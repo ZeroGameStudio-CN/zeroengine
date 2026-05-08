@@ -4,7 +4,7 @@ using UnityEngine;
 namespace ZeroEngine.Quest
 {
     /// <summary>
-    /// 到达条件 (v1.2.0+)
+    /// 到达条件。
     /// 用于到达指定位置/区域
     /// </summary>
     [Serializable]

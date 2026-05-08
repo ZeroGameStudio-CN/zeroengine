@@ -4,7 +4,7 @@ using UnityEngine;
 namespace ZeroEngine.Quest
 {
     /// <summary>
-    /// 交互条件 (v1.2.0+)
+    /// 交互条件。
     /// 用于对话、检查物体、使用设备等
     /// </summary>
     [Serializable]
@@ -56,7 +56,7 @@ namespace ZeroEngine.Quest
     }
 
     /// <summary>
-    /// 交互类型 (v1.2.0+)
+    /// 交互类型。
     /// </summary>
     public enum InteractionType
     {

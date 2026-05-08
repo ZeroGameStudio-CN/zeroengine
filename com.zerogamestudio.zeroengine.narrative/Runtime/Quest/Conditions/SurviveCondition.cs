@@ -4,7 +4,7 @@ using UnityEngine;
 namespace ZeroEngine.Quest
 {
     /// <summary>
-    /// 存活条件 — 响应 SurviveCompleted 事件 (v1.3.0+)
+    /// 存活条件，响应 SurviveCompleted 事件。
     /// </summary>
     [Serializable]
     public class SurviveCondition : QuestCondition

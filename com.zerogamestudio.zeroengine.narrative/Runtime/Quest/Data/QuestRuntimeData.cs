@@ -13,12 +13,7 @@ namespace ZeroEngine.Quest
         public QuestState state;
 
         /// <summary>
-        /// Legacy progress list (v1.0 compatibility)
-        /// </summary>
-        public List<QuestEventProgress> progressList = new List<QuestEventProgress>();
-
-        /// <summary>
-        /// Progress dictionary for v1.2.0+ condition system
+        /// Progress dictionary for condition system.
         /// </summary>
         public Dictionary<string, int> Progress = new Dictionary<string, int>();
 
@@ -29,51 +24,27 @@ namespace ZeroEngine.Quest
         }
 
         /// <summary>
-        /// Add progress (Legacy system)
+        /// Add condition progress.
         /// </summary>
         public void AddProgress(string targetName, int amount, int maxNeeded)
         {
-            QuestEventProgress progress = null;
-            for (int i = 0; i < progressList.Count; i++)
-            {
-                if (progressList[i].targetName == targetName)
-                {
-                    progress = progressList[i];
-                    break;
-                }
-            }
+            if (string.IsNullOrEmpty(targetName)) return;
 
-            if (progress == null)
-            {
-                progress = new QuestEventProgress { targetName = targetName, currentCount = 0 };
-                progressList.Add(progress);
-            }
+            Progress ??= new Dictionary<string, int>();
+            Progress.TryGetValue(targetName, out var current);
 
-            if (progress.currentCount < maxNeeded)
-            {
-                progress.currentCount += amount;
-            }
+            if (current < maxNeeded)
+                Progress[targetName] = Math.Min(current + amount, maxNeeded);
         }
 
         /// <summary>
-        /// Get progress (Legacy system)
+        /// Get condition progress.
         /// </summary>
         public int GetProgress(string targetName)
         {
-            for (int i = 0; i < progressList.Count; i++)
-            {
-                if (progressList[i].targetName == targetName)
-                    return progressList[i].currentCount;
-            }
-            return 0;
+            if (string.IsNullOrEmpty(targetName) || Progress == null) return 0;
+            return Progress.TryGetValue(targetName, out var current) ? current : 0;
         }
-    }
-
-    [Serializable]
-    public class QuestEventProgress
-    {
-        public string targetName;
-        public int currentCount;
     }
 
     /// <summary>

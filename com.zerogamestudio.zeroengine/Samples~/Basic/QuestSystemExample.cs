@@ -37,30 +37,20 @@ namespace ZeroEngine.Samples
 
         private void TestQuestOperations()
         {
-            Debug.Log($"[QuestExample] Testing quest: {testQuest.QuestId}");
+            Debug.Log($"[QuestExample] Testing quest: {testQuest.questId}");
 
             // 接受任务
-            bool accepted = QuestManager.Instance.AcceptQuest(testQuest.QuestId);
+            bool accepted = QuestManager.Instance.AcceptQuest(testQuest.questId);
             Debug.Log($"[QuestExample] Quest accepted: {accepted}");
 
             // 查询状态
-            var state = QuestManager.Instance.GetQuestState(testQuest.QuestId);
+            var state = QuestManager.Instance.GetQuestState(testQuest.questId);
             Debug.Log($"[QuestExample] Quest state: {state}");
 
-            // 检查是否使用新条件系统
-            if (testQuest.UsesNewConditionSystem)
-            {
-                Debug.Log("[QuestExample] Quest uses v1.2.0+ condition system");
-                TestNewConditionSystem();
-            }
-            else
-            {
-                Debug.Log("[QuestExample] Quest uses legacy system");
-                TestLegacySystem();
-            }
+            TestConditionSystem();
         }
 
-        private void TestNewConditionSystem()
+        private void TestConditionSystem()
         {
             // 模拟击杀事件
             QuestManager.Instance.ProcessConditionEvent(QuestEvents.EntityKilled, new ConditionEventData
@@ -70,27 +60,21 @@ namespace ZeroEngine.Samples
             });
 
             // 查询条件进度
-            var progressList = QuestManager.Instance.GetConditionProgress(testQuest.QuestId);
+            var progressList = QuestManager.Instance.GetConditionProgress(testQuest.questId);
             foreach (var (condition, current, target, completed) in progressList)
             {
                 Debug.Log($"[QuestExample] Condition: {condition.Description}, Progress: {current}/{target}, Completed: {completed}");
             }
         }
 
-        private void TestLegacySystem()
+        private void OnConditionProgress(string questId, QuestCondition condition)
         {
-            // 使用旧系统更新进度
-            QuestManager.Instance.UpdateQuestProgress(ObjectiveType.Kill, "slime", 1);
+            Debug.Log($"[QuestExample] Quest {questId} condition progress: {condition.Description}");
         }
 
-        private void OnConditionProgress(string questId, int conditionIndex, int progress)
+        private void OnConditionCompleted(string questId, QuestCondition condition)
         {
-            Debug.Log($"[QuestExample] Quest {questId} condition {conditionIndex} progress: {progress}");
-        }
-
-        private void OnConditionCompleted(string questId, int conditionIndex)
-        {
-            Debug.Log($"[QuestExample] Quest {questId} condition {conditionIndex} completed!");
+            Debug.Log($"[QuestExample] Quest {questId} condition completed: {condition.Description}");
         }
 
         private void Update()
@@ -122,13 +106,13 @@ namespace ZeroEngine.Samples
             // 按 T 键提交任务
             if (Input.GetKeyDown(KeyCode.T))
             {
-                QuestManager.Instance.SubmitQuest(testQuest.QuestId);
+                QuestManager.Instance.SubmitQuest(testQuest.questId);
             }
 
             // 按 X 键放弃任务
             if (Input.GetKeyDown(KeyCode.X))
             {
-                QuestManager.Instance.AbandonQuest(testQuest.QuestId);
+                QuestManager.Instance.AbandonQuest(testQuest.questId);
             }
         }
 

@@ -6,7 +6,7 @@ using ZeroEngine.Utils;
 namespace ZeroEngine.Quest
 {
     /// <summary>
-    /// 物品奖励 (v1.2.0+)
+    /// 物品奖励。
     /// </summary>
     [Serializable]
     public class ItemReward : QuestReward

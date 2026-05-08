@@ -9,21 +9,18 @@ namespace ZeroEngine.Quest
 {
     public class QuestManager : Singleton<QuestManager>, ISaveable
     {
-        // Runtime Data
         private QuestSystemSaveData _saveData = new QuestSystemSaveData();
-
-        // Config Cache
         private Dictionary<string, QuestConfigSO> _questConfigs = new Dictionary<string, QuestConfigSO>();
 
-        #region Events (v1.2.0+)
+        #region Events
 
         /// <summary>
-        /// 条件进度更新时触发
+        /// 条件进度更新时触发。
         /// </summary>
         public event Action<string, QuestCondition> OnConditionProgress;
 
         /// <summary>
-        /// 单个条件完成时触发
+        /// 单个条件完成时触发。
         /// </summary>
         public event Action<string, QuestCondition> OnConditionCompleted;
 
@@ -38,8 +35,6 @@ namespace ZeroEngine.Quest
         private void Start()
         {
             RegisterEvents();
-
-            // 注册到存档系统
             SaveSlotManager.Instance?.Register(this);
         }
 
@@ -52,37 +47,18 @@ namespace ZeroEngine.Quest
 
         #region ISaveable Implementation
 
-        /// <summary>
-        /// ISaveable: 存档键名
-        /// </summary>
         public string SaveKey => "Quest";
 
-        /// <summary>
-        /// ISaveable: 导出存档数据
-        /// </summary>
         public object ExportSaveData()
         {
             return _saveData;
         }
 
-        /// <summary>
-        /// ISaveable: 导入存档数据
-        /// </summary>
         public void ImportSaveData(object data)
         {
-            if (data is QuestSystemSaveData questData)
-            {
-                _saveData = questData;
-            }
-            else
-            {
-                _saveData = new QuestSystemSaveData();
-            }
+            _saveData = data as QuestSystemSaveData ?? new QuestSystemSaveData();
         }
 
-        /// <summary>
-        /// ISaveable: 重置为初始状态
-        /// </summary>
         public void ResetToDefault()
         {
             _saveData = new QuestSystemSaveData();
@@ -95,32 +71,28 @@ namespace ZeroEngine.Quest
             var configs = Resources.LoadAll<QuestConfigSO>("Quests");
             foreach (var config in configs)
             {
-                if (!_questConfigs.ContainsKey(config.questId))
-                    _questConfigs.Add(config.questId, config);
+                if (config != null && !string.IsNullOrEmpty(config.questId))
+                    _questConfigs[config.questId] = config;
             }
         }
 
         /// <summary>
-        /// 注册任务配置 (v1.2.0+)
+        /// 注册任务配置。
         /// </summary>
         public void RegisterConfig(QuestConfigSO config)
         {
             if (config != null && !string.IsNullOrEmpty(config.questId))
-            {
                 _questConfigs[config.questId] = config;
-            }
         }
 
         #region Event Management
 
         private void RegisterEvents()
         {
-            // Legacy events
             EventManager.Subscribe<string, int>(GameEvents.ItemObtained, OnItemObtained);
             EventManager.Subscribe<string, int>(GameEvents.CharacterDied, OnEntityKilled);
             EventManager.Subscribe<string>(GameEvents.QuestProgressChanged, OnManualProgress);
 
-            // v1.2.0+ condition events — each handler forwards eventType to ProcessConditionEvent
             EventManager.Subscribe<ConditionEventData>(QuestEvents.EntityKilled, OnEntityKilledCondition);
             EventManager.Subscribe<ConditionEventData>(QuestEvents.ItemObtained, OnItemObtainedCondition);
             EventManager.Subscribe<ConditionEventData>(QuestEvents.Interacted, OnInteractedCondition);
@@ -141,27 +113,21 @@ namespace ZeroEngine.Quest
             EventManager.Unsubscribe<ConditionEventData>(QuestEvents.SurviveCompleted, OnSurviveCompletedCondition);
         }
 
-        // Legacy event handlers
         private void OnItemObtained(string itemId, int count)
         {
-            UpdateQuestProgress(QuestType.Collect, itemId, count);
             ProcessConditionEvent(QuestEvents.ItemObtained, new ConditionEventData(itemId, count));
         }
 
         private void OnEntityKilled(string entityId, int count)
         {
-            UpdateQuestProgress(QuestType.KillMonster, entityId, count);
             ProcessConditionEvent(QuestEvents.EntityKilled, new ConditionEventData(entityId, count));
         }
 
         private void OnManualProgress(string targetName)
         {
-            UpdateQuestProgress(QuestType.Custom, targetName, 1);
-            UpdateQuestProgress(QuestType.Dialogue, targetName, 1);
             ProcessConditionEvent(QuestEvents.Interacted, new ConditionEventData(targetName, 1));
         }
 
-        // v1.2.0+ per-event condition handlers
         private void OnEntityKilledCondition(ConditionEventData data) => ProcessConditionEvent(QuestEvents.EntityKilled, data);
         private void OnItemObtainedCondition(ConditionEventData data) => ProcessConditionEvent(QuestEvents.ItemObtained, data);
         private void OnInteractedCondition(ConditionEventData data) => ProcessConditionEvent(QuestEvents.Interacted, data);
@@ -173,7 +139,7 @@ namespace ZeroEngine.Quest
         #region Core Logic
 
         /// <summary>
-        /// 处理条件事件 (v1.2.0+)
+        /// 处理条件事件。
         /// </summary>
         public void ProcessConditionEvent(string eventType, ConditionEventData data)
         {
@@ -183,7 +149,7 @@ namespace ZeroEngine.Quest
                 if (quest.state != QuestState.Active) continue;
 
                 var config = GetConfig(quest.questId);
-                if (config == null || !config.UsesNewConditionSystem) continue;
+                if (config == null || config.Conditions == null || config.Conditions.Count == 0) continue;
 
                 bool questChanged = false;
 
@@ -194,87 +160,21 @@ namespace ZeroEngine.Quest
                     bool wasCompleted = condition.IsSatisfied(quest);
                     bool updated = condition.ProcessEvent(quest, eventType, data);
 
-                    if (updated)
-                    {
-                        questChanged = true;
-                        OnConditionProgress?.Invoke(quest.questId, condition);
+                    if (!updated) continue;
 
-                        if (!wasCompleted && condition.IsSatisfied(quest))
-                        {
-                            OnConditionCompleted?.Invoke(quest.questId, condition);
-                        }
-                    }
+                    questChanged = true;
+                    OnConditionProgress?.Invoke(quest.questId, condition);
+
+                    if (!wasCompleted && condition.IsSatisfied(quest))
+                        OnConditionCompleted?.Invoke(quest.questId, condition);
                 }
 
                 if (questChanged)
-                {
-                    CheckCompletionNew(quest, config);
-                }
+                    CheckCompletion(quest, config);
             }
         }
 
-        /// <summary>
-        /// 更新任务进度 (Legacy)
-        /// </summary>
-        public void UpdateQuestProgress(QuestType type, string targetName, int amount)
-        {
-
-            foreach (var quest in _saveData.activeQuests)
-            {
-                if (quest.state != QuestState.Active) continue;
-
-                var config = GetConfig(quest.questId);
-                if (config == null || config.questType != type) continue;
-                if (config.UsesNewConditionSystem) continue;
-
-                if (config.completionConditions == null) continue;
-                QuestEventConfig condition = null;
-                for (int j = 0; j < config.completionConditions.Count; j++)
-                {
-                    if (config.completionConditions[j].targetName == targetName)
-                    {
-                        condition = config.completionConditions[j];
-                        break;
-                    }
-                }
-                if (condition != null)
-                {
-                    quest.AddProgress(targetName, amount, condition.targetCount);
-                    ZeroLog.Info(ZeroLog.Modules.Quest, $"Updated {quest.questId}: {targetName} += {amount}");
-
-                    CheckCompletionLegacy(quest, config);
-                }
-            }
-        }
-
-        /// <summary>
-        /// 检查完成状态 (Legacy)
-        /// </summary>
-        private void CheckCompletionLegacy(QuestRuntimeData quest, QuestConfigSO config)
-        {
-            if (config.completionConditions == null) return;
-
-            bool isComplete = true;
-            foreach (var condition in config.completionConditions)
-            {
-                int current = quest.GetProgress(condition.targetName);
-                if (current < condition.targetCount)
-                {
-                    isComplete = false;
-                    break;
-                }
-            }
-
-            if (isComplete)
-            {
-                CompleteQuest(quest, config);
-            }
-        }
-
-        /// <summary>
-        /// 检查完成状态 (v1.2.0+)
-        /// </summary>
-        private void CheckCompletionNew(QuestRuntimeData quest, QuestConfigSO config)
+        private void CheckCompletion(QuestRuntimeData quest, QuestConfigSO config)
         {
             if (config.Conditions == null || config.Conditions.Count == 0) return;
 
@@ -289,9 +189,7 @@ namespace ZeroEngine.Quest
             }
 
             if (isComplete)
-            {
                 CompleteQuest(quest, config);
-            }
         }
 
         private void CompleteQuest(QuestRuntimeData quest, QuestConfigSO config)
@@ -301,9 +199,7 @@ namespace ZeroEngine.Quest
             EventManager.Trigger(GameEvents.QuestCompleted, quest.questId);
 
             if (config.autoSubmit)
-            {
                 SubmitQuest(quest.questId);
-            }
         }
 
         public bool AcceptQuest(string questId)
@@ -349,9 +245,7 @@ namespace ZeroEngine.Quest
 
             var config = GetConfig(questId);
             if (config != null)
-            {
                 GrantRewards(config);
-            }
 
             quest.state = QuestState.TheEnd;
             _saveData.activeQuests.Remove(quest);
@@ -369,36 +263,21 @@ namespace ZeroEngine.Quest
         }
 
         /// <summary>
-        /// 发放奖励 (v1.2.0+)
+        /// 发放奖励。
         /// </summary>
         private void GrantRewards(QuestConfigSO config)
         {
-            // Legacy rewards
-            if (config.expReward > 0)
-            {
-                EventManager.Trigger(GameEvents.ExpGained, config.expReward);
-            }
+            if (config.Rewards == null) return;
 
-            if (config.goldReward > 0)
+            foreach (var reward in config.Rewards)
             {
-                EventManager.Trigger(GameEvents.CurrencyGained, "Gold", config.goldReward);
-            }
-
-            // v1.2.0+ rewards
-            if (config.Rewards != null)
-            {
-                foreach (var reward in config.Rewards)
-                {
-                    if (reward != null)
-                    {
-                        reward.Grant();
-                    }
-                }
+                if (reward != null)
+                    reward.Grant();
             }
         }
 
         /// <summary>
-        /// 放弃任务 (v1.2.0+)
+        /// 放弃任务。
         /// </summary>
         public void AbandonQuest(string questId)
         {
@@ -416,14 +295,13 @@ namespace ZeroEngine.Quest
 
         #endregion
 
-        #region Query Methods (v1.2.0+)
+        #region Query Methods
 
-        // Reusable buffer for condition progress queries
         private readonly List<(QuestCondition condition, int current, int target, bool completed)> _conditionProgressBuffer
             = new List<(QuestCondition, int, int, bool)>(8);
 
         /// <summary>
-        /// 获取任务的条件进度列表
+        /// 获取任务的条件进度列表。
         /// </summary>
         public List<(QuestCondition condition, int current, int target, bool completed)> GetConditionProgress(string questId)
         {
@@ -433,11 +311,8 @@ namespace ZeroEngine.Quest
         }
 
         /// <summary>
-        /// 获取任务的条件进度列表 (零分配版本, v1.2.0+)
+        /// 获取任务的条件进度列表 (零分配版本)。
         /// </summary>
-        /// <param name="questId">任务ID</param>
-        /// <param name="buffer">用于存储结果的列表，会被清空后填充</param>
-        /// <returns>填充的条目数量</returns>
         public int GetConditionProgressNonAlloc(string questId, List<(QuestCondition condition, int current, int target, bool completed)> buffer)
         {
             buffer.Clear();
@@ -446,7 +321,7 @@ namespace ZeroEngine.Quest
             if (quest == null) return 0;
 
             var config = GetConfig(questId);
-            if (config == null || !config.UsesNewConditionSystem) return 0;
+            if (config == null || config.Conditions == null || config.Conditions.Count == 0) return 0;
 
             foreach (var condition in config.Conditions)
             {
@@ -463,8 +338,8 @@ namespace ZeroEngine.Quest
         }
 
         /// <summary>
-        /// 获取任务的条件进度列表 (使用内部缓冲区, v1.2.0+)
-        /// 注意：返回的列表是共享的，下次调用会被覆盖
+        /// 获取任务的条件进度列表 (使用内部缓冲区)。
+        /// 注意：返回的列表是共享的，下次调用会被覆盖。
         /// </summary>
         public IReadOnlyList<(QuestCondition condition, int current, int target, bool completed)> GetConditionProgressCached(string questId)
         {
@@ -547,7 +422,7 @@ namespace ZeroEngine.Quest
         }
 
         /// <summary>
-        /// 获取指定生命周期的活跃任务 (v1.3.0+)
+        /// 获取指定生命周期的活跃任务。
         /// </summary>
         public List<QuestRuntimeData> GetActiveQuests(QuestLifecycle lifecycle)
         {
@@ -562,7 +437,7 @@ namespace ZeroEngine.Quest
         }
 
         /// <summary>
-        /// 清除所有 PerRun 生命周期的任务 (v1.3.0+)
+        /// 清除所有 PerRun 生命周期的任务。
         /// </summary>
         public void ClearPerRunQuests()
         {

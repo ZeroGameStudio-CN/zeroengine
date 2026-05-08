@@ -1,7 +1,7 @@
 namespace ZeroEngine.Quest
 {
     /// <summary>
-    /// 任务系统事件常量 (v1.2.0+)
+    /// 任务系统事件常量。
     /// </summary>
     public static class QuestEvents
     {

@@ -4,7 +4,7 @@ using UnityEngine;
 namespace ZeroEngine.Quest
 {
     /// <summary>
-    /// 击杀条件 (v1.2.0+)
+    /// 击杀条件。
     /// </summary>
     [Serializable]
     public class KillCondition : QuestCondition
@@ -38,13 +38,6 @@ namespace ZeroEngine.Quest
             if (eventData is ConditionEventData data && data.TargetId == TargetId)
             {
                 runtime.AddProgress(GetProgressKey(), data.Amount, RequiredCount);
-                return true;
-            }
-
-            // Legacy support for string, int
-            if (eventData is (string targetId, int amount) && targetId == TargetId)
-            {
-                runtime.AddProgress(GetProgressKey(), amount, RequiredCount);
                 return true;
             }
 

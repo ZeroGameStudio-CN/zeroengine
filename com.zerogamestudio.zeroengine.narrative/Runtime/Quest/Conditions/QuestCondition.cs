@@ -4,7 +4,7 @@ using UnityEngine;
 namespace ZeroEngine.Quest
 {
     /// <summary>
-    /// 任务条件基类 (v1.2.0+)
+    /// 任务条件基类。
     /// 所有任务条件必须继承此类
     /// </summary>
     [Serializable]
@@ -65,7 +65,7 @@ namespace ZeroEngine.Quest
     }
 
     /// <summary>
-    /// 条件事件数据 (v1.2.0+)
+    /// 条件事件数据。
     /// </summary>
     public struct ConditionEventData
     {

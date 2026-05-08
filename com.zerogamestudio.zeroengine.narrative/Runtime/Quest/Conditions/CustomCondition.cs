@@ -4,7 +4,7 @@ using UnityEngine;
 namespace ZeroEngine.Quest
 {
     /// <summary>
-    /// 通用自定义条件 — 匹配 eventType + TargetId (v1.3.0+)
+    /// 通用自定义条件，匹配 eventType + TargetId。
     /// </summary>
     [Serializable]
     public class CustomCondition : QuestCondition

@@ -4,7 +4,7 @@ using UnityEngine;
 namespace ZeroEngine.Quest
 {
     /// <summary>
-    /// 收集条件 (v1.2.0+)
+    /// 收集条件。
     /// </summary>
     [Serializable]
     public class CollectCondition : QuestCondition
@@ -41,12 +41,6 @@ namespace ZeroEngine.Quest
             if (eventData is ConditionEventData data && data.TargetId == ItemId)
             {
                 runtime.AddProgress(GetProgressKey(), data.Amount, RequiredCount);
-                return true;
-            }
-
-            if (eventData is (string itemId, int amount) && itemId == ItemId)
-            {
-                runtime.AddProgress(GetProgressKey(), amount, RequiredCount);
                 return true;
             }
 

@@ -6,7 +6,7 @@ using ZeroEngine.Utils;
 namespace ZeroEngine.Quest
 {
     /// <summary>
-    /// 货币奖励 (v1.2.0+)
+    /// 货币奖励。
     /// </summary>
     [Serializable]
     public class CurrencyReward : QuestReward
@@ -47,7 +47,7 @@ namespace ZeroEngine.Quest
     }
 
     /// <summary>
-    /// 货币类型 (v1.2.0+)
+    /// 货币类型。
     /// </summary>
     public enum CurrencyType
     {

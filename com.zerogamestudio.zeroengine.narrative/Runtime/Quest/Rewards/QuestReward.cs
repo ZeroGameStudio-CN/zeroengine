@@ -4,7 +4,7 @@ using UnityEngine;
 namespace ZeroEngine.Quest
 {
     /// <summary>
-    /// 任务奖励基类 (v1.2.0+)
+    /// 任务奖励基类。
     /// 所有任务奖励必须继承此类
     /// </summary>
     [Serializable]
