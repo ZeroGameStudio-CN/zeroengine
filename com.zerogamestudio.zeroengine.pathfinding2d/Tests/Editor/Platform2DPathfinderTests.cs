@@ -112,7 +112,9 @@ namespace ZeroEngine.Pathfinding2D.Tests.Editor
                 graph.Config.EdgeInset = 0.2f;
 
                 graph.GeneratePlatformGraph();
-                host.AddComponent<JumpLinkCalculator>().GenerateJumpLinks();
+                var jumpLinkCalculator = host.AddComponent<JumpLinkCalculator>();
+                jumpLinkCalculator.Config.MaxJumpVelocity = 16f;
+                jumpLinkCalculator.GenerateJumpLinks();
 
                 var pathfinder = host.AddComponent<Platform2DPathfinder>();
                 pathfinder.SetGraphGenerator(graph);
