@@ -1,0 +1,24 @@
+{
+  "name": "ZeroEngine.Pathfinding2D.Tests.Editor",
+  "rootNamespace": "ZeroEngine.Pathfinding2D.Tests.Editor",
+  "references": [
+    "ZeroEngine.Pathfinding2D",
+    "UnityEngine.TestRunner",
+    "UnityEditor.TestRunner"
+  ],
+  "includePlatforms": [
+    "Editor"
+  ],
+  "excludePlatforms": [],
+  "allowUnsafeCode": false,
+  "overrideReferences": true,
+  "precompiledReferences": [
+    "nunit.framework.dll"
+  ],
+  "autoReferenced": false,
+  "defineConstraints": [
+    "UNITY_INCLUDE_TESTS"
+  ],
+  "versionDefines": [],
+  "noEngineReferences": false
+}

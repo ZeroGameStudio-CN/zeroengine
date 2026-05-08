@@ -1,0 +1,15 @@
+namespace ZeroEngine.Pathfinding2D
+{
+    public enum PlatformPathFailureReason
+    {
+        None,
+        Throttled,
+        MissingGraphGenerator,
+        GraphNotGenerated,
+        AlreadyArrived,
+        StartNodeNotFound,
+        EndNodeNotFound,
+        PathNotFound,
+        PartialPathUnavailable
+    }
+}

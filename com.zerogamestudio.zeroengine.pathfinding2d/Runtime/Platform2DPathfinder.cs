@@ -80,6 +80,9 @@ namespace ZeroEngine.Pathfinding2D
         /// <summary>配置</summary>
         public PathfinderConfig Config => config;
 
+        /// <summary>平台图生成器</summary>
+        public PlatformGraphGenerator GraphGenerator => graphGenerator;
+
         /// <summary>当前路径</summary>
         public Platform2DPath CurrentPath { get; private set; }
 
@@ -88,7 +91,10 @@ namespace ZeroEngine.Pathfinding2D
                                     CurrentPath.Status == PathStatus.Valid &&
                                     !CurrentPath.IsComplete;
 
-        private float lastPathRequestTime;
+        /// <summary>上一次寻路失败原因</summary>
+        public PlatformPathFailureReason LastFailureReason { get; private set; }
+
+        private float lastPathRequestTime = -999f;
 
         private void Awake()
         {
@@ -96,6 +102,14 @@ namespace ZeroEngine.Pathfinding2D
             {
                 graphGenerator = FindObjectOfType<PlatformGraphGenerator>();
             }
+        }
+
+        /// <summary>
+        /// 绑定平台图生成器。
+        /// </summary>
+        public void SetGraphGenerator(PlatformGraphGenerator generator)
+        {
+            graphGenerator = generator;
         }
 
         /// <summary>
@@ -107,66 +121,152 @@ namespace ZeroEngine.Pathfinding2D
         /// <returns>是否成功发起请求</returns>
         public bool RequestPath(Vector3 start, Vector3 end, bool forceRequest = false)
         {
+            return TryRequestPath(new PlatformPathRequest(start, end, forceRequest), out _);
+        }
+
+        /// <summary>
+        /// 请求新路径，并返回可诊断的结果。
+        /// </summary>
+        public bool TryRequestPath(PlatformPathRequest request, out PlatformPathResult result)
+        {
             // 检查请求间隔
-            if (!forceRequest && Time.time - lastPathRequestTime < config.PathRequestInterval)
+            if (!request.ForceRequest && Time.time - lastPathRequestTime < config.PathRequestInterval)
             {
+                LastFailureReason = PlatformPathFailureReason.Throttled;
+                result = PlatformPathResult.Failed(
+                    LastFailureReason,
+                    request.Start,
+                    request.Target,
+                    request.Target,
+                    CurrentPath,
+                    requestStarted: false);
+                return false;
+            }
+
+            // 检查图是否已生成
+            if (graphGenerator == null)
+            {
+                LastFailureReason = PlatformPathFailureReason.MissingGraphGenerator;
+                result = PlatformPathResult.Failed(
+                    LastFailureReason,
+                    request.Start,
+                    request.Target,
+                    request.Target,
+                    requestStarted: false);
+                return false;
+            }
+
+            if (!graphGenerator.IsGenerated)
+            {
+                CurrentPath = Platform2DPath.NotFound(request.Start, request.Target);
+                LastFailureReason = PlatformPathFailureReason.GraphNotGenerated;
+                result = PlatformPathResult.Failed(
+                    LastFailureReason,
+                    request.Start,
+                    request.Target,
+                    request.Target,
+                    CurrentPath,
+                    requestStarted: false);
                 return false;
             }
 
             lastPathRequestTime = Time.time;
 
-            // 检查图是否已生成
-            if (graphGenerator == null || !graphGenerator.IsGenerated)
+            var resolvedTarget = request.Target;
+            if (request.ProjectTargetToGround)
             {
-                CurrentPath = Platform2DPath.NotFound(start, end);
-                return false;
+                resolvedTarget = PlatformTargetProjection.ProjectTargetToGround(
+                    request.Target,
+                    graphGenerator.Config.AllPlatformLayers,
+                    request.ProjectionDistance);
             }
 
             // 检查是否已经到达目标
-            if (Vector2.Distance(start, end) <= config.ArriveDistance)
+            if (Vector2.Distance(request.Start, resolvedTarget) <= config.ArriveDistance)
             {
-                CurrentPath = new Platform2DPath(start, end, new List<MoveCommand>());
+                CurrentPath = Platform2DPath.Arrived(request.Start, resolvedTarget);
+                LastFailureReason = PlatformPathFailureReason.None;
+                result = PlatformPathResult.Succeeded(
+                    request.Start,
+                    request.Target,
+                    resolvedTarget,
+                    CurrentPath,
+                    null);
                 return true;
             }
 
             // 尝试同平台快速路径（跳过 A*）
-            var samePlatformPath = TryCreateSamePlatformPath(start, end);
+            var samePlatformPath = TryCreateSamePlatformPath(request.Start, resolvedTarget);
             if (samePlatformPath != null)
             {
                 CurrentPath = samePlatformPath;
+                LastFailureReason = PlatformPathFailureReason.None;
+                result = PlatformPathResult.Succeeded(
+                    request.Start,
+                    request.Target,
+                    resolvedTarget,
+                    CurrentPath,
+                    GetCurrentCommand());
                 return true;
             }
 
             // 查找起点和终点节点
             // 优先选择脚下平台上的节点，避免错误选择头顶平台节点
-            var startPlatform = DetectPlatformBelow(start);
-            var endPlatform = DetectPlatformBelow(end);
-            var startNode = graphGenerator.FindNearestNodeOnPlatform(start, startPlatform, config.MaxNodeSearchRadius);
-            var endNode = graphGenerator.FindNearestNodeOnPlatform(end, endPlatform, config.MaxNodeSearchRadius);
+            var startPlatform = DetectPlatformBelow(request.Start);
+            var endPlatform = DetectPlatformBelow(resolvedTarget);
+            var startNode = graphGenerator.FindNearestNodeOnPlatform(request.Start, startPlatform, config.MaxNodeSearchRadius);
+            var endNode = graphGenerator.FindNearestNodeOnPlatform(resolvedTarget, endPlatform, config.MaxNodeSearchRadius);
 
-            if (!startNode.HasValue || !endNode.HasValue)
+            if (!startNode.HasValue)
             {
-                // 找不到节点，尝试回退策略
+                CurrentPath = Platform2DPath.NotFound(request.Start, resolvedTarget);
+                LastFailureReason = PlatformPathFailureReason.StartNodeNotFound;
+                result = PlatformPathResult.Failed(
+                    LastFailureReason,
+                    request.Start,
+                    request.Target,
+                    resolvedTarget,
+                    CurrentPath);
+                return false;
+            }
+
+            if (!endNode.HasValue)
+            {
                 if (config.AllowPartialPath)
                 {
-                    var partialPath = TryCreatePartialPath(start, end, startNode, endNode);
+                    var partialPath = TryCreatePartialPath(request.Start, resolvedTarget, startNode, endNode);
                     if (partialPath != null)
                     {
                         CurrentPath = partialPath;
+                        LastFailureReason = PlatformPathFailureReason.None;
+                        result = PlatformPathResult.Succeeded(
+                            request.Start,
+                            request.Target,
+                            resolvedTarget,
+                            CurrentPath,
+                            GetCurrentCommand());
                         return true;
                     }
                 }
-                CurrentPath = Platform2DPath.NotFound(start, end);
+
+                CurrentPath = Platform2DPath.NotFound(request.Start, resolvedTarget);
+                LastFailureReason = PlatformPathFailureReason.EndNodeNotFound;
+                result = PlatformPathResult.Failed(
+                    LastFailureReason,
+                    request.Start,
+                    request.Target,
+                    resolvedTarget,
+                    CurrentPath);
                 return false;
             }
 
             // 执行 A* 寻路
-            var path = FindPath(startNode.Value, endNode.Value, start, end);
+            var path = FindPath(startNode.Value, endNode.Value, request.Start, resolvedTarget);
 
             // 如果找不到路径，尝试回退策略
             if (path.Status == PathStatus.NotFound && config.AllowPartialPath)
             {
-                var partialPath = TryFindPartialPath(startNode.Value, endNode.Value, start, end);
+                var partialPath = TryFindPartialPath(startNode.Value, endNode.Value, request.Start, resolvedTarget);
                 if (partialPath != null)
                 {
                     path = partialPath;
@@ -174,7 +274,16 @@ namespace ZeroEngine.Pathfinding2D
             }
 
             CurrentPath = path;
-            return path.Status == PathStatus.Valid;
+            bool success = path.Status == PathStatus.Valid;
+            LastFailureReason = success
+                ? PlatformPathFailureReason.None
+                : config.AllowPartialPath
+                    ? PlatformPathFailureReason.PartialPathUnavailable
+                    : PlatformPathFailureReason.PathNotFound;
+            result = success
+                ? PlatformPathResult.Succeeded(request.Start, request.Target, resolvedTarget, CurrentPath, GetCurrentCommand())
+                : PlatformPathResult.Failed(LastFailureReason, request.Start, request.Target, resolvedTarget, CurrentPath);
+            return success;
         }
 
         /// <summary>
@@ -470,6 +579,22 @@ namespace ZeroEngine.Pathfinding2D
         public void ClearPath()
         {
             CurrentPath = null;
+        }
+
+        /// <summary>
+        /// 获取当前寻路诊断快照。
+        /// </summary>
+        public PlatformNavigationSnapshot GetSnapshot()
+        {
+            return new PlatformNavigationSnapshot(
+                graphGenerator != null,
+                graphGenerator != null && graphGenerator.IsGenerated,
+                graphGenerator != null ? graphGenerator.Nodes.Count : 0,
+                graphGenerator != null ? graphGenerator.Links.Count : 0,
+                HasValidPath,
+                CurrentPath != null && CurrentPath.Commands != null ? CurrentPath.Commands.Count : 0,
+                CurrentPath != null ? CurrentPath.CurrentIndex : -1,
+                LastFailureReason);
         }
 
         /// <summary>

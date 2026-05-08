@@ -151,6 +151,21 @@ namespace ZeroEngine.Pathfinding2D
         }
 
         /// <summary>
+        /// 创建已到达目标的有效空路径。
+        /// </summary>
+        public static Platform2DPath Arrived(Vector3 start, Vector3 end)
+        {
+            return new Platform2DPath
+            {
+                StartPosition = start,
+                EndPosition = end,
+                Commands = new List<MoveCommand>(),
+                Status = PathStatus.Valid,
+                CreateTime = Time.time
+            };
+        }
+
+        /// <summary>
         /// 创建待处理路径
         /// </summary>
         public static Platform2DPath Pending(Vector3 start, Vector3 end)
