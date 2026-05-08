@@ -23,6 +23,9 @@ namespace ZeroEngine.Pathfinding2D
         [Tooltip("到达目标的判定距离（高速移动时需要更大值避免过冲）")]
         public float ArriveDistance = 1.0f;
 
+        [Tooltip("行走指令到达判定距离。应小于 ArriveDistance，避免短距离起跳点被第一帧跳过。")]
+        public float WalkCommandArriveDistance = 0.25f;
+
         [Header("节点查找")]
         [Tooltip("查找起点/终点节点的最大距离")]
         public float MaxNodeSearchRadius = 8f;
@@ -649,7 +652,7 @@ namespace ZeroEngine.Pathfinding2D
             {
                 case MoveCommandType.Walk:
                     // 行走：到达目标 X 坐标附近
-                    return Mathf.Abs(currentPosition.x - command.Target.x) < config.ArriveDistance;
+                    return Mathf.Abs(currentPosition.x - command.Target.x) < config.WalkCommandArriveDistance;
 
                 case MoveCommandType.Jump:
                 case MoveCommandType.Fall:
