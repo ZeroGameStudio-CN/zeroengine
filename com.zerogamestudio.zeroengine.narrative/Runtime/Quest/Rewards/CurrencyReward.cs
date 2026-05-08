@@ -11,10 +11,12 @@ namespace ZeroEngine.Quest
     [Serializable]
     public class CurrencyReward : QuestReward
     {
-        [Tooltip("货币类型")]
+        [Header("Currency")]
+        [Tooltip("Currency type to grant.")]
         public CurrencyType CurrencyType = CurrencyType.Gold;
 
-        [Tooltip("货币数量")]
+        [Min(0)]
+        [Tooltip("Currency amount to grant.")]
         public int Amount;
 
         public override string RewardType => "Currency";

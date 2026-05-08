@@ -9,10 +9,12 @@ namespace ZeroEngine.Quest
     [Serializable]
     public class SurviveCondition : QuestCondition
     {
-        [Tooltip("存活场景/阶段 ID")]
+        [Header("Survive")]
+        [Tooltip("Stage or encounter ID to match against Quest.SurviveCompleted events. Empty may match any stage.")]
         public string StageId;
 
-        [Tooltip("需要存活的次数")]
+        [Min(1)]
+        [Tooltip("Number of matching survival completion events required.")]
         public int RequiredCount = 1;
 
         public override string ConditionType => "Survive";

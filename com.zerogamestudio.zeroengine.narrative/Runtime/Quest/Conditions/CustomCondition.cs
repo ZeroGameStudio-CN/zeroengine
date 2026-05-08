@@ -9,13 +9,15 @@ namespace ZeroEngine.Quest
     [Serializable]
     public class CustomCondition : QuestCondition
     {
-        [Tooltip("要监听的事件类型")]
+        [Header("Custom Event")]
+        [Tooltip("Custom condition event type to listen for.")]
         public string EventType;
 
-        [Tooltip("目标 ID（留空则匹配所有）")]
+        [Tooltip("Optional target ID. Empty matches all targets for this event type.")]
         public string TargetId;
 
-        [Tooltip("需要的次数")]
+        [Min(1)]
+        [Tooltip("Number of matching custom events required.")]
         public int RequiredCount = 1;
 
         public override string ConditionType => "Custom";

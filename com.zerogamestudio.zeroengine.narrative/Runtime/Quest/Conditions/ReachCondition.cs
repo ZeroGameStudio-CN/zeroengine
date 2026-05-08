@@ -10,13 +10,15 @@ namespace ZeroEngine.Quest
     [Serializable]
     public class ReachCondition : QuestCondition
     {
-        [Tooltip("区域/位置 ID")]
+        [Header("Reach")]
+        [Tooltip("Location or zone ID to match against Quest.LocationReached events.")]
         public string LocationId;
 
-        [Tooltip("目标位置（可选，用于距离检测）")]
+        [Tooltip("Optional target position for projects that perform distance checks.")]
         public Vector3 TargetPosition;
 
-        [Tooltip("触发半径（0 表示使用区域触发器）")]
+        [Min(0)]
+        [Tooltip("Optional trigger radius. 0 means progress is driven by external trigger events.")]
         public float TriggerRadius = 0f;
 
         public override string ConditionType => "Reach";

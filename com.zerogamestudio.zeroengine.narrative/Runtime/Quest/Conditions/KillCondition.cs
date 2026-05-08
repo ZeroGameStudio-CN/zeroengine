@@ -9,10 +9,12 @@ namespace ZeroEngine.Quest
     [Serializable]
     public class KillCondition : QuestCondition
     {
-        [Tooltip("目标 ID（敌人类型 ID）")]
+        [Header("Kill")]
+        [Tooltip("Entity or enemy type ID to match against Quest.EntityKilled events.")]
         public string TargetId;
 
-        [Tooltip("需要击杀的数量")]
+        [Min(1)]
+        [Tooltip("Number of matching kill events required.")]
         public int RequiredCount = 1;
 
         public override string ConditionType => "Kill";

@@ -10,13 +10,15 @@ namespace ZeroEngine.Quest
     [Serializable]
     public class InteractCondition : QuestCondition
     {
-        [Tooltip("交互目标 ID（NPC ID / 物体 ID）")]
+        [Header("Interact")]
+        [Tooltip("NPC or object ID to match against Quest.Interacted events.")]
         public string TargetId;
 
-        [Tooltip("需要交互的次数")]
+        [Min(1)]
+        [Tooltip("Number of matching interaction events required.")]
         public int RequiredCount = 1;
 
-        [Tooltip("交互类型")]
+        [Tooltip("Designer-facing interaction type. Event matching uses TargetId; projects may use this for UI or validation.")]
         public InteractionType InteractionType = InteractionType.Talk;
 
         public override string ConditionType => "Interact";

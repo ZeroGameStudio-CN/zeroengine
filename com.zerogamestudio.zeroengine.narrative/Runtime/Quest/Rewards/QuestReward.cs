@@ -10,10 +10,11 @@ namespace ZeroEngine.Quest
     [Serializable]
     public abstract class QuestReward
     {
-        [Tooltip("奖励描述（用于 UI 显示）")]
+        [Header("Display")]
+        [Tooltip("Fallback reward description for UI preview. Projects may override this through localization.")]
         public string Description;
 
-        [Tooltip("是否隐藏（不显示在奖励预览中）")]
+        [Tooltip("Hide this reward from preview UI while still granting it.")]
         public bool IsHidden;
 
         /// <summary>

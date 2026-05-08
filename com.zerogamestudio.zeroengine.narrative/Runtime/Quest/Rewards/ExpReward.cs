@@ -11,7 +11,9 @@ namespace ZeroEngine.Quest
     [Serializable]
     public class ExpReward : QuestReward
     {
-        [Tooltip("经验值数量")]
+        [Header("Exp")]
+        [Min(0)]
+        [Tooltip("Experience amount to grant.")]
         public int Amount;
 
         public override string RewardType => "Exp";

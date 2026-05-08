@@ -9,13 +9,15 @@ namespace ZeroEngine.Quest
     [Serializable]
     public class CollectCondition : QuestCondition
     {
-        [Tooltip("物品 ID")]
+        [Header("Collect")]
+        [Tooltip("Item ID to match against Quest.ItemObtained events.")]
         public string ItemId;
 
-        [Tooltip("需要收集的数量")]
+        [Min(1)]
+        [Tooltip("Number of matching item events required.")]
         public int RequiredCount = 1;
 
-        [Tooltip("是否在完成时消耗物品")]
+        [Tooltip("Whether the project should consume the item when the quest is completed. Consumption is project-defined.")]
         public bool ConsumeOnComplete = true;
 
         public override string ConditionType => "Collect";

@@ -10,10 +10,11 @@ namespace ZeroEngine.Quest
     [Serializable]
     public abstract class QuestCondition
     {
-        [Tooltip("条件描述（用于 UI 显示）")]
+        [Header("Display")]
+        [Tooltip("Fallback objective text for UI display. Projects may override this through localization.")]
         public string Description;
 
-        [Tooltip("是否隐藏（不显示在任务追踪中）")]
+        [Tooltip("Hide this condition from quest trackers while still requiring it for completion.")]
         public bool IsHidden;
 
         /// <summary>

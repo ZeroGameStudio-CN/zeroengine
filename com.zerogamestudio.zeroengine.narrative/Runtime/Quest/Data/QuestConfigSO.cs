@@ -7,28 +7,44 @@ namespace ZeroEngine.Quest
     public class QuestConfigSO : ScriptableObject
     {
         [Header("Basic Info")]
+        [Tooltip("Unique quest ID. Keep stable after release because runtime state and save data reference this value.")]
         public string questId;
+
+        [Tooltip("Fallback display name. Projects may override this through their localization layer.")]
         public string questName;
+
+        [Tooltip("Fallback quest description for UI or designer notes.")]
         [TextArea(3, 5)] public string description;
 
         [Header("Conditions")]
-        [Tooltip("条件系统 - 支持多种条件类型")]
+        [Tooltip("Completion conditions. All visible and hidden conditions must be satisfied before the quest becomes Successful.")]
         [SerializeReference]
         public List<QuestCondition> Conditions = new List<QuestCondition>();
 
         [Header("Rewards")]
-        [Tooltip("奖励系统 - 支持多种奖励类型")]
+        [Tooltip("Rewards granted when the quest is submitted or auto-submitted.")]
         [SerializeReference]
         public List<QuestReward> Rewards = new List<QuestReward>();
 
         [Header("Settings")]
+        [Tooltip("If enabled, the quest submits automatically as soon as all Conditions are satisfied.")]
         public bool autoSubmit;
+
+        [Min(0)]
+        [Tooltip("How many times this quest may be completed. 0 means unlimited.")]
         public int repetitionLimit;
+
+        [Tooltip("Persistent quests stay in save data. PerRun quests can be cleared by run/session flow.")]
         public QuestLifecycle lifecycle = QuestLifecycle.Persistent;
 
         [Header("NPC Interaction")]
+        [Tooltip("Optional provider NPC ID for projects that use NPC-based quest acceptance.")]
         public string providerNpcId;
+
+        [Tooltip("Optional submit NPC ID for projects that require hand-in at a specific NPC.")]
         public string submitNpcId;
+
+        [Tooltip("Optional fallback completion dialogue text.")]
         [TextArea(3, 5)] public string completionDialogue;
 
         /// <summary>

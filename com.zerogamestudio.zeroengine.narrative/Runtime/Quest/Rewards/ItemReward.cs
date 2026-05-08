@@ -11,13 +11,15 @@ namespace ZeroEngine.Quest
     [Serializable]
     public class ItemReward : QuestReward
     {
-        [Tooltip("物品 ID")]
+        [Header("Item")]
+        [Tooltip("Item ID to grant.")]
         public string ItemId;
 
-        [Tooltip("物品数量")]
+        [Min(1)]
+        [Tooltip("Item quantity to grant.")]
         public int Quantity = 1;
 
-        [Tooltip("物品配置（可选，用于预览）")]
+        [Tooltip("Optional item data reference used for reward preview UI.")]
         public InventoryItemSO ItemData;
 
         public override string RewardType => "Item";
