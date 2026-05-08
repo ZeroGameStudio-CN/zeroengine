@@ -260,8 +260,8 @@ namespace ZeroEngine.Pathfinding2D
                 return false;
             }
 
-            // 执行 A* 寻路
-            var path = FindPath(startNode.Value, endNode.Value, request.Start, resolvedTarget);
+            // 执行 A* 寻路。对高处目标同时尝试目标平台边缘节点，避免锁到平台中点后只在下方顶头。
+            var path = FindBestPathToTarget(startNode.Value, endNode.Value, endPlatform, request.Start, resolvedTarget);
 
             // 如果找不到路径，尝试回退策略
             if (path.Status == PathStatus.NotFound && config.AllowPartialPath)
@@ -406,6 +406,96 @@ namespace ZeroEngine.Pathfinding2D
             }
 
             return null;
+        }
+
+        private Platform2DPath FindBestPathToTarget(
+            PlatformNodeData startNode,
+            PlatformNodeData nearestEndNode,
+            Collider2D endPlatform,
+            Vector3 actualStart,
+            Vector3 actualEnd)
+        {
+            Platform2DPath bestPath = null;
+            float bestScore = float.MaxValue;
+
+            foreach (var candidate in BuildTargetNodeCandidates(nearestEndNode, endPlatform, actualEnd))
+            {
+                var path = FindPath(startNode, candidate, actualStart, actualEnd);
+                if (path.Status != PathStatus.Valid)
+                    continue;
+
+                float score = ScoreTargetPath(path, actualEnd);
+                if (score < bestScore)
+                {
+                    bestPath = path;
+                    bestScore = score;
+                }
+            }
+
+            return bestPath ?? Platform2DPath.NotFound(actualStart, actualEnd);
+        }
+
+        private List<PlatformNodeData> BuildTargetNodeCandidates(
+            PlatformNodeData nearestEndNode,
+            Collider2D endPlatform,
+            Vector3 actualEnd)
+        {
+            var candidates = new List<PlatformNodeData> { nearestEndNode };
+            var seen = new HashSet<int> { nearestEndNode.NodeId };
+
+            if (endPlatform == null)
+                return candidates;
+
+            foreach (var node in graphGenerator.Nodes)
+            {
+                if (node.PlatformCollider != endPlatform || seen.Contains(node.NodeId))
+                    continue;
+
+                bool isEdge = node.NodeType == PlatformNodeType.LeftEdge ||
+                              node.NodeType == PlatformNodeType.RightEdge;
+                if (!isEdge)
+                    continue;
+
+                candidates.Add(node);
+                seen.Add(node.NodeId);
+            }
+
+            candidates.Sort((a, b) =>
+            {
+                int heightCompare = Mathf.Abs(a.Position.y - actualEnd.y)
+                    .CompareTo(Mathf.Abs(b.Position.y - actualEnd.y));
+                if (heightCompare != 0)
+                    return heightCompare;
+
+                return Vector2.Distance(a.Position, actualEnd)
+                    .CompareTo(Vector2.Distance(b.Position, actualEnd));
+            });
+
+            return candidates;
+        }
+
+        private float ScoreTargetPath(Platform2DPath path, Vector3 actualEnd)
+        {
+            float score = path.TotalDuration;
+            bool hasTraversal = false;
+
+            foreach (var command in path.Commands)
+            {
+                if (command.CommandType == MoveCommandType.Jump ||
+                    command.CommandType == MoveCommandType.Fall ||
+                    command.CommandType == MoveCommandType.DropDown)
+                {
+                    hasTraversal = true;
+                }
+            }
+
+            if (!hasTraversal && actualEnd.y > path.StartPosition.y + config.SamePlatformMaxHeightDiff)
+                score += 1000f;
+
+            if (path.Commands.Count > 0)
+                score += Vector2.Distance(path.Commands[path.Commands.Count - 1].Target, actualEnd);
+
+            return score;
         }
 
         /// <summary>
