@@ -144,6 +144,113 @@ namespace ZeroEngine.Pathfinding2D.Tests.Editor
             }
         }
 
+        [Test]
+        public void IsCurrentCommandComplete_WalkToNearEdge_DoesNotUseGlobalArriveDistance()
+        {
+            var host = new GameObject("NearEdgeWalkCompletionTest");
+            var lower = CreatePlatform("NearEdgeLowerPlatform", new Vector2(0f, 0f), new Vector2(10f, 0.2f));
+            var upper = CreatePlatform("NearEdgeUpperPlatform", new Vector2(0f, 3f), new Vector2(2f, 0.2f));
+
+            try
+            {
+                var pathfinder = CreatePathfinder(host, lower, upper, maxJumpVelocity: 16f);
+                var start = new Vector3(-0.3f, 0.35f, 0f);
+
+                bool success = pathfinder.TryRequestPath(
+                    new PlatformPathRequest(
+                        start,
+                        new Vector3(0f, 3.6f, 0f),
+                        forceRequest: true,
+                        projectTargetToGround: true),
+                    out var result);
+
+                Assert.IsTrue(success, BuildPathDebug(result));
+                Assert.That(result.Path.Commands, Has.Count.GreaterThanOrEqualTo(2));
+                Assert.AreEqual(MoveCommandType.Walk, result.Path.Commands[0].CommandType);
+                Assert.Less(Mathf.Abs(start.x - result.Path.Commands[0].Target.x), pathfinder.Config.ArriveDistance);
+                Assert.IsFalse(pathfinder.IsCurrentCommandComplete(start, isGrounded: true));
+            }
+            finally
+            {
+                Object.DestroyImmediate(host);
+                Object.DestroyImmediate(lower);
+                Object.DestroyImmediate(upper);
+            }
+        }
+
+        [Test]
+        public void TryRequestPath_ToOffsetHighPlatform_WalksTowardSameSideEdgeBeforeJumping()
+        {
+            var host = new GameObject("OffsetHighPlatformPathTest");
+            var lower = CreatePlatform("OffsetLowerPlatform", new Vector2(0f, 0f), new Vector2(10f, 0.2f));
+            var upper = CreatePlatform("OffsetUpperPlatform", new Vector2(4f, 3f), new Vector2(4f, 0.2f));
+
+            try
+            {
+                var pathfinder = CreatePathfinder(host, lower, upper, maxJumpVelocity: 16f);
+                var start = new Vector3(1.4f, 0.35f, 0f);
+
+                bool success = pathfinder.TryRequestPath(
+                    new PlatformPathRequest(
+                        start,
+                        new Vector3(4f, 3.6f, 0f),
+                        forceRequest: true,
+                        projectTargetToGround: true),
+                    out var result);
+
+                Assert.IsTrue(success, BuildPathDebug(result));
+                Assert.That(result.Path.Commands, Has.Count.GreaterThanOrEqualTo(2));
+
+                var first = result.Path.Commands[0];
+                Assert.AreEqual(MoveCommandType.Walk, first.CommandType);
+                Assert.Greater(first.Target.x, start.x, "The first command should walk toward the reachable same-side edge, not away from the target platform.");
+                Assert.IsTrue(result.Path.Commands.Any(command => command.CommandType == MoveCommandType.Jump));
+                Assert.IsFalse(pathfinder.IsCurrentCommandComplete(start, isGrounded: true));
+            }
+            finally
+            {
+                Object.DestroyImmediate(host);
+                Object.DestroyImmediate(lower);
+                Object.DestroyImmediate(upper);
+            }
+        }
+
+        [Test]
+        public void TryRequestPath_ToOffsetHighPlatform_DoesNotPreferOppositeEdgeWhenSameSideEdgeIsReachable()
+        {
+            var host = new GameObject("OffsetHighPlatformSameSideTest");
+            var lower = CreatePlatform("SameSideLowerPlatform", new Vector2(0f, 0f), new Vector2(12f, 0.2f));
+            var upper = CreatePlatform("SameSideUpperPlatform", new Vector2(4f, 3f), new Vector2(4f, 0.2f));
+
+            try
+            {
+                var pathfinder = CreatePathfinder(host, lower, upper, maxJumpVelocity: 16f);
+                var start = new Vector3(1.6f, 0.35f, 0f);
+
+                bool success = pathfinder.TryRequestPath(
+                    new PlatformPathRequest(
+                        start,
+                        new Vector3(4f, 3.6f, 0f),
+                        forceRequest: true,
+                        projectTargetToGround: true),
+                    out var result);
+
+                Assert.IsTrue(success, BuildPathDebug(result));
+                Assert.That(result.Path.Commands, Has.Count.GreaterThanOrEqualTo(2));
+
+                var first = result.Path.Commands[0];
+                Assert.AreEqual(MoveCommandType.Walk, first.CommandType);
+                Assert.Greater(first.Target.x, 0f);
+                Assert.IsTrue(result.Path.Commands.Any(command => command.CommandType == MoveCommandType.Jump));
+            }
+            finally
+            {
+                Object.DestroyImmediate(host);
+                Object.DestroyImmediate(lower);
+                Object.DestroyImmediate(upper);
+            }
+        }
+
         private static GameObject CreatePlatform(string name, Vector2 position, Vector2 size)
         {
             var platform = new GameObject(name);
@@ -152,6 +259,36 @@ namespace ZeroEngine.Pathfinding2D.Tests.Editor
             collider.size = size;
             Physics2D.SyncTransforms();
             return platform;
+        }
+
+        private static Platform2DPathfinder CreatePathfinder(
+            GameObject host,
+            GameObject lower,
+            GameObject upper,
+            float maxJumpVelocity)
+        {
+            var graph = host.AddComponent<PlatformGraphGenerator>();
+            graph.Config.ScanCenter = new Vector2(0f, 1.5f);
+            graph.Config.ScanSize = new Vector2(14f, 8f);
+            graph.Config.GroundLayer = 1 << lower.layer;
+            graph.Config.OneWayPlatformLayer = 0;
+            graph.Config.ObstacleLayer = 0;
+            graph.Config.NodeSpacing = 1f;
+            graph.Config.EdgeInset = 0.2f;
+
+            graph.GeneratePlatformGraph();
+            var jumpLinkCalculator = host.AddComponent<JumpLinkCalculator>();
+            jumpLinkCalculator.Config.MaxJumpVelocity = maxJumpVelocity;
+            jumpLinkCalculator.GenerateJumpLinks();
+
+            var pathfinder = host.AddComponent<Platform2DPathfinder>();
+            pathfinder.SetGraphGenerator(graph);
+            return pathfinder;
+        }
+
+        private static string BuildPathDebug(PlatformPathResult result)
+        {
+            return $"{result.FailureReason}; commands={result.Path?.Commands.Count ?? 0}";
         }
     }
 }
