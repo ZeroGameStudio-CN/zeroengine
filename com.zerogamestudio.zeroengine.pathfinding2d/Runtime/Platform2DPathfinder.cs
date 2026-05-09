@@ -270,7 +270,7 @@ namespace ZeroEngine.Pathfinding2D
             }
 
             // 执行 A* 寻路。对高处目标同时尝试目标平台边缘节点，避免锁到平台中点后只在下方顶头。
-            var path = FindBestPathToTarget(startNode.Value, endNode.Value, endPlatform, request.Start, resolvedTarget);
+            var path = FindBestPathToTarget(startNode.Value, endNode.Value, request.Start, resolvedTarget);
 
             // 如果找不到路径，尝试回退策略
             if (path.Status == PathStatus.NotFound && config.AllowPartialPath)
@@ -310,8 +310,18 @@ namespace ZeroEngine.Pathfinding2D
             var startPlatform = DetectPlatformBelow(start);
             var endPlatform = DetectPlatformBelow(end);
 
-            // 如果不在同一平台，返回 null
+            // 如果不在同一碰撞体，返回 null
             if (startPlatform == null || endPlatform == null || startPlatform != endPlatform)
+            {
+                return null;
+            }
+
+            var startNode = graphGenerator.FindNearestNodeOnPlatform(start, startPlatform, config.MaxNodeSearchRadius);
+            var endNode = graphGenerator.FindNearestNodeOnPlatform(end, endPlatform, config.MaxNodeSearchRadius);
+            if (!startNode.HasValue ||
+                !endNode.HasValue ||
+                startNode.Value.SurfaceGroupId < 0 ||
+                startNode.Value.SurfaceGroupId != endNode.Value.SurfaceGroupId)
             {
                 return null;
             }
@@ -459,14 +469,13 @@ namespace ZeroEngine.Pathfinding2D
         private Platform2DPath FindBestPathToTarget(
             PlatformNodeData startNode,
             PlatformNodeData nearestEndNode,
-            Collider2D endPlatform,
             Vector3 actualStart,
             Vector3 actualEnd)
         {
             Platform2DPath bestPath = null;
             float bestScore = float.MaxValue;
 
-            foreach (var candidate in BuildTargetNodeCandidates(nearestEndNode, endPlatform, actualEnd))
+            foreach (var candidate in BuildTargetNodeCandidates(nearestEndNode, actualEnd))
             {
                 var path = FindPath(startNode, candidate, actualStart, actualEnd);
                 if (path.Status != PathStatus.Valid)
@@ -488,18 +497,18 @@ namespace ZeroEngine.Pathfinding2D
 
         private List<PlatformNodeData> BuildTargetNodeCandidates(
             PlatformNodeData nearestEndNode,
-            Collider2D endPlatform,
             Vector3 actualEnd)
         {
             var candidates = new List<PlatformNodeData> { nearestEndNode };
             var seen = new HashSet<int> { nearestEndNode.NodeId };
 
-            if (endPlatform == null)
+            int targetSurfaceGroupId = nearestEndNode.SurfaceGroupId;
+            if (targetSurfaceGroupId < 0)
                 return candidates;
 
             foreach (var node in graphGenerator.Nodes)
             {
-                if (node.PlatformCollider != endPlatform || seen.Contains(node.NodeId))
+                if (node.SurfaceGroupId != targetSurfaceGroupId || seen.Contains(node.NodeId))
                     continue;
 
                 bool isEdge = node.NodeType == PlatformNodeType.LeftEdge ||
@@ -789,7 +798,7 @@ namespace ZeroEngine.Pathfinding2D
                 BuildCommandDebug(CurrentPath));
         }
 
-        private static string BuildCommandDebug(Platform2DPath path)
+        private string BuildCommandDebug(Platform2DPath path)
         {
             if (path?.Commands == null || path.Commands.Count == 0)
                 return "none";
@@ -798,10 +807,20 @@ namespace ZeroEngine.Pathfinding2D
             for (int i = 0; i < path.Commands.Count; i++)
             {
                 var command = path.Commands[i];
-                parts.Add($"{i}:{command.CommandType}@{command.Target:F2}/face={command.FacingDirection}");
+                int groupId = ResolveCommandTargetSurfaceGroup(command);
+                parts.Add($"{i}:{command.CommandType}@{command.Target:F2}/face={command.FacingDirection}/group={groupId}");
             }
 
             return string.Join(" -> ", parts);
+        }
+
+        private int ResolveCommandTargetSurfaceGroup(MoveCommand command)
+        {
+            if (graphGenerator == null)
+                return -1;
+
+            var node = graphGenerator.FindNearestNode(command.Target, config.MaxNodeSearchRadius);
+            return node.HasValue ? node.Value.SurfaceGroupId : -1;
         }
 
         /// <summary>

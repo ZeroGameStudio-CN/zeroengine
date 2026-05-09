@@ -144,10 +144,15 @@ namespace ZeroEngine.Pathfinding2D
 
                     var toNode = nodes[j];
 
-                    // 跳过同一平台的节点（改用 Y 坐标差异判断，支持 Tilemap Composite Collider）
-                    // 原逻辑用 PlatformCollider 判断，但 Tilemap 所有平台共享一个 Collider，导致跳跃链接无法生成
+                    // 跳过同一连续平台段的节点。Composite/Tilemap 会让多个平台段共享 Collider，
+                    // 这里只能用 SurfaceGroupId 判断真实同平台。
                     float heightDiff = Mathf.Abs(toNode.Position.y - fromNode.Position.y);
-                    if (heightDiff < 0.5f && fromNode.PlatformCollider == toNode.PlatformCollider) continue;
+                    if (fromNode.SurfaceGroupId >= 0 &&
+                        fromNode.SurfaceGroupId == toNode.SurfaceGroupId &&
+                        heightDiff < 0.5f)
+                    {
+                        continue;
+                    }
 
                     // 检查距离限制
                     float horizontalDist = Mathf.Abs(toNode.Position.x - fromNode.Position.x);
@@ -483,9 +488,14 @@ namespace ZeroEngine.Pathfinding2D
 
             foreach (var toNode in allNodes)
             {
-                // 跳过同一平台（使用高度差判断，支持 Tilemap Composite Collider）
+                // 跳过同一连续平台段。
                 float heightDiff = Mathf.Abs(toNode.Position.y - fromNode.Position.y);
-                if (heightDiff < 0.5f && toNode.PlatformCollider == fromNode.PlatformCollider) continue;
+                if (fromNode.SurfaceGroupId >= 0 &&
+                    fromNode.SurfaceGroupId == toNode.SurfaceGroupId &&
+                    heightDiff < 0.5f)
+                {
+                    continue;
+                }
 
                 // 目标必须在正下方附近
                 float horizontalDist = Mathf.Abs(toNode.Position.x - startPos.x);

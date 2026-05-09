@@ -46,13 +46,21 @@ namespace ZeroEngine.Pathfinding2D
         /// <summary>平台表面 Y 坐标</summary>
         public float SurfaceY;
 
+        /// <summary>所属可站立平台段 ID。同一连续表面上的节点共享同一个 ID。</summary>
+        public int SurfaceGroupId;
+
         /// <summary>节点是否可用</summary>
         public bool IsValid => PlatformCollider != null;
 
         /// <summary>
         /// 创建表面节点
         /// </summary>
-        public static PlatformNodeData CreateSurface(int id, Vector3 position, Collider2D collider, bool isOneWay = false)
+        public static PlatformNodeData CreateSurface(
+            int id,
+            Vector3 position,
+            Collider2D collider,
+            bool isOneWay = false,
+            int surfaceGroupId = -1)
         {
             return new PlatformNodeData
             {
@@ -61,14 +69,21 @@ namespace ZeroEngine.Pathfinding2D
                 NodeType = PlatformNodeType.Surface,
                 PlatformCollider = collider,
                 IsOneWay = isOneWay,
-                SurfaceY = position.y
+                SurfaceY = position.y,
+                SurfaceGroupId = surfaceGroupId
             };
         }
 
         /// <summary>
         /// 创建边缘节点
         /// </summary>
-        public static PlatformNodeData CreateEdge(int id, Vector3 position, Collider2D collider, bool isLeftEdge, bool isOneWay = false)
+        public static PlatformNodeData CreateEdge(
+            int id,
+            Vector3 position,
+            Collider2D collider,
+            bool isLeftEdge,
+            bool isOneWay = false,
+            int surfaceGroupId = -1)
         {
             return new PlatformNodeData
             {
@@ -77,13 +92,14 @@ namespace ZeroEngine.Pathfinding2D
                 NodeType = isLeftEdge ? PlatformNodeType.LeftEdge : PlatformNodeType.RightEdge,
                 PlatformCollider = collider,
                 IsOneWay = isOneWay,
-                SurfaceY = position.y
+                SurfaceY = position.y,
+                SurfaceGroupId = surfaceGroupId
             };
         }
 
         public override string ToString()
         {
-            return $"Node[{NodeId}] {NodeType} at {Position:F2} (OneWay: {IsOneWay})";
+            return $"Node[{NodeId}] {NodeType} at {Position:F2} (OneWay: {IsOneWay}, Group: {SurfaceGroupId})";
         }
     }
 

@@ -388,6 +388,123 @@ namespace ZeroEngine.Pathfinding2D.Tests.Editor
             }
         }
 
+        [Test]
+        public void TryRequestPath_SameColliderTargetCandidates_StayOnTargetSurfaceGroup()
+        {
+            var host = new GameObject("SameColliderTargetSurfaceGroupTest");
+            var platform = CreateMultiPathPolygonPlatform(
+                "SameColliderMultiPlatform",
+                (new Vector2(0f, 0f), new Vector2(14f, 0.2f)),
+                (new Vector2(-4f, 3f), new Vector2(2f, 0.2f)),
+                (new Vector2(4f, 3f), new Vector2(2f, 0.2f)));
+
+            try
+            {
+                var pathfinder = CreatePathfinderForSingleCollider(host, platform, maxJumpVelocity: 16f);
+                var graph = pathfinder.GraphGenerator;
+                var target = new Vector3(4f, 3.6f, 0f);
+
+                bool success = pathfinder.TryRequestPath(
+                    new PlatformPathRequest(
+                        new Vector3(0f, 0.35f, 0f),
+                        target,
+                        forceRequest: true,
+                        projectTargetToGround: true),
+                    out var result);
+
+                Assert.IsTrue(success, BuildPathDebug(result));
+                Assert.IsTrue(result.Path.Commands.Any(command => command.CommandType == MoveCommandType.Jump), BuildPathDebug(result));
+
+                var targetNode = graph.FindNearestNodeOnPlatform(result.ResolvedTarget, platform, pathfinder.Config.MaxNodeSearchRadius);
+                Assert.IsTrue(targetNode.HasValue, BuildPathDebug(result));
+
+                var lastCommandNode = graph.FindNearestNode(
+                    result.Path.Commands[result.Path.Commands.Count - 1].Target,
+                    pathfinder.Config.MaxNodeSearchRadius);
+                Assert.IsTrue(lastCommandNode.HasValue, BuildPathDebug(result));
+                Assert.AreEqual(targetNode.Value.SurfaceGroupId, lastCommandNode.Value.SurfaceGroupId, BuildPathDebug(result));
+                Assert.That(pathfinder.GetSnapshot().CommandDebug, Does.Contain("/group="));
+
+                var oneWayHost = new GameObject("SameColliderTargetSurfaceGroupOneWayHost");
+                try
+                {
+                    var oneWayPathfinder = CreatePathfinderForSingleCollider(
+                        oneWayHost,
+                        platform,
+                        maxJumpVelocity: 16f,
+                        oneWay: true);
+                    bool oneWaySuccess = oneWayPathfinder.TryRequestPath(
+                        new PlatformPathRequest(
+                            new Vector3(0f, 0.35f, 0f),
+                            target,
+                            forceRequest: true,
+                            projectTargetToGround: true),
+                        out var oneWayResult);
+
+                    Assert.IsTrue(oneWaySuccess, BuildPathDebug(oneWayResult));
+                    var oneWayTargetNode = oneWayPathfinder.GraphGenerator.FindNearestNodeOnPlatform(
+                        oneWayResult.ResolvedTarget,
+                        platform,
+                        oneWayPathfinder.Config.MaxNodeSearchRadius);
+                    var oneWayFinalNode = oneWayPathfinder.GraphGenerator.FindNearestNode(
+                        oneWayResult.Path.Commands[oneWayResult.Path.Commands.Count - 1].Target,
+                        oneWayPathfinder.Config.MaxNodeSearchRadius);
+                    Assert.IsTrue(oneWayTargetNode.HasValue, BuildPathDebug(oneWayResult));
+                    Assert.IsTrue(oneWayFinalNode.HasValue, BuildPathDebug(oneWayResult));
+                    Assert.AreEqual(oneWayTargetNode.Value.SurfaceGroupId, oneWayFinalNode.Value.SurfaceGroupId, BuildPathDebug(oneWayResult));
+                }
+                finally
+                {
+                    Object.DestroyImmediate(oneWayHost);
+                }
+            }
+            finally
+            {
+                Object.DestroyImmediate(host);
+                Object.DestroyImmediate(platform.gameObject);
+            }
+        }
+
+        [Test]
+        public void GenerateWalkLinks_SameColliderGap_DoesNotConnectSurfaceGroups()
+        {
+            var host = new GameObject("SameColliderGapWalkLinkTest");
+            var platform = CreateMultiPathPolygonPlatform(
+                "SameColliderGapPlatform",
+                (new Vector2(-3f, 0f), new Vector2(2f, 0.2f)),
+                (new Vector2(3f, 0f), new Vector2(2f, 0.2f)));
+
+            try
+            {
+                var graph = host.AddComponent<PlatformGraphGenerator>();
+                graph.Config.ScanCenter = new Vector2(0f, 0f);
+                graph.Config.ScanSize = new Vector2(10f, 4f);
+                graph.Config.GroundLayer = 1 << platform.gameObject.layer;
+                graph.Config.OneWayPlatformLayer = 0;
+                graph.Config.ObstacleLayer = 0;
+                graph.Config.NodeSpacing = 0.75f;
+                graph.Config.EdgeInset = 0.2f;
+
+                graph.GeneratePlatformGraph();
+
+                Assert.That(graph.Nodes.Select(node => node.SurfaceGroupId).Distinct().Count(), Is.GreaterThanOrEqualTo(2));
+                Assert.IsFalse(graph.Links.Any(link =>
+                {
+                    var from = graph.GetNode(link.FromNodeId);
+                    var to = graph.GetNode(link.ToNodeId);
+                    return link.LinkType == PlatformLinkType.Walk &&
+                           from.HasValue &&
+                           to.HasValue &&
+                           from.Value.SurfaceGroupId != to.Value.SurfaceGroupId;
+                }));
+            }
+            finally
+            {
+                Object.DestroyImmediate(host);
+                Object.DestroyImmediate(platform.gameObject);
+            }
+        }
+
         private static GameObject CreatePlatform(string name, Vector2 position, Vector2 size)
         {
             var platform = new GameObject(name);
@@ -396,6 +513,57 @@ namespace ZeroEngine.Pathfinding2D.Tests.Editor
             collider.size = size;
             Physics2D.SyncTransforms();
             return platform;
+        }
+
+        private static PolygonCollider2D CreateMultiPathPolygonPlatform(
+            string name,
+            params (Vector2 center, Vector2 size)[] platforms)
+        {
+            var platform = new GameObject(name);
+            var collider = platform.AddComponent<PolygonCollider2D>();
+            collider.pathCount = platforms.Length;
+
+            for (int i = 0; i < platforms.Length; i++)
+            {
+                var rect = platforms[i];
+                float halfWidth = rect.size.x * 0.5f;
+                float halfHeight = rect.size.y * 0.5f;
+                collider.SetPath(i, new[]
+                {
+                    new Vector2(rect.center.x - halfWidth, rect.center.y - halfHeight),
+                    new Vector2(rect.center.x - halfWidth, rect.center.y + halfHeight),
+                    new Vector2(rect.center.x + halfWidth, rect.center.y + halfHeight),
+                    new Vector2(rect.center.x + halfWidth, rect.center.y - halfHeight)
+                });
+            }
+
+            Physics2D.SyncTransforms();
+            return collider;
+        }
+
+        private static Platform2DPathfinder CreatePathfinderForSingleCollider(
+            GameObject host,
+            Collider2D platform,
+            float maxJumpVelocity,
+            bool oneWay = false)
+        {
+            var graph = host.AddComponent<PlatformGraphGenerator>();
+            graph.Config.ScanCenter = new Vector2(0f, 1.5f);
+            graph.Config.ScanSize = new Vector2(16f, 8f);
+            graph.Config.GroundLayer = oneWay ? 0 : 1 << platform.gameObject.layer;
+            graph.Config.OneWayPlatformLayer = oneWay ? 1 << platform.gameObject.layer : 0;
+            graph.Config.ObstacleLayer = 0;
+            graph.Config.NodeSpacing = 1f;
+            graph.Config.EdgeInset = 0.2f;
+
+            graph.GeneratePlatformGraph();
+            var jumpLinkCalculator = host.AddComponent<JumpLinkCalculator>();
+            jumpLinkCalculator.Config.MaxJumpVelocity = maxJumpVelocity;
+            jumpLinkCalculator.GenerateJumpLinks();
+
+            var pathfinder = host.AddComponent<Platform2DPathfinder>();
+            pathfinder.SetGraphGenerator(graph);
+            return pathfinder;
         }
 
         private static Platform2DPathfinder CreatePathfinder(
