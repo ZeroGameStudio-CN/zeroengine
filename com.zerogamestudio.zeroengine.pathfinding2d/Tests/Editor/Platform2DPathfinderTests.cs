@@ -178,6 +178,90 @@ namespace ZeroEngine.Pathfinding2D.Tests.Editor
         }
 
         [Test]
+        public void TryRequestPath_TPlatformHighTarget_DoesNotGenerateVerticalWalk()
+        {
+            var host = new GameObject("TPlatformVerticalWalkRegression");
+            var lower = CreatePlatform("TPlatformLower", new Vector2(58f, 3f), new Vector2(12f, 0.2f));
+            var upper = CreatePlatform("TPlatformUpper", new Vector2(62f, 7f), new Vector2(16f, 0.2f));
+
+            try
+            {
+                var graph = host.AddComponent<PlatformGraphGenerator>();
+                graph.Config.ScanCenter = new Vector2(62f, 5f);
+                graph.Config.ScanSize = new Vector2(30f, 14f);
+                graph.Config.GroundLayer = 1 << lower.layer;
+                graph.Config.OneWayPlatformLayer = 0;
+                graph.Config.ObstacleLayer = 0;
+                graph.Config.NodeSpacing = 1f;
+                graph.Config.EdgeInset = 0.2f;
+
+                graph.GeneratePlatformGraph();
+                var jumpLinkCalculator = host.AddComponent<JumpLinkCalculator>();
+                jumpLinkCalculator.Config.MaxJumpVelocity = 18f;
+                jumpLinkCalculator.GenerateJumpLinks();
+
+                var pathfinder = host.AddComponent<Platform2DPathfinder>();
+                pathfinder.SetGraphGenerator(graph);
+
+                bool success = pathfinder.TryRequestPath(
+                    new PlatformPathRequest(
+                        new Vector3(53.49f, 3.12f, 0f),
+                        new Vector3(69.98f, 13.03f, 0f),
+                        forceRequest: true,
+                        projectTargetToGround: true),
+                    out var result);
+
+                Assert.IsTrue(success, BuildPathDebug(result));
+                Assert.AreEqual(PlatformPathCompletionKind.FullPath, result.CompletionKind, BuildPathDebug(result));
+                AssertNoVerticalWalkCommands(result);
+                Assert.IsTrue(
+                    result.Path.Commands.Any(command => command.CommandType == MoveCommandType.Jump),
+                    $"Expected a jump command for high T-platform traversal. {BuildPathDebug(result)}");
+            }
+            finally
+            {
+                Object.DestroyImmediate(host);
+                Object.DestroyImmediate(lower);
+                Object.DestroyImmediate(upper);
+            }
+        }
+
+        [Test]
+        public void TryRequestPath_WhenUpperNodeIsCloserByDistance_StartsFromGroundSurface()
+        {
+            var host = new GameObject("StartSurfaceGroupRegression");
+            var lower = CreatePlatform("StartSurfaceLower", new Vector2(0f, 0f), new Vector2(8f, 0.2f));
+            var upper = CreatePlatform("StartSurfaceUpper", new Vector2(0.4f, 3.5f), new Vector2(3f, 0.2f));
+
+            try
+            {
+                var pathfinder = CreatePathfinder(host, lower, upper, maxJumpVelocity: 16f);
+
+                bool success = pathfinder.TryRequestPath(
+                    new PlatformPathRequest(
+                        new Vector3(0f, 0.12f, 0f),
+                        new Vector3(0.4f, 4.0f, 0f),
+                        forceRequest: true,
+                        projectTargetToGround: true),
+                    out var result);
+
+                Assert.IsTrue(success, BuildPathDebug(result));
+                AssertNoVerticalWalkCommands(result);
+                Assert.AreEqual(
+                    result.Path.StartPosition.y,
+                    result.Path.Commands.First().Target.y,
+                    0.5f,
+                    $"First command should stay on the player's current ground surface. {BuildPathDebug(result)}");
+            }
+            finally
+            {
+                Object.DestroyImmediate(host);
+                Object.DestroyImmediate(lower);
+                Object.DestroyImmediate(upper);
+            }
+        }
+
+        [Test]
         public void IsCurrentCommandComplete_WalkToNearEdge_DoesNotUseGlobalArriveDistance()
         {
             var host = new GameObject("NearEdgeWalkCompletionTest");
@@ -505,6 +589,32 @@ namespace ZeroEngine.Pathfinding2D.Tests.Editor
             }
         }
 
+        [Test]
+        public void IsCurrentCommandComplete_WalkRequiresMatchingHeight()
+        {
+            var host = new GameObject("WalkCompletionHeightTest");
+
+            try
+            {
+                var pathfinder = host.AddComponent<Platform2DPathfinder>();
+                var commands = new System.Collections.Generic.List<MoveCommand>
+                {
+                    MoveCommand.Walk(new Vector3(1f, 4f, 0f), 0.5f, 1)
+                };
+                var path = new Platform2DPath(
+                    new Vector3(0.9f, 0f, 0f),
+                    new Vector3(1f, 4f, 0f),
+                    commands);
+                SetCurrentPath(pathfinder, path);
+
+                Assert.IsFalse(pathfinder.IsCurrentCommandComplete(new Vector3(1f, 0f, 0f), isGrounded: true));
+            }
+            finally
+            {
+                Object.DestroyImmediate(host);
+            }
+        }
+
         private static GameObject CreatePlatform(string name, Vector2 position, Vector2 size)
         {
             var platform = new GameObject(name);
@@ -593,7 +703,40 @@ namespace ZeroEngine.Pathfinding2D.Tests.Editor
 
         private static string BuildPathDebug(PlatformPathResult result)
         {
-            return $"{result.FailureReason}; commands={result.Path?.Commands.Count ?? 0}";
+            if (result.Path?.Commands == null)
+                return $"{result.FailureReason}; commands=0";
+
+            string commands = string.Join(" -> ", result.Path.Commands.Select((command, index) =>
+                $"{index}:{command.CommandType}@{command.Target:F2}/face={command.FacingDirection}"));
+            return $"{result.FailureReason}; kind={result.CompletionKind}; commands={result.Path.Commands.Count}; {commands}";
+        }
+
+        private static void AssertNoVerticalWalkCommands(PlatformPathResult result, float maxVerticalDelta = 0.5f)
+        {
+            Assert.IsNotNull(result.Path, BuildPathDebug(result));
+            Assert.IsNotNull(result.Path.Commands, BuildPathDebug(result));
+
+            for (int i = 0; i < result.Path.Commands.Count; i++)
+            {
+                var command = result.Path.Commands[i];
+                if (command.CommandType != MoveCommandType.Walk)
+                    continue;
+
+                Vector3 previousTarget = i == 0
+                    ? result.Path.StartPosition
+                    : result.Path.Commands[i - 1].Target;
+                float verticalDelta = Mathf.Abs(command.Target.y - previousTarget.y);
+                Assert.LessOrEqual(
+                    verticalDelta,
+                    maxVerticalDelta,
+                    $"Walk command {i} moves vertically from {previousTarget:F2} to {command.Target:F2}. {BuildPathDebug(result)}");
+            }
+        }
+
+        private static void SetCurrentPath(Platform2DPathfinder pathfinder, Platform2DPath path)
+        {
+            var property = typeof(Platform2DPathfinder).GetProperty(nameof(Platform2DPathfinder.CurrentPath));
+            property.SetValue(pathfinder, path);
         }
     }
 }

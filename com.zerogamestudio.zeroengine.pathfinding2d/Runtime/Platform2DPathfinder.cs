@@ -26,6 +26,9 @@ namespace ZeroEngine.Pathfinding2D
         [Tooltip("行走指令到达判定距离。应小于 ArriveDistance，避免短距离起跳点被第一帧跳过。")]
         public float WalkCommandArriveDistance = 0.25f;
 
+        [Tooltip("行走指令允许的最大高度差。更大的垂直移动必须由 Jump/Fall/DropDown 表达。")]
+        public float WalkCommandVerticalTolerance = 0.5f;
+
         [Header("节点查找")]
         [Tooltip("查找起点/终点节点的最大距离")]
         public float MaxNodeSearchRadius = 8f;
@@ -220,9 +223,8 @@ namespace ZeroEngine.Pathfinding2D
 
             // 查找起点和终点节点
             // 优先选择脚下平台上的节点，避免错误选择头顶平台节点
-            var startPlatform = DetectPlatformBelow(request.Start);
             var endPlatform = DetectPlatformBelow(resolvedTarget);
-            var startNode = graphGenerator.FindNearestNodeOnPlatform(request.Start, startPlatform, config.MaxNodeSearchRadius);
+            var startNode = ResolveStartNode(request.Start);
             var endNode = graphGenerator.FindNearestNodeOnPlatform(resolvedTarget, endPlatform, config.MaxNodeSearchRadius);
 
             if (!startNode.HasValue)
@@ -293,12 +295,34 @@ namespace ZeroEngine.Pathfinding2D
                 : config.AllowPartialPath
                     ? PlatformPathFailureReason.PartialPathUnavailable
                     : PlatformPathFailureReason.PathNotFound;
+            var resultResolvedTarget = (success || partial) && CurrentPath != null
+                ? CurrentPath.EndPosition
+                : resolvedTarget;
             result = success
-                ? PlatformPathResult.Succeeded(request.Start, request.Target, resolvedTarget, CurrentPath, GetCurrentCommand())
+                ? PlatformPathResult.Succeeded(request.Start, request.Target, resultResolvedTarget, CurrentPath, GetCurrentCommand())
                 : partial
-                    ? PlatformPathResult.Partial(LastFailureReason, request.Start, request.Target, resolvedTarget, CurrentPath, GetCurrentCommand())
+                    ? PlatformPathResult.Partial(LastFailureReason, request.Start, request.Target, resultResolvedTarget, CurrentPath, GetCurrentCommand())
                 : PlatformPathResult.Failed(LastFailureReason, request.Start, request.Target, resolvedTarget, CurrentPath);
             return success;
+        }
+
+        private PlatformNodeData? ResolveStartNode(Vector3 startPosition)
+        {
+            if (graphGenerator == null)
+                return null;
+
+            var startPlatform = DetectPlatformBelow(startPosition);
+            if (startPlatform != null)
+            {
+                var surfaceNode = graphGenerator.FindNearestNodeOnPlatform(
+                    startPosition,
+                    startPlatform,
+                    config.MaxNodeSearchRadius);
+                if (surfaceNode.HasValue)
+                    return surfaceNode;
+            }
+
+            return graphGenerator.FindNearestNode(startPosition, config.MaxNodeSearchRadius);
         }
 
         /// <summary>
@@ -758,7 +782,8 @@ namespace ZeroEngine.Pathfinding2D
             {
                 case MoveCommandType.Walk:
                     // 行走：到达目标 X 坐标附近
-                    return Mathf.Abs(currentPosition.x - command.Target.x) < config.WalkCommandArriveDistance;
+                    return Mathf.Abs(currentPosition.x - command.Target.x) < config.WalkCommandArriveDistance &&
+                           Mathf.Abs(currentPosition.y - command.Target.y) <= config.WalkCommandVerticalTolerance;
 
                 case MoveCommandType.Jump:
                 case MoveCommandType.Fall:
@@ -808,7 +833,8 @@ namespace ZeroEngine.Pathfinding2D
             {
                 var command = path.Commands[i];
                 int groupId = ResolveCommandTargetSurfaceGroup(command);
-                parts.Add($"{i}:{command.CommandType}@{command.Target:F2}/face={command.FacingDirection}/group={groupId}");
+                string currentMarker = i == path.CurrentIndex ? "*" : "";
+                parts.Add($"{currentMarker}{i}:{command.CommandType}@{command.Target:F2}/face={command.FacingDirection}/group={groupId}");
             }
 
             return string.Join(" -> ", parts);
@@ -959,6 +985,7 @@ namespace ZeroEngine.Pathfinding2D
 
             // 转换为 MoveCommand
             var commands = new List<MoveCommand>();
+            Vector3 generatedEnd = actualStart;
 
             // 从实际起点走到第一个节点
             if (nodePath.Count > 0)
@@ -967,7 +994,8 @@ namespace ZeroEngine.Pathfinding2D
                 if (firstNode.HasValue)
                 {
                     float dist = Vector2.Distance(actualStart, firstNode.Value.Position);
-                    if (dist > config.ArriveDistance)
+                    generatedEnd = firstNode.Value.Position;
+                    if (dist > config.ArriveDistance && CanCreateWalkCommand(actualStart, firstNode.Value.Position))
                     {
                         // 计算朝向：根据目标 X 与起点 X 的差值
                         float deltaX = firstNode.Value.Position.x - actualStart.x;
@@ -997,6 +1025,9 @@ namespace ZeroEngine.Pathfinding2D
                 switch (link.LinkType)
                 {
                     case PlatformLinkType.Walk:
+                        if (!CanCreateWalkCommand(prevPosition, toNode.Value.Position))
+                            return Platform2DPath.NotFound(actualStart, actualEnd);
+
                         commands.Add(MoveCommand.Walk(toNode.Value.Position, link.Duration, facing));
                         break;
 
@@ -1026,6 +1057,7 @@ namespace ZeroEngine.Pathfinding2D
                 }
 
                 prevPosition = toNode.Value.Position;
+                generatedEnd = toNode.Value.Position;
             }
 
             // 从最后一个节点走到实际终点
@@ -1035,7 +1067,7 @@ namespace ZeroEngine.Pathfinding2D
                 if (lastNode.HasValue)
                 {
                     float dist = Vector2.Distance(lastNode.Value.Position, actualEnd);
-                    if (dist > config.ArriveDistance)
+                    if (dist > config.ArriveDistance && CanCreateWalkCommand(lastNode.Value.Position, actualEnd))
                     {
                         // 计算朝向
                         float deltaX = actualEnd.x - lastNode.Value.Position.x;
@@ -1046,11 +1078,17 @@ namespace ZeroEngine.Pathfinding2D
                             dist / config.WalkSpeed,
                             facing
                         ));
+                        generatedEnd = actualEnd;
                     }
                 }
             }
 
-            return new Platform2DPath(actualStart, actualEnd, commands);
+            return new Platform2DPath(actualStart, generatedEnd, commands);
+        }
+
+        private bool CanCreateWalkCommand(Vector3 from, Vector3 to)
+        {
+            return Mathf.Abs(from.y - to.y) <= config.WalkCommandVerticalTolerance;
         }
 
         /// <summary>
