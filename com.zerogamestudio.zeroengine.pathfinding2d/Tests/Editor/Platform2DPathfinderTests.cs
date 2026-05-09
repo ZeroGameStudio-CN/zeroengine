@@ -303,6 +303,57 @@ namespace ZeroEngine.Pathfinding2D.Tests.Editor
             }
         }
 
+        [Test]
+        public void TryRequestPath_ElevatedFarTarget_DoesNotReturnWalkOnlyLowPartialPath()
+        {
+            var host = new GameObject("ElevatedFarTargetNoWalkOnlyPartialTest");
+            var lowerRoute = CreatePlatform("LowerWalkOnlyRoutePlatform", new Vector2(35f, 0f), new Vector2(40f, 0.2f));
+            var targetPlatform = CreatePlatform("UnreachableWalkOnlyHighTargetPlatform", new Vector2(53f, 8f), new Vector2(3f, 0.2f));
+
+            try
+            {
+                var graph = host.AddComponent<PlatformGraphGenerator>();
+                graph.Config.ScanCenter = new Vector2(35f, 4f);
+                graph.Config.ScanSize = new Vector2(45f, 18f);
+                graph.Config.GroundLayer = 1 << lowerRoute.layer;
+                graph.Config.OneWayPlatformLayer = 0;
+                graph.Config.ObstacleLayer = 0;
+                graph.Config.NodeSpacing = 1f;
+                graph.Config.EdgeInset = 0.2f;
+
+                graph.GeneratePlatformGraph();
+                var jumpLinkCalculator = host.AddComponent<JumpLinkCalculator>();
+                jumpLinkCalculator.Config.MaxJumpVelocity = 8f;
+                jumpLinkCalculator.Config.MaxJumpHeight = 4f;
+                jumpLinkCalculator.Config.MaxHorizontalDistance = 4f;
+                jumpLinkCalculator.GenerateJumpLinks();
+
+                var pathfinder = host.AddComponent<Platform2DPathfinder>();
+                pathfinder.SetGraphGenerator(graph);
+
+                bool success = pathfinder.TryRequestPath(
+                    new PlatformPathRequest(
+                        new Vector3(20.5f, 0.35f, 0f),
+                        new Vector3(53f, 8.6f, 0f),
+                        forceRequest: true,
+                        projectTargetToGround: true),
+                    out var result);
+
+                bool hasWalkOnlyLowRoute = result.Path?.Commands != null &&
+                                           result.Path.Commands.All(command => command.CommandType == MoveCommandType.Walk) &&
+                                           result.Path.Commands.Count > 0 &&
+                                           result.Path.Commands[result.Path.Commands.Count - 1].Target.y < 7.5f;
+
+                Assert.IsFalse(success && hasWalkOnlyLowRoute, BuildPathDebug(result));
+            }
+            finally
+            {
+                Object.DestroyImmediate(host);
+                Object.DestroyImmediate(lowerRoute);
+                Object.DestroyImmediate(targetPlatform);
+            }
+        }
+
         private static GameObject CreatePlatform(string name, Vector2 position, Vector2 size)
         {
             var platform = new GameObject(name);

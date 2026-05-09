@@ -420,17 +420,16 @@ namespace ZeroEngine.Pathfinding2D
                 return false;
 
             bool hasJump = false;
-            bool hasFallOrDrop = false;
             foreach (var command in path.Commands)
             {
                 if (command.CommandType == MoveCommandType.Jump)
+                {
                     hasJump = true;
-                else if (command.CommandType == MoveCommandType.Fall ||
-                         command.CommandType == MoveCommandType.DropDown)
-                    hasFallOrDrop = true;
+                    break;
+                }
             }
 
-            if (hasJump || !hasFallOrDrop)
+            if (hasJump)
                 return false;
 
             var finalTarget = path.Commands[path.Commands.Count - 1].Target;
