@@ -238,7 +238,7 @@ namespace ZeroEngine.Pathfinding2D
                 if (config.AllowPartialPath)
                 {
                     var partialPath = TryCreatePartialPath(request.Start, resolvedTarget, startNode, endNode);
-                    if (partialPath != null)
+                    if (partialPath != null && !IsBadElevatedPartialPath(partialPath, request.Start, resolvedTarget))
                     {
                         CurrentPath = partialPath;
                         LastFailureReason = PlatformPathFailureReason.None;
@@ -270,7 +270,7 @@ namespace ZeroEngine.Pathfinding2D
             if (path.Status == PathStatus.NotFound && config.AllowPartialPath)
             {
                 var partialPath = TryFindPartialPath(startNode.Value, endNode.Value, request.Start, resolvedTarget);
-                if (partialPath != null)
+                if (partialPath != null && !IsBadElevatedPartialPath(partialPath, request.Start, resolvedTarget))
                 {
                     path = partialPath;
                 }
@@ -409,6 +409,32 @@ namespace ZeroEngine.Pathfinding2D
             }
 
             return null;
+        }
+
+        private bool IsBadElevatedPartialPath(Platform2DPath path, Vector3 actualStart, Vector3 actualEnd)
+        {
+            if (path == null || path.Commands == null || path.Commands.Count == 0)
+                return false;
+
+            if (actualEnd.y <= actualStart.y + config.SamePlatformMaxHeightDiff)
+                return false;
+
+            bool hasJump = false;
+            bool hasFallOrDrop = false;
+            foreach (var command in path.Commands)
+            {
+                if (command.CommandType == MoveCommandType.Jump)
+                    hasJump = true;
+                else if (command.CommandType == MoveCommandType.Fall ||
+                         command.CommandType == MoveCommandType.DropDown)
+                    hasFallOrDrop = true;
+            }
+
+            if (hasJump || !hasFallOrDrop)
+                return false;
+
+            var finalTarget = path.Commands[path.Commands.Count - 1].Target;
+            return finalTarget.y < actualEnd.y - config.SamePlatformMaxHeightDiff;
         }
 
         private Platform2DPath FindBestPathToTarget(
