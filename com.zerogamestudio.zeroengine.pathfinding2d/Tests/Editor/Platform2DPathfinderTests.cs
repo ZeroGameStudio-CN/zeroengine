@@ -21,6 +21,7 @@ namespace ZeroEngine.Pathfinding2D.Tests.Editor
 
                 Assert.IsFalse(success);
                 Assert.IsFalse(result.Success);
+                Assert.AreEqual(PlatformPathCompletionKind.Failed, result.CompletionKind);
                 Assert.AreEqual(PlatformPathFailureReason.MissingGraphGenerator, result.FailureReason);
             }
             finally
@@ -44,6 +45,7 @@ namespace ZeroEngine.Pathfinding2D.Tests.Editor
                     out var result);
 
                 Assert.IsFalse(success);
+                Assert.AreEqual(PlatformPathCompletionKind.Failed, result.CompletionKind);
                 Assert.AreEqual(PlatformPathFailureReason.GraphNotGenerated, result.FailureReason);
             }
             finally
@@ -86,10 +88,41 @@ namespace ZeroEngine.Pathfinding2D.Tests.Editor
                 Assert.IsFalse(snapshot.HasGraphGenerator);
                 Assert.AreEqual(0, snapshot.NodeCount);
                 Assert.AreEqual(0, snapshot.LinkCount);
+                Assert.AreEqual(PlatformPathCompletionKind.Failed, snapshot.CompletionKind);
+                Assert.AreEqual("none", snapshot.CommandDebug);
             }
             finally
             {
                 Object.DestroyImmediate(host);
+            }
+        }
+
+        [Test]
+        public void TryRequestPath_WhenAlreadyAtResolvedTarget_ReturnsArrivedKind()
+        {
+            var host = new GameObject("ArrivedKindTest");
+            var platform = CreatePlatform("ArrivedKindPlatform", new Vector2(0f, 0f), new Vector2(6f, 0.2f));
+
+            try
+            {
+                var pathfinder = CreatePathfinder(host, platform, platform, maxJumpVelocity: 16f);
+
+                bool success = pathfinder.TryRequestPath(
+                    new PlatformPathRequest(
+                        new Vector3(0f, 0.35f, 0f),
+                        new Vector3(0.1f, 0.35f, 0f),
+                        forceRequest: true,
+                        projectTargetToGround: false),
+                    out var result);
+
+                Assert.IsTrue(success);
+                Assert.AreEqual(PlatformPathCompletionKind.Arrived, result.CompletionKind);
+                Assert.AreEqual(PlatformPathCompletionKind.Arrived, result.Path.CompletionKind);
+            }
+            finally
+            {
+                Object.DestroyImmediate(host);
+                Object.DestroyImmediate(platform);
             }
         }
 
@@ -345,6 +378,7 @@ namespace ZeroEngine.Pathfinding2D.Tests.Editor
                                            result.Path.Commands[result.Path.Commands.Count - 1].Target.y < 7.5f;
 
                 Assert.IsFalse(success && hasWalkOnlyLowRoute, BuildPathDebug(result));
+                Assert.AreNotEqual(PlatformPathCompletionKind.FullPath, result.CompletionKind, BuildPathDebug(result));
             }
             finally
             {

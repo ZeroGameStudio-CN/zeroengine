@@ -94,6 +94,11 @@ namespace ZeroEngine.Pathfinding2D
                                     CurrentPath.Status == PathStatus.Valid &&
                                     !CurrentPath.IsComplete;
 
+        /// <summary>是否有完整或已到达路径。部分路径不代表导航成功。</summary>
+        public bool HasCompletePath => CurrentPath != null &&
+                                       CurrentPath.Status == PathStatus.Valid &&
+                                       CurrentPath.CompletionKind != PlatformPathCompletionKind.Partial;
+
         /// <summary>上一次寻路失败原因</summary>
         public PlatformPathFailureReason LastFailureReason { get; private set; }
 
@@ -241,14 +246,15 @@ namespace ZeroEngine.Pathfinding2D
                     if (partialPath != null && !IsBadElevatedPartialPath(partialPath, request.Start, resolvedTarget))
                     {
                         CurrentPath = partialPath;
-                        LastFailureReason = PlatformPathFailureReason.None;
-                        result = PlatformPathResult.Succeeded(
+                        LastFailureReason = PlatformPathFailureReason.PartialPath;
+                        result = PlatformPathResult.Partial(
+                            LastFailureReason,
                             request.Start,
                             request.Target,
                             resolvedTarget,
                             CurrentPath,
                             GetCurrentCommand());
-                        return true;
+                        return false;
                     }
                 }
 
@@ -277,14 +283,20 @@ namespace ZeroEngine.Pathfinding2D
             }
 
             CurrentPath = path;
-            bool success = path.Status == PathStatus.Valid;
+            bool partial = path.Status == PathStatus.Valid &&
+                           path.CompletionKind == PlatformPathCompletionKind.Partial;
+            bool success = path.Status == PathStatus.Valid && !partial;
             LastFailureReason = success
                 ? PlatformPathFailureReason.None
+                : partial
+                    ? PlatformPathFailureReason.PartialPath
                 : config.AllowPartialPath
                     ? PlatformPathFailureReason.PartialPathUnavailable
                     : PlatformPathFailureReason.PathNotFound;
             result = success
                 ? PlatformPathResult.Succeeded(request.Start, request.Target, resolvedTarget, CurrentPath, GetCurrentCommand())
+                : partial
+                    ? PlatformPathResult.Partial(LastFailureReason, request.Start, request.Target, resolvedTarget, CurrentPath, GetCurrentCommand())
                 : PlatformPathResult.Failed(LastFailureReason, request.Start, request.Target, resolvedTarget, CurrentPath);
             return success;
         }
@@ -387,7 +399,7 @@ namespace ZeroEngine.Pathfinding2D
                 var nearestToEnd = graphGenerator.FindNearestNode(end, float.MaxValue);
                 if (nearestToEnd.HasValue)
                 {
-                    return FindPath(startNode.Value, nearestToEnd.Value, start, nearestToEnd.Value.Position);
+                    return ToPartialPath(FindPath(startNode.Value, nearestToEnd.Value, start, nearestToEnd.Value.Position));
                 }
             }
 
@@ -405,10 +417,18 @@ namespace ZeroEngine.Pathfinding2D
 
             if (closestReachable.HasValue && closestReachable.Value.NodeId != startNode.NodeId)
             {
-                return FindPath(startNode, closestReachable.Value, actualStart, closestReachable.Value.Position);
+                return ToPartialPath(FindPath(startNode, closestReachable.Value, actualStart, closestReachable.Value.Position));
             }
 
             return null;
+        }
+
+        private static Platform2DPath ToPartialPath(Platform2DPath path)
+        {
+            if (path == null || path.Status != PathStatus.Valid)
+                return path;
+
+            return Platform2DPath.Partial(path.StartPosition, path.EndPosition, path.Commands);
         }
 
         private bool IsBadElevatedPartialPath(Platform2DPath path, Vector3 actualStart, Vector3 actualEnd)
@@ -450,6 +470,9 @@ namespace ZeroEngine.Pathfinding2D
             {
                 var path = FindPath(startNode, candidate, actualStart, actualEnd);
                 if (path.Status != PathStatus.Valid)
+                    continue;
+
+                if (IsInvalidElevatedPath(path, actualStart, actualEnd))
                     continue;
 
                 float score = ScoreTargetPath(path, actualEnd);
@@ -506,24 +529,73 @@ namespace ZeroEngine.Pathfinding2D
         {
             float score = path.TotalDuration;
             bool hasTraversal = false;
+            bool hasJump = false;
+            bool hasDownwardTraversal = false;
 
             foreach (var command in path.Commands)
             {
-                if (command.CommandType == MoveCommandType.Jump ||
-                    command.CommandType == MoveCommandType.Fall ||
-                    command.CommandType == MoveCommandType.DropDown)
+                if (command.CommandType == MoveCommandType.Jump)
+                {
+                    hasJump = true;
+                    hasTraversal = true;
+                }
+                else if (command.CommandType == MoveCommandType.Fall ||
+                         command.CommandType == MoveCommandType.DropDown)
                 {
                     hasTraversal = true;
+                    hasDownwardTraversal = true;
                 }
             }
 
             if (!hasTraversal && actualEnd.y > path.StartPosition.y + config.SamePlatformMaxHeightDiff)
                 score += 1000f;
 
+            if (hasDownwardTraversal && actualEnd.y > path.StartPosition.y + config.SamePlatformMaxHeightDiff)
+                score += hasJump ? 25f : 2000f;
+
             if (path.Commands.Count > 0)
                 score += Vector2.Distance(path.Commands[path.Commands.Count - 1].Target, actualEnd);
 
             return score;
+        }
+
+        private bool IsInvalidElevatedPath(Platform2DPath path, Vector3 actualStart, Vector3 actualEnd)
+        {
+            if (path == null || path.Commands == null || path.Commands.Count == 0)
+                return false;
+
+            if (actualEnd.y <= actualStart.y + config.SamePlatformMaxHeightDiff)
+                return false;
+
+            bool hasJump = false;
+            bool hasDownwardTraversal = false;
+            foreach (var command in path.Commands)
+            {
+                if (command.CommandType == MoveCommandType.Jump)
+                    hasJump = true;
+                else if (command.CommandType == MoveCommandType.Fall ||
+                         command.CommandType == MoveCommandType.DropDown)
+                    hasDownwardTraversal = true;
+            }
+
+            if (!hasJump)
+                return true;
+
+            if (!hasDownwardTraversal)
+                return false;
+
+            int lastJumpIndex = -1;
+            int lastDownIndex = -1;
+            for (int i = 0; i < path.Commands.Count; i++)
+            {
+                var type = path.Commands[i].CommandType;
+                if (type == MoveCommandType.Jump)
+                    lastJumpIndex = i;
+                else if (type == MoveCommandType.Fall || type == MoveCommandType.DropDown)
+                    lastDownIndex = i;
+            }
+
+            return lastDownIndex > lastJumpIndex;
         }
 
         /// <summary>
@@ -712,7 +784,24 @@ namespace ZeroEngine.Pathfinding2D
                 HasValidPath,
                 CurrentPath != null && CurrentPath.Commands != null ? CurrentPath.Commands.Count : 0,
                 CurrentPath != null ? CurrentPath.CurrentIndex : -1,
-                LastFailureReason);
+                LastFailureReason,
+                CurrentPath != null ? CurrentPath.CompletionKind : PlatformPathCompletionKind.Failed,
+                BuildCommandDebug(CurrentPath));
+        }
+
+        private static string BuildCommandDebug(Platform2DPath path)
+        {
+            if (path?.Commands == null || path.Commands.Count == 0)
+                return "none";
+
+            var parts = new List<string>(path.Commands.Count);
+            for (int i = 0; i < path.Commands.Count; i++)
+            {
+                var command = path.Commands[i];
+                parts.Add($"{i}:{command.CommandType}@{command.Target:F2}/face={command.FacingDirection}");
+            }
+
+            return string.Join(" -> ", parts);
         }
 
         /// <summary>

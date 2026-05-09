@@ -12,6 +12,7 @@ namespace ZeroEngine.Pathfinding2D
         public readonly Vector3 ResolvedTarget;
         public readonly Platform2DPath Path;
         public readonly MoveCommand? CurrentCommand;
+        public readonly PlatformPathCompletionKind CompletionKind;
 
         public PlatformPathResult(
             bool success,
@@ -21,7 +22,8 @@ namespace ZeroEngine.Pathfinding2D
             Vector3 originalTarget,
             Vector3 resolvedTarget,
             Platform2DPath path,
-            MoveCommand? currentCommand)
+            MoveCommand? currentCommand,
+            PlatformPathCompletionKind completionKind)
         {
             Success = success;
             RequestStarted = requestStarted;
@@ -31,6 +33,7 @@ namespace ZeroEngine.Pathfinding2D
             ResolvedTarget = resolvedTarget;
             Path = path;
             CurrentCommand = currentCommand;
+            CompletionKind = completionKind;
         }
 
         public static PlatformPathResult Failed(
@@ -41,7 +44,16 @@ namespace ZeroEngine.Pathfinding2D
             Platform2DPath path = null,
             bool requestStarted = true)
         {
-            return new PlatformPathResult(false, requestStarted, reason, start, originalTarget, resolvedTarget, path, null);
+            return new PlatformPathResult(
+                false,
+                requestStarted,
+                reason,
+                start,
+                originalTarget,
+                resolvedTarget,
+                path,
+                null,
+                PlatformPathCompletionKind.Failed);
         }
 
         public static PlatformPathResult Succeeded(
@@ -51,7 +63,36 @@ namespace ZeroEngine.Pathfinding2D
             Platform2DPath path,
             MoveCommand? currentCommand)
         {
-            return new PlatformPathResult(true, true, PlatformPathFailureReason.None, start, originalTarget, resolvedTarget, path, currentCommand);
+            return new PlatformPathResult(
+                true,
+                true,
+                PlatformPathFailureReason.None,
+                start,
+                originalTarget,
+                resolvedTarget,
+                path,
+                currentCommand,
+                path != null ? path.CompletionKind : PlatformPathCompletionKind.FullPath);
+        }
+
+        public static PlatformPathResult Partial(
+            PlatformPathFailureReason reason,
+            Vector3 start,
+            Vector3 originalTarget,
+            Vector3 resolvedTarget,
+            Platform2DPath path,
+            MoveCommand? currentCommand)
+        {
+            return new PlatformPathResult(
+                false,
+                true,
+                reason,
+                start,
+                originalTarget,
+                resolvedTarget,
+                path,
+                currentCommand,
+                PlatformPathCompletionKind.Partial);
         }
     }
 }

@@ -10,6 +10,8 @@ namespace ZeroEngine.Pathfinding2D
         public readonly int CommandCount;
         public readonly int CurrentCommandIndex;
         public readonly PlatformPathFailureReason LastFailureReason;
+        public readonly PlatformPathCompletionKind CompletionKind;
+        public readonly string CommandDebug;
 
         public PlatformNavigationSnapshot(
             bool hasGraphGenerator,
@@ -19,7 +21,9 @@ namespace ZeroEngine.Pathfinding2D
             bool hasValidPath,
             int commandCount,
             int currentCommandIndex,
-            PlatformPathFailureReason lastFailureReason)
+            PlatformPathFailureReason lastFailureReason,
+            PlatformPathCompletionKind completionKind,
+            string commandDebug)
         {
             HasGraphGenerator = hasGraphGenerator;
             IsGenerated = isGenerated;
@@ -29,6 +33,8 @@ namespace ZeroEngine.Pathfinding2D
             CommandCount = commandCount;
             CurrentCommandIndex = currentCommandIndex;
             LastFailureReason = lastFailureReason;
+            CompletionKind = completionKind;
+            CommandDebug = commandDebug;
         }
     }
 }
