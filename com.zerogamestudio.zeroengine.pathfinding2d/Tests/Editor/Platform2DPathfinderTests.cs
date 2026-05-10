@@ -590,7 +590,7 @@ namespace ZeroEngine.Pathfinding2D.Tests.Editor
         }
 
         [Test]
-        public void IsCurrentCommandComplete_WalkRequiresMatchingHeight()
+        public void IsCurrentCommandComplete_WalkTargetAbovePlayer_DoesNotComplete()
         {
             var host = new GameObject("WalkCompletionHeightTest");
 
@@ -608,6 +608,32 @@ namespace ZeroEngine.Pathfinding2D.Tests.Editor
                 SetCurrentPath(pathfinder, path);
 
                 Assert.IsFalse(pathfinder.IsCurrentCommandComplete(new Vector3(1f, 0f, 0f), isGrounded: true));
+            }
+            finally
+            {
+                Object.DestroyImmediate(host);
+            }
+        }
+
+        [Test]
+        public void IsCurrentCommandComplete_WalkTargetBelowPlayer_CompletesWhenXArrived()
+        {
+            var host = new GameObject("WalkCompletionBelowPlayerTest");
+
+            try
+            {
+                var pathfinder = host.AddComponent<Platform2DPathfinder>();
+                var commands = new System.Collections.Generic.List<MoveCommand>
+                {
+                    MoveCommand.Walk(new Vector3(2.55f, 3f, 0f), 0.5f, 1)
+                };
+                var path = new Platform2DPath(
+                    new Vector3(2.63f, 4.32f, 0f),
+                    new Vector3(2.55f, 3f, 0f),
+                    commands);
+                SetCurrentPath(pathfinder, path);
+
+                Assert.IsTrue(pathfinder.IsCurrentCommandComplete(new Vector3(2.63f, 4.32f, 0f), isGrounded: true));
             }
             finally
             {

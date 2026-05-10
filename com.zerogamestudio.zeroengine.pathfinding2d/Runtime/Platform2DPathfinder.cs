@@ -781,9 +781,10 @@ namespace ZeroEngine.Pathfinding2D
             switch (command.CommandType)
             {
                 case MoveCommandType.Walk:
-                    // 行走：到达目标 X 坐标附近
+                    // 行走：到达目标 X 坐标附近，且没有明显低于目标平台。
+                    // 玩家已越过目标高度时允许完成，避免低处中间 Walk 卡住空中/上层状态。
                     return Mathf.Abs(currentPosition.x - command.Target.x) < config.WalkCommandArriveDistance &&
-                           Mathf.Abs(currentPosition.y - command.Target.y) <= config.WalkCommandVerticalTolerance;
+                           currentPosition.y + config.WalkCommandVerticalTolerance >= command.Target.y;
 
                 case MoveCommandType.Jump:
                 case MoveCommandType.Fall:
