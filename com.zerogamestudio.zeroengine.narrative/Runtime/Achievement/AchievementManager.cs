@@ -52,6 +52,7 @@ namespace ZeroEngine.Achievement
 
         // 临时列表（零分配）
         private readonly List<AchievementSO> _tempAchievementList = new List<AchievementSO>(32);
+        private SaveSlotManager _registeredSaveSlotManager;
 
         #region Events
 
@@ -100,12 +101,15 @@ namespace ZeroEngine.Achievement
 
         public void Register()
         {
-            SaveSlotManager.Instance?.Register(this);
+            _registeredSaveSlotManager = SaveSlotManager.Instance;
+            _registeredSaveSlotManager?.Register(this);
         }
 
         public void Unregister()
         {
-            SaveSlotManager.Instance?.Unregister(this);
+            if (_registeredSaveSlotManager != null)
+                _registeredSaveSlotManager.Unregister(this);
+            _registeredSaveSlotManager = null;
         }
 
         public object ExportSaveData()

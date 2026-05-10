@@ -11,6 +11,7 @@ namespace ZeroEngine.Quest
     {
         private QuestSystemSaveData _saveData = new QuestSystemSaveData();
         private Dictionary<string, QuestConfigSO> _questConfigs = new Dictionary<string, QuestConfigSO>();
+        private SaveSlotManager _registeredSaveSlotManager;
 
         #region Events
 
@@ -35,13 +36,16 @@ namespace ZeroEngine.Quest
         private void Start()
         {
             RegisterEvents();
-            SaveSlotManager.Instance?.Register(this);
+            _registeredSaveSlotManager = SaveSlotManager.Instance;
+            _registeredSaveSlotManager?.Register(this);
         }
 
         protected override void OnDestroy()
         {
             UnregisterEvents();
-            SaveSlotManager.Instance?.Unregister(this);
+            if (_registeredSaveSlotManager != null)
+                _registeredSaveSlotManager.Unregister(this);
+            _registeredSaveSlotManager = null;
             base.OnDestroy();
         }
 

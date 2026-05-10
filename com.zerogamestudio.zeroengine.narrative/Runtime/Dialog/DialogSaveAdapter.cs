@@ -11,14 +11,19 @@ namespace ZeroEngine.Dialog
     /// </summary>
     public class DialogSaveAdapter : Singleton<DialogSaveAdapter>, ISaveable
     {
+        private SaveSlotManager _registeredSaveSlotManager;
+
         private void Start()
         {
-            SaveSlotManager.Instance?.Register(this);
+            _registeredSaveSlotManager = SaveSlotManager.Instance;
+            _registeredSaveSlotManager?.Register(this);
         }
 
         protected override void OnDestroy()
         {
-            SaveSlotManager.Instance?.Unregister(this);
+            if (_registeredSaveSlotManager != null)
+                _registeredSaveSlotManager.Unregister(this);
+            _registeredSaveSlotManager = null;
             base.OnDestroy();
         }
 
