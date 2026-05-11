@@ -72,12 +72,7 @@ namespace ZeroEngine.Quest
 
         private void LoadConfig()
         {
-            var configs = Resources.LoadAll<QuestConfigSO>("Quests");
-            foreach (var config in configs)
-            {
-                if (config != null && !string.IsNullOrEmpty(config.questId))
-                    _questConfigs[config.questId] = config;
-            }
+            ReloadConfigsFromSource();
         }
 
         /// <summary>
@@ -85,8 +80,46 @@ namespace ZeroEngine.Quest
         /// </summary>
         public void RegisterConfig(QuestConfigSO config)
         {
-            if (config != null && !string.IsNullOrEmpty(config.questId))
-                _questConfigs[config.questId] = config;
+            if (config == null || string.IsNullOrWhiteSpace(config.questId))
+                return;
+
+            _questConfigs[config.questId.Trim()] = config;
+        }
+
+        /// <summary>
+        /// Registers multiple quest configs.
+        /// </summary>
+        public int RegisterConfigs(IEnumerable<QuestConfigSO> configs)
+        {
+            if (configs == null) return 0;
+
+            var count = 0;
+            foreach (var config in configs)
+            {
+                if (config == null || string.IsNullOrWhiteSpace(config.questId)) continue;
+
+                RegisterConfig(config);
+                count++;
+            }
+
+            return count;
+        }
+
+        /// <summary>
+        /// Reloads configs from the registered project source, then Resources fallback if no custom source is registered.
+        /// </summary>
+        public void ReloadConfigsFromSource()
+        {
+            _questConfigs.Clear();
+
+            var serviceConfigs = QuestServiceRegistry.ConfigSource.LoadConfigs();
+            RegisterConfigs(serviceConfigs);
+
+            if (_questConfigs.Count > 0 || QuestServiceRegistry.HasCustomConfigSource)
+                return;
+
+            var resourcesConfigs = Resources.LoadAll<QuestConfigSO>("Quests");
+            RegisterConfigs(resourcesConfigs);
         }
 
         #region Event Management
@@ -271,12 +304,12 @@ namespace ZeroEngine.Quest
         /// </summary>
         private void GrantRewards(QuestConfigSO config)
         {
-            if (config.Rewards == null) return;
+            if (config?.Rewards == null) return;
 
             foreach (var reward in config.Rewards)
             {
-                if (reward != null)
-                    reward.Grant();
+                if (reward == null) continue;
+                QuestServiceRegistry.RewardService.Grant(reward, config);
             }
         }
 
