@@ -77,7 +77,7 @@ namespace ZeroEngine.Dialog
             {
                 for (int i = 0; i < Conditions.Count; i++)
                 {
-                    if (Conditions[i] == null || Conditions[i].Evaluate())
+                    if (Conditions[i] != null && Conditions[i].Evaluate())
                         return true;
                 }
 

@@ -162,6 +162,30 @@ namespace ZeroEngine.Quest.Tests.Editor
             Object.DestroyImmediate(quest);
         }
 
+        [Test]
+        public void DialogQuestConditionGroup_OrSkipsNullConditionsAndRequiresARealMatch()
+        {
+            var group = new DialogQuestConditionGroup
+            {
+                CombineWith = LogicalOperator.Or,
+                Conditions = new List<DialogQuestCondition>
+                {
+                    null,
+                    new DialogQuestCondition
+                    {
+                        questId = "missing_manager_quest",
+                        mode = DialogQuestConditionMode.Active
+                    }
+                }
+            };
+
+            Assert.False(group.Evaluate());
+
+            group.Conditions.Add(new DialogQuestCondition());
+
+            Assert.True(group.Evaluate());
+        }
+
         private sealed class FakeConfigSource : IQuestConfigSource
         {
             public IReadOnlyList<QuestConfigSO> LoadConfigs() => new List<QuestConfigSO>();
