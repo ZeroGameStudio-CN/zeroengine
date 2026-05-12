@@ -1,6 +1,7 @@
 using System.Collections.Generic;
 using NUnit.Framework;
 using UnityEngine;
+using ZeroEngine.Dialog;
 using Object = UnityEngine.Object;
 
 namespace ZeroEngine.Quest.Tests.Editor
@@ -10,7 +11,14 @@ namespace ZeroEngine.Quest.Tests.Editor
         [SetUp]
         public void SetUp()
         {
+            DestroyExistingQuestManagers();
             QuestServiceRegistry.ResetForTests();
+        }
+
+        [TearDown]
+        public void TearDown()
+        {
+            DestroyExistingQuestManagers();
         }
 
         [Test]
@@ -88,9 +96,83 @@ namespace ZeroEngine.Quest.Tests.Editor
             Object.DestroyImmediate(quest);
         }
 
+        [Test]
+        public void DialogQuestCondition_EmptyQuestIdPasses()
+        {
+            var condition = new DialogQuestCondition();
+
+            Assert.True(condition.Evaluate());
+        }
+
+        [Test]
+        public void DialogQuestCondition_NonEmptyQuestIdFailsWithoutManager()
+        {
+            var condition = new DialogQuestCondition
+            {
+                questId = "missing_manager_quest",
+                mode = DialogQuestConditionMode.Active
+            };
+
+            Assert.False(condition.Evaluate());
+        }
+
+        [Test]
+        public void DialogQuestCondition_InvertReversesResult()
+        {
+            var condition = new DialogQuestCondition
+            {
+                questId = "missing_manager_quest",
+                mode = DialogQuestConditionMode.Active,
+                invert = true
+            };
+
+            Assert.True(condition.Evaluate());
+        }
+
+        [Test]
+        public void DialogQuestCondition_CanSubmitMatchesSuccessfulState()
+        {
+            var quest = ScriptableObject.CreateInstance<QuestConfigSO>();
+            quest.questId = "submit_ready_quest";
+            quest.Conditions = new List<QuestCondition>
+            {
+                new CustomCondition
+                {
+                    EventType = "Quest.Test",
+                    TargetId = "Target",
+                    RequiredCount = 1
+                }
+            };
+
+            var managerObject = new GameObject("QuestManager_DialogCondition_Test");
+            var manager = managerObject.AddComponent<QuestManager>();
+            manager.RegisterConfig(quest);
+            Assert.True(manager.AcceptQuest("submit_ready_quest"));
+            manager.ProcessConditionEvent("Quest.Test", new ConditionEventData("Target", 1));
+
+            var condition = new DialogQuestCondition
+            {
+                questId = "submit_ready_quest",
+                mode = DialogQuestConditionMode.CanSubmit
+            };
+
+            Assert.True(condition.Evaluate());
+
+            Object.DestroyImmediate(managerObject);
+            Object.DestroyImmediate(quest);
+        }
+
         private sealed class FakeConfigSource : IQuestConfigSource
         {
             public IReadOnlyList<QuestConfigSO> LoadConfigs() => new List<QuestConfigSO>();
+        }
+
+        private static void DestroyExistingQuestManagers()
+        {
+            foreach (var manager in Object.FindObjectsOfType<QuestManager>())
+            {
+                Object.DestroyImmediate(manager.gameObject);
+            }
         }
 
         private sealed class SingleConfigSource : IQuestConfigSource

@@ -15,6 +15,7 @@ namespace ZeroEngine.Quest.Editor
         static QuestEditorQuestIdProvider()
         {
             EditorApplication.projectChanged += MarkDirty;
+            QuestStringDropdownProviderRegistry.Register(QuestStringDropdownKind.QuestId, GetQuestIds);
         }
 
         public static IReadOnlyList<string> GetQuestIds()
@@ -56,6 +57,7 @@ namespace ZeroEngine.Quest.Editor
             }
 
             cacheDirty = false;
+            QuestStringDropdownProviderRegistry.Refresh(QuestStringDropdownKind.QuestId);
         }
 
         private static void EnsureCache()

@@ -11,6 +11,7 @@ namespace ZeroEngine.Quest
     {
         [Header("Kill")]
         [Tooltip("Entity or enemy type ID to match against Quest.EntityKilled events.")]
+        [QuestEntityIdDropdown]
         public string TargetId;
 
         [Min(1)]

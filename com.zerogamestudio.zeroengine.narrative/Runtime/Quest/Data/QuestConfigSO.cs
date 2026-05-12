@@ -39,9 +39,11 @@ namespace ZeroEngine.Quest
 
         [Header("NPC Interaction")]
         [Tooltip("Optional provider NPC ID for projects that use NPC-based quest acceptance.")]
+        [QuestNpcIdDropdown]
         public string providerNpcId;
 
         [Tooltip("Optional submit NPC ID for projects that require hand-in at a specific NPC.")]
+        [QuestNpcIdDropdown]
         public string submitNpcId;
 
         [Tooltip("Optional fallback completion dialogue text.")]

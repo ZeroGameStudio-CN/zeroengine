@@ -12,6 +12,7 @@ namespace ZeroEngine.Quest
     {
         [Header("Reach")]
         [Tooltip("Location or zone ID to match against Quest.LocationReached events.")]
+        [QuestLocationIdDropdown]
         public string LocationId;
 
         [Tooltip("Optional target position for projects that perform distance checks.")]

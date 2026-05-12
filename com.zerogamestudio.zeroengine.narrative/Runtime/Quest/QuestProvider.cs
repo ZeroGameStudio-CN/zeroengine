@@ -11,6 +11,7 @@ namespace ZeroEngine.Quest
     /// </summary>
     public class QuestProvider : MonoBehaviour
     {
+        [QuestNpcIdDropdown]
         public string providerId; // NPC ID
         public DialogueConfigSO dialogueConfig;
         

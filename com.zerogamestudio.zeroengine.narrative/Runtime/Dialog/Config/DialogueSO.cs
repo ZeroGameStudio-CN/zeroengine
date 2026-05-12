@@ -51,6 +51,9 @@ namespace ZeroEngine.Dialog
 
         [Tooltip("Condition variable name (optional, checked for truthiness)")]
         public string Condition;
+
+        [Tooltip("Structured quest conditions. These are combined with the string Condition when both are configured.")]
+        public DialogQuestConditionGroup QuestConditions = new();
     }
 
     /// <summary>

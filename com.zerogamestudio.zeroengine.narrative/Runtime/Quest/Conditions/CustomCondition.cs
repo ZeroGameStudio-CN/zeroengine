@@ -11,6 +11,7 @@ namespace ZeroEngine.Quest
     {
         [Header("Custom Event")]
         [Tooltip("Custom condition event type to listen for.")]
+        [QuestEventNameDropdown]
         public string EventType;
 
         [Tooltip("Optional target ID. Empty matches all targets for this event type.")]

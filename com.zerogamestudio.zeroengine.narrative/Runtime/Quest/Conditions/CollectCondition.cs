@@ -11,6 +11,7 @@ namespace ZeroEngine.Quest
     {
         [Header("Collect")]
         [Tooltip("Item ID to match against Quest.ItemObtained events.")]
+        [QuestItemIdDropdown]
         public string ItemId;
 
         [Min(1)]

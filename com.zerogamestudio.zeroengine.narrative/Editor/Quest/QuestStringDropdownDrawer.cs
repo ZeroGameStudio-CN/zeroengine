@@ -5,8 +5,8 @@ using UnityEngine;
 
 namespace ZeroEngine.Quest.Editor
 {
-    [CustomPropertyDrawer(typeof(QuestIdDropdownAttribute))]
-    public sealed class QuestIdDropdownDrawer : PropertyDrawer
+    [CustomPropertyDrawer(typeof(QuestStringDropdownAttribute), true)]
+    public sealed class QuestStringDropdownDrawer : PropertyDrawer
     {
         private const float VerticalSpacing = 2f;
 
@@ -27,7 +27,7 @@ namespace ZeroEngine.Quest.Editor
             manualRect.y = dropdownRect.yMax + VerticalSpacing;
             manualRect.height = EditorGUIUtility.singleLineHeight;
 
-            DrawQuestIdDropdown(dropdownRect, property, label);
+            DrawDropdown(dropdownRect, property, label, GetKind());
             property.stringValue = EditorGUI.DelayedTextField(manualRect, "Manual", property.stringValue);
 
             EditorGUI.EndProperty();
@@ -38,17 +38,24 @@ namespace ZeroEngine.Quest.Editor
             return EditorGUIUtility.singleLineHeight * 2f + VerticalSpacing;
         }
 
-        private static void DrawQuestIdDropdown(Rect position, SerializedProperty property, GUIContent label)
+        private QuestStringDropdownKind GetKind()
+        {
+            return attribute is QuestStringDropdownAttribute dropdown
+                ? dropdown.Kind
+                : QuestStringDropdownKind.QuestId;
+        }
+
+        private static void DrawDropdown(Rect position, SerializedProperty property, GUIContent label, QuestStringDropdownKind kind)
         {
             var current = property.stringValue?.Trim() ?? string.Empty;
-            var ids = QuestEditorQuestIdProvider.GetQuestIds();
+            var values = QuestStringDropdownProviderRegistry.GetOptions(kind);
             var options = new List<string> { "(None)" };
 
             var currentFound = string.IsNullOrWhiteSpace(current);
-            foreach (var id in ids)
+            foreach (var value in values)
             {
-                options.Add(id);
-                if (id == current)
+                options.Add(value);
+                if (value == current)
                     currentFound = true;
             }
 

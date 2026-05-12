@@ -13,6 +13,7 @@ namespace ZeroEngine.Quest
     {
         [Header("Item")]
         [Tooltip("Item ID to grant.")]
+        [QuestItemIdDropdown]
         public string ItemId;
 
         [Min(1)]

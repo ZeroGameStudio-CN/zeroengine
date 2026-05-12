@@ -12,6 +12,7 @@ namespace ZeroEngine.Quest
     {
         [Header("Interact")]
         [Tooltip("NPC or object ID to match against Quest.Interacted events.")]
+        [QuestInteractTargetIdDropdown]
         public string TargetId;
 
         [Min(1)]

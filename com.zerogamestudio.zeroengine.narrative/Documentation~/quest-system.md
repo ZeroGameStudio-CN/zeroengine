@@ -87,7 +87,12 @@ The package provides dependency-light editor primitives:
 - `QuestConfigValidator`
 - `QuestEditorQuestIdProvider`
 - `QuestIdDropdownAttribute`
-- `QuestIdDropdownDrawer`
+- `QuestStringDropdownAttribute`
+- `QuestStringDropdownProviderRegistry`
+- `QuestStringDropdownDrawer`
+- `DialogQuestCondition`
 
 These tools use Unity Editor APIs only. Rich project windows can build on top
-of them, but should stay in the project layer.
+of them, but should stay in the project layer. Projects may register NPC,
+entity, item, and location dropdown sources without changing serialized quest
+fields; missing dropdown values are preserved as plain strings.
