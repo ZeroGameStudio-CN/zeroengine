@@ -29,6 +29,11 @@ namespace ZeroEngine.UI.Toast
             Toast.ClearAll();
         }
 
+        private void Update()
+        {
+            Toast.Runtime.Tick(Time.unscaledTime);
+        }
+
         public void RebuildLookup()
         {
             byAnchor.Clear();

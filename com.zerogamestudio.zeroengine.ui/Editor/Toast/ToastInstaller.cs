@@ -102,8 +102,8 @@ namespace ZeroEngine.UI.Editor.Toast
             rootRect.offsetMin = Vector2.zero;
             rootRect.offsetMax = Vector2.zero;
 
-            var topCenter = CreateContainer(root.transform, "TopCenter", ToastAnchor.TopCenter, new Vector2(0.5f, 1f), new Vector2(0.5f, 1f), new Vector2(0.5f, 1f), new Vector2(0f, -200f), itemPrefab);
-            var topRight = CreateContainer(root.transform, "TopRight", ToastAnchor.TopRight, new Vector2(1f, 1f), new Vector2(1f, 1f), new Vector2(1f, 1f), new Vector2(-24f, -24f), itemPrefab);
+            var topCenter = CreateContainer(root.transform, "TopCenter", ToastAnchor.TopCenter, new Vector2(0.5f, 1f), new Vector2(0.5f, 1f), new Vector2(0.5f, 1f), new Vector2(0f, -96f), itemPrefab);
+            var topRight = CreateContainer(root.transform, "TopRight", ToastAnchor.TopRight, new Vector2(1f, 1f), new Vector2(1f, 1f), new Vector2(1f, 1f), new Vector2(-174f, -74f), itemPrefab);
             var bottomCenter = CreateContainer(root.transform, "BottomCenter", ToastAnchor.BottomCenter, new Vector2(0.5f, 0f), new Vector2(0.5f, 0f), new Vector2(0.5f, 0f), new Vector2(0f, 96f), itemPrefab);
 
             var presenter = root.GetComponent<ToastRootPresenter>();

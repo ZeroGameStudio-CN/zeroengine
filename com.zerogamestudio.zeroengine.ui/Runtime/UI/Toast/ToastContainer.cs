@@ -37,6 +37,7 @@ namespace ZeroEngine.UI.Toast
             if (itemRoot == null) itemRoot = (RectTransform)transform;
 
             var view = Instantiate(itemPrefab, itemRoot);
+            view.gameObject.SetActive(true);
             views[handle.Id] = view;
             view.Show(handle, resolvedText, style, timings);
         }

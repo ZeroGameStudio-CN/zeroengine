@@ -63,7 +63,7 @@ namespace ZeroEngine.UI.Toast
             }
 
             if (canvasGroup != null) canvasGroup.alpha = 1f;
-            if (Application.isPlaying)
+            if (Application.isPlaying && EnsureActiveForCoroutine())
                 lifeRoutine = StartCoroutine(LifeRoutine(timings));
         }
 
@@ -77,7 +77,10 @@ namespace ZeroEngine.UI.Toast
             }
 
             if (moveRoutine != null) StopCoroutine(moveRoutine);
-            moveRoutine = StartCoroutine(MoveRoutine(target, 0.16f));
+            if (EnsureActiveForCoroutine())
+                moveRoutine = StartCoroutine(MoveRoutine(target, 0.16f));
+            else
+                RectTransform.anchoredPosition = target;
         }
 
         public void DismissImmediate()
@@ -97,6 +100,13 @@ namespace ZeroEngine.UI.Toast
             handle.Request.OnClick?.Invoke(handle);
             if (handle.Request.DismissOnClick)
                 handle.Dismiss(ToastDismissReason.Clicked);
+        }
+
+        private bool EnsureActiveForCoroutine()
+        {
+            if (gameObject.activeInHierarchy) return true;
+            if (!gameObject.activeSelf) gameObject.SetActive(true);
+            return gameObject.activeInHierarchy;
         }
 
         private IEnumerator LifeRoutine(ToastAnimationTimings timings)
