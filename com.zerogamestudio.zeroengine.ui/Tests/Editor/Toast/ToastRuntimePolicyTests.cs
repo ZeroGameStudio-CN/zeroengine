@@ -163,23 +163,24 @@ namespace ZeroEngine.UI.Tests.Editor.Toast
             var presenter = new RecordingPresenter();
             manager.Configure(settings, null, presenter);
 
+            var startTime = Time.unscaledTime;
             manager.Show(ToastRequest.Text("one"));
             manager.Show(ToastRequest.Text("two"));
             manager.Show(ToastRequest.Text("three"));
 
-            Tick(manager, 0.49f);
+            Tick(manager, startTime + 0.49f);
             Assert.AreEqual(1, manager.ActiveCount);
             Assert.AreEqual(2, manager.QueuedCount);
 
-            Tick(manager, 0.5f);
+            Tick(manager, startTime + 0.5f);
             Assert.AreEqual(2, manager.ActiveCount);
             Assert.AreEqual(1, manager.QueuedCount);
 
-            Tick(manager, 0.99f);
+            Tick(manager, startTime + 0.99f);
             Assert.AreEqual(2, manager.ActiveCount);
             Assert.AreEqual(1, manager.QueuedCount);
 
-            Tick(manager, 1f);
+            Tick(manager, startTime + 1f);
             Assert.AreEqual(3, manager.ActiveCount);
             Assert.AreEqual(0, manager.QueuedCount);
             Assert.AreEqual(3, presenter.ShowCount);
@@ -194,6 +195,7 @@ namespace ZeroEngine.UI.Tests.Editor.Toast
             var presenter = new RecordingPresenter();
             manager.Configure(settings, null, presenter);
 
+            var startTime = Time.unscaledTime;
             var first = manager.Show(ToastRequest.Text("one"));
             manager.Show(ToastRequest.Text("two"));
             manager.Show(ToastRequest.Text("three"));
@@ -201,21 +203,21 @@ namespace ZeroEngine.UI.Tests.Editor.Toast
             manager.Show(ToastRequest.Text("five"));
             manager.Show(ToastRequest.Text("six"));
 
-            Tick(manager, 0.5f);
-            Tick(manager, 1f);
-            Tick(manager, 1.5f);
-            Tick(manager, 2f);
+            Tick(manager, startTime + 0.5f);
+            Tick(manager, startTime + 1f);
+            Tick(manager, startTime + 1.5f);
+            Tick(manager, startTime + 2f);
 
             Assert.AreEqual(5, manager.ActiveCount);
             Assert.AreEqual(1, manager.QueuedCount);
             Assert.IsFalse(first.IsDismissed);
 
             first.Dismiss();
-            Tick(manager, 2.49f);
+            Tick(manager, startTime + 2.49f);
             Assert.AreEqual(4, manager.ActiveCount);
             Assert.AreEqual(1, manager.QueuedCount);
 
-            Tick(manager, 2.5f);
+            Tick(manager, startTime + 2.5f);
             Assert.AreEqual(5, manager.ActiveCount);
             Assert.AreEqual(0, manager.QueuedCount);
             Assert.IsTrue(presenter.WasTextShown("six"));
@@ -230,13 +232,14 @@ namespace ZeroEngine.UI.Tests.Editor.Toast
             var presenter = new RecordingPresenter();
             manager.Configure(settings, null, presenter);
 
+            var startTime = Time.unscaledTime;
             manager.Show(ToastRequest.Text("one"));
             var queued = manager.Show(ToastRequest.Text("two"));
 
             Assert.IsNotNull(queued);
             Assert.IsFalse(presenter.WasHandleShown(queued));
 
-            Tick(manager, 0.5f);
+            Tick(manager, startTime + 0.5f);
 
             Assert.IsTrue(presenter.WasHandleShown(queued));
             Assert.AreEqual(0, manager.QueuedCount);
@@ -251,6 +254,7 @@ namespace ZeroEngine.UI.Tests.Editor.Toast
             var presenter = new RecordingPresenter();
             manager.Configure(settings, null, presenter);
 
+            var startTime = Time.unscaledTime;
             manager.Show(ToastRequest.Text("one"));
             var queued = manager.Show(new ToastRequest { Message = "two", DedupeKey = "same" });
             var duplicate = manager.Show(new ToastRequest { Message = "two updated", DedupeKey = "same" });
@@ -260,7 +264,7 @@ namespace ZeroEngine.UI.Tests.Editor.Toast
             Assert.AreEqual(0, presenter.RefreshCount);
             Assert.AreEqual("two updated", queued.Request.Message);
 
-            Tick(manager, 0.5f);
+            Tick(manager, startTime + 0.5f);
 
             Assert.IsTrue(presenter.WasTextShown("two updated"));
             Assert.AreEqual(0, presenter.RefreshCount);
@@ -286,12 +290,14 @@ namespace ZeroEngine.UI.Tests.Editor.Toast
 
             queued.Dismiss();
             Tick(manager, 0.5f);
-            var next = manager.Show(new ToastRequest { Message = "two again", DedupeKey = "queued" });
 
             Assert.IsTrue(queued.IsDismissed);
             Assert.AreEqual(1, dismissCount);
             Assert.AreEqual(0, manager.QueuedCount);
             Assert.IsFalse(presenter.WasTextShown("two"));
+
+            var next = manager.Show(new ToastRequest { Message = "two again", DedupeKey = "queued" });
+
             Assert.AreNotSame(queued, next);
         }
 
