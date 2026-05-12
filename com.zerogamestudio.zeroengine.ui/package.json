@@ -15,7 +15,10 @@
         "panel",
         "view",
         "mvvm",
-        "layer"
+        "layer",
+        "toast",
+        "notification",
+        "alert"
     ],
     "author": {
         "name": "ZeroGameStudio",

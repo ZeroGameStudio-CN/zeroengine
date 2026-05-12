@@ -16,6 +16,16 @@
 ### UI.MVVM (可选)
 - MVVM 数据绑定框架
 
+### UI.Toast
+- `Toast` - gameplay notification facade
+- `ToastManager` - queue, overflow, duplicate, priority, and group policy runtime
+- `ToastRootPresenter` - default presenter router for multiple anchor lanes
+- `ToastContainer` - default UGUI anchor container
+- `ToastItemView` - default TextMeshPro item view
+- `ToastSettings` - style and behavior defaults
+
+The toast system is project-neutral. Games should create a local adapter for localization and call-site semantics.
+
 ## 快速使用
 
 ```csharp
