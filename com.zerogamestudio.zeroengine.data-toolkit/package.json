@@ -1,0 +1,19 @@
+{
+  "name": "com.zerogamestudio.zeroengine.data-toolkit",
+  "version": "1.0.0",
+  "displayName": "ZeroEngine.DataToolkit",
+  "description": "Reusable ZeroEngine editor tooling for discovering, browsing, editing, and validating project data assets.",
+  "unity": "2022.3",
+  "unityRelease": "0f1",
+  "keywords": [
+    "zeroengine",
+    "editor",
+    "data",
+    "toolkit",
+    "scriptableobject"
+  ],
+  "author": {
+    "name": "ZeroGameStudio",
+    "url": "https://github.com/zerogamestudio"
+  }
+}
