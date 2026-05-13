@@ -54,6 +54,22 @@ namespace ZeroEngine.Quest.Tests.Editor
         }
 
         [Test]
+        public void QuestStringDropdown_HasOptionalOdinDrawerWithoutReplacingUnityDrawer()
+        {
+            var unityDrawer = File.ReadAllText($"{PackageRoot}/Editor/Quest/QuestStringDropdownDrawer.cs");
+            var odinDrawer = File.ReadAllText($"{PackageRoot}/Editor/Quest/QuestStringDropdownOdinDrawer.cs");
+
+            StringAssert.Contains("[CustomPropertyDrawer(typeof(QuestStringDropdownAttribute), true)]", unityDrawer);
+            StringAssert.Contains("QuestStringDropdownProviderRegistry.GetOptions", unityDrawer);
+            StringAssert.Contains("#if ODIN_INSPECTOR", odinDrawer);
+            StringAssert.Contains("OdinAttributeDrawer<QuestStringDropdownAttribute, string>", odinDrawer);
+            StringAssert.Contains("QuestStringDropdownProviderRegistry.GetOptions", odinDrawer);
+            StringAssert.Contains("QuestStringDropdownKind", odinDrawer);
+            StringAssert.Contains("Manual Input", odinDrawer);
+            StringAssert.Contains("Missing:", odinDrawer);
+        }
+
+        [Test]
         public void QuestStringDropdownAttributes_CoverQuestAuthoringFields()
         {
             var attributes = File.ReadAllText($"{PackageRoot}/Runtime/Quest/QuestStringDropdownAttribute.cs");
