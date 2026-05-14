@@ -33,7 +33,7 @@ namespace ZeroEngine.Pathfinding2D
         [Tooltip("最大下落水平距离")]
         public float MaxFallHorizontalDistance = 4f;
 
-        [Tooltip("表面节点垂直下落最大水平距离（小于此值才从表面节点生成下落链接）")]
+        [Tooltip("兼容保留：旧版本用于表面节点垂直下落；当前 Fall 只从真实边缘生成。")]
         public float SurfaceNodeVerticalFallMaxHorizontal = 1.5f;
 
         [Header("验证参数")]

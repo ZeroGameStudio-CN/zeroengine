@@ -726,6 +726,54 @@ namespace ZeroEngine.Pathfinding2D.Tests.Editor
             }
         }
 
+        [Test]
+        public void ValidatePath_JumpCommandAlignedXWithVerticalGap_RemainsValid()
+        {
+            var host = new GameObject("JumpValidationVerticalGapTest");
+
+            try
+            {
+                var pathfinder = host.AddComponent<Platform2DPathfinder>();
+                var commands = new System.Collections.Generic.List<MoveCommand>
+                {
+                    MoveCommand.Jump(new Vector3(3f, 6f, 0f), 10f, 0f, 0.5f)
+                };
+                SetCurrentPath(pathfinder, new Platform2DPath(Vector3.zero, new Vector3(3f, 6f, 0f), commands));
+
+                var result = pathfinder.ValidatePath(new Vector3(3f, 1f, 0f), new Vector3(3f, 6f, 0f));
+
+                Assert.AreEqual(PathValidationResult.Valid, result);
+            }
+            finally
+            {
+                Object.DestroyImmediate(host);
+            }
+        }
+
+        [Test]
+        public void ValidatePath_FallCommandHorizontallyDeviated_ReturnsDeviated()
+        {
+            var host = new GameObject("FallValidationDeviationTest");
+
+            try
+            {
+                var pathfinder = host.AddComponent<Platform2DPathfinder>();
+                var commands = new System.Collections.Generic.List<MoveCommand>
+                {
+                    MoveCommand.Fall(new Vector3(3f, 0f, 0f), 0.5f, 1)
+                };
+                SetCurrentPath(pathfinder, new Platform2DPath(new Vector3(3f, 6f, 0f), new Vector3(3f, 0f, 0f), commands));
+
+                var result = pathfinder.ValidatePath(new Vector3(8f, 4f, 0f), new Vector3(3f, 0f, 0f));
+
+                Assert.AreEqual(PathValidationResult.Deviated, result);
+            }
+            finally
+            {
+                Object.DestroyImmediate(host);
+            }
+        }
+
         private static GameObject CreatePlatform(string name, Vector2 position, Vector2 size)
         {
             var platform = new GameObject(name);

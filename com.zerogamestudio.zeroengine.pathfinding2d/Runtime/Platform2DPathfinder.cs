@@ -708,12 +708,17 @@ namespace ZeroEngine.Pathfinding2D
             var currentCmd = CurrentPath.GetCurrentCommand();
             if (currentCmd.HasValue)
             {
-                // 计算到当前目标点的距离
-                float deviation = Vector2.Distance(currentPosition, currentCmd.Value.Target);
+                var command = currentCmd.Value;
+                bool deviated = command.CommandType switch
+                {
+                    MoveCommandType.Walk => Vector2.Distance(currentPosition, command.Target) > config.PathDeviationThreshold,
+                    MoveCommandType.Jump => Mathf.Abs(currentPosition.x - command.Target.x) > config.PathDeviationThreshold,
+                    MoveCommandType.Fall => Mathf.Abs(currentPosition.x - command.Target.x) > config.PathDeviationThreshold,
+                    MoveCommandType.DropDown => Mathf.Abs(currentPosition.x - command.Target.x) > config.PathDeviationThreshold,
+                    _ => false
+                };
 
-                // 如果偏离太远且不是在执行跳跃/下落
-                if (deviation > config.PathDeviationThreshold &&
-                    currentCmd.Value.CommandType == MoveCommandType.Walk)
+                if (deviated)
                 {
                     return PathValidationResult.Deviated;
                 }
