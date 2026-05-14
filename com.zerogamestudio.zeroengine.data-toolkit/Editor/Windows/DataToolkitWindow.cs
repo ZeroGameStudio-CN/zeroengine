@@ -13,6 +13,7 @@ namespace ZGS.DataToolkit.Editor
         private const float DefaultAssetColumnWidth = 240f;
         private const float MinColumnWidth = 160f;
         private const float MaxColumnWidth = 520f;
+        private const float MinInspectorWidth = 320f;
         private const float SplitterWidth = 5f;
         private const float RowHeight = 24f;
 
@@ -50,6 +51,24 @@ namespace ZGS.DataToolkit.Editor
             public string SelectedTypeId { get; }
             public string AssetPath { get; }
             public string AssetGuid { get; }
+        }
+
+        private readonly struct BodyLayoutRects
+        {
+            public BodyLayoutRects(Rect typeColumn, Rect typeSplitter, Rect assetColumn, Rect assetSplitter, Rect inspectorColumn)
+            {
+                TypeColumn = typeColumn;
+                TypeSplitter = typeSplitter;
+                AssetColumn = assetColumn;
+                AssetSplitter = assetSplitter;
+                InspectorColumn = inspectorColumn;
+            }
+
+            public Rect TypeColumn { get; }
+            public Rect TypeSplitter { get; }
+            public Rect AssetColumn { get; }
+            public Rect AssetSplitter { get; }
+            public Rect InspectorColumn { get; }
         }
 
         public static DataToolkitWindow Open(DataToolkitProjectSettings settings)
@@ -119,14 +138,7 @@ namespace ZGS.DataToolkit.Editor
         {
             EnsureContext();
             DrawHeaderToolbar();
-
-            EditorGUILayout.BeginHorizontal();
-            DrawTypeColumn();
-            DrawColumnResizeHandle(ref typeColumnWidth, context.Settings.PrefKey("TypeColumnWidth"), position.width - assetColumnWidth - 360f);
-            DrawAssetColumn();
-            DrawColumnResizeHandle(ref assetColumnWidth, context.Settings.PrefKey("AssetColumnWidth"), position.width - typeColumnWidth - 360f);
-            DrawSelectedAssetInspector();
-            EditorGUILayout.EndHorizontal();
+            DrawBodyLayout();
         }
 
         private void EnsureContext()
@@ -192,9 +204,47 @@ namespace ZGS.DataToolkit.Editor
             }
         }
 
-        private void DrawTypeColumn()
+        private void DrawBodyLayout()
         {
-            using (new EditorGUILayout.VerticalScope(EditorStyles.helpBox, GUILayout.Width(typeColumnWidth), GUILayout.ExpandHeight(true)))
+            var bodyRect = GUILayoutUtility.GetRect(0f, 0f, GUILayout.ExpandWidth(true), GUILayout.ExpandHeight(true));
+            var layoutRects = CalculateBodyLayoutRects(bodyRect);
+
+            DrawTypeColumn(layoutRects.TypeColumn);
+            DrawColumnResizeHandle(
+                layoutRects.TypeSplitter,
+                ref typeColumnWidth,
+                context.Settings.PrefKey("TypeColumnWidth"),
+                bodyRect.width - assetColumnWidth - SplitterWidth * 2f - MinInspectorWidth);
+            DrawAssetColumn(layoutRects.AssetColumn);
+            DrawColumnResizeHandle(
+                layoutRects.AssetSplitter,
+                ref assetColumnWidth,
+                context.Settings.PrefKey("AssetColumnWidth"),
+                bodyRect.width - typeColumnWidth - SplitterWidth * 2f - MinInspectorWidth);
+            DrawSelectedAssetInspector(layoutRects.InspectorColumn);
+        }
+
+        private BodyLayoutRects CalculateBodyLayoutRects(Rect bodyRect)
+        {
+            var maxTypeWidth = Mathf.Max(MinColumnWidth, bodyRect.width - assetColumnWidth - SplitterWidth * 2f - MinInspectorWidth);
+            var resolvedTypeWidth = Mathf.Clamp(typeColumnWidth, MinColumnWidth, Mathf.Min(MaxColumnWidth, maxTypeWidth));
+            var maxAssetWidth = Mathf.Max(MinColumnWidth, bodyRect.width - resolvedTypeWidth - SplitterWidth * 2f - MinInspectorWidth);
+            var resolvedAssetWidth = Mathf.Clamp(assetColumnWidth, MinColumnWidth, Mathf.Min(MaxColumnWidth, maxAssetWidth));
+            var inspectorWidth = Mathf.Max(0f, bodyRect.width - resolvedTypeWidth - resolvedAssetWidth - SplitterWidth * 2f);
+
+            var typeColumn = new Rect(bodyRect.x, bodyRect.y, resolvedTypeWidth, bodyRect.height);
+            var typeSplitter = new Rect(typeColumn.xMax, bodyRect.y, SplitterWidth, bodyRect.height);
+            var assetColumn = new Rect(typeSplitter.xMax, bodyRect.y, resolvedAssetWidth, bodyRect.height);
+            var assetSplitter = new Rect(assetColumn.xMax, bodyRect.y, SplitterWidth, bodyRect.height);
+            var inspectorColumn = new Rect(assetSplitter.xMax, bodyRect.y, inspectorWidth, bodyRect.height);
+
+            return new BodyLayoutRects(typeColumn, typeSplitter, assetColumn, assetSplitter, inspectorColumn);
+        }
+
+        private void DrawTypeColumn(Rect rect)
+        {
+            GUILayout.BeginArea(rect);
+            using (new EditorGUILayout.VerticalScope(EditorStyles.helpBox, GUILayout.ExpandWidth(true), GUILayout.ExpandHeight(true)))
             {
                 EditorGUILayout.LabelField("Data Types", EditorStyles.boldLabel);
                 typeSearch = EditorGUILayout.TextField(typeSearch, GUI.skin.FindStyle("ToolbarSearchTextField") ?? EditorStyles.toolbarSearchField);
@@ -210,11 +260,13 @@ namespace ZGS.DataToolkit.Editor
 
                 EditorGUILayout.EndScrollView();
             }
+            GUILayout.EndArea();
         }
 
-        private void DrawAssetColumn()
+        private void DrawAssetColumn(Rect rect)
         {
-            using (new EditorGUILayout.VerticalScope(EditorStyles.helpBox, GUILayout.Width(assetColumnWidth), GUILayout.ExpandHeight(true)))
+            GUILayout.BeginArea(rect);
+            using (new EditorGUILayout.VerticalScope(EditorStyles.helpBox, GUILayout.ExpandWidth(true), GUILayout.ExpandHeight(true)))
             {
                 EditorGUILayout.LabelField(selectedType == null ? "Assets" : selectedType.Name, EditorStyles.boldLabel);
                 assetSearch = EditorGUILayout.TextField(assetSearch, GUI.skin.FindStyle("ToolbarSearchTextField") ?? EditorStyles.toolbarSearchField);
@@ -230,39 +282,48 @@ namespace ZGS.DataToolkit.Editor
 
                 EditorGUILayout.EndScrollView();
             }
+            GUILayout.EndArea();
         }
 
-        private void DrawSelectedAssetInspector()
+        private void DrawSelectedAssetInspector(Rect rect)
         {
+            GUILayout.BeginArea(rect);
             using (new EditorGUILayout.VerticalScope(EditorStyles.helpBox, GUILayout.ExpandWidth(true), GUILayout.ExpandHeight(true)))
             {
                 if (selectedAsset == null)
                 {
-                    EditorGUILayout.HelpBox("Select a data asset from the middle column.", MessageType.Info);
-                    return;
+                    DrawEmptyInspectorState();
                 }
-
-                EditorGUILayout.BeginHorizontal();
-                EditorGUILayout.LabelField(selectedAsset.name, EditorStyles.boldLabel);
-                if (GUILayout.Button("Ping", GUILayout.Width(64f), GUILayout.Height(22f)))
+                else
                 {
-                    EditorGUIUtility.PingObject(selectedAsset);
+                    EditorGUILayout.BeginHorizontal();
+                    EditorGUILayout.LabelField(selectedAsset.name, EditorStyles.boldLabel);
+                    if (GUILayout.Button("Ping", GUILayout.Width(64f), GUILayout.Height(22f)))
+                    {
+                        EditorGUIUtility.PingObject(selectedAsset);
+                    }
+
+                    EditorGUILayout.EndHorizontal();
+
+                    inspector.SetTarget(selectedAsset);
+                    inspectorScroll = EditorGUILayout.BeginScrollView(inspectorScroll);
+                    EditorGUI.BeginChangeCheck();
+                    inspector.Draw();
+                    if (EditorGUI.EndChangeCheck())
+                    {
+                        EditorUtility.SetDirty(selectedAsset);
+                        Repaint();
+                    }
+
+                    EditorGUILayout.EndScrollView();
                 }
-
-                EditorGUILayout.EndHorizontal();
-
-                inspector.SetTarget(selectedAsset);
-                inspectorScroll = EditorGUILayout.BeginScrollView(inspectorScroll);
-                EditorGUI.BeginChangeCheck();
-                inspector.Draw();
-                if (EditorGUI.EndChangeCheck())
-                {
-                    EditorUtility.SetDirty(selectedAsset);
-                    Repaint();
-                }
-
-                EditorGUILayout.EndScrollView();
             }
+            GUILayout.EndArea();
+        }
+
+        private void DrawEmptyInspectorState()
+        {
+            EditorGUILayout.HelpBox("Select a data asset from the middle column.", MessageType.Info);
         }
 
         private bool DrawSelectableRow(string title, string countText, bool selected)
@@ -306,9 +367,8 @@ namespace ZGS.DataToolkit.Editor
             return GUI.Button(rect, GUIContent.none, GUIStyle.none);
         }
 
-        private void DrawColumnResizeHandle(ref float width, string prefsKey, float maxWidthByLayout)
+        private void DrawColumnResizeHandle(Rect rect, ref float width, string prefsKey, float maxWidthByLayout)
         {
-            var rect = GUILayoutUtility.GetRect(SplitterWidth, SplitterWidth, GUILayout.ExpandHeight(true));
             EditorGUI.DrawRect(new Rect(rect.x + 2f, rect.y, 1f, rect.height), new Color(0.28f, 0.28f, 0.28f, 1f));
             EditorGUIUtility.AddCursorRect(rect, MouseCursor.ResizeHorizontal);
 
