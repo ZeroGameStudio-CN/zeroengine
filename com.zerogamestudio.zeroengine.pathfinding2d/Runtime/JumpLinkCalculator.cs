@@ -135,8 +135,6 @@ namespace ZeroEngine.Pathfinding2D
                 // 判断节点类型
                 bool isEdgeNode = fromNode.NodeType == PlatformNodeType.LeftEdge ||
                                   fromNode.NodeType == PlatformNodeType.RightEdge;
-                bool isSurfaceNode = fromNode.NodeType == PlatformNodeType.Surface;
-
                 // 计算跳跃到其他平台的链接
                 for (int j = 0; j < nodes.Count; j++)
                 {
@@ -220,7 +218,7 @@ namespace ZeroEngine.Pathfinding2D
                     else if (verticalDist < -0.5f && Mathf.Abs(verticalDist) <= config.MaxFallHeight)
                     {
                         // 边缘节点：完整下落检测（水平 + 垂直）
-                        if (isEdgeNode && horizontalDist <= config.MaxFallHorizontalDistance)
+                        if (isEdgeNode && !fromNode.IsTransitionAnchor && horizontalDist <= config.MaxFallHorizontalDistance)
                         {
                             // ★ 终点也必须是边缘节点
                             bool toIsEdge = toNode.NodeType == PlatformNodeType.LeftEdge ||
@@ -233,23 +231,6 @@ namespace ZeroEngine.Pathfinding2D
 
                             // ★ 工业级方案：尝试连接所有可达边缘节点（不只是最近的）
                             // 让轨迹验证决定是否创建链接，而非位置去重
-
-                            if (TryCreateFallLink(fromNode, toNode, obstacleLayer))
-                            {
-                                fallLinksCreated++;
-                            }
-                        }
-                        // 表面节点：仅限垂直下落（水平距离很小）
-                        // ★ 终点也必须是边缘节点，防止平台内部生成大量无意义的下落链接
-                        else if (isSurfaceNode && horizontalDist <= config.SurfaceNodeVerticalFallMaxHorizontal)
-                        {
-                            bool toIsEdge = toNode.NodeType == PlatformNodeType.LeftEdge ||
-                                            toNode.NodeType == PlatformNodeType.RightEdge;
-                            if (!toIsEdge)
-                            {
-                                fallSkippedToNotEdge++;
-                                continue;
-                            }
 
                             if (TryCreateFallLink(fromNode, toNode, obstacleLayer))
                             {

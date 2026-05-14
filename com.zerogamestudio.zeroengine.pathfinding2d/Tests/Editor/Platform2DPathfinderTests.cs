@@ -217,6 +217,9 @@ namespace ZeroEngine.Pathfinding2D.Tests.Editor
                 Assert.IsTrue(
                     result.Path.Commands.Any(command => command.CommandType == MoveCommandType.Jump),
                     $"Expected a jump command for high T-platform traversal. {BuildPathDebug(result)}");
+                Assert.IsFalse(
+                    result.Path.Commands.Any(command => command.CommandType == MoveCommandType.Fall || command.CommandType == MoveCommandType.DropDown),
+                    $"Elevated T-platform traversal should not start by going down. {BuildPathDebug(result)}");
             }
             finally
             {
@@ -586,6 +589,88 @@ namespace ZeroEngine.Pathfinding2D.Tests.Editor
             {
                 Object.DestroyImmediate(host);
                 Object.DestroyImmediate(platform.gameObject);
+            }
+        }
+
+        [Test]
+        public void GeneratePlatformGraph_MultiPathPolygon_ExposesSurfaceSegments()
+        {
+            var host = new GameObject("SurfaceSegmentMetadataTest");
+            var platform = CreateMultiPathPolygonPlatform(
+                "SurfaceSegmentMetadataPlatform",
+                (new Vector2(-3f, 0f), new Vector2(2f, 0.2f)),
+                (new Vector2(3f, 0f), new Vector2(2f, 0.2f)),
+                (new Vector2(0f, 3f), new Vector2(2f, 0.2f)));
+
+            try
+            {
+                var graph = host.AddComponent<PlatformGraphGenerator>();
+                graph.Config.ScanCenter = new Vector2(0f, 1.5f);
+                graph.Config.ScanSize = new Vector2(10f, 8f);
+                graph.Config.GroundLayer = 1 << platform.gameObject.layer;
+                graph.Config.OneWayPlatformLayer = 0;
+                graph.Config.ObstacleLayer = 0;
+                graph.Config.NodeSpacing = 0.75f;
+                graph.Config.EdgeInset = 0.2f;
+
+                graph.GeneratePlatformGraph();
+
+                Assert.That(graph.SurfaceSegments, Has.Count.EqualTo(3));
+                Assert.IsTrue(graph.TryGetSurfaceSegment(0, out var firstSegment));
+                Assert.AreEqual(-4f, firstSegment.Left, 0.05f);
+                Assert.AreEqual(-2f, firstSegment.Right, 0.05f);
+                Assert.AreEqual(0.1f, firstSegment.Y, 0.05f);
+                Assert.AreSame(platform, firstSegment.Collider);
+
+                var pathfinder = host.AddComponent<Platform2DPathfinder>();
+                pathfinder.SetGraphGenerator(graph);
+                var snapshot = pathfinder.GetSnapshot();
+                Assert.AreEqual(3, snapshot.SurfaceSegmentCount);
+                Assert.That(snapshot.SurfaceSegmentDebug, Does.Contain("x=[-4.00,-2.00]"));
+            }
+            finally
+            {
+                Object.DestroyImmediate(host);
+                Object.DestroyImmediate(platform.gameObject);
+            }
+        }
+
+        [Test]
+        public void GenerateJumpLinks_SurfaceNodeAboveLowerPlatform_DoesNotCreateFallFromInterior()
+        {
+            var host = new GameObject("InteriorFallLinkRegression");
+            var upper = CreatePlatform("InteriorFallUpper", new Vector2(0f, 4f), new Vector2(6f, 0.2f));
+            var lower = CreatePlatform("InteriorFallLower", new Vector2(0f, 0f), new Vector2(6f, 0.2f));
+
+            try
+            {
+                var graph = host.AddComponent<PlatformGraphGenerator>();
+                graph.Config.ScanCenter = new Vector2(0f, 2f);
+                graph.Config.ScanSize = new Vector2(10f, 8f);
+                graph.Config.GroundLayer = 1 << upper.layer;
+                graph.Config.OneWayPlatformLayer = 0;
+                graph.Config.ObstacleLayer = 0;
+                graph.Config.NodeSpacing = 1f;
+                graph.Config.EdgeInset = 0.2f;
+
+                graph.GeneratePlatformGraph();
+                var jumpLinkCalculator = host.AddComponent<JumpLinkCalculator>();
+                jumpLinkCalculator.GenerateJumpLinks();
+
+                Assert.IsFalse(graph.Links.Any(link =>
+                {
+                    if (link.LinkType != PlatformLinkType.Fall)
+                        return false;
+
+                    var from = graph.GetNode(link.FromNodeId);
+                    return from.HasValue && from.Value.NodeType == PlatformNodeType.Surface;
+                }), "Fall links must start from real ledges, not surface/interior nodes.");
+            }
+            finally
+            {
+                Object.DestroyImmediate(host);
+                Object.DestroyImmediate(upper);
+                Object.DestroyImmediate(lower);
             }
         }
 

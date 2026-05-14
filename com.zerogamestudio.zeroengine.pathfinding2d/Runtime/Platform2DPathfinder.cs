@@ -334,8 +334,7 @@ namespace ZeroEngine.Pathfinding2D
             var startPlatform = DetectPlatformBelow(start);
             var endPlatform = DetectPlatformBelow(end);
 
-            // 如果不在同一碰撞体，返回 null
-            if (startPlatform == null || endPlatform == null || startPlatform != endPlatform)
+            if (startPlatform == null || endPlatform == null)
             {
                 return null;
             }
@@ -821,7 +820,9 @@ namespace ZeroEngine.Pathfinding2D
                 CurrentPath != null ? CurrentPath.CurrentIndex : -1,
                 LastFailureReason,
                 CurrentPath != null ? CurrentPath.CompletionKind : PlatformPathCompletionKind.Failed,
-                BuildCommandDebug(CurrentPath));
+                BuildCommandDebug(CurrentPath),
+                graphGenerator != null ? graphGenerator.SurfaceSegments.Count : 0,
+                BuildSurfaceSegmentDebug());
         }
 
         private string BuildCommandDebug(Platform2DPath path)
@@ -839,6 +840,20 @@ namespace ZeroEngine.Pathfinding2D
             }
 
             return string.Join(" -> ", parts);
+        }
+
+        private string BuildSurfaceSegmentDebug()
+        {
+            if (graphGenerator == null || graphGenerator.SurfaceSegments == null || graphGenerator.SurfaceSegments.Count == 0)
+                return "none";
+
+            var parts = new List<string>(graphGenerator.SurfaceSegments.Count);
+            foreach (var segment in graphGenerator.SurfaceSegments)
+            {
+                parts.Add($"{segment.GroupId}:x=[{segment.Left:F2},{segment.Right:F2}],y={segment.Y:F2},oneWay={segment.IsOneWay}");
+            }
+
+            return string.Join(" | ", parts);
         }
 
         private int ResolveCommandTargetSurfaceGroup(MoveCommand command)
@@ -1016,6 +1031,7 @@ namespace ZeroEngine.Pathfinding2D
 
             foreach (var link in linkPath)
             {
+                var fromNode = graphGenerator.GetNode(link.FromNodeId);
                 var toNode = graphGenerator.GetNode(link.ToNodeId);
                 if (!toNode.HasValue) continue;
 
@@ -1044,10 +1060,14 @@ namespace ZeroEngine.Pathfinding2D
                         break;
 
                     case PlatformLinkType.Fall:
+                        if (facing == 0 && fromNode.HasValue)
+                            facing = ResolveEdgeExitFacing(fromNode.Value);
                         commands.Add(MoveCommand.Fall(toNode.Value.Position, link.Duration, facing));
                         break;
 
                     case PlatformLinkType.DropThrough:
+                        if (facing == 0 && fromNode.HasValue)
+                            facing = ResolveEdgeExitFacing(fromNode.Value);
                         commands.Add(MoveCommand.DropDown(
                             toNode.Value.Position,
                             toNode.Value.PlatformCollider,
@@ -1085,6 +1105,15 @@ namespace ZeroEngine.Pathfinding2D
             }
 
             return new Platform2DPath(actualStart, generatedEnd, commands);
+        }
+
+        private int ResolveEdgeExitFacing(PlatformNodeData node)
+        {
+            if (node.NodeType == PlatformNodeType.LeftEdge)
+                return -1;
+            if (node.NodeType == PlatformNodeType.RightEdge)
+                return 1;
+            return 0;
         }
 
         private bool CanCreateWalkCommand(Vector3 from, Vector3 to)

@@ -1,6 +1,6 @@
 {
     "name": "com.zerogamestudio.zeroengine.pathfinding2d",
-    "version": "1.6.17",
+    "version": "1.6.18",
     "displayName": "ZeroEngine.Pathfinding2D",
     "description": "2D Platform pathfinding system for ZeroEngine. Provides platform graph generation, jump link calculation, and built-in A* pathfinding for platformer games.",
     "unity": "2022.3",

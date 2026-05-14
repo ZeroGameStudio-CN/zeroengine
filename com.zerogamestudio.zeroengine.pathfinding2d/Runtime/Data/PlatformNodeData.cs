@@ -49,6 +49,9 @@ namespace ZeroEngine.Pathfinding2D
         /// <summary>所属可站立平台段 ID。同一连续表面上的节点共享同一个 ID。</summary>
         public int SurfaceGroupId;
 
+        /// <summary>是否是用于跨高度转换的锚点，而不是平台真实边缘。</summary>
+        public bool IsTransitionAnchor;
+
         /// <summary>节点是否可用</summary>
         public bool IsValid => PlatformCollider != null;
 
@@ -83,7 +86,8 @@ namespace ZeroEngine.Pathfinding2D
             Collider2D collider,
             bool isLeftEdge,
             bool isOneWay = false,
-            int surfaceGroupId = -1)
+            int surfaceGroupId = -1,
+            bool isTransitionAnchor = false)
         {
             return new PlatformNodeData
             {
@@ -93,13 +97,14 @@ namespace ZeroEngine.Pathfinding2D
                 PlatformCollider = collider,
                 IsOneWay = isOneWay,
                 SurfaceY = position.y,
-                SurfaceGroupId = surfaceGroupId
+                SurfaceGroupId = surfaceGroupId,
+                IsTransitionAnchor = isTransitionAnchor
             };
         }
 
         public override string ToString()
         {
-            return $"Node[{NodeId}] {NodeType} at {Position:F2} (OneWay: {IsOneWay}, Group: {SurfaceGroupId})";
+            return $"Node[{NodeId}] {NodeType} at {Position:F2} (OneWay: {IsOneWay}, Group: {SurfaceGroupId}, Transition: {IsTransitionAnchor})";
         }
     }
 
