@@ -21,6 +21,11 @@ namespace ZeroEngine.Quest
         [SerializeReference]
         public List<QuestCondition> Conditions = new List<QuestCondition>();
 
+        [Header("Accept Requirements")]
+        [Tooltip("Optional prerequisites that must pass before this quest can be accepted. Empty means always accept-ready.")]
+        [SerializeReference]
+        public List<QuestAcceptRequirement> AcceptRequirements = new List<QuestAcceptRequirement>();
+
         [Header("Rewards")]
         [Tooltip("Rewards granted when the quest is submitted or auto-submitted.")]
         [SerializeReference]

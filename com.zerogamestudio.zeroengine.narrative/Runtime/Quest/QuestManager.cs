@@ -241,33 +241,70 @@ namespace ZeroEngine.Quest
 
         public bool AcceptQuest(string questId)
         {
-            if (HasActiveQuest(questId))
+            if (!CanAcceptQuest(questId, out var reason))
             {
-                ZeroLog.Warning(ZeroLog.Modules.Quest, $"Already has active quest: {questId}");
+                ZeroLog.Warning(ZeroLog.Modules.Quest, reason);
                 return false;
             }
 
-            var config = GetConfig(questId);
-            if (config == null) return false;
-
-            if (config.repetitionLimit > 0)
-            {
-                int doneCount = GetQuestCompletionCount(questId);
-                if (doneCount >= config.repetitionLimit)
-                {
-                    ZeroLog.Warning(ZeroLog.Modules.Quest, $"Repetition limit reached for: {questId}");
-                    return false;
-                }
-            }
-
-            var newQuest = new QuestRuntimeData(questId)
+            var normalizedQuestId = questId.Trim();
+            var newQuest = new QuestRuntimeData(normalizedQuestId)
             {
                 state = QuestState.Active
             };
             _saveData.activeQuests.Add(newQuest);
 
-            ZeroLog.Info(ZeroLog.Modules.Quest, $"Accepted: {questId}");
-            EventManager.Trigger(GameEvents.QuestAccepted, questId);
+            ZeroLog.Info(ZeroLog.Modules.Quest, $"Accepted: {normalizedQuestId}");
+            EventManager.Trigger(GameEvents.QuestAccepted, normalizedQuestId);
+            return true;
+        }
+
+        public bool CanAcceptQuest(string questId, out string reason)
+        {
+            reason = string.Empty;
+            var normalizedQuestId = questId?.Trim();
+            if (string.IsNullOrEmpty(normalizedQuestId))
+            {
+                reason = "Quest id is empty.";
+                return false;
+            }
+
+            if (HasActiveQuest(normalizedQuestId))
+            {
+                reason = $"Already has active quest: {normalizedQuestId}";
+                return false;
+            }
+
+            var config = GetConfig(normalizedQuestId);
+            if (config == null)
+            {
+                reason = $"Config not found: {normalizedQuestId}";
+                return false;
+            }
+
+            if (config.repetitionLimit > 0)
+            {
+                int doneCount = GetQuestCompletionCount(normalizedQuestId);
+                if (doneCount >= config.repetitionLimit)
+                {
+                    reason = $"Repetition limit reached for: {normalizedQuestId}";
+                    return false;
+                }
+            }
+
+            if (config.AcceptRequirements == null) return true;
+
+            foreach (var requirement in config.AcceptRequirements)
+            {
+                if (requirement == null) continue;
+                if (requirement.IsSatisfied(this, out var blockReason)) continue;
+
+                reason = string.IsNullOrWhiteSpace(blockReason)
+                    ? $"Accept requirement failed: {requirement.GetPreviewText()}"
+                    : blockReason;
+                return false;
+            }
+
             return true;
         }
 
@@ -497,6 +534,23 @@ namespace ZeroEngine.Quest
         {
             _saveData = data ?? new QuestSystemSaveData();
         }
+
+#if UNITY_EDITOR
+        public void ForceCompleteQuestForTests(string questId)
+        {
+            var normalizedQuestId = questId?.Trim();
+            if (string.IsNullOrEmpty(normalizedQuestId)) return;
+
+            var quest = FindActiveQuest(normalizedQuestId);
+            if (quest == null)
+            {
+                quest = new QuestRuntimeData(normalizedQuestId);
+                _saveData.activeQuests.Add(quest);
+            }
+
+            quest.state = QuestState.Successful;
+        }
+#endif
 
         #endregion
     }

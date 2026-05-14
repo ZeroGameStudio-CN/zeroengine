@@ -142,6 +142,26 @@ namespace ZeroEngine.Quest.Tests.Editor
         }
 
         [Test]
+        public void QuestConfigSO_HasAcceptRequirements()
+        {
+            var source = File.ReadAllText($"{PackageRoot}/Runtime/Quest/Data/QuestConfigSO.cs");
+
+            StringAssert.Contains("List<QuestAcceptRequirement>", source);
+            StringAssert.Contains("AcceptRequirements", source);
+            StringAssert.Contains("[SerializeReference]", source);
+        }
+
+        [Test]
+        public void QuestManager_AcceptQuest_UsesCanAcceptQuest()
+        {
+            var source = File.ReadAllText($"{PackageRoot}/Runtime/Quest/QuestManager.cs");
+
+            StringAssert.Contains("public bool CanAcceptQuest(string questId, out string reason)", source);
+            StringAssert.Contains("if (!CanAcceptQuest(questId, out var reason))", source);
+            StringAssert.Contains("config.AcceptRequirements", source);
+        }
+
+        [Test]
         public void PackageDocumentation_DeclaresAdapterBoundaryAndSaveDeferral()
         {
             var docs = File.ReadAllText($"{PackageRoot}/Documentation~/quest-system.md");
