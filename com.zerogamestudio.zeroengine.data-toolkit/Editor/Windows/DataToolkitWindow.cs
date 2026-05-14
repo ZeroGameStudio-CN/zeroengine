@@ -36,6 +36,22 @@ namespace ZGS.DataToolkit.Editor
         private string activeResizeKey;
         private bool isWarmingAssetCounts;
 
+        private readonly struct SelectionSnapshot
+        {
+            public SelectionSnapshot(Type selectedType, string selectedTypeId, string assetPath, string assetGuid)
+            {
+                SelectedType = selectedType;
+                SelectedTypeId = selectedTypeId;
+                AssetPath = assetPath;
+                AssetGuid = assetGuid;
+            }
+
+            public Type SelectedType { get; }
+            public string SelectedTypeId { get; }
+            public string AssetPath { get; }
+            public string AssetGuid { get; }
+        }
+
         public static DataToolkitWindow Open(DataToolkitProjectSettings settings)
         {
             return Open(new DataToolkitProjectProfile(settings));
@@ -334,28 +350,32 @@ namespace ZGS.DataToolkit.Editor
             selectedType = type;
             assetColumnScroll = Vector2.zero;
             assetSearch = string.Empty;
-            selectedAssetPath = null;
-            SelectAsset(null);
+            ClearSelectedAsset();
         }
 
         private void SelectAssetByPath(string assetPath)
         {
-            if (selectedAssetPath == assetPath)
+            if (string.IsNullOrEmpty(assetPath))
+            {
+                ClearSelectedAsset();
+                return;
+            }
+
+            if (selectedAssetPath == assetPath && selectedAsset != null)
             {
                 return;
             }
 
             selectedAssetPath = assetPath;
-            SelectAsset(string.IsNullOrEmpty(assetPath)
-                ? null
-                : AssetDatabase.LoadAssetAtPath<UnityEngine.Object>(assetPath));
+            SelectAsset(AssetDatabase.LoadAssetAtPath<UnityEngine.Object>(assetPath));
         }
 
         private void SelectAsset(UnityEngine.Object asset)
         {
             if (asset == null)
             {
-                selectedAssetPath = null;
+                ClearSelectedAsset();
+                return;
             }
 
             if (selectedAsset == asset)
@@ -367,6 +387,15 @@ namespace ZGS.DataToolkit.Editor
             Selection.activeObject = asset;
             inspectorScroll = Vector2.zero;
             inspector.SetTarget(asset);
+        }
+
+        private void ClearSelectedAsset()
+        {
+            selectedAssetPath = null;
+            selectedAsset = null;
+            Selection.activeObject = null;
+            inspectorScroll = Vector2.zero;
+            inspector.SetTarget(null);
         }
 
         private bool IsTypeVisible(Type type)
@@ -406,19 +435,85 @@ namespace ZGS.DataToolkit.Editor
 
         private void RefreshCaches()
         {
+            var selectionSnapshot = CaptureSelectionSnapshot();
+
             ManageableDataTypeDiscovery.ClearCache();
             AssetDiscoveryService.ClearCaches();
             assetCountCache.Clear();
             pendingCountTypes.Clear();
             typesToDisplay = ManageableDataTypeDiscovery.GetManageableScriptableObjectTypes().ToArray();
-            if (selectedType != null && !typesToDisplay.Contains(selectedType))
-            {
-                SelectType(null);
-            }
-
-            EnsureSelectedType();
+            RestoreSelectionAfterRefresh(selectionSnapshot);
             StartAssetCountWarmup();
             Repaint();
+        }
+
+        private SelectionSnapshot CaptureSelectionSnapshot()
+        {
+            var assetPath = selectedAssetPath;
+            if (string.IsNullOrEmpty(assetPath) && selectedAsset != null)
+            {
+                assetPath = AssetDatabase.GetAssetPath(selectedAsset);
+            }
+
+            var assetGuid = string.IsNullOrEmpty(assetPath) ? null : AssetDatabase.AssetPathToGUID(assetPath);
+            return new SelectionSnapshot(selectedType, selectedType?.AssemblyQualifiedName, assetPath, assetGuid);
+        }
+
+        private void RestoreSelectionAfterRefresh(SelectionSnapshot selectionSnapshot)
+        {
+            var previousSelectedType = selectedType;
+            selectedType = ResolveTypeAfterRefresh(selectionSnapshot);
+            if (selectedType != previousSelectedType)
+            {
+                assetColumnScroll = Vector2.zero;
+                assetSearch = string.Empty;
+            }
+
+            ClearSelectedAsset();
+
+            if (selectedType == null)
+            {
+                EnsureSelectedType();
+                return;
+            }
+
+            var assetPath = ResolveAssetPathAfterRefresh(selectionSnapshot);
+            if (!string.IsNullOrEmpty(assetPath) && AssetBelongsToSelectedType(assetPath))
+            {
+                SelectAssetByPath(assetPath);
+            }
+        }
+
+        private Type ResolveTypeAfterRefresh(SelectionSnapshot selectionSnapshot)
+        {
+            if (!string.IsNullOrEmpty(selectionSnapshot.SelectedTypeId))
+            {
+                return typesToDisplay.FirstOrDefault(type => type.AssemblyQualifiedName == selectionSnapshot.SelectedTypeId);
+            }
+
+            return selectionSnapshot.SelectedType != null && typesToDisplay.Contains(selectionSnapshot.SelectedType)
+                ? selectionSnapshot.SelectedType
+                : null;
+        }
+
+        private string ResolveAssetPathAfterRefresh(SelectionSnapshot selectionSnapshot)
+        {
+            if (!string.IsNullOrEmpty(selectionSnapshot.AssetGuid))
+            {
+                var assetPathFromGuid = AssetDatabase.GUIDToAssetPath(selectionSnapshot.AssetGuid);
+                if (!string.IsNullOrEmpty(assetPathFromGuid))
+                {
+                    return assetPathFromGuid;
+                }
+            }
+
+            return selectionSnapshot.AssetPath;
+        }
+
+        private bool AssetBelongsToSelectedType(string assetPath)
+        {
+            return selectedType != null &&
+                   AssetDiscoveryService.GetAssetPathsForType(selectedType, context.Settings).Contains(assetPath);
         }
 
         private int CountAssetsForType(Type type)
