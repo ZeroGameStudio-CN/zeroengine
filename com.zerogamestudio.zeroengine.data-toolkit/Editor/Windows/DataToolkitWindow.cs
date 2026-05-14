@@ -213,6 +213,7 @@ namespace ZGS.DataToolkit.Editor
                 MaxBodyLayoutWidth,
                 0f,
                 MaxBodyLayoutHeight,
+                GUIStyle.none,
                 GUILayout.ExpandWidth(true),
                 GUILayout.ExpandHeight(true));
             var layoutRects = CalculateBodyLayoutRects(bodyRect);
