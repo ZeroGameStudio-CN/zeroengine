@@ -14,6 +14,8 @@ namespace ZGS.DataToolkit.Editor
         private const float MinColumnWidth = 160f;
         private const float MaxColumnWidth = 520f;
         private const float MinInspectorWidth = 320f;
+        private const float MaxBodyLayoutWidth = 100000f;
+        private const float MaxBodyLayoutHeight = 100000f;
         private const float SplitterWidth = 5f;
         private const float RowHeight = 24f;
 
@@ -206,7 +208,13 @@ namespace ZGS.DataToolkit.Editor
 
         private void DrawBodyLayout()
         {
-            var bodyRect = GUILayoutUtility.GetRect(0f, 0f, GUILayout.ExpandWidth(true), GUILayout.ExpandHeight(true));
+            var bodyRect = GUILayoutUtility.GetRect(
+                0f,
+                MaxBodyLayoutWidth,
+                0f,
+                MaxBodyLayoutHeight,
+                GUILayout.ExpandWidth(true),
+                GUILayout.ExpandHeight(true));
             var layoutRects = CalculateBodyLayoutRects(bodyRect);
 
             DrawTypeColumn(layoutRects.TypeColumn);
