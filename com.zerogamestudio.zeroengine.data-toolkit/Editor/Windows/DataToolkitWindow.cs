@@ -14,8 +14,10 @@ namespace ZGS.DataToolkit.Editor
         private const float MinColumnWidth = 160f;
         private const float MaxColumnWidth = 520f;
         private const float MinInspectorWidth = 320f;
-        private const float MaxBodyLayoutWidth = 100000f;
-        private const float MaxBodyLayoutHeight = 100000f;
+        private const float WindowPadding = 4f;
+        private const float HeaderRowHeight = 38f;
+        private const float ProjectToolbarRowHeight = 64f;
+        private const float HeaderBodySpacing = 4f;
         private const float SplitterWidth = 5f;
         private const float RowHeight = 24f;
 
@@ -139,8 +141,18 @@ namespace ZGS.DataToolkit.Editor
         private void OnGUI()
         {
             EnsureContext();
-            DrawHeaderToolbar();
-            DrawBodyLayout();
+            var visibleToolbarProviders = GetVisibleToolbarProviders();
+            var headerHeight = CalculateHeaderHeight(visibleToolbarProviders.Count);
+            var contentWidth = Mathf.Max(0f, position.width - WindowPadding * 2f);
+            var headerRect = new Rect(WindowPadding, WindowPadding, contentWidth, headerHeight);
+            var bodyRect = new Rect(
+                WindowPadding,
+                headerRect.yMax + HeaderBodySpacing,
+                contentWidth,
+                Mathf.Max(0f, position.height - headerRect.yMax - HeaderBodySpacing - WindowPadding));
+
+            DrawHeaderToolbar(headerRect, visibleToolbarProviders);
+            DrawBodyLayout(bodyRect);
         }
 
         private void EnsureContext()
@@ -162,9 +174,42 @@ namespace ZGS.DataToolkit.Editor
             Repaint();
         }
 
-        private void DrawHeaderToolbar()
+        private float CalculateHeaderHeight(int visibleToolbarCount)
         {
-            using (new EditorGUILayout.VerticalScope(EditorStyles.helpBox))
+            return HeaderRowHeight + visibleToolbarCount * ProjectToolbarRowHeight;
+        }
+
+        private IReadOnlyList<IDataToolkitToolbarProvider> GetVisibleToolbarProviders()
+        {
+            var visibleProviders = new List<IDataToolkitToolbarProvider>();
+
+            foreach (var toolbarProvider in toolbarProviders)
+            {
+                if (toolbarProvider == null)
+                {
+                    continue;
+                }
+
+                try
+                {
+                    if (toolbarProvider.IsVisible(context))
+                    {
+                        visibleProviders.Add(toolbarProvider);
+                    }
+                }
+                catch (Exception exception)
+                {
+                    Debug.LogException(exception);
+                }
+            }
+
+            return visibleProviders;
+        }
+
+        private void DrawHeaderToolbar(Rect rect, IReadOnlyList<IDataToolkitToolbarProvider> visibleToolbarProviders)
+        {
+            GUILayout.BeginArea(rect);
+            using (new EditorGUILayout.VerticalScope(EditorStyles.helpBox, GUILayout.ExpandWidth(true), GUILayout.ExpandHeight(true)))
             {
                 EditorGUILayout.BeginHorizontal();
                 GUILayout.Label(context.Settings.WindowTitle, EditorStyles.boldLabel, GUILayout.MinWidth(160f));
@@ -177,26 +222,17 @@ namespace ZGS.DataToolkit.Editor
                 }
 
                 EditorGUILayout.EndHorizontal();
-                DrawProjectToolbars();
+                DrawProjectToolbars(visibleToolbarProviders);
             }
+            GUILayout.EndArea();
         }
 
-        private void DrawProjectToolbars()
+        private void DrawProjectToolbars(IReadOnlyList<IDataToolkitToolbarProvider> visibleToolbarProviders)
         {
-            foreach (var toolbarProvider in toolbarProviders)
+            foreach (var toolbarProvider in visibleToolbarProviders)
             {
-                if (toolbarProvider == null)
-                {
-                    continue;
-                }
-
                 try
                 {
-                    if (!toolbarProvider.IsVisible(context))
-                    {
-                        continue;
-                    }
-
                     toolbarProvider.DrawToolbar(context);
                 }
                 catch (Exception exception)
@@ -206,16 +242,8 @@ namespace ZGS.DataToolkit.Editor
             }
         }
 
-        private void DrawBodyLayout()
+        private void DrawBodyLayout(Rect bodyRect)
         {
-            var bodyRect = GUILayoutUtility.GetRect(
-                0f,
-                MaxBodyLayoutWidth,
-                0f,
-                MaxBodyLayoutHeight,
-                GUIStyle.none,
-                GUILayout.ExpandWidth(true),
-                GUILayout.ExpandHeight(true));
             var layoutRects = CalculateBodyLayoutRects(bodyRect);
 
             DrawTypeColumn(layoutRects.TypeColumn);
