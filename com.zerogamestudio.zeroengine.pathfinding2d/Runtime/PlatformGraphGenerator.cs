@@ -753,6 +753,8 @@ namespace ZeroEngine.Pathfinding2D
             Vector3 rightEdgePos = new Vector3(right - config.EdgeInset, y, 0f);
             AddNode(PlatformNodeData.CreateEdge(nextNodeId++, rightEdgePos, collider, false, isOneWay, surfaceGroupId));
 
+            AddPhysicalEdgeTransitionAnchors(left, right, y, collider, isOneWay, surfaceGroupId);
+
             // 生成中间表面节点
             float innerWidth = width - 2 * config.EdgeInset;
             int innerNodeCount = Mathf.FloorToInt(innerWidth / nodeSpacing);
@@ -769,6 +771,44 @@ namespace ZeroEngine.Pathfinding2D
             }
 
             return surfaceGroupId;
+        }
+
+        private void AddPhysicalEdgeTransitionAnchors(
+            float left,
+            float right,
+            float y,
+            Collider2D collider,
+            bool isOneWay,
+            int surfaceGroupId)
+        {
+            if (config.EdgeInset <= 0.01f)
+                return;
+
+            Vector3 leftAnchor = new Vector3(left, y, 0f);
+            if (!HasNodeNearPosition(leftAnchor, 0.05f))
+            {
+                AddNode(PlatformNodeData.CreateEdge(
+                    nextNodeId++,
+                    leftAnchor,
+                    collider,
+                    true,
+                    isOneWay,
+                    surfaceGroupId,
+                    isTransitionAnchor: true));
+            }
+
+            Vector3 rightAnchor = new Vector3(right, y, 0f);
+            if (!HasNodeNearPosition(rightAnchor, 0.05f))
+            {
+                AddNode(PlatformNodeData.CreateEdge(
+                    nextNodeId++,
+                    rightAnchor,
+                    collider,
+                    false,
+                    isOneWay,
+                    surfaceGroupId,
+                    isTransitionAnchor: true));
+            }
         }
 
         /// <summary>
@@ -998,8 +1038,11 @@ namespace ZeroEngine.Pathfinding2D
 
         public PlatformSurfaceSegment FindSurfaceSegmentAt(Vector2 position, Collider2D preferredPlatform, float maxDistance)
         {
+            PlatformSurfaceSegment bestContainingBelowSegment = null;
+            float bestContainingBelowVertical = maxDistance;
             PlatformSurfaceSegment bestContainingSegment = null;
             float bestContainingVertical = maxDistance;
+            const float surfaceAboveTolerance = 0.25f;
 
             foreach (var segment in SurfaceSegments)
             {
@@ -1015,11 +1058,23 @@ namespace ZeroEngine.Pathfinding2D
                     bestContainingVertical = verticalDistance;
                     bestContainingSegment = segment;
                 }
+
+                if (segment.Y <= position.y + surfaceAboveTolerance &&
+                    verticalDistance < bestContainingBelowVertical)
+                {
+                    bestContainingBelowVertical = verticalDistance;
+                    bestContainingBelowSegment = segment;
+                }
             }
+
+            if (bestContainingBelowSegment != null)
+                return bestContainingBelowSegment;
 
             if (bestContainingSegment != null)
                 return bestContainingSegment;
 
+            PlatformSurfaceSegment bestBelowSegment = null;
+            float bestBelowDistance = maxDistance;
             PlatformSurfaceSegment bestSegment = null;
             float bestDistance = maxDistance;
             foreach (var segment in SurfaceSegments)
@@ -1033,7 +1088,17 @@ namespace ZeroEngine.Pathfinding2D
                     bestDistance = distance;
                     bestSegment = segment;
                 }
+
+                if (segment.Y <= position.y + surfaceAboveTolerance &&
+                    distance < bestBelowDistance)
+                {
+                    bestBelowDistance = distance;
+                    bestBelowSegment = segment;
+                }
             }
+
+            if (bestBelowSegment != null)
+                return bestBelowSegment;
 
             return bestSegment;
         }

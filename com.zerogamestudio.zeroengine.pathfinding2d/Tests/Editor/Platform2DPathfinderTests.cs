@@ -476,6 +476,60 @@ namespace ZeroEngine.Pathfinding2D.Tests.Editor
         }
 
         [Test]
+        public void TryRequestPath_SameColliderStartBelowUpperPlatform_UsesLowerSurfaceRoute()
+        {
+            var host = new GameObject("SameColliderStartBelowUpperRouteTest");
+            var platform = CreateMultiPathPolygonPlatform(
+                "SameColliderLayeredRoute",
+                (new Vector2(35f, -0.1f), new Vector2(40f, 0.2f)),
+                (new Vector2(65f, 3.9f), new Vector2(20f, 0.2f)),
+                (new Vector2(35.5f, 9.9f), new Vector2(27f, 0.2f)));
+
+            try
+            {
+                var graph = host.AddComponent<PlatformGraphGenerator>();
+                graph.Config.ScanCenter = new Vector2(40f, 5f);
+                graph.Config.ScanSize = new Vector2(80f, 24f);
+                graph.Config.GroundLayer = 1 << platform.gameObject.layer;
+                graph.Config.OneWayPlatformLayer = 0;
+                graph.Config.ObstacleLayer = 0;
+                graph.Config.NodeSpacing = 1.5f;
+                graph.Config.EdgeInset = 0.3f;
+
+                graph.GeneratePlatformGraph();
+                var startGroup = graph.FindSurfaceGroupAt(new Vector2(29.27f, 5.92f), platform, 8f);
+                Assert.IsTrue(graph.TryGetSurfaceSegment(startGroup, out var startSegment), "Expected a start surface segment.");
+                Assert.AreEqual(0f, startSegment.Y, 0.05f, "Start segment must be the lower floor, not the overhead target platform.");
+
+                var jumpLinkCalculator = host.AddComponent<JumpLinkCalculator>();
+                jumpLinkCalculator.Config.MaxJumpVelocity = 99f;
+                jumpLinkCalculator.Config.MaxHorizontalDistance = 6f;
+                jumpLinkCalculator.Config.MaxJumpHeight = 6f;
+                jumpLinkCalculator.GenerateJumpLinks();
+
+                var pathfinder = host.AddComponent<Platform2DPathfinder>();
+                pathfinder.SetGraphGenerator(graph);
+
+                bool success = pathfinder.TryRequestPath(
+                    new PlatformPathRequest(
+                        new Vector3(29.27f, 5.92f, 0f),
+                        new Vector3(28.81f, 11.06f, 0f),
+                        forceRequest: true,
+                        projectTargetToGround: true),
+                    out var result);
+
+                Assert.IsTrue(success, BuildPathDebug(result));
+                Assert.AreEqual(PlatformPathCompletionKind.FullPath, result.CompletionKind, BuildPathDebug(result));
+                Assert.That(result.Path.Commands.Count(command => command.CommandType == MoveCommandType.Jump), Is.GreaterThanOrEqualTo(2), BuildPathDebug(result));
+            }
+            finally
+            {
+                Object.DestroyImmediate(host);
+                Object.DestroyImmediate(platform.gameObject);
+            }
+        }
+
+        [Test]
         public void TryRequestPath_SameColliderTargetCandidates_StayOnTargetSurfaceGroup()
         {
             var host = new GameObject("SameColliderTargetSurfaceGroupTest");
