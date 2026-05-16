@@ -785,10 +785,17 @@ namespace ZeroEngine.Pathfinding2D
             switch (command.CommandType)
             {
                 case MoveCommandType.Walk:
-                    // 行走：到达目标 X 坐标附近，且没有明显低于目标平台。
-                    // 玩家已越过目标高度时允许完成，避免低处中间 Walk 卡住空中/上层状态。
-                    return Mathf.Abs(currentPosition.x - command.Target.x) < config.WalkCommandArriveDistance &&
-                           currentPosition.y + config.WalkCommandVerticalTolerance >= command.Target.y;
+                    if (Mathf.Abs(currentPosition.x - command.Target.x) >= config.WalkCommandArriveDistance)
+                        return false;
+
+                    float verticalDelta = currentPosition.y - command.Target.y;
+                    if (Mathf.Abs(verticalDelta) <= config.WalkCommandVerticalTolerance)
+                        return true;
+
+                    // Non-terminal lower walk nodes may be crossed while the actor is still airborne or climbing.
+                    // The final walk command, however, represents the resolved destination plane and must not complete
+                    // until the actor is actually on that plane.
+                    return !IsCurrentCommandTerminal() && verticalDelta > config.WalkCommandVerticalTolerance;
 
                 case MoveCommandType.Jump:
                 case MoveCommandType.Fall:
@@ -800,6 +807,13 @@ namespace ZeroEngine.Pathfinding2D
                 default:
                     return true;
             }
+        }
+
+        private bool IsCurrentCommandTerminal()
+        {
+            return CurrentPath == null ||
+                   CurrentPath.Commands == null ||
+                   CurrentPath.CurrentIndex >= CurrentPath.Commands.Count - 1;
         }
 
         /// <summary>

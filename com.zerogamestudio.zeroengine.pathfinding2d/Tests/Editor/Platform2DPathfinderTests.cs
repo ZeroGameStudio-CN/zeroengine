@@ -755,7 +755,7 @@ namespace ZeroEngine.Pathfinding2D.Tests.Editor
         }
 
         [Test]
-        public void IsCurrentCommandComplete_WalkTargetBelowPlayer_CompletesWhenXArrived()
+        public void IsCurrentCommandComplete_NonTerminalWalkTargetBelowPlayer_CanAdvance()
         {
             var host = new GameObject("WalkCompletionBelowPlayerTest");
 
@@ -764,7 +764,8 @@ namespace ZeroEngine.Pathfinding2D.Tests.Editor
                 var pathfinder = host.AddComponent<Platform2DPathfinder>();
                 var commands = new System.Collections.Generic.List<MoveCommand>
                 {
-                    MoveCommand.Walk(new Vector3(2.55f, 3f, 0f), 0.5f, 1)
+                    MoveCommand.Walk(new Vector3(2.55f, 3f, 0f), 0.5f, 1),
+                    MoveCommand.Jump(new Vector3(3.5f, 5f, 0f), 8f, 1f, 0.3f, facingDirection: 1)
                 };
                 var path = new Platform2DPath(
                     new Vector3(2.63f, 4.32f, 0f),
@@ -773,6 +774,58 @@ namespace ZeroEngine.Pathfinding2D.Tests.Editor
                 SetCurrentPath(pathfinder, path);
 
                 Assert.IsTrue(pathfinder.IsCurrentCommandComplete(new Vector3(2.63f, 4.32f, 0f), isGrounded: true));
+            }
+            finally
+            {
+                Object.DestroyImmediate(host);
+            }
+        }
+
+        [Test]
+        public void IsCurrentCommandComplete_TerminalWalkTargetFarBelowGroundedPlayer_DoesNotComplete()
+        {
+            var host = new GameObject("TerminalWalkFarBelowPlayerTest");
+
+            try
+            {
+                var pathfinder = host.AddComponent<Platform2DPathfinder>();
+                var commands = new System.Collections.Generic.List<MoveCommand>
+                {
+                    MoveCommand.Walk(new Vector3(15.30f, 0f, 0f), 0.2f, -1)
+                };
+                var path = new Platform2DPath(
+                    new Vector3(15.20f, 5.32f, 0f),
+                    new Vector3(15.30f, 0f, 0f),
+                    commands);
+                SetCurrentPath(pathfinder, path);
+
+                Assert.IsFalse(pathfinder.IsCurrentCommandComplete(new Vector3(15.20f, 5.32f, 0f), isGrounded: true));
+            }
+            finally
+            {
+                Object.DestroyImmediate(host);
+            }
+        }
+
+        [Test]
+        public void IsCurrentCommandComplete_TerminalWalkSamePlane_Completes()
+        {
+            var host = new GameObject("TerminalWalkSamePlaneTest");
+
+            try
+            {
+                var pathfinder = host.AddComponent<Platform2DPathfinder>();
+                var commands = new System.Collections.Generic.List<MoveCommand>
+                {
+                    MoveCommand.Walk(new Vector3(15.30f, 5.25f, 0f), 0.2f, -1)
+                };
+                var path = new Platform2DPath(
+                    new Vector3(15.20f, 5.32f, 0f),
+                    new Vector3(15.30f, 5.25f, 0f),
+                    commands);
+                SetCurrentPath(pathfinder, path);
+
+                Assert.IsTrue(pathfinder.IsCurrentCommandComplete(new Vector3(15.20f, 5.32f, 0f), isGrounded: true));
             }
             finally
             {
