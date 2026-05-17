@@ -54,6 +54,9 @@ namespace ZeroEngine.Pathfinding2D
         /// <summary>预计总耗时</summary>
         public float TotalDuration { get; private set; }
 
+        public PlatformRouteCost RouteCost { get; private set; } = PlatformRouteCost.Unreachable;
+        public bool CommandsValidated { get; private set; }
+
         /// <summary>是否还有剩余指令</summary>
         public bool HasNextCommand => CurrentIndex < Commands.Count;
 
@@ -134,6 +137,12 @@ namespace ZeroEngine.Pathfinding2D
         public void SetStatus(PathStatus status)
         {
             Status = status;
+        }
+
+        public void SetRouteDiagnostics(PlatformRouteCost routeCost, bool commandsValidated)
+        {
+            RouteCost = routeCost;
+            CommandsValidated = commandsValidated;
         }
 
         /// <summary>

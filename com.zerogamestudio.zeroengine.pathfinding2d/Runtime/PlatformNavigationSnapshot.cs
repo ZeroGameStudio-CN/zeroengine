@@ -14,6 +14,10 @@ namespace ZeroEngine.Pathfinding2D
         public readonly PlatformPathCompletionKind CompletionKind;
         public readonly string CommandDebug;
         public readonly string SurfaceSegmentDebug;
+        public readonly float RouteCost;
+        public readonly int CurrentSurfaceSegmentId;
+        public readonly int TargetSurfaceSegmentId;
+        public readonly bool CommandsValidated;
 
         public PlatformNavigationSnapshot(
             bool hasGraphGenerator,
@@ -27,7 +31,11 @@ namespace ZeroEngine.Pathfinding2D
             PlatformPathCompletionKind completionKind,
             string commandDebug,
             int surfaceSegmentCount = 0,
-            string surfaceSegmentDebug = null)
+            string surfaceSegmentDebug = null,
+            float routeCost = 0f,
+            int currentSurfaceSegmentId = -1,
+            int targetSurfaceSegmentId = -1,
+            bool commandsValidated = false)
         {
             HasGraphGenerator = hasGraphGenerator;
             IsGenerated = isGenerated;
@@ -41,6 +49,10 @@ namespace ZeroEngine.Pathfinding2D
             CompletionKind = completionKind;
             CommandDebug = commandDebug;
             SurfaceSegmentDebug = surfaceSegmentDebug ?? "none";
+            RouteCost = routeCost;
+            CurrentSurfaceSegmentId = currentSurfaceSegmentId;
+            TargetSurfaceSegmentId = targetSurfaceSegmentId;
+            CommandsValidated = commandsValidated;
         }
     }
 }

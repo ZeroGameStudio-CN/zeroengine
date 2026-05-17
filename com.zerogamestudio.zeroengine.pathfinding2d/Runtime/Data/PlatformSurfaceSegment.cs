@@ -21,6 +21,9 @@ namespace ZeroEngine.Pathfinding2D
         public int RightNodeId = -1;
         public readonly List<int> NodeIds = new List<int>();
 
+        public int Id => GroupId;
+        public float MinX => Left;
+        public float MaxX => Right;
         public float Width => Right - Left;
         public Vector2 Center => new Vector2((Left + Right) * 0.5f, Y);
 

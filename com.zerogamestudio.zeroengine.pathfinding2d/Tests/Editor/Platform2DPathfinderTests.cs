@@ -881,6 +881,127 @@ namespace ZeroEngine.Pathfinding2D.Tests.Editor
             }
         }
 
+        [Test]
+        public void TryEvaluateRoute_ReturnsComparableCostWithoutMutatingCurrentPath()
+        {
+            var host = new GameObject("RouteCostQueryTest");
+            var ground = CreatePlatform("RouteCostGround", new Vector2(0f, 0f), new Vector2(12f, 0.2f));
+
+            try
+            {
+                var pathfinder = CreatePathfinder(host, ground, ground, maxJumpVelocity: 16f);
+                Assert.IsTrue(pathfinder.TryRequestPath(
+                    new PlatformPathRequest(
+                        new Vector3(-4f, 0.35f, 0f),
+                        new Vector3(-2f, 0.35f, 0f),
+                        forceRequest: true,
+                        projectTargetToGround: false),
+                    out var activePathResult),
+                    BuildPathDebug(activePathResult));
+                var originalSnapshot = pathfinder.GetSnapshot();
+
+                bool success = pathfinder.TryEvaluateRoute(
+                    new PlatformRouteQuery(
+                        new Vector3(-4f, 0.35f, 0f),
+                        new Vector3(4f, 0.35f, 0f),
+                        projectTargetToGround: false),
+                    out var result);
+
+                Assert.IsTrue(success, result.DebugSummary);
+                Assert.IsTrue(result.Cost.IsReachable);
+                Assert.Greater(result.Cost.Total, 0f);
+                Assert.AreEqual(1, result.Cost.CommandCount);
+                Assert.That(result.DebugSummary, Does.Contain("0:Walk"));
+                Assert.AreEqual(originalSnapshot.CurrentCommandIndex, pathfinder.GetSnapshot().CurrentCommandIndex);
+                Assert.AreEqual(originalSnapshot.CommandDebug, pathfinder.GetSnapshot().CommandDebug);
+            }
+            finally
+            {
+                Object.DestroyImmediate(host);
+                Object.DestroyImmediate(ground);
+            }
+        }
+
+        [Test]
+        public void TryEvaluateRoute_FallOnlyStartsFromReachableEdge()
+        {
+            var host = new GameObject("FallEdgeOnlyRoute");
+            var upper = CreatePlatform("FallUpper", new Vector2(0f, 5f), new Vector2(12f, 0.2f));
+            var lower = CreatePlatform("FallLower", new Vector2(0f, 0f), new Vector2(12f, 0.2f));
+
+            try
+            {
+                var pathfinder = CreatePathfinder(host, upper, lower, maxJumpVelocity: 12f);
+
+                bool success = pathfinder.TryEvaluateRoute(
+                    new PlatformRouteQuery(
+                        new Vector3(0f, 5.12f, 0f),
+                        new Vector3(0f, 0.12f, 0f),
+                        projectTargetToGround: true),
+                    out var result);
+
+                if (!success)
+                {
+                    Assert.AreEqual(PlatformPathFailureReason.InvalidCommand, result.FailureReason, result.DebugSummary);
+                    return;
+                }
+
+                Vector3 previous = result.Path.StartPosition;
+                foreach (var command in result.Path.Commands)
+                {
+                    if (command.CommandType == MoveCommandType.Fall)
+                    {
+                        float distanceToLeftEdge = Mathf.Abs(previous.x + 6f);
+                        float distanceToRightEdge = Mathf.Abs(previous.x - 6f);
+                        Assert.LessOrEqual(
+                            Mathf.Min(distanceToLeftEdge, distanceToRightEdge),
+                            0.4f,
+                            $"Fall source must be an upper-platform edge, not the landing target. Source={previous:F2}, Command={command}, {result.DebugSummary}");
+                    }
+
+                    previous = command.Target;
+                }
+            }
+            finally
+            {
+                Object.DestroyImmediate(host);
+                Object.DestroyImmediate(upper);
+                Object.DestroyImmediate(lower);
+            }
+        }
+
+        [Test]
+        public void Snapshot_IncludesRouteCostAndSurfaceSegments()
+        {
+            var host = new GameObject("RouteSnapshotDetails");
+            var ground = CreatePlatform("SnapshotGround", new Vector2(0f, 0f), new Vector2(12f, 0.2f));
+
+            try
+            {
+                var pathfinder = CreatePathfinder(host, ground, ground, maxJumpVelocity: 16f);
+                bool success = pathfinder.TryRequestPath(
+                    new PlatformPathRequest(
+                        new Vector3(-4f, 0.35f, 0f),
+                        new Vector3(4f, 0.35f, 0f),
+                        forceRequest: true,
+                        projectTargetToGround: false),
+                    out var result);
+
+                Assert.IsTrue(success, BuildPathDebug(result));
+                var snapshot = pathfinder.GetSnapshot();
+                Assert.Greater(snapshot.RouteCost, 0f);
+                Assert.GreaterOrEqual(snapshot.CurrentSurfaceSegmentId, 0);
+                Assert.GreaterOrEqual(snapshot.TargetSurfaceSegmentId, 0);
+                Assert.IsTrue(snapshot.CommandsValidated);
+                Assert.That(snapshot.SurfaceSegmentDebug, Does.Contain("x=["));
+            }
+            finally
+            {
+                Object.DestroyImmediate(host);
+                Object.DestroyImmediate(ground);
+            }
+        }
+
         private static GameObject CreatePlatform(string name, Vector2 position, Vector2 size)
         {
             var platform = new GameObject(name);

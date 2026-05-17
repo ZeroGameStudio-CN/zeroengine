@@ -11,6 +11,7 @@ namespace ZeroEngine.Pathfinding2D
         EndNodeNotFound,
         PathNotFound,
         PartialPath,
-        PartialPathUnavailable
+        PartialPathUnavailable,
+        InvalidCommand
     }
 }

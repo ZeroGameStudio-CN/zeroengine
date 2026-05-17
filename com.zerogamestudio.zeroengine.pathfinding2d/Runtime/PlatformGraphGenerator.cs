@@ -877,6 +877,37 @@ namespace ZeroEngine.Pathfinding2D
             return surfaceSegmentsById.TryGetValue(surfaceGroupId, out segment);
         }
 
+        public bool TryFindSurfaceSegmentAt(Vector3 position, float verticalTolerance, out PlatformSurfaceSegment segment)
+        {
+            foreach (var candidate in SurfaceSegments)
+            {
+                bool xInside = position.x >= candidate.MinX && position.x <= candidate.MaxX;
+                bool yClose = Mathf.Abs(position.y - candidate.Y) <= verticalTolerance;
+                if (!xInside || !yClose)
+                    continue;
+
+                segment = candidate;
+                return true;
+            }
+
+            segment = default;
+            return false;
+        }
+
+        public string BuildSurfaceSegmentDebug()
+        {
+            if (SurfaceSegments == null || SurfaceSegments.Count == 0)
+                return "none";
+
+            var parts = new List<string>(SurfaceSegments.Count);
+            foreach (var segment in SurfaceSegments)
+            {
+                parts.Add($"{segment.Id}:x=[{segment.MinX:F2},{segment.MaxX:F2}],y={segment.Y:F2},oneWay={segment.IsOneWay}");
+            }
+
+            return string.Join(" | ", parts);
+        }
+
         private void AttachExistingNodesToSegment(PlatformSurfaceSegment segment)
         {
             foreach (var node in Nodes)
