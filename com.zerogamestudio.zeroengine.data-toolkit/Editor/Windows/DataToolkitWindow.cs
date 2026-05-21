@@ -20,6 +20,7 @@ namespace ZGS.DataToolkit.Editor
         private const float HeaderBodySpacing = 4f;
         private const float SplitterWidth = 5f;
         private const float RowHeight = 24f;
+        private const long LargeAssetInspectorThresholdBytes = 512 * 1024;
 
         private readonly CompositeAssetInspector inspector = new();
         private readonly Dictionary<Type, int> assetCountCache = new();
@@ -40,6 +41,7 @@ namespace ZGS.DataToolkit.Editor
         private float assetColumnWidth = DefaultAssetColumnWidth;
         private string activeResizeKey;
         private bool isWarmingAssetCounts;
+        private bool allowFullInspectorForSelectedAsset;
 
         private readonly struct SelectionSnapshot
         {
@@ -342,17 +344,24 @@ namespace ZGS.DataToolkit.Editor
 
                     EditorGUILayout.EndHorizontal();
 
-                    inspector.SetTarget(selectedAsset);
-                    inspectorScroll = EditorGUILayout.BeginScrollView(inspectorScroll);
-                    EditorGUI.BeginChangeCheck();
-                    inspector.Draw();
-                    if (EditorGUI.EndChangeCheck())
+                    if (ShouldDeferFullInspector(selectedAsset) && !allowFullInspectorForSelectedAsset)
                     {
-                        EditorUtility.SetDirty(selectedAsset);
-                        Repaint();
+                        DrawDeferredInspectorState();
                     }
+                    else
+                    {
+                        inspector.SetTarget(selectedAsset);
+                        inspectorScroll = EditorGUILayout.BeginScrollView(inspectorScroll);
+                        EditorGUI.BeginChangeCheck();
+                        inspector.Draw();
+                        if (EditorGUI.EndChangeCheck())
+                        {
+                            EditorUtility.SetDirty(selectedAsset);
+                            Repaint();
+                        }
 
-                    EditorGUILayout.EndScrollView();
+                        EditorGUILayout.EndScrollView();
+                    }
                 }
             }
             GUILayout.EndArea();
@@ -361,6 +370,79 @@ namespace ZGS.DataToolkit.Editor
         private void DrawEmptyInspectorState()
         {
             EditorGUILayout.HelpBox("Select a data asset from the middle column.", MessageType.Info);
+        }
+
+        private void DrawDeferredInspectorState()
+        {
+            var assetPath = ResolveSelectedAssetPath();
+            var sizeInBytes = GetAssetFileSize(assetPath);
+
+            EditorGUILayout.HelpBox(
+                "This asset is large, so the full inspector is deferred to keep Data Manager responsive.",
+                MessageType.Info);
+
+            EditorGUILayout.LabelField("Type", selectedAsset.GetType().Name);
+            EditorGUILayout.LabelField("Path", string.IsNullOrEmpty(assetPath) ? "(unknown)" : assetPath);
+            EditorGUILayout.LabelField("Size", FormatByteSize(sizeInBytes));
+
+            EditorGUILayout.Space(8f);
+            if (GUILayout.Button("Open Full Inspector", GUILayout.Height(28f)))
+            {
+                allowFullInspectorForSelectedAsset = true;
+                inspector.SetTarget(selectedAsset);
+                Repaint();
+            }
+        }
+
+        private bool ShouldDeferFullInspector(UnityEngine.Object asset)
+        {
+            if (asset == null)
+            {
+                return false;
+            }
+
+            var assetPath = ResolveSelectedAssetPath();
+            return GetAssetFileSize(assetPath) > LargeAssetInspectorThresholdBytes;
+        }
+
+        private string ResolveSelectedAssetPath()
+        {
+            if (!string.IsNullOrEmpty(selectedAssetPath))
+            {
+                return selectedAssetPath;
+            }
+
+            return selectedAsset == null ? null : AssetDatabase.GetAssetPath(selectedAsset);
+        }
+
+        private static long GetAssetFileSize(string assetPath)
+        {
+            if (string.IsNullOrEmpty(assetPath))
+            {
+                return 0L;
+            }
+
+            if (!File.Exists(assetPath))
+            {
+                return 0L;
+            }
+
+            return new FileInfo(assetPath).Length;
+        }
+
+        private static string FormatByteSize(long bytes)
+        {
+            if (bytes <= 0L)
+            {
+                return "0 KB";
+            }
+
+            if (bytes < 1024L * 1024L)
+            {
+                return $"{Mathf.CeilToInt(bytes / 1024f)} KB";
+            }
+
+            return $"{bytes / (1024f * 1024f):0.0} MB";
         }
 
         private bool DrawSelectableRow(string title, string countText, bool selected)
@@ -483,7 +565,8 @@ namespace ZGS.DataToolkit.Editor
             selectedAsset = asset;
             Selection.activeObject = asset;
             inspectorScroll = Vector2.zero;
-            inspector.SetTarget(asset);
+            allowFullInspectorForSelectedAsset = false;
+            inspector.SetTarget(null);
         }
 
         private void ClearSelectedAsset()
@@ -492,6 +575,7 @@ namespace ZGS.DataToolkit.Editor
             selectedAsset = null;
             Selection.activeObject = null;
             inspectorScroll = Vector2.zero;
+            allowFullInspectorForSelectedAsset = false;
             inspector.SetTarget(null);
         }
 
