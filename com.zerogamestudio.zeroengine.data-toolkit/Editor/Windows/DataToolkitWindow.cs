@@ -103,6 +103,7 @@ namespace ZGS.DataToolkit.Editor
             var settings = profile.Settings;
             context = new DataToolkitContext(settings);
             toolbarProviders = profile.ToolbarProviders;
+            inspector.SetCustomInspectors(context, profile.AssetInspectorProviders);
             titleContent = new GUIContent(settings.WindowTitle);
             minSize = new Vector2(980f, 560f);
             typeColumnWidth = Mathf.Clamp(EditorPrefs.GetFloat(settings.PrefKey("TypeColumnWidth"), DefaultTypeColumnWidth), MinColumnWidth, MaxColumnWidth);
@@ -344,7 +345,7 @@ namespace ZGS.DataToolkit.Editor
 
                     EditorGUILayout.EndHorizontal();
 
-                    if (ShouldDeferFullInspector(selectedAsset) && !allowFullInspectorForSelectedAsset)
+                    if (ShouldDeferFullInspector(selectedAsset) && !HasCustomInspectorFor(selectedAsset) && !allowFullInspectorForSelectedAsset)
                     {
                         DrawDeferredInspectorState();
                     }
@@ -403,6 +404,11 @@ namespace ZGS.DataToolkit.Editor
 
             var assetPath = ResolveSelectedAssetPath();
             return GetAssetFileSize(assetPath) > LargeAssetInspectorThresholdBytes;
+        }
+
+        private bool HasCustomInspectorFor(UnityEngine.Object asset)
+        {
+            return inspector.HasCustomInspectorFor(asset);
         }
 
         private string ResolveSelectedAssetPath()
