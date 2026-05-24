@@ -17,9 +17,8 @@ namespace ZGS.DataToolkit.Editor
         private const float WindowPadding = 4f;
         private const float HeaderRowHeight = 38f;
         private const float ProjectToolbarRowHeight = 64f;
-        private const float ProjectFooterRowHeight = 34f;
         private const float HeaderBodySpacing = 4f;
-        private const float BodyFooterSpacing = 4f;
+        private const float HeaderActionSpacing = 6f;
         private const float SplitterWidth = 5f;
         private const float RowHeight = 24f;
         private const long LargeAssetInspectorThresholdBytes = 512 * 1024;
@@ -30,7 +29,7 @@ namespace ZGS.DataToolkit.Editor
 
         private DataToolkitContext context;
         private IReadOnlyList<IDataToolkitToolbarProvider> toolbarProviders = Array.Empty<IDataToolkitToolbarProvider>();
-        private IReadOnlyList<IDataToolkitFooterProvider> footerProviders = Array.Empty<IDataToolkitFooterProvider>();
+        private IReadOnlyList<IDataToolkitHeaderActionProvider> headerActionProviders = Array.Empty<IDataToolkitHeaderActionProvider>();
         private Type[] typesToDisplay = Array.Empty<Type>();
         private Type selectedType;
         private string selectedAssetPath;
@@ -106,7 +105,7 @@ namespace ZGS.DataToolkit.Editor
             var settings = profile.Settings;
             context = new DataToolkitContext(settings);
             toolbarProviders = profile.ToolbarProviders;
-            footerProviders = profile.FooterProviders;
+            headerActionProviders = profile.HeaderActionProviders;
             inspector.SetCustomInspectors(context, profile.AssetInspectorProviders);
             titleContent = new GUIContent(settings.WindowTitle);
             minSize = new Vector2(980f, 560f);
@@ -149,26 +148,18 @@ namespace ZGS.DataToolkit.Editor
         {
             EnsureContext();
             var visibleToolbarProviders = GetVisibleToolbarProviders();
-            var visibleFooterProviders = GetVisibleFooterProviders();
+            var visibleHeaderActionProviders = GetVisibleHeaderActionProviders();
             var headerHeight = CalculateHeaderHeight(visibleToolbarProviders.Count);
-            var footerHeight = CalculateFooterHeight(visibleFooterProviders.Count);
-            var footerSpacing = footerHeight > 0f ? BodyFooterSpacing : 0f;
             var contentWidth = Mathf.Max(0f, position.width - WindowPadding * 2f);
             var headerRect = new Rect(WindowPadding, WindowPadding, contentWidth, headerHeight);
             var bodyRect = new Rect(
                 WindowPadding,
                 headerRect.yMax + HeaderBodySpacing,
                 contentWidth,
-                Mathf.Max(0f, position.height - headerRect.yMax - HeaderBodySpacing - footerHeight - footerSpacing - WindowPadding));
-            var footerRect = new Rect(
-                WindowPadding,
-                position.height - WindowPadding - footerHeight,
-                contentWidth,
-                footerHeight);
+                Mathf.Max(0f, position.height - headerRect.yMax - HeaderBodySpacing - WindowPadding));
 
-            DrawHeaderToolbar(headerRect, visibleToolbarProviders);
+            DrawHeaderToolbar(headerRect, visibleToolbarProviders, visibleHeaderActionProviders);
             DrawBodyLayout(bodyRect);
-            DrawFooterToolbar(footerRect, visibleFooterProviders);
         }
 
         private void EnsureContext()
@@ -193,11 +184,6 @@ namespace ZGS.DataToolkit.Editor
         private float CalculateHeaderHeight(int visibleToolbarCount)
         {
             return HeaderRowHeight + visibleToolbarCount * ProjectToolbarRowHeight;
-        }
-
-        private float CalculateFooterHeight(int visibleFooterCount)
-        {
-            return visibleFooterCount <= 0 ? 0f : visibleFooterCount * ProjectFooterRowHeight;
         }
 
         private IReadOnlyList<IDataToolkitToolbarProvider> GetVisibleToolbarProviders()
@@ -227,22 +213,22 @@ namespace ZGS.DataToolkit.Editor
             return visibleProviders;
         }
 
-        private IReadOnlyList<IDataToolkitFooterProvider> GetVisibleFooterProviders()
+        private IReadOnlyList<IDataToolkitHeaderActionProvider> GetVisibleHeaderActionProviders()
         {
-            var visibleProviders = new List<IDataToolkitFooterProvider>();
+            var visibleProviders = new List<IDataToolkitHeaderActionProvider>();
 
-            foreach (var footerProvider in footerProviders)
+            foreach (var headerActionProvider in headerActionProviders)
             {
-                if (footerProvider == null)
+                if (headerActionProvider == null)
                 {
                     continue;
                 }
 
                 try
                 {
-                    if (footerProvider.IsVisible(context))
+                    if (headerActionProvider.IsVisible(context))
                     {
-                        visibleProviders.Add(footerProvider);
+                        visibleProviders.Add(headerActionProvider);
                     }
                 }
                 catch (Exception exception)
@@ -254,7 +240,10 @@ namespace ZGS.DataToolkit.Editor
             return visibleProviders;
         }
 
-        private void DrawHeaderToolbar(Rect rect, IReadOnlyList<IDataToolkitToolbarProvider> visibleToolbarProviders)
+        private void DrawHeaderToolbar(
+            Rect rect,
+            IReadOnlyList<IDataToolkitToolbarProvider> visibleToolbarProviders,
+            IReadOnlyList<IDataToolkitHeaderActionProvider> visibleHeaderActionProviders)
         {
             GUILayout.BeginArea(rect);
             using (new EditorGUILayout.VerticalScope(EditorStyles.helpBox, GUILayout.ExpandWidth(true), GUILayout.ExpandHeight(true)))
@@ -263,6 +252,11 @@ namespace ZGS.DataToolkit.Editor
                 GUILayout.Label(context.Settings.WindowTitle, EditorStyles.boldLabel, GUILayout.MinWidth(160f));
                 GUILayout.Label(BuildAssetSummaryText(), EditorStyles.miniLabel, GUILayout.Width(220f));
                 GUILayout.FlexibleSpace();
+                DrawProjectHeaderActions(visibleHeaderActionProviders);
+                if (visibleHeaderActionProviders.Count > 0)
+                {
+                    GUILayout.Space(HeaderActionSpacing);
+                }
 
                 if (GUILayout.Button("Refresh", GUILayout.Width(82f), GUILayout.Height(24f)))
                 {
@@ -275,13 +269,13 @@ namespace ZGS.DataToolkit.Editor
             GUILayout.EndArea();
         }
 
-        private void DrawProjectToolbars(IReadOnlyList<IDataToolkitToolbarProvider> visibleToolbarProviders)
+        private void DrawProjectHeaderActions(IReadOnlyList<IDataToolkitHeaderActionProvider> visibleHeaderActionProviders)
         {
-            foreach (var toolbarProvider in visibleToolbarProviders)
+            foreach (var headerActionProvider in visibleHeaderActionProviders)
             {
                 try
                 {
-                    toolbarProvider.DrawToolbar(context);
+                    headerActionProvider.DrawHeaderActions(context);
                 }
                 catch (Exception exception)
                 {
@@ -290,28 +284,13 @@ namespace ZGS.DataToolkit.Editor
             }
         }
 
-        private void DrawFooterToolbar(Rect rect, IReadOnlyList<IDataToolkitFooterProvider> visibleFooterProviders)
+        private void DrawProjectToolbars(IReadOnlyList<IDataToolkitToolbarProvider> visibleToolbarProviders)
         {
-            if (visibleFooterProviders.Count == 0)
-            {
-                return;
-            }
-
-            GUILayout.BeginArea(rect);
-            using (new EditorGUILayout.VerticalScope(EditorStyles.helpBox, GUILayout.ExpandWidth(true), GUILayout.ExpandHeight(true)))
-            {
-                DrawProjectFooters(visibleFooterProviders);
-            }
-            GUILayout.EndArea();
-        }
-
-        private void DrawProjectFooters(IReadOnlyList<IDataToolkitFooterProvider> visibleFooterProviders)
-        {
-            foreach (var footerProvider in visibleFooterProviders)
+            foreach (var toolbarProvider in visibleToolbarProviders)
             {
                 try
                 {
-                    footerProvider.DrawFooter(context);
+                    toolbarProvider.DrawToolbar(context);
                 }
                 catch (Exception exception)
                 {
