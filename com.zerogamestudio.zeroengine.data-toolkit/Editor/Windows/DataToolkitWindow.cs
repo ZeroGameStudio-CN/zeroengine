@@ -24,6 +24,7 @@ namespace ZGS.DataToolkit.Editor
         private const long LargeAssetInspectorThresholdBytes = 512 * 1024;
 
         private readonly CompositeAssetInspector inspector = new();
+        private readonly SafeOdinAssetInspector safeOdinInspector = new();
         private readonly Dictionary<Type, int> assetCountCache = new();
         private readonly Queue<Type> pendingCountTypes = new();
 
@@ -135,6 +136,7 @@ namespace ZGS.DataToolkit.Editor
             }
 
             inspector.Dispose();
+            safeOdinInspector.Dispose();
             StopAssetCountWarmup();
             DataToolkitProjectRegistry.DefaultProfileRegistered -= RestoreDefaultProfileIfUsingGenericFallback;
         }
@@ -399,7 +401,13 @@ namespace ZGS.DataToolkit.Editor
 
                     EditorGUILayout.EndHorizontal();
 
-                    if (ShouldUseSafeSummaryInspector(selectedAsset) && !allowFullInspectorForSelectedAsset)
+                    if (ShouldUseSafeOdinInspector(selectedAsset, out var safeOdinRule) &&
+                        !HasCustomInspectorFor(selectedAsset) &&
+                        !allowFullInspectorForSelectedAsset)
+                    {
+                        DrawSafeOdinInspector(safeOdinRule);
+                    }
+                    else if (ShouldUseSafeSummaryInspector(selectedAsset) && !allowFullInspectorForSelectedAsset)
                     {
                         DrawSafeSummaryInspectorState();
                     }
@@ -424,6 +432,29 @@ namespace ZGS.DataToolkit.Editor
                 }
             }
             GUILayout.EndArea();
+        }
+
+        private void DrawSafeOdinInspector(DataToolkitSafeOdinInspectorRule rule)
+        {
+            safeOdinInspector.SetTarget(selectedAsset, rule);
+            inspectorScroll = EditorGUILayout.BeginScrollView(inspectorScroll);
+            EditorGUI.BeginChangeCheck();
+            safeOdinInspector.Draw();
+            if (EditorGUI.EndChangeCheck())
+            {
+                EditorUtility.SetDirty(selectedAsset);
+                Repaint();
+            }
+
+            EditorGUILayout.Space(8f);
+            if (GUILayout.Button("Open Full Inspector", GUILayout.Height(28f)))
+            {
+                allowFullInspectorForSelectedAsset = true;
+                inspector.SetTarget(selectedAsset);
+                Repaint();
+            }
+
+            EditorGUILayout.EndScrollView();
         }
 
         private void DrawEmptyInspectorState()
@@ -469,6 +500,18 @@ namespace ZGS.DataToolkit.Editor
             return asset != null &&
                    context.Settings.DefaultInspectorMode == DataToolkitDefaultInspectorMode.SafeSummary &&
                    !HasCustomInspectorFor(asset);
+        }
+
+        private bool ShouldUseSafeOdinInspector(UnityEngine.Object asset, out DataToolkitSafeOdinInspectorRule rule)
+        {
+            rule = null;
+            if (asset == null || !safeOdinInspector.CanInspect(asset))
+            {
+                return false;
+            }
+
+            rule = context.Settings.SafeOdinInspectorRules.FirstOrDefault(candidate => candidate.Matches(asset.GetType()));
+            return rule != null;
         }
 
         private bool ShouldDeferFullInspector(UnityEngine.Object asset)
@@ -649,6 +692,7 @@ namespace ZGS.DataToolkit.Editor
             inspectorScroll = Vector2.zero;
             allowFullInspectorForSelectedAsset = false;
             inspector.SetTarget(null);
+            safeOdinInspector.SetTarget(null, null);
         }
 
         private void ClearSelectedAsset()
@@ -659,6 +703,7 @@ namespace ZGS.DataToolkit.Editor
             inspectorScroll = Vector2.zero;
             allowFullInspectorForSelectedAsset = false;
             inspector.SetTarget(null);
+            safeOdinInspector.SetTarget(null, null);
         }
 
         private bool IsTypeVisible(Type type)
