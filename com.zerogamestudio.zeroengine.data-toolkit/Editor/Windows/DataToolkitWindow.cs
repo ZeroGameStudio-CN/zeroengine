@@ -25,6 +25,7 @@ namespace ZGS.DataToolkit.Editor
 
         private readonly CompositeAssetInspector inspector = new();
         private readonly SafeSerializedAssetInspector safeInspector = new();
+        private readonly LazyPreviewAssetInspector lazyPreviewInspector = new();
         private readonly Dictionary<Type, int> assetCountCache = new();
         private readonly Queue<Type> pendingCountTypes = new();
 
@@ -137,6 +138,7 @@ namespace ZGS.DataToolkit.Editor
 
             inspector.Dispose();
             safeInspector.Dispose();
+            lazyPreviewInspector.Dispose();
             StopAssetCountWarmup();
             DataToolkitProjectRegistry.DefaultProfileRegistered -= RestoreDefaultProfileIfUsingGenericFallback;
         }
@@ -407,6 +409,10 @@ namespace ZGS.DataToolkit.Editor
                     {
                         DrawSafeInspector(safeInspectorRule);
                     }
+                    else if (ShouldUseLazyPreviewInspector(selectedAsset) && !allowFullInspectorForSelectedAsset)
+                    {
+                        DrawLazyPreviewInspector();
+                    }
                     else if (ShouldUseSafeSummaryInspector(selectedAsset) && !allowFullInspectorForSelectedAsset)
                     {
                         DrawSafeSummaryInspectorState();
@@ -440,6 +446,29 @@ namespace ZGS.DataToolkit.Editor
             inspectorScroll = EditorGUILayout.BeginScrollView(inspectorScroll);
             EditorGUI.BeginChangeCheck();
             safeInspector.Draw();
+            if (EditorGUI.EndChangeCheck())
+            {
+                EditorUtility.SetDirty(selectedAsset);
+                Repaint();
+            }
+
+            EditorGUILayout.Space(8f);
+            if (GUILayout.Button("Open Full Inspector", GUILayout.Height(28f)))
+            {
+                allowFullInspectorForSelectedAsset = true;
+                inspector.SetTarget(selectedAsset);
+                Repaint();
+            }
+
+            EditorGUILayout.EndScrollView();
+        }
+
+        private void DrawLazyPreviewInspector()
+        {
+            lazyPreviewInspector.SetTarget(selectedAsset);
+            inspectorScroll = EditorGUILayout.BeginScrollView(inspectorScroll);
+            EditorGUI.BeginChangeCheck();
+            lazyPreviewInspector.Draw();
             if (EditorGUI.EndChangeCheck())
             {
                 EditorUtility.SetDirty(selectedAsset);
@@ -499,6 +528,13 @@ namespace ZGS.DataToolkit.Editor
         {
             return asset != null &&
                    context.Settings.DefaultInspectorMode == DataToolkitDefaultInspectorMode.SafeSummary &&
+                   !HasCustomInspectorFor(asset);
+        }
+
+        private bool ShouldUseLazyPreviewInspector(UnityEngine.Object asset)
+        {
+            return asset != null &&
+                   context.Settings.DefaultInspectorMode == DataToolkitDefaultInspectorMode.LazyPreview &&
                    !HasCustomInspectorFor(asset);
         }
 
@@ -693,6 +729,7 @@ namespace ZGS.DataToolkit.Editor
             allowFullInspectorForSelectedAsset = false;
             inspector.SetTarget(null);
             safeInspector.SetTarget(null, null);
+            lazyPreviewInspector.SetTarget(null);
         }
 
         private void ClearSelectedAsset()
@@ -704,6 +741,7 @@ namespace ZGS.DataToolkit.Editor
             allowFullInspectorForSelectedAsset = false;
             inspector.SetTarget(null);
             safeInspector.SetTarget(null, null);
+            lazyPreviewInspector.SetTarget(null);
         }
 
         private bool IsTypeVisible(Type type)
