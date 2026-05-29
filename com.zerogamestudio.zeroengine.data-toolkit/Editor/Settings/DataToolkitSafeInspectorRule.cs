@@ -4,9 +4,9 @@ using System.Linq;
 
 namespace ZGS.DataToolkit.Editor
 {
-    public sealed class DataToolkitSafeOdinInspectorRule
+    public sealed class DataToolkitSafeInspectorRule
     {
-        public DataToolkitSafeOdinInspectorRule(
+        public DataToolkitSafeInspectorRule(
             Type assetType,
             IEnumerable<string> excludedPropertyPaths,
             string summary = null)
