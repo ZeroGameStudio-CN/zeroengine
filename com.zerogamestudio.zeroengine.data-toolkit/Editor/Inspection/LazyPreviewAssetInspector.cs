@@ -152,9 +152,15 @@ namespace ZGS.DataToolkit.Editor
         private static void DrawCollectionElement(SerializedProperty element, int index)
         {
             EditorGUILayout.BeginVertical(EditorStyles.helpBox);
-            EditorGUILayout.LabelField($"Element {index}", BuildElementSummary(element));
-            EditorGUILayout.PropertyField(element, GUIContent.none, includeChildren: false);
+            EditorGUILayout.PropertyField(element, BuildElementLabel(index, BuildElementSummary(element)), includeChildren: true);
             EditorGUILayout.EndVertical();
+        }
+
+        private static GUIContent BuildElementLabel(int index, string summary)
+        {
+            return string.IsNullOrWhiteSpace(summary)
+                ? new GUIContent($"Element {index}")
+                : new GUIContent($"Element {index}: {summary}");
         }
 
         private static string BuildElementSummary(SerializedProperty element)
