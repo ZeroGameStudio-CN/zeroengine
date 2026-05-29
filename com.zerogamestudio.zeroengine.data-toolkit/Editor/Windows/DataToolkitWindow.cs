@@ -399,7 +399,11 @@ namespace ZGS.DataToolkit.Editor
 
                     EditorGUILayout.EndHorizontal();
 
-                    if (ShouldDeferFullInspector(selectedAsset) && !HasCustomInspectorFor(selectedAsset) && !allowFullInspectorForSelectedAsset)
+                    if (ShouldUseSafeSummaryInspector(selectedAsset) && !allowFullInspectorForSelectedAsset)
+                    {
+                        DrawSafeSummaryInspectorState();
+                    }
+                    else if (ShouldDeferFullInspector(selectedAsset) && !HasCustomInspectorFor(selectedAsset) && !allowFullInspectorForSelectedAsset)
                     {
                         DrawDeferredInspectorState();
                     }
@@ -429,13 +433,24 @@ namespace ZGS.DataToolkit.Editor
 
         private void DrawDeferredInspectorState()
         {
+            DrawInspectorSummary(
+                "This asset is large, so the full inspector is deferred to keep Data Manager responsive.",
+                MessageType.Info);
+        }
+
+        private void DrawSafeSummaryInspectorState()
+        {
+            DrawInspectorSummary(
+                "The full inspector is hidden by default to keep Data Manager responsive.",
+                MessageType.Info);
+        }
+
+        private void DrawInspectorSummary(string message, MessageType messageType)
+        {
             var assetPath = ResolveSelectedAssetPath();
             var sizeInBytes = GetAssetFileSize(assetPath);
 
-            EditorGUILayout.HelpBox(
-                "This asset is large, so the full inspector is deferred to keep Data Manager responsive.",
-                MessageType.Info);
-
+            EditorGUILayout.HelpBox(message, messageType);
             EditorGUILayout.LabelField("Type", selectedAsset.GetType().Name);
             EditorGUILayout.LabelField("Path", string.IsNullOrEmpty(assetPath) ? "(unknown)" : assetPath);
             EditorGUILayout.LabelField("Size", FormatByteSize(sizeInBytes));
@@ -447,6 +462,13 @@ namespace ZGS.DataToolkit.Editor
                 inspector.SetTarget(selectedAsset);
                 Repaint();
             }
+        }
+
+        private bool ShouldUseSafeSummaryInspector(UnityEngine.Object asset)
+        {
+            return asset != null &&
+                   context.Settings.DefaultInspectorMode == DataToolkitDefaultInspectorMode.SafeSummary &&
+                   !HasCustomInspectorFor(asset);
         }
 
         private bool ShouldDeferFullInspector(UnityEngine.Object asset)

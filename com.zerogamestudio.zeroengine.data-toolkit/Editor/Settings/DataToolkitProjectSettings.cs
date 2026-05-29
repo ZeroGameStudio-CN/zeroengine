@@ -11,7 +11,8 @@ namespace ZGS.DataToolkit.Editor
             string menuPath,
             string editorPrefsPrefix,
             IEnumerable<string> searchRoots,
-            IEnumerable<string> excludedPaths)
+            IEnumerable<string> excludedPaths,
+            DataToolkitDefaultInspectorMode defaultInspectorMode = DataToolkitDefaultInspectorMode.FullInspector)
         {
             ProjectId = string.IsNullOrWhiteSpace(projectId) ? "ZGS" : projectId.Trim();
             WindowTitle = string.IsNullOrWhiteSpace(windowTitle) ? "Data Manager" : windowTitle.Trim();
@@ -19,6 +20,7 @@ namespace ZGS.DataToolkit.Editor
             EditorPrefsPrefix = string.IsNullOrWhiteSpace(editorPrefsPrefix) ? ProjectId : editorPrefsPrefix.Trim();
             SearchRoots = NormalizePaths(searchRoots).ToArray();
             ExcludedPaths = NormalizePaths(excludedPaths).ToArray();
+            DefaultInspectorMode = defaultInspectorMode;
         }
 
         public string ProjectId { get; }
@@ -27,6 +29,7 @@ namespace ZGS.DataToolkit.Editor
         public string EditorPrefsPrefix { get; }
         public IReadOnlyList<string> SearchRoots { get; }
         public IReadOnlyList<string> ExcludedPaths { get; }
+        public DataToolkitDefaultInspectorMode DefaultInspectorMode { get; }
 
         public string PrefKey(string suffix)
         {
