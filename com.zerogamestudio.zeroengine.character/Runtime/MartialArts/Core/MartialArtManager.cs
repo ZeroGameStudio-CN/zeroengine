@@ -82,6 +82,32 @@ namespace ZeroEngine.Character.MartialArts
         {
             if (string.IsNullOrEmpty(artId)) return false;
 
+            // 获取武学数据
+            var artData = _database?.GetMartialArt(artId);
+            if (artData == null)
+            {
+                Debug.LogError($"[MartialArtManager] 找不到武学数据: {artId}");
+                return false;
+            }
+
+            return LearnMartialArtInternal(artData);
+        }
+
+        /// <summary>
+        /// 学习武学 (通过数据)
+        /// </summary>
+        public bool LearnMartialArt(MartialArtDataSO artData)
+        {
+            if (artData == null) return false;
+            if (string.IsNullOrEmpty(artData.artId)) return false;
+
+            return LearnMartialArtInternal(artData);
+        }
+
+        private bool LearnMartialArtInternal(MartialArtDataSO artData)
+        {
+            var artId = artData.artId;
+
             // 检查是否已学习
             if (_learnedArts.ContainsKey(artId))
             {
@@ -93,14 +119,6 @@ namespace ZeroEngine.Character.MartialArts
             if (_maxLearnedArts > 0 && _learnedArts.Count >= _maxLearnedArts)
             {
                 Debug.LogWarning($"[MartialArtManager] 已达到武学数量上限: {_maxLearnedArts}");
-                return false;
-            }
-
-            // 获取武学数据
-            var artData = _database?.GetMartialArt(artId);
-            if (artData == null)
-            {
-                Debug.LogError($"[MartialArtManager] 找不到武学数据: {artId}");
                 return false;
             }
 
@@ -124,17 +142,20 @@ namespace ZeroEngine.Character.MartialArts
             OnMartialArtLearned?.Invoke(eventArgs);
             EventManager.Trigger(MartialArtEvents.OnMartialArtLearned, eventArgs);
 
+            PublishCurrentUnlockedSkills(instance);
+
             Debug.Log($"[MartialArtManager] {_characterId} 学习武学: {artData.artName}");
             return true;
         }
 
-        /// <summary>
-        /// 学习武学 (通过数据)
-        /// </summary>
-        public bool LearnMartialArt(MartialArtDataSO artData)
+        private void PublishCurrentUnlockedSkills(MartialArtInstance instance)
         {
-            if (artData == null) return false;
-            return LearnMartialArt(artData.artId);
+            if (instance == null) return;
+
+            foreach (var skillId in instance.UnlockedSkills)
+            {
+                HandleSkillUnlocked(instance, skillId);
+            }
         }
 
         /// <summary>

@@ -31,6 +31,13 @@ namespace ZeroEngine.Inventory.UI
         private void OnDestroy()
         {
             EventManager.Unsubscribe(GameEvents.InventoryUpdated, Refresh);
+            for (int i = 0; i < _uiSlots.Count; i++)
+            {
+                if (_uiSlots[i] != null)
+                {
+                    _uiSlots[i].OnSlotDropRequested -= HandleSlotDropRequested;
+                }
+            }
         }
 
         private void InitializeUI()
@@ -44,6 +51,8 @@ namespace ZeroEngine.Inventory.UI
             for (int i = 0; i < max; i++)
             {
                 var ui = Instantiate(SlotPrefab, SlotGridParent);
+                ui.Setup(i);
+                ui.OnSlotDropRequested += HandleSlotDropRequested;
                 _uiSlots.Add(ui);
             }
         }
@@ -70,6 +79,11 @@ namespace ZeroEngine.Inventory.UI
         {
             if (PanelRoot != null)
                 PanelRoot.SetActive(!PanelRoot.activeSelf);
+        }
+
+        private void HandleSlotDropRequested(int sourceSlotIndex, int targetSlotIndex)
+        {
+            InventoryManager.Instance?.SwapSlots(sourceSlotIndex, targetSlotIndex);
         }
     }
 }

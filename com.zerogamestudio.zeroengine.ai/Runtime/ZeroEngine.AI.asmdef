@@ -3,6 +3,7 @@
     "rootNamespace": "ZeroEngine",
     "references": [
         "ZeroEngine.Core",
+        "ZeroEngine.World",
         "CrashKonijn.Goap.Runtime",
         "CrashKonijn.Goap.Core"
     ],
@@ -14,7 +15,8 @@
     "autoReferenced": true,
     "defineConstraints": [],
     "versionDefines": [
-        { "name": "com.crashkonijn.goap", "expression": "", "define": "GOAP_INSTALLED" }
+        { "name": "com.crashkonijn.goap", "expression": "", "define": "GOAP_INSTALLED" },
+        { "name": "com.zerogamestudio.zeroengine.world", "expression": "", "define": "ZEROENGINE_ENVIRONMENT" }
     ],
     "noEngineReferences": false
 }

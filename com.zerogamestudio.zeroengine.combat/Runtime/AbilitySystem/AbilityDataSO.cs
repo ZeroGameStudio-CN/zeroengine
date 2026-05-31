@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using UnityEngine;
 
@@ -9,6 +10,7 @@ namespace ZeroEngine.AbilitySystem
 {
 #if ODIN_INSPECTOR
     [CreateAssetMenu(fileName = "NewAbility", menuName = "ZeroEngine/Ability System/Ability Data")]
+    [Obsolete("Legacy ability data. Use AbilityDefinition with AbilityExecutor and IAbilityRuntimeServices for new TCE content.")]
     public class AbilityDataSO : SerializedScriptableObject
     {
         [Title("Basic Info")]
@@ -74,6 +76,7 @@ namespace ZeroEngine.AbilitySystem
     }
 #else
     [CreateAssetMenu(fileName = "NewAbility", menuName = "ZeroEngine/Ability System/Ability Data")]
+    [Obsolete("Legacy ability data. Use AbilityDefinition with AbilityExecutor and IAbilityRuntimeServices for new TCE content.")]
     public class AbilityDataSO : ScriptableObject
     {
         public string AbilityName;

@@ -1,5 +1,6 @@
 using System;
 using UnityEngine;
+using ZeroEngine.Utils;
 
 namespace ZeroEngine.RPG.Systems
 {
@@ -69,14 +70,14 @@ namespace ZeroEngine.RPG.Systems
 
             if (_currentBP < amount)
             {
-                Debug.Log($"[BoostComponent] BP 不足，需要 {amount}，当前 {_currentBP}");
+                DebugUtils.Log($"[BoostComponent] BP 不足，需要 {amount}，当前 {_currentBP}");
                 return false;
             }
 
             int oldBP = _currentBP;
             _currentBP -= amount;
 
-            Debug.Log($"[BoostComponent] 消耗 {amount} BP: {oldBP} -> {_currentBP}");
+            DebugUtils.Log($"[BoostComponent] 消耗 {amount} BP: {oldBP} -> {_currentBP}");
             OnBPChanged?.Invoke(oldBP, _currentBP);
 
             return true;
@@ -95,7 +96,7 @@ namespace ZeroEngine.RPG.Systems
 
             if (_currentBP != oldBP)
             {
-                Debug.Log($"[BoostComponent] 恢复 {amount} BP: {oldBP} -> {_currentBP}");
+            DebugUtils.Log($"[BoostComponent] 恢复 {amount} BP: {oldBP} -> {_currentBP}");
                 OnBPChanged?.Invoke(oldBP, _currentBP);
             }
         }
@@ -125,7 +126,7 @@ namespace ZeroEngine.RPG.Systems
                 OnBPChanged?.Invoke(oldBP, _currentBP);
             }
 
-            Debug.Log($"[BoostComponent] 初始化 BP: {_currentBP}/{_maxBP}");
+            DebugUtils.Log($"[BoostComponent] 初始化 BP: {_currentBP}/{_maxBP}");
         }
 
         /// <summary>

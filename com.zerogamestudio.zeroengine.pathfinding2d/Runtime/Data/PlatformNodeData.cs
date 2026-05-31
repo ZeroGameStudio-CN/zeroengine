@@ -46,24 +46,13 @@ namespace ZeroEngine.Pathfinding2D
         /// <summary>平台表面 Y 坐标</summary>
         public float SurfaceY;
 
-        /// <summary>所属可站立平台段 ID。同一连续表面上的节点共享同一个 ID。</summary>
-        public int SurfaceGroupId;
-
-        /// <summary>是否是用于跨高度转换的锚点，而不是平台真实边缘。</summary>
-        public bool IsTransitionAnchor;
-
         /// <summary>节点是否可用</summary>
         public bool IsValid => PlatformCollider != null;
 
         /// <summary>
         /// 创建表面节点
         /// </summary>
-        public static PlatformNodeData CreateSurface(
-            int id,
-            Vector3 position,
-            Collider2D collider,
-            bool isOneWay = false,
-            int surfaceGroupId = -1)
+        public static PlatformNodeData CreateSurface(int id, Vector3 position, Collider2D collider, bool isOneWay = false)
         {
             return new PlatformNodeData
             {
@@ -72,22 +61,14 @@ namespace ZeroEngine.Pathfinding2D
                 NodeType = PlatformNodeType.Surface,
                 PlatformCollider = collider,
                 IsOneWay = isOneWay,
-                SurfaceY = position.y,
-                SurfaceGroupId = surfaceGroupId
+                SurfaceY = position.y
             };
         }
 
         /// <summary>
         /// 创建边缘节点
         /// </summary>
-        public static PlatformNodeData CreateEdge(
-            int id,
-            Vector3 position,
-            Collider2D collider,
-            bool isLeftEdge,
-            bool isOneWay = false,
-            int surfaceGroupId = -1,
-            bool isTransitionAnchor = false)
+        public static PlatformNodeData CreateEdge(int id, Vector3 position, Collider2D collider, bool isLeftEdge, bool isOneWay = false)
         {
             return new PlatformNodeData
             {
@@ -96,15 +77,13 @@ namespace ZeroEngine.Pathfinding2D
                 NodeType = isLeftEdge ? PlatformNodeType.LeftEdge : PlatformNodeType.RightEdge,
                 PlatformCollider = collider,
                 IsOneWay = isOneWay,
-                SurfaceY = position.y,
-                SurfaceGroupId = surfaceGroupId,
-                IsTransitionAnchor = isTransitionAnchor
+                SurfaceY = position.y
             };
         }
 
         public override string ToString()
         {
-            return $"Node[{NodeId}] {NodeType} at {Position:F2} (OneWay: {IsOneWay}, Group: {SurfaceGroupId}, Transition: {IsTransitionAnchor})";
+            return $"Node[{NodeId}] {NodeType} at {Position:F2} (OneWay: {IsOneWay})";
         }
     }
 
@@ -183,7 +162,7 @@ namespace ZeroEngine.Pathfinding2D
                 FromNodeId = from,
                 ToNodeId = to,
                 LinkType = PlatformLinkType.Jump,
-                Cost = duration * 2f, // 跳跃代价较高
+                Cost = duration * 2f + Mathf.Abs(velocityX) * 0.5f,
                 JumpVelocityY = velocityY,
                 JumpVelocityX = velocityX,
                 Duration = duration,

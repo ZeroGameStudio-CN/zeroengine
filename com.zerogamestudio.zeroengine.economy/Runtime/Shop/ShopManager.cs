@@ -2,6 +2,8 @@ using System;
 using System.Collections.Generic;
 using UnityEngine;
 using ZeroEngine.Core;
+using ZeroEngine.Currency;
+using ZeroEngine.Economy;
 using ZeroEngine.Save;
 using ZeroEngine.Inventory;
 
@@ -30,6 +32,10 @@ namespace ZeroEngine.Shop
 
         // 上次补货日期
         private string _lastRestockDate;
+
+        private ICurrencyProvider _currencyProvider;
+        private IInventoryProvider _inventoryProvider;
+        private IExternalSystemProvider _externalSystemProvider;
 
         #region Events
 
@@ -109,6 +115,7 @@ namespace ZeroEngine.Shop
 
         private void Start()
         {
+            ResolveDefaultProviders();
             Register();
             if (_shopData.Count == 0)
             {
@@ -125,6 +132,21 @@ namespace ZeroEngine.Shop
         #endregion
 
         #region Public API - Shop Management
+
+        public void SetCurrencyProvider(ICurrencyProvider provider)
+        {
+            _currencyProvider = provider;
+        }
+
+        public void SetInventoryProvider(IInventoryProvider provider)
+        {
+            _inventoryProvider = provider;
+        }
+
+        public void SetExternalSystemProvider(IExternalSystemProvider provider)
+        {
+            _externalSystemProvider = provider;
+        }
 
         /// <summary>
         /// 打开商店
@@ -231,8 +253,8 @@ namespace ZeroEngine.Shop
                 return PurchaseResult.InsufficientCurrency;
 
             // 检查背包空间
-            var inventory = InventoryManager.Instance;
-            if (inventory != null && inventory.IsFull)
+            var inventory = GetInventoryProvider();
+            if (inventory == null || inventory.IsFull)
                 return PurchaseResult.InventoryFull;
 
             return PurchaseResult.Success;
@@ -253,11 +275,19 @@ namespace ZeroEngine.Shop
             int totalPrice = item.GetFinalBuyPrice() * amount;
 
             // 扣除货币
-            ConsumeCurrency(item.BuyPrice.GetCurrencyId(), totalPrice);
+            string currencyId = item.BuyPrice.GetCurrencyId();
+            if (!ConsumeCurrency(currencyId, totalPrice))
+            {
+                return PurchaseResult.InsufficientCurrency;
+            }
 
             // 添加物品
-            var inventory = InventoryManager.Instance;
-            inventory?.AddItem(item.Item, item.Quantity * amount);
+            var inventory = GetInventoryProvider();
+            if (inventory == null || !inventory.AddItem(item.Item, item.Quantity * amount))
+            {
+                AddCurrency(currencyId, totalPrice);
+                return PurchaseResult.InventoryFull;
+            }
 
             // 更新库存和限购
             var data = GetOrCreateData(shop.ShopId);
@@ -274,7 +304,7 @@ namespace ZeroEngine.Shop
             }
 
             // 触发事件
-            OnShopEvent?.Invoke(ShopEventArgs.Purchased(shop, item, amount, totalPrice));
+            RaiseShopEvent(ShopEventArgs.Purchased(shop, item, amount, totalPrice));
 
             // 触发成就
 #if ZEROENGINE_NARRATIVE
@@ -299,7 +329,7 @@ namespace ZeroEngine.Shop
             if (!shop.AllowSelling)
                 return PurchaseResult.NotAvailable;
 
-            var inventory = InventoryManager.Instance;
+            var inventory = GetInventoryProvider();
             if (inventory == null || inventory.GetItemCount(item) < amount)
                 return PurchaseResult.InsufficientStock;
 
@@ -310,11 +340,11 @@ namespace ZeroEngine.Shop
             inventory.RemoveItem(item, amount);
 
             // 添加货币
-            AddCurrency("Gold", sellPrice);
+            AddCurrency(CurrencyIds.Gold, sellPrice);
 
             // 触发事件
             var shopItem = shop.GetItem(item.Id);
-            OnShopEvent?.Invoke(ShopEventArgs.Sold(shop, shopItem, amount, sellPrice));
+            RaiseShopEvent(ShopEventArgs.Sold(shop, shopItem, amount, sellPrice));
 
             Log($"出售成功: {item.ItemName} x{amount}, 获得 {sellPrice}");
 
@@ -393,7 +423,7 @@ namespace ZeroEngine.Shop
                 }
             }
 
-            OnShopEvent?.Invoke(ShopEventArgs.Restocked(shop));
+            RaiseShopEvent(ShopEventArgs.Restocked(shop));
             Log($"商店补货: {shop.DisplayName}");
         }
 
@@ -457,35 +487,68 @@ namespace ZeroEngine.Shop
             Log($"每日补货完成: {oldDate} -> {newDate}");
         }
 
-        // 货币系统接口 (需要外部实现)
-        private bool HasCurrency(string currencyId, int amount)
+        private void ResolveDefaultProviders()
         {
-            // TODO: 接入货币系统
-            return true;
+            _currencyProvider ??= EconomyProviderResolver.FindCurrencyProvider();
+            _inventoryProvider ??= EconomyProviderResolver.FindInventoryProvider();
+            _externalSystemProvider ??= EconomyProviderResolver.DefaultExternalSystemProvider();
         }
 
-        private void ConsumeCurrency(string currencyId, int amount)
+        private IInventoryProvider GetInventoryProvider()
         {
-            // TODO: 接入货币系统
-            Log($"消耗货币: {currencyId} x{amount}");
+            _inventoryProvider ??= EconomyProviderResolver.FindInventoryProvider();
+            return _inventoryProvider;
+        }
+
+        private ICurrencyProvider GetCurrencyProvider()
+        {
+            _currencyProvider ??= EconomyProviderResolver.FindCurrencyProvider();
+            return _currencyProvider;
+        }
+
+        private IExternalSystemProvider GetExternalSystemProvider()
+        {
+            _externalSystemProvider ??= EconomyProviderResolver.DefaultExternalSystemProvider();
+            return _externalSystemProvider;
+        }
+
+        private bool HasCurrency(string currencyId, int amount)
+        {
+            return GetCurrencyProvider()?.HasCurrency(currencyId, amount) ?? false;
+        }
+
+        private bool ConsumeCurrency(string currencyId, int amount)
+        {
+            return GetCurrencyProvider()?.ConsumeCurrency(currencyId, amount) ?? false;
         }
 
         private void AddCurrency(string currencyId, int amount)
         {
-            // TODO: 接入货币系统
-            Log($"获得货币: {currencyId} x{amount}");
+            GetCurrencyProvider()?.AddCurrency(currencyId, amount);
         }
 
         private int GetPlayerLevel()
         {
-            // TODO: 接入角色系统
-            return 99;
+            return GetExternalSystemProvider()?.GetPlayerLevel() ?? 1;
         }
 
         private int GetPlayerReputation()
         {
-            // TODO: 接入声望系统
-            return 999;
+            return GetExternalSystemProvider()?.GetPlayerReputation() ?? 0;
+        }
+
+        private void RaiseShopEvent(ShopEventArgs args)
+        {
+            OnShopEvent?.Invoke(args);
+            switch (args.Type)
+            {
+                case ShopEventType.ItemPurchased:
+                    EventManager.Trigger(EconomyEvents.ShopPurchased, args);
+                    break;
+                case ShopEventType.ItemSold:
+                    EventManager.Trigger(EconomyEvents.ShopSold, args);
+                    break;
+            }
         }
 
         [System.Diagnostics.Conditional("UNITY_EDITOR")]

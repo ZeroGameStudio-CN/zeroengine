@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using UnityEngine;
 using ZeroEngine.Core;
+using ZeroEngine.Economy;
 using ZeroEngine.Save;
 
 namespace ZeroEngine.Crafting
@@ -43,6 +44,12 @@ namespace ZeroEngine.Crafting
         // 临时列表
         private readonly List<RecipeOutput> _tempOutputList = new List<RecipeOutput>(8);
         private readonly List<CraftingRecipeSO> _tempRecipeList = new List<CraftingRecipeSO>(32);
+
+        private IInventoryProvider _inventoryProvider;
+        private IExternalSystemProvider _externalSystemProvider;
+        private ICurrencyProvider _currencyProvider;
+        private float _nextCompletionCheckTime;
+        private const float CompletionCheckInterval = 0.5f;
 
         #region Events
 
@@ -145,6 +152,7 @@ namespace ZeroEngine.Crafting
 
         private void Start()
         {
+            ResolveDefaultProviders();
             Register();
 
             // 初始化默认解锁
@@ -156,7 +164,12 @@ namespace ZeroEngine.Crafting
 
         private void Update()
         {
-            // 检查完成的合成
+            if (_activeProgress.Count == 0 || Time.time < _nextCompletionCheckTime)
+            {
+                return;
+            }
+
+            _nextCompletionCheckTime = Time.time + CompletionCheckInterval;
             CheckCompletedCrafting();
         }
 
@@ -169,6 +182,21 @@ namespace ZeroEngine.Crafting
         #endregion
 
         #region Public API
+
+        public void SetInventoryProvider(IInventoryProvider provider)
+        {
+            _inventoryProvider = provider;
+        }
+
+        public void SetExternalSystemProvider(IExternalSystemProvider provider)
+        {
+            _externalSystemProvider = provider;
+        }
+
+        public void SetCurrencyProvider(ICurrencyProvider provider)
+        {
+            _currencyProvider = provider;
+        }
 
         /// <summary>
         /// 注册配方（运行时添加）
@@ -223,7 +251,7 @@ namespace ZeroEngine.Crafting
             }
 
             _unlockedRecipes.Add(recipe.RecipeId);
-            OnCraftingEvent?.Invoke(CraftingEventArgs.RecipeUnlocked(recipe));
+            RaiseCraftingEvent(CraftingEventArgs.RecipeUnlocked(recipe));
             Log($"配方解锁: {recipe.DisplayName}");
 
             return true;
@@ -236,7 +264,7 @@ namespace ZeroEngine.Crafting
         {
             if (learnItem == null) return false;
 
-            var inventory = Inventory.InventoryManager.Instance;
+            var inventory = GetInventoryProvider();
             if (inventory == null || inventory.GetItemCount(learnItem) <= 0)
             {
                 return false;
@@ -254,7 +282,7 @@ namespace ZeroEngine.Crafting
 
                     // 解锁配方
                     _unlockedRecipes.Add(recipe.RecipeId);
-                    OnCraftingEvent?.Invoke(CraftingEventArgs.RecipeUnlocked(recipe));
+                    RaiseCraftingEvent(CraftingEventArgs.RecipeUnlocked(recipe));
                     Log($"学习配方: {recipe.DisplayName}");
 
                     return true;
@@ -294,7 +322,7 @@ namespace ZeroEngine.Crafting
             }
 
             // 检查材料
-            var inventory = Inventory.InventoryManager.Instance;
+            var inventory = GetInventoryProvider();
             if (!recipe.CheckIngredients(inventory, batchCount))
             {
                 return CraftingResult.InsufficientMaterials;
@@ -315,7 +343,7 @@ namespace ZeroEngine.Crafting
                 return canCraft;
             }
 
-            var inventory = Inventory.InventoryManager.Instance;
+            var inventory = GetInventoryProvider();
 
             // 消耗材料
             recipe.ConsumeIngredients(inventory, batchCount);
@@ -337,7 +365,7 @@ namespace ZeroEngine.Crafting
             };
 
             _activeProgress.Add(progress);
-            OnCraftingEvent?.Invoke(CraftingEventArgs.Started(recipe, batchCount));
+            RaiseCraftingEvent(CraftingEventArgs.Started(recipe, batchCount));
             Log($"开始合成: {recipe.DisplayName} x{batchCount}");
 
             return CraftingResult.Success;
@@ -357,7 +385,7 @@ namespace ZeroEngine.Crafting
             // 返还材料（如果配置了）
             if (recipe != null && recipe.KeepMaterialsOnFail)
             {
-                var inventory = Inventory.InventoryManager.Instance;
+                var inventory = GetInventoryProvider();
                 if (inventory != null)
                 {
                     for (int i = 0; i < recipe.Ingredients.Count; i++)
@@ -493,12 +521,10 @@ namespace ZeroEngine.Crafting
                     return true;
 
                 case RecipeUnlockType.Level:
-                    // 需要外部等级系统
-                    return true;
+                    return (GetExternalSystemProvider()?.GetPlayerLevel() ?? 1) >= recipe.UnlockLevel;
 
                 case RecipeUnlockType.Quest:
-                    // 需要外部任务系统
-                    return true;
+                    return GetExternalSystemProvider()?.IsQuestCompleted(recipe.UnlockQuestId) ?? false;
 
                 case RecipeUnlockType.Achievement:
 #if ZEROENGINE_NARRATIVE
@@ -515,8 +541,8 @@ namespace ZeroEngine.Crafting
                     return false;
 
                 case RecipeUnlockType.Relationship:
-                    // 需要 RelationshipManager
-                    return true;
+                    return (GetExternalSystemProvider()?.GetRelationshipLevel(recipe.UnlockRelationshipNpcId) ?? 0)
+                        >= recipe.UnlockRelationshipLevel;
 
                 case RecipeUnlockType.Custom:
                     if (_customUnlockChecks.TryGetValue(recipe.CustomUnlockId, out var check))
@@ -549,7 +575,7 @@ namespace ZeroEngine.Crafting
                 // 返还材料
                 if (recipe.KeepMaterialsOnFail)
                 {
-                    var inventory = Inventory.InventoryManager.Instance;
+                    var inventory = GetInventoryProvider();
                     if (inventory != null)
                     {
                         for (int i = 0; i < recipe.Ingredients.Count; i++)
@@ -563,7 +589,7 @@ namespace ZeroEngine.Crafting
                     }
                 }
 
-                OnCraftingEvent?.Invoke(CraftingEventArgs.Failed(recipe, result));
+                RaiseCraftingEvent(CraftingEventArgs.Failed(recipe, result));
                 Log($"合成失败: {recipe.DisplayName}");
                 return result;
             }
@@ -571,7 +597,7 @@ namespace ZeroEngine.Crafting
             result = greatSuccess ? CraftingResult.GreatSuccess : CraftingResult.Success;
 
             // 发放产出
-            var inventoryMgr = Inventory.InventoryManager.Instance;
+            var inventoryMgr = GetInventoryProvider();
             if (inventoryMgr != null)
             {
                 for (int i = 0; i < recipe.Outputs.Count; i++)
@@ -614,7 +640,7 @@ namespace ZeroEngine.Crafting
             achievementMgr?.TriggerEvent("CraftCategory", recipe.Category.ToString());
 #endif
 
-            OnCraftingEvent?.Invoke(CraftingEventArgs.Completed(recipe, result, _tempOutputList));
+            RaiseCraftingEvent(CraftingEventArgs.Completed(recipe, result, _tempOutputList));
             Log($"合成完成: {recipe.DisplayName} x{batchCount} ({result})");
 
             return result;
@@ -634,6 +660,45 @@ namespace ZeroEngine.Crafting
                     }
                     _activeProgress.RemoveAt(i);
                 }
+            }
+        }
+
+        private void ResolveDefaultProviders()
+        {
+            _inventoryProvider ??= EconomyProviderResolver.FindInventoryProvider();
+            _currencyProvider ??= EconomyProviderResolver.FindCurrencyProvider();
+            _externalSystemProvider ??= EconomyProviderResolver.DefaultExternalSystemProvider();
+        }
+
+        private IInventoryProvider GetInventoryProvider()
+        {
+            _inventoryProvider ??= EconomyProviderResolver.FindInventoryProvider();
+            return _inventoryProvider;
+        }
+
+        private IExternalSystemProvider GetExternalSystemProvider()
+        {
+            _externalSystemProvider ??= EconomyProviderResolver.DefaultExternalSystemProvider();
+            return _externalSystemProvider;
+        }
+
+        private ICurrencyProvider GetCurrencyProvider()
+        {
+            _currencyProvider ??= EconomyProviderResolver.FindCurrencyProvider();
+            return _currencyProvider;
+        }
+
+        private void RaiseCraftingEvent(CraftingEventArgs args)
+        {
+            OnCraftingEvent?.Invoke(args);
+            switch (args.EventType)
+            {
+                case CraftingEventType.Completed:
+                    EventManager.Trigger(EconomyEvents.CraftingCompleted, args);
+                    break;
+                case CraftingEventType.RecipeUnlocked:
+                    EventManager.Trigger(EconomyEvents.RecipeUnlocked, args);
+                    break;
             }
         }
 

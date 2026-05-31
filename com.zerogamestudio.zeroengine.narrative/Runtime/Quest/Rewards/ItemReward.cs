@@ -6,21 +6,18 @@ using ZeroEngine.Utils;
 namespace ZeroEngine.Quest
 {
     /// <summary>
-    /// 物品奖励。
+    /// 物品奖励 (v1.2.0+)
     /// </summary>
     [Serializable]
     public class ItemReward : QuestReward
     {
-        [Header("Item")]
-        [Tooltip("Item ID to grant.")]
-        [QuestItemIdDropdown]
+        [Tooltip("物品 ID")]
         public string ItemId;
 
-        [Min(1)]
-        [Tooltip("Item quantity to grant.")]
+        [Tooltip("物品数量")]
         public int Quantity = 1;
 
-        [Tooltip("Optional item data reference used for reward preview UI.")]
+        [Tooltip("物品配置（可选，用于预览）")]
         public InventoryItemSO ItemData;
 
         public override string RewardType => "Item";

@@ -78,8 +78,6 @@ namespace ZeroEngine.Dialog.Providers
                     enabled = _variables.TryGetValue(c.Condition, out var val) && IsTruthy(val);
                 }
 
-                enabled = enabled && (c.QuestConditions == null || c.QuestConditions.Evaluate());
-
                 choices.Add(new DialogChoice
                 {
                     Text = c.Text,

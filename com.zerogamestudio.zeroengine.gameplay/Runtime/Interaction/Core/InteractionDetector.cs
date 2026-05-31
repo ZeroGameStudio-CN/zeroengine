@@ -162,12 +162,15 @@ namespace ZeroEngine.Interaction
 
         private void CheckEnterExitEvents()
         {
+            var interactionManager = InteractionManager.Instance;
+
             // 检测新进入的对象
             foreach (var interactable in _nearbyInteractables)
             {
                 if (!_previousNearby.Contains(interactable))
                 {
                     OnInteractableEnterRange?.Invoke(interactable);
+                    interactionManager?.NotifyInteractableEnteredRange(interactable);
                 }
             }
 
@@ -177,6 +180,7 @@ namespace ZeroEngine.Interaction
                 if (!_nearbyInteractables.Contains(interactable))
                 {
                     OnInteractableExitRange?.Invoke(interactable);
+                    interactionManager?.NotifyInteractableExitedRange(interactable);
                 }
             }
         }

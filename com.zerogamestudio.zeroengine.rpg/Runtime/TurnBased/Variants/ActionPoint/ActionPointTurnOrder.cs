@@ -70,11 +70,6 @@ namespace ZeroEngine.RPG.TurnBased.Variants
         /// </summary>
         private readonly List<ITurnBasedCombatant> _turnOrder = new();
 
-        /// <summary>
-        /// 当前行动者索引
-        /// </summary>
-        private int _currentActorIndex = 0;
-
         #endregion
 
         /// <summary>
@@ -204,7 +199,6 @@ namespace ZeroEngine.RPG.TurnBased.Variants
         {
             _turnOrder.Clear();
             _turnOrder.AddRange(aliveUnits.OrderByDescending(c => c.Speed));
-            _currentActorIndex = 0;
             _actedThisTurn.Clear();
         }
 
@@ -312,7 +306,6 @@ namespace ZeroEngine.RPG.TurnBased.Variants
             _maxAP.Clear();
             _actedThisTurn.Clear();
             _turnOrder.Clear();
-            _currentActorIndex = 0;
 
             Debug.Log("[ActionPointTurnOrder] AP 系统重置");
         }

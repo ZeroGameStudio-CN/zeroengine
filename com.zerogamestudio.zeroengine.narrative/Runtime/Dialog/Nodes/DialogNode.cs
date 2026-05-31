@@ -251,9 +251,6 @@ namespace ZeroEngine.Dialog
             [Tooltip("Condition expression (empty = always available)")]
             public string Condition;
 
-            [Tooltip("Structured quest conditions. These are combined with the string Condition when both are configured.")]
-            public DialogQuestConditionGroup QuestConditions = new();
-
             [Tooltip("Show but disable if condition fails (vs hide)")]
             public bool ShowIfDisabled;
         }
@@ -280,7 +277,6 @@ namespace ZeroEngine.Dialog
                 var opt = Choices[i];
                 bool conditionMet = string.IsNullOrEmpty(opt.Condition) ||
                                     DialogConditionParser.Evaluate(opt.Condition, context.Variables);
-                conditionMet = conditionMet && (opt.QuestConditions == null || opt.QuestConditions.Evaluate());
 
                 if (!conditionMet && !opt.ShowIfDisabled)
                     continue;
@@ -325,9 +321,6 @@ namespace ZeroEngine.Dialog
         [Tooltip("Condition expression (e.g., 'gold >= 100 && hasKey')")]
         public string Condition;
 
-        [Tooltip("Structured quest conditions. These are combined with the string Condition when both are configured.")]
-        public DialogQuestConditionGroup QuestConditions = new();
-
         [Tooltip("Node ID if condition is true")]
         public string TrueNodeId;
 
@@ -341,8 +334,7 @@ namespace ZeroEngine.Dialog
 
         public override DialogNodeResult Execute(DialogGraphContext context)
         {
-            bool result = DialogConditionParser.Evaluate(Condition, context.Variables) &&
-                          (QuestConditions == null || QuestConditions.Evaluate());
+            bool result = DialogConditionParser.Evaluate(Condition, context.Variables);
             string nextNode = result ? TrueNodeId : FalseNodeId;
             return DialogNodeResult.Continue(nextNode);
         }

@@ -4,21 +4,18 @@ using UnityEngine;
 namespace ZeroEngine.Quest
 {
     /// <summary>
-    /// 通用自定义条件，匹配 eventType + TargetId。
+    /// 通用自定义条件 — 匹配 eventType + TargetId (v1.3.0+)
     /// </summary>
     [Serializable]
     public class CustomCondition : QuestCondition
     {
-        [Header("Custom Event")]
-        [Tooltip("Custom condition event type to listen for.")]
-        [QuestEventNameDropdown]
+        [Tooltip("要监听的事件类型")]
         public string EventType;
 
-        [Tooltip("Optional target ID. Empty matches all targets for this event type.")]
+        [Tooltip("目标 ID（留空则匹配所有）")]
         public string TargetId;
 
-        [Min(1)]
-        [Tooltip("Number of matching custom events required.")]
+        [Tooltip("需要的次数")]
         public int RequiredCount = 1;
 
         public override string ConditionType => "Custom";

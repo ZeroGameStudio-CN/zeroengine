@@ -4,17 +4,15 @@ using UnityEngine;
 namespace ZeroEngine.Quest
 {
     /// <summary>
-    /// 存活条件，响应 SurviveCompleted 事件。
+    /// 存活条件 — 响应 SurviveCompleted 事件 (v1.3.0+)
     /// </summary>
     [Serializable]
     public class SurviveCondition : QuestCondition
     {
-        [Header("Survive")]
-        [Tooltip("Stage or encounter ID to match against Quest.SurviveCompleted events. Empty may match any stage.")]
+        [Tooltip("存活场景/阶段 ID")]
         public string StageId;
 
-        [Min(1)]
-        [Tooltip("Number of matching survival completion events required.")]
+        [Tooltip("需要存活的次数")]
         public int RequiredCount = 1;
 
         public override string ConditionType => "Survive";

@@ -1,21 +1,29 @@
 {
-  "name": "ZeroEngine.Narrative.Tests.Editor",
-  "rootNamespace": "ZeroEngine.Quest.Tests.Editor",
-  "references": [
-    "ZeroEngine.Core",
-    "ZeroEngine.Narrative",
-    "UnityEditor.TestRunner",
-    "UnityEngine.TestRunner"
-  ],
-  "includePlatforms": [
-    "Editor"
-  ],
-  "excludePlatforms": [],
-  "allowUnsafeCode": false,
-  "overrideReferences": false,
-  "precompiledReferences": [],
-  "autoReferenced": false,
-  "defineConstraints": [],
-  "versionDefines": [],
-  "noEngineReferences": false
+    "name": "ZeroEngine.Narrative.Tests.Editor",
+    "rootNamespace": "ZeroEngine.Narrative.Tests",
+    "references": [
+        "ZeroEngine.Core",
+        "ZeroEngine.Persistence",
+        "ZeroEngine.Data",
+        "ZeroEngine.Economy",
+        "ZeroEngine.Gameplay",
+        "ZeroEngine.Narrative",
+        "UnityEngine.TestRunner",
+        "UnityEditor.TestRunner"
+    ],
+    "includePlatforms": [
+        "Editor"
+    ],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": true,
+    "precompiledReferences": [
+        "nunit.framework.dll"
+    ],
+    "autoReferenced": false,
+    "defineConstraints": [
+        "UNITY_INCLUDE_TESTS"
+    ],
+    "versionDefines": [],
+    "noEngineReferences": false
 }

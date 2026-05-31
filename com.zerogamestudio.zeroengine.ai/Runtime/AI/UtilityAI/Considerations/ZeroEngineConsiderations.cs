@@ -72,7 +72,9 @@ namespace ZeroEngine.AI.UtilityAI
     public class HealthConsideration : Consideration
     {
         [SerializeField] private bool _useSelfHealth = true;
+#if ZEROENGINE_COMBAT
         [SerializeField] private string _targetBlackboardKey = "";
+#endif
 
         public HealthConsideration()
         {
@@ -171,7 +173,8 @@ namespace ZeroEngine.AI.UtilityAI
                 case BuffCheckType.StackCount:
                     if (!hasBuff) return 0f;
                     var buff = buffReceiver.GetBuff(_buffId);
-                    return buff != null ? Mathf.Clamp01((float)buff.CurrentStack / buff.MaxStack) : 0f;
+                    int requiredStacks = Mathf.Max(1, _minStacks);
+                    return buff != null ? Mathf.Clamp01((float)buff.CurrentStack / requiredStacks) : 0f;
 
                 case BuffCheckType.RemainingDuration:
                     if (!hasBuff) return 0f;

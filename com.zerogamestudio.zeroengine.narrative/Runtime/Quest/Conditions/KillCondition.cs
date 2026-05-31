@@ -4,18 +4,15 @@ using UnityEngine;
 namespace ZeroEngine.Quest
 {
     /// <summary>
-    /// 击杀条件。
+    /// 击杀条件 (v1.2.0+)
     /// </summary>
     [Serializable]
     public class KillCondition : QuestCondition
     {
-        [Header("Kill")]
-        [Tooltip("Entity or enemy type ID to match against Quest.EntityKilled events.")]
-        [QuestEntityIdDropdown]
+        [Tooltip("目标 ID（敌人类型 ID）")]
         public string TargetId;
 
-        [Min(1)]
-        [Tooltip("Number of matching kill events required.")]
+        [Tooltip("需要击杀的数量")]
         public int RequiredCount = 1;
 
         public override string ConditionType => "Kill";
@@ -41,6 +38,13 @@ namespace ZeroEngine.Quest
             if (eventData is ConditionEventData data && data.TargetId == TargetId)
             {
                 runtime.AddProgress(GetProgressKey(), data.Amount, RequiredCount);
+                return true;
+            }
+
+            // Legacy support for string, int
+            if (eventData is (string targetId, int amount) && targetId == TargetId)
+            {
+                runtime.AddProgress(GetProgressKey(), amount, RequiredCount);
                 return true;
             }
 

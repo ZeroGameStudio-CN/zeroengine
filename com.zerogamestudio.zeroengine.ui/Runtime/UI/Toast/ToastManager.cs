@@ -9,14 +9,13 @@ namespace ZeroEngine.UI.Toast
     public sealed class ToastManager
     {
         private readonly List<ToastHandle> active = new List<ToastHandle>();
-        private readonly Queue<ToastHandle> queued = new Queue<ToastHandle>();
+        private readonly Queue<ToastRequest> queued = new Queue<ToastRequest>();
         private readonly Dictionary<string, ToastHandle> dedupeLookup = new Dictionary<string, ToastHandle>();
         private int nextId = 1;
         private ToastSettings settings;
         private IToastTextResolver resolver;
         private IToastPresenter presenter;
         private bool warnedMissingPresenter;
-        private float nextAllowedShowTime;
 
         public int ActiveCount => active.Count;
         public int QueuedCount => queued.Count;
@@ -30,7 +29,6 @@ namespace ZeroEngine.UI.Toast
             resolver = textResolver;
             presenter = toastPresenter;
             warnedMissingPresenter = false;
-            nextAllowedShowTime = 0f;
         }
 
         public ToastHandle Show(ToastRequest request)
@@ -44,26 +42,15 @@ namespace ZeroEngine.UI.Toast
             if (duplicate != null)
                 return HandleDuplicate(duplicate, request);
 
-            var now = Time.unscaledTime;
-            if (ShouldDelayForInterval(now))
-                return QueueNew(request);
+            if (active.Count >= settings.MaxVisible && !HandleOverflow(request))
+                return null;
 
-            if (active.Count >= settings.MaxVisible)
-                return HandleOverflow(request, now);
-
-            return ShowNow(CreateHandle(request), now);
-        }
-
-        internal void Tick(float unscaledTime)
-        {
-            TryDrainQueue(unscaledTime);
+            return ShowNow(request);
         }
 
         public void ClearAll()
         {
-            while (queued.Count > 0)
-                CompleteDismiss(queued.Dequeue(), ToastDismissReason.Cleared, false);
-
+            queued.Clear();
             for (int i = active.Count - 1; i >= 0; i--)
                 DismissInternal(active[i], ToastDismissReason.Cleared);
 
@@ -73,7 +60,7 @@ namespace ZeroEngine.UI.Toast
         public void ClearGroup(string groupKey)
         {
             if (string.IsNullOrWhiteSpace(groupKey)) return;
-            DismissQueuedGroup(groupKey);
+            RemoveQueuedGroup(groupKey);
 
             for (int i = active.Count - 1; i >= 0; i--)
             {
@@ -84,17 +71,12 @@ namespace ZeroEngine.UI.Toast
 
         private ToastHandle ShowNow(ToastRequest request)
         {
-            return ShowNow(CreateHandle(request), Time.unscaledTime);
-        }
-
-        private ToastHandle ShowNow(ToastHandle handle, float unscaledTime)
-        {
-            if (handle == null || handle.IsDismissed) return null;
+            var handle = new ToastHandle(nextId++, request, DismissInternal);
             active.Add(handle);
-            nextAllowedShowTime = unscaledTime + settings.ShowInterval;
+            RegisterDedupe(handle);
 
             if (presenter != null)
-                presenter.ShowToast(handle, ResolveText(handle.Request), ResolveStyle(handle.Request), ResolveTimings(handle.Request));
+                presenter.ShowToast(handle, ResolveText(request), ResolveStyle(request), ResolveTimings(request));
             else
                 WarnMissingPresenter();
 
@@ -103,26 +85,29 @@ namespace ZeroEngine.UI.Toast
             return handle;
         }
 
-        private ToastHandle HandleOverflow(ToastRequest incoming, float unscaledTime)
+        private bool HandleOverflow(ToastRequest incoming)
         {
             switch (settings.OverflowPolicy)
             {
                 case ToastOverflowPolicy.DropIncoming:
-                    return null;
+                    return false;
                 case ToastOverflowPolicy.Queue:
-                    return QueueNew(incoming);
+                    if (settings.MaxQueued <= 0) return false;
+                    if (queued.Count >= settings.MaxQueued) queued.Dequeue();
+                    queued.Enqueue(incoming);
+                    return false;
                 case ToastOverflowPolicy.ReplaceLowestPriority:
                     var lowest = FindLowestPriority();
                     if (lowest != null && lowest.Request.Priority <= incoming.Priority)
                     {
-                        DismissInternal(lowest, ToastDismissReason.Overflow, false);
-                        return ShowNow(CreateHandle(incoming), unscaledTime);
+                        DismissInternal(lowest, ToastDismissReason.Overflow);
+                        return true;
                     }
-                    return null;
+                    return false;
                 case ToastOverflowPolicy.DropOldest:
                 default:
-                    if (active.Count > 0) DismissInternal(active[0], ToastDismissReason.Overflow, false);
-                    return ShowNow(CreateHandle(incoming), unscaledTime);
+                    if (active.Count > 0) DismissInternal(active[0], ToastDismissReason.Overflow);
+                    return true;
             }
         }
 
@@ -133,18 +118,17 @@ namespace ZeroEngine.UI.Toast
                 case ToastDuplicatePolicy.IgnoreDuplicate:
                     return existing;
                 case ToastDuplicatePolicy.ReplaceExisting:
-                    DismissInternal(existing, ToastDismissReason.Replaced, false);
-                    return Show(request);
+                    DismissInternal(existing, ToastDismissReason.Replaced);
+                    return ShowNow(request);
                 case ToastDuplicatePolicy.RefreshExisting:
                     UnregisterDedupe(existing);
                     existing.ReplaceRequest(request);
                     RegisterDedupe(existing);
-                    if (active.Contains(existing))
-                        presenter?.RefreshToast(existing, ResolveText(request), ResolveStyle(request), ResolveTimings(request));
+                    presenter?.RefreshToast(existing, ResolveText(request), ResolveStyle(request), ResolveTimings(request));
                     return existing;
                 case ToastDuplicatePolicy.StackDuplicate:
                 default:
-                    return Show(request);
+                    return ShowNow(request);
             }
         }
 
@@ -169,70 +153,28 @@ namespace ZeroEngine.UI.Toast
 
         private void DismissInternal(ToastHandle handle, ToastDismissReason reason)
         {
-            DismissInternal(handle, reason, true);
-        }
-
-        private void DismissInternal(ToastHandle handle, ToastDismissReason reason, bool drainQueue)
-        {
             if (handle == null) return;
-            if (active.Remove(handle))
-            {
-                CompleteDismiss(handle, reason, true);
-                Reposition();
-                if (drainQueue)
-                    TryDrainQueue(Time.unscaledTime);
-                return;
-            }
+            if (!active.Remove(handle)) return;
 
-            if (RemoveQueued(handle))
-                CompleteDismiss(handle, reason, false);
+            UnregisterDedupe(handle);
+            handle.MarkDismissed();
+            presenter?.DismissToast(handle, reason);
+            handle.Request.OnDismissed?.Invoke(handle);
+            ToastDismissed?.Invoke(handle, reason);
+            Reposition();
+            TryDrainQueue();
         }
 
-        private bool ShouldDelayForInterval(float unscaledTime)
+        private void TryDrainQueue()
         {
-            return settings.OverflowPolicy == ToastOverflowPolicy.Queue
-                   && settings.ShowInterval > 0f
-                   && active.Count > 0
-                   && unscaledTime < nextAllowedShowTime;
-        }
-
-        private ToastHandle QueueNew(ToastRequest incoming)
-        {
-            if (settings.MaxQueued <= 0) return null;
-
-            var handle = CreateHandle(incoming);
-            Enqueue(handle);
-            return handle;
-        }
-
-        private void Enqueue(ToastHandle handle)
-        {
-            if (handle == null || handle.IsDismissed) return;
-            if (queued.Count >= settings.MaxQueued)
-                CompleteDismiss(queued.Dequeue(), ToastDismissReason.Overflow, false);
-
-            queued.Enqueue(handle);
-        }
-
-        private void TryDrainQueue(float unscaledTime)
-        {
-            if (queued.Count == 0 || active.Count >= settings.MaxVisible) return;
-
-            if (settings.ShowInterval > 0f)
-            {
-                if (active.Count > 0 && unscaledTime < nextAllowedShowTime) return;
-                ShowNow(queued.Dequeue(), unscaledTime);
-                return;
-            }
-
             while (queued.Count > 0 && active.Count < settings.MaxVisible)
-                ShowNow(queued.Dequeue(), unscaledTime);
+                ShowNow(queued.Dequeue());
         }
 
         private void Reposition()
         {
             var anchorCounts = new Dictionary<ToastAnchor, int>();
-            for (int i = active.Count - 1; i >= 0; i--)
+            for (int i = 0; i < active.Count; i++)
             {
                 var anchor = active[i].Request.Anchor;
                 anchorCounts.TryGetValue(anchor, out var anchorIndex);
@@ -243,59 +185,16 @@ namespace ZeroEngine.UI.Toast
             }
         }
 
-        private ToastHandle CreateHandle(ToastRequest request)
-        {
-            var handle = new ToastHandle(nextId++, request, DismissInternal);
-            RegisterDedupe(handle);
-            return handle;
-        }
-
-        private void CompleteDismiss(ToastHandle handle, ToastDismissReason reason, bool wasVisible)
-        {
-            if (handle == null || handle.IsDismissed) return;
-
-            UnregisterDedupe(handle);
-            handle.MarkDismissed();
-            if (wasVisible)
-                presenter?.DismissToast(handle, reason);
-
-            handle.Request.OnDismissed?.Invoke(handle);
-            ToastDismissed?.Invoke(handle, reason);
-        }
-
-        private bool RemoveQueued(ToastHandle handle)
-        {
-            if (handle == null || queued.Count == 0) return false;
-
-            var removed = false;
-            var count = queued.Count;
-            for (int i = 0; i < count; i++)
-            {
-                var current = queued.Dequeue();
-                if (!removed && current == handle)
-                {
-                    removed = true;
-                    continue;
-                }
-
-                queued.Enqueue(current);
-            }
-
-            return removed;
-        }
-
-        private void DismissQueuedGroup(string groupKey)
+        private void RemoveQueuedGroup(string groupKey)
         {
             if (queued.Count == 0) return;
 
-            var kept = new Queue<ToastHandle>(queued.Count);
+            var kept = new Queue<ToastRequest>(queued.Count);
             while (queued.Count > 0)
             {
-                var handle = queued.Dequeue();
-                if (string.Equals(handle.Request.GroupKey, groupKey, StringComparison.Ordinal))
-                    CompleteDismiss(handle, ToastDismissReason.Cleared, false);
-                else
-                    kept.Enqueue(handle);
+                var request = queued.Dequeue();
+                if (!string.Equals(request.GroupKey, groupKey, StringComparison.Ordinal))
+                    kept.Enqueue(request);
             }
 
             while (kept.Count > 0)
@@ -374,7 +273,7 @@ namespace ZeroEngine.UI.Toast
 
         public static void EnsurePresenter(ToastSettings settings)
         {
-            if (UnityEngine.Object.FindObjectOfType<ToastRootPresenter>() != null) return;
+            if (UnityEngine.Object.FindFirstObjectByType<ToastRootPresenter>() != null) return;
 
             var root = new GameObject(RootName, typeof(RectTransform), typeof(Canvas), typeof(CanvasScaler), typeof(GraphicRaycaster));
             UnityEngine.Object.DontDestroyOnLoad(root);
@@ -397,8 +296,8 @@ namespace ZeroEngine.UI.Toast
             var itemPrefab = CreateItemPrefab(root.transform);
             itemPrefab.gameObject.SetActive(false);
 
-            var topCenter = CreateContainer(root.transform, "TopCenter", ToastAnchor.TopCenter, new Vector2(0.5f, 1f), new Vector2(0.5f, 1f), new Vector2(0.5f, 1f), new Vector2(0f, -96f), itemPrefab);
-            var topRight = CreateContainer(root.transform, "TopRight", ToastAnchor.TopRight, new Vector2(1f, 1f), new Vector2(1f, 1f), new Vector2(1f, 1f), new Vector2(-174f, -74f), itemPrefab);
+            var topCenter = CreateContainer(root.transform, "TopCenter", ToastAnchor.TopCenter, new Vector2(0.5f, 1f), new Vector2(0.5f, 1f), new Vector2(0.5f, 1f), new Vector2(0f, -200f), itemPrefab);
+            var topRight = CreateContainer(root.transform, "TopRight", ToastAnchor.TopRight, new Vector2(1f, 1f), new Vector2(1f, 1f), new Vector2(1f, 1f), new Vector2(-24f, -24f), itemPrefab);
             var bottomCenter = CreateContainer(root.transform, "BottomCenter", ToastAnchor.BottomCenter, new Vector2(0.5f, 0f), new Vector2(0.5f, 0f), new Vector2(0.5f, 0f), new Vector2(0f, 96f), itemPrefab);
 
             var presenter = root.AddComponent<ToastRootPresenter>();
@@ -460,7 +359,7 @@ namespace ZeroEngine.UI.Toast
             text.fontSize = 34f;
             text.color = Color.white;
             text.alignment = TextAlignmentOptions.MidlineLeft;
-            text.enableWordWrapping = true;
+            text.textWrappingMode = TextWrappingModes.Normal;
             text.raycastTarget = false;
 
             var view = root.GetComponent<ToastItemView>();

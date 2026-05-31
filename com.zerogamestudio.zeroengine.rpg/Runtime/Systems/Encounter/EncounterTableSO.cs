@@ -6,6 +6,7 @@
 using System;
 using System.Collections.Generic;
 using UnityEngine;
+using ZeroEngine.RPG.TurnBased;
 
 namespace ZeroEngine.RPG.Encounter
 {
@@ -46,6 +47,9 @@ namespace ZeroEngine.RPG.Encounter
 
         [Tooltip("是否为 Boss 遭遇 (强制/剧情触发)")]
         public bool IsBoss;
+
+        [Tooltip("战斗模式 (Classic=经典回合制, Tactics=战棋)")]
+        public BattleMode BattleMode = BattleMode.Classic;
 
         /// <summary>
         /// 检查玩家等级是否满足条件

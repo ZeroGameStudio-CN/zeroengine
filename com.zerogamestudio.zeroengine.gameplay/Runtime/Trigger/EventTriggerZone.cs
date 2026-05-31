@@ -8,7 +8,6 @@ namespace ZeroEngine.Trigger
     /// Generic trigger zone that evaluates conditions and executes actions
     /// when an object with the specified tag enters the collider.
     /// </summary>
-    [AddComponentMenu("ZGS/Quest/Event Trigger Zone")]
     public class EventTriggerZone : MonoBehaviour
     {
         [Header("Trigger Settings")]

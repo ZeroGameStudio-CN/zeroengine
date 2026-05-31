@@ -1,31 +1,26 @@
 {
-  "name": "com.zerogamestudio.zeroengine.ai",
-  "version": "2.0.0",
-  "displayName": "ZeroEngine.AI",
-  "description": "AI decision systems for ZeroEngine. Includes FSM (Finite State Machine), Behavior Tree, UtilityAI (self-developed), GOAP bridge (crashkonijn/GOAP adapter), and NPC Schedule system.",
-  "unity": "2022.3",
-  "unityRelease": "0f1",
-  "dependencies": {
-    "com.zerogamestudio.zeroengine.core": "2.0.0"
-  },
-  "keywords": [
-    "zeroengine",
-    "ai",
-    "fsm",
-    "state-machine",
-    "behavior-tree",
-    "utility-ai",
-    "goap",
-    "npc-schedule"
-  ],
-  "author": {
-    "name": "ZeroGameStudio",
-    "url": "https://github.com/zerogamestudio"
-  },
-  "license": "MIT",
-  "repository": {
-    "type": "git",
-    "url": "https://github.com/liuzqk/zeroengine.git",
-    "directory": "com.zerogamestudio.zeroengine.ai"
-  }
+    "name": "com.zerogamestudio.zeroengine.ai",
+    "version": "2.0.0",
+    "displayName": "ZeroEngine.AI",
+    "description": "AI decision systems for ZeroEngine. Includes FSM (Finite State Machine), Behavior Tree, UtilityAI (self-developed), GOAP bridge (crashkonijn/GOAP adapter), and NPC Schedule system.",
+    "unity": "2022.3",
+    "unityRelease": "0f1",
+    "dependencies": {
+        "com.zerogamestudio.zeroengine.core": "2.0.0",
+        "com.zerogamestudio.zeroengine.world": "2.0.0"
+    },
+    "keywords": [
+        "zeroengine",
+        "ai",
+        "fsm",
+        "state-machine",
+        "behavior-tree",
+        "utility-ai",
+        "goap",
+        "npc-schedule"
+    ],
+    "author": {
+        "name": "ZeroGameStudio",
+        "url": "https://github.com/zerogamestudio"
+    }
 }

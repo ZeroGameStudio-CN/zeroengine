@@ -16,10 +16,5 @@
     "name": "ZeroGameStudio",
     "url": "https://github.com/zerogamestudio"
   },
-  "license": "MIT",
-  "repository": {
-    "type": "git",
-    "url": "https://github.com/liuzqk/zeroengine.git",
-    "directory": "com.zerogamestudio.zeroengine.data-toolkit"
-  }
+  "_fingerprint": "82013a9747f30cc1b1100b370184a4808e0d891e"
 }

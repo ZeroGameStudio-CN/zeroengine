@@ -303,6 +303,14 @@ namespace ZeroEngine.Interaction
             float distance = Vector3.Distance(interactorPos, target.GetInteractionPosition());
             var ctx = new InteractionContext(interactor, interactorPos, distance);
 
+            if (_defaultInteractionDistance > 0f && distance > _defaultInteractionDistance)
+            {
+                const string reason = "Too far away";
+                LogDebug($"Cannot interact with {target.DisplayName}: {reason}");
+                OnInteractionFailed?.Invoke(target, reason);
+                return InteractionResult.Failed(target, reason);
+            }
+
             // 检查是否可交互
             if (!target.CanInteract(ctx))
             {
@@ -368,7 +376,6 @@ namespace ZeroEngine.Interaction
             // 通知新目标获得焦点
             target?.OnFocus();
 
-            // 触发事件
             OnFocusTargetChanged?.Invoke(previous, target);
 
             LogDebug($"Focus changed: {previous?.DisplayName ?? "null"} -> {target?.DisplayName ?? "null"}");
@@ -389,6 +396,26 @@ namespace ZeroEngine.Interaction
         public void ClearFocus()
         {
             SetFocusTarget(null);
+        }
+
+        /// <summary>
+        /// 通知可交互对象真实进入检测范围。
+        /// </summary>
+        public void NotifyInteractableEnteredRange(IInteractable interactable)
+        {
+            if (interactable == null) return;
+
+            OnInteractableEnterRange?.Invoke(interactable);
+        }
+
+        /// <summary>
+        /// 通知可交互对象真实离开检测范围。
+        /// </summary>
+        public void NotifyInteractableExitedRange(IInteractable interactable)
+        {
+            if (interactable == null) return;
+
+            OnInteractableExitRange?.Invoke(interactable);
         }
 
         #endregion

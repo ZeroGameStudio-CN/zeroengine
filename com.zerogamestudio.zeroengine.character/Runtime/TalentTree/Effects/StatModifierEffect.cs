@@ -13,8 +13,8 @@ namespace ZeroEngine.TalentTree
     public class StatModifierEffect : TalentEffect
     {
         [Header("属性配置")]
-        [Tooltip("属性类型")]
-        public StatType StatType;
+        [Tooltip("属性 ID")]
+        public StatId StatId;
 
         [Tooltip("修饰类型")]
         public StatModType ModType = StatModType.Flat;
@@ -49,14 +49,14 @@ namespace ZeroEngine.TalentTree
             // 创建并应用修饰器
             _appliedModifier = new StatModifier(value, ModType, (int)ModType, this);
             _cachedController = controller;
-            controller.AddModifier(StatType, _appliedModifier);
+            controller.AddModifier(StatId, _appliedModifier);
         }
 
         public override void Remove(GameObject owner)
         {
             if (_appliedModifier == null || _cachedController == null) return;
 
-            _cachedController.RemoveModifier(StatType, _appliedModifier);
+            _cachedController.RemoveModifier(StatId, _appliedModifier);
             _appliedModifier = null;
             _cachedController = null;
         }
@@ -66,7 +66,7 @@ namespace ZeroEngine.TalentTree
             float value = BaseValue + ValuePerLevel * level;
             string sign = value >= 0 ? "+" : "";
             string suffix = ModType == StatModType.Flat ? "" : "%";
-            return $"{StatType} {sign}{value}{suffix}";
+            return $"{StatId} {sign}{value}{suffix}";
         }
     }
 
@@ -80,7 +80,7 @@ namespace ZeroEngine.TalentTree
         [Serializable]
         public class StatEntry
         {
-            public StatType StatType;
+            public StatId StatId;
             public StatModType ModType = StatModType.Flat;
             public float ValuePerLevel = 1f;
             public float BaseValue = 0f;
@@ -91,8 +91,8 @@ namespace ZeroEngine.TalentTree
         [Header("属性列表")]
         public List<StatEntry> Stats = new List<StatEntry>();
 
-        private readonly List<(StatController, StatType, StatModifier)> _appliedModifiers =
-            new List<(StatController, StatType, StatModifier)>();
+        private readonly List<(StatController Controller, StatId Id, StatModifier Modifier)> _appliedModifiers =
+            new List<(StatController Controller, StatId Id, StatModifier Modifier)>();
 
         public override void Apply(GameObject owner, int level)
         {
@@ -107,16 +107,16 @@ namespace ZeroEngine.TalentTree
             {
                 float value = entry.GetValue(level);
                 var modifier = new StatModifier(value, entry.ModType, (int)entry.ModType, this);
-                controller.AddModifier(entry.StatType, modifier);
-                _appliedModifiers.Add((controller, entry.StatType, modifier));
+                controller.AddModifier(entry.StatId, modifier);
+                _appliedModifiers.Add((controller, entry.StatId, modifier));
             }
         }
 
         public override void Remove(GameObject owner)
         {
-            foreach (var (controller, statType, modifier) in _appliedModifiers)
+            foreach (var (controller, id, modifier) in _appliedModifiers)
             {
-                controller?.RemoveModifier(statType, modifier);
+                controller?.RemoveModifier(id, modifier);
             }
             _appliedModifiers.Clear();
         }
@@ -129,7 +129,7 @@ namespace ZeroEngine.TalentTree
                 float value = entry.GetValue(level);
                 string sign = value >= 0 ? "+" : "";
                 string suffix = entry.ModType == StatModType.Flat ? "" : "%";
-                parts.Add($"{entry.StatType} {sign}{value}{suffix}");
+                parts.Add($"{entry.StatId} {sign}{value}{suffix}");
             }
             return string.Join(", ", parts);
         }

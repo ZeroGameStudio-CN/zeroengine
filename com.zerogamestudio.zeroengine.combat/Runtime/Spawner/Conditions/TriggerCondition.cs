@@ -132,12 +132,13 @@ namespace ZeroEngine.Spawner
         /// </summary>
         private bool CheckTag()
         {
-            if (_targetObject == null || string.IsNullOrEmpty(_targetState))
+            string tag = !string.IsNullOrEmpty(_eventTag) ? _eventTag : _targetState;
+            if (_targetObject == null || string.IsNullOrEmpty(tag))
             {
                 return false;
             }
 
-            return _targetObject.CompareTag(_targetState);
+            return _targetObject.CompareTag(tag);
         }
 
         #endregion
@@ -220,6 +221,16 @@ namespace ZeroEngine.Spawner
             _targetObject = target;
         }
 
+        /// <summary>
+        /// 设置标签触发
+        /// </summary>
+        public void SetTagTrigger(GameObject target, string tag)
+        {
+            _conditionType = TriggerConditionType.Tag;
+            _targetObject = target;
+            _eventTag = tag;
+        }
+
         public override string GetDescription()
         {
             return _conditionType switch
@@ -229,7 +240,7 @@ namespace ZeroEngine.Spawner
                 TriggerConditionType.ObjectInactive => $"{_targetObject?.name} is inactive",
                 TriggerConditionType.Distance => $"Distance {_distanceComparison} {_triggerDistance}",
                 TriggerConditionType.Health => $"Health {_healthComparison} {_healthThreshold:P0}",
-                TriggerConditionType.Tag => $"Tag equals '{_targetState}'",
+                TriggerConditionType.Tag => $"Tag equals '{(!string.IsNullOrEmpty(_eventTag) ? _eventTag : _targetState)}'",
                 TriggerConditionType.Always => "Always",
                 TriggerConditionType.Never => "Never",
                 _ => base.GetDescription()

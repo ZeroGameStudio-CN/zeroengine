@@ -6,17 +6,15 @@ using ZeroEngine.Utils;
 namespace ZeroEngine.Quest
 {
     /// <summary>
-    /// 货币奖励。
+    /// 货币奖励 (v1.2.0+)
     /// </summary>
     [Serializable]
     public class CurrencyReward : QuestReward
     {
-        [Header("Currency")]
-        [Tooltip("Currency type to grant.")]
+        [Tooltip("货币类型")]
         public CurrencyType CurrencyType = CurrencyType.Gold;
 
-        [Min(0)]
-        [Tooltip("Currency amount to grant.")]
+        [Tooltip("货币数量")]
         public int Amount;
 
         public override string RewardType => "Currency";
@@ -49,7 +47,7 @@ namespace ZeroEngine.Quest
     }
 
     /// <summary>
-    /// 货币类型。
+    /// 货币类型 (v1.2.0+)
     /// </summary>
     public enum CurrencyType
     {

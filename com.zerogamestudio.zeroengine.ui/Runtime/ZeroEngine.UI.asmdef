@@ -4,6 +4,7 @@
     "references": [
         "ZeroEngine.Core",
         "Unity.TextMeshPro",
+        "Unity.ugui",
         "Unity.Addressables",
         "Unity.ResourceManager",
         "Sirenix.OdinInspector.Attributes",

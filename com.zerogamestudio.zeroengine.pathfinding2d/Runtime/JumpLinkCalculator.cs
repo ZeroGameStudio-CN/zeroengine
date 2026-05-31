@@ -33,7 +33,7 @@ namespace ZeroEngine.Pathfinding2D
         [Tooltip("最大下落水平距离")]
         public float MaxFallHorizontalDistance = 4f;
 
-        [Tooltip("兼容保留：旧版本用于表面节点垂直下落；当前 Fall 只从真实边缘生成。")]
+        [Tooltip("表面节点垂直下落最大水平距离（小于此值才从表面节点生成下落链接）")]
         public float SurfaceNodeVerticalFallMaxHorizontal = 1.5f;
 
         [Header("验证参数")]
@@ -135,6 +135,8 @@ namespace ZeroEngine.Pathfinding2D
                 // 判断节点类型
                 bool isEdgeNode = fromNode.NodeType == PlatformNodeType.LeftEdge ||
                                   fromNode.NodeType == PlatformNodeType.RightEdge;
+                bool isSurfaceNode = fromNode.NodeType == PlatformNodeType.Surface;
+
                 // 计算跳跃到其他平台的链接
                 for (int j = 0; j < nodes.Count; j++)
                 {
@@ -142,15 +144,10 @@ namespace ZeroEngine.Pathfinding2D
 
                     var toNode = nodes[j];
 
-                    // 跳过同一连续平台段的节点。Composite/Tilemap 会让多个平台段共享 Collider，
-                    // 这里只能用 SurfaceGroupId 判断真实同平台。
+                    // 跳过同一平台的节点（改用 Y 坐标差异判断，支持 Tilemap Composite Collider）
+                    // 原逻辑用 PlatformCollider 判断，但 Tilemap 所有平台共享一个 Collider，导致跳跃链接无法生成
                     float heightDiff = Mathf.Abs(toNode.Position.y - fromNode.Position.y);
-                    if (fromNode.SurfaceGroupId >= 0 &&
-                        fromNode.SurfaceGroupId == toNode.SurfaceGroupId &&
-                        heightDiff < 0.5f)
-                    {
-                        continue;
-                    }
+                    if (heightDiff < 0.5f && fromNode.PlatformCollider == toNode.PlatformCollider) continue;
 
                     // 检查距离限制
                     float horizontalDist = Mathf.Abs(toNode.Position.x - fromNode.Position.x);
@@ -218,7 +215,7 @@ namespace ZeroEngine.Pathfinding2D
                     else if (verticalDist < -0.5f && Mathf.Abs(verticalDist) <= config.MaxFallHeight)
                     {
                         // 边缘节点：完整下落检测（水平 + 垂直）
-                        if (isEdgeNode && !fromNode.IsTransitionAnchor && horizontalDist <= config.MaxFallHorizontalDistance)
+                        if (isEdgeNode && horizontalDist <= config.MaxFallHorizontalDistance)
                         {
                             // ★ 终点也必须是边缘节点
                             bool toIsEdge = toNode.NodeType == PlatformNodeType.LeftEdge ||
@@ -231,6 +228,23 @@ namespace ZeroEngine.Pathfinding2D
 
                             // ★ 工业级方案：尝试连接所有可达边缘节点（不只是最近的）
                             // 让轨迹验证决定是否创建链接，而非位置去重
+
+                            if (TryCreateFallLink(fromNode, toNode, obstacleLayer))
+                            {
+                                fallLinksCreated++;
+                            }
+                        }
+                        // 表面节点：仅限垂直下落（水平距离很小）
+                        // ★ 终点也必须是边缘节点，防止平台内部生成大量无意义的下落链接
+                        else if (isSurfaceNode && horizontalDist <= config.SurfaceNodeVerticalFallMaxHorizontal)
+                        {
+                            bool toIsEdge = toNode.NodeType == PlatformNodeType.LeftEdge ||
+                                            toNode.NodeType == PlatformNodeType.RightEdge;
+                            if (!toIsEdge)
+                            {
+                                fallSkippedToNotEdge++;
+                                continue;
+                            }
 
                             if (TryCreateFallLink(fromNode, toNode, obstacleLayer))
                             {
@@ -469,14 +483,9 @@ namespace ZeroEngine.Pathfinding2D
 
             foreach (var toNode in allNodes)
             {
-                // 跳过同一连续平台段。
+                // 跳过同一平台（使用高度差判断，支持 Tilemap Composite Collider）
                 float heightDiff = Mathf.Abs(toNode.Position.y - fromNode.Position.y);
-                if (fromNode.SurfaceGroupId >= 0 &&
-                    fromNode.SurfaceGroupId == toNode.SurfaceGroupId &&
-                    heightDiff < 0.5f)
-                {
-                    continue;
-                }
+                if (heightDiff < 0.5f && toNode.PlatformCollider == fromNode.PlatformCollider) continue;
 
                 // 目标必须在正下方附近
                 float horizontalDist = Mathf.Abs(toNode.Position.x - startPos.x);

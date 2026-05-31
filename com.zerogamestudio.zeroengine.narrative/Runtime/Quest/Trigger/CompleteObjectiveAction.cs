@@ -11,11 +11,9 @@ namespace ZeroEngine.Quest.Trigger
     public class CompleteObjectiveAction : TriggerAction
     {
         [Tooltip("Condition event type (e.g. Quest.Interacted, Quest.LocationReached)")]
-        [QuestEventNameDropdown]
         public string EventType = QuestEvents.Interacted;
 
         [Tooltip("Target ID for the condition")]
-        [QuestInteractTargetIdDropdown]
         public string TargetId;
 
         [Tooltip("Amount to add")]

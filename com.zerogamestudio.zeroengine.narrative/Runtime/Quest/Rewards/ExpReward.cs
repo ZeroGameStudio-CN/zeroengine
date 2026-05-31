@@ -6,14 +6,12 @@ using ZeroEngine.Utils;
 namespace ZeroEngine.Quest
 {
     /// <summary>
-    /// 经验值奖励。
+    /// 经验值奖励 (v1.2.0+)
     /// </summary>
     [Serializable]
     public class ExpReward : QuestReward
     {
-        [Header("Exp")]
-        [Min(0)]
-        [Tooltip("Experience amount to grant.")]
+        [Tooltip("经验值数量")]
         public int Amount;
 
         public override string RewardType => "Exp";

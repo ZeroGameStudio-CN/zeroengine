@@ -9,6 +9,9 @@ namespace ZeroEngine.Samples
     /// </summary>
     public class StatSystemExample : MonoBehaviour
     {
+        private static readonly StatId Health = "core.health";
+        private static readonly StatId Attack = "offense.attack";
+
         [Header("Stats")]
         [SerializeField] private float baseHealth = 100f;
         [SerializeField] private float baseAttack = 10f;
@@ -24,15 +27,15 @@ namespace ZeroEngine.Samples
             }
 
             // 初始化属性
-            _statController.InitStat(StatType.Health, baseHealth, 0, 9999);
-            _statController.InitStat(StatType.Attack, baseAttack);
+            _statController.InitStat(Health, baseHealth, 0, 9999);
+            _statController.InitStat(Attack, baseAttack);
 
             // 监听属性变化
-            var healthStat = _statController.GetStat(StatType.Health);
+            var healthStat = _statController.GetStat(Health);
             healthStat.OnValueChanged += OnHealthChanged;
 
-            Debug.Log($"[StatExample] Health: {_statController.GetStatValue(StatType.Health)}");
-            Debug.Log($"[StatExample] Attack: {_statController.GetStatValue(StatType.Attack)}");
+            Debug.Log($"[StatExample] Health: {_statController.GetStatValue(Health)}");
+            Debug.Log($"[StatExample] Attack: {_statController.GetStatValue(Attack)}");
 
             // 测试修饰器
             TestModifiers();
@@ -42,17 +45,17 @@ namespace ZeroEngine.Samples
         {
             // 添加固定值修饰器 (+50 生命)
             var flatMod = new StatModifier(50f, StatModType.Flat);
-            _statController.AddModifier(StatType.Health, flatMod);
-            Debug.Log($"[StatExample] After +50 Flat: Health = {_statController.GetStatValue(StatType.Health)}");
+            _statController.AddModifier(Health, flatMod);
+            Debug.Log($"[StatExample] After +50 Flat: Health = {_statController.GetStatValue(Health)}");
 
             // 添加百分比修饰器 (+20% 生命)
             var percentMod = new StatModifier(0.2f, StatModType.PercentAdd);
-            _statController.AddModifier(StatType.Health, percentMod);
-            Debug.Log($"[StatExample] After +20% PercentAdd: Health = {_statController.GetStatValue(StatType.Health)}");
+            _statController.AddModifier(Health, percentMod);
+            Debug.Log($"[StatExample] After +20% PercentAdd: Health = {_statController.GetStatValue(Health)}");
 
             // 移除修饰器
-            _statController.RemoveModifier(StatType.Health, flatMod);
-            Debug.Log($"[StatExample] After removing Flat: Health = {_statController.GetStatValue(StatType.Health)}");
+            _statController.RemoveModifier(Health, flatMod);
+            Debug.Log($"[StatExample] After removing Flat: Health = {_statController.GetStatValue(Health)}");
         }
 
         private void OnHealthChanged(StatChangedEventArgs args)
@@ -62,7 +65,7 @@ namespace ZeroEngine.Samples
 
         private void OnDestroy()
         {
-            var healthStat = _statController?.GetStat(StatType.Health);
+            var healthStat = _statController?.GetStat(Health);
             if (healthStat != null)
             {
                 healthStat.OnValueChanged -= OnHealthChanged;

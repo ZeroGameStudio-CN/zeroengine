@@ -1,28 +1,14 @@
 {
-  "name": "com.zerogamestudio.zeroengine.world",
-  "version": "2.0.0",
-  "displayName": "ZeroEngine.World",
-  "description": "World and environment systems for ZeroEngine. Includes Environment System (weather, day-night cycle), Calendar System (game time, seasons), and Minimap System (markers, fog of war).",
-  "unity": "2022.3",
-  "unityRelease": "0f1",
-  "dependencies": {
-    "com.zerogamestudio.zeroengine.core": "2.0.0",
-    "com.zerogamestudio.zeroengine.persistence": "2.0.0"
-  },
-  "keywords": [
-    "zeroengine",
-    "environment",
-    "weather",
-    "calendar",
-    "minimap"
-  ],
-  "author": {
-    "name": "ZeroGameStudio"
-  },
-  "license": "MIT",
-  "repository": {
-    "type": "git",
-    "url": "https://github.com/liuzqk/zeroengine.git",
-    "directory": "com.zerogamestudio.zeroengine.world"
-  }
+    "name": "com.zerogamestudio.zeroengine.world",
+    "version": "2.0.0",
+    "displayName": "ZeroEngine.World",
+    "description": "World and environment systems for ZeroEngine. Includes Environment System (weather, day-night cycle), Calendar System (game time, seasons), and Minimap System (markers, fog of war).",
+    "unity": "2022.3",
+    "unityRelease": "0f1",
+    "dependencies": {
+        "com.zerogamestudio.zeroengine.core": "2.0.0",
+        "com.zerogamestudio.zeroengine.persistence": "2.0.0"
+    },
+    "keywords": ["zeroengine", "environment", "weather", "calendar", "minimap"],
+    "author": { "name": "ZeroGameStudio" }
 }

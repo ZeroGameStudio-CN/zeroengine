@@ -2,12 +2,13 @@ using System;
 using System.Collections.Generic;
 using UnityEngine;
 using ZeroEngine.Core;
+using ZeroEngine.Economy;
 using ZeroEngine.Save;
 using ZeroEngine.Utils;
 
 namespace ZeroEngine.Inventory
 {
-    public class InventoryManager : Singleton<InventoryManager>, ISaveable
+    public class InventoryManager : Singleton<InventoryManager>, ISaveable, IInventoryProvider
     {
         public const int MaxSlots = 30;
         private List<InventorySlot> _slots = new List<InventorySlot>();
@@ -361,65 +362,85 @@ namespace ZeroEngine.Inventory
         /// <summary>
         /// 按类型查询物品 (v1.2.0+)
         /// </summary>
-        public IEnumerable<InventorySlot> GetItemsByType(InventoryItemType type)
+        public void GetItemsByType(InventoryItemType type, List<InventorySlot> results)
         {
+            if (results == null) return;
+            results.Clear();
             for (int i = 0; i < _slots.Count; i++)
             {
                 var slot = _slots[i];
                 if (!slot.IsEmpty && slot.ItemData != null && slot.ItemData.Type == type)
-                    yield return slot;
+                {
+                    results.Add(slot);
+                }
             }
         }
 
         /// <summary>
         /// 按分类查询物品 (v1.2.0+)
         /// </summary>
-        public IEnumerable<InventorySlot> GetItemsByCategory(ItemCategory category)
+        public void GetItemsByCategory(ItemCategory category, List<InventorySlot> results)
         {
+            if (results == null) return;
+            results.Clear();
             for (int i = 0; i < _slots.Count; i++)
             {
                 var slot = _slots[i];
                 if (!slot.IsEmpty && slot.ItemData != null && slot.ItemData.Category == category)
-                    yield return slot;
+                {
+                    results.Add(slot);
+                }
             }
         }
 
         /// <summary>
         /// 按稀有度查询物品 (v1.2.0+)
         /// </summary>
-        public IEnumerable<InventorySlot> GetItemsByRarity(ItemRarity rarity)
+        public void GetItemsByRarity(ItemRarity rarity, List<InventorySlot> results)
         {
+            if (results == null) return;
+            results.Clear();
             for (int i = 0; i < _slots.Count; i++)
             {
                 var slot = _slots[i];
                 if (!slot.IsEmpty && slot.ItemData != null && slot.ItemData.Rarity == rarity)
-                    yield return slot;
+                {
+                    results.Add(slot);
+                }
             }
         }
 
         /// <summary>
         /// 按稀有度查询物品 (最低稀有度) (v1.2.0+)
         /// </summary>
-        public IEnumerable<InventorySlot> GetItemsByMinRarity(ItemRarity minRarity)
+        public void GetItemsByMinRarity(ItemRarity minRarity, List<InventorySlot> results)
         {
+            if (results == null) return;
+            results.Clear();
             for (int i = 0; i < _slots.Count; i++)
             {
                 var slot = _slots[i];
                 if (!slot.IsEmpty && slot.ItemData != null && slot.ItemData.Rarity >= minRarity)
-                    yield return slot;
+                {
+                    results.Add(slot);
+                }
             }
         }
 
         /// <summary>
         /// 获取所有非空槽位 (v1.2.0+)
         /// </summary>
-        public IEnumerable<InventorySlot> GetAllItems()
+        public void GetAllItems(List<InventorySlot> results)
         {
+            if (results == null) return;
+            results.Clear();
             for (int i = 0; i < _slots.Count; i++)
             {
                 var slot = _slots[i];
                 if (!slot.IsEmpty)
-                    yield return slot;
+                {
+                    results.Add(slot);
+                }
             }
         }
 
@@ -624,6 +645,12 @@ namespace ZeroEngine.Inventory
             {
                 return;
             }
+
+            if (SaveManager.Instance == null)
+            {
+                return;
+            }
+
             SaveManager.Instance.Save("PlayerInventory", _slots);
         }
 

@@ -12,9 +12,6 @@ namespace ZeroEngine.Debugging
     {
         public const string MODULE_NAME = "StatSystem";
 
-        // 缓存枚举值，避免每次 Update 调用 Enum.GetValues() 产生 GC
-        private static readonly StatType[] _cachedStatTypes = (StatType[])Enum.GetValues(typeof(StatType));
-
         private readonly List<StatController> _trackedControllers = new List<StatController>(8);
         private readonly List<StatDebugData> _statData = new List<StatDebugData>(32);
         private readonly List<string> _changeLog = new List<string>(MAX_LOG);
@@ -56,14 +53,14 @@ namespace ZeroEngine.Debugging
         {
             var data = new StatDebugData
             {
-                StatName = args.StatType.ToString(),
+                StatName = args.StatId.ToString(),
                 BaseValue = 0, // 无法从事件获取
                 CurrentValue = args.NewValue,
                 ModifierCount = 0
             };
 
             string delta = args.Delta >= 0 ? $"+{args.Delta:F1}" : $"{args.Delta:F1}";
-            AddLog($"{args.StatType}: {args.OldValue:F1} → {args.NewValue:F1} ({delta})");
+            AddLog($"{args.StatId}: {args.OldValue:F1} → {args.NewValue:F1} ({delta})");
 
             OnStatChanged?.Invoke(data, args.OldValue, args.NewValue);
         }
@@ -85,16 +82,21 @@ namespace ZeroEngine.Debugging
             {
                 if (controller == null) continue;
 
-                // 遍历所有 StatType 枚举值（使用缓存数组避免 GC）
-                for (int s = 0; s < _cachedStatTypes.Length; s++)
+                var saveData = controller.ExportSaveData();
+                if (saveData?.Stats == null)
                 {
-                    StatType statType = _cachedStatTypes[s];
-                    var stat = controller.GetStat(statType);
+                    continue;
+                }
+
+                for (int s = 0; s < saveData.Stats.Count; s++)
+                {
+                    var id = saveData.Stats[s].Id;
+                    var stat = controller.GetStat(id);
                     if (stat == null) continue;
 
                     var data = new StatDebugData
                     {
-                        StatName = statType.ToString(),
+                        StatName = id.ToString(),
                         BaseValue = stat.BaseValue,
                         CurrentValue = stat.Value,
                         MinValue = stat.MinValue,

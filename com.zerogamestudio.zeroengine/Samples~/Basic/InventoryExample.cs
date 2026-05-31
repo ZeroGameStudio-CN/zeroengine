@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using UnityEngine;
 using ZeroEngine.Inventory;
 
@@ -61,14 +62,18 @@ namespace ZeroEngine.Samples
             int emptySlots = InventoryManager.Instance.GetEmptySlotCount();
             Debug.Log($"[InventoryExample] Empty slots: {emptySlots}");
 
+            var queryResults = new List<InventorySlot>();
+
             // 按类型查询
-            foreach (var itemSlot in InventoryManager.Instance.GetItemsByType(testItem.Type))
+            InventoryManager.Instance.GetItemsByType(testItem.Type, queryResults);
+            foreach (var itemSlot in queryResults)
             {
                 Debug.Log($"[InventoryExample] Found item by type: {itemSlot.ItemData.ItemName}");
             }
 
             // 按稀有度查询
-            foreach (var itemSlot in InventoryManager.Instance.GetItemsByRarity(testItem.Rarity))
+            InventoryManager.Instance.GetItemsByRarity(testItem.Rarity, queryResults);
+            foreach (var itemSlot in queryResults)
             {
                 Debug.Log($"[InventoryExample] Found item by rarity: {itemSlot.ItemData.ItemName}");
             }

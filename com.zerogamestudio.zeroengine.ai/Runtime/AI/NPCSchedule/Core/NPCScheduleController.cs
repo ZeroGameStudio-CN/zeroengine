@@ -400,6 +400,28 @@ namespace ZeroEngine.AI.NPCSchedule
             }
         }
 
+        /// <summary>
+        /// 外部事件开始时覆盖日程
+        /// </summary>
+        public void OnEventStarted(string reason = "InEvent")
+        {
+            if (_allowEventOverride)
+            {
+                SetOverride(true, string.IsNullOrEmpty(reason) ? "InEvent" : reason);
+            }
+        }
+
+        /// <summary>
+        /// 外部事件结束时恢复日程
+        /// </summary>
+        public void OnEventEnded(string reason = "InEvent")
+        {
+            if (_overrideReason == (string.IsNullOrEmpty(reason) ? "InEvent" : reason))
+            {
+                SetOverride(false);
+            }
+        }
+
         #endregion
 
         #region Public Methods

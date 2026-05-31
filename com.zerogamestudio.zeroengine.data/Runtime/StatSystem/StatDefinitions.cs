@@ -1,51 +1,95 @@
-using System.Collections.Generic;
+using System;
 using UnityEngine;
 
 namespace ZeroEngine.StatSystem
 {
-    /// <summary>
-    /// 标准 RPG 属性类型枚举
-    /// </summary>
-    public enum StatType
+    [Serializable]
+    public struct StatId : IEquatable<StatId>
     {
-        None,
+        [SerializeField] private string _value;
 
-        // === 基础资源 ===
-        MaxHP,
-        MaxMP,
+        public StatId(string value)
+        {
+            _value = Normalize(value);
+        }
 
-        // === 基础属性 ===
-        Attack,
-        Defense,
-        MagicAttack,
-        MagicDefense,
-        Speed,
-        Luck,
+        public string Value => _value ?? string.Empty;
+        public bool IsEmpty => string.IsNullOrWhiteSpace(Value);
 
-        // === 战斗属性 ===
-        CritRate,
-        CritDamage,
-        HitRate,
-        DodgeRate,
-        BlockRate,
-        CounterRate,
-        LifeSteal,
-        DamageReduction,
+        public bool Equals(StatId other)
+        {
+            return string.Equals(Value, other.Value, StringComparison.Ordinal);
+        }
 
-        // === 移动属性 ===
-        MoveSpeed,
-        JumpForce,
+        public override bool Equals(object obj)
+        {
+            return obj is StatId other && Equals(other);
+        }
 
-        // === 自定义扩展 ===
-        Custom1,
-        Custom2,
-        Custom3,
-        Custom4,
-        Custom5
+        public override int GetHashCode()
+        {
+            return StringComparer.Ordinal.GetHashCode(Value);
+        }
+
+        public override string ToString()
+        {
+            return Value;
+        }
+
+        public static bool operator ==(StatId left, StatId right)
+        {
+            return left.Equals(right);
+        }
+
+        public static bool operator !=(StatId left, StatId right)
+        {
+            return !left.Equals(right);
+        }
+
+        public static implicit operator StatId(string value)
+        {
+            return new StatId(value);
+        }
+
+        public static implicit operator string(StatId id)
+        {
+            return id.Value;
+        }
+
+        public static string Normalize(string value)
+        {
+            return string.IsNullOrWhiteSpace(value)
+                ? string.Empty
+                : value.Trim().ToLowerInvariant();
+        }
+    }
+
+    public enum StatValueKind
+    {
+        Integer,
+        Float,
+        Percent,
+        Multiplier
+    }
+
+    [Serializable]
+    public sealed class StatDefinition
+    {
+        public StatId Id;
+        public string DisplayName;
+        [TextArea(2, 4)] public string Description;
+        public string Group;
+        public int SortOrder;
+        public StatValueKind ValueKind;
+        public float DefaultValue;
+        public float MinValue = float.MinValue;
+        public float MaxValue = float.MaxValue;
+        public string ExcelColumn;
+        public bool ShowInCharacterEditor = true;
     }
 
     public interface IStatProvider
     {
-        float GetStatValue(StatType type);
+        float GetStatValue(StatId id);
     }
 }

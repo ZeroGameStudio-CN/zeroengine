@@ -100,7 +100,7 @@ namespace ZeroEngine.Interaction
             // 自动查找检测器
             if (_detector == null)
             {
-                _detector = FindObjectOfType<InteractionDetector>();
+                _detector = FindFirstObjectByType<InteractionDetector>();
             }
 
             if (_detector != null)

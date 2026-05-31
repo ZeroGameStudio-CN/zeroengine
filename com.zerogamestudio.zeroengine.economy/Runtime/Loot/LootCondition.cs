@@ -125,7 +125,7 @@ namespace ZeroEngine.Loot
         {
             if (Item == null) return true;
 
-            var inventory = Inventory.InventoryManager.Instance;
+            var inventory = context?.InventoryProvider;
             if (inventory == null) return true;
 
             bool hasItem = inventory.GetItemCount(Item) >= MinAmount;

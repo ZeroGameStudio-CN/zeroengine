@@ -1,32 +1,31 @@
 {
-  "name": "com.zerogamestudio.zeroengine.autobattle",
-  "version": "1.0.0",
-  "displayName": "ZeroEngine.AutoBattle",
-  "description": "Auto-battle framework for grid-based tactical combat. Includes grid system, battle units, skill configuration, AI strategy, and formation management.",
-  "unity": "2022.3",
-  "unityRelease": "0f1",
-  "dependencies": {
-    "com.zerogamestudio.zeroengine.core": "2.0.0",
-    "com.zerogamestudio.zeroengine.combat": "2.0.0",
-    "com.zerogamestudio.zeroengine.data": "2.0.0",
-    "com.zerogamestudio.zeroengine.ai": "2.0.0"
-  },
-  "keywords": [
-    "zeroengine",
-    "autobattle",
-    "grid",
-    "tactical",
-    "formation",
-    "ai"
-  ],
-  "author": {
-    "name": "ZeroGameStudio",
-    "url": "https://github.com/zerogamestudio"
-  },
-  "repository": {
-    "type": "git",
-    "url": "https://github.com/liuzqk/zeroengine.git",
-    "directory": "com.zerogamestudio.zeroengine.autobattle"
-  },
-  "license": "MIT"
+    "name": "com.zerogamestudio.zeroengine.autobattle",
+    "version": "1.0.0",
+    "displayName": "ZeroEngine.AutoBattle",
+    "description": "Auto-battle framework for grid-based tactical combat. Includes grid system, battle units, skill configuration, AI strategy, and formation management.",
+    "unity": "2022.3",
+    "unityRelease": "0f1",
+    "dependencies": {
+        "com.zerogamestudio.zeroengine.core": "2.0.0",
+        "com.zerogamestudio.zeroengine.combat": "2.0.0",
+        "com.zerogamestudio.zeroengine.data": "2.0.0",
+        "com.zerogamestudio.zeroengine.ai": "2.0.0"
+    },
+    "keywords": [
+        "zeroengine",
+        "autobattle",
+        "grid",
+        "tactical",
+        "formation",
+        "ai"
+    ],
+    "author": {
+        "name": "ZeroGameStudio",
+        "url": "https://github.com/zerogamestudio"
+    },
+    "repository": {
+        "type": "git",
+        "url": "https://github.com/zerogamestudio/zeroengine.git",
+        "directory": "Packages/com.zerogamestudio.zeroengine.autobattle"
+    }
 }

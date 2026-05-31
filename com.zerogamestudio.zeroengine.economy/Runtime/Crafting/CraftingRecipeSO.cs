@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using UnityEngine;
+using ZeroEngine.Economy;
 
 namespace ZeroEngine.Crafting
 {
@@ -98,7 +99,7 @@ namespace ZeroEngine.Crafting
         /// <summary>
         /// 检查材料是否充足
         /// </summary>
-        public bool CheckIngredients(Inventory.InventoryManager inventory, int batchCount = 1)
+        public bool CheckIngredients(IInventoryProvider inventory, int batchCount = 1)
         {
             if (inventory == null) return false;
 
@@ -119,7 +120,7 @@ namespace ZeroEngine.Crafting
         /// <summary>
         /// 消耗材料
         /// </summary>
-        public void ConsumeIngredients(Inventory.InventoryManager inventory, int batchCount = 1)
+        public void ConsumeIngredients(IInventoryProvider inventory, int batchCount = 1)
         {
             if (inventory == null) return;
 
@@ -145,7 +146,7 @@ namespace ZeroEngine.Crafting
         /// <summary>
         /// 计算最大可制作数量
         /// </summary>
-        public int CalculateMaxCraftCount(Inventory.InventoryManager inventory)
+        public int CalculateMaxCraftCount(IInventoryProvider inventory)
         {
             if (inventory == null) return 0;
 

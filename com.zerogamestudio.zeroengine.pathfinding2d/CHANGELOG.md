@@ -2,17 +2,6 @@
 
 All notable changes to this package will be documented in this file.
 
-## [1.6.17] - 2026-05-08
-
-### Added
-- Added `PlatformPathRequest`, `PlatformPathResult`, and failure reasons for diagnosable path requests.
-- Added `PlatformNavigationBootstrap` for runtime-safe component setup.
-- Added shared target-ground projection and navigation snapshot APIs.
-
-### Fixed
-- First path request is no longer throttled immediately after a pathfinder is created.
-- Reached-target requests now return a valid completed path instead of a `NotFound` path.
-
 ## [1.6.15] - 2025-01-21
 
 ### Fixed

@@ -1,5 +1,6 @@
 using NUnit.Framework;
 using ZeroEngine.StatSystem;
+using ZeroEngine.StatSystem.Formula;
 
 namespace ZeroEngine.Tests.Data
 {
@@ -9,6 +10,8 @@ namespace ZeroEngine.Tests.Data
     [TestFixture]
     public class StatSystemTests
     {
+        private static readonly StatId Attack = "offense.attack";
+
         #region Stat Basic Tests
 
         [Test]
@@ -286,6 +289,107 @@ namespace ZeroEngine.Tests.Data
 
             // Assert
             Assert.AreEqual(300f, stat.Value);
+        }
+
+        #endregion
+
+        #region Graduation Tests
+
+        [Test]
+        public void Stat_AddModifierWithSource_GroupsModifiersBySource()
+        {
+            var stat = new Stat(100f);
+            var source = new object();
+
+            stat.AddModifier(new StatModifier(10f, StatModType.Flat), source);
+            stat.AddModifier(new StatModifier(0.1f, StatModType.PercentAdd), source);
+
+            Assert.IsTrue(stat.StatModifiersBySource.TryGetValue(source, out var modifiers));
+            Assert.AreEqual(2, modifiers.Count);
+            Assert.AreEqual(121f, stat.Value);
+        }
+
+        [Test]
+        public void Stats_AddAndRemoveFormulaModifier_RemovesRuntimeSnapshotByOriginalModifier()
+        {
+            var stats = new Stats();
+            stats.GetOrCreateAndInit<Stat>(Attack, stat => stat.InitBase(10));
+            var source = new object();
+            var formula = UnityEngine.ScriptableObject.CreateInstance<MathFormula>();
+            formula.InitialValue = 5f;
+            var modifier = new StatModifier(0f, StatModType.Flat) { Formula = formula };
+
+            try
+            {
+                var data = new System.Collections.Generic.Dictionary<StatId, System.Collections.Generic.List<StatModifier>>
+                {
+                    { Attack, new System.Collections.Generic.List<StatModifier> { modifier } }
+                };
+
+                stats.AddStatModifier(data, source, ctx: null);
+                Assert.AreEqual(15f, stats.GetStat(Attack).Value);
+
+                stats.RemoveStatModifier(data, source);
+                Assert.AreEqual(10f, stats.GetStat(Attack).Value);
+            }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(formula);
+            }
+        }
+
+        [Test]
+        public void CurrentStat_AddModifierWithPercentPolicy_PreservesCurrentPercent()
+        {
+            var stat = new CurrentStat();
+            stat.InitCurrent(100f, 50f);
+
+            stat.AddModifier(new StatModifier(100f, StatModType.Flat), new object(), IncreaseType.Percent);
+
+            Assert.AreEqual(200f, stat.MaxValue);
+            Assert.AreEqual(100f, stat.CurrentValue);
+        }
+
+        [Test]
+        public void CurrentStat_RemoveAllModifiersFromSource_ClampsCurrentAfterMaxDrops()
+        {
+            var stat = new CurrentStat();
+            stat.InitCurrent(100f, 100f);
+            var source = new object();
+            stat.AddModifier(new StatModifier(100f, StatModType.Flat), source, IncreaseType.Flat);
+            Assert.AreEqual(200f, stat.CurrentValue);
+
+            stat.RemoveAllModifiersFromSource(source);
+
+            Assert.AreEqual(100f, stat.MaxValue);
+            Assert.AreEqual(100f, stat.CurrentValue);
+        }
+
+        [Test]
+        public void Stat_Calculation_ClampsNaNAndInfinityToFiniteValue()
+        {
+            var stat = new Stat(10f);
+
+            stat.AddModifier(new StatModifier(float.PositiveInfinity, StatModType.PercentMult));
+
+            Assert.IsFalse(float.IsInfinity(stat.Value));
+            Assert.IsFalse(float.IsNaN(stat.Value));
+            Assert.AreEqual(float.MaxValue, stat.Value);
+        }
+
+        [Test]
+        public void Stats_LoadFromData_InvalidatesCachedStatValue()
+        {
+            var stats = new Stats();
+            stats.GetOrCreateAndInit<Stat>(Attack, stat => stat.InitBase(10f));
+            Assert.AreEqual(10f, stats.GetStat(Attack).Value);
+
+            stats.LoadFromData(new System.Collections.Generic.Dictionary<StatId, float>
+            {
+                { Attack, 20f }
+            });
+
+            Assert.AreEqual(20f, stats.GetStat(Attack).Value);
         }
 
         #endregion

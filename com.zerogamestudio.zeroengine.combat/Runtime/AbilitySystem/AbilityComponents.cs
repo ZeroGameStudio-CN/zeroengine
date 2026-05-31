@@ -10,6 +10,7 @@ namespace ZeroEngine.AbilitySystem
 {
     // ---------------- Interface & Base ----------------
 
+    [Obsolete("Legacy ability component data. Use AbilityTriggerDefinition, AbilityConditionDefinition and AbilityEffectDefinition for new TCE content.")]
     public abstract class ComponentData
     {
         // For serialization polymorphism (Odin handles this automatically, 
@@ -19,6 +20,7 @@ namespace ZeroEngine.AbilitySystem
     /// <summary>
     /// Base class for runtime ability components
     /// </summary>
+    [Obsolete("Legacy ability component interface. Use AbilityExecutor with AbilityDefinition components for new TCE content.")]
     public interface IAbilityComponent
     {
         void Initialize(ComponentData data, object source, AbilityDataSO abilityData);
@@ -27,6 +29,7 @@ namespace ZeroEngine.AbilitySystem
     // ---------------- Data Definitions ----------------
 
     [Serializable]
+    [Obsolete("Legacy trigger component data. Use AbilityTriggerDefinition for new TCE content.")]
     public abstract class TriggerComponentData : ComponentData
     {
 #if ODIN_INSPECTOR
@@ -47,11 +50,13 @@ namespace ZeroEngine.AbilitySystem
     }
 
     [Serializable]
+    [Obsolete("Legacy condition component data. Use AbilityConditionDefinition for new TCE content.")]
     public abstract class ConditionComponentData : ComponentData
     {
     }
 
     [Serializable]
+    [Obsolete("Legacy effect component data. Use AbilityEffectDefinition for new TCE content.")]
     public abstract class EffectComponentData : ComponentData
     {
 #if ODIN_INSPECTOR

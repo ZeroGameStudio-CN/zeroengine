@@ -25,19 +25,6 @@ namespace ZeroEngine.BuffSystem
     }
 
     /// <summary>
-    /// Buff 统计属性类型（用于配置）
-    /// </summary>
-    public enum BuffStatType
-    {
-        /// <summary>持续时间</summary>
-        Duration,
-        /// <summary>最大层数</summary>
-        MaxStacks,
-        /// <summary>Tick 间隔</summary>
-        TickInterval
-    }
-
-    /// <summary>
     /// Buff 触发时机
     /// </summary>
     public enum BuffTriggerTiming

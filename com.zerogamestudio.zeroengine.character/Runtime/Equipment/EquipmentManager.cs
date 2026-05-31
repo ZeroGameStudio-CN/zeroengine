@@ -32,12 +32,12 @@ namespace ZeroEngine.Equipment
             new Dictionary<EquipmentSetSO, HashSet<int>>();
 
         // 当前应用的修饰器（用于移除）
-        private readonly Dictionary<EquipmentInstance, List<(StatType, StatModifier)>> _appliedModifiers =
-            new Dictionary<EquipmentInstance, List<(StatType, StatModifier)>>();
+        private readonly Dictionary<EquipmentInstance, List<EquipmentStatModifier>> _appliedModifiers =
+            new Dictionary<EquipmentInstance, List<EquipmentStatModifier>>();
 
         // 套装修饰器
-        private readonly Dictionary<(EquipmentSetSO, int), List<(StatType, StatModifier)>> _setModifiers =
-            new Dictionary<(EquipmentSetSO, int), List<(StatType, StatModifier)>>();
+        private readonly Dictionary<(EquipmentSetSO, int), List<EquipmentStatModifier>> _setModifiers =
+            new Dictionary<(EquipmentSetSO, int), List<EquipmentStatModifier>>();
 
         // === 性能优化：缓存集合避免 GC 分配 ===
         private readonly List<EquipmentSlotType> _tempSlotList = new List<EquipmentSlotType>(8);
@@ -48,15 +48,15 @@ namespace ZeroEngine.Equipment
         // 修饰器列表对象池
         private static class ModifierListPool
         {
-            private static readonly Stack<List<(StatType, StatModifier)>> _pool =
-                new Stack<List<(StatType, StatModifier)>>(16);
+            private static readonly Stack<List<EquipmentStatModifier>> _pool =
+                new Stack<List<EquipmentStatModifier>>(16);
 
-            public static List<(StatType, StatModifier)> Get()
+            public static List<EquipmentStatModifier> Get()
             {
-                return _pool.Count > 0 ? _pool.Pop() : new List<(StatType, StatModifier)>(16);
+                return _pool.Count > 0 ? _pool.Pop() : new List<EquipmentStatModifier>(16);
             }
 
-            public static void Return(List<(StatType, StatModifier)> list)
+            public static void Return(List<EquipmentStatModifier> list)
             {
                 if (list == null) return;
                 list.Clear();
@@ -358,15 +358,8 @@ namespace ZeroEngine.Equipment
 
             foreach (var mod in modifiers)
             {
-                // 查找对应的 StatType（通过 StatModifierData）
-                foreach (var statData in equipment.Data.BaseStats)
-                {
-                    if (mod.Source == equipment)
-                    {
-                        _statController.AddModifier(statData.StatType, mod);
-                        appliedList.Add((statData.StatType, mod));
-                    }
-                }
+                _statController.AddModifier(mod.StatId, mod.Modifier);
+                appliedList.Add(mod);
             }
 
             _appliedModifiers[equipment] = appliedList;
@@ -380,8 +373,8 @@ namespace ZeroEngine.Equipment
             {
                 for (int i = 0; i < modifiers.Count; i++)
                 {
-                    var (statType, modifier) = modifiers[i];
-                    _statController.RemoveModifier(statType, modifier);
+                    var modifier = modifiers[i];
+                    _statController.RemoveModifier(modifier.StatId, modifier.Modifier);
                 }
                 ModifierListPool.Return(modifiers); // 归还对象池
                 _appliedModifiers.Remove(equipment);
@@ -475,13 +468,13 @@ namespace ZeroEngine.Equipment
             if (_statController == null) return;
 
             var key = (set, effect.RequiredPieces);
-            var appliedList = new List<(StatType, StatModifier)>();
+            var appliedList = new List<EquipmentStatModifier>();
 
             foreach (var statData in effect.StatBonuses)
             {
                 var modifier = statData.CreateModifier(0, set);
-                _statController.AddModifier(statData.StatType, modifier);
-                appliedList.Add((statData.StatType, modifier));
+                _statController.AddModifier(statData.StatId, modifier);
+                appliedList.Add(new EquipmentStatModifier(statData.StatId, modifier));
             }
 
             _setModifiers[key] = appliedList;
@@ -495,9 +488,9 @@ namespace ZeroEngine.Equipment
             var key = (set, threshold);
             if (_setModifiers.TryGetValue(key, out var modifiers))
             {
-                foreach (var (statType, modifier) in modifiers)
+                foreach (var modifier in modifiers)
                 {
-                    _statController.RemoveModifier(statType, modifier);
+                    _statController.RemoveModifier(modifier.StatId, modifier.Modifier);
                 }
                 _setModifiers.Remove(key);
                 Log($"套装 {set.SetName} {threshold}件效果失效");

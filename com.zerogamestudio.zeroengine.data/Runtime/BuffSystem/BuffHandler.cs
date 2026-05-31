@@ -35,10 +35,9 @@ namespace ZeroEngine.BuffSystem
         private float _tickTimer;
         private StatController _targetStats;
         
-        // Refactored: Track type with modifier to allow removal
         private struct AppliedModifier
         {
-            public StatType Type;
+            public StatId Id;
             public StatModifier Modifier;
         }
         private List<AppliedModifier> _appliedModifiers = new List<AppliedModifier>();
@@ -199,11 +198,11 @@ namespace ZeroEngine.BuffSystem
                     foreach (var modConfig in Data.StatModifiers)
                     {
                         var mod = new StatModifier(modConfig.Value, modConfig.ModType, (int)modConfig.ModType, this);
-                        _targetStats.AddModifier(modConfig.StatType, mod);
+                        _targetStats.AddModifier(modConfig.StatId, mod);
                         
                         _appliedModifiers.Add(new AppliedModifier 
                         { 
-                            Type = modConfig.StatType, 
+                            Id = modConfig.StatId,
                             Modifier = mod 
                         });
                     }
@@ -224,7 +223,7 @@ namespace ZeroEngine.BuffSystem
                         var lastIndex = _appliedModifiers.Count - 1;
                         var entry = _appliedModifiers[lastIndex];
                         
-                        _targetStats.RemoveModifier(entry.Type, entry.Modifier);
+                        _targetStats.RemoveModifier(entry.Id, entry.Modifier);
                         _appliedModifiers.RemoveAt(lastIndex);
                     }
                 }
@@ -240,7 +239,7 @@ namespace ZeroEngine.BuffSystem
 
             foreach (var entry in _appliedModifiers)
             {
-                _targetStats.RemoveModifier(entry.Type, entry.Modifier);
+                _targetStats.RemoveModifier(entry.Id, entry.Modifier);
             }
             _appliedModifiers.Clear();
         }

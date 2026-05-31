@@ -77,9 +77,9 @@ namespace ZeroEngine.BuffSystem
     public class BuffStatModifierConfig
     {
         /// <summary>
-        /// 目标属性类型
+        /// 目标属性 ID
         /// </summary>
-        public StatType StatType;
+        public StatId StatId;
 
         /// <summary>
         /// 修饰值

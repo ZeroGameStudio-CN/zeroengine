@@ -1,3 +1,5 @@
+using System;
+
 namespace ZeroEngine.Quest
 {
     public enum QuestState
@@ -6,6 +8,14 @@ namespace ZeroEngine.Quest
         Active,     // Accepted, in progress
         Successful, // Goals met, ready to submit
         TheEnd      // Submitted & Completed
+    }
+
+    public enum QuestType
+    {
+        Dialogue,
+        KillMonster,
+        Collect,
+        Custom
     }
 
     public enum QuestLifecycle

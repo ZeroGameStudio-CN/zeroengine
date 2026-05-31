@@ -177,7 +177,7 @@ namespace ZeroEngine.Editor.Equipment
                 EditorGUILayout.BeginHorizontal();
                 EditorGUILayout.LabelField($"Slot: {(equipment.SlotType != null ? equipment.SlotType.DisplayName : "None")}", GUILayout.Width(150));
                 EditorGUILayout.LabelField($"Rarity: {equipment.Rarity}", GUILayout.Width(120));
-                EditorGUILayout.LabelField($"Stats: {equipment.BaseStats.Count}", GUILayout.Width(80));
+                EditorGUILayout.LabelField($"Stats: {equipment.StatModifiers.Count}", GUILayout.Width(80));
                 if (equipment.BelongsToSet != null)
                 {
                     EditorGUILayout.LabelField($"Set: {equipment.BelongsToSet.SetName}", GUILayout.Width(150));

@@ -33,9 +33,6 @@ namespace ZeroEngine.Pathfinding2D
         /// <summary>路径状态</summary>
         public PathStatus Status { get; private set; } = PathStatus.Pending;
 
-        /// <summary>路径完成类型，用于区分完整路径、已到达、部分路径和失败。</summary>
-        public PlatformPathCompletionKind CompletionKind { get; private set; } = PlatformPathCompletionKind.Failed;
-
         /// <summary>移动指令列表</summary>
         public List<MoveCommand> Commands { get; private set; } = new List<MoveCommand>();
 
@@ -53,9 +50,6 @@ namespace ZeroEngine.Pathfinding2D
 
         /// <summary>预计总耗时</summary>
         public float TotalDuration { get; private set; }
-
-        public PlatformRouteCost RouteCost { get; private set; } = PlatformRouteCost.Unreachable;
-        public bool CommandsValidated { get; private set; }
 
         /// <summary>是否还有剩余指令</summary>
         public bool HasNextCommand => CurrentIndex < Commands.Count;
@@ -77,17 +71,12 @@ namespace ZeroEngine.Pathfinding2D
         /// <summary>
         /// 创建有效路径
         /// </summary>
-        public Platform2DPath(
-            Vector3 start,
-            Vector3 end,
-            List<MoveCommand> commands,
-            PlatformPathCompletionKind completionKind = PlatformPathCompletionKind.FullPath)
+        public Platform2DPath(Vector3 start, Vector3 end, List<MoveCommand> commands)
         {
             StartPosition = start;
             EndPosition = end;
             Commands = commands ?? new List<MoveCommand>();
             Status = Commands.Count > 0 ? PathStatus.Valid : PathStatus.NotFound;
-            CompletionKind = Status == PathStatus.Valid ? completionKind : PlatformPathCompletionKind.Failed;
             CreateTime = Time.time;
 
             // 计算总耗时
@@ -139,12 +128,6 @@ namespace ZeroEngine.Pathfinding2D
             Status = status;
         }
 
-        public void SetRouteDiagnostics(PlatformRouteCost routeCost, bool commandsValidated)
-        {
-            RouteCost = routeCost;
-            CommandsValidated = commandsValidated;
-        }
-
         /// <summary>
         /// 检查路径是否过期
         /// </summary>
@@ -163,38 +146,8 @@ namespace ZeroEngine.Pathfinding2D
             {
                 StartPosition = start,
                 EndPosition = end,
-                Status = PathStatus.NotFound,
-                CompletionKind = PlatformPathCompletionKind.Failed
+                Status = PathStatus.NotFound
             };
-        }
-
-        /// <summary>
-        /// 创建已到达目标的有效空路径。
-        /// </summary>
-        public static Platform2DPath Arrived(Vector3 start, Vector3 end)
-        {
-            return new Platform2DPath
-            {
-                StartPosition = start,
-                EndPosition = end,
-                Commands = new List<MoveCommand>(),
-                Status = PathStatus.Valid,
-                CompletionKind = PlatformPathCompletionKind.Arrived,
-                CreateTime = Time.time
-            };
-        }
-
-        /// <summary>
-        /// 创建部分路径。部分路径仅表示最近可达点，不代表完整到达目标。
-        /// </summary>
-        public static Platform2DPath Partial(Vector3 start, Vector3 end, List<MoveCommand> commands)
-        {
-            var path = new Platform2DPath(start, end, commands, PlatformPathCompletionKind.Partial);
-            path.Status = commands != null && commands.Count > 0 ? PathStatus.Valid : PathStatus.NotFound;
-            path.CompletionKind = path.Status == PathStatus.Valid
-                ? PlatformPathCompletionKind.Partial
-                : PlatformPathCompletionKind.Failed;
-            return path;
         }
 
         /// <summary>
@@ -206,8 +159,7 @@ namespace ZeroEngine.Pathfinding2D
             {
                 StartPosition = start,
                 EndPosition = end,
-                Status = PathStatus.Pending,
-                CompletionKind = PlatformPathCompletionKind.Failed
+                Status = PathStatus.Pending
             };
         }
 

@@ -4,21 +4,18 @@ using UnityEngine;
 namespace ZeroEngine.Quest
 {
     /// <summary>
-    /// 收集条件。
+    /// 收集条件 (v1.2.0+)
     /// </summary>
     [Serializable]
     public class CollectCondition : QuestCondition
     {
-        [Header("Collect")]
-        [Tooltip("Item ID to match against Quest.ItemObtained events.")]
-        [QuestItemIdDropdown]
+        [Tooltip("物品 ID")]
         public string ItemId;
 
-        [Min(1)]
-        [Tooltip("Number of matching item events required.")]
+        [Tooltip("需要收集的数量")]
         public int RequiredCount = 1;
 
-        [Tooltip("Whether the project should consume the item when the quest is completed. Consumption is project-defined.")]
+        [Tooltip("是否在完成时消耗物品")]
         public bool ConsumeOnComplete = true;
 
         public override string ConditionType => "Collect";
@@ -44,6 +41,12 @@ namespace ZeroEngine.Quest
             if (eventData is ConditionEventData data && data.TargetId == ItemId)
             {
                 runtime.AddProgress(GetProgressKey(), data.Amount, RequiredCount);
+                return true;
+            }
+
+            if (eventData is (string itemId, int amount) && itemId == ItemId)
+            {
+                runtime.AddProgress(GetProgressKey(), amount, RequiredCount);
                 return true;
             }
 

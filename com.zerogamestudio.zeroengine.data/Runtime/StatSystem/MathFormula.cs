@@ -43,7 +43,7 @@ namespace ZeroEngine.StatSystem.Formula
         public MathOperationType Operation;
         public ValueProviderType ProviderType;
         public float ConstantValue;
-        public StatType StatType; // For Source/Target Stat
+        public StatId StatId;
 
         public float Apply(float current, MathContext ctx, float? input)
         {
@@ -64,8 +64,8 @@ namespace ZeroEngine.StatSystem.Formula
             {
                 case ValueProviderType.Constant: return ConstantValue;
                 case ValueProviderType.InputValue: return input ?? 0;
-                case ValueProviderType.SourceStat: return ctx?.Source?.GetStatValue(StatType) ?? 0;
-                case ValueProviderType.TargetStat: return ctx?.Target?.GetStatValue(StatType) ?? 0;
+                case ValueProviderType.SourceStat: return ctx?.Source?.GetStatValue(StatId) ?? 0;
+                case ValueProviderType.TargetStat: return ctx?.Target?.GetStatValue(StatId) ?? 0;
             }
             return 0;
         }

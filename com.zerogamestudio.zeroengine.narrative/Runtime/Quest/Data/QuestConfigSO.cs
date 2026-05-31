@@ -7,69 +7,165 @@ namespace ZeroEngine.Quest
     public class QuestConfigSO : ScriptableObject
     {
         [Header("Basic Info")]
-        [Tooltip("Unique quest ID. Keep stable after release because runtime state and save data reference this value.")]
         public string questId;
-
-        [Tooltip("Fallback display name. Projects may override this through their localization layer.")]
         public string questName;
-
-        [Tooltip("Fallback quest description for UI or designer notes.")]
         [TextArea(3, 5)] public string description;
+        public QuestType questType;
 
-        [Header("Conditions")]
-        [Tooltip("Completion conditions. All visible and hidden conditions must be satisfied before the quest becomes Successful.")]
+        [Header("Completion Logic (Legacy)")]
+        [Tooltip("旧版条件配置（向后兼容）")]
+        public List<QuestEventConfig> failureConditions;
+        public List<QuestEventConfig> completionConditions;
+
+        [Header("Conditions (v1.2.0+)")]
+        [Tooltip("新版条件系统 - 支持多种条件类型")]
         [SerializeReference]
         public List<QuestCondition> Conditions = new List<QuestCondition>();
 
-        [Header("Accept Requirements")]
-        [Tooltip("Optional prerequisites that must pass before this quest can be accepted. Empty means always accept-ready.")]
-        [SerializeReference]
-        public List<QuestAcceptRequirement> AcceptRequirements = new List<QuestAcceptRequirement>();
+        [Header("Rewards (Legacy)")]
+        public int expReward;
+        public int goldReward;
+        public List<string> itemRewards;
 
-        [Header("Rewards")]
-        [Tooltip("Rewards granted when the quest is submitted or auto-submitted.")]
+        [Header("Rewards (v1.2.0+)")]
+        [Tooltip("新版奖励系统 - 支持多种奖励类型")]
         [SerializeReference]
         public List<QuestReward> Rewards = new List<QuestReward>();
 
         [Header("Settings")]
-        [Tooltip("If enabled, the quest submits automatically as soon as all Conditions are satisfied.")]
         public bool autoSubmit;
-
-        [Min(0)]
-        [Tooltip("How many times this quest may be completed. 0 means unlimited.")]
         public int repetitionLimit;
-
-        [Tooltip("Persistent quests stay in save data. PerRun quests can be cleared by run/session flow.")]
         public QuestLifecycle lifecycle = QuestLifecycle.Persistent;
 
         [Header("NPC Interaction")]
-        [Tooltip("Optional provider NPC ID for projects that use NPC-based quest acceptance.")]
-        [QuestNpcIdDropdown]
         public string providerNpcId;
-
-        [Tooltip("Optional submit NPC ID for projects that require hand-in at a specific NPC.")]
-        [QuestNpcIdDropdown]
         public string submitNpcId;
-
-        [Tooltip("Optional fallback completion dialogue text.")]
         [TextArea(3, 5)] public string completionDialogue;
 
         /// <summary>
-        /// 获取所有奖励预览文本。
+        /// 是否使用新版条件系统 (v1.2.0+)
+        /// </summary>
+        public bool UsesNewConditionSystem => Conditions != null && Conditions.Count > 0;
+
+        /// <summary>
+        /// 是否使用新版奖励系统 (v1.2.0+)
+        /// </summary>
+        public bool UsesNewRewardSystem => Rewards != null && Rewards.Count > 0;
+
+        /// <summary>
+        /// 获取所有奖励预览文本 (v1.2.0+)
         /// </summary>
         public List<string> GetRewardPreviews()
         {
             var previews = new List<string>();
 
-            if (Rewards == null) return previews;
-
-            foreach (var reward in Rewards)
+            // Legacy rewards
+            if (expReward > 0)
+                previews.Add($"经验值 +{expReward}");
+            if (goldReward > 0)
+                previews.Add($"金币 +{goldReward}");
+            foreach (var itemId in itemRewards)
             {
-                if (reward != null && !reward.IsHidden)
-                    previews.Add(reward.GetPreviewText());
+                if (!string.IsNullOrEmpty(itemId))
+                    previews.Add(itemId);
+            }
+
+            // New rewards
+            if (Rewards != null)
+            {
+                foreach (var reward in Rewards)
+                {
+                    if (reward != null && !reward.IsHidden)
+                        previews.Add(reward.GetPreviewText());
+                }
             }
 
             return previews;
         }
+
+#if UNITY_EDITOR
+        [ContextMenu("Migrate Legacy Conditions to New System")]
+        private void MigrateLegacyConditions()
+        {
+            if (completionConditions == null || completionConditions.Count == 0) return;
+            if (Conditions == null) Conditions = new List<QuestCondition>();
+
+            foreach (var legacy in completionConditions)
+            {
+                QuestCondition newCondition = questType switch
+                {
+                    QuestType.KillMonster => new KillCondition
+                    {
+                        TargetId = legacy.targetName,
+                        RequiredCount = legacy.targetCount,
+                        Description = $"击杀 {legacy.targetName}"
+                    },
+                    QuestType.Collect => new CollectCondition
+                    {
+                        ItemId = legacy.targetName,
+                        RequiredCount = legacy.targetCount,
+                        Description = $"收集 {legacy.targetName}"
+                    },
+                    QuestType.Dialogue => new InteractCondition
+                    {
+                        TargetId = legacy.targetName,
+                        RequiredCount = legacy.targetCount,
+                        InteractionType = InteractionType.Talk,
+                        Description = $"与 {legacy.targetName} 对话"
+                    },
+                    _ => new InteractCondition
+                    {
+                        TargetId = legacy.targetName,
+                        RequiredCount = legacy.targetCount,
+                        Description = legacy.targetName
+                    }
+                };
+
+                Conditions.Add(newCondition);
+            }
+
+            UnityEditor.EditorUtility.SetDirty(this);
+            Debug.Log($"[Quest] Migrated {completionConditions.Count} conditions to new system");
+        }
+
+        [ContextMenu("Migrate Legacy Rewards to New System")]
+        private void MigrateLegacyRewards()
+        {
+            if (Rewards == null) Rewards = new List<QuestReward>();
+
+            if (expReward > 0)
+            {
+                Rewards.Add(new ExpReward { Amount = expReward });
+            }
+
+            if (goldReward > 0)
+            {
+                Rewards.Add(new CurrencyReward
+                {
+                    CurrencyType = CurrencyType.Gold,
+                    Amount = goldReward
+                });
+            }
+
+            foreach (var itemId in itemRewards)
+            {
+                if (!string.IsNullOrEmpty(itemId))
+                {
+                    Rewards.Add(new ItemReward { ItemId = itemId, Quantity = 1 });
+                }
+            }
+
+            UnityEditor.EditorUtility.SetDirty(this);
+            Debug.Log($"[Quest] Migrated legacy rewards to new system");
+        }
+#endif
+    }
+
+    [System.Serializable]
+    public class QuestEventConfig
+    {
+        public string targetName;
+        public int targetCount;
     }
 }
+

@@ -93,9 +93,6 @@ namespace ZeroEngine.Pathfinding2D
         /// <summary>生成的链接列表</summary>
         public List<PlatformLinkData> Links { get; private set; } = new List<PlatformLinkData>();
 
-        /// <summary>连续可站立平台段。一个 Collider 可以包含多个平台段。</summary>
-        public List<PlatformSurfaceSegment> SurfaceSegments { get; private set; } = new List<PlatformSurfaceSegment>();
-
         /// <summary>邻接表：节点ID -> 出边链接列表（性能优化）</summary>
         public Dictionary<int, List<PlatformLinkData>> AdjacencyList { get; private set; } = new Dictionary<int, List<PlatformLinkData>>();
 
@@ -109,12 +106,10 @@ namespace ZeroEngine.Pathfinding2D
         public SpatialGrid2D SpatialGrid { get; private set; }
 
         private int nextNodeId = 0;
-        private int nextSurfaceGroupId = 0;
-        private readonly Dictionary<int, PlatformSurfaceSegment> surfaceSegmentsById = new Dictionary<int, PlatformSurfaceSegment>();
 
         // 缓存所有边缘数据，用于全局转换节点生成
-        private readonly List<(float left, float right, float y, Collider2D collider, bool isOneWay, int surfaceGroupId)> _allEdgesCache
-            = new List<(float, float, float, Collider2D, bool, int)>();
+        private readonly List<(float left, float right, float y, Collider2D collider, bool isOneWay)> _allEdgesCache
+            = new List<(float, float, float, Collider2D, bool)>();
 
         // 复用 List 避免 GC
         private readonly List<Vector2> _pathPointsCache = new List<Vector2>(64);
@@ -162,14 +157,11 @@ namespace ZeroEngine.Pathfinding2D
             Nodes.Clear();
             NodeIdToIndex.Clear();
             Links.Clear();
-            SurfaceSegments.Clear();
-            surfaceSegmentsById.Clear();
             AdjacencyList.Clear();
             nextNodeId = 0;
             IsGenerated = false;
             SpatialGrid?.Clear();
             SpatialGrid = null;
-            nextSurfaceGroupId = 0;
         }
 
         /// <summary>
@@ -253,8 +245,6 @@ namespace ZeroEngine.Pathfinding2D
             // 记录上一个检测到的表面 Y 坐标，用于检测边缘
             float? lastSurfaceY = null;
             float lastX = startX;
-            float currentSegmentLeftX = startX;
-            int currentSurfaceGroupId = -1;
 
             for (float x = startX; x <= endX; x += nodeSpacing)
             {
@@ -273,21 +263,18 @@ namespace ZeroEngine.Pathfinding2D
                         if (lastSurfaceY.HasValue && Mathf.Abs(surfaceY - lastSurfaceY.Value) > 0.5f)
                         {
                             Vector3 rightEdgePos = new Vector3(lastX, lastSurfaceY.Value, 0f);
-                            AddNode(PlatformNodeData.CreateEdge(nextNodeId++, rightEdgePos, tilemapCollider, false, isOneWay, currentSurfaceGroupId));
-                            AddSurfaceEdgeCache(currentSegmentLeftX, lastX, lastSurfaceY.Value, tilemapCollider, isOneWay, currentSurfaceGroupId);
+                            AddNode(PlatformNodeData.CreateEdge(nextNodeId++, rightEdgePos, tilemapCollider, false, isOneWay));
                         }
 
                         // 新平台段的左边缘
-                        currentSurfaceGroupId = AllocateSurfaceGroupId();
-                        currentSegmentLeftX = x;
                         Vector3 leftEdgePos = new Vector3(x, surfaceY, 0f);
-                        AddNode(PlatformNodeData.CreateEdge(nextNodeId++, leftEdgePos, tilemapCollider, true, isOneWay, currentSurfaceGroupId));
+                        AddNode(PlatformNodeData.CreateEdge(nextNodeId++, leftEdgePos, tilemapCollider, true, isOneWay));
                     }
                     else
                     {
                         // 同一平台段的中间表面节点
                         Vector3 surfacePos = new Vector3(x, surfaceY, 0f);
-                        AddNode(PlatformNodeData.CreateSurface(nextNodeId++, surfacePos, tilemapCollider, isOneWay, currentSurfaceGroupId));
+                        AddNode(PlatformNodeData.CreateSurface(nextNodeId++, surfacePos, tilemapCollider, isOneWay));
                     }
 
                     lastSurfaceY = surfaceY;
@@ -299,10 +286,8 @@ namespace ZeroEngine.Pathfinding2D
                     if (lastSurfaceY.HasValue)
                     {
                         Vector3 rightEdgePos = new Vector3(lastX, lastSurfaceY.Value, 0f);
-                        AddNode(PlatformNodeData.CreateEdge(nextNodeId++, rightEdgePos, tilemapCollider, false, isOneWay, currentSurfaceGroupId));
-                        AddSurfaceEdgeCache(currentSegmentLeftX, lastX, lastSurfaceY.Value, tilemapCollider, isOneWay, currentSurfaceGroupId);
+                        AddNode(PlatformNodeData.CreateEdge(nextNodeId++, rightEdgePos, tilemapCollider, false, isOneWay));
                         lastSurfaceY = null;
-                        currentSurfaceGroupId = -1;
                     }
                 }
             }
@@ -311,8 +296,7 @@ namespace ZeroEngine.Pathfinding2D
             if (lastSurfaceY.HasValue)
             {
                 Vector3 rightEdgePos = new Vector3(lastX, lastSurfaceY.Value, 0f);
-                AddNode(PlatformNodeData.CreateEdge(nextNodeId++, rightEdgePos, tilemapCollider, false, isOneWay, currentSurfaceGroupId));
-                AddSurfaceEdgeCache(currentSegmentLeftX, lastX, lastSurfaceY.Value, tilemapCollider, isOneWay, currentSurfaceGroupId);
+                AddNode(PlatformNodeData.CreateEdge(nextNodeId++, rightEdgePos, tilemapCollider, false, isOneWay));
             }
         }
 
@@ -368,16 +352,14 @@ namespace ZeroEngine.Pathfinding2D
 
             // 找到顶部边缘：遍历所有边，找出近似水平且位于顶部的边
             var topEdges = FindTopEdges(worldPoints);
-            var groupedTopEdges = new List<(float left, float right, float y, int surfaceGroupId)>(topEdges.Count);
 
             foreach (var edge in topEdges)
             {
-                int surfaceGroupId = GenerateNodesForEdge(edge.left, edge.right, edge.y, collider, isOneWay);
-                groupedTopEdges.Add((edge.left, edge.right, edge.y, surfaceGroupId));
+                GenerateNodesForEdge(edge.left, edge.right, edge.y, collider, isOneWay);
             }
 
             // 检测高度变化处并生成额外边缘节点（用于侧面突出平台跳跃）
-            GenerateHeightTransitionNodes(groupedTopEdges, collider, isOneWay);
+            GenerateHeightTransitionNodes(topEdges, collider, isOneWay);
         }
 
         /// <summary>
@@ -395,15 +377,12 @@ namespace ZeroEngine.Pathfinding2D
         /// 在下层平台的 upper.left 和 upper.right 位置生成额外边缘节点，
         /// 使得 JumpLinkCalculator 能在水平距离内找到跳跃目标。
         /// </summary>
-        private void GenerateHeightTransitionNodes(
-            List<(float left, float right, float y, int surfaceGroupId)> edges,
-            Collider2D collider,
-            bool isOneWay)
+        private void GenerateHeightTransitionNodes(List<(float left, float right, float y)> edges, Collider2D collider, bool isOneWay)
         {
             if (edges.Count < 2) return;
 
             // 按 Y 坐标升序排序
-            var sortedByY = new List<(float left, float right, float y, int surfaceGroupId)>(edges);
+            var sortedByY = new List<(float left, float right, float y)>(edges);
             sortedByY.Sort((a, b) => a.y.CompareTo(b.y));
 
             // 检测相邻高度层的交界处
@@ -432,7 +411,7 @@ namespace ZeroEngine.Pathfinding2D
                         // 检查是否已存在相近位置的节点
                         if (!HasNodeNearPosition(transitionPos, 0.3f))
                         {
-                            AddNode(PlatformNodeData.CreateEdge(nextNodeId++, transitionPos, collider, true, isOneWay, lower.surfaceGroupId, isTransitionAnchor: true));
+                            AddNode(PlatformNodeData.CreateEdge(nextNodeId++, transitionPos, collider, true, isOneWay));
                         }
                     }
 
@@ -442,7 +421,7 @@ namespace ZeroEngine.Pathfinding2D
                         Vector3 transitionPos = new Vector3(upper.right, lower.y, 0f);
                         if (!HasNodeNearPosition(transitionPos, 0.3f))
                         {
-                            AddNode(PlatformNodeData.CreateEdge(nextNodeId++, transitionPos, collider, false, isOneWay, lower.surfaceGroupId, isTransitionAnchor: true));
+                            AddNode(PlatformNodeData.CreateEdge(nextNodeId++, transitionPos, collider, false, isOneWay));
                         }
                     }
                 }
@@ -478,7 +457,7 @@ namespace ZeroEngine.Pathfinding2D
             if (_allEdgesCache.Count < 2) return;
 
             // 按 Y 坐标升序排序
-            var sortedByY = new List<(float left, float right, float y, Collider2D collider, bool isOneWay, int surfaceGroupId)>(_allEdgesCache);
+            var sortedByY = new List<(float left, float right, float y, Collider2D collider, bool isOneWay)>(_allEdgesCache);
             sortedByY.Sort((a, b) => a.y.CompareTo(b.y));
 
             for (int i = 0; i < sortedByY.Count; i++)
@@ -502,7 +481,7 @@ namespace ZeroEngine.Pathfinding2D
                         Vector3 pos = new Vector3(upper.left, lower.y, 0f);
                         if (!HasNodeNearPosition(pos, 0.3f))
                         {
-                            AddNode(PlatformNodeData.CreateEdge(nextNodeId++, pos, lower.collider, true, lower.isOneWay, lower.surfaceGroupId, isTransitionAnchor: true));
+                            AddNode(PlatformNodeData.CreateEdge(nextNodeId++, pos, lower.collider, true, lower.isOneWay));
                         }
                     }
 
@@ -512,7 +491,7 @@ namespace ZeroEngine.Pathfinding2D
                         Vector3 pos = new Vector3(upper.right, lower.y, 0f);
                         if (!HasNodeNearPosition(pos, 0.3f))
                         {
-                            AddNode(PlatformNodeData.CreateEdge(nextNodeId++, pos, lower.collider, false, lower.isOneWay, lower.surfaceGroupId, isTransitionAnchor: true));
+                            AddNode(PlatformNodeData.CreateEdge(nextNodeId++, pos, lower.collider, false, lower.isOneWay));
                         }
                     }
 
@@ -526,7 +505,7 @@ namespace ZeroEngine.Pathfinding2D
                         Vector3 pos = new Vector3(lower.left, upper.y, 0f);
                         if (!HasNodeNearPosition(pos, 0.3f))
                         {
-                            AddNode(PlatformNodeData.CreateEdge(nextNodeId++, pos, upper.collider, true, upper.isOneWay, upper.surfaceGroupId, isTransitionAnchor: true));
+                            AddNode(PlatformNodeData.CreateEdge(nextNodeId++, pos, upper.collider, true, upper.isOneWay));
                         }
                     }
 
@@ -536,7 +515,7 @@ namespace ZeroEngine.Pathfinding2D
                         Vector3 pos = new Vector3(lower.right, upper.y, 0f);
                         if (!HasNodeNearPosition(pos, 0.3f))
                         {
-                            AddNode(PlatformNodeData.CreateEdge(nextNodeId++, pos, upper.collider, false, upper.isOneWay, upper.surfaceGroupId, isTransitionAnchor: true));
+                            AddNode(PlatformNodeData.CreateEdge(nextNodeId++, pos, upper.collider, false, upper.isOneWay));
                         }
                     }
                 }
@@ -726,13 +705,10 @@ namespace ZeroEngine.Pathfinding2D
         /// <summary>
         /// 为单条顶部边缘生成节点
         /// </summary>
-        private int GenerateNodesForEdge(float left, float right, float y, Collider2D collider, bool isOneWay)
+        private void GenerateNodesForEdge(float left, float right, float y, Collider2D collider, bool isOneWay)
         {
-            int surfaceGroupId = AllocateSurfaceGroupId();
-            RegisterSurfaceSegment(surfaceGroupId, left, right, y, collider, isOneWay);
-
             // 缓存边缘数据，用于后续全局转换节点生成
-            AddSurfaceEdgeCache(left, right, y, collider, isOneWay, surfaceGroupId);
+            _allEdgesCache.Add((left, right, y, collider, isOneWay));
 
             float width = right - left;
             float nodeSpacing = config.ActualNodeSpacing;
@@ -741,19 +717,17 @@ namespace ZeroEngine.Pathfinding2D
             if (width < config.MinPlatformWidth)
             {
                 Vector3 centerPos = new Vector3((left + right) / 2f, y, 0f);
-                AddNode(PlatformNodeData.CreateEdge(nextNodeId++, centerPos, collider, true, isOneWay, surfaceGroupId));
-                return surfaceGroupId;
+                AddNode(PlatformNodeData.CreateEdge(nextNodeId++, centerPos, collider, true, isOneWay));
+                return;
             }
 
             // 生成左边缘节点
             Vector3 leftEdgePos = new Vector3(left + config.EdgeInset, y, 0f);
-            AddNode(PlatformNodeData.CreateEdge(nextNodeId++, leftEdgePos, collider, true, isOneWay, surfaceGroupId));
+            AddNode(PlatformNodeData.CreateEdge(nextNodeId++, leftEdgePos, collider, true, isOneWay));
 
             // 生成右边缘节点
             Vector3 rightEdgePos = new Vector3(right - config.EdgeInset, y, 0f);
-            AddNode(PlatformNodeData.CreateEdge(nextNodeId++, rightEdgePos, collider, false, isOneWay, surfaceGroupId));
-
-            AddPhysicalEdgeTransitionAnchors(left, right, y, collider, isOneWay, surfaceGroupId);
+            AddNode(PlatformNodeData.CreateEdge(nextNodeId++, rightEdgePos, collider, false, isOneWay));
 
             // 生成中间表面节点
             float innerWidth = width - 2 * config.EdgeInset;
@@ -766,48 +740,8 @@ namespace ZeroEngine.Pathfinding2D
                 {
                     float x = left + config.EdgeInset + actualSpacing * i;
                     Vector3 surfacePos = new Vector3(x, y, 0f);
-                    AddNode(PlatformNodeData.CreateSurface(nextNodeId++, surfacePos, collider, isOneWay, surfaceGroupId));
+                    AddNode(PlatformNodeData.CreateSurface(nextNodeId++, surfacePos, collider, isOneWay));
                 }
-            }
-
-            return surfaceGroupId;
-        }
-
-        private void AddPhysicalEdgeTransitionAnchors(
-            float left,
-            float right,
-            float y,
-            Collider2D collider,
-            bool isOneWay,
-            int surfaceGroupId)
-        {
-            if (config.EdgeInset <= 0.01f)
-                return;
-
-            Vector3 leftAnchor = new Vector3(left, y, 0f);
-            if (!HasNodeNearPosition(leftAnchor, 0.05f))
-            {
-                AddNode(PlatformNodeData.CreateEdge(
-                    nextNodeId++,
-                    leftAnchor,
-                    collider,
-                    true,
-                    isOneWay,
-                    surfaceGroupId,
-                    isTransitionAnchor: true));
-            }
-
-            Vector3 rightAnchor = new Vector3(right, y, 0f);
-            if (!HasNodeNearPosition(rightAnchor, 0.05f))
-            {
-                AddNode(PlatformNodeData.CreateEdge(
-                    nextNodeId++,
-                    rightAnchor,
-                    collider,
-                    false,
-                    isOneWay,
-                    surfaceGroupId,
-                    isTransitionAnchor: true));
             }
         }
 
@@ -830,112 +764,6 @@ namespace ZeroEngine.Pathfinding2D
         {
             NodeIdToIndex[node.NodeId] = Nodes.Count;
             Nodes.Add(node);
-
-            if (surfaceSegmentsById.TryGetValue(node.SurfaceGroupId, out var segment))
-            {
-                segment.NodeIds.Add(node.NodeId);
-                if (node.NodeType == PlatformNodeType.LeftEdge && segment.LeftNodeId < 0)
-                    segment.LeftNodeId = node.NodeId;
-                else if (node.NodeType == PlatformNodeType.RightEdge && segment.RightNodeId < 0)
-                    segment.RightNodeId = node.NodeId;
-            }
-        }
-
-        private int AllocateSurfaceGroupId()
-        {
-            return nextSurfaceGroupId++;
-        }
-
-        private void RegisterSurfaceSegment(
-            int groupId,
-            float left,
-            float right,
-            float y,
-            Collider2D collider,
-            bool isOneWay)
-        {
-            if (groupId < 0 || surfaceSegmentsById.ContainsKey(groupId))
-                return;
-
-            var segment = new PlatformSurfaceSegment
-            {
-                GroupId = groupId,
-                Collider = collider,
-                Left = Mathf.Min(left, right),
-                Right = Mathf.Max(left, right),
-                Y = y,
-                IsOneWay = isOneWay
-            };
-
-            surfaceSegmentsById[groupId] = segment;
-            SurfaceSegments.Add(segment);
-            AttachExistingNodesToSegment(segment);
-        }
-
-        public bool TryGetSurfaceSegment(int surfaceGroupId, out PlatformSurfaceSegment segment)
-        {
-            return surfaceSegmentsById.TryGetValue(surfaceGroupId, out segment);
-        }
-
-        public bool TryFindSurfaceSegmentAt(Vector3 position, float verticalTolerance, out PlatformSurfaceSegment segment)
-        {
-            foreach (var candidate in SurfaceSegments)
-            {
-                bool xInside = position.x >= candidate.MinX && position.x <= candidate.MaxX;
-                bool yClose = Mathf.Abs(position.y - candidate.Y) <= verticalTolerance;
-                if (!xInside || !yClose)
-                    continue;
-
-                segment = candidate;
-                return true;
-            }
-
-            segment = default;
-            return false;
-        }
-
-        public string BuildSurfaceSegmentDebug()
-        {
-            if (SurfaceSegments == null || SurfaceSegments.Count == 0)
-                return "none";
-
-            var parts = new List<string>(SurfaceSegments.Count);
-            foreach (var segment in SurfaceSegments)
-            {
-                parts.Add($"{segment.Id}:x=[{segment.MinX:F2},{segment.MaxX:F2}],y={segment.Y:F2},oneWay={segment.IsOneWay}");
-            }
-
-            return string.Join(" | ", parts);
-        }
-
-        private void AttachExistingNodesToSegment(PlatformSurfaceSegment segment)
-        {
-            foreach (var node in Nodes)
-            {
-                if (node.SurfaceGroupId != segment.GroupId || segment.NodeIds.Contains(node.NodeId))
-                    continue;
-
-                segment.NodeIds.Add(node.NodeId);
-                if (node.NodeType == PlatformNodeType.LeftEdge && segment.LeftNodeId < 0)
-                    segment.LeftNodeId = node.NodeId;
-                else if (node.NodeType == PlatformNodeType.RightEdge && segment.RightNodeId < 0)
-                    segment.RightNodeId = node.NodeId;
-            }
-        }
-
-        private void AddSurfaceEdgeCache(
-            float left,
-            float right,
-            float y,
-            Collider2D collider,
-            bool isOneWay,
-            int surfaceGroupId)
-        {
-            if (surfaceGroupId < 0)
-                return;
-
-            RegisterSurfaceSegment(surfaceGroupId, left, right, y, collider, isOneWay);
-            _allEdgesCache.Add((left, right, y, collider, isOneWay, surfaceGroupId));
         }
 
         /// <summary>
@@ -946,24 +774,24 @@ namespace ZeroEngine.Pathfinding2D
             const float maxYDiff = 0.5f; // 同一行走平面的最大 Y 坐标差异
             const float maxXGap = 3f; // 相邻节点最大 X 间距（超过则不连接）
 
-            // 按连续平台段分组节点。Composite/Tilemap 可能一个 Collider 包含多条平台段，
-            // 所以不能再用 Collider + Y 作为同平台身份。
-            var platformGroups = new Dictionary<int, List<int>>();
+            // 按平台 Collider + Y 坐标分组节点
+            // Key: (Collider, Y 坐标取整到 0.5)
+            var platformGroups = new Dictionary<(Collider2D, int), List<int>>();
 
             for (int i = 0; i < Nodes.Count; i++)
             {
                 var node = Nodes[i];
                 if (node.PlatformCollider == null) continue;
 
-                int groupId = node.SurfaceGroupId;
-                if (groupId < 0)
-                    groupId = -100000 - i;
+                // 将 Y 坐标量化到 0.5 单位，用于分组
+                int yGroup = Mathf.RoundToInt(node.Position.y / maxYDiff);
+                var key = (node.PlatformCollider, yGroup);
 
-                if (!platformGroups.ContainsKey(groupId))
+                if (!platformGroups.ContainsKey(key))
                 {
-                    platformGroups[groupId] = new List<int>();
+                    platformGroups[key] = new List<int>();
                 }
-                platformGroups[groupId].Add(i);
+                platformGroups[key].Add(i);
             }
 
             // 为每个平台层的节点生成行走链接
@@ -1021,117 +849,34 @@ namespace ZeroEngine.Pathfinding2D
         /// <returns>找到的节点，优先返回指定平台上的节点</returns>
         public PlatformNodeData? FindNearestNodeOnPlatform(Vector2 position, Collider2D preferredPlatform, float maxDistance)
         {
-            // 1. 先找目标点所在的连续平台段。Composite/Tilemap 内可能有多个平台段，
-            // 只按 Collider 找最近节点会把目标吸到同 Collider 的空平台上。
+            // 1. 先在 preferredPlatform 上找最近节点
             if (preferredPlatform != null)
             {
-                var groupNode = FindNearestNodeInSurfaceGroup(position, preferredPlatform, maxDistance);
-                if (groupNode.HasValue)
-                    return groupNode;
+                PlatformNodeData? bestOnPlatform = null;
+                float bestDist = maxDistance;
+
+                foreach (var node in Nodes)
+                {
+                    if (node.PlatformCollider == preferredPlatform)
+                    {
+                        float dist = Vector2.Distance(position, node.Position);
+                        if (dist < bestDist)
+                        {
+                            bestDist = dist;
+                            bestOnPlatform = node;
+                        }
+                    }
+                }
+
+                // 如果在指定平台上找到节点，直接返回
+                if (bestOnPlatform.HasValue)
+                {
+                    return bestOnPlatform;
+                }
             }
 
             // 2. 回退到原逻辑：查找任意平台上的最近节点
             return FindNearestNode(position, maxDistance);
-        }
-
-        public int FindSurfaceGroupAt(Vector2 position, Collider2D preferredPlatform, float maxDistance)
-        {
-            var segment = FindSurfaceSegmentAt(position, preferredPlatform, maxDistance);
-            return segment != null ? segment.GroupId : -1;
-        }
-
-        private PlatformNodeData? FindNearestNodeInSurfaceGroup(Vector2 position, Collider2D preferredPlatform, float maxDistance)
-        {
-            if (preferredPlatform == null)
-                return null;
-
-            var segment = FindSurfaceSegmentAt(position, preferredPlatform, maxDistance);
-            if (segment == null)
-                return null;
-
-            PlatformNodeData? bestOnGroup = null;
-            float bestNodeDistance = maxDistance;
-            foreach (var node in Nodes)
-            {
-                if (node.SurfaceGroupId != segment.GroupId)
-                    continue;
-
-                float dist = Vector2.Distance(position, node.Position);
-                if (dist < bestNodeDistance)
-                {
-                    bestNodeDistance = dist;
-                    bestOnGroup = node;
-                }
-            }
-
-            return bestOnGroup;
-        }
-
-        public PlatformSurfaceSegment FindSurfaceSegmentAt(Vector2 position, Collider2D preferredPlatform, float maxDistance)
-        {
-            PlatformSurfaceSegment bestContainingBelowSegment = null;
-            float bestContainingBelowVertical = maxDistance;
-            PlatformSurfaceSegment bestContainingSegment = null;
-            float bestContainingVertical = maxDistance;
-            const float surfaceAboveTolerance = 0.25f;
-
-            foreach (var segment in SurfaceSegments)
-            {
-                if (segment.Collider != preferredPlatform)
-                    continue;
-
-                if (!segment.ContainsX(position.x, config.EdgeInset + 0.05f))
-                    continue;
-
-                float verticalDistance = Mathf.Abs(position.y - segment.Y);
-                if (verticalDistance < bestContainingVertical)
-                {
-                    bestContainingVertical = verticalDistance;
-                    bestContainingSegment = segment;
-                }
-
-                if (segment.Y <= position.y + surfaceAboveTolerance &&
-                    verticalDistance < bestContainingBelowVertical)
-                {
-                    bestContainingBelowVertical = verticalDistance;
-                    bestContainingBelowSegment = segment;
-                }
-            }
-
-            if (bestContainingBelowSegment != null)
-                return bestContainingBelowSegment;
-
-            if (bestContainingSegment != null)
-                return bestContainingSegment;
-
-            PlatformSurfaceSegment bestBelowSegment = null;
-            float bestBelowDistance = maxDistance;
-            PlatformSurfaceSegment bestSegment = null;
-            float bestDistance = maxDistance;
-            foreach (var segment in SurfaceSegments)
-            {
-                if (segment.Collider != preferredPlatform)
-                    continue;
-
-                float distance = segment.DistanceTo(position);
-                if (distance < bestDistance)
-                {
-                    bestDistance = distance;
-                    bestSegment = segment;
-                }
-
-                if (segment.Y <= position.y + surfaceAboveTolerance &&
-                    distance < bestBelowDistance)
-                {
-                    bestBelowDistance = distance;
-                    bestBelowSegment = segment;
-                }
-            }
-
-            if (bestBelowSegment != null)
-                return bestBelowSegment;
-
-            return bestSegment;
         }
 
         /// <summary>

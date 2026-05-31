@@ -2,6 +2,8 @@ using System;
 using System.Collections.Generic;
 using UnityEngine;
 using ZeroEngine.Core;
+using ZeroEngine.Currency;
+using ZeroEngine.Economy;
 using ZeroEngine.Save;
 
 namespace ZeroEngine.Loot
@@ -25,6 +27,9 @@ namespace ZeroEngine.Loot
         private readonly List<LootEntry> _tempValidEntries = new List<LootEntry>(32);
         private readonly List<LootResult> _tempResults = new List<LootResult>(16);
         private readonly List<int> _tempSelectedIndices = new List<int>(16);
+
+        private IInventoryProvider _inventoryProvider;
+        private ICurrencyProvider _currencyProvider;
 
         #region Events
 
@@ -83,6 +88,7 @@ namespace ZeroEngine.Loot
 
         private void Start()
         {
+            ResolveDefaultProviders();
             Register();
         }
 
@@ -95,6 +101,16 @@ namespace ZeroEngine.Loot
         #endregion
 
         #region Public API
+
+        public void SetInventoryProvider(IInventoryProvider provider)
+        {
+            _inventoryProvider = provider;
+        }
+
+        public void SetCurrencyProvider(ICurrencyProvider provider)
+        {
+            _currencyProvider = provider;
+        }
 
         /// <summary>
         /// 执行掉落
@@ -121,6 +137,8 @@ namespace ZeroEngine.Loot
             }
 
             context ??= new LootContext();
+            context.InventoryProvider ??= GetInventoryProvider();
+            context.CurrencyProvider ??= GetCurrencyProvider();
 
             // 检查全局条件
             if (!table.CheckGlobalConditions(context))
@@ -190,7 +208,8 @@ namespace ZeroEngine.Loot
         {
             if (results == null || results.Count == 0) return;
 
-            var inventory = Inventory.InventoryManager.Instance;
+            var inventory = GetInventoryProvider();
+            var currency = GetCurrencyProvider();
 
             for (int i = 0; i < results.Count; i++)
             {
@@ -207,15 +226,15 @@ namespace ZeroEngine.Loot
                         break;
 
                     case LootEntryType.Currency:
-                        // 通过事件通知货币系统
-                        EventManager.Trigger(Core.GameEvents.CurrencyGained,
-                            new CurrencyEventData(result.Currency, result.Amount));
+                        currency?.AddCurrency(GetCurrencyId(result.Currency), result.Amount);
                         Log($"发放货币: {result.Currency} x{result.Amount}");
                         break;
                 }
             }
 
-            OnLootEvent?.Invoke(LootEventArgs.Granted(null, results.ToArray()));
+            var args = LootEventArgs.Granted(null, results.ToArray());
+            OnLootEvent?.Invoke(args);
+            EventManager.Trigger(EconomyEvents.LootGranted, args);
         }
 
         /// <summary>
@@ -489,6 +508,36 @@ namespace ZeroEngine.Loot
         private string GetPityKey(LootTableSO table, int entryIndex)
         {
             return $"{table.TableId}_{entryIndex}";
+        }
+
+        private void ResolveDefaultProviders()
+        {
+            _inventoryProvider ??= EconomyProviderResolver.FindInventoryProvider();
+            _currencyProvider ??= EconomyProviderResolver.FindCurrencyProvider();
+        }
+
+        private IInventoryProvider GetInventoryProvider()
+        {
+            _inventoryProvider ??= EconomyProviderResolver.FindInventoryProvider();
+            return _inventoryProvider;
+        }
+
+        private ICurrencyProvider GetCurrencyProvider()
+        {
+            _currencyProvider ??= EconomyProviderResolver.FindCurrencyProvider();
+            return _currencyProvider;
+        }
+
+        private static string GetCurrencyId(CurrencyType currency)
+        {
+            return currency switch
+            {
+                CurrencyType.Gold => CurrencyIds.Gold,
+                CurrencyType.Gem => CurrencyIds.Gem,
+                CurrencyType.Token => CurrencyIds.Token,
+                CurrencyType.Experience => CurrencyIds.Experience,
+                _ => currency.ToString()
+            };
         }
 
         #endregion

@@ -4,22 +4,19 @@ using UnityEngine;
 namespace ZeroEngine.Quest
 {
     /// <summary>
-    /// 交互条件。
+    /// 交互条件 (v1.2.0+)
     /// 用于对话、检查物体、使用设备等
     /// </summary>
     [Serializable]
     public class InteractCondition : QuestCondition
     {
-        [Header("Interact")]
-        [Tooltip("NPC or object ID to match against Quest.Interacted events.")]
-        [QuestInteractTargetIdDropdown]
+        [Tooltip("交互目标 ID（NPC ID / 物体 ID）")]
         public string TargetId;
 
-        [Min(1)]
-        [Tooltip("Number of matching interaction events required.")]
+        [Tooltip("需要交互的次数")]
         public int RequiredCount = 1;
 
-        [Tooltip("Designer-facing interaction type. Event matching uses TargetId; projects may use this for UI or validation.")]
+        [Tooltip("交互类型")]
         public InteractionType InteractionType = InteractionType.Talk;
 
         public override string ConditionType => "Interact";
@@ -59,7 +56,7 @@ namespace ZeroEngine.Quest
     }
 
     /// <summary>
-    /// 交互类型。
+    /// 交互类型 (v1.2.0+)
     /// </summary>
     public enum InteractionType
     {

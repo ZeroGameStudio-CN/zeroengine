@@ -1,25 +1,19 @@
 {
-  "name": "com.zerogamestudio.zeroengine.dashboard",
-  "version": "1.0.0",
-  "displayName": "ZeroEngine Dashboard",
-  "description": "ZeroEngine 编辑器控制中心，支持轻量项目使用。通过条件编译自动适配已安装的包。",
-  "unity": "2022.3",
-  "dependencies": {
-    "com.zerogamestudio.zeroengine.core": "1.0.0"
-  },
-  "keywords": [
-    "editor",
-    "dashboard",
-    "tools"
-  ],
-  "author": {
-    "name": "ZeroGameStudio",
-    "url": "https://github.com/zerogamestudio"
-  },
-  "license": "MIT",
-  "repository": {
-    "type": "git",
-    "url": "https://github.com/liuzqk/zeroengine.git",
-    "directory": "com.zerogamestudio.zeroengine.dashboard"
-  }
+    "name": "com.zerogamestudio.zeroengine.dashboard",
+    "version": "1.0.0",
+    "displayName": "ZeroEngine Dashboard",
+    "description": "ZeroEngine 编辑器控制中心，支持轻量项目使用。通过条件编译自动适配已安装的包。",
+    "unity": "2022.3",
+    "dependencies": {
+        "com.zerogamestudio.zeroengine.core": "1.0.0"
+    },
+    "keywords": [
+        "editor",
+        "dashboard",
+        "tools"
+    ],
+    "author": {
+        "name": "ZeroGameStudio",
+        "url": "https://github.com/zerogamestudio"
+    }
 }

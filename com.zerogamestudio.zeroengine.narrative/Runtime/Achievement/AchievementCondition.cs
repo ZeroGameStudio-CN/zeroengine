@@ -99,8 +99,8 @@ namespace ZeroEngine.Achievement
         [Tooltip("货币类型（CheckType=CurrencyAmount时使用）")]
         public Loot.CurrencyType CurrencyType;
 
-        [Tooltip("属性类型（CheckType=StatValue时使用）")]
-        public StatSystem.StatType StatType;
+        [Tooltip("属性 ID（CheckType=StatValue时使用）")]
+        public StatSystem.StatId StatId;
 
         [Tooltip("自定义检查ID（CheckType=Custom时使用）")]
         public string CustomCheckId;
@@ -110,7 +110,7 @@ namespace ZeroEngine.Achievement
             StateCheckType.PlayerLevel => $"达到等级 {TargetValue}",
             StateCheckType.HasItem => $"拥有 {Item?.ItemName} x{TargetValue}",
             StateCheckType.CurrencyAmount => $"拥有 {CurrencyType} x{TargetValue}",
-            StateCheckType.StatValue => $"{StatType} >= {TargetValue}",
+            StateCheckType.StatValue => $"{StatId} >= {TargetValue}",
             StateCheckType.Custom => $"自定义: {CustomCheckId}",
             _ => "状态条件"
         };

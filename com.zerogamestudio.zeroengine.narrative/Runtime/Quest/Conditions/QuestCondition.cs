@@ -4,17 +4,16 @@ using UnityEngine;
 namespace ZeroEngine.Quest
 {
     /// <summary>
-    /// 任务条件基类。
+    /// 任务条件基类 (v1.2.0+)
     /// 所有任务条件必须继承此类
     /// </summary>
     [Serializable]
     public abstract class QuestCondition
     {
-        [Header("Display")]
-        [Tooltip("Fallback objective text for UI display. Projects may override this through localization.")]
+        [Tooltip("条件描述（用于 UI 显示）")]
         public string Description;
 
-        [Tooltip("Hide this condition from quest trackers while still requiring it for completion.")]
+        [Tooltip("是否隐藏（不显示在任务追踪中）")]
         public bool IsHidden;
 
         /// <summary>
@@ -66,7 +65,7 @@ namespace ZeroEngine.Quest
     }
 
     /// <summary>
-    /// 条件事件数据。
+    /// 条件事件数据 (v1.2.0+)
     /// </summary>
     public struct ConditionEventData
     {

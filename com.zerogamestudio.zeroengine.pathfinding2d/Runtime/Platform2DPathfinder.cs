@@ -23,12 +23,6 @@ namespace ZeroEngine.Pathfinding2D
         [Tooltip("到达目标的判定距离（高速移动时需要更大值避免过冲）")]
         public float ArriveDistance = 1.0f;
 
-        [Tooltip("行走指令到达判定距离。应小于 ArriveDistance，避免短距离起跳点被第一帧跳过。")]
-        public float WalkCommandArriveDistance = 0.25f;
-
-        [Tooltip("行走指令允许的最大高度差。更大的垂直移动必须由 Jump/Fall/DropDown 表达。")]
-        public float WalkCommandVerticalTolerance = 0.5f;
-
         [Header("节点查找")]
         [Tooltip("查找起点/终点节点的最大距离")]
         public float MaxNodeSearchRadius = 8f;
@@ -86,9 +80,6 @@ namespace ZeroEngine.Pathfinding2D
         /// <summary>配置</summary>
         public PathfinderConfig Config => config;
 
-        /// <summary>平台图生成器</summary>
-        public PlatformGraphGenerator GraphGenerator => graphGenerator;
-
         /// <summary>当前路径</summary>
         public Platform2DPath CurrentPath { get; private set; }
 
@@ -97,30 +88,14 @@ namespace ZeroEngine.Pathfinding2D
                                     CurrentPath.Status == PathStatus.Valid &&
                                     !CurrentPath.IsComplete;
 
-        /// <summary>是否有完整或已到达路径。部分路径不代表导航成功。</summary>
-        public bool HasCompletePath => CurrentPath != null &&
-                                       CurrentPath.Status == PathStatus.Valid &&
-                                       CurrentPath.CompletionKind != PlatformPathCompletionKind.Partial;
-
-        /// <summary>上一次寻路失败原因</summary>
-        public PlatformPathFailureReason LastFailureReason { get; private set; }
-
-        private float lastPathRequestTime = -999f;
+        private float lastPathRequestTime;
 
         private void Awake()
         {
             if (graphGenerator == null)
             {
-                graphGenerator = FindObjectOfType<PlatformGraphGenerator>();
+                graphGenerator = FindFirstObjectByType<PlatformGraphGenerator>();
             }
-        }
-
-        /// <summary>
-        /// 绑定平台图生成器。
-        /// </summary>
-        public void SetGraphGenerator(PlatformGraphGenerator generator)
-        {
-            graphGenerator = generator;
         }
 
         /// <summary>
@@ -132,393 +107,74 @@ namespace ZeroEngine.Pathfinding2D
         /// <returns>是否成功发起请求</returns>
         public bool RequestPath(Vector3 start, Vector3 end, bool forceRequest = false)
         {
-            return TryRequestPath(new PlatformPathRequest(start, end, forceRequest), out _);
-        }
-
-        /// <summary>
-        /// 请求新路径，并返回可诊断的结果。
-        /// </summary>
-        public bool TryRequestPath(PlatformPathRequest request, out PlatformPathResult result)
-        {
-            return TryCreatePathResult(request, mutateCurrentPath: true, out result);
-        }
-
-        public bool TryEvaluateRoute(PlatformRouteQuery query, out PlatformRouteQueryResult result)
-        {
-            var request = new PlatformPathRequest(
-                query.StartPosition,
-                query.TargetPosition,
-                forceRequest: true,
-                projectTargetToGround: query.ProjectTargetToGround,
-                allowPartialPathOverride: query.AllowPartialPath);
-
-            bool success = TryCreatePathResult(request, mutateCurrentPath: false, out var pathResult);
-            if (!success || !pathResult.Success || pathResult.Path == null)
-            {
-                result = PlatformRouteQueryResult.Failed(
-                    pathResult.FailureReason,
-                    pathResult.ResolvedTarget,
-                    BuildRouteDebugSummary(pathResult, PlatformRouteCost.Unreachable));
-                return false;
-            }
-
-            var cost = CalculateRouteCost(pathResult.Path);
-            result = new PlatformRouteQueryResult(
-                true,
-                pathResult.CompletionKind,
-                pathResult.FailureReason,
-                cost,
-                pathResult.ResolvedTarget,
-                pathResult.Path,
-                BuildRouteDebugSummary(pathResult, cost));
-            return true;
-        }
-
-        private bool TryCreatePathResult(PlatformPathRequest request, bool mutateCurrentPath, out PlatformPathResult result)
-        {
             // 检查请求间隔
-            if (mutateCurrentPath && !request.ForceRequest && Time.time - lastPathRequestTime < config.PathRequestInterval)
+            if (!forceRequest && Time.time - lastPathRequestTime < config.PathRequestInterval)
             {
-                CommitPathState(CurrentPath, PlatformPathFailureReason.Throttled, mutateCurrentPath);
-                result = PlatformPathResult.Failed(
-                    PlatformPathFailureReason.Throttled,
-                    request.Start,
-                    request.Target,
-                    request.Target,
-                    CurrentPath,
-                    requestStarted: false);
                 return false;
             }
+
+            lastPathRequestTime = Time.time;
 
             // 检查图是否已生成
-            if (graphGenerator == null)
+            if (graphGenerator == null || !graphGenerator.IsGenerated)
             {
-                CommitPathState(null, PlatformPathFailureReason.MissingGraphGenerator, mutateCurrentPath);
-                result = PlatformPathResult.Failed(
-                    PlatformPathFailureReason.MissingGraphGenerator,
-                    request.Start,
-                    request.Target,
-                    request.Target,
-                    requestStarted: false);
+                CurrentPath = Platform2DPath.NotFound(start, end);
                 return false;
-            }
-
-            if (!graphGenerator.IsGenerated)
-            {
-                var notFound = Platform2DPath.NotFound(request.Start, request.Target);
-                CommitPathState(notFound, PlatformPathFailureReason.GraphNotGenerated, mutateCurrentPath);
-                result = PlatformPathResult.Failed(
-                    PlatformPathFailureReason.GraphNotGenerated,
-                    request.Start,
-                    request.Target,
-                    request.Target,
-                    notFound,
-                    requestStarted: false);
-                return false;
-            }
-
-            if (mutateCurrentPath)
-                lastPathRequestTime = Time.time;
-
-            var resolvedTarget = request.Target;
-            if (request.ProjectTargetToGround)
-            {
-                resolvedTarget = PlatformTargetProjection.ProjectTargetToGround(
-                    request.Target,
-                    graphGenerator.Config.AllPlatformLayers,
-                    request.ProjectionDistance);
             }
 
             // 检查是否已经到达目标
-            if (Vector2.Distance(request.Start, resolvedTarget) <= config.ArriveDistance)
+            if (Vector2.Distance(start, end) <= config.ArriveDistance)
             {
-                var arrived = Platform2DPath.Arrived(request.Start, resolvedTarget);
-                ApplyRouteDiagnostics(arrived, commandsValidated: true);
-                CommitPathState(arrived, PlatformPathFailureReason.None, mutateCurrentPath);
-                result = PlatformPathResult.Succeeded(
-                    request.Start,
-                    request.Target,
-                    resolvedTarget,
-                    arrived,
-                    null);
+                CurrentPath = new Platform2DPath(start, end, new List<MoveCommand>());
                 return true;
             }
 
             // 尝试同平台快速路径（跳过 A*）
-            var samePlatformPath = TryCreateSamePlatformPath(request.Start, resolvedTarget);
+            var samePlatformPath = TryCreateSamePlatformPath(start, end);
             if (samePlatformPath != null)
             {
-                ApplyRouteDiagnostics(samePlatformPath, commandsValidated: true);
-                CommitPathState(samePlatformPath, PlatformPathFailureReason.None, mutateCurrentPath);
-                result = PlatformPathResult.Succeeded(
-                    request.Start,
-                    request.Target,
-                    resolvedTarget,
-                    samePlatformPath,
-                    samePlatformPath.GetCurrentCommand());
+                CurrentPath = samePlatformPath;
                 return true;
             }
 
             // 查找起点和终点节点
             // 优先选择脚下平台上的节点，避免错误选择头顶平台节点
-            var endPlatform = DetectPlatformBelow(resolvedTarget);
-            var startNode = ResolveStartNode(request.Start);
-            var endNode = graphGenerator.FindNearestNodeOnPlatform(resolvedTarget, endPlatform, config.MaxNodeSearchRadius);
+            var startPlatform = DetectPlatformBelow(start);
+            var endPlatform = DetectPlatformBelow(end);
+            var startNode = graphGenerator.FindNearestNodeOnPlatform(start, startPlatform, config.MaxNodeSearchRadius);
+            var endNode = graphGenerator.FindNearestNodeOnPlatform(end, endPlatform, config.MaxNodeSearchRadius);
 
-            if (!startNode.HasValue)
+            if (!startNode.HasValue || !endNode.HasValue)
             {
-                var notFound = Platform2DPath.NotFound(request.Start, resolvedTarget);
-                CommitPathState(notFound, PlatformPathFailureReason.StartNodeNotFound, mutateCurrentPath);
-                result = PlatformPathResult.Failed(
-                    PlatformPathFailureReason.StartNodeNotFound,
-                    request.Start,
-                    request.Target,
-                    resolvedTarget,
-                    notFound);
-                return false;
-            }
-
-            if (!endNode.HasValue)
-            {
-                if (request.ShouldAllowPartialPath(config.AllowPartialPath))
+                // 找不到节点，尝试回退策略
+                if (config.AllowPartialPath)
                 {
-                    var partialPath = TryCreatePartialPath(request.Start, resolvedTarget, startNode, endNode);
-                    if (partialPath != null && !IsBadElevatedPartialPath(partialPath, request.Start, resolvedTarget))
+                    var partialPath = TryCreatePartialPath(start, end, startNode, endNode);
+                    if (partialPath != null)
                     {
-                        ApplyRouteDiagnostics(partialPath, commandsValidated: true);
-                        bool recoveredFullPath = partialPath.Status == PathStatus.Valid &&
-                                                 partialPath.CompletionKind == PlatformPathCompletionKind.FullPath;
-                        var recoveredFailureReason = recoveredFullPath
-                            ? PlatformPathFailureReason.None
-                            : PlatformPathFailureReason.PartialPath;
-                        CommitPathState(partialPath, recoveredFailureReason, mutateCurrentPath);
-                        result = recoveredFullPath
-                            ? PlatformPathResult.Succeeded(
-                                request.Start,
-                                request.Target,
-                                partialPath.EndPosition,
-                                partialPath,
-                                partialPath.GetCurrentCommand())
-                            : PlatformPathResult.Partial(
-                                recoveredFailureReason,
-                                request.Start,
-                                request.Target,
-                                partialPath.EndPosition,
-                                partialPath,
-                                partialPath.GetCurrentCommand());
-                        return recoveredFullPath;
+                        CurrentPath = partialPath;
+                        return true;
                     }
                 }
-
-                var notFound = Platform2DPath.NotFound(request.Start, resolvedTarget);
-                CommitPathState(notFound, PlatformPathFailureReason.EndNodeNotFound, mutateCurrentPath);
-                result = PlatformPathResult.Failed(
-                    PlatformPathFailureReason.EndNodeNotFound,
-                    request.Start,
-                    request.Target,
-                    resolvedTarget,
-                    notFound);
+                CurrentPath = Platform2DPath.NotFound(start, end);
                 return false;
             }
 
-            // 执行 A* 寻路。对高处目标同时尝试目标平台边缘节点，避免锁到平台中点后只在下方顶头。
-            var path = FindBestPathToTarget(startNode.Value, endNode.Value, request.Start, resolvedTarget);
+            // 执行 A* 寻路
+            var path = FindPath(startNode.Value, endNode.Value, start, end);
 
             // 如果找不到路径，尝试回退策略
-            if (path.Status == PathStatus.NotFound && request.ShouldAllowPartialPath(config.AllowPartialPath))
+            if (path.Status == PathStatus.NotFound && config.AllowPartialPath)
             {
-                var partialPath = TryFindPartialPath(startNode.Value, endNode.Value, request.Start, resolvedTarget);
-                if (partialPath != null && !IsBadElevatedPartialPath(partialPath, request.Start, resolvedTarget))
+                var partialPath = TryFindPartialPath(startNode.Value, endNode.Value, start, end);
+                if (partialPath != null)
                 {
                     path = partialPath;
                 }
             }
 
-            bool partial = path.Status == PathStatus.Valid &&
-                           path.CompletionKind == PlatformPathCompletionKind.Partial;
-            bool success = path.Status == PathStatus.Valid && !partial;
-
-            bool commandsValidated = false;
-            PlatformPathFailureReason failureReason = success
-                ? PlatformPathFailureReason.None
-                : partial
-                    ? PlatformPathFailureReason.PartialPath
-                : request.ShouldAllowPartialPath(config.AllowPartialPath)
-                    ? PlatformPathFailureReason.PartialPathUnavailable
-                    : PlatformPathFailureReason.PathNotFound;
-            Platform2DPath invalidPath = null;
-            if (success && !ValidatePathCommands(path, out failureReason))
-            {
-                invalidPath = path;
-                path = Platform2DPath.NotFound(request.Start, resolvedTarget);
-                success = false;
-                partial = false;
-            }
-            else
-            {
-                commandsValidated = success || partial;
-            }
-
-            ApplyRouteDiagnostics(path, commandsValidated);
-            CommitPathState(path, failureReason, mutateCurrentPath);
-            var resultResolvedTarget = (success || partial) && path != null
-                ? path.EndPosition
-                : resolvedTarget;
-            result = success
-                ? PlatformPathResult.Succeeded(request.Start, request.Target, resultResolvedTarget, path, path.GetCurrentCommand())
-                : partial
-                    ? PlatformPathResult.Partial(failureReason, request.Start, request.Target, resultResolvedTarget, path, path.GetCurrentCommand())
-                : PlatformPathResult.Failed(failureReason, request.Start, request.Target, resolvedTarget, invalidPath ?? path);
-            return success;
-        }
-
-        private void CommitPathState(Platform2DPath path, PlatformPathFailureReason failureReason, bool mutateCurrentPath)
-        {
-            if (!mutateCurrentPath)
-                return;
-
             CurrentPath = path;
-            LastFailureReason = failureReason;
-        }
-
-        private PlatformRouteCost CalculateRouteCost(Platform2DPath path)
-        {
-            if (path == null || path.Commands == null)
-                return PlatformRouteCost.Unreachable;
-
-            float horizontal = 0f;
-            float vertical = 0f;
-            int jumps = 0;
-            int falls = 0;
-            int dropDowns = 0;
-            Vector3 previous = path.StartPosition;
-
-            foreach (var command in path.Commands)
-            {
-                Vector3 target = command.Target;
-                horizontal += Mathf.Abs(target.x - previous.x);
-                vertical += Mathf.Abs(target.y - previous.y);
-
-                switch (command.CommandType)
-                {
-                    case MoveCommandType.Jump:
-                        jumps++;
-                        break;
-                    case MoveCommandType.Fall:
-                        falls++;
-                        break;
-                    case MoveCommandType.DropDown:
-                        dropDowns++;
-                        break;
-                }
-
-                previous = target;
-            }
-
-            float traversalPenalty = jumps * 3f + falls * 1.5f + dropDowns * 1.5f;
-            float commandPenalty = path.Commands.Count * 0.05f;
-            float total = horizontal + vertical * 0.75f + traversalPenalty + commandPenalty;
-            return new PlatformRouteCost(
-                total,
-                horizontal,
-                vertical,
-                jumps,
-                falls,
-                dropDowns,
-                path.Commands.Count);
-        }
-
-        private void ApplyRouteDiagnostics(Platform2DPath path, bool commandsValidated)
-        {
-            if (path == null)
-                return;
-
-            path.SetRouteDiagnostics(CalculateRouteCost(path), commandsValidated);
-        }
-
-        private string BuildRouteDebugSummary(PlatformPathResult result, PlatformRouteCost cost)
-        {
-            string commands = BuildCommandDebug(result.Path);
-            return $"Success={result.Success}, Kind={result.CompletionKind}, Failure={result.FailureReason}, Resolved={result.ResolvedTarget:F2}, Cost={cost.Total:F2}, Commands={commands}";
-        }
-
-        private bool ValidatePathCommands(Platform2DPath path, out PlatformPathFailureReason failureReason)
-        {
-            if (path == null || path.Commands == null)
-            {
-                failureReason = PlatformPathFailureReason.InvalidCommand;
-                return false;
-            }
-
-            Vector3 previous = path.StartPosition;
-            foreach (var command in path.Commands)
-            {
-                switch (command.CommandType)
-                {
-                    case MoveCommandType.Walk:
-                        if (!CanCreateWalkCommand(previous, command.Target))
-                        {
-                            failureReason = PlatformPathFailureReason.InvalidCommand;
-                            return false;
-                        }
-                        break;
-                    case MoveCommandType.Fall:
-                        if (!IsFallCommandExecutable(previous, command.Target, allowOneWayInterior: false))
-                        {
-                            failureReason = PlatformPathFailureReason.InvalidCommand;
-                            return false;
-                        }
-                        break;
-                    case MoveCommandType.DropDown:
-                        if (!IsFallCommandExecutable(previous, command.Target, allowOneWayInterior: true))
-                        {
-                            failureReason = PlatformPathFailureReason.InvalidCommand;
-                            return false;
-                        }
-                        break;
-                }
-
-                previous = command.Target;
-            }
-
-            failureReason = PlatformPathFailureReason.None;
-            return true;
-        }
-
-        private bool IsFallCommandExecutable(Vector3 from, Vector3 to, bool allowOneWayInterior)
-        {
-            if (graphGenerator == null ||
-                !graphGenerator.TryFindSurfaceSegmentAt(from, config.WalkCommandVerticalTolerance, out var fromSegment))
-            {
-                return false;
-            }
-
-            if (to.y >= from.y - config.WalkCommandVerticalTolerance)
-                return false;
-
-            float edgeTolerance = Mathf.Max(config.ArriveDistance, 0.25f);
-            bool nearLeftEdge = Mathf.Abs(from.x - fromSegment.MinX) <= edgeTolerance;
-            bool nearRightEdge = Mathf.Abs(from.x - fromSegment.MaxX) <= edgeTolerance;
-            return nearLeftEdge || nearRightEdge || (allowOneWayInterior && fromSegment.IsOneWay);
-        }
-
-        private PlatformNodeData? ResolveStartNode(Vector3 startPosition)
-        {
-            if (graphGenerator == null)
-                return null;
-
-            var startPlatform = DetectPlatformBelow(startPosition);
-            if (startPlatform != null)
-            {
-                var surfaceNode = graphGenerator.FindNearestNodeOnPlatform(
-                    startPosition,
-                    startPlatform,
-                    config.MaxNodeSearchRadius);
-                if (surfaceNode.HasValue)
-                    return surfaceNode;
-            }
-
-            return graphGenerator.FindNearestNode(startPosition, config.MaxNodeSearchRadius);
+            return path.Status == PathStatus.Valid;
         }
 
         /// <summary>
@@ -530,17 +186,8 @@ namespace ZeroEngine.Pathfinding2D
             var startPlatform = DetectPlatformBelow(start);
             var endPlatform = DetectPlatformBelow(end);
 
-            if (startPlatform == null || endPlatform == null)
-            {
-                return null;
-            }
-
-            var startNode = graphGenerator.FindNearestNodeOnPlatform(start, startPlatform, config.MaxNodeSearchRadius);
-            var endNode = graphGenerator.FindNearestNodeOnPlatform(end, endPlatform, config.MaxNodeSearchRadius);
-            if (!startNode.HasValue ||
-                !endNode.HasValue ||
-                startNode.Value.SurfaceGroupId < 0 ||
-                startNode.Value.SurfaceGroupId != endNode.Value.SurfaceGroupId)
+            // 如果不在同一平台，返回 null
+            if (startPlatform == null || endPlatform == null || startPlatform != endPlatform)
             {
                 return null;
             }
@@ -628,10 +275,7 @@ namespace ZeroEngine.Pathfinding2D
                 var nearestToEnd = graphGenerator.FindNearestNode(end, float.MaxValue);
                 if (nearestToEnd.HasValue)
                 {
-                    var path = FindPath(startNode.Value, nearestToEnd.Value, start, nearestToEnd.Value.Position);
-                    return IsPathCloseEnoughToTarget(path, end)
-                        ? path
-                        : ToPartialPath(path);
+                    return FindPath(startNode.Value, nearestToEnd.Value, start, nearestToEnd.Value.Position);
                 }
             }
 
@@ -649,202 +293,10 @@ namespace ZeroEngine.Pathfinding2D
 
             if (closestReachable.HasValue && closestReachable.Value.NodeId != startNode.NodeId)
             {
-                var path = FindPath(startNode, closestReachable.Value, actualStart, closestReachable.Value.Position);
-                return IsPathCloseEnoughToTarget(path, actualEnd)
-                    ? path
-                    : ToPartialPath(path);
+                return FindPath(startNode, closestReachable.Value, actualStart, closestReachable.Value.Position);
             }
 
             return null;
-        }
-
-        private bool IsPathCloseEnoughToTarget(Platform2DPath path, Vector3 actualEnd)
-        {
-            if (path == null || path.Status != PathStatus.Valid)
-                return false;
-
-            float horizontalDistance = Mathf.Abs(path.EndPosition.x - actualEnd.x);
-            float verticalDistance = Mathf.Abs(path.EndPosition.y - actualEnd.y);
-            float verticalTargetTolerance = config.ArriveDistance + config.WalkCommandVerticalTolerance;
-            return horizontalDistance <= config.ArriveDistance &&
-                   verticalDistance <= verticalTargetTolerance;
-        }
-
-        private static Platform2DPath ToPartialPath(Platform2DPath path)
-        {
-            if (path == null || path.Status != PathStatus.Valid)
-                return path;
-
-            return Platform2DPath.Partial(path.StartPosition, path.EndPosition, path.Commands);
-        }
-
-        private bool IsBadElevatedPartialPath(Platform2DPath path, Vector3 actualStart, Vector3 actualEnd)
-        {
-            if (path == null || path.Commands == null || path.Commands.Count == 0)
-                return false;
-
-            if (actualEnd.y <= actualStart.y + config.SamePlatformMaxHeightDiff)
-                return false;
-
-            bool hasJump = false;
-            foreach (var command in path.Commands)
-            {
-                if (command.CommandType == MoveCommandType.Jump)
-                {
-                    hasJump = true;
-                    break;
-                }
-            }
-
-            if (hasJump)
-                return false;
-
-            var finalTarget = path.Commands[path.Commands.Count - 1].Target;
-            return finalTarget.y < actualEnd.y - config.SamePlatformMaxHeightDiff;
-        }
-
-        private Platform2DPath FindBestPathToTarget(
-            PlatformNodeData startNode,
-            PlatformNodeData nearestEndNode,
-            Vector3 actualStart,
-            Vector3 actualEnd)
-        {
-            Platform2DPath bestPath = null;
-            float bestScore = float.MaxValue;
-
-            foreach (var candidate in BuildTargetNodeCandidates(nearestEndNode, actualEnd))
-            {
-                var path = FindPath(startNode, candidate, actualStart, actualEnd);
-                if (path.Status != PathStatus.Valid)
-                    continue;
-
-                if (IsInvalidElevatedPath(path, actualStart, actualEnd))
-                    continue;
-
-                if (!ValidatePathCommands(path, out _))
-                    continue;
-
-                float score = ScoreTargetPath(path, actualEnd);
-                if (score < bestScore)
-                {
-                    bestPath = path;
-                    bestScore = score;
-                }
-            }
-
-            return bestPath ?? Platform2DPath.NotFound(actualStart, actualEnd);
-        }
-
-        private List<PlatformNodeData> BuildTargetNodeCandidates(
-            PlatformNodeData nearestEndNode,
-            Vector3 actualEnd)
-        {
-            var candidates = new List<PlatformNodeData> { nearestEndNode };
-            var seen = new HashSet<int> { nearestEndNode.NodeId };
-
-            int targetSurfaceGroupId = nearestEndNode.SurfaceGroupId;
-            if (targetSurfaceGroupId < 0)
-                return candidates;
-
-            foreach (var node in graphGenerator.Nodes)
-            {
-                if (node.SurfaceGroupId != targetSurfaceGroupId || seen.Contains(node.NodeId))
-                    continue;
-
-                bool isEdge = node.NodeType == PlatformNodeType.LeftEdge ||
-                              node.NodeType == PlatformNodeType.RightEdge;
-                if (!isEdge)
-                    continue;
-
-                candidates.Add(node);
-                seen.Add(node.NodeId);
-            }
-
-            candidates.Sort((a, b) =>
-            {
-                int heightCompare = Mathf.Abs(a.Position.y - actualEnd.y)
-                    .CompareTo(Mathf.Abs(b.Position.y - actualEnd.y));
-                if (heightCompare != 0)
-                    return heightCompare;
-
-                return Vector2.Distance(a.Position, actualEnd)
-                    .CompareTo(Vector2.Distance(b.Position, actualEnd));
-            });
-
-            return candidates;
-        }
-
-        private float ScoreTargetPath(Platform2DPath path, Vector3 actualEnd)
-        {
-            float score = path.TotalDuration;
-            bool hasTraversal = false;
-            bool hasJump = false;
-            bool hasDownwardTraversal = false;
-
-            foreach (var command in path.Commands)
-            {
-                if (command.CommandType == MoveCommandType.Jump)
-                {
-                    hasJump = true;
-                    hasTraversal = true;
-                }
-                else if (command.CommandType == MoveCommandType.Fall ||
-                         command.CommandType == MoveCommandType.DropDown)
-                {
-                    hasTraversal = true;
-                    hasDownwardTraversal = true;
-                }
-            }
-
-            if (!hasTraversal && actualEnd.y > path.StartPosition.y + config.SamePlatformMaxHeightDiff)
-                score += 1000f;
-
-            if (hasDownwardTraversal && actualEnd.y > path.StartPosition.y + config.SamePlatformMaxHeightDiff)
-                score += hasJump ? 25f : 2000f;
-
-            if (path.Commands.Count > 0)
-                score += Vector2.Distance(path.Commands[path.Commands.Count - 1].Target, actualEnd);
-
-            return score;
-        }
-
-        private bool IsInvalidElevatedPath(Platform2DPath path, Vector3 actualStart, Vector3 actualEnd)
-        {
-            if (path == null || path.Commands == null || path.Commands.Count == 0)
-                return false;
-
-            if (actualEnd.y <= actualStart.y + config.SamePlatformMaxHeightDiff)
-                return false;
-
-            bool hasJump = false;
-            bool hasDownwardTraversal = false;
-            foreach (var command in path.Commands)
-            {
-                if (command.CommandType == MoveCommandType.Jump)
-                    hasJump = true;
-                else if (command.CommandType == MoveCommandType.Fall ||
-                         command.CommandType == MoveCommandType.DropDown)
-                    hasDownwardTraversal = true;
-            }
-
-            if (!hasJump)
-                return true;
-
-            if (!hasDownwardTraversal)
-                return false;
-
-            int lastJumpIndex = -1;
-            int lastDownIndex = -1;
-            for (int i = 0; i < path.Commands.Count; i++)
-            {
-                var type = path.Commands[i].CommandType;
-                if (type == MoveCommandType.Jump)
-                    lastJumpIndex = i;
-                else if (type == MoveCommandType.Fall || type == MoveCommandType.DropDown)
-                    lastDownIndex = i;
-            }
-
-            return lastDownIndex > lastJumpIndex;
         }
 
         /// <summary>
@@ -925,17 +377,12 @@ namespace ZeroEngine.Pathfinding2D
             var currentCmd = CurrentPath.GetCurrentCommand();
             if (currentCmd.HasValue)
             {
-                var command = currentCmd.Value;
-                bool deviated = command.CommandType switch
-                {
-                    MoveCommandType.Walk => Vector2.Distance(currentPosition, command.Target) > config.PathDeviationThreshold,
-                    MoveCommandType.Jump => Mathf.Abs(currentPosition.x - command.Target.x) > config.PathDeviationThreshold,
-                    MoveCommandType.Fall => Mathf.Abs(currentPosition.x - command.Target.x) > config.PathDeviationThreshold,
-                    MoveCommandType.DropDown => Mathf.Abs(currentPosition.x - command.Target.x) > config.PathDeviationThreshold,
-                    _ => false
-                };
+                // 计算到当前目标点的距离
+                float deviation = Vector2.Distance(currentPosition, currentCmd.Value.Target);
 
-                if (deviated)
+                // 如果偏离太远且不是在执行跳跃/下落
+                if (deviation > config.PathDeviationThreshold &&
+                    currentCmd.Value.CommandType == MoveCommandType.Walk)
                 {
                     return PathValidationResult.Deviated;
                 }
@@ -1002,17 +449,8 @@ namespace ZeroEngine.Pathfinding2D
             switch (command.CommandType)
             {
                 case MoveCommandType.Walk:
-                    if (Mathf.Abs(currentPosition.x - command.Target.x) >= config.WalkCommandArriveDistance)
-                        return false;
-
-                    float verticalDelta = currentPosition.y - command.Target.y;
-                    if (Mathf.Abs(verticalDelta) <= config.WalkCommandVerticalTolerance)
-                        return true;
-
-                    // Non-terminal lower walk nodes may be crossed while the actor is still airborne or climbing.
-                    // The final walk command, however, represents the resolved destination plane and must not complete
-                    // until the actor is actually on that plane.
-                    return !IsCurrentCommandTerminal() && verticalDelta > config.WalkCommandVerticalTolerance;
+                    // 行走：到达目标 X 坐标附近
+                    return Mathf.Abs(currentPosition.x - command.Target.x) < config.ArriveDistance;
 
                 case MoveCommandType.Jump:
                 case MoveCommandType.Fall:
@@ -1026,85 +464,12 @@ namespace ZeroEngine.Pathfinding2D
             }
         }
 
-        private bool IsCurrentCommandTerminal()
-        {
-            return CurrentPath == null ||
-                   CurrentPath.Commands == null ||
-                   CurrentPath.CurrentIndex >= CurrentPath.Commands.Count - 1;
-        }
-
         /// <summary>
         /// 清除当前路径
         /// </summary>
         public void ClearPath()
         {
             CurrentPath = null;
-        }
-
-        /// <summary>
-        /// 获取当前寻路诊断快照。
-        /// </summary>
-        public PlatformNavigationSnapshot GetSnapshot()
-        {
-            int currentSegmentId = ResolveSurfaceSegmentId(transform.position);
-            int targetSegmentId = CurrentPath != null
-                ? ResolveSurfaceSegmentId(CurrentPath.EndPosition)
-                : -1;
-            float routeCost = CurrentPath != null ? CalculateRouteCost(CurrentPath).Total : 0f;
-
-            return new PlatformNavigationSnapshot(
-                graphGenerator != null,
-                graphGenerator != null && graphGenerator.IsGenerated,
-                graphGenerator != null ? graphGenerator.Nodes.Count : 0,
-                graphGenerator != null ? graphGenerator.Links.Count : 0,
-                HasValidPath,
-                CurrentPath != null && CurrentPath.Commands != null ? CurrentPath.Commands.Count : 0,
-                CurrentPath != null ? CurrentPath.CurrentIndex : -1,
-                LastFailureReason,
-                CurrentPath != null ? CurrentPath.CompletionKind : PlatformPathCompletionKind.Failed,
-                BuildCommandDebug(CurrentPath),
-                graphGenerator != null ? graphGenerator.SurfaceSegments.Count : 0,
-                graphGenerator != null ? graphGenerator.BuildSurfaceSegmentDebug() : "none",
-                routeCost,
-                currentSegmentId,
-                targetSegmentId,
-                CurrentPath != null && CurrentPath.CommandsValidated);
-        }
-
-        private int ResolveSurfaceSegmentId(Vector3 position)
-        {
-            if (graphGenerator == null)
-                return -1;
-
-            return graphGenerator.TryFindSurfaceSegmentAt(position, config.WalkCommandVerticalTolerance, out var segment)
-                ? segment.Id
-                : -1;
-        }
-
-        private string BuildCommandDebug(Platform2DPath path)
-        {
-            if (path?.Commands == null || path.Commands.Count == 0)
-                return "none";
-
-            var parts = new List<string>(path.Commands.Count);
-            for (int i = 0; i < path.Commands.Count; i++)
-            {
-                var command = path.Commands[i];
-                int groupId = ResolveCommandTargetSurfaceGroup(command);
-                string currentMarker = i == path.CurrentIndex ? "*" : "";
-                parts.Add($"{currentMarker}{i}:{command.CommandType}@{command.Target:F2}/face={command.FacingDirection}/group={groupId}");
-            }
-
-            return string.Join(" -> ", parts);
-        }
-
-        private int ResolveCommandTargetSurfaceGroup(MoveCommand command)
-        {
-            if (graphGenerator == null)
-                return -1;
-
-            var node = graphGenerator.FindNearestNode(command.Target, config.MaxNodeSearchRadius);
-            return node.HasValue ? node.Value.SurfaceGroupId : -1;
         }
 
         /// <summary>
@@ -1243,8 +608,6 @@ namespace ZeroEngine.Pathfinding2D
 
             // 转换为 MoveCommand
             var commands = new List<MoveCommand>();
-            Vector3 commandStart = actualStart;
-            Vector3 generatedEnd = actualStart;
 
             // 从实际起点走到第一个节点
             if (nodePath.Count > 0)
@@ -1253,8 +616,7 @@ namespace ZeroEngine.Pathfinding2D
                 if (firstNode.HasValue)
                 {
                     float dist = Vector2.Distance(actualStart, firstNode.Value.Position);
-                    generatedEnd = firstNode.Value.Position;
-                    if (dist > config.ArriveDistance && CanCreateWalkCommand(actualStart, firstNode.Value.Position))
+                    if (dist > config.ArriveDistance)
                     {
                         // 计算朝向：根据目标 X 与起点 X 的差值
                         float deltaX = firstNode.Value.Position.x - actualStart.x;
@@ -1266,10 +628,6 @@ namespace ZeroEngine.Pathfinding2D
                             facing
                         ));
                     }
-                    else
-                    {
-                        commandStart = firstNode.Value.Position;
-                    }
                 }
             }
 
@@ -1278,7 +636,6 @@ namespace ZeroEngine.Pathfinding2D
 
             foreach (var link in linkPath)
             {
-                var fromNode = graphGenerator.GetNode(link.FromNodeId);
                 var toNode = graphGenerator.GetNode(link.ToNodeId);
                 if (!toNode.HasValue) continue;
 
@@ -1289,9 +646,6 @@ namespace ZeroEngine.Pathfinding2D
                 switch (link.LinkType)
                 {
                     case PlatformLinkType.Walk:
-                        if (!CanCreateWalkCommand(prevPosition, toNode.Value.Position))
-                            return Platform2DPath.NotFound(actualStart, actualEnd);
-
                         commands.Add(MoveCommand.Walk(toNode.Value.Position, link.Duration, facing));
                         break;
 
@@ -1307,14 +661,10 @@ namespace ZeroEngine.Pathfinding2D
                         break;
 
                     case PlatformLinkType.Fall:
-                        if (facing == 0 && fromNode.HasValue)
-                            facing = ResolveEdgeExitFacing(fromNode.Value);
                         commands.Add(MoveCommand.Fall(toNode.Value.Position, link.Duration, facing));
                         break;
 
                     case PlatformLinkType.DropThrough:
-                        if (facing == 0 && fromNode.HasValue)
-                            facing = ResolveEdgeExitFacing(fromNode.Value);
                         commands.Add(MoveCommand.DropDown(
                             toNode.Value.Position,
                             toNode.Value.PlatformCollider,
@@ -1325,7 +675,6 @@ namespace ZeroEngine.Pathfinding2D
                 }
 
                 prevPosition = toNode.Value.Position;
-                generatedEnd = toNode.Value.Position;
             }
 
             // 从最后一个节点走到实际终点
@@ -1335,7 +684,7 @@ namespace ZeroEngine.Pathfinding2D
                 if (lastNode.HasValue)
                 {
                     float dist = Vector2.Distance(lastNode.Value.Position, actualEnd);
-                    if (dist > config.ArriveDistance && CanCreateWalkCommand(lastNode.Value.Position, actualEnd))
+                    if (dist > config.ArriveDistance)
                     {
                         // 计算朝向
                         float deltaX = actualEnd.x - lastNode.Value.Position.x;
@@ -1346,26 +695,11 @@ namespace ZeroEngine.Pathfinding2D
                             dist / config.WalkSpeed,
                             facing
                         ));
-                        generatedEnd = actualEnd;
                     }
                 }
             }
 
-         return new Platform2DPath(commandStart, generatedEnd, commands);
-     }
-
-        private int ResolveEdgeExitFacing(PlatformNodeData node)
-        {
-            if (node.NodeType == PlatformNodeType.LeftEdge)
-                return -1;
-            if (node.NodeType == PlatformNodeType.RightEdge)
-                return 1;
-            return 0;
-        }
-
-        private bool CanCreateWalkCommand(Vector3 from, Vector3 to)
-        {
-            return Mathf.Abs(from.y - to.y) <= config.WalkCommandVerticalTolerance;
+            return new Platform2DPath(actualStart, actualEnd, commands);
         }
 
         /// <summary>

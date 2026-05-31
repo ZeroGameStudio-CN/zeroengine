@@ -4,17 +4,16 @@ using UnityEngine;
 namespace ZeroEngine.Quest
 {
     /// <summary>
-    /// 任务奖励基类。
+    /// 任务奖励基类 (v1.2.0+)
     /// 所有任务奖励必须继承此类
     /// </summary>
     [Serializable]
     public abstract class QuestReward
     {
-        [Header("Display")]
-        [Tooltip("Fallback reward description for UI preview. Projects may override this through localization.")]
+        [Tooltip("奖励描述（用于 UI 显示）")]
         public string Description;
 
-        [Tooltip("Hide this reward from preview UI while still granting it.")]
+        [Tooltip("是否隐藏（不显示在奖励预览中）")]
         public bool IsHidden;
 
         /// <summary>

@@ -6,11 +6,10 @@ namespace ZeroEngine.UI.Toast
     [CreateAssetMenu(fileName = "ToastSettings", menuName = "ZeroEngine/UI/Toast Settings")]
     public sealed class ToastSettings : ScriptableObject
     {
-        [SerializeField] private int maxVisible = 5;
-        [SerializeField] private int maxQueued = 12;
-        [SerializeField] private float showInterval = 0.5f;
-        [SerializeField] private float spacing = 112f;
-        [SerializeField] private ToastOverflowPolicy overflowPolicy = ToastOverflowPolicy.Queue;
+        [SerializeField] private int maxVisible = 3;
+        [SerializeField] private int maxQueued = 8;
+        [SerializeField] private float spacing = 72f;
+        [SerializeField] private ToastOverflowPolicy overflowPolicy = ToastOverflowPolicy.DropOldest;
         [SerializeField] private ToastDuplicatePolicy duplicatePolicy = ToastDuplicatePolicy.RefreshExisting;
         [SerializeField] private ToastAnchor defaultAnchor = ToastAnchor.TopRight;
         [SerializeField] private ToastAnimationTimings animationTimings = ToastAnimationTimings.Default;
@@ -18,7 +17,6 @@ namespace ZeroEngine.UI.Toast
 
         public int MaxVisible => Mathf.Max(1, maxVisible);
         public int MaxQueued => Mathf.Max(0, maxQueued);
-        public float ShowInterval => Mathf.Max(0f, showInterval);
         public float Spacing => Mathf.Max(1f, spacing);
         public ToastOverflowPolicy OverflowPolicy => overflowPolicy;
         public ToastDuplicatePolicy DuplicatePolicy => duplicatePolicy;
@@ -47,11 +45,10 @@ namespace ZeroEngine.UI.Toast
 
         public void ResetToDefaults()
         {
-            maxVisible = 5;
-            maxQueued = 12;
-            showInterval = 0.5f;
-            spacing = 112f;
-            overflowPolicy = ToastOverflowPolicy.Queue;
+            maxVisible = 3;
+            maxQueued = 8;
+            spacing = 72f;
+            overflowPolicy = ToastOverflowPolicy.DropOldest;
             duplicatePolicy = ToastDuplicatePolicy.RefreshExisting;
             defaultAnchor = ToastAnchor.TopRight;
             animationTimings = ToastAnimationTimings.Default;
@@ -80,7 +77,6 @@ namespace ZeroEngine.UI.Toast
         {
             maxVisible = Mathf.Max(1, maxVisible);
             maxQueued = Mathf.Max(0, maxQueued);
-            showInterval = Mathf.Max(0f, showInterval);
             spacing = Mathf.Max(1f, spacing);
             EnsureDefaultStyles();
         }

@@ -219,7 +219,7 @@ Copy this folder to the game's `Mods` directory.
     ""RefreshOnAddStack"": true,
     ""StatModifiers"": [
         {
-            ""StatType"": ""Attack"",
+            ""StatId"": ""offense.attack"",
             ""Value"": 10,
             ""ModType"": ""Flat""
         }
