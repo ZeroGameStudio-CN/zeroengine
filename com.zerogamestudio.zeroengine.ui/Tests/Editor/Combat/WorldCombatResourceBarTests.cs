@@ -312,8 +312,10 @@ namespace ZeroEngine.UI.Tests.Editor.Combat
         [Test]
         public void RuntimeAssembly_DoesNotReferenceProjectOrFeedbackPlugins()
         {
+            var packageInfo = UnityEditor.PackageManager.PackageInfo.FindForAssembly(typeof(WorldCombatStatusView).Assembly);
+            Assert.NotNull(packageInfo);
             var asmdef = System.IO.File.ReadAllText(
-                "D:/unity/projects/ZeroEngine/Packages/com.zerogamestudio.zeroengine.ui/Runtime/ZeroEngine.UI.asmdef");
+                System.IO.Path.Combine(packageInfo.resolvedPath, "Runtime/ZeroEngine.UI.asmdef"));
 
             Assert.That(asmdef, Does.Not.Contain("DamageNumbersPro"));
             Assert.That(asmdef, Does.Not.Contain("DOTween"));

@@ -179,22 +179,14 @@ namespace ZGS.DataToolkit.Editor
                 return string.Empty;
             }
 
-            try
-            {
-                return NormalizeFolder(System.IO.Path.GetDirectoryName(path));
-            }
-            catch (ArgumentException)
+            var normalizedPath = path.Replace('\\', '/');
+            var lastSlashIndex = normalizedPath.LastIndexOf('/');
+            if (lastSlashIndex <= 0)
             {
                 return string.Empty;
             }
-            catch (NotSupportedException)
-            {
-                return string.Empty;
-            }
-            catch (System.IO.PathTooLongException)
-            {
-                return string.Empty;
-            }
+
+            return NormalizeFolder(normalizedPath.Substring(0, lastSlashIndex));
         }
 
         internal static string NormalizeFolder(string folder)
