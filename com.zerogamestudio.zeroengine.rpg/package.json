@@ -1,28 +1,34 @@
 {
-    "name": "com.zerogamestudio.zeroengine.rpg",
-    "version": "2.3.0",
-    "displayName": "ZeroEngine.RPG",
-    "description": "Turn-based RPG systems for ZeroEngine. Includes TurnBased framework (Speed/ATB/CTB/ActionPoint variants), Boost Points system (Octopath-style BP), and Shield Break system (weakness/shield mechanics).",
-    "unity": "2022.3",
-    "unityRelease": "0f1",
-    "dependencies": {
-        "com.zerogamestudio.zeroengine.core": "2.0.0",
-        "com.zerogamestudio.zeroengine.data": "2.0.0",
-        "com.zerogamestudio.zeroengine.combat": "2.0.0"
-    },
-    "keywords": [
-        "zeroengine",
-        "rpg",
-        "turn-based",
-        "combat",
-        "boost",
-        "shield",
-        "octopath",
-        "atb",
-        "ctb"
-    ],
-    "author": {
-        "name": "ZeroGameStudio",
-        "url": "https://github.com/zerogamestudio"
-    }
+  "name": "com.zerogamestudio.zeroengine.rpg",
+  "version": "2.3.0",
+  "displayName": "ZeroEngine.RPG",
+  "description": "Turn-based RPG systems for ZeroEngine. Includes TurnBased framework (Speed/ATB/CTB/ActionPoint variants), Boost Points system (Octopath-style BP), and Shield Break system (weakness/shield mechanics).",
+  "unity": "2022.3",
+  "unityRelease": "0f1",
+  "dependencies": {
+    "com.zerogamestudio.zeroengine.core": "2.0.0",
+    "com.zerogamestudio.zeroengine.data": "2.0.0",
+    "com.zerogamestudio.zeroengine.combat": "2.0.0"
+  },
+  "keywords": [
+    "zeroengine",
+    "rpg",
+    "turn-based",
+    "combat",
+    "boost",
+    "shield",
+    "octopath",
+    "atb",
+    "ctb"
+  ],
+  "author": {
+    "name": "ZeroGameStudio",
+    "url": "https://github.com/zerogamestudio"
+  },
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/liuzqk/zeroengine.git",
+    "directory": "com.zerogamestudio.zeroengine.rpg"
+  }
 }

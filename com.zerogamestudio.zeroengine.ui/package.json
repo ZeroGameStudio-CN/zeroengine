@@ -1,27 +1,33 @@
 {
-    "name": "com.zerogamestudio.zeroengine.ui",
-    "version": "2.0.0",
-    "displayName": "ZeroEngine.UI",
-    "description": "Industrial-grade UI framework for ZeroEngine. Includes UIManager (layers, stacks, masks), UIViewBase (lifecycle, animations, focus), and optional MVVM framework.",
-    "unity": "2022.3",
-    "unityRelease": "0f1",
-    "dependencies": {
-        "com.zerogamestudio.zeroengine.core": "2.0.0",
-        "com.unity.textmeshpro": "3.0.6"
-    },
-    "keywords": [
-        "zeroengine",
-        "ui",
-        "panel",
-        "view",
-        "mvvm",
-        "layer",
-        "toast",
-        "notification",
-        "alert"
-    ],
-    "author": {
-        "name": "ZeroGameStudio",
-        "url": "https://github.com/zerogamestudio"
-    }
+  "name": "com.zerogamestudio.zeroengine.ui",
+  "version": "2.0.0",
+  "displayName": "ZeroEngine.UI",
+  "description": "Industrial-grade UI framework for ZeroEngine. Includes UIManager (layers, stacks, masks), UIViewBase (lifecycle, animations, focus), and optional MVVM framework.",
+  "unity": "2022.3",
+  "unityRelease": "0f1",
+  "dependencies": {
+    "com.zerogamestudio.zeroengine.core": "2.0.0",
+    "com.unity.textmeshpro": "3.0.6"
+  },
+  "keywords": [
+    "zeroengine",
+    "ui",
+    "panel",
+    "view",
+    "mvvm",
+    "layer",
+    "toast",
+    "notification",
+    "alert"
+  ],
+  "author": {
+    "name": "ZeroGameStudio",
+    "url": "https://github.com/zerogamestudio"
+  },
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/liuzqk/zeroengine.git",
+    "directory": "com.zerogamestudio.zeroengine.ui"
+  }
 }

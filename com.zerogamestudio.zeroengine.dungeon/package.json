@@ -1,24 +1,30 @@
 {
-    "name": "com.zerogamestudio.zeroengine.dungeon",
-    "version": "1.0.0",
-    "displayName": "ZeroEngine.Dungeon",
-    "description": "Dungeon exploration framework with procedural node map generation, AI pathfinding, event system, and reward calculation.",
-    "unity": "2022.3",
-    "unityRelease": "0f1",
-    "dependencies": {
-        "com.zerogamestudio.zeroengine.core": "2.0.0",
-        "com.zerogamestudio.zeroengine.data": "2.0.0"
-    },
-    "keywords": [
-        "zeroengine",
-        "dungeon",
-        "exploration",
-        "roguelike",
-        "procedural",
-        "node"
-    ],
-    "author": {
-        "name": "ZeroGameStudio",
-        "url": "https://github.com/zerogamestudio"
-    }
+  "name": "com.zerogamestudio.zeroengine.dungeon",
+  "version": "1.0.0",
+  "displayName": "ZeroEngine.Dungeon",
+  "description": "Dungeon exploration framework with procedural node map generation, AI pathfinding, event system, and reward calculation.",
+  "unity": "2022.3",
+  "unityRelease": "0f1",
+  "dependencies": {
+    "com.zerogamestudio.zeroengine.core": "2.0.0",
+    "com.zerogamestudio.zeroengine.data": "2.0.0"
+  },
+  "keywords": [
+    "zeroengine",
+    "dungeon",
+    "exploration",
+    "roguelike",
+    "procedural",
+    "node"
+  ],
+  "author": {
+    "name": "ZeroGameStudio",
+    "url": "https://github.com/zerogamestudio"
+  },
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/liuzqk/zeroengine.git",
+    "directory": "com.zerogamestudio.zeroengine.dungeon"
+  }
 }
