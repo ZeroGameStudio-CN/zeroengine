@@ -1,14 +1,26 @@
 {
-    "name": "com.zerogamestudio.zeroengine.social",
-    "version": "2.0.0",
-    "displayName": "ZeroEngine.Social",
-    "description": "Social systems for ZeroEngine. Includes Relationship System (affinity, gifts, levels) and Notification System (toasts, alerts, queues).",
-    "unity": "2022.3",
-    "unityRelease": "0f1",
-    "dependencies": {
-        "com.zerogamestudio.zeroengine.core": "2.0.0",
-        "com.zerogamestudio.zeroengine.persistence": "2.0.0"
-    },
-    "keywords": ["zeroengine", "relationship", "notification"],
-    "author": { "name": "ZeroGameStudio" }
+  "name": "com.zerogamestudio.zeroengine.social",
+  "version": "2.0.0",
+  "displayName": "ZeroEngine.Social",
+  "description": "Social systems for ZeroEngine. Includes Relationship System (affinity, gifts, levels) and Notification System (toasts, alerts, queues).",
+  "unity": "2022.3",
+  "unityRelease": "0f1",
+  "dependencies": {
+    "com.zerogamestudio.zeroengine.core": "2.0.0",
+    "com.zerogamestudio.zeroengine.persistence": "2.0.0"
+  },
+  "keywords": [
+    "zeroengine",
+    "relationship",
+    "notification"
+  ],
+  "author": {
+    "name": "ZeroGameStudio"
+  },
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/liuzqk/zeroengine.git",
+    "directory": "com.zerogamestudio.zeroengine.social"
+  }
 }

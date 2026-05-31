@@ -15,5 +15,11 @@
   "author": {
     "name": "ZeroGameStudio",
     "url": "https://github.com/zerogamestudio"
+  },
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/liuzqk/zeroengine.git",
+    "directory": "com.zerogamestudio.zeroengine.data-toolkit"
   }
 }

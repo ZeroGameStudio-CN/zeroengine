@@ -1,27 +1,33 @@
 {
-    "name": "com.zerogamestudio.zeroengine.combat",
-    "version": "2.0.0",
-    "displayName": "ZeroEngine.Combat",
-    "description": "Combat framework for ZeroEngine. Includes Combat Core (CombatManager, team relations), Damage System (types, calculators), Targeting (selectors, filters, range), Health System, AbilitySystem (TCE pattern), Projectile, and Spawner.",
-    "unity": "2022.3",
-    "unityRelease": "0f1",
-    "dependencies": {
-        "com.zerogamestudio.zeroengine.core": "2.0.0",
-        "com.zerogamestudio.zeroengine.data": "2.0.0"
-    },
-    "keywords": [
-        "zeroengine",
-        "combat",
-        "damage",
-        "health",
-        "targeting",
-        "ability",
-        "skill",
-        "projectile",
-        "spawner"
-    ],
-    "author": {
-        "name": "ZeroGameStudio",
-        "url": "https://github.com/zerogamestudio"
-    }
+  "name": "com.zerogamestudio.zeroengine.combat",
+  "version": "2.0.0",
+  "displayName": "ZeroEngine.Combat",
+  "description": "Combat framework for ZeroEngine. Includes Combat Core (CombatManager, team relations), Damage System (types, calculators), Targeting (selectors, filters, range), Health System, AbilitySystem (TCE pattern), Projectile, and Spawner.",
+  "unity": "2022.3",
+  "unityRelease": "0f1",
+  "dependencies": {
+    "com.zerogamestudio.zeroengine.core": "2.0.0",
+    "com.zerogamestudio.zeroengine.data": "2.0.0"
+  },
+  "keywords": [
+    "zeroengine",
+    "combat",
+    "damage",
+    "health",
+    "targeting",
+    "ability",
+    "skill",
+    "projectile",
+    "spawner"
+  ],
+  "author": {
+    "name": "ZeroGameStudio",
+    "url": "https://github.com/zerogamestudio"
+  },
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/liuzqk/zeroengine.git",
+    "directory": "com.zerogamestudio.zeroengine.combat"
+  }
 }

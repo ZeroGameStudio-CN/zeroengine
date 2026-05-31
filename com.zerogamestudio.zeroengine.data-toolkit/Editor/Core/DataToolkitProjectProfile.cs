@@ -9,7 +9,8 @@ namespace ZGS.DataToolkit.Editor
         public DataToolkitProjectProfile(
             DataToolkitProjectSettings settings,
             IEnumerable<IDataToolkitToolbarProvider> toolbarProviders = null,
-            IEnumerable<IDataToolkitAssetInspectorProvider> assetInspectorProviders = null)
+            IEnumerable<IDataToolkitAssetInspectorProvider> assetInspectorProviders = null,
+            IEnumerable<IDataToolkitFooterProvider> footerProviders = null)
         {
             Settings = settings ?? throw new ArgumentNullException(nameof(settings));
             ToolbarProviders = (toolbarProviders ?? Array.Empty<IDataToolkitToolbarProvider>())
@@ -20,10 +21,15 @@ namespace ZGS.DataToolkit.Editor
                 .Where(provider => provider != null)
                 .OrderBy(provider => provider.Order)
                 .ToArray();
+            FooterProviders = (footerProviders ?? Array.Empty<IDataToolkitFooterProvider>())
+                .Where(provider => provider != null)
+                .OrderBy(provider => provider.Order)
+                .ToArray();
         }
 
         public DataToolkitProjectSettings Settings { get; }
         public IReadOnlyList<IDataToolkitToolbarProvider> ToolbarProviders { get; }
         public IReadOnlyList<IDataToolkitAssetInspectorProvider> AssetInspectorProviders { get; }
+        public IReadOnlyList<IDataToolkitFooterProvider> FooterProviders { get; }
     }
 }
