@@ -41,6 +41,55 @@ namespace ZeroEngine.World.Tests.Editor
         }
 
         [Test]
+        public void YamlScanner_IgnoresGuidSerializedOutsideScriptReference()
+        {
+            var yaml = string.Join("\n",
+                "--- !u!114",
+                "m_Script: {fileID: 11500000, guid: marker-guid, type: 3}",
+                "  _portalId: marker_should_not_count",
+                "  _debugText: portal-guid");
+
+            var portalBlocks = AreaAuthoringYamlScanner.ExtractComponentBlocks(yaml, "portal-guid");
+
+            Assert.That(portalBlocks, Is.Empty);
+        }
+
+        [Test]
+        public void ForbiddenScriptValidation_IgnoresGuidSerializedOutsideScriptReference()
+        {
+            var yaml = string.Join("\n",
+                "--- !u!114",
+                "m_Script: {fileID: 11500000, guid: allowed-guid, type: 3}",
+                "  _debugText: forbidden-guid");
+
+            var issues = AreaAuthoringYamlScanner.ValidateForbiddenScriptGuids(
+                "Assets/Scenes/Areas/Test.unity",
+                yaml,
+                new[] { "forbidden-guid" },
+                directComponentsAreErrors: true);
+
+            Assert.That(issues, Is.Empty);
+        }
+
+        [Test]
+        public void ForbiddenSingleScriptValidation_IgnoresGuidSerializedOutsideScriptReference()
+        {
+            var yaml = string.Join("\n",
+                "--- !u!114",
+                "m_Script: {fileID: 11500000, guid: allowed-guid, type: 3}",
+                "  _debugText: forbidden-guid");
+
+            var issues = AreaAuthoringYamlScanner.ValidateForbiddenScriptGuid(
+                "Assets/Scenes/Areas/Test.unity",
+                yaml,
+                "forbidden-guid",
+                "FORBIDDEN_SCRIPT_PRESENT",
+                "Forbidden script must not be serialized.");
+
+            Assert.That(issues, Is.Empty);
+        }
+
+        [Test]
         public void StableIdValidation_ReportsDuplicateStableIds()
         {
             var yaml = string.Join("\n",

@@ -47,7 +47,7 @@ namespace ZeroEngine.World.Authoring
             }
 
             return yaml.Split(new[] { "--- !u!" }, StringSplitOptions.None)
-                .Where(block => block.Contains(scriptGuid))
+                .Where(block => ReferencesScriptGuid(block, scriptGuid))
                 .Select(block => new AreaAuthoringYamlComponentBlock(block))
                 .ToArray();
         }
@@ -77,7 +77,7 @@ namespace ZeroEngine.World.Authoring
 
             foreach (var guid in forbiddenScriptGuids.Where(guid => !string.IsNullOrWhiteSpace(guid)))
             {
-                if (!yaml.Contains(guid))
+                if (!ContainsScriptGuid(yaml, guid))
                 {
                     continue;
                 }
@@ -100,7 +100,7 @@ namespace ZeroEngine.World.Authoring
             string code,
             string message)
         {
-            if (string.IsNullOrEmpty(yaml) || string.IsNullOrWhiteSpace(scriptGuid) || !yaml.Contains(scriptGuid))
+            if (string.IsNullOrEmpty(yaml) || string.IsNullOrWhiteSpace(scriptGuid) || !ContainsScriptGuid(yaml, scriptGuid))
             {
                 return Array.Empty<AreaAuthoringIssue>();
             }
@@ -114,6 +114,24 @@ namespace ZeroEngine.World.Authoring
         private static AreaAuthoringIssue Error(string code, string message, string assetPath = null, string contextId = null)
         {
             return new AreaAuthoringIssue(AreaAuthoringIssueSeverity.Error, code, message, assetPath, contextId);
+        }
+
+        private static bool ContainsScriptGuid(string yaml, string scriptGuid)
+        {
+            return ExtractComponentBlocks(yaml, scriptGuid).Count > 0;
+        }
+
+        private static bool ReferencesScriptGuid(string yamlBlock, string scriptGuid)
+        {
+            if (string.IsNullOrEmpty(yamlBlock) || string.IsNullOrWhiteSpace(scriptGuid))
+            {
+                return false;
+            }
+
+            var pattern = @"(?m)^\s*m_Script:\s*\{[^\r\n}]*\bguid:\s*"
+                + Regex.Escape(scriptGuid)
+                + @"(?:\s|,|\})";
+            return Regex.IsMatch(yamlBlock, pattern);
         }
     }
 }
