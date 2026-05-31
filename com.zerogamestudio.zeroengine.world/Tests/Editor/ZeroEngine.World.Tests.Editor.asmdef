@@ -2,6 +2,7 @@
   "name": "ZeroEngine.World.Tests.Editor",
   "rootNamespace": "ZeroEngine.World.Tests.Editor",
   "references": [
+    "ZeroEngine.World",
     "ZeroEngine.World.Editor",
     "UnityEditor.TestRunner",
     "UnityEngine.TestRunner"
