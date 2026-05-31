@@ -729,6 +729,49 @@ namespace ZeroEngine.Pathfinding2D.Tests.Editor
         }
 
         [Test]
+        public void GenerateJumpLinks_OneWayDropThrough_DoesNotPassThroughIntermediateSolidPlatform()
+        {
+            var host = new GameObject("OneWayDropThroughSolidBlockerTest");
+            var upper = CreatePlatform("OneWayDropUpper", new Vector2(0f, 4f), new Vector2(6f, 0.2f));
+            var blocker = CreatePlatform("OneWayDropSolidBlocker", new Vector2(0f, 2f), new Vector2(6f, 0.2f));
+            var lower = CreatePlatform("OneWayDropLower", new Vector2(0f, 0f), new Vector2(6f, 0.2f));
+            upper.layer = 2;
+
+            try
+            {
+                var graph = host.AddComponent<PlatformGraphGenerator>();
+                graph.Config.ScanCenter = new Vector2(0f, 2f);
+                graph.Config.ScanSize = new Vector2(8f, 7f);
+                graph.Config.GroundLayer = 1 << blocker.layer;
+                graph.Config.OneWayPlatformLayer = 1 << upper.layer;
+                graph.Config.ObstacleLayer = 0;
+                graph.Config.NodeSpacing = 1f;
+                graph.Config.EdgeInset = 0.2f;
+
+                graph.GeneratePlatformGraph();
+                var jumpLinkCalculator = host.AddComponent<JumpLinkCalculator>();
+                jumpLinkCalculator.GenerateJumpLinks();
+
+                bool dropsToBlocker = graph.Links.Any(link =>
+                    link.LinkType == PlatformLinkType.DropThrough &&
+                    LinkConnectsColliders(graph, link, upper.GetComponent<Collider2D>(), blocker.GetComponent<Collider2D>()));
+                bool dropsToLowerThroughBlocker = graph.Links.Any(link =>
+                    link.LinkType == PlatformLinkType.DropThrough &&
+                    LinkConnectsColliders(graph, link, upper.GetComponent<Collider2D>(), lower.GetComponent<Collider2D>()));
+
+                Assert.IsTrue(dropsToBlocker, "Dropping through the current one-way platform should allow landing on the first solid platform below.");
+                Assert.IsFalse(dropsToLowerThroughBlocker, "Drop-through links must not pass through an intermediate solid platform.");
+            }
+            finally
+            {
+                Object.DestroyImmediate(host);
+                Object.DestroyImmediate(upper);
+                Object.DestroyImmediate(blocker);
+                Object.DestroyImmediate(lower);
+            }
+        }
+
+        [Test]
         public void IsCurrentCommandComplete_WalkTargetAbovePlayer_DoesNotComplete()
         {
             var host = new GameObject("WalkCompletionHeightTest");
@@ -1096,6 +1139,20 @@ namespace ZeroEngine.Pathfinding2D.Tests.Editor
             string commands = string.Join(" -> ", result.Path.Commands.Select((command, index) =>
                 $"{index}:{command.CommandType}@{command.Target:F2}/face={command.FacingDirection}"));
             return $"{result.FailureReason}; kind={result.CompletionKind}; commands={result.Path.Commands.Count}; {commands}";
+        }
+
+        private static bool LinkConnectsColliders(
+            PlatformGraphGenerator graph,
+            PlatformLinkData link,
+            Collider2D fromCollider,
+            Collider2D toCollider)
+        {
+            var from = graph.GetNode(link.FromNodeId);
+            var to = graph.GetNode(link.ToNodeId);
+            return from.HasValue &&
+                   to.HasValue &&
+                   from.Value.PlatformCollider == fromCollider &&
+                   to.Value.PlatformCollider == toCollider;
         }
 
         private static void AssertNoVerticalWalkCommands(PlatformPathResult result, float maxVerticalDelta = 0.5f)

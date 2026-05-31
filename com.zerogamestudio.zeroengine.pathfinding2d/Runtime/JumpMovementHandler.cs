@@ -60,7 +60,8 @@ namespace ZeroEngine.Pathfinding2D
             Vector2 end,
             float maxJumpVelocity,
             float gravityScale = DefaultGravityScale,
-            float overshoot = 1.2f)
+            float overshoot = 1.2f,
+            float maxHorizontalSpeed = 0f)
         {
             float deltaX = end.x - start.x;
             float deltaY = end.y - start.y;
@@ -70,11 +71,17 @@ namespace ZeroEngine.Pathfinding2D
             if (deltaY < -0.5f && Mathf.Abs(deltaX) < 2f)
             {
                 float fallTime = Mathf.Sqrt(2f * Mathf.Abs(deltaY) / gravity);
+                float fallVelocityX = deltaX / fallTime;
+                if (ExceedsHorizontalSpeed(fallVelocityX, maxHorizontalSpeed))
+                {
+                    return JumpCalculationResult.NotReachable;
+                }
+
                 return new JumpCalculationResult
                 {
                     IsReachable = true,
                     VelocityY = 0f,
-                    VelocityX = deltaX / fallTime,
+                    VelocityX = fallVelocityX,
                     FlightTime = fallTime,
                     MaxHeight = 0f
                 };
@@ -93,21 +100,20 @@ namespace ZeroEngine.Pathfinding2D
                 return JumpCalculationResult.NotReachable;
             }
 
-            // 计算到达最高点的时间: t_up = v / g
-            float timeToApex = requiredVelocityY / gravity;
-
-            // 计算从最高点下落到目标高度的时间
-            float heightAtApex = start.y + requiredHeight;
-            float fallHeight = heightAtApex - end.y;
-
-            if (fallHeight < 0)
+            float selectedHeight = SelectJumpHeightForHorizontalSpeed(
+                requiredHeight,
+                deltaX,
+                deltaY,
+                gravity,
+                maxJumpVelocity,
+                maxHorizontalSpeed);
+            if (selectedHeight < 0f)
             {
-                // 目标高于最高点，不可达
                 return JumpCalculationResult.NotReachable;
             }
 
-            float timeToFall = Mathf.Sqrt(2f * fallHeight / gravity);
-            float totalTime = timeToApex + timeToFall;
+            requiredVelocityY = Mathf.Sqrt(2f * gravity * selectedHeight);
+            float totalTime = CalculateFlightTime(selectedHeight, deltaY, gravity);
 
             // 限制飞行时间
             if (totalTime < MinJumpTime || totalTime > MaxJumpTime)
@@ -118,6 +124,11 @@ namespace ZeroEngine.Pathfinding2D
             // 计算所需的 X 速度
             float requiredVelocityX = deltaX / totalTime;
 
+            if (ExceedsHorizontalSpeed(requiredVelocityX, maxHorizontalSpeed))
+            {
+                return JumpCalculationResult.NotReachable;
+            }
+
             // 生成轨迹点
             var trajectory = GenerateTrajectory(start, requiredVelocityX, requiredVelocityY, gravity, totalTime);
 
@@ -127,9 +138,73 @@ namespace ZeroEngine.Pathfinding2D
                 VelocityY = requiredVelocityY,
                 VelocityX = requiredVelocityX,
                 FlightTime = totalTime,
-                MaxHeight = requiredHeight,
+                MaxHeight = selectedHeight,
                 Trajectory = trajectory
             };
+        }
+
+        private static float SelectJumpHeightForHorizontalSpeed(
+            float minimumHeight,
+            float deltaX,
+            float deltaY,
+            float gravity,
+            float maxJumpVelocity,
+            float maxHorizontalSpeed)
+        {
+            float maxHeight = maxJumpVelocity * maxJumpVelocity / (2f * gravity);
+            if (minimumHeight > maxHeight)
+            {
+                return -1f;
+            }
+
+            float minimumTime = CalculateFlightTime(minimumHeight, deltaY, gravity);
+            if (minimumTime <= 0f)
+            {
+                return -1f;
+            }
+
+            if (!ExceedsHorizontalSpeed(deltaX / minimumTime, maxHorizontalSpeed))
+            {
+                return minimumHeight;
+            }
+
+            float maxTime = CalculateFlightTime(maxHeight, deltaY, gravity);
+            if (maxTime <= 0f || ExceedsHorizontalSpeed(deltaX / maxTime, maxHorizontalSpeed))
+            {
+                return -1f;
+            }
+
+            float low = minimumHeight;
+            float high = maxHeight;
+            for (int i = 0; i < 12; i++)
+            {
+                float mid = (low + high) * 0.5f;
+                float midTime = CalculateFlightTime(mid, deltaY, gravity);
+                float midVelocityX = deltaX / midTime;
+
+                if (ExceedsHorizontalSpeed(midVelocityX, maxHorizontalSpeed))
+                    low = mid;
+                else
+                    high = mid;
+            }
+
+            return high;
+        }
+
+        private static float CalculateFlightTime(float jumpHeight, float deltaY, float gravity)
+        {
+            float fallHeight = jumpHeight - deltaY;
+            if (fallHeight < 0f)
+                return -1f;
+
+            float timeToApex = Mathf.Sqrt(2f * jumpHeight / gravity);
+            float timeToFall = Mathf.Sqrt(2f * fallHeight / gravity);
+            return timeToApex + timeToFall;
+        }
+
+        private static bool ExceedsHorizontalSpeed(float velocityX, float maxHorizontalSpeed)
+        {
+            return maxHorizontalSpeed > 0f && Mathf.Abs(velocityX) > maxHorizontalSpeed;
         }
 
         /// <summary>
@@ -166,7 +241,8 @@ namespace ZeroEngine.Pathfinding2D
         public static JumpCalculationResult CalculateFall(
             Vector2 start,
             Vector2 end,
-            float gravityScale = DefaultGravityScale)
+            float gravityScale = DefaultGravityScale,
+            float maxHorizontalSpeed = 0f)
         {
             float deltaX = end.x - start.x;
             float deltaY = start.y - end.y; // 正值表示下落高度
@@ -180,6 +256,10 @@ namespace ZeroEngine.Pathfinding2D
             // 自由落体时间: t = sqrt(2h/g)
             float fallTime = Mathf.Sqrt(2f * deltaY / gravity);
             float velocityX = deltaX / fallTime;
+            if (ExceedsHorizontalSpeed(velocityX, maxHorizontalSpeed))
+            {
+                return JumpCalculationResult.NotReachable;
+            }
 
             return new JumpCalculationResult
             {
@@ -296,6 +376,9 @@ namespace ZeroEngine.Pathfinding2D
                 return false;
 
             Vector2 startPos = trajectory[0];
+            Vector2 endPos = trajectory[trajectory.Length - 1];
+            float totalTrajectoryDistance = CalculateTrajectoryDistance(trajectory);
+            float endpointTolerance = Mathf.Max(colliderRadius * 2f + 0.1f, 0.35f);
             float traveledDistance = 0f;
 
             for (int i = 0; i < trajectory.Length - 1; i++)
@@ -312,15 +395,27 @@ namespace ZeroEngine.Pathfinding2D
                     continue;
                 }
 
-                RaycastHit2D hit = Physics2D.CircleCast(
+                var hits = Physics2D.CircleCastAll(
                     from, colliderRadius, (to - from).normalized, segmentDist, obstacleMask);
 
-                if (hit.collider != null)
+                for (int hitIndex = 0; hitIndex < hits.Length; hitIndex++)
                 {
-                    // 排除起点和目标平台，避免误判
-                    if (hit.collider == fromPlatform || hit.collider == toPlatform)
+                    var hit = hits[hitIndex];
+                    if (hit.collider == null)
+                        continue;
+
+                    float hitPathDistance = traveledDistance + hit.distance;
+                    if (ShouldIgnoreEndpointPlatformHit(
+                            hit,
+                            fromPlatform,
+                            toPlatform,
+                            startPos,
+                            endPos,
+                            hitPathDistance,
+                            totalTrajectoryDistance,
+                            endpointTolerance,
+                            ignoreInitialDistance))
                     {
-                        traveledDistance += segmentDist;
                         continue;
                     }
 
@@ -332,7 +427,6 @@ namespace ZeroEngine.Pathfinding2D
                     if (distFromStart < 1.5f && hit.point.y > startPos.y && horizontalDistFromStart > 0.5f)
                     {
                         // 只有侧面擦边才忽略（水平距离 > 0.5m）
-                        traveledDistance += segmentDist;
                         continue;
                     }
 
@@ -342,6 +436,49 @@ namespace ZeroEngine.Pathfinding2D
                 traveledDistance += segmentDist;
             }
             return true;
+        }
+
+        private static float CalculateTrajectoryDistance(Vector2[] trajectory)
+        {
+            float distance = 0f;
+            for (int i = 0; i < trajectory.Length - 1; i++)
+            {
+                distance += Vector2.Distance(trajectory[i], trajectory[i + 1]);
+            }
+
+            return distance;
+        }
+
+        private static bool ShouldIgnoreEndpointPlatformHit(
+            RaycastHit2D hit,
+            Collider2D fromPlatform,
+            Collider2D toPlatform,
+            Vector2 startPos,
+            Vector2 endPos,
+            float hitPathDistance,
+            float totalTrajectoryDistance,
+            float endpointTolerance,
+            float ignoreInitialDistance)
+        {
+            bool isFromPlatform = hit.collider == fromPlatform;
+            bool isToPlatform = hit.collider == toPlatform;
+
+            if (isFromPlatform || isToPlatform)
+            {
+                float startTolerance = Mathf.Max(ignoreInitialDistance, endpointTolerance);
+                float remainingDistance = totalTrajectoryDistance - hitPathDistance;
+                bool nearStart = isFromPlatform &&
+                                 (hitPathDistance <= startTolerance ||
+                                  Vector2.Distance(hit.point, startPos) <= startTolerance);
+                bool nearEnd = isToPlatform &&
+                               (remainingDistance <= endpointTolerance ||
+                                Vector2.Distance(hit.point, endPos) <= endpointTolerance ||
+                                Vector2.Distance(hit.centroid, endPos) <= endpointTolerance);
+
+                return nearStart || nearEnd;
+            }
+
+            return false;
         }
     }
 }

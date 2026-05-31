@@ -20,6 +20,9 @@ namespace ZeroEngine.Pathfinding2D
         [Tooltip("最大水平跳跃距离")]
         public float MaxHorizontalDistance = 6f;
 
+        [Tooltip("最大空中水平速度；<= 0 表示不限制。应匹配角色空中移动速度。")]
+        public float MaxAirHorizontalSpeed = 0f;
+
         [Tooltip("最大跳跃高度")]
         public float MaxJumpHeight = 6f;
 
@@ -86,7 +89,7 @@ namespace ZeroEngine.Pathfinding2D
             }
 
             var nodes = graphGenerator.Nodes;
-            var obstacleLayer = graphGenerator.Config.ObstacleLayer;
+            LayerMask trajectoryBlockerLayer = graphGenerator.Config.ObstacleLayer.value | graphGenerator.Config.GroundLayer.value;
 
             int jumpLinksCreated = 0;
             int fallLinksCreated = 0;
@@ -186,7 +189,7 @@ namespace ZeroEngine.Pathfinding2D
                         if (horizontalDist <= config.MaxHorizontalDistance)
                         {
                             jumpAttempts++;
-                            if (TryCreateJumpLink(fromNode, toNode, obstacleLayer, out string failReason))
+                            if (TryCreateJumpLink(fromNode, toNode, trajectoryBlockerLayer, out string failReason))
                             {
                                 jumpLinksCreated++;
                             }
@@ -232,7 +235,7 @@ namespace ZeroEngine.Pathfinding2D
                             // ★ 工业级方案：尝试连接所有可达边缘节点（不只是最近的）
                             // 让轨迹验证决定是否创建链接，而非位置去重
 
-                            if (TryCreateFallLink(fromNode, toNode, obstacleLayer))
+                            if (TryCreateFallLink(fromNode, toNode, trajectoryBlockerLayer))
                             {
                                 fallLinksCreated++;
                             }
@@ -243,7 +246,7 @@ namespace ZeroEngine.Pathfinding2D
                 // 检查穿透单向平台下落（单向平台任意位置都可下穿，不限于边缘节点）
                 if (fromNode.IsOneWay)
                 {
-                    var dropLinks = CreateDropThroughLinks(fromNode, nodes, obstacleLayer);
+                    var dropLinks = CreateDropThroughLinks(fromNode, nodes, trajectoryBlockerLayer);
                     dropLinksCreated += dropLinks;
                 }
             }
@@ -259,7 +262,7 @@ namespace ZeroEngine.Pathfinding2D
                           $"超距离={jumpFailedDistance}, 超高度={jumpFailedHeight}, 不可达={jumpFailedReachable}, 轨迹阻挡={jumpFailedTrajectory}");
                 Debug.Log($"[JumpLinkCalculator] 过滤诊断: 起点非边缘={jumpSkippedNotEdge}, 终点非边缘(跳)={jumpSkippedToNotEdge}, 终点非边缘(落)={fallSkippedToNotEdge}");
                 Debug.Log($"[JumpLinkCalculator] 配置: MaxJumpHeight={config.MaxJumpHeight}, MaxHorizontalDistance={config.MaxHorizontalDistance}, " +
-                          $"MaxJumpVelocity={config.MaxJumpVelocity}, ObstacleLayer={obstacleLayer.value}");
+                          $"MaxAirHorizontalSpeed={config.MaxAirHorizontalSpeed}, MaxJumpVelocity={config.MaxJumpVelocity}, BlockerLayer={trajectoryBlockerLayer.value}");
             }
 
             // 构建邻接表，优化 A* 寻路性能（O(n) -> O(1)）
@@ -338,7 +341,8 @@ namespace ZeroEngine.Pathfinding2D
                 to.Position,
                 config.MaxJumpVelocity,
                 config.GravityScale,
-                config.Overshoot
+                config.Overshoot,
+                config.MaxAirHorizontalSpeed
             );
 
             if (!result.IsReachable)
@@ -429,7 +433,8 @@ namespace ZeroEngine.Pathfinding2D
             var result = JumpMovementHandler.CalculateFall(
                 from.Position,
                 to.Position,
-                config.GravityScale
+                config.GravityScale,
+                config.MaxAirHorizontalSpeed
             );
 
             if (!result.IsReachable) return false;
@@ -438,15 +443,14 @@ namespace ZeroEngine.Pathfinding2D
             Vector2 direction = ((Vector2)to.Position - (Vector2)from.Position).normalized;
             float distance = Vector2.Distance(from.Position, to.Position);
 
-            RaycastHit2D hit = Physics2D.CircleCast(
+            if (!ValidateLinearTrajectory(
                 from.Position,
                 config.TrajectoryCheckRadius,
                 direction,
                 distance,
-                obstacleLayer
-            );
-
-            if (hit.collider != null && hit.collider != to.PlatformCollider)
+                obstacleLayer,
+                from.PlatformCollider,
+                to.PlatformCollider))
             {
                 return false;
             }
@@ -486,9 +490,24 @@ namespace ZeroEngine.Pathfinding2D
                 if (verticalDist <= 0.5f || verticalDist > config.MaxFallHeight) continue;
 
                 // 计算下落时间
-                var result = JumpMovementHandler.CalculateFall(startPos, toNode.Position, config.GravityScale);
+                var result = JumpMovementHandler.CalculateFall(
+                    startPos,
+                    toNode.Position,
+                    config.GravityScale,
+                    config.MaxAirHorizontalSpeed);
 
                 if (!result.IsReachable) continue;
+                if (!ValidateLinearTrajectory(
+                        startPos,
+                        config.TrajectoryCheckRadius,
+                        ((Vector2)toNode.Position - startPos).normalized,
+                        Vector2.Distance(startPos, toNode.Position),
+                        obstacleLayer,
+                        fromNode.PlatformCollider,
+                        toNode.PlatformCollider))
+                {
+                    continue;
+                }
 
                 // 创建穿透下落链接
                 var link = PlatformLinkData.CreateDropThrough(fromNode.NodeId, toNode.NodeId, result.FlightTime);
@@ -497,6 +516,74 @@ namespace ZeroEngine.Pathfinding2D
             }
 
             return created;
+        }
+
+        private bool ValidateLinearTrajectory(
+            Vector2 start,
+            float colliderRadius,
+            Vector2 direction,
+            float distance,
+            LayerMask obstacleLayer,
+            Collider2D fromPlatform,
+            Collider2D toPlatform)
+        {
+            var hits = Physics2D.CircleCastAll(start, colliderRadius, direction, distance, obstacleLayer);
+            Vector2 end = start + direction.normalized * distance;
+            float endpointTolerance = Mathf.Max(colliderRadius * 2f + 0.1f, 0.35f);
+
+            for (int i = 0; i < hits.Length; i++)
+            {
+                var hit = hits[i];
+                if (hit.collider == null)
+                {
+                    continue;
+                }
+
+                if (ShouldIgnoreLinearEndpointHit(
+                        hit,
+                        start,
+                        end,
+                        distance,
+                        endpointTolerance,
+                        fromPlatform,
+                        toPlatform))
+                {
+                    continue;
+                }
+
+                return false;
+            }
+
+            return true;
+        }
+
+        private static bool ShouldIgnoreLinearEndpointHit(
+            RaycastHit2D hit,
+            Vector2 start,
+            Vector2 end,
+            float totalDistance,
+            float endpointTolerance,
+            Collider2D fromPlatform,
+            Collider2D toPlatform)
+        {
+            bool isFromPlatform = hit.collider == fromPlatform;
+            bool isToPlatform = hit.collider == toPlatform;
+
+            if (isFromPlatform || isToPlatform)
+            {
+                float remainingDistance = totalDistance - hit.distance;
+                bool nearStart = isFromPlatform &&
+                                 (hit.distance <= endpointTolerance ||
+                                  Vector2.Distance(hit.point, start) <= endpointTolerance);
+                bool nearEnd = isToPlatform &&
+                               (remainingDistance <= endpointTolerance ||
+                                Vector2.Distance(hit.point, end) <= endpointTolerance ||
+                                Vector2.Distance(hit.centroid, end) <= endpointTolerance);
+
+                return nearStart || nearEnd;
+            }
+
+            return false;
         }
 
         /// <summary>
