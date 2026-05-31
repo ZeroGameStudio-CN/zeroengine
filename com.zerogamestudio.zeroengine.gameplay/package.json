@@ -1,14 +1,27 @@
 {
-    "name": "com.zerogamestudio.zeroengine.gameplay",
-    "version": "2.0.0",
-    "displayName": "ZeroEngine.Gameplay",
-    "description": "Gameplay mechanics for ZeroEngine. Includes Interaction System, Tutorial System (sequences, steps), and Command Pattern (undo/redo).",
-    "unity": "2022.3",
-    "unityRelease": "0f1",
-    "dependencies": {
-        "com.zerogamestudio.zeroengine.core": "2.0.0",
-        "com.zerogamestudio.zeroengine.persistence": "2.0.0"
-    },
-    "keywords": ["zeroengine", "interaction", "tutorial", "command"],
-    "author": { "name": "ZeroGameStudio" }
+  "name": "com.zerogamestudio.zeroengine.gameplay",
+  "version": "2.0.0",
+  "displayName": "ZeroEngine.Gameplay",
+  "description": "Gameplay mechanics for ZeroEngine. Includes Interaction System, Tutorial System (sequences, steps), and Command Pattern (undo/redo).",
+  "unity": "2022.3",
+  "unityRelease": "0f1",
+  "dependencies": {
+    "com.zerogamestudio.zeroengine.core": "2.0.0",
+    "com.zerogamestudio.zeroengine.persistence": "2.0.0"
+  },
+  "keywords": [
+    "zeroengine",
+    "interaction",
+    "tutorial",
+    "command"
+  ],
+  "author": {
+    "name": "ZeroGameStudio"
+  },
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/liuzqk/zeroengine.git",
+    "directory": "com.zerogamestudio.zeroengine.gameplay"
+  }
 }

@@ -1,29 +1,30 @@
 {
-    "name": "com.zerogamestudio.zeroengine.pathfinding2d",
-    "version": "1.6.19",
-    "displayName": "ZeroEngine.Pathfinding2D",
-    "description": "2D Platform pathfinding system for ZeroEngine. Provides platform graph generation, jump link calculation, and built-in A* pathfinding for platformer games.",
-    "unity": "2022.3",
-    "unityRelease": "0f1",
-    "dependencies": {
-        "com.zerogamestudio.zeroengine.core": "1.0.0"
-    },
-    "keywords": [
-        "zeroengine",
-        "pathfinding",
-        "2d",
-        "platformer",
-        "navigation",
-        "jump",
-        "astar"
-    ],
-    "author": {
-        "name": "ZeroGameStudio",
-        "url": "https://github.com/zerogamestudio"
-    },
-    "repository": {
-        "type": "git",
-        "url": "https://github.com/zerogamestudio/zeroengine.git",
-        "directory": "Packages/com.zerogamestudio.zeroengine.pathfinding2d"
-    }
+  "name": "com.zerogamestudio.zeroengine.pathfinding2d",
+  "version": "1.6.19",
+  "displayName": "ZeroEngine.Pathfinding2D",
+  "description": "2D Platform pathfinding system for ZeroEngine. Provides platform graph generation, jump link calculation, and built-in A* pathfinding for platformer games.",
+  "unity": "2022.3",
+  "unityRelease": "0f1",
+  "dependencies": {
+    "com.zerogamestudio.zeroengine.core": "1.0.0"
+  },
+  "keywords": [
+    "zeroengine",
+    "pathfinding",
+    "2d",
+    "platformer",
+    "navigation",
+    "jump",
+    "astar"
+  ],
+  "author": {
+    "name": "ZeroGameStudio",
+    "url": "https://github.com/zerogamestudio"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/liuzqk/zeroengine.git",
+    "directory": "com.zerogamestudio.zeroengine.pathfinding2d"
+  },
+  "license": "MIT"
 }

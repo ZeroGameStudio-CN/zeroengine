@@ -1,15 +1,36 @@
 {
-    "name": "com.zerogamestudio.zeroengine.character",
-    "version": "2.6.0",
-    "displayName": "ZeroEngine.Character",
-    "description": "Character progression systems for ZeroEngine. Includes Equipment System, Talent Tree System, Party System, Formation System, Job System, Sect System (门派), MartialArts System (武学), and Realm System (境界).",
-    "unity": "2022.3",
-    "unityRelease": "0f1",
-    "dependencies": {
-        "com.zerogamestudio.zeroengine.core": "2.0.0",
-        "com.zerogamestudio.zeroengine.data": "2.0.0",
-        "com.zerogamestudio.zeroengine.persistence": "2.0.0"
-    },
-    "keywords": ["zeroengine", "equipment", "talent", "progression", "party", "formation", "job", "class", "sect", "martial-arts", "realm", "wuxia"],
-    "author": { "name": "ZeroGameStudio" }
+  "name": "com.zerogamestudio.zeroengine.character",
+  "version": "2.6.0",
+  "displayName": "ZeroEngine.Character",
+  "description": "Character progression systems for ZeroEngine. Includes Equipment System, Talent Tree System, Party System, Formation System, Job System, Sect System (门派), MartialArts System (武学), and Realm System (境界).",
+  "unity": "2022.3",
+  "unityRelease": "0f1",
+  "dependencies": {
+    "com.zerogamestudio.zeroengine.core": "2.0.0",
+    "com.zerogamestudio.zeroengine.data": "2.0.0",
+    "com.zerogamestudio.zeroengine.persistence": "2.0.0"
+  },
+  "keywords": [
+    "zeroengine",
+    "equipment",
+    "talent",
+    "progression",
+    "party",
+    "formation",
+    "job",
+    "class",
+    "sect",
+    "martial-arts",
+    "realm",
+    "wuxia"
+  ],
+  "author": {
+    "name": "ZeroGameStudio"
+  },
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/liuzqk/zeroengine.git",
+    "directory": "com.zerogamestudio.zeroengine.character"
+  }
 }

@@ -1,24 +1,30 @@
 {
-    "name": "com.zerogamestudio.zeroengine.data",
-    "version": "2.0.0",
-    "displayName": "ZeroEngine.Data",
-    "description": "Data systems for ZeroEngine. Includes StatSystem (attributes, modifiers, constraints) and BuffSystem (buff management, stacking, duration, stat integration).",
-    "unity": "2022.3",
-    "unityRelease": "0f1",
-    "dependencies": {
-        "com.zerogamestudio.zeroengine.core": "2.0.0"
-    },
-    "keywords": [
-        "zeroengine",
-        "stat",
-        "attribute",
-        "modifier",
-        "buff",
-        "debuff",
-        "status-effect"
-    ],
-    "author": {
-        "name": "ZeroGameStudio",
-        "url": "https://github.com/zerogamestudio"
-    }
+  "name": "com.zerogamestudio.zeroengine.data",
+  "version": "2.0.0",
+  "displayName": "ZeroEngine.Data",
+  "description": "Data systems for ZeroEngine. Includes StatSystem (attributes, modifiers, constraints) and BuffSystem (buff management, stacking, duration, stat integration).",
+  "unity": "2022.3",
+  "unityRelease": "0f1",
+  "dependencies": {
+    "com.zerogamestudio.zeroengine.core": "2.0.0"
+  },
+  "keywords": [
+    "zeroengine",
+    "stat",
+    "attribute",
+    "modifier",
+    "buff",
+    "debuff",
+    "status-effect"
+  ],
+  "author": {
+    "name": "ZeroGameStudio",
+    "url": "https://github.com/zerogamestudio"
+  },
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/liuzqk/zeroengine.git",
+    "directory": "com.zerogamestudio.zeroengine.data"
+  }
 }
