@@ -20,6 +20,9 @@ namespace ZeroEngine.Pathfinding2D
         [Tooltip("最大水平跳跃距离")]
         public float MaxHorizontalDistance = 6f;
 
+        [Tooltip("最大空中水平速度，0 表示不限制")]
+        public float MaxAirHorizontalSpeed = 0f;
+
         [Tooltip("最大跳跃高度")]
         public float MaxJumpHeight = 6f;
 
@@ -86,7 +89,8 @@ namespace ZeroEngine.Pathfinding2D
             }
 
             var nodes = graphGenerator.Nodes;
-            var obstacleLayer = graphGenerator.Config.ObstacleLayer;
+            LayerMask obstacleLayer = graphGenerator.Config.ObstacleLayer;
+            LayerMask trajectoryBlockerLayer = graphGenerator.Config.GroundLayer | graphGenerator.Config.ObstacleLayer;
 
             int jumpLinksCreated = 0;
             int fallLinksCreated = 0;
@@ -186,7 +190,7 @@ namespace ZeroEngine.Pathfinding2D
                         if (horizontalDist <= config.MaxHorizontalDistance)
                         {
                             jumpAttempts++;
-                            if (TryCreateJumpLink(fromNode, toNode, obstacleLayer, out string failReason))
+                            if (TryCreateJumpLink(fromNode, toNode, trajectoryBlockerLayer, out string failReason))
                             {
                                 jumpLinksCreated++;
                             }
@@ -232,7 +236,7 @@ namespace ZeroEngine.Pathfinding2D
                             // ★ 工业级方案：尝试连接所有可达边缘节点（不只是最近的）
                             // 让轨迹验证决定是否创建链接，而非位置去重
 
-                            if (TryCreateFallLink(fromNode, toNode, obstacleLayer))
+                            if (TryCreateFallLink(fromNode, toNode, trajectoryBlockerLayer))
                             {
                                 fallLinksCreated++;
                             }
@@ -243,7 +247,7 @@ namespace ZeroEngine.Pathfinding2D
                 // 检查穿透单向平台下落（单向平台任意位置都可下穿，不限于边缘节点）
                 if (fromNode.IsOneWay)
                 {
-                    var dropLinks = CreateDropThroughLinks(fromNode, nodes, obstacleLayer);
+                    var dropLinks = CreateDropThroughLinks(fromNode, nodes, trajectoryBlockerLayer);
                     dropLinksCreated += dropLinks;
                 }
             }
@@ -259,7 +263,8 @@ namespace ZeroEngine.Pathfinding2D
                           $"超距离={jumpFailedDistance}, 超高度={jumpFailedHeight}, 不可达={jumpFailedReachable}, 轨迹阻挡={jumpFailedTrajectory}");
                 Debug.Log($"[JumpLinkCalculator] 过滤诊断: 起点非边缘={jumpSkippedNotEdge}, 终点非边缘(跳)={jumpSkippedToNotEdge}, 终点非边缘(落)={fallSkippedToNotEdge}");
                 Debug.Log($"[JumpLinkCalculator] 配置: MaxJumpHeight={config.MaxJumpHeight}, MaxHorizontalDistance={config.MaxHorizontalDistance}, " +
-                          $"MaxJumpVelocity={config.MaxJumpVelocity}, ObstacleLayer={obstacleLayer.value}");
+                          $"MaxJumpVelocity={config.MaxJumpVelocity}, MaxAirHorizontalSpeed={config.MaxAirHorizontalSpeed}, " +
+                          $"ObstacleLayer={obstacleLayer.value}, TrajectoryBlockerLayer={trajectoryBlockerLayer.value}");
             }
 
             // 构建邻接表，优化 A* 寻路性能（O(n) -> O(1)）
@@ -338,7 +343,8 @@ namespace ZeroEngine.Pathfinding2D
                 to.Position,
                 config.MaxJumpVelocity,
                 config.GravityScale,
-                config.Overshoot
+                config.Overshoot,
+                config.MaxAirHorizontalSpeed
             );
 
             if (!result.IsReachable)
@@ -429,24 +435,23 @@ namespace ZeroEngine.Pathfinding2D
             var result = JumpMovementHandler.CalculateFall(
                 from.Position,
                 to.Position,
-                config.GravityScale
+                config.GravityScale,
+                config.MaxAirHorizontalSpeed
             );
 
             if (!result.IsReachable) return false;
 
-            // 简单的直线碰撞检测
-            Vector2 direction = ((Vector2)to.Position - (Vector2)from.Position).normalized;
-            float distance = Vector2.Distance(from.Position, to.Position);
-
-            RaycastHit2D hit = Physics2D.CircleCast(
-                from.Position,
-                config.TrajectoryCheckRadius,
-                direction,
-                distance,
-                obstacleLayer
-            );
-
-            if (hit.collider != null && hit.collider != to.PlatformCollider)
+            var trajectory = new[]
+            {
+                (Vector2)from.Position,
+                (Vector2)to.Position
+            };
+            if (!JumpMovementHandler.ValidateTrajectory(
+                    trajectory,
+                    obstacleLayer,
+                    config.TrajectoryCheckRadius,
+                    from.PlatformCollider,
+                    to.PlatformCollider))
             {
                 return false;
             }
@@ -486,9 +491,28 @@ namespace ZeroEngine.Pathfinding2D
                 if (verticalDist <= 0.5f || verticalDist > config.MaxFallHeight) continue;
 
                 // 计算下落时间
-                var result = JumpMovementHandler.CalculateFall(startPos, toNode.Position, config.GravityScale);
+                var result = JumpMovementHandler.CalculateFall(
+                    startPos,
+                    toNode.Position,
+                    config.GravityScale,
+                    config.MaxAirHorizontalSpeed);
 
                 if (!result.IsReachable) continue;
+
+                var trajectory = new[]
+                {
+                    startPos,
+                    (Vector2)toNode.Position
+                };
+                if (!JumpMovementHandler.ValidateTrajectory(
+                        trajectory,
+                        obstacleLayer,
+                        config.TrajectoryCheckRadius,
+                        fromNode.PlatformCollider,
+                        toNode.PlatformCollider))
+                {
+                    continue;
+                }
 
                 // 创建穿透下落链接
                 var link = PlatformLinkData.CreateDropThrough(fromNode.NodeId, toNode.NodeId, result.FlightTime);

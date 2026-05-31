@@ -45,6 +45,7 @@ namespace ZeroEngine.Pathfinding2D
         private const float MinJumpTime = 0.1f;
         private const float MaxJumpTime = 2f;
         private const int TrajectoryPoints = 20;
+        private const float DisabledAirSpeedLimit = 0f;
 
         /// <summary>
         /// 计算从起点跳跃到终点所需的速度
@@ -60,7 +61,8 @@ namespace ZeroEngine.Pathfinding2D
             Vector2 end,
             float maxJumpVelocity,
             float gravityScale = DefaultGravityScale,
-            float overshoot = 1.2f)
+            float overshoot = 1.2f,
+            float maxAirHorizontalSpeed = DisabledAirSpeedLimit)
         {
             float deltaX = end.x - start.x;
             float deltaY = end.y - start.y;
@@ -70,11 +72,17 @@ namespace ZeroEngine.Pathfinding2D
             if (deltaY < -0.5f && Mathf.Abs(deltaX) < 2f)
             {
                 float fallTime = Mathf.Sqrt(2f * Mathf.Abs(deltaY) / gravity);
+                float fallVelocityX = deltaX / fallTime;
+                if (ExceedsAirHorizontalSpeed(fallVelocityX, maxAirHorizontalSpeed))
+                {
+                    return JumpCalculationResult.NotReachable;
+                }
+
                 return new JumpCalculationResult
                 {
                     IsReachable = true,
                     VelocityY = 0f,
-                    VelocityX = deltaX / fallTime,
+                    VelocityX = fallVelocityX,
                     FlightTime = fallTime,
                     MaxHeight = 0f
                 };
@@ -117,6 +125,10 @@ namespace ZeroEngine.Pathfinding2D
 
             // 计算所需的 X 速度
             float requiredVelocityX = deltaX / totalTime;
+            if (ExceedsAirHorizontalSpeed(requiredVelocityX, maxAirHorizontalSpeed))
+            {
+                return JumpCalculationResult.NotReachable;
+            }
 
             // 生成轨迹点
             var trajectory = GenerateTrajectory(start, requiredVelocityX, requiredVelocityY, gravity, totalTime);
@@ -166,7 +178,8 @@ namespace ZeroEngine.Pathfinding2D
         public static JumpCalculationResult CalculateFall(
             Vector2 start,
             Vector2 end,
-            float gravityScale = DefaultGravityScale)
+            float gravityScale = DefaultGravityScale,
+            float maxAirHorizontalSpeed = DisabledAirSpeedLimit)
         {
             float deltaX = end.x - start.x;
             float deltaY = start.y - end.y; // 正值表示下落高度
@@ -180,6 +193,10 @@ namespace ZeroEngine.Pathfinding2D
             // 自由落体时间: t = sqrt(2h/g)
             float fallTime = Mathf.Sqrt(2f * deltaY / gravity);
             float velocityX = deltaX / fallTime;
+            if (ExceedsAirHorizontalSpeed(velocityX, maxAirHorizontalSpeed))
+            {
+                return JumpCalculationResult.NotReachable;
+            }
 
             return new JumpCalculationResult
             {
@@ -296,33 +313,33 @@ namespace ZeroEngine.Pathfinding2D
                 return false;
 
             Vector2 startPos = trajectory[0];
+            Vector2 endPos = trajectory[trajectory.Length - 1];
             float traveledDistance = 0f;
+            float endpointIgnoreDistance = Mathf.Max(ignoreInitialDistance, colliderRadius * 2f + 0.05f);
 
             for (int i = 0; i < trajectory.Length - 1; i++)
             {
                 Vector2 from = trajectory[i];
                 Vector2 to = trajectory[i + 1];
                 float segmentDist = Vector2.Distance(from, to);
+                if (segmentDist <= Mathf.Epsilon) continue;
 
-                // 忽略起跳初期的检测（解决突出平台下方起跳被阻挡的问题）
-                // 在起跳的前 ignoreInitialDistance 米内，不进行碰撞检测
-                if (traveledDistance < ignoreInitialDistance)
-                {
-                    traveledDistance += segmentDist;
-                    continue;
-                }
-
-                RaycastHit2D hit = Physics2D.CircleCast(
+                RaycastHit2D[] hits = Physics2D.CircleCastAll(
                     from, colliderRadius, (to - from).normalized, segmentDist, obstacleMask);
 
-                if (hit.collider != null)
+                for (int hitIndex = 0; hitIndex < hits.Length; hitIndex++)
                 {
-                    // 排除起点和目标平台，避免误判
-                    if (hit.collider == fromPlatform || hit.collider == toPlatform)
-                    {
-                        traveledDistance += segmentDist;
+                    var hit = hits[hitIndex];
+                    if (hit.collider == null) continue;
+                    if (ShouldIgnoreEndpointColliderHit(
+                            hit.collider,
+                            hit.point,
+                            startPos,
+                            endPos,
+                            fromPlatform,
+                            toPlatform,
+                            endpointIgnoreDistance))
                         continue;
-                    }
 
                     // 额外检查：如果碰撞点在起点附近（1.5m内），且是侧面擦边（非正面撞头），忽略
                     // 这处理了突出平台底部"擦边"起跳的情况
@@ -339,9 +356,87 @@ namespace ZeroEngine.Pathfinding2D
                     return false;
                 }
 
+                if (SegmentOverlapsBlockingCollider(
+                        from,
+                        to,
+                        colliderRadius,
+                        obstacleMask,
+                        startPos,
+                        endPos,
+                        fromPlatform,
+                        toPlatform,
+                        endpointIgnoreDistance))
+                {
+                    return false;
+                }
+
                 traveledDistance += segmentDist;
             }
             return true;
+        }
+
+        private static bool ExceedsAirHorizontalSpeed(float velocityX, float maxAirHorizontalSpeed)
+        {
+            return maxAirHorizontalSpeed > DisabledAirSpeedLimit &&
+                   Mathf.Abs(velocityX) > maxAirHorizontalSpeed + 0.001f;
+        }
+
+        private static bool SegmentOverlapsBlockingCollider(
+            Vector2 from,
+            Vector2 to,
+            float colliderRadius,
+            LayerMask obstacleMask,
+            Vector2 startPos,
+            Vector2 endPos,
+            Collider2D fromPlatform,
+            Collider2D toPlatform,
+            float endpointIgnoreDistance)
+        {
+            float segmentDist = Vector2.Distance(from, to);
+            if (segmentDist <= Mathf.Epsilon) return false;
+
+            int steps = Mathf.Max(1, Mathf.CeilToInt(segmentDist / Mathf.Max(0.1f, colliderRadius)));
+            for (int step = 0; step <= steps; step++)
+            {
+                Vector2 sample = Vector2.Lerp(from, to, (float)step / steps);
+                Collider2D[] overlaps = Physics2D.OverlapCircleAll(sample, colliderRadius, obstacleMask);
+                for (int i = 0; i < overlaps.Length; i++)
+                {
+                    var collider = overlaps[i];
+                    if (collider == null) continue;
+                    if (ShouldIgnoreEndpointColliderHit(
+                            collider,
+                            sample,
+                            startPos,
+                            endPos,
+                            fromPlatform,
+                            toPlatform,
+                            endpointIgnoreDistance))
+                        continue;
+
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
+        private static bool ShouldIgnoreEndpointColliderHit(
+            Collider2D collider,
+            Vector2 hitPoint,
+            Vector2 startPos,
+            Vector2 endPos,
+            Collider2D fromPlatform,
+            Collider2D toPlatform,
+            float endpointIgnoreDistance)
+        {
+            if (collider == fromPlatform && Vector2.Distance(hitPoint, startPos) <= endpointIgnoreDistance)
+                return true;
+
+            if (collider == toPlatform && Vector2.Distance(hitPoint, endPos) <= endpointIgnoreDistance)
+                return true;
+
+            return false;
         }
     }
 }
