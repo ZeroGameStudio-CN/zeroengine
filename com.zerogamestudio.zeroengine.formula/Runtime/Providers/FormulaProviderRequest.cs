@@ -36,5 +36,19 @@ namespace ZeroEngine.Formula
             value = parameter?.FloatValue ?? 0f;
             return parameter != null;
         }
+
+        public bool TryGetBool(string name, out bool value)
+        {
+            var parameter = parameters.FirstOrDefault(p => p.Name == name && p.Type == FormulaParameterType.Bool);
+            value = parameter?.BoolValue ?? false;
+            return parameter != null;
+        }
+
+        public bool TryGetObject(string name, out UnityEngine.Object value)
+        {
+            var parameter = parameters.FirstOrDefault(p => p.Name == name && p.Type == FormulaParameterType.Object);
+            value = parameter?.ObjectValue;
+            return parameter != null;
+        }
     }
 }

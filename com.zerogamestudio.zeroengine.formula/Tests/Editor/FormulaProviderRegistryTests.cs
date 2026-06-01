@@ -1,4 +1,5 @@
 using NUnit.Framework;
+using System.Linq;
 
 namespace ZeroEngine.Formula.Tests.Editor
 {
@@ -53,6 +54,18 @@ namespace ZeroEngine.Formula.Tests.Editor
             Assert.AreEqual(0f, value, 0.0001f);
             Assert.IsTrue(report.HasErrors);
             Assert.That(report.Diagnostics[0].Code, Is.EqualTo(FormulaDiagnosticCode.InvalidProvider));
+        }
+
+        [Test]
+        public void ProviderRequest_ExposesBoolAndObjectAccessors()
+        {
+            var methods = typeof(FormulaProviderRequest)
+                .GetMethods()
+                .Select(method => method.Name)
+                .ToArray();
+
+            CollectionAssert.Contains(methods, "TryGetBool");
+            CollectionAssert.Contains(methods, "TryGetObject");
         }
 
         private sealed class TestProvider : IFormulaValueProvider
