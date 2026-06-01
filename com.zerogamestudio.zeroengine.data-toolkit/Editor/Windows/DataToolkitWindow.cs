@@ -22,12 +22,20 @@ namespace ZGS.DataToolkit.Editor
         private const float SplitterWidth = 5f;
         private const float RowHeight = 24f;
         private const long LargeAssetInspectorThresholdBytes = 512 * 1024;
+        private const string SelectedTypePrefSuffix = "SelectedType";
+        private const string SelectedAssetGuidPrefSuffix = "SelectedAssetGuid";
+        private const string SelectedAssetPathPrefSuffix = "SelectedAssetPath";
+        private const string TypeSearchPrefSuffix = "TypeSearch";
+        private const string AssetSearchPrefSuffix = "AssetSearch";
 
         private readonly CompositeAssetInspector inspector = new();
         private readonly SafeSerializedAssetInspector safeInspector = new();
         private readonly LazyPreviewAssetInspector lazyPreviewInspector = new();
         private readonly Dictionary<Type, int> assetCountCache = new();
         private readonly Queue<Type> pendingCountTypes = new();
+        private readonly HashSet<IDataToolkitToolbarProvider> disabledToolbarProviders = new();
+        private readonly HashSet<IDataToolkitHeaderActionProvider> disabledHeaderActionProviders = new();
+        private readonly HashSet<string> loggedProviderExceptionKeys = new();
 
         private DataToolkitContext context;
         private IReadOnlyList<IDataToolkitToolbarProvider> toolbarProviders = Array.Empty<IDataToolkitToolbarProvider>();
@@ -108,13 +116,22 @@ namespace ZGS.DataToolkit.Editor
             context = new DataToolkitContext(settings);
             toolbarProviders = profile.ToolbarProviders;
             headerActionProviders = profile.HeaderActionProviders;
+            disabledToolbarProviders.Clear();
+            disabledHeaderActionProviders.Clear();
+            loggedProviderExceptionKeys.Clear();
             inspector.SetCustomInspectors(context, profile.AssetInspectorProviders);
             titleContent = new GUIContent(settings.WindowTitle);
             minSize = new Vector2(980f, 560f);
             typeColumnWidth = Mathf.Clamp(EditorPrefs.GetFloat(settings.PrefKey("TypeColumnWidth"), DefaultTypeColumnWidth), MinColumnWidth, MaxColumnWidth);
             assetColumnWidth = Mathf.Clamp(EditorPrefs.GetFloat(settings.PrefKey("AssetColumnWidth"), DefaultAssetColumnWidth), MinColumnWidth, MaxColumnWidth);
+            typeSearch = EditorPrefs.GetString(settings.PrefKey(TypeSearchPrefSuffix), string.Empty);
+            assetSearch = EditorPrefs.GetString(settings.PrefKey(AssetSearchPrefSuffix), string.Empty);
             typesToDisplay = ManageableDataTypeDiscovery.GetManageableScriptableObjectTypes().ToArray();
-            EnsureSelectedType();
+            if (!RestorePersistedSelection())
+            {
+                EnsureSelectedType();
+            }
+
             StartAssetCountWarmup();
         }
 
@@ -132,6 +149,7 @@ namespace ZGS.DataToolkit.Editor
         {
             if (context != null)
             {
+                SavePersistentState();
                 EditorPrefs.SetFloat(context.Settings.PrefKey("TypeColumnWidth"), Mathf.Clamp(typeColumnWidth, MinColumnWidth, MaxColumnWidth));
                 EditorPrefs.SetFloat(context.Settings.PrefKey("AssetColumnWidth"), Mathf.Clamp(assetColumnWidth, MinColumnWidth, MaxColumnWidth));
             }
@@ -196,7 +214,7 @@ namespace ZGS.DataToolkit.Editor
 
             foreach (var toolbarProvider in toolbarProviders)
             {
-                if (toolbarProvider == null)
+                if (toolbarProvider == null || disabledToolbarProviders.Contains(toolbarProvider))
                 {
                     continue;
                 }
@@ -210,7 +228,7 @@ namespace ZGS.DataToolkit.Editor
                 }
                 catch (Exception exception)
                 {
-                    Debug.LogException(exception);
+                    DisableProvider(toolbarProvider, disabledToolbarProviders, nameof(IDataToolkitToolbarProvider.IsVisible), exception);
                 }
             }
 
@@ -223,7 +241,7 @@ namespace ZGS.DataToolkit.Editor
 
             foreach (var headerActionProvider in headerActionProviders)
             {
-                if (headerActionProvider == null)
+                if (headerActionProvider == null || disabledHeaderActionProviders.Contains(headerActionProvider))
                 {
                     continue;
                 }
@@ -237,7 +255,7 @@ namespace ZGS.DataToolkit.Editor
                 }
                 catch (Exception exception)
                 {
-                    Debug.LogException(exception);
+                    DisableProvider(headerActionProvider, disabledHeaderActionProviders, nameof(IDataToolkitHeaderActionProvider.IsVisible), exception);
                 }
             }
 
@@ -277,13 +295,18 @@ namespace ZGS.DataToolkit.Editor
         {
             foreach (var headerActionProvider in visibleHeaderActionProviders)
             {
+                if (disabledHeaderActionProviders.Contains(headerActionProvider))
+                {
+                    continue;
+                }
+
                 try
                 {
                     headerActionProvider.DrawHeaderActions(context);
                 }
                 catch (Exception exception)
                 {
-                    Debug.LogException(exception);
+                    DisableProvider(headerActionProvider, disabledHeaderActionProviders, nameof(IDataToolkitHeaderActionProvider.DrawHeaderActions), exception);
                 }
             }
         }
@@ -292,13 +315,18 @@ namespace ZGS.DataToolkit.Editor
         {
             foreach (var toolbarProvider in visibleToolbarProviders)
             {
+                if (disabledToolbarProviders.Contains(toolbarProvider))
+                {
+                    continue;
+                }
+
                 try
                 {
                     toolbarProvider.DrawToolbar(context);
                 }
                 catch (Exception exception)
                 {
-                    Debug.LogException(exception);
+                    DisableProvider(toolbarProvider, disabledToolbarProviders, nameof(IDataToolkitToolbarProvider.DrawToolbar), exception);
                 }
             }
         }
@@ -691,6 +719,7 @@ namespace ZGS.DataToolkit.Editor
             assetColumnScroll = Vector2.zero;
             assetSearch = string.Empty;
             ClearSelectedAsset();
+            SavePersistentState();
         }
 
         private void SelectAssetByPath(string assetPath)
@@ -708,6 +737,7 @@ namespace ZGS.DataToolkit.Editor
 
             selectedAssetPath = assetPath;
             SelectAsset(AssetDatabase.LoadAssetAtPath<UnityEngine.Object>(assetPath));
+            SavePersistentState();
         }
 
         private void SelectAsset(UnityEngine.Object asset)
@@ -730,6 +760,7 @@ namespace ZGS.DataToolkit.Editor
             inspector.SetTarget(null);
             safeInspector.SetTarget(null, null);
             lazyPreviewInspector.SetTarget(null);
+            SavePersistentState();
         }
 
         private void ClearSelectedAsset()
@@ -742,6 +773,29 @@ namespace ZGS.DataToolkit.Editor
             inspector.SetTarget(null);
             safeInspector.SetTarget(null, null);
             lazyPreviewInspector.SetTarget(null);
+            SavePersistentState();
+        }
+
+        private void DisableProvider<TProvider>(
+            TProvider provider,
+            HashSet<TProvider> disabledProviders,
+            string phase,
+            Exception exception)
+        {
+            if (provider == null)
+            {
+                return;
+            }
+
+            disabledProviders.Add(provider);
+
+            var key = $"{provider.GetType().FullName}|{phase}";
+            if (!loggedProviderExceptionKeys.Add(key))
+            {
+                return;
+            }
+
+            Debug.LogException(exception);
         }
 
         private bool IsTypeVisible(Type type)
@@ -789,8 +843,141 @@ namespace ZGS.DataToolkit.Editor
             pendingCountTypes.Clear();
             typesToDisplay = ManageableDataTypeDiscovery.GetManageableScriptableObjectTypes().ToArray();
             RestoreSelectionAfterRefresh(selectionSnapshot);
+            SavePersistentState();
             StartAssetCountWarmup();
             Repaint();
+        }
+
+        private void SavePersistentState()
+        {
+            if (context == null)
+            {
+                return;
+            }
+
+            EditorPrefs.SetString(context.Settings.PrefKey(TypeSearchPrefSuffix), typeSearch ?? string.Empty);
+            EditorPrefs.SetString(context.Settings.PrefKey(AssetSearchPrefSuffix), assetSearch ?? string.Empty);
+
+            if (selectedType == null)
+            {
+                EditorPrefs.DeleteKey(context.Settings.PrefKey(SelectedTypePrefSuffix));
+                EditorPrefs.DeleteKey(context.Settings.PrefKey(SelectedAssetGuidPrefSuffix));
+                EditorPrefs.DeleteKey(context.Settings.PrefKey(SelectedAssetPathPrefSuffix));
+                return;
+            }
+
+            EditorPrefs.SetString(context.Settings.PrefKey(SelectedTypePrefSuffix), selectedType.AssemblyQualifiedName);
+
+            var assetPath = selectedAssetPath;
+            if (string.IsNullOrEmpty(assetPath) && selectedAsset != null)
+            {
+                assetPath = AssetDatabase.GetAssetPath(selectedAsset);
+            }
+
+            if (string.IsNullOrEmpty(assetPath))
+            {
+                EditorPrefs.DeleteKey(context.Settings.PrefKey(SelectedAssetGuidPrefSuffix));
+                EditorPrefs.DeleteKey(context.Settings.PrefKey(SelectedAssetPathPrefSuffix));
+                return;
+            }
+
+            EditorPrefs.SetString(context.Settings.PrefKey(SelectedAssetPathPrefSuffix), assetPath);
+            EditorPrefs.SetString(context.Settings.PrefKey(SelectedAssetGuidPrefSuffix), AssetDatabase.AssetPathToGUID(assetPath));
+        }
+
+        private bool RestorePersistedSelection()
+        {
+            if (context == null)
+            {
+                return false;
+            }
+
+            var selectedTypeId = EditorPrefs.GetString(context.Settings.PrefKey(SelectedTypePrefSuffix), string.Empty);
+            if (string.IsNullOrEmpty(selectedTypeId))
+            {
+                return false;
+            }
+
+            var persistedType = typesToDisplay.FirstOrDefault(type => type.AssemblyQualifiedName == selectedTypeId);
+            if (persistedType == null)
+            {
+                return false;
+            }
+
+            selectedType = persistedType;
+
+            var assetPath = ResolvePersistedAssetPath();
+            if (!string.IsNullOrEmpty(assetPath) && CanRestorePersistedAssetPath(assetPath))
+            {
+                selectedAssetPath = assetPath;
+                selectedAsset = AssetDatabase.LoadAssetAtPath<UnityEngine.Object>(assetPath);
+                Selection.activeObject = selectedAsset;
+            }
+
+            return true;
+        }
+
+        private string ResolvePersistedAssetPath()
+        {
+            var assetGuid = EditorPrefs.GetString(context.Settings.PrefKey(SelectedAssetGuidPrefSuffix), string.Empty);
+            if (!string.IsNullOrEmpty(assetGuid))
+            {
+                var assetPathFromGuid = AssetDatabase.GUIDToAssetPath(assetGuid);
+                if (!string.IsNullOrEmpty(assetPathFromGuid))
+                {
+                    return assetPathFromGuid;
+                }
+            }
+
+            return EditorPrefs.GetString(context.Settings.PrefKey(SelectedAssetPathPrefSuffix), string.Empty);
+        }
+
+        private bool CanRestorePersistedAssetPath(string assetPath)
+        {
+            if (string.IsNullOrEmpty(assetPath) || selectedType == null)
+            {
+                return false;
+            }
+
+            if (!IsInSearchRoots(assetPath) || IsInExcludedPaths(assetPath))
+            {
+                return false;
+            }
+
+            if (AssetBelongsToSelectedType(assetPath))
+            {
+                return true;
+            }
+
+            foreach (var asset in AssetDatabase.LoadAllAssetsAtPath(assetPath))
+            {
+                if (asset != null && selectedType.IsInstanceOfType(asset))
+                {
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
+        private bool IsInSearchRoots(string assetPath)
+        {
+            if (context.Settings.SearchRoots.Count == 0)
+            {
+                return assetPath.StartsWith("Assets/", StringComparison.OrdinalIgnoreCase) ||
+                       assetPath.Equals("Assets", StringComparison.OrdinalIgnoreCase);
+            }
+
+            return context.Settings.SearchRoots.Any(root =>
+                assetPath.Equals(root, StringComparison.OrdinalIgnoreCase) ||
+                assetPath.StartsWith(root + "/", StringComparison.OrdinalIgnoreCase));
+        }
+
+        private bool IsInExcludedPaths(string assetPath)
+        {
+            return context.Settings.ExcludedPaths.Any(excluded =>
+                assetPath.Equals(excluded, StringComparison.OrdinalIgnoreCase) ||
+                assetPath.StartsWith(excluded + "/", StringComparison.OrdinalIgnoreCase));
         }
 
         private SelectionSnapshot CaptureSelectionSnapshot()
