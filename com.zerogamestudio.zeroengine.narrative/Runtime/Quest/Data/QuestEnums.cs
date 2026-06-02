@@ -13,4 +13,12 @@ namespace ZeroEngine.Quest
         Persistent, // Survives across runs
         PerRun      // Cleared at end of each run
     }
+
+    public enum QuestType
+    {
+        Custom,
+        Dialogue,
+        Collect,
+        KillMonster
+    }
 }
