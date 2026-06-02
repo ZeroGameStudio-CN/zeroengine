@@ -69,6 +69,22 @@ namespace ZeroEngine.Formula.Editor
             return Scan(searchRoot, profile);
         }
 
+        public static FormulaAssetScanReport ScanAsset(
+            string assetPath,
+            FormulaAsset formula,
+            FormulaEditorProfile profile)
+        {
+            var report = new FormulaAssetScanReport { AssetCount = 1 };
+            ScanFormula(
+                string.IsNullOrEmpty(assetPath) ? "<formula>" : assetPath,
+                formula,
+                profile,
+                FormulaEditorPreview.CreateContext(profile),
+                FormulaEditorPreview.CreateRegistry(profile),
+                report);
+            return report;
+        }
+
         public static FormulaAssetScanReport Scan(string searchRoot, FormulaEditorProfile profile)
         {
             var report = new FormulaAssetScanReport();

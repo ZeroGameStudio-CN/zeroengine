@@ -3,7 +3,6 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
 using NUnit.Framework;
-using UnityEditor;
 using UnityEngine;
 using ZeroEngine.Formula.Editor;
 using UnityObject = UnityEngine.Object;
@@ -17,32 +16,23 @@ namespace ZeroEngine.Formula.Tests.Editor
         public void ScanFormula_WithNullNestedFormula_ReportsError()
         {
             var formula = ScriptableObject.CreateInstance<FormulaAsset>();
-            var folderName = "__FormulaAssetScannerTests_" + Guid.NewGuid().ToString("N");
-            var folder = "Assets/" + folderName;
-            var assetPath = folder + "/InvalidFormula.asset";
 
             try
             {
-                var folderGuid = AssetDatabase.CreateFolder("Assets", folderName);
-                Assert.IsFalse(string.IsNullOrEmpty(folderGuid));
-
                 SetFormulaAsset(formula, 1f, new[]
                 {
                     FormulaStep.Create(FormulaOperationType.Add, FormulaValueSource.Nested(null)),
                 });
-                AssetDatabase.CreateAsset(formula, assetPath);
-                AssetDatabase.SaveAssets();
 
-                var report = FormulaAssetScanner.ScanAll(folder);
+                var report = FormulaAssetScanner.ScanAsset("Assets/Test/InvalidFormula.asset", formula, null);
 
+                Assert.AreEqual(1, report.AssetCount);
                 Assert.AreEqual(1, report.ErrorCount);
                 Assert.IsTrue(report.HasErrors);
             }
             finally
             {
-                if (AssetDatabase.IsValidFolder(folder))
-                    AssetDatabase.DeleteAsset(folder);
-                else if (formula != null)
+                if (formula != null)
                     UnityObject.DestroyImmediate(formula);
             }
         }
@@ -51,26 +41,18 @@ namespace ZeroEngine.Formula.Tests.Editor
         public void Scan_WithProfileProvider_UsesPreviewProvider()
         {
             var formula = ScriptableObject.CreateInstance<FormulaAsset>();
-            var folderName = "__FormulaAssetScannerTests_" + Guid.NewGuid().ToString("N");
-            var folder = "Assets/" + folderName;
-            var assetPath = folder + "/ProfileFormula.asset";
 
             try
             {
-                var folderGuid = AssetDatabase.CreateFolder("Assets", folderName);
-                Assert.IsFalse(string.IsNullOrEmpty(folderGuid));
-
                 SetFormulaAsset(formula, 1f, new[]
                 {
                     FormulaStep.Create(FormulaOperationType.Add, FormulaValueSource.Provider("test.value")),
                 });
-                AssetDatabase.CreateAsset(formula, assetPath);
-                AssetDatabase.SaveAssets();
 
                 var profile = new FormulaEditorProfile(
                     "test",
                     "测试公式",
-                    folder,
+                    "Assets/Test",
                     string.Empty,
                     "测试公式",
                     new[]
@@ -85,16 +67,14 @@ namespace ZeroEngine.Formula.Tests.Editor
                     },
                     Array.Empty<FormulaPreviewInputDescriptor>());
 
-                var report = FormulaAssetScanner.Scan(folder, profile);
+                var report = FormulaAssetScanner.ScanAsset("Assets/Test/ProfileFormula.asset", formula, profile);
 
                 Assert.AreEqual(1, report.AssetCount);
                 Assert.AreEqual(0, report.ErrorCount, string.Join("\n", report.Issues.Select(i => i.ToString())));
             }
             finally
             {
-                if (AssetDatabase.IsValidFolder(folder))
-                    AssetDatabase.DeleteAsset(folder);
-                else if (formula != null)
+                if (formula != null)
                     UnityObject.DestroyImmediate(formula);
             }
         }
@@ -103,33 +83,26 @@ namespace ZeroEngine.Formula.Tests.Editor
         public void Scan_WithTemporaryAssetName_ReportsWarning()
         {
             var formula = ScriptableObject.CreateInstance<FormulaAsset>();
-            var folderName = "__FormulaAssetScannerTests_" + Guid.NewGuid().ToString("N");
-            var folder = "Assets/" + folderName;
-            var assetPath = folder + "/New Math Formula.asset";
+            formula.name = "New Math Formula";
 
             try
             {
-                var folderGuid = AssetDatabase.CreateFolder("Assets", folderName);
-                Assert.IsFalse(string.IsNullOrEmpty(folderGuid));
-
                 SetFormulaAsset(formula, 1f, new[]
                 {
                     FormulaStep.Create(FormulaOperationType.Add, FormulaValueSource.Constant(1f)),
                 });
-                AssetDatabase.CreateAsset(formula, assetPath);
-                AssetDatabase.SaveAssets();
 
                 var profile = new FormulaEditorProfile(
                     "test",
                     "测试公式",
-                    folder,
+                    "Assets/Test",
                     string.Empty,
                     "测试公式",
                     Array.Empty<FormulaProviderDescriptor>(),
                     Array.Empty<FormulaPreviewInputDescriptor>(),
                     new FormulaAssetQualityRules(true, new[] { "New Math Formula" }));
 
-                var report = FormulaAssetScanner.Scan(folder, profile);
+                var report = FormulaAssetScanner.ScanAsset("Assets/Test/New Math Formula.asset", formula, profile);
 
                 Assert.AreEqual(1, report.AssetCount);
                 Assert.AreEqual(0, report.ErrorCount, string.Join("\n", report.Issues.Select(i => i.ToString())));
@@ -138,9 +111,7 @@ namespace ZeroEngine.Formula.Tests.Editor
             }
             finally
             {
-                if (AssetDatabase.IsValidFolder(folder))
-                    AssetDatabase.DeleteAsset(folder);
-                else if (formula != null)
+                if (formula != null)
                     UnityObject.DestroyImmediate(formula);
             }
         }
@@ -149,30 +120,22 @@ namespace ZeroEngine.Formula.Tests.Editor
         public void Scan_WithNoSteps_ReportsWarning()
         {
             var formula = ScriptableObject.CreateInstance<FormulaAsset>();
-            var folderName = "__FormulaAssetScannerTests_" + Guid.NewGuid().ToString("N");
-            var folder = "Assets/" + folderName;
-            var assetPath = folder + "/EmptyFormula.asset";
 
             try
             {
-                var folderGuid = AssetDatabase.CreateFolder("Assets", folderName);
-                Assert.IsFalse(string.IsNullOrEmpty(folderGuid));
-
                 SetFormulaAsset(formula, 1f, Array.Empty<FormulaStep>());
-                AssetDatabase.CreateAsset(formula, assetPath);
-                AssetDatabase.SaveAssets();
 
                 var profile = new FormulaEditorProfile(
                     "test",
                     "测试公式",
-                    folder,
+                    "Assets/Test",
                     string.Empty,
                     "测试公式",
                     Array.Empty<FormulaProviderDescriptor>(),
                     Array.Empty<FormulaPreviewInputDescriptor>(),
                     new FormulaAssetQualityRules(true, Array.Empty<string>()));
 
-                var report = FormulaAssetScanner.Scan(folder, profile);
+                var report = FormulaAssetScanner.ScanAsset("Assets/Test/EmptyFormula.asset", formula, profile);
 
                 Assert.AreEqual(1, report.AssetCount);
                 Assert.AreEqual(0, report.ErrorCount, string.Join("\n", report.Issues.Select(i => i.ToString())));
@@ -181,9 +144,7 @@ namespace ZeroEngine.Formula.Tests.Editor
             }
             finally
             {
-                if (AssetDatabase.IsValidFolder(folder))
-                    AssetDatabase.DeleteAsset(folder);
-                else if (formula != null)
+                if (formula != null)
                     UnityObject.DestroyImmediate(formula);
             }
         }
