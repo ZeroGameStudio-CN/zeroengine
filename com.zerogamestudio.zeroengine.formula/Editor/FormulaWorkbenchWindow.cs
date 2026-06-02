@@ -1,4 +1,3 @@
-using System.Collections.Generic;
 using UnityEditor;
 using UnityEngine;
 
@@ -6,62 +5,81 @@ namespace ZeroEngine.Formula.Editor
 {
     public sealed class FormulaWorkbenchWindow : EditorWindow
     {
-        private readonly List<string> diagnostics = new();
-        private readonly List<string> steps = new();
         private FormulaAsset formula;
-        private float result;
-        private bool succeeded;
+        private FormulaEvaluationReport lastReport;
 
         [MenuItem("ZeroEngine/Formula/Formula Workbench", priority = 131)]
         private static void Open()
         {
-            GetWindow<FormulaWorkbenchWindow>("Formula Workbench").Show();
+            OpenWithProfile(FormulaEditorProfileRegistry.ActiveProfile);
+        }
+
+        public static void OpenWithProfile(FormulaEditorProfile profile)
+        {
+            if (profile != null)
+            {
+                var registered = false;
+                foreach (var registeredProfile in FormulaEditorProfileRegistry.RegisteredProfiles)
+                {
+                    if (registeredProfile.ProfileId == profile.ProfileId)
+                    {
+                        registered = true;
+                        break;
+                    }
+                }
+
+                if (!registered)
+                    FormulaEditorProfileRegistry.Register(profile);
+
+                FormulaEditorProfileRegistry.SetActiveProfile(profile.ProfileId);
+            }
+
+            var activeProfile = FormulaEditorProfileRegistry.ActiveProfile;
+            var title = string.IsNullOrEmpty(activeProfile.WorkbenchTitle)
+                ? activeProfile.DisplayName
+                : activeProfile.WorkbenchTitle;
+            GetWindow<FormulaWorkbenchWindow>(title).Show();
         }
 
         private void OnGUI()
         {
-            formula = (FormulaAsset)EditorGUILayout.ObjectField("Formula", formula, typeof(FormulaAsset), false);
-            if (GUILayout.Button("Evaluate"))
-                Evaluate();
+            var profile = FormulaEditorProfileRegistry.ActiveProfile;
+            EditorGUILayout.LabelField("配置", $"{profile.DisplayName} ({profile.ProfileId})");
 
-            EditorGUILayout.LabelField("Succeeded", succeeded.ToString());
-            EditorGUILayout.LabelField("Result", result.ToString("0.###"));
+            formula = (FormulaAsset)EditorGUILayout.ObjectField(FormulaEditorLabels.Formula, formula, typeof(FormulaAsset), false);
+            if (GUILayout.Button(FormulaEditorLabels.Evaluate))
+                Evaluate(profile);
 
-            EditorGUILayout.Space();
-            EditorGUILayout.LabelField("Diagnostics", EditorStyles.boldLabel);
-            foreach (var diagnostic in diagnostics)
-                EditorGUILayout.LabelField(diagnostic);
-
-            EditorGUILayout.Space();
-            EditorGUILayout.LabelField("Steps", EditorStyles.boldLabel);
-            foreach (var step in steps)
-                EditorGUILayout.LabelField(step);
-        }
-
-        private void Evaluate()
-        {
-            diagnostics.Clear();
-            steps.Clear();
-            if (!formula)
+            if (lastReport == null)
             {
-                succeeded = false;
-                result = 0f;
-                diagnostics.Add("No formula selected.");
+                EditorGUILayout.Space();
+                EditorGUILayout.LabelField(FormulaEditorLabels.Diagnostics, EditorStyles.boldLabel);
+                EditorGUILayout.Space();
+                EditorGUILayout.LabelField(FormulaEditorLabels.StepTrace, EditorStyles.boldLabel);
                 return;
             }
 
-            succeeded = FormulaEvaluator.TryEvaluate(
+            FormulaEditorGUILayout.DrawReport(lastReport);
+        }
+
+        private void Evaluate(FormulaEditorProfile profile)
+        {
+            _ = profile;
+
+            if (!formula)
+            {
+                lastReport = new FormulaEvaluationReport(null, "<null>");
+                lastReport.SetResult(0f, false);
+                lastReport.AddDiagnostic(FormulaDiagnosticSeverity.Error, FormulaDiagnosticCode.NullFormula, "未选择公式。");
+                return;
+            }
+
+            FormulaEvaluator.TryEvaluate(
                 formula,
                 FormulaDictionaryEvaluationContext.Empty,
                 FormulaProviderRegistry.Empty,
-                out result,
-                out var report);
-
-            foreach (var diagnostic in report.Diagnostics)
-                diagnostics.Add(diagnostic.ToString());
-
-            foreach (var step in report.Steps)
-                steps.Add($"#{step.StepIndex} {step.InputValue} {step.Operation} {step.StepValue} => {step.OutputValue} ({step.SourceType}: {step.SourceLabel})");
+                out _,
+                out lastReport);
         }
     }
 }

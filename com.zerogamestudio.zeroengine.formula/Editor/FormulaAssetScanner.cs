@@ -49,28 +49,48 @@ namespace ZeroEngine.Formula.Editor
         [MenuItem("ZeroEngine/Formula/Scan Formula Assets", priority = 130)]
         public static void RunMenu()
         {
-            var report = ScanAll("Assets");
-            var message = $"ZeroEngine Formula scan complete. Assets={report.AssetCount}, Errors={report.ErrorCount}, Warnings={report.WarningCount}";
+            var profile = FormulaEditorProfileRegistry.ActiveProfile;
+            var report = Scan(profile);
+            var message = $"ZeroEngine 公式扫描完成。Profile={profile.DisplayName} ({profile.ProfileId}), Assets={report.AssetCount}, Errors={report.ErrorCount}, Warnings={report.WarningCount}";
             if (report.HasErrors) Debug.LogError(message);
             else Debug.Log(message);
         }
 
         public static FormulaAssetScanReport ScanAll(string searchRoot)
         {
+            return Scan(searchRoot, null);
+        }
+
+        public static FormulaAssetScanReport Scan(FormulaEditorProfile profile)
+        {
+            var searchRoot = string.IsNullOrEmpty(profile?.DefaultSearchRoot)
+                ? "Assets"
+                : profile.DefaultSearchRoot;
+            return Scan(searchRoot, profile);
+        }
+
+        public static FormulaAssetScanReport Scan(string searchRoot, FormulaEditorProfile profile)
+        {
             var report = new FormulaAssetScanReport();
-            var guids = AssetDatabase.FindAssets("t:FormulaAsset", new[] { searchRoot });
+            var root = string.IsNullOrEmpty(searchRoot) ? "Assets" : searchRoot;
+            var registry = CreatePreviewRegistry(profile);
+            var guids = AssetDatabase.FindAssets("t:FormulaAsset", new[] { root });
             foreach (var guid in guids)
             {
                 var path = AssetDatabase.GUIDToAssetPath(guid);
                 var formula = AssetDatabase.LoadAssetAtPath<FormulaAsset>(path);
                 report.AssetCount++;
-                ScanFormula(path, formula, report);
+                ScanFormula(path, formula, registry, report);
             }
 
             return report;
         }
 
-        private static void ScanFormula(string path, FormulaAsset formula, FormulaAssetScanReport report)
+        private static void ScanFormula(
+            string path,
+            FormulaAsset formula,
+            FormulaProviderRegistry registry,
+            FormulaAssetScanReport report)
         {
             if (!formula)
             {
@@ -81,7 +101,7 @@ namespace ZeroEngine.Formula.Editor
             FormulaEvaluator.TryEvaluate(
                 formula,
                 FormulaDictionaryEvaluationContext.Empty,
-                FormulaProviderRegistry.Empty,
+                registry,
                 out _,
                 out var evalReport);
 
@@ -91,6 +111,77 @@ namespace ZeroEngine.Formula.Editor
                     ? FormulaAssetScanSeverity.Error
                     : FormulaAssetScanSeverity.Warning;
                 report.AddIssue(severity, path, diagnostic.Message);
+            }
+        }
+
+        private static FormulaProviderRegistry CreatePreviewRegistry(FormulaEditorProfile profile)
+        {
+            if (profile == null || profile.Providers.Count == 0)
+                return FormulaProviderRegistry.Empty;
+
+            var registry = new FormulaProviderRegistry();
+            foreach (var provider in profile.Providers)
+                registry.Register(new ProfilePreviewFormulaProvider(provider));
+
+            return registry;
+        }
+
+        private sealed class ProfilePreviewFormulaProvider : IFormulaValueProvider
+        {
+            private readonly FormulaProviderDescriptor descriptor;
+
+            public ProfilePreviewFormulaProvider(FormulaProviderDescriptor descriptor)
+            {
+                this.descriptor = descriptor;
+            }
+
+            public string Id => descriptor.Id;
+
+            public bool TryGetValue(
+                FormulaProviderRequest request,
+                IFormulaEvaluationContext context,
+                out float value,
+                FormulaDiagnosticSink diagnostics)
+            {
+                _ = context;
+
+                foreach (var parameter in descriptor.Parameters)
+                {
+                    if (!parameter.Required || HasParameter(request, parameter))
+                        continue;
+
+                    value = 0f;
+                    diagnostics.Add(
+                        FormulaDiagnosticSeverity.Error,
+                        FormulaDiagnosticCode.InvalidParameter,
+                        $"{descriptor.DisplayName} 缺少参数：{parameter.DisplayName} ({parameter.Key})");
+                    return false;
+                }
+
+                value = descriptor.PreviewValue;
+                return true;
+            }
+
+            private static bool HasParameter(
+                FormulaProviderRequest request,
+                FormulaParameterDescriptor parameter)
+            {
+                switch (parameter.Kind)
+                {
+                    case FormulaEditorParameterKind.String:
+                        return request.TryGetString(parameter.Key, out _);
+                    case FormulaEditorParameterKind.Int:
+                    case FormulaEditorParameterKind.Enum:
+                        return request.TryGetInt(parameter.Key, out _);
+                    case FormulaEditorParameterKind.Float:
+                        return request.TryGetFloat(parameter.Key, out _);
+                    case FormulaEditorParameterKind.Bool:
+                        return request.TryGetBool(parameter.Key, out _);
+                    case FormulaEditorParameterKind.Object:
+                        return request.TryGetObject(parameter.Key, out _);
+                    default:
+                        return false;
+                }
             }
         }
     }
