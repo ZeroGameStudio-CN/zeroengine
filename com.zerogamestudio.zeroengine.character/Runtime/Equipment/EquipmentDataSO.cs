@@ -15,6 +15,12 @@ namespace ZeroEngine.Equipment
         [Tooltip("属性类型")]
         public StatType StatType;
 
+        public StatId StatId
+        {
+            get => new StatId(StatType.ToString());
+            set => StatType = value.ToStatTypeOrDefault();
+        }
+
         [Tooltip("修饰类型")]
         public StatModType ModType = StatModType.Flat;
 
