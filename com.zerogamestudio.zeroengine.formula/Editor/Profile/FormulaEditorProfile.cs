@@ -63,13 +63,15 @@ namespace ZeroEngine.Formula.Editor
             string category,
             string description,
             float previewValue,
-            IReadOnlyList<FormulaParameterDescriptor> parameters)
+            IReadOnlyList<FormulaParameterDescriptor> parameters,
+            string previewInputKey = null)
         {
             Id = id ?? string.Empty;
             DisplayName = displayName ?? string.Empty;
             Category = category ?? string.Empty;
             Description = description ?? string.Empty;
             PreviewValue = previewValue;
+            PreviewInputKey = previewInputKey ?? string.Empty;
             Parameters = parameters == null
                 ? Array.Empty<FormulaParameterDescriptor>()
                 : new List<FormulaParameterDescriptor>(parameters).AsReadOnly();
@@ -80,6 +82,7 @@ namespace ZeroEngine.Formula.Editor
         public string Category { get; }
         public string Description { get; }
         public float PreviewValue { get; }
+        public string PreviewInputKey { get; }
         public IReadOnlyList<FormulaParameterDescriptor> Parameters { get; }
     }
 
@@ -115,7 +118,8 @@ namespace ZeroEngine.Formula.Editor
             string workbenchMenuPath,
             string workbenchTitle,
             IReadOnlyList<FormulaProviderDescriptor> providers,
-            IReadOnlyList<FormulaPreviewInputDescriptor> previewInputs)
+            IReadOnlyList<FormulaPreviewInputDescriptor> previewInputs,
+            FormulaAssetQualityRules qualityRules = null)
         {
             ProfileId = profileId ?? string.Empty;
             DisplayName = displayName ?? string.Empty;
@@ -128,6 +132,7 @@ namespace ZeroEngine.Formula.Editor
             PreviewInputs = previewInputs == null
                 ? Array.Empty<FormulaPreviewInputDescriptor>()
                 : new List<FormulaPreviewInputDescriptor>(previewInputs).AsReadOnly();
+            QualityRules = qualityRules ?? FormulaAssetQualityRules.None;
         }
 
         public string ProfileId { get; }
@@ -137,6 +142,7 @@ namespace ZeroEngine.Formula.Editor
         public string WorkbenchTitle { get; }
         public IReadOnlyList<FormulaProviderDescriptor> Providers { get; }
         public IReadOnlyList<FormulaPreviewInputDescriptor> PreviewInputs { get; }
+        public FormulaAssetQualityRules QualityRules { get; }
 
         public static FormulaEditorProfile CreateEmpty(string profileId, string displayName)
         {
@@ -164,5 +170,22 @@ namespace ZeroEngine.Formula.Editor
             descriptor = null;
             return false;
         }
+    }
+
+    public sealed class FormulaAssetQualityRules
+    {
+        public FormulaAssetQualityRules(bool warnOnEmptySteps, IReadOnlyList<string> temporaryNamePatterns)
+        {
+            WarnOnEmptySteps = warnOnEmptySteps;
+            TemporaryNamePatterns = temporaryNamePatterns == null
+                ? Array.Empty<string>()
+                : new List<string>(temporaryNamePatterns).AsReadOnly();
+        }
+
+        public static FormulaAssetQualityRules None { get; } =
+            new FormulaAssetQualityRules(false, Array.Empty<string>());
+
+        public bool WarnOnEmptySteps { get; }
+        public IReadOnlyList<string> TemporaryNamePatterns { get; }
     }
 }

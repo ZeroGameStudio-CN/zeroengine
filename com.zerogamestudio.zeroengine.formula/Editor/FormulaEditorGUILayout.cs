@@ -15,6 +15,37 @@ namespace ZeroEngine.Formula.Editor
                 MessageType.Info);
         }
 
+        public static void DrawPreviewInputs(FormulaEditorProfile profile, FormulaEditorPreviewState state)
+        {
+            if (profile == null || state == null || profile.PreviewInputs.Count == 0)
+                return;
+
+            EditorGUILayout.Space();
+            EditorGUILayout.LabelField(FormulaEditorLabels.PreviewInputs, EditorStyles.boldLabel);
+            foreach (var input in profile.PreviewInputs)
+            {
+                var value = state.GetValue(input);
+                switch (input.Kind)
+                {
+                    case FormulaPreviewInputKind.Int:
+                        state.SetValue(
+                            input.Key,
+                            EditorGUILayout.IntField(new GUIContent(input.DisplayName, input.Description), Mathf.RoundToInt(value)));
+                        break;
+                    case FormulaPreviewInputKind.Float:
+                        state.SetValue(
+                            input.Key,
+                            EditorGUILayout.FloatField(new GUIContent(input.DisplayName, input.Description), value));
+                        break;
+                    case FormulaPreviewInputKind.Bool:
+                        state.SetValue(
+                            input.Key,
+                            EditorGUILayout.Toggle(new GUIContent(input.DisplayName, input.Description), value > 0.5f) ? 1f : 0f);
+                        break;
+                }
+            }
+        }
+
         public static void DrawReport(FormulaEvaluationReport report)
         {
             if (report == null)

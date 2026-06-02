@@ -17,6 +17,10 @@ namespace ZeroEngine.Formula.Editor
         public const string Diagnostics = "诊断";
         public const string StepTrace = "步骤追踪";
         public const string Evaluate = "预览计算";
+        public const string PreviewInputs = "预览输入";
+        public const string ResetPreviewInputs = "重置预览输入";
+        public const string AddStep = "添加步骤";
+        public const string RemoveStep = "删除步骤";
 
         public static string OperationName(FormulaOperationType operation)
         {

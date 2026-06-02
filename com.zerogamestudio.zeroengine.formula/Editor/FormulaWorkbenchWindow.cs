@@ -7,6 +7,7 @@ namespace ZeroEngine.Formula.Editor
     {
         private FormulaAsset formula;
         private FormulaEvaluationReport lastReport;
+        private readonly FormulaEditorPreviewState previewState = new();
 
         [MenuItem("ZeroEngine/Formula/Formula Workbench", priority = 131)]
         private static void Open()
@@ -47,6 +48,7 @@ namespace ZeroEngine.Formula.Editor
             EditorGUILayout.LabelField("配置", $"{profile.DisplayName} ({profile.ProfileId})");
 
             formula = (FormulaAsset)EditorGUILayout.ObjectField(FormulaEditorLabels.Formula, formula, typeof(FormulaAsset), false);
+            FormulaEditorGUILayout.DrawPreviewInputs(profile, previewState);
             if (GUILayout.Button(FormulaEditorLabels.Evaluate))
                 Evaluate(profile);
 
@@ -76,8 +78,8 @@ namespace ZeroEngine.Formula.Editor
 
             FormulaEvaluator.TryEvaluate(
                 formula,
-                FormulaDictionaryEvaluationContext.Empty,
-                FormulaProviderRegistry.Empty,
+                previewState.CreateContext(profile),
+                FormulaEditorPreview.CreateRegistry(profile),
                 out _,
                 out lastReport);
         }

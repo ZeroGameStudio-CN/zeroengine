@@ -73,14 +73,15 @@ namespace ZeroEngine.Formula.Editor
         {
             var report = new FormulaAssetScanReport();
             var root = string.IsNullOrEmpty(searchRoot) ? "Assets" : searchRoot;
-            var registry = CreatePreviewRegistry(profile);
+            var registry = FormulaEditorPreview.CreateRegistry(profile);
+            var context = FormulaEditorPreview.CreateContext(profile);
             var guids = AssetDatabase.FindAssets("t:FormulaAsset", new[] { root });
             foreach (var guid in guids)
             {
                 var path = AssetDatabase.GUIDToAssetPath(guid);
                 var formula = AssetDatabase.LoadAssetAtPath<FormulaAsset>(path);
                 report.AssetCount++;
-                ScanFormula(path, formula, registry, report);
+                ScanFormula(path, formula, profile, context, registry, report);
             }
 
             return report;
@@ -89,6 +90,8 @@ namespace ZeroEngine.Formula.Editor
         private static void ScanFormula(
             string path,
             FormulaAsset formula,
+            FormulaEditorProfile profile,
+            IFormulaEvaluationContext context,
             FormulaProviderRegistry registry,
             FormulaAssetScanReport report)
         {
@@ -98,9 +101,11 @@ namespace ZeroEngine.Formula.Editor
                 return;
             }
 
+            ScanQualityRules(path, formula, profile, report);
+
             FormulaEvaluator.TryEvaluate(
                 formula,
-                FormulaDictionaryEvaluationContext.Empty,
+                context,
                 registry,
                 out _,
                 out var evalReport);
@@ -114,74 +119,32 @@ namespace ZeroEngine.Formula.Editor
             }
         }
 
-        private static FormulaProviderRegistry CreatePreviewRegistry(FormulaEditorProfile profile)
+        private static void ScanQualityRules(
+            string path,
+            FormulaAsset formula,
+            FormulaEditorProfile profile,
+            FormulaAssetScanReport report)
         {
-            if (profile == null || profile.Providers.Count == 0)
-                return FormulaProviderRegistry.Empty;
-
-            var registry = new FormulaProviderRegistry();
-            foreach (var provider in profile.Providers)
-                registry.Register(new ProfilePreviewFormulaProvider(provider));
-
-            return registry;
-        }
-
-        private sealed class ProfilePreviewFormulaProvider : IFormulaValueProvider
-        {
-            private readonly FormulaProviderDescriptor descriptor;
-
-            public ProfilePreviewFormulaProvider(FormulaProviderDescriptor descriptor)
+            var rules = profile?.QualityRules ?? FormulaAssetQualityRules.None;
+            if (rules.WarnOnEmptySteps && formula.StepCount == 0)
             {
-                this.descriptor = descriptor;
+                report.AddIssue(
+                    FormulaAssetScanSeverity.Warning,
+                    path,
+                    "公式没有配置步骤，只会返回初始值。");
             }
 
-            public string Id => descriptor.Id;
-
-            public bool TryGetValue(
-                FormulaProviderRequest request,
-                IFormulaEvaluationContext context,
-                out float value,
-                FormulaDiagnosticSink diagnostics)
+            foreach (var pattern in rules.TemporaryNamePatterns)
             {
-                _ = context;
+                if (string.IsNullOrWhiteSpace(pattern)
+                    || formula.FormulaName.IndexOf(pattern, System.StringComparison.OrdinalIgnoreCase) < 0)
+                    continue;
 
-                foreach (var parameter in descriptor.Parameters)
-                {
-                    if (!parameter.Required || HasParameter(request, parameter))
-                        continue;
-
-                    value = 0f;
-                    diagnostics.Add(
-                        FormulaDiagnosticSeverity.Error,
-                        FormulaDiagnosticCode.InvalidParameter,
-                        $"{descriptor.DisplayName} 缺少参数：{parameter.DisplayName} ({parameter.Key})");
-                    return false;
-                }
-
-                value = descriptor.PreviewValue;
-                return true;
-            }
-
-            private static bool HasParameter(
-                FormulaProviderRequest request,
-                FormulaParameterDescriptor parameter)
-            {
-                switch (parameter.Kind)
-                {
-                    case FormulaEditorParameterKind.String:
-                        return request.TryGetString(parameter.Key, out _);
-                    case FormulaEditorParameterKind.Int:
-                    case FormulaEditorParameterKind.Enum:
-                        return request.TryGetInt(parameter.Key, out _);
-                    case FormulaEditorParameterKind.Float:
-                        return request.TryGetFloat(parameter.Key, out _);
-                    case FormulaEditorParameterKind.Bool:
-                        return request.TryGetBool(parameter.Key, out _);
-                    case FormulaEditorParameterKind.Object:
-                        return request.TryGetObject(parameter.Key, out _);
-                    default:
-                        return false;
-                }
+                report.AddIssue(
+                    FormulaAssetScanSeverity.Warning,
+                    path,
+                    $"公式名称像临时命名：{formula.FormulaName}。请改成表达用途的名称。");
+                break;
             }
         }
     }
