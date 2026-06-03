@@ -132,5 +132,28 @@ namespace ZeroEngine.Formula.Editor
         {
             return new FormulaCatalogLookup(entries);
         }
+
+        public int AddMissingEntries(IEnumerable<FormulaCatalogEntry> candidates)
+        {
+            if (candidates == null)
+                return 0;
+
+            var added = 0;
+            var lookup = CreateLookup();
+            foreach (var candidate in candidates)
+            {
+                if (candidate == null)
+                    continue;
+
+                if (lookup.TryGetEntry(candidate.Formula, candidate.FormulaGuid, out _))
+                    continue;
+
+                entries.Add(candidate);
+                lookup = CreateLookup();
+                added++;
+            }
+
+            return added;
+        }
     }
 }

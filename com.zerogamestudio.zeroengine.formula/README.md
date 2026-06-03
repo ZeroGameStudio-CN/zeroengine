@@ -94,12 +94,18 @@ Menu items:
 
 ```text
 ZeroEngine/Formula/Scan Formula Assets
+ZeroEngine/Formula/Formula Catalog
 ZeroEngine/Formula/Formula Workbench
 ```
 
 The scanner evaluates formula assets with an empty provider registry and reports
 missing providers, invalid nested formulas, non-finite results, and other
 structural issues.
+
+The catalog window lists formula assets for the active profile, combines scan
+issues with reference counts and catalog metadata, filters common governance
+states, opens the shared Workbench, and can generate missing draft catalog
+entries without changing formula math.
 
 ## Governance Tools
 
@@ -115,6 +121,7 @@ The editor package includes reusable governance primitives:
 - `FormulaReferenceIndexer` for deterministic GUID reference matches
 - `FormulaAssetScanReportExporter` for JSON and Markdown reports
 - `FormulaRenamePlanner` for safe rename dry-runs before touching assets
+- `FormulaCatalogWindow` for project profile-driven formula catalog review
 
 These APIs are editor-only and do not change runtime formula evaluation.
 

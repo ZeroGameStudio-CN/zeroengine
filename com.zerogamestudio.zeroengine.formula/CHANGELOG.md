@@ -17,6 +17,9 @@
   profile default preview cases, and curve preview data for formula debugging.
 - Added batchmode scanner CLI exit-code policy, report file output, and
   deterministic formula migration dry-run/apply reports.
+- Added a shared Formula Catalog window that aggregates formulas, references,
+  scan issues, catalog metadata, Markdown reports, and draft missing-entry
+  generation for project profiles.
 
 ## 0.1.0
 
