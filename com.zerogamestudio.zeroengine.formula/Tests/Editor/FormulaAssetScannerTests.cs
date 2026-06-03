@@ -149,6 +149,107 @@ namespace ZeroEngine.Formula.Tests.Editor
             }
         }
 
+        [Test]
+        public void Scan_WithMissingCatalogEntry_ReportsWarning()
+        {
+            var formula = ScriptableObject.CreateInstance<FormulaAsset>();
+
+            try
+            {
+                SetFormulaAsset(formula, 1f, new[]
+                {
+                    FormulaStep.Create(FormulaOperationType.Add, FormulaValueSource.Constant(1f)),
+                });
+
+                var profile = new FormulaEditorProfile(
+                    "test",
+                    "测试公式",
+                    "Assets/Test",
+                    string.Empty,
+                    "测试公式",
+                    Array.Empty<FormulaProviderDescriptor>(),
+                    Array.Empty<FormulaPreviewInputDescriptor>(),
+                    new FormulaAssetQualityRules(
+                        false,
+                        Array.Empty<string>(),
+                        warnOnMissingCatalogEntry: true));
+                var context = new FormulaAssetScanContext(
+                    new FormulaCatalogLookup(Array.Empty<FormulaCatalogEntry>()),
+                    Array.Empty<FormulaAssetReference>(),
+                    new Dictionary<string, string>
+                    {
+                        { "Assets/Test/Formula.asset", "guid-1" },
+                    });
+
+                var report = FormulaAssetScanner.ScanAsset("Assets/Test/Formula.asset", formula, profile, context);
+
+                Assert.AreEqual(1, report.WarningCount);
+                StringAssert.Contains("缺少目录信息", report.Issues.Single().Message);
+            }
+            finally
+            {
+                if (formula != null)
+                    UnityObject.DestroyImmediate(formula);
+            }
+        }
+
+        [Test]
+        public void Scan_WithUnreferencedFormula_ReportsWarning()
+        {
+            var formula = ScriptableObject.CreateInstance<FormulaAsset>();
+
+            try
+            {
+                SetFormulaAsset(formula, 1f, new[]
+                {
+                    FormulaStep.Create(FormulaOperationType.Add, FormulaValueSource.Constant(1f)),
+                });
+
+                var profile = new FormulaEditorProfile(
+                    "test",
+                    "测试公式",
+                    "Assets/Test",
+                    string.Empty,
+                    "测试公式",
+                    Array.Empty<FormulaProviderDescriptor>(),
+                    Array.Empty<FormulaPreviewInputDescriptor>(),
+                    new FormulaAssetQualityRules(
+                        false,
+                        Array.Empty<string>(),
+                        warnOnUnreferencedFormula: true));
+                var context = new FormulaAssetScanContext(
+                    new FormulaCatalogLookup(new[]
+                    {
+                        new FormulaCatalogEntry(
+                            formula,
+                            "guid-1",
+                            "测试公式",
+                            "用于测试",
+                            "系统",
+                            "数值",
+                            Array.Empty<string>(),
+                            FormulaCatalogStatus.Active,
+                            FormulaResultRange.None,
+                            string.Empty),
+                    }),
+                    Array.Empty<FormulaAssetReference>(),
+                    new Dictionary<string, string>
+                    {
+                        { "Assets/Test/Formula.asset", "guid-1" },
+                    });
+
+                var report = FormulaAssetScanner.ScanAsset("Assets/Test/Formula.asset", formula, profile, context);
+
+                Assert.AreEqual(1, report.WarningCount);
+                StringAssert.Contains("没有被任何配置引用", report.Issues.Single().Message);
+            }
+            finally
+            {
+                if (formula != null)
+                    UnityObject.DestroyImmediate(formula);
+            }
+        }
+
         private static void SetFormulaAsset(FormulaAsset formula, float initialValue, IEnumerable<FormulaStep> steps)
         {
             const BindingFlags flags = BindingFlags.Instance | BindingFlags.NonPublic;

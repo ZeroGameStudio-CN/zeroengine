@@ -101,6 +101,23 @@ The scanner evaluates formula assets with an empty provider registry and reports
 missing providers, invalid nested formulas, non-finite results, and other
 structural issues.
 
+## Governance Tools
+
+Project editor profiles can declare:
+
+- a Formula Catalog asset path
+- reference roots to scan for formula GUID usage
+- excluded roots such as `Library`, `Temp`, or generated output
+
+The editor package includes reusable governance primitives:
+
+- `FormulaCatalogEntry` and `FormulaCatalogLookup` for content metadata
+- `FormulaReferenceIndexer` for deterministic GUID reference matches
+- `FormulaAssetScanReportExporter` for JSON and Markdown reports
+- `FormulaRenamePlanner` for safe rename dry-runs before touching assets
+
+These APIs are editor-only and do not change runtime formula evaluation.
+
 ## Package Boundary
 
 Runtime code must stay free of project-specific dependencies:

@@ -119,7 +119,10 @@ namespace ZeroEngine.Formula.Editor
             string workbenchTitle,
             IReadOnlyList<FormulaProviderDescriptor> providers,
             IReadOnlyList<FormulaPreviewInputDescriptor> previewInputs,
-            FormulaAssetQualityRules qualityRules = null)
+            FormulaAssetQualityRules qualityRules = null,
+            string catalogAssetPath = null,
+            IReadOnlyList<string> referenceRoots = null,
+            IReadOnlyList<string> excludedReferenceRoots = null)
         {
             ProfileId = profileId ?? string.Empty;
             DisplayName = displayName ?? string.Empty;
@@ -133,6 +136,13 @@ namespace ZeroEngine.Formula.Editor
                 ? Array.Empty<FormulaPreviewInputDescriptor>()
                 : new List<FormulaPreviewInputDescriptor>(previewInputs).AsReadOnly();
             QualityRules = qualityRules ?? FormulaAssetQualityRules.None;
+            CatalogAssetPath = catalogAssetPath ?? string.Empty;
+            ReferenceRoots = referenceRoots == null
+                ? Array.Empty<string>()
+                : new List<string>(referenceRoots).AsReadOnly();
+            ExcludedReferenceRoots = excludedReferenceRoots == null
+                ? Array.Empty<string>()
+                : new List<string>(excludedReferenceRoots).AsReadOnly();
         }
 
         public string ProfileId { get; }
@@ -143,6 +153,9 @@ namespace ZeroEngine.Formula.Editor
         public IReadOnlyList<FormulaProviderDescriptor> Providers { get; }
         public IReadOnlyList<FormulaPreviewInputDescriptor> PreviewInputs { get; }
         public FormulaAssetQualityRules QualityRules { get; }
+        public string CatalogAssetPath { get; }
+        public IReadOnlyList<string> ReferenceRoots { get; }
+        public IReadOnlyList<string> ExcludedReferenceRoots { get; }
 
         public static FormulaEditorProfile CreateEmpty(string profileId, string displayName)
         {
@@ -174,12 +187,18 @@ namespace ZeroEngine.Formula.Editor
 
     public sealed class FormulaAssetQualityRules
     {
-        public FormulaAssetQualityRules(bool warnOnEmptySteps, IReadOnlyList<string> temporaryNamePatterns)
+        public FormulaAssetQualityRules(
+            bool warnOnEmptySteps,
+            IReadOnlyList<string> temporaryNamePatterns,
+            bool warnOnMissingCatalogEntry = false,
+            bool warnOnUnreferencedFormula = false)
         {
             WarnOnEmptySteps = warnOnEmptySteps;
             TemporaryNamePatterns = temporaryNamePatterns == null
                 ? Array.Empty<string>()
                 : new List<string>(temporaryNamePatterns).AsReadOnly();
+            WarnOnMissingCatalogEntry = warnOnMissingCatalogEntry;
+            WarnOnUnreferencedFormula = warnOnUnreferencedFormula;
         }
 
         public static FormulaAssetQualityRules None { get; } =
@@ -187,5 +206,7 @@ namespace ZeroEngine.Formula.Editor
 
         public bool WarnOnEmptySteps { get; }
         public IReadOnlyList<string> TemporaryNamePatterns { get; }
+        public bool WarnOnMissingCatalogEntry { get; }
+        public bool WarnOnUnreferencedFormula { get; }
     }
 }

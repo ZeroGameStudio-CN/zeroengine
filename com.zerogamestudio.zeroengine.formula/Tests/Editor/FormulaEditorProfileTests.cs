@@ -153,5 +153,43 @@ namespace ZeroEngine.Formula.Tests.Editor
             Assert.AreEqual(1, profile.Providers.Count);
             Assert.AreEqual("resource.coin", profile.Providers[0].Id);
         }
+
+        [Test]
+        public void Profile_StoresGovernanceSettings_AsReadOnlyCopies()
+        {
+            var referenceRoots = new List<string>
+            {
+                "Assets/Assets/_Data",
+                "Assets/AddressableAssetsData",
+            };
+            var excludedRoots = new List<string>
+            {
+                "Library",
+                "Temp",
+            };
+
+            var profile = new FormulaEditorProfile(
+                "test",
+                "测试公式",
+                "Assets/Data/Formulas",
+                "ZGS/工具/公式工作台",
+                "测试公式工作台",
+                null,
+                null,
+                catalogAssetPath: "Assets/Data/Formulas/FormulaCatalog.asset",
+                referenceRoots: referenceRoots,
+                excludedReferenceRoots: excludedRoots);
+
+            referenceRoots.Clear();
+            excludedRoots.Clear();
+
+            Assert.AreEqual("Assets/Data/Formulas/FormulaCatalog.asset", profile.CatalogAssetPath);
+            Assert.AreEqual(2, profile.ReferenceRoots.Count);
+            Assert.AreEqual("Assets/Assets/_Data", profile.ReferenceRoots[0]);
+            Assert.AreEqual("Assets/AddressableAssetsData", profile.ReferenceRoots[1]);
+            Assert.AreEqual(2, profile.ExcludedReferenceRoots.Count);
+            Assert.AreEqual("Library", profile.ExcludedReferenceRoots[0]);
+            Assert.AreEqual("Temp", profile.ExcludedReferenceRoots[1]);
+        }
     }
 }
