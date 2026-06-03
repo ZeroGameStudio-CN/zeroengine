@@ -13,6 +13,8 @@
   export, and rename planning.
 - Added preview cases, runtime snapshots, batch preview reports, and JSON /
   Markdown preview report export helpers for formula debugging workflows.
+- Added preview case ScriptableObject assets, Workbench batch preview export,
+  profile default preview cases, and curve preview data for formula debugging.
 
 ## 0.1.0
 

@@ -126,6 +126,9 @@ Formula preview debugging can be automated with:
 - `FormulaRuntimeSnapshot` for captured runtime context values
 - `FormulaPreviewRunner` for evaluating multiple cases with one formula/profile
 - `FormulaPreviewReportExporter` for JSON and Markdown summaries
+- `FormulaPreviewCaseAsset` for designer-authored reusable sample inputs
+- `FormulaCurvePreview` for x-axis sweep previews over one input key
+- `FormulaWorkbenchSession` for Workbench batch preview and report export
 
 These reports are designed for Workbench UI, CI artifacts, and agent-assisted
 formula configuration.

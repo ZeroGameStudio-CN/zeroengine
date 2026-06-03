@@ -122,7 +122,8 @@ namespace ZeroEngine.Formula.Editor
             FormulaAssetQualityRules qualityRules = null,
             string catalogAssetPath = null,
             IReadOnlyList<string> referenceRoots = null,
-            IReadOnlyList<string> excludedReferenceRoots = null)
+            IReadOnlyList<string> excludedReferenceRoots = null,
+            IReadOnlyList<FormulaPreviewCase> defaultPreviewCases = null)
         {
             ProfileId = profileId ?? string.Empty;
             DisplayName = displayName ?? string.Empty;
@@ -143,6 +144,9 @@ namespace ZeroEngine.Formula.Editor
             ExcludedReferenceRoots = excludedReferenceRoots == null
                 ? Array.Empty<string>()
                 : new List<string>(excludedReferenceRoots).AsReadOnly();
+            DefaultPreviewCases = defaultPreviewCases == null
+                ? Array.Empty<FormulaPreviewCase>()
+                : new List<FormulaPreviewCase>(defaultPreviewCases).AsReadOnly();
         }
 
         public string ProfileId { get; }
@@ -156,6 +160,7 @@ namespace ZeroEngine.Formula.Editor
         public string CatalogAssetPath { get; }
         public IReadOnlyList<string> ReferenceRoots { get; }
         public IReadOnlyList<string> ExcludedReferenceRoots { get; }
+        public IReadOnlyList<FormulaPreviewCase> DefaultPreviewCases { get; }
 
         public static FormulaEditorProfile CreateEmpty(string profileId, string displayName)
         {

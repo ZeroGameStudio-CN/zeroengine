@@ -30,6 +30,18 @@ namespace ZeroEngine.Formula.Editor
         {
             return FormulaEditorPreview.CreateContext(profile, values);
         }
+
+        public FormulaPreviewValueSet ToValueSet(FormulaEditorProfile profile)
+        {
+            var previewValues = new List<FormulaPreviewValue>();
+            if (profile == null)
+                return new FormulaPreviewValueSet(previewValues);
+
+            foreach (var input in profile.PreviewInputs)
+                previewValues.Add(new FormulaPreviewValue(input.Key, GetValue(input)));
+
+            return new FormulaPreviewValueSet(previewValues);
+        }
     }
 
     public static class FormulaEditorPreview

@@ -18,6 +18,16 @@ namespace ZeroEngine.Formula.Editor
         public const string StepTrace = "步骤追踪";
         public const string Evaluate = "预览计算";
         public const string PreviewInputs = "预览输入";
+        public const string PreviewCases = "预览样例";
+        public const string AddPreviewCase = "添加样例";
+        public const string EvaluatePreviewCases = "批量预览";
+        public const string PreviewReportJson = "JSON 报告";
+        public const string PreviewReportMarkdown = "Markdown 报告";
+        public const string CurvePreview = "曲线预览";
+        public const string CurveInput = "曲线输入";
+        public const string CurveRange = "曲线范围";
+        public const string CurveSamples = "采样数";
+        public const string BuildCurve = "生成曲线";
         public const string ResetPreviewInputs = "重置预览输入";
         public const string AddStep = "添加步骤";
         public const string RemoveStep = "删除步骤";
