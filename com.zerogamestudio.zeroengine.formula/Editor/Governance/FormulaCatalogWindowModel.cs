@@ -58,8 +58,13 @@ namespace ZeroEngine.Formula.Editor
         public FormulaCatalogStatus Status => CatalogEntry?.Status ?? FormulaCatalogStatus.Draft;
         public string Title => string.IsNullOrEmpty(CatalogEntry?.Title) ? DisplayName : CatalogEntry.Title;
         public string Purpose => CatalogEntry?.Purpose ?? string.Empty;
+        public string Owner => CatalogEntry?.Owner ?? string.Empty;
+        public string Unit => CatalogEntry?.Unit ?? string.Empty;
+        public IReadOnlyList<string> Tags => CatalogEntry?.Tags ?? Array.Empty<string>();
+        public string Notes => CatalogEntry?.Notes ?? string.Empty;
         public int ErrorCount => Issues.Count(issue => issue.Severity == FormulaAssetScanSeverity.Error);
         public int WarningCount => Issues.Count(issue => issue.Severity == FormulaAssetScanSeverity.Warning);
+        public int InfoCount => Issues.Count(issue => issue.Severity == FormulaAssetScanSeverity.Info);
     }
 
     public static class FormulaCatalogWindowModel
@@ -117,6 +122,35 @@ namespace ZeroEngine.Formula.Editor
             }
         }
 
+        public static IReadOnlyList<FormulaCatalogWindowRow> FilterRows(
+            IEnumerable<FormulaCatalogWindowRow> sourceRows,
+            FormulaCatalogWindowFilter filter,
+            string searchText)
+        {
+            return (sourceRows ?? Array.Empty<FormulaCatalogWindowRow>())
+                .Where(row => MatchesFilter(row, filter) && MatchesSearch(row, searchText))
+                .ToList()
+                .AsReadOnly();
+        }
+
+        public static bool MatchesSearch(FormulaCatalogWindowRow row, string searchText)
+        {
+            if (row == null)
+                return false;
+
+            var tokens = Tokenize(searchText);
+            if (tokens.Count == 0)
+                return true;
+
+            foreach (var token in tokens)
+            {
+                if (!ContainsSearchToken(row, token))
+                    return false;
+            }
+
+            return true;
+        }
+
         public static FormulaCatalogEntry CreateDraftEntry(
             FormulaAsset formula,
             string formulaGuid,
@@ -136,6 +170,57 @@ namespace ZeroEngine.Formula.Editor
                 FormulaCatalogStatus.Draft,
                 FormulaResultRange.None,
                 string.Empty);
+        }
+
+        private static IReadOnlyList<string> Tokenize(string searchText)
+        {
+            if (string.IsNullOrWhiteSpace(searchText))
+                return Array.Empty<string>();
+
+            return searchText
+                .Split(new[] { ' ', '\t', '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries)
+                .Select(token => token.Trim())
+                .Where(token => token.Length > 0)
+                .ToList()
+                .AsReadOnly();
+        }
+
+        private static bool ContainsSearchToken(FormulaCatalogWindowRow row, string token)
+        {
+            if (Contains(row.Title, token)
+                || Contains(row.DisplayName, token)
+                || Contains(row.AssetPath, token)
+                || Contains(row.FormulaGuid, token)
+                || Contains(row.Purpose, token)
+                || Contains(row.Owner, token)
+                || Contains(row.Unit, token)
+                || Contains(row.Notes, token)
+                || Contains(FormulaEditorLabels.CatalogStatusName(row.Status), token))
+                return true;
+
+            foreach (var tag in row.Tags)
+            {
+                if (Contains(tag, token))
+                    return true;
+            }
+
+            foreach (var issue in row.Issues)
+            {
+                if (issue == null)
+                    continue;
+
+                if (Contains(issue.Message, token)
+                    || Contains(FormulaEditorLabels.ScanSeverityName(issue.Severity), token))
+                    return true;
+            }
+
+            return false;
+        }
+
+        private static bool Contains(string value, string token)
+        {
+            return !string.IsNullOrEmpty(value)
+                && value.IndexOf(token, StringComparison.OrdinalIgnoreCase) >= 0;
         }
     }
 }

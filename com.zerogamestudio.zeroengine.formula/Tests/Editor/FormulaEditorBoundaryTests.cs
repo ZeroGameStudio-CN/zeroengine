@@ -30,16 +30,19 @@ namespace ZeroEngine.Formula.Tests.Editor
         public void Workbench_UsesChineseGenericLabels()
         {
             var source = File.ReadAllText(Path.Combine(GetPackageRoot(), "Editor", "FormulaWorkbenchWindow.cs"));
+            var guiSource = File.ReadAllText(Path.Combine(GetPackageRoot(), "Editor", "FormulaEditorGUILayout.cs"));
+            var combinedSource = source + "\n" + guiSource;
 
             StringAssert.Contains("FormulaEditorLabels.Formula", source);
             StringAssert.Contains("FormulaEditorLabels.Evaluate", source);
-            StringAssert.Contains("FormulaEditorLabels.Diagnostics", source);
-            StringAssert.Contains("FormulaEditorLabels.StepTrace", source);
-            StringAssert.DoesNotContain("EditorGUILayout.LabelField(\"Succeeded\"", source);
-            StringAssert.DoesNotContain("EditorGUILayout.LabelField(\"Result\"", source);
-            StringAssert.DoesNotContain("EditorGUILayout.LabelField(\"Diagnostics\"", source);
-            StringAssert.DoesNotContain("EditorGUILayout.LabelField(\"Steps\"", source);
-            StringAssert.DoesNotContain("GUILayout.Button(\"Evaluate\"", source);
+            StringAssert.Contains("FormulaEditorGUILayout.DrawReport", source);
+            StringAssert.Contains("FormulaEditorLabels.Diagnostics", guiSource);
+            StringAssert.Contains("FormulaEditorLabels.StepTrace", guiSource);
+            StringAssert.DoesNotContain("EditorGUILayout.LabelField(\"Succeeded\"", combinedSource);
+            StringAssert.DoesNotContain("EditorGUILayout.LabelField(\"Result\"", combinedSource);
+            StringAssert.DoesNotContain("EditorGUILayout.LabelField(\"Diagnostics\"", combinedSource);
+            StringAssert.DoesNotContain("EditorGUILayout.LabelField(\"Steps\"", combinedSource);
+            StringAssert.DoesNotContain("GUILayout.Button(\"Evaluate\"", combinedSource);
         }
 
         private static string GetPackageRoot()

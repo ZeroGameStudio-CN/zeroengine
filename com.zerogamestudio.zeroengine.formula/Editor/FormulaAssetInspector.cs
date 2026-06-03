@@ -41,13 +41,19 @@ namespace ZeroEngine.Formula.Editor
             var profile = FormulaEditorProfileRegistry.ActiveProfile;
             serializedObject.Update();
 
-            EditorGUILayout.LabelField(FormulaEditorLabels.Formula, target.name, EditorStyles.boldLabel);
-            EditorGUILayout.LabelField("Profile", $"{profile.DisplayName} ({profile.ProfileId})");
+            FormulaEditorGUILayout.DrawHeader(
+                target.name,
+                $"{profile.DisplayName} ({profile.ProfileId})",
+                AssetDatabase.GetAssetPath(target));
+
+            EditorGUILayout.BeginVertical(EditorStyles.helpBox);
             EditorGUILayout.PropertyField(initialValue, new GUIContent(FormulaEditorLabels.InitialValue, "公式开始计算时使用的基础值。"));
+            EditorGUILayout.EndVertical();
             DrawSteps(profile);
             serializedObject.ApplyModifiedProperties();
 
             FormulaEditorGUILayout.DrawPreviewInputs(profile, previewState);
+            EditorGUILayout.BeginHorizontal();
             if (GUILayout.Button(FormulaEditorLabels.Evaluate))
             {
                 FormulaEditorPreview.TryEvaluate(
@@ -58,13 +64,16 @@ namespace ZeroEngine.Formula.Editor
                     out lastReport);
             }
 
+            if (GUILayout.Button(FormulaEditorLabels.OpenWorkbench))
+                FormulaWorkbenchWindow.OpenWithFormula(profile, (FormulaAsset)target);
+            EditorGUILayout.EndHorizontal();
+
             FormulaEditorGUILayout.DrawReport(lastReport);
         }
 
         private void DrawSteps(FormulaEditorProfile profile)
         {
-            EditorGUILayout.Space();
-            EditorGUILayout.LabelField(FormulaEditorLabels.Steps, EditorStyles.boldLabel);
+            FormulaEditorGUILayout.DrawSectionHeader(FormulaEditorLabels.Steps);
 
             for (var i = 0; i < steps.arraySize; i++)
             {

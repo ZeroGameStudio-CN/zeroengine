@@ -13,6 +13,7 @@ namespace ZeroEngine.Formula.Editor
         private FormulaCatalogWindowFilter filter;
         private FormulaAssetScanReport lastScanReport;
         private string lastMarkdown = string.Empty;
+        private string searchText = string.Empty;
         private Vector2 scrollPosition;
 
         [MenuItem("ZeroEngine/Formula/Formula Catalog", priority = 129)]
@@ -44,60 +45,81 @@ namespace ZeroEngine.Formula.Editor
         private void OnGUI()
         {
             var profile = FormulaEditorProfileRegistry.ActiveProfile;
-            EditorGUILayout.LabelField("Profile", $"{profile.DisplayName} ({profile.ProfileId})");
-            EditorGUILayout.LabelField("公式根目录", string.IsNullOrEmpty(profile.DefaultSearchRoot) ? "Assets" : profile.DefaultSearchRoot);
-            EditorGUILayout.LabelField("Catalog", string.IsNullOrEmpty(profile.CatalogAssetPath) ? "<未配置>" : profile.CatalogAssetPath);
+            var root = string.IsNullOrEmpty(profile.DefaultSearchRoot) ? "Assets" : profile.DefaultSearchRoot;
+            var catalogPath = string.IsNullOrEmpty(profile.CatalogAssetPath)
+                ? FormulaEditorLabels.NoCatalogPath
+                : profile.CatalogAssetPath;
+            FormulaEditorGUILayout.DrawHeader(
+                "公式目录",
+                $"{profile.DisplayName} ({profile.ProfileId})",
+                $"{FormulaEditorLabels.FormulaRoot}: {root}    {FormulaEditorLabels.Catalog}: {catalogPath}");
 
             EditorGUILayout.BeginHorizontal();
-            if (GUILayout.Button("刷新"))
+            if (GUILayout.Button(FormulaEditorLabels.Refresh))
                 RefreshRows();
-            if (GUILayout.Button("扫描"))
+            if (GUILayout.Button(FormulaEditorLabels.Scan))
                 RefreshRows();
-            if (GUILayout.Button("生成缺失目录项"))
+            if (GUILayout.Button(FormulaEditorLabels.GenerateMissingCatalogEntries))
                 GenerateMissingCatalogEntries(profile);
             EditorGUILayout.EndHorizontal();
 
-            filter = (FormulaCatalogWindowFilter)EditorGUILayout.EnumPopup("筛选", filter);
-            DrawSummary();
-            DrawRows(profile);
+            EditorGUILayout.BeginVertical(EditorStyles.helpBox);
+            searchText = EditorGUILayout.TextField(FormulaEditorLabels.Search, searchText);
+            filter = FormulaEditorGUILayout.DrawCatalogFilter(filter);
+            EditorGUILayout.EndVertical();
+
+            var visibleRows = FormulaCatalogWindowModel.FilterRows(rows, filter, searchText);
+            DrawSummary(visibleRows);
+            DrawRows(profile, visibleRows);
             DrawMarkdown();
         }
 
-        private void DrawSummary()
+        private void DrawSummary(IReadOnlyList<FormulaCatalogWindowRow> visibleRows)
         {
-            var visibleRows = rows.Where(row => FormulaCatalogWindowModel.MatchesFilter(row, filter)).ToList();
-            EditorGUILayout.Space();
+            FormulaEditorGUILayout.DrawSectionHeader(FormulaEditorLabels.ScanSummary);
             EditorGUILayout.LabelField(
-                "扫描摘要",
+                FormulaEditorLabels.ScanSummary,
                 $"公式={lastScanReport?.AssetCount ?? rows.Count}, 错误={lastScanReport?.ErrorCount ?? 0}, 警告={lastScanReport?.WarningCount ?? 0}, 显示={visibleRows.Count}");
         }
 
-        private void DrawRows(FormulaEditorProfile profile)
+        private void DrawRows(FormulaEditorProfile profile, IReadOnlyList<FormulaCatalogWindowRow> visibleRows)
         {
-            EditorGUILayout.Space();
-            EditorGUILayout.LabelField("公式", EditorStyles.boldLabel);
+            FormulaEditorGUILayout.DrawSectionHeader(FormulaEditorLabels.FormulaList);
+            if (visibleRows.Count == 0)
+            {
+                EditorGUILayout.HelpBox(FormulaEditorLabels.NoRows, MessageType.Info);
+                return;
+            }
+
             scrollPosition = EditorGUILayout.BeginScrollView(scrollPosition);
 
-            foreach (var row in rows.Where(row => FormulaCatalogWindowModel.MatchesFilter(row, filter)))
+            foreach (var row in visibleRows)
             {
                 EditorGUILayout.BeginVertical(EditorStyles.helpBox);
                 EditorGUILayout.BeginHorizontal();
                 EditorGUILayout.LabelField(row.Title, EditorStyles.boldLabel);
-                EditorGUILayout.LabelField($"引用 {row.ReferenceCount}", GUILayout.Width(64f));
-                EditorGUILayout.LabelField($"E{row.ErrorCount}/W{row.WarningCount}", GUILayout.Width(72f));
-                EditorGUILayout.LabelField(row.HasCatalogEntry ? row.Status.ToString() : "缺目录", GUILayout.Width(72f));
-                if (GUILayout.Button("Ping", GUILayout.Width(48f)))
+                EditorGUILayout.LabelField($"{FormulaEditorLabels.References} {row.ReferenceCount}", GUILayout.Width(72f));
+                EditorGUILayout.LabelField(
+                    FormulaEditorLabels.IssueSummary(row.ErrorCount, row.WarningCount, row.InfoCount),
+                    GUILayout.Width(148f));
+                EditorGUILayout.LabelField(
+                    row.HasCatalogEntry ? FormulaEditorLabels.CatalogStatusName(row.Status) : FormulaEditorLabels.MissingCatalog,
+                    GUILayout.Width(64f));
+                if (GUILayout.Button(FormulaEditorLabels.Ping, GUILayout.Width(48f)))
                     Ping(row);
-                if (GUILayout.Button("Workbench", GUILayout.Width(88f)))
-                    FormulaWorkbenchWindow.OpenWithProfile(profile);
+                if (GUILayout.Button(FormulaEditorLabels.OpenWorkbench, GUILayout.Width(64f)))
+                    FormulaWorkbenchWindow.OpenWithFormula(profile, row.Formula);
                 EditorGUILayout.EndHorizontal();
 
-                EditorGUILayout.LabelField(row.AssetPath);
+                EditorGUILayout.SelectableLabel(row.AssetPath, EditorStyles.miniLabel, GUILayout.Height(EditorGUIUtility.singleLineHeight));
                 if (!string.IsNullOrWhiteSpace(row.Purpose))
                     EditorGUILayout.LabelField("用途", row.Purpose);
+                DrawCatalogMetadata(row);
 
                 foreach (var issue in row.Issues)
-                    EditorGUILayout.LabelField(issue.Severity.ToString(), issue.Message);
+                    EditorGUILayout.HelpBox(
+                        $"{FormulaEditorLabels.ScanSeverityName(issue.Severity)}: {issue.Message}",
+                        issue.Severity == FormulaAssetScanSeverity.Error ? MessageType.Error : MessageType.Warning);
 
                 EditorGUILayout.EndVertical();
             }
@@ -110,8 +132,7 @@ namespace ZeroEngine.Formula.Editor
             if (string.IsNullOrEmpty(lastMarkdown))
                 return;
 
-            EditorGUILayout.Space();
-            EditorGUILayout.LabelField("Markdown 报告", EditorStyles.boldLabel);
+            FormulaEditorGUILayout.DrawSectionHeader(FormulaEditorLabels.PreviewReportMarkdown);
             EditorGUILayout.TextArea(lastMarkdown, GUILayout.MinHeight(72f));
         }
 
@@ -220,6 +241,20 @@ namespace ZeroEngine.Formula.Editor
 
             Selection.activeObject = row.Formula;
             EditorGUIUtility.PingObject(row.Formula);
+        }
+
+        private static void DrawCatalogMetadata(FormulaCatalogWindowRow row)
+        {
+            var parts = new List<string>();
+            if (!string.IsNullOrWhiteSpace(row.Owner))
+                parts.Add($"负责人: {row.Owner}");
+            if (!string.IsNullOrWhiteSpace(row.Unit))
+                parts.Add($"单位: {row.Unit}");
+            if (row.Tags.Count > 0)
+                parts.Add($"标签: {string.Join(", ", row.Tags)}");
+
+            if (parts.Count > 0)
+                EditorGUILayout.LabelField(string.Join("    ", parts), EditorStyles.miniLabel);
         }
     }
 }

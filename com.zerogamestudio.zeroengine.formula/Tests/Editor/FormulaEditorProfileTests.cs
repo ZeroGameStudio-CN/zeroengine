@@ -100,6 +100,20 @@ namespace ZeroEngine.Formula.Tests.Editor
         }
 
         [Test]
+        public void Labels_TranslateEditorStatusAndIssueSummary()
+        {
+            Assert.AreEqual("全部", FormulaEditorLabels.FilterName(FormulaCatalogWindowFilter.All));
+            Assert.AreEqual("错误", FormulaEditorLabels.FilterName(FormulaCatalogWindowFilter.Errors));
+            Assert.AreEqual("草稿", FormulaEditorLabels.CatalogStatusName(FormulaCatalogStatus.Draft));
+            Assert.AreEqual("生效", FormulaEditorLabels.CatalogStatusName(FormulaCatalogStatus.Active));
+            Assert.AreEqual("废弃", FormulaEditorLabels.CatalogStatusName(FormulaCatalogStatus.Deprecated));
+            Assert.AreEqual("错误", FormulaEditorLabels.ScanSeverityName(FormulaAssetScanSeverity.Error));
+            Assert.AreEqual("警告", FormulaEditorLabels.DiagnosticSeverityName(FormulaDiagnosticSeverity.Warning));
+            Assert.AreEqual("无问题", FormulaEditorLabels.IssueSummary(0, 0, 0));
+            Assert.AreEqual("错误 2 / 警告 1 / 信息 3", FormulaEditorLabels.IssueSummary(2, 1, 3));
+        }
+
+        [Test]
         public void Constructors_NormalizeNullStrings_ToEmpty()
         {
             var parameter = new FormulaParameterDescriptor(

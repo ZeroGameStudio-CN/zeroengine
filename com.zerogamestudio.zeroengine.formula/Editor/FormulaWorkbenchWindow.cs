@@ -27,6 +27,16 @@ namespace ZeroEngine.Formula.Editor
 
         public static void OpenWithProfile(FormulaEditorProfile profile)
         {
+            Open(profile, null);
+        }
+
+        public static void OpenWithFormula(FormulaEditorProfile profile, FormulaAsset selectedFormula)
+        {
+            Open(profile, selectedFormula);
+        }
+
+        private static void Open(FormulaEditorProfile profile, FormulaAsset selectedFormula)
+        {
             if (profile != null)
             {
                 var registered = false;
@@ -49,7 +59,10 @@ namespace ZeroEngine.Formula.Editor
             var title = string.IsNullOrEmpty(activeProfile.WorkbenchTitle)
                 ? activeProfile.DisplayName
                 : activeProfile.WorkbenchTitle;
-            GetWindow<FormulaWorkbenchWindow>(title).Show();
+            var window = GetWindow<FormulaWorkbenchWindow>(title);
+            if (selectedFormula != null)
+                window.formula = selectedFormula;
+            window.Show();
         }
 
         private void OnGUI()
@@ -57,19 +70,23 @@ namespace ZeroEngine.Formula.Editor
             var profile = FormulaEditorProfileRegistry.ActiveProfile;
             scrollPosition = EditorGUILayout.BeginScrollView(scrollPosition);
 
-            EditorGUILayout.LabelField("配置", $"{profile.DisplayName} ({profile.ProfileId})");
+            FormulaEditorGUILayout.DrawHeader(
+                string.IsNullOrEmpty(profile.WorkbenchTitle) ? FormulaEditorLabels.Workbench : profile.WorkbenchTitle,
+                $"{profile.DisplayName} ({profile.ProfileId})",
+                string.IsNullOrEmpty(profile.DefaultSearchRoot) ? string.Empty : $"{FormulaEditorLabels.FormulaRoot}: {profile.DefaultSearchRoot}");
 
+            FormulaEditorGUILayout.DrawSectionHeader(FormulaEditorLabels.Formula);
+            EditorGUILayout.BeginVertical(EditorStyles.helpBox);
             formula = (FormulaAsset)EditorGUILayout.ObjectField(FormulaEditorLabels.Formula, formula, typeof(FormulaAsset), false);
+            EditorGUILayout.EndVertical();
+
             FormulaEditorGUILayout.DrawPreviewInputs(profile, previewState);
             if (GUILayout.Button(FormulaEditorLabels.Evaluate))
                 Evaluate(profile);
 
             if (lastReport == null)
             {
-                EditorGUILayout.Space();
-                EditorGUILayout.LabelField(FormulaEditorLabels.Diagnostics, EditorStyles.boldLabel);
-                EditorGUILayout.Space();
-                EditorGUILayout.LabelField(FormulaEditorLabels.StepTrace, EditorStyles.boldLabel);
+                FormulaEditorGUILayout.DrawReport(null);
                 DrawBatchPreview(profile);
                 DrawCurvePreview(profile);
                 EditorGUILayout.EndScrollView();
@@ -104,8 +121,7 @@ namespace ZeroEngine.Formula.Editor
 
         private void DrawBatchPreview(FormulaEditorProfile profile)
         {
-            EditorGUILayout.Space();
-            EditorGUILayout.LabelField(FormulaEditorLabels.PreviewCases, EditorStyles.boldLabel);
+            FormulaEditorGUILayout.DrawSectionHeader(FormulaEditorLabels.PreviewCases);
 
             for (var index = 0; index < session.PreviewCaseAssets.Count; index++)
             {
@@ -138,9 +154,9 @@ namespace ZeroEngine.Formula.Editor
             if (lastBatchReport == null)
                 return;
 
-            EditorGUILayout.LabelField(FormulaEditorLabels.PreviewReportJson, EditorStyles.boldLabel);
+            FormulaEditorGUILayout.DrawSectionHeader(FormulaEditorLabels.PreviewReportJson);
             EditorGUILayout.TextArea(lastBatchJson, GUILayout.MinHeight(48f));
-            EditorGUILayout.LabelField(FormulaEditorLabels.PreviewReportMarkdown, EditorStyles.boldLabel);
+            FormulaEditorGUILayout.DrawSectionHeader(FormulaEditorLabels.PreviewReportMarkdown);
             EditorGUILayout.TextArea(lastBatchMarkdown, GUILayout.MinHeight(64f));
         }
 
@@ -149,8 +165,7 @@ namespace ZeroEngine.Formula.Editor
             if (profile == null || profile.PreviewInputs.Count == 0)
                 return;
 
-            EditorGUILayout.Space();
-            EditorGUILayout.LabelField(FormulaEditorLabels.CurvePreview, EditorStyles.boldLabel);
+            FormulaEditorGUILayout.DrawSectionHeader(FormulaEditorLabels.CurvePreview);
 
             curveInputIndex = Mathf.Clamp(curveInputIndex, 0, profile.PreviewInputs.Count - 1);
             var inputNames = new string[profile.PreviewInputs.Count];

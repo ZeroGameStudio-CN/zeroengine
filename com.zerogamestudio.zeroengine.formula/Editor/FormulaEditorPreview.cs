@@ -29,6 +29,16 @@ namespace ZeroEngine.Formula.Editor
                 values[key] = value;
         }
 
+        public void ResetToDefaults(FormulaEditorProfile profile)
+        {
+            values.Clear();
+            if (profile == null)
+                return;
+
+            foreach (var input in profile.PreviewInputs)
+                values[input.Key] = input.DefaultValue;
+        }
+
         public FormulaDictionaryEvaluationContext CreateContext(FormulaEditorProfile profile)
         {
             return FormulaEditorPreview.CreateContext(profile, values);

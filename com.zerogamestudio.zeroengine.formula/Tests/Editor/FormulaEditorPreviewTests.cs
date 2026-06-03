@@ -119,6 +119,42 @@ namespace ZeroEngine.Formula.Tests.Editor
             }
         }
 
+        [Test]
+        public void PreviewState_ResetToDefaults_RestoresProfileDefaultValues()
+        {
+            var profile = new FormulaEditorProfile(
+                "test",
+                "测试公式",
+                string.Empty,
+                string.Empty,
+                "测试公式",
+                Array.Empty<FormulaProviderDescriptor>(),
+                new[]
+                {
+                    new FormulaPreviewInputDescriptor(
+                        "level",
+                        "等级",
+                        FormulaPreviewInputKind.Int,
+                        5f,
+                        "玩家等级"),
+                    new FormulaPreviewInputDescriptor(
+                        "ratio",
+                        "倍率",
+                        FormulaPreviewInputKind.Float,
+                        1.5f,
+                        "倍率"),
+                });
+            var state = new FormulaEditorPreviewState();
+            state.SetValue("level", 99f);
+            state.SetValue("ratio", 8f);
+
+            state.ResetToDefaults(profile);
+            var values = state.ToValueSet(profile);
+
+            Assert.AreEqual(5f, values.TryGetValue("level", out var level) ? level : -1f);
+            Assert.AreEqual(1.5f, values.TryGetValue("ratio", out var ratio) ? ratio : -1f);
+        }
+
         private static void SetFormulaAsset(FormulaAsset formula, float initialValue, FormulaStep[] steps)
         {
             const BindingFlags flags = BindingFlags.Instance | BindingFlags.NonPublic;

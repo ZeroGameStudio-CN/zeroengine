@@ -61,6 +61,106 @@ namespace ZeroEngine.Formula.Tests.Editor
         }
 
         [Test]
+        public void FilterRows_SearchTextMatchesCatalogMetadataAndIssues()
+        {
+            var report = new FormulaAssetScanReport { AssetCount = 2 };
+            report.AddIssue(
+                FormulaAssetScanSeverity.Warning,
+                "Assets/Data/CoinFormula.asset",
+                "需要策划复核期望范围。");
+
+            var rows = FormulaCatalogWindowModel.BuildRows(
+                new[]
+                {
+                    new FormulaCatalogAssetRecord(
+                        "Assets/Data/CoinFormula.asset",
+                        "guid-1",
+                        "CoinFormula",
+                        null),
+                    new FormulaCatalogAssetRecord(
+                        "Assets/Data/DamageFormula.asset",
+                        "guid-2",
+                        "DamageFormula",
+                        null),
+                },
+                new FormulaCatalogLookup(new[]
+                {
+                    new FormulaCatalogEntry(
+                        null,
+                        "guid-1",
+                        "金币收益",
+                        "关卡掉落奖励",
+                        "策划",
+                        "coin",
+                        new[] { "reward", "economy" },
+                        FormulaCatalogStatus.Active,
+                        FormulaResultRange.None,
+                        "主线奖励公式"),
+                    new FormulaCatalogEntry(
+                        null,
+                        "guid-2",
+                        "伤害",
+                        "战斗伤害",
+                        "战斗",
+                        "damage",
+                        new[] { "combat" },
+                        FormulaCatalogStatus.Active,
+                        FormulaResultRange.None,
+                        string.Empty),
+                }),
+                Array.Empty<FormulaAssetReference>(),
+                report);
+
+            var metadataMatches = FormulaCatalogWindowModel.FilterRows(rows, FormulaCatalogWindowFilter.All, "economy 策划");
+            var issueMatches = FormulaCatalogWindowModel.FilterRows(rows, FormulaCatalogWindowFilter.All, "复核");
+            var assetMatches = FormulaCatalogWindowModel.FilterRows(rows, FormulaCatalogWindowFilter.All, "coinformula");
+            var misses = FormulaCatalogWindowModel.FilterRows(rows, FormulaCatalogWindowFilter.All, "boss");
+
+            Assert.That(metadataMatches.Select(row => row.FormulaGuid).ToArray(), Is.EqualTo(new[] { "guid-1" }));
+            Assert.That(issueMatches.Select(row => row.FormulaGuid).ToArray(), Is.EqualTo(new[] { "guid-1" }));
+            Assert.That(assetMatches.Select(row => row.FormulaGuid).ToArray(), Is.EqualTo(new[] { "guid-1" }));
+            Assert.That(misses, Is.Empty);
+        }
+
+        [Test]
+        public void FilterRows_CombinesIssueFilterAndSearchText()
+        {
+            var report = new FormulaAssetScanReport { AssetCount = 2 };
+            report.AddIssue(
+                FormulaAssetScanSeverity.Error,
+                "Assets/Data/BrokenFormula.asset",
+                "除零错误。");
+            report.AddIssue(
+                FormulaAssetScanSeverity.Warning,
+                "Assets/Data/WarningFormula.asset",
+                "未引用。");
+
+            var rows = FormulaCatalogWindowModel.BuildRows(
+                new[]
+                {
+                    new FormulaCatalogAssetRecord(
+                        "Assets/Data/BrokenFormula.asset",
+                        "guid-1",
+                        "BrokenFormula",
+                        null),
+                    new FormulaCatalogAssetRecord(
+                        "Assets/Data/WarningFormula.asset",
+                        "guid-2",
+                        "WarningFormula",
+                        null),
+                },
+                null,
+                Array.Empty<FormulaAssetReference>(),
+                report);
+
+            var matches = FormulaCatalogWindowModel.FilterRows(rows, FormulaCatalogWindowFilter.Errors, "broken");
+            var filteredOutBySearch = FormulaCatalogWindowModel.FilterRows(rows, FormulaCatalogWindowFilter.Errors, "warning");
+
+            Assert.That(matches.Select(row => row.FormulaGuid).ToArray(), Is.EqualTo(new[] { "guid-1" }));
+            Assert.That(filteredOutBySearch, Is.Empty);
+        }
+
+        [Test]
         public void AddMissingEntries_AddsOnlyMissingGuids()
         {
             var catalog = ScriptableObject.CreateInstance<FormulaCatalog>();
