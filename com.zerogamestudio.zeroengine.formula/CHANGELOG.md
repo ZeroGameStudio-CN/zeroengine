@@ -11,6 +11,8 @@
 - Added safe rename dry-run planning with Addressables blocking detection.
 - Added EditMode tests for governance metadata, reference indexing, scan report
   export, and rename planning.
+- Added preview cases, runtime snapshots, batch preview reports, and JSON /
+  Markdown preview report export helpers for formula debugging workflows.
 
 ## 0.1.0
 

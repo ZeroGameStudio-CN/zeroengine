@@ -118,6 +118,18 @@ The editor package includes reusable governance primitives:
 
 These APIs are editor-only and do not change runtime formula evaluation.
 
+## Debugging Workflows
+
+Formula preview debugging can be automated with:
+
+- `FormulaPreviewCase` for named sets of preview input values
+- `FormulaRuntimeSnapshot` for captured runtime context values
+- `FormulaPreviewRunner` for evaluating multiple cases with one formula/profile
+- `FormulaPreviewReportExporter` for JSON and Markdown summaries
+
+These reports are designed for Workbench UI, CI artifacts, and agent-assisted
+formula configuration.
+
 ## Package Boundary
 
 Runtime code must stay free of project-specific dependencies:
