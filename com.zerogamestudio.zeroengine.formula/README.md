@@ -133,6 +133,31 @@ Formula preview debugging can be automated with:
 These reports are designed for Workbench UI, CI artifacts, and agent-assisted
 formula configuration.
 
+## CI And Migration
+
+Batchmode scanner entry:
+
+```text
+-executeMethod ZeroEngine.Formula.Editor.FormulaScannerCli.Run
+```
+
+Formula CLI flags:
+
+```text
+-formulaProfile <profileId>
+-formulaReportJson <path>
+-formulaReportMarkdown <path>
+-formulaFailOnWarning
+-formulaFailOnMissingCatalog
+```
+
+The CLI exits with `1` for scan errors, `2` for warnings when strict warning
+mode is enabled, and `3` for missing catalog warnings when that gate is enabled.
+
+Editor-only migration helpers support deterministic dry-run/apply for provider
+id renames and parameter key renames. `FormulaMigrationReportExporter` emits
+JSON and Markdown summaries for agent review.
+
 ## Package Boundary
 
 Runtime code must stay free of project-specific dependencies:

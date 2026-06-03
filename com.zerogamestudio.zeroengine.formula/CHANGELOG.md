@@ -15,6 +15,8 @@
   Markdown preview report export helpers for formula debugging workflows.
 - Added preview case ScriptableObject assets, Workbench batch preview export,
   profile default preview cases, and curve preview data for formula debugging.
+- Added batchmode scanner CLI exit-code policy, report file output, and
+  deterministic formula migration dry-run/apply reports.
 
 ## 0.1.0
 
