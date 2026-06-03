@@ -1,4 +1,7 @@
+using System;
 using System.Collections.Generic;
+using System.Globalization;
+using System.Text;
 
 namespace ZeroEngine.Formula.Editor
 {
@@ -71,18 +74,54 @@ namespace ZeroEngine.Formula.Editor
             IReadOnlyDictionary<string, float> overrides)
         {
             var context = FormulaDictionaryEvaluationContext.Empty;
-            if (profile == null)
-                return context;
-
-            foreach (var input in profile.PreviewInputs)
+            if (profile != null)
             {
-                var value = overrides != null && overrides.TryGetValue(input.Key, out var overrideValue)
-                    ? overrideValue
-                    : input.DefaultValue;
-                context.SetValue(input.Key, value);
+                foreach (var input in profile.PreviewInputs)
+                {
+                    var value = overrides != null && overrides.TryGetValue(input.Key, out var overrideValue)
+                        ? overrideValue
+                        : input.DefaultValue;
+                    context.SetValue(input.Key, value);
+                }
+            }
+
+            if (overrides != null)
+            {
+                foreach (var entry in overrides)
+                    context.SetValue(entry.Key, entry.Value);
             }
 
             return context;
+        }
+
+        public static string GetProviderPreviewInputKey(
+            string providerId,
+            IReadOnlyList<FormulaParameter> parameters)
+        {
+            var builder = new StringBuilder();
+            builder.Append("provider:");
+            builder.Append(providerId ?? string.Empty);
+
+            if (parameters == null || parameters.Count == 0)
+                return builder.ToString();
+
+            var sortedParameters = new List<FormulaParameter>();
+            foreach (var parameter in parameters)
+            {
+                if (parameter != null)
+                    sortedParameters.Add(parameter);
+            }
+
+            sortedParameters.Sort(CompareParameters);
+            foreach (var parameter in sortedParameters)
+            {
+                builder.Append('|');
+                AppendEscaped(builder, parameter.Name);
+                builder.Append('=');
+                builder.Append(GetParameterValueToken(parameter));
+            }
+
+            return builder.ToString();
         }
 
         public static FormulaProviderRegistry CreateRegistry(FormulaEditorProfile profile)
@@ -127,6 +166,11 @@ namespace ZeroEngine.Formula.Editor
                     return false;
                 }
 
+                var scopedInputKey = GetProviderPreviewInputKey(request.ProviderId, request.Parameters);
+                if (context != null
+                    && context.TryGetValue(scopedInputKey, out value))
+                    return true;
+
                 if (!string.IsNullOrEmpty(descriptor.PreviewInputKey)
                     && context != null
                     && context.TryGetValue(descriptor.PreviewInputKey, out value))
@@ -156,6 +200,51 @@ namespace ZeroEngine.Formula.Editor
                     default:
                         return false;
                 }
+            }
+        }
+
+        private static int CompareParameters(FormulaParameter left, FormulaParameter right)
+        {
+            var nameComparison = string.Compare(left?.Name, right?.Name, StringComparison.Ordinal);
+            if (nameComparison != 0)
+                return nameComparison;
+
+            var leftType = left?.Type ?? FormulaParameterType.String;
+            var rightType = right?.Type ?? FormulaParameterType.String;
+            return leftType.CompareTo(rightType);
+        }
+
+        private static string GetParameterValueToken(FormulaParameter parameter)
+        {
+            switch (parameter.Type)
+            {
+                case FormulaParameterType.Int:
+                    return "i:" + parameter.IntValue.ToString(CultureInfo.InvariantCulture);
+                case FormulaParameterType.Float:
+                    return "f:" + parameter.FloatValue.ToString("R", CultureInfo.InvariantCulture);
+                case FormulaParameterType.Bool:
+                    return "b:" + (parameter.BoolValue ? "true" : "false");
+                case FormulaParameterType.Object:
+                    return "o:" + (parameter.ObjectValue ? parameter.ObjectValue.GetInstanceID().ToString(CultureInfo.InvariantCulture) : "0");
+                case FormulaParameterType.String:
+                default:
+                    var builder = new StringBuilder("s:");
+                    AppendEscaped(builder, parameter.StringValue);
+                    return builder.ToString();
+            }
+        }
+
+        private static void AppendEscaped(StringBuilder builder, string value)
+        {
+            if (string.IsNullOrEmpty(value))
+                return;
+
+            foreach (var character in value)
+            {
+                if (character == '\\' || character == '|' || character == '=')
+                    builder.Append('\\');
+
+                builder.Append(character);
             }
         }
     }
