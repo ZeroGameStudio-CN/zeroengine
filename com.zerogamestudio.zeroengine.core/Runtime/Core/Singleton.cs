@@ -113,7 +113,7 @@ namespace ZeroEngine.Core
                             GameObject singletonObject = new GameObject();
                             _instance = singletonObject.AddComponent<T>();
                             singletonObject.name = $"[{typeof(T)}]";
-                            DontDestroyOnLoad(singletonObject);
+                            MakePersistent(singletonObject);
                         }
                     }
 
@@ -127,11 +127,29 @@ namespace ZeroEngine.Core
             if (_instance == null)
             {
                 _instance = this as T;
-                DontDestroyOnLoad(gameObject);
+                MakePersistent(gameObject);
             }
             else if (_instance != this)
             {
                 Destroy(gameObject);
+            }
+        }
+
+        private static void MakePersistent(GameObject target)
+        {
+            if (target == null)
+            {
+                return;
+            }
+
+            if (target.transform.parent != null)
+            {
+                target.transform.SetParent(null);
+            }
+
+            if (Application.isPlaying)
+            {
+                DontDestroyOnLoad(target);
             }
         }
     }
