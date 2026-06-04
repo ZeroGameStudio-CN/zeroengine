@@ -5,6 +5,7 @@
 
 using System;
 using UnityEngine;
+using ZeroEngine.Timing;
 #if ODIN_INSPECTOR
 using Sirenix.OdinInspector;
 #endif
@@ -39,6 +40,8 @@ namespace ZeroEngine.RPG.SkillVisual
 #endif
     public class CameraControlEvent : VisualEvent
     {
+        private static readonly object SlowMotionToken = new object();
+
 #if ODIN_INSPECTOR
         [FoldoutGroup("Settings")]
 #endif
@@ -193,18 +196,12 @@ namespace ZeroEngine.RPG.SkillVisual
 
         private void DoSlowMotion()
         {
-#if ZEROENGINE_DOTWEEN
-            float originalTimeScale = Time.timeScale;
-            Time.timeScale = TimeScale;
-
-            // 使用真实时间恢复
-            DOVirtual.DelayedCall(SlowMotionDuration, () =>
-            {
-                Time.timeScale = originalTimeScale;
-            }).SetUpdate(true); // 使用 unscaledTime
-#else
-            Debug.Log($"[CameraControl] SlowMotion: scale={TimeScale}, duration={SlowMotionDuration}");
-#endif
+            TimeControlLocator.Service.SetScaleModifier(
+                SlowMotionToken,
+                TimeDomainIds.Presentation,
+                Mathf.Clamp(TimeScale, 0f, 10f),
+                durationSeconds: Mathf.Max(0f, SlowMotionDuration),
+                reason: "ZE.RPG.CameraControlEvent.SlowMotion");
         }
     }
 }
