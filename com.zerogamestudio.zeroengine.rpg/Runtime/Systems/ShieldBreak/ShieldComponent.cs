@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using UnityEngine;
+using ZeroEngine.Utils;
 
 namespace ZeroEngine.RPG.Systems
 {
@@ -109,7 +110,7 @@ namespace ZeroEngine.RPG.Systems
             int oldShield = _currentShield;
             _currentShield = Mathf.Max(0, _currentShield - amount);
 
-            Debug.Log($"[ShieldComponent] 护盾受损: {oldShield} -> {_currentShield}");
+            DebugUtils.Log($"[ShieldComponent] 护盾受损: {oldShield} -> {_currentShield}");
             OnShieldChanged?.Invoke(oldShield, _currentShield);
 
             // 检查是否触发破盾
@@ -132,7 +133,7 @@ namespace ZeroEngine.RPG.Systems
             _isBroken = true;
             _brokenTurnsRemaining = _breakRecoveryTurns;
 
-            Debug.Log($"[ShieldComponent] 破盾！恢复需要 {_brokenTurnsRemaining} 回合");
+            DebugUtils.Log($"[ShieldComponent] 破盾！恢复需要 {_brokenTurnsRemaining} 回合");
             OnBroken?.Invoke();
         }
 
@@ -150,7 +151,7 @@ namespace ZeroEngine.RPG.Systems
             int oldShield = _currentShield;
             _currentShield = _maxShield;
 
-            Debug.Log($"[ShieldComponent] 从破盾状态恢复，护盾: {oldShield} -> {_currentShield}");
+            DebugUtils.Log($"[ShieldComponent] 从破盾状态恢复，护盾: {oldShield} -> {_currentShield}");
 
             OnShieldChanged?.Invoke(oldShield, _currentShield);
             OnRecovered?.Invoke();
@@ -164,7 +165,7 @@ namespace ZeroEngine.RPG.Systems
             if (!_isBroken) return;
 
             _brokenTurnsRemaining--;
-            Debug.Log($"[ShieldComponent] 破盾恢复倒计时: {_brokenTurnsRemaining}");
+            DebugUtils.Log($"[ShieldComponent] 破盾恢复倒计时: {_brokenTurnsRemaining}");
 
             if (_brokenTurnsRemaining <= 0)
             {
@@ -185,7 +186,7 @@ namespace ZeroEngine.RPG.Systems
             _isBroken = false;
             _brokenTurnsRemaining = 0;
 
-            Debug.Log($"[ShieldComponent] 初始化护盾: {_currentShield}/{_maxShield}, 弱点数: {_weaknesses.Count}");
+            DebugUtils.Log($"[ShieldComponent] 初始化护盾: {_currentShield}/{_maxShield}, 弱点数: {_weaknesses.Count}");
         }
 
         /// <summary>
