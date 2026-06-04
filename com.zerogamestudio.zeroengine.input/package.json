@@ -2,7 +2,7 @@
   "name": "com.zerogamestudio.zeroengine.input",
   "version": "2.0.0",
   "displayName": "ZeroEngine.Input",
-  "description": "Input management for ZeroEngine. Wraps Unity Input System with device detection, rebinding, and context-aware input handling.",
+  "description": "Reusable ZeroEngine input settings kernel over Unity Input System: action catalog validation, binding display, override persistence, conflict validation, settings rows, and interactive rebinding.",
   "unity": "2022.3",
   "unityRelease": "0f1",
   "dependencies": {
