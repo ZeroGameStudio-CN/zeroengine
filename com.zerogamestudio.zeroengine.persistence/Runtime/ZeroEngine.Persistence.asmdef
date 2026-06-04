@@ -3,7 +3,7 @@
     "rootNamespace": "ZeroEngine",
     "references": [
         "ZeroEngine.Core",
-        "ES3"
+        "EasySave3"
     ],
     "includePlatforms": [],
     "excludePlatforms": [],
