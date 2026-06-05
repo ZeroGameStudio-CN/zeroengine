@@ -96,6 +96,22 @@ namespace ZGS.DataToolkit.Editor.Tests
             Assert.AreEqual(1, messages.Count);
         }
 
+        [Test]
+        public void SelectableRowsWithoutCountText_UseAvailableTitleWidth()
+        {
+            var method = typeof(DataToolkitWindow).GetMethod("BuildSelectableRowTitleRect", BindingFlags.Static | BindingFlags.NonPublic);
+            Assert.NotNull(method, "Selectable rows should calculate title width from whether count text is visible.");
+
+            var rowRect = new Rect(10f, 20f, 240f, 24f);
+            var titleRectWithoutCount = (Rect)method.Invoke(null, new object[] { rowRect, false });
+            var titleRectWithCount = (Rect)method.Invoke(null, new object[] { rowRect, true });
+
+            Assert.AreEqual(rowRect.x + 6f, titleRectWithoutCount.x);
+            Assert.AreEqual(rowRect.width - 12f, titleRectWithoutCount.width);
+            Assert.AreEqual(rowRect.width - 56f, titleRectWithCount.width);
+            Assert.Greater(titleRectWithoutCount.width, titleRectWithCount.width);
+        }
+
         private static DataToolkitProjectProfile CreateProfile()
         {
             return new DataToolkitProjectProfile(CreateSettings());

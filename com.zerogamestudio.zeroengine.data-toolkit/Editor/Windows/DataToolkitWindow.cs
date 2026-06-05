@@ -651,7 +651,8 @@ namespace ZGS.DataToolkit.Editor
                     EditorGUI.DrawRect(rect, new Color(1f, 1f, 1f, 0.06f));
                 }
 
-                var titleRect = new Rect(rect.x + 6f, rect.y + 2f, rect.width - 56f, rect.height - 4f);
+                var hasCountText = !string.IsNullOrEmpty(countText);
+                var titleRect = BuildSelectableRowTitleRect(rect, hasCountText);
                 var titleStyle = new GUIStyle(EditorStyles.label)
                 {
                     clipping = TextClipping.Clip,
@@ -660,7 +661,7 @@ namespace ZGS.DataToolkit.Editor
                 titleStyle.normal.textColor = selected ? Color.white : EditorStyles.label.normal.textColor;
                 GUI.Label(titleRect, title, titleStyle);
 
-                if (!string.IsNullOrEmpty(countText))
+                if (hasCountText)
                 {
                     var countRect = new Rect(rect.xMax - 46f, rect.y + 2f, 40f, rect.height - 4f);
                     var countStyle = new GUIStyle(EditorStyles.miniLabel)
@@ -673,6 +674,12 @@ namespace ZGS.DataToolkit.Editor
             }
 
             return GUI.Button(rect, GUIContent.none, GUIStyle.none);
+        }
+
+        private static Rect BuildSelectableRowTitleRect(Rect rect, bool hasCountText)
+        {
+            var rightReservedWidth = hasCountText ? 56f : 12f;
+            return new Rect(rect.x + 6f, rect.y + 2f, Mathf.Max(0f, rect.width - rightReservedWidth), rect.height - 4f);
         }
 
         private void DrawColumnResizeHandle(Rect rect, ref float width, string prefsKey, float maxWidthByLayout)
