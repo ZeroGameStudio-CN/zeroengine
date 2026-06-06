@@ -1,4 +1,5 @@
 using System;
+using System.IO;
 using System.Linq;
 using NUnit.Framework;
 using UnityEditor;
@@ -96,6 +97,19 @@ namespace ZGS.DataToolkit.Editor.Tests
             var types = ManageableDataTypeDiscovery.GetManageableScriptableObjectTypes();
 
             CollectionAssert.Contains(types.ToArray(), typeof(ToolkitAttributedTestData));
+        }
+
+        [Test]
+        public void LoadFirstAssetOfType_UsesMainAssetBeforeSubAssetFallback()
+        {
+            var source = File.ReadAllText("Packages/com.zerogamestudio.zeroengine.data-toolkit/Editor/Discovery/AssetDiscoveryService.cs");
+            var mainLoadIndex = source.IndexOf("var mainAsset = AssetDatabase.LoadAssetAtPath(path, type);", StringComparison.Ordinal);
+            var mainReturnIndex = source.IndexOf("if (mainAsset != null)", StringComparison.Ordinal);
+            var allAssetsIndex = source.IndexOf("AssetDatabase.LoadAllAssetsAtPath(path)", StringComparison.Ordinal);
+
+            Assert.GreaterOrEqual(mainLoadIndex, 0);
+            Assert.Greater(mainReturnIndex, mainLoadIndex);
+            Assert.Greater(allAssetsIndex, mainLoadIndex);
         }
 
         private static DataToolkitProjectSettings CreateSettings(DataToolkitDefaultInspectorMode inspectorMode)

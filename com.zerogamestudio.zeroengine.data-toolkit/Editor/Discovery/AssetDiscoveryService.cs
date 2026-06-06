@@ -48,9 +48,15 @@ namespace ZGS.DataToolkit.Editor
                 return null;
             }
 
+            var mainAsset = AssetDatabase.LoadAssetAtPath(path, type);
+            if (mainAsset != null)
+            {
+                return mainAsset;
+            }
+
             if (type == typeof(GameObject))
             {
-                return AssetDatabase.LoadAssetAtPath(path, type);
+                return null;
             }
 
             foreach (var asset in AssetDatabase.LoadAllAssetsAtPath(path))
