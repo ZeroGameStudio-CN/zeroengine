@@ -1,0 +1,18 @@
+{
+  "name": "com.zerogamestudio.zeroengine.tce",
+  "version": "0.1.0",
+  "displayName": "ZeroEngine TCE",
+  "description": "Generic Trigger-Condition-Effect runtime contracts and reusable components.",
+  "unity": "2022.3",
+  "dependencies": {},
+  "keywords": [
+    "zeroengine",
+    "tce",
+    "ability",
+    "gameplay"
+  ],
+  "author": {
+    "name": "ZeroGameStudio",
+    "url": "https://github.com/zerogamestudio"
+  }
+}
