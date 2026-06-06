@@ -33,7 +33,6 @@ namespace ZGS.DataToolkit.Editor
                 .Where(path => !string.IsNullOrEmpty(path))
                 .Select(NormalizePath)
                 .Where(path => !IsExcluded(path, settings))
-                .Where(path => ContainsAssetOfType(path, type))
                 .OrderBy(path => Path.GetFileNameWithoutExtension(path), StringComparer.OrdinalIgnoreCase)
                 .ToArray();
 
@@ -73,11 +72,6 @@ namespace ZGS.DataToolkit.Editor
         public static void ClearCaches()
         {
             AssetPathCache.Clear();
-        }
-
-        private static bool ContainsAssetOfType(string path, Type type)
-        {
-            return LoadFirstAssetOfType(path, type) != null;
         }
 
         private static bool IsExcluded(string path, DataToolkitProjectSettings settings)

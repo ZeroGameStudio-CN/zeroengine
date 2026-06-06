@@ -112,6 +112,14 @@ namespace ZGS.DataToolkit.Editor.Tests
             Assert.Greater(allAssetsIndex, mainLoadIndex);
         }
 
+        [Test]
+        public void GetAssetPathsForType_DoesNotLoadAssetsDuringDiscovery()
+        {
+            var source = File.ReadAllText("Packages/com.zerogamestudio.zeroengine.data-toolkit/Editor/Discovery/AssetDiscoveryService.cs");
+
+            StringAssert.DoesNotContain(".Where(path => ContainsAssetOfType(path, type))", source);
+        }
+
         private static DataToolkitProjectSettings CreateSettings(DataToolkitDefaultInspectorMode inspectorMode)
         {
             return new DataToolkitProjectSettings(
