@@ -41,6 +41,29 @@ namespace ZGS.DataToolkit.Editor
             return paths;
         }
 
+        public static UnityEngine.Object LoadFirstAssetOfType(string path, Type type)
+        {
+            if (string.IsNullOrEmpty(path) || type == null)
+            {
+                return null;
+            }
+
+            if (type == typeof(GameObject))
+            {
+                return AssetDatabase.LoadAssetAtPath(path, type);
+            }
+
+            foreach (var asset in AssetDatabase.LoadAllAssetsAtPath(path))
+            {
+                if (asset != null && type.IsInstanceOfType(asset))
+                {
+                    return asset;
+                }
+            }
+
+            return null;
+        }
+
         public static void ClearCaches()
         {
             AssetPathCache.Clear();
@@ -48,20 +71,7 @@ namespace ZGS.DataToolkit.Editor
 
         private static bool ContainsAssetOfType(string path, Type type)
         {
-            if (type == typeof(GameObject))
-            {
-                return AssetDatabase.LoadAssetAtPath(path, type) != null;
-            }
-
-            foreach (var asset in AssetDatabase.LoadAllAssetsAtPath(path))
-            {
-                if (asset != null && type.IsInstanceOfType(asset))
-                {
-                    return true;
-                }
-            }
-
-            return false;
+            return LoadFirstAssetOfType(path, type) != null;
         }
 
         private static bool IsExcluded(string path, DataToolkitProjectSettings settings)

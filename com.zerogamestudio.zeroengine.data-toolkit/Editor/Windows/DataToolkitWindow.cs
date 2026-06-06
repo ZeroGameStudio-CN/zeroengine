@@ -40,6 +40,7 @@ namespace ZGS.DataToolkit.Editor
         private DataToolkitContext context;
         private IReadOnlyList<IDataToolkitToolbarProvider> toolbarProviders = Array.Empty<IDataToolkitToolbarProvider>();
         private IReadOnlyList<IDataToolkitHeaderActionProvider> headerActionProviders = Array.Empty<IDataToolkitHeaderActionProvider>();
+        private IReadOnlyList<IDataToolkitAssetInspectorProvider> assetInspectorProviders = Array.Empty<IDataToolkitAssetInspectorProvider>();
         private Type[] typesToDisplay = Array.Empty<Type>();
         private Type selectedType;
         private string selectedAssetPath;
@@ -116,10 +117,11 @@ namespace ZGS.DataToolkit.Editor
             context = new DataToolkitContext(settings);
             toolbarProviders = profile.ToolbarProviders;
             headerActionProviders = profile.HeaderActionProviders;
+            assetInspectorProviders = profile.AssetInspectorProviders;
             disabledToolbarProviders.Clear();
             disabledHeaderActionProviders.Clear();
             loggedProviderExceptionKeys.Clear();
-            inspector.SetCustomInspectors(context, profile.AssetInspectorProviders);
+            inspector.SetCustomInspectors(context, assetInspectorProviders);
             titleContent = new GUIContent(settings.WindowTitle);
             minSize = new Vector2(980f, 560f);
             typeColumnWidth = Mathf.Clamp(EditorPrefs.GetFloat(settings.PrefKey("TypeColumnWidth"), DefaultTypeColumnWidth), MinColumnWidth, MaxColumnWidth);
@@ -283,6 +285,11 @@ namespace ZGS.DataToolkit.Editor
                 if (GUILayout.Button("Refresh", GUILayout.Width(82f), GUILayout.Height(24f)))
                 {
                     RefreshCaches();
+                }
+
+                if (GUILayout.Button("Diagnostics", GUILayout.Width(96f), GUILayout.Height(24f)))
+                {
+                    DataToolkitDiagnosticsWindow.Open(context, assetInspectorProviders);
                 }
 
                 EditorGUILayout.EndHorizontal();
