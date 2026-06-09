@@ -11,7 +11,12 @@
 | 文件 | 描述 |
 |------|------|
 | `TimeManager.cs` | 游戏时间管理器 + 所有枚举/类型/ScriptableObject 定义 |
-| `WeatherManager.cs` | 天气系统管理器 |
+| `WeatherState.cs` | 纯天气状态与存档数据 |
+| `WeatherManager.cs` | 天气状态、预设、事件和存档管理器 |
+| `WeatherPresentationContext.cs` | 天气表现适配器上下文 |
+| `IWeatherPresentationAdapter.cs` | 天气表现适配器接口 |
+| `IWeatherFollowTargetAdapter.cs` | 可选 VFX 跟随目标接口 |
+| `DefaultWeatherPresentationAdapter.cs` | 默认雾效、VFX、环境音适配器 |
 | `LightingManager.cs` | 光照控制器 |
 
 **类型定义 (均在 TimeManager.cs 中)**:
@@ -26,7 +31,7 @@
 
 ## WeatherManager.cs
 
-**用途**: 管理天气效果、VFX 粒子、雾效过渡、环境音效
+**用途**: 管理天气状态、预设查询、存档数据和天气事件。雾效、VFX、环境音效等 Unity 表现副作用由显式绑定的 `IWeatherPresentationAdapter` 处理。
 
 ### Public API
 
@@ -45,7 +50,7 @@ public class WeatherManager : MonoSingleton<WeatherManager>, ISaveable
     void SetWeather(WeatherType type);
     WeatherPresetSO GetPreset(WeatherType type);
     void ClearWeather();
-    void SetFollowTarget(Transform target);
+    void SetFollowTarget(Transform target);  // 兼容 API: 转发给 IWeatherFollowTargetAdapter
     void RegisterPreset(WeatherPresetSO preset);
 
     // ISaveable
@@ -68,10 +73,10 @@ WeatherManager.Instance.SetWeather(myRainPreset);
 // 获取当前天气
 var weather = WeatherManager.Instance.CurrentWeatherType;
 
-// 清除天气效果
+// 清除天气状态，并通知已绑定的表现适配器清理表现
 WeatherManager.Instance.ClearWeather();
 
-// 设置 VFX 跟随目标
+// 设置 VFX 跟随目标；仅当同对象绑定了 IWeatherFollowTargetAdapter 时生效
 WeatherManager.Instance.SetFollowTarget(Camera.main.transform);
 
 // 监听天气变化
@@ -80,6 +85,37 @@ WeatherManager.Instance.OnEnvironmentEvent += args =>
     if (args.Type == EnvironmentEventType.WeatherChanged)
         Debug.Log($"Weather: {args.PreviousWeather} -> {args.Weather}");
 };
+```
+
+---
+
+## DefaultWeatherPresentationAdapter.cs
+
+**用途**: 提供默认 Unity 表现层，把 `WeatherPresetSO` 中的 VFX、雾效和环境音应用到场景。需要这些表现时，显式把该组件挂在 `WeatherManager` 同一个 GameObject 上；只需要天气状态和事件时不要绑定它。
+
+### Public API
+
+```csharp
+public sealed class DefaultWeatherPresentationAdapter : MonoBehaviour,
+    IWeatherPresentationAdapter,
+    IWeatherFollowTargetAdapter
+{
+    void SetFollowTarget(Transform target);
+    void ApplyWeatherPresentation(WeatherPresentationContext context);
+    void ClearWeatherPresentation(WeatherType previousWeatherType);
+}
+```
+
+**使用示例**:
+
+```csharp
+using ZeroEngine.EnvironmentSystem;
+
+// 组件应在 Inspector 中和 WeatherManager 挂在同一个 GameObject 上。
+var adapter = WeatherManager.Instance.GetComponent<DefaultWeatherPresentationAdapter>();
+adapter.SetFollowTarget(Camera.main.transform);
+
+WeatherManager.Instance.SetWeather(WeatherType.Rain);
 ```
 
 ---
@@ -347,9 +383,11 @@ Environment System (v1.13.0)
 │   ├── Time of Day Events             # 时间段事件
 │   └── Time Control                   # 时间控制
 ├── WeatherManager                     # 天气管理器 (ISaveable)
-│   ├── VFX Management                 # VFX 管理
-│   ├── Fog Transition                 # 雾效过渡
-│   └── Ambient Audio                  # 环境音效
+│   ├── Weather State                  # 天气状态
+│   ├── Preset Lookup                  # 预设查询
+│   └── Save/Event Bridge              # 存档与事件桥接
+├── IWeatherPresentationAdapter        # 可选天气表现边界
+├── DefaultWeatherPresentationAdapter  # 默认 VFX/雾效/环境音表现
 └── LightingManager                    # 光照管理器
     ├── Sun Color/Intensity            # 太阳颜色/强度
     ├── Sun Rotation                   # 太阳旋转
