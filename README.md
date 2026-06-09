@@ -32,6 +32,7 @@ mixing in game-specific content.
 | `com.zerogamestudio.zeroengine.narrative` | Quest and narrative runtime services. |
 | `com.zerogamestudio.zeroengine.pathfinding2d` | 2D platform navigation, graph generation, jump links, route costs, and diagnostics. |
 | `com.zerogamestudio.zeroengine.persistence` | Save and persistence infrastructure. |
+| `com.zerogamestudio.zeroengine.tce` | Generic trigger-condition-effect runtime contracts, reusable components, graph validation, and authoring tools. |
 | `com.zerogamestudio.zeroengine.ui` | Runtime UI framework and toast notification systems. |
 | `com.zerogamestudio.analytics` | Self-hostable analytics and bug feedback SDK. |
 
