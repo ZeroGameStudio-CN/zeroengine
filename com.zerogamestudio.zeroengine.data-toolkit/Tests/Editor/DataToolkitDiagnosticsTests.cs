@@ -10,14 +10,14 @@ namespace ZGS.DataToolkit.Editor.Tests
     [TestFixture]
     public sealed class DataToolkitDiagnosticsTests
     {
-        private const string TestRoot = "Packages/com.zerogamestudio.zeroengine.data-toolkit/Tests/Editor/__DataToolkitDiagnosticsTests";
+        private const string TestRoot = "Assets/__ZGSDataToolkitDiagnosticsTests";
         private const string AssetPath = TestRoot + "/Selected.asset";
 
         [SetUp]
         public void SetUp()
         {
             AssetDatabase.DeleteAsset(TestRoot);
-            AssetDatabase.CreateFolder("Packages/com.zerogamestudio.zeroengine.data-toolkit/Tests/Editor", "__DataToolkitDiagnosticsTests");
+            AssetDatabase.CreateFolder("Assets", "__ZGSDataToolkitDiagnosticsTests");
             ManageableDataTypeDiscovery.ClearCache();
             AssetDiscoveryService.ClearCaches();
         }

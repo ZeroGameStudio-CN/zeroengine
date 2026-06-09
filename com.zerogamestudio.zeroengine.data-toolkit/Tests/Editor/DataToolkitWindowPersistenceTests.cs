@@ -11,7 +11,7 @@ namespace ZGS.DataToolkit.Editor.Tests
     [TestFixture]
     public sealed class DataToolkitWindowPersistenceTests
     {
-        private const string TestRoot = "Packages/com.zerogamestudio.zeroengine.data-toolkit/Tests/Editor/__DataToolkitWindowPersistenceTests";
+        private const string TestRoot = "Assets/__ZGSDataToolkitWindowPersistenceTests";
         private const string OriginalAssetPath = TestRoot + "/Selected.asset";
         private const string EditorPrefsPrefix = "ZGS_DataToolkitWindowPersistenceTests";
 
@@ -19,7 +19,7 @@ namespace ZGS.DataToolkit.Editor.Tests
         public void SetUp()
         {
             AssetDatabase.DeleteAsset(TestRoot);
-            AssetDatabase.CreateFolder("Packages/com.zerogamestudio.zeroengine.data-toolkit/Tests/Editor", "__DataToolkitWindowPersistenceTests");
+            AssetDatabase.CreateFolder("Assets", "__ZGSDataToolkitWindowPersistenceTests");
             DeletePersistedSelection();
             ManageableDataTypeDiscovery.ClearCache();
             AssetDiscoveryService.ClearCaches();
