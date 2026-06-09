@@ -76,6 +76,7 @@ namespace ZGS.DataToolkit.Editor
                 DrawSummaryRow("Assets", report.AssetCount.ToString());
                 DrawSummaryRow("First-class inspectors", report.FirstClassCount.ToString());
                 DrawSummaryRow("Safe previews", report.SafePreviewCount.ToString());
+                DrawSummaryRow("Native inspector fallback", report.NativeInspectorFallbackCount.ToString());
                 DrawSummaryRow("Raw Odin fallback", report.RawOdinFallbackCount.ToString());
                 DrawSummaryRow("No assets", report.NoAssetsCount.ToString());
                 DrawSummaryRow("Unsupported", report.UnsupportedCount.ToString());

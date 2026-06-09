@@ -21,6 +21,7 @@ namespace ZGS.DataToolkit.Editor
         public int AssetCount => Types.Sum(type => type.AssetCount);
         public int FirstClassCount => Count(DataToolkitInspectorCoverageLevel.FirstClass);
         public int SafePreviewCount => Count(DataToolkitInspectorCoverageLevel.SafePreview);
+        public int NativeInspectorFallbackCount => Count(DataToolkitInspectorCoverageLevel.NativeInspectorFallback);
         public int RawOdinFallbackCount => Count(DataToolkitInspectorCoverageLevel.RawOdinFallback);
         public int NoAssetsCount => Count(DataToolkitInspectorCoverageLevel.NoAssets);
         public int UnsupportedCount => Count(DataToolkitInspectorCoverageLevel.Unsupported);

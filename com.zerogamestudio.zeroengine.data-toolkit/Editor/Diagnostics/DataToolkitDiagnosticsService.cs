@@ -70,6 +70,11 @@ namespace ZGS.DataToolkit.Editor
                 return DataToolkitInspectorCoverageLevel.SafePreview;
             }
 
+            if (context.Settings.DefaultInspectorMode == DataToolkitDefaultInspectorMode.FullInspector)
+            {
+                return DataToolkitInspectorCoverageLevel.NativeInspectorFallback;
+            }
+
             return DataToolkitInspectorCoverageLevel.RawOdinFallback;
         }
 
@@ -105,7 +110,12 @@ namespace ZGS.DataToolkit.Editor
                 return $"Default inspector mode: {context.Settings.DefaultInspectorMode}";
             }
 
-            return "No custom provider or safe preview rule matched; Odin/full inspector fallback will be used.";
+            if (coverageLevel == DataToolkitInspectorCoverageLevel.NativeInspectorFallback)
+            {
+                return "Default inspector mode: FullInspector; Unity native inspector will be used when no custom provider matched.";
+            }
+
+            return "No custom provider or safe preview rule matched; raw Odin fallback will be used.";
         }
 
         private static IDataToolkitAssetInspectorProvider FindCustomProvider(

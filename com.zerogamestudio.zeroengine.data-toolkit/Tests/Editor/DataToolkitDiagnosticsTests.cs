@@ -65,6 +65,22 @@ namespace ZGS.DataToolkit.Editor.Tests
         }
 
         [Test]
+        public void BuildReport_WithFullInspectorDefault_ReportsNativeInspectorFallbackCoverage()
+        {
+            CreateTestAsset(AssetPath);
+            var context = new DataToolkitContext(CreateSettings(DataToolkitDefaultInspectorMode.FullInspector));
+
+            var report = DataToolkitDiagnosticsService.BuildReport(context, Array.Empty<IDataToolkitAssetInspectorProvider>());
+            var info = report.Types.Single(type => type.Type == typeof(SelectedToolkitTestData));
+
+            Assert.GreaterOrEqual(report.TypeCount, 1);
+            Assert.GreaterOrEqual(report.AssetCount, 1);
+            Assert.GreaterOrEqual(report.NativeInspectorFallbackCount, 1);
+            Assert.AreEqual(DataToolkitInspectorCoverageLevel.NativeInspectorFallback, info.CoverageLevel);
+            StringAssert.Contains("Unity native inspector", info.Reason);
+        }
+
+        [Test]
         public void BuildReport_WithNoAssets_ReportsNoAssetsCoverage()
         {
             var context = new DataToolkitContext(CreateSettings(DataToolkitDefaultInspectorMode.LazyPreview));

@@ -4,6 +4,7 @@ namespace ZGS.DataToolkit.Editor
     {
         FirstClass,
         SafePreview,
+        NativeInspectorFallback,
         RawOdinFallback,
         NoAssets,
         Unsupported
