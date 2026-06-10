@@ -1,0 +1,154 @@
+﻿{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://zerogamestudio.local/schemas/zeroengine-tce-graph.schema.json",
+  "title": "ZeroEngine TCE Graph",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["format", "schemaVersion", "graphId", "displayName", "triggers", "conditions", "effects"],
+  "properties": {
+    "format": { "const": "zeroengine-tce-graph" },
+    "schemaVersion": { "const": 1 },
+    "graphId": { "type": "string", "minLength": 1 },
+    "displayName": { "type": "string" },
+    "triggers": {
+      "type": "array",
+      "items": {
+        "oneOf": [
+          { "$ref": "#/$defs/zeroengine_tce_trigger_on_install" }
+        ]
+      }
+    },
+    "conditions": {
+      "type": "array",
+      "items": {
+        "oneOf": [
+          { "$ref": "#/$defs/zeroengine_tce_condition_chance" },
+          { "$ref": "#/$defs/zeroengine_tce_condition_cooldown" },
+          { "$ref": "#/$defs/zeroengine_tce_condition_execution_count" },
+          { "$ref": "#/$defs/zeroengine_tce_condition_flag" },
+          { "$ref": "#/$defs/zeroengine_tce_condition_numeric_source" }
+        ]
+      }
+    },
+    "effects": {
+      "type": "array",
+      "items": {
+        "oneOf": [
+          { "$ref": "#/$defs/zeroengine_tce_effect_debug_log" }
+        ]
+      }
+    }
+  },
+  "$defs": {
+    "zeroengine_tce_trigger_on_install": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["componentId", "fields"],
+      "properties": {
+        "componentId": { "const": "zeroengine.tce.trigger.on_install" },
+        "fields": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "Order": { "description": "Trigger ordering value used by authoring tools and docs.", "type": "integer" }
+          }
+        }
+      }
+    },
+    "zeroengine_tce_condition_chance": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["componentId", "fields"],
+      "properties": {
+        "componentId": { "const": "zeroengine.tce.condition.chance" },
+        "fields": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "Chance": { "description": "Acceptance probability from 0 to 1.", "type": "number" },
+            "LookupTarget": { "description": "Object used to resolve the random source.", "type": "string", "enum": ["Owner", "TriggerTarget", "InstallSource", "TriggerSource"] }
+          }
+        }
+      }
+    },
+    "zeroengine_tce_condition_cooldown": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["componentId", "fields"],
+      "properties": {
+        "componentId": { "const": "zeroengine.tce.condition.cooldown" },
+        "fields": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "Duration": { "description": "Cooldown duration in domain time seconds.", "type": "number" }
+          }
+        }
+      }
+    },
+    "zeroengine_tce_condition_execution_count": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["componentId", "fields"],
+      "properties": {
+        "componentId": { "const": "zeroengine.tce.condition.execution_count" },
+        "fields": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "MaxAcceptedExecutions": { "description": "Maximum number of accepted executions allowed.", "type": "integer" }
+          }
+        }
+      }
+    },
+    "zeroengine_tce_condition_flag": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["componentId", "fields"],
+      "properties": {
+        "componentId": { "const": "zeroengine.tce.condition.flag" },
+        "fields": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "FlagId": { "description": "Flag identifier passed to the resolved flag source.", "type": "string" },
+            "Invert": { "description": "Invert the flag result before returning the condition result.", "type": "boolean" },
+            "LookupTarget": { "description": "Object used to resolve the flag source.", "type": "string", "enum": ["Owner", "TriggerTarget", "Source"] }
+          }
+        }
+      }
+    },
+    "zeroengine_tce_condition_numeric_source": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["componentId", "fields"],
+      "properties": {
+        "componentId": { "const": "zeroengine.tce.condition.numeric_source" },
+        "fields": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "Comparison": { "description": "Comparison operation applied to the trigger source value.", "type": "string", "enum": ["GreaterThan", "LessThan", "GreaterThanOrEqualTo", "LessThanOrEqualTo", "EqualTo"] },
+            "RequiredValue": { "description": "Numeric threshold compared against the trigger source value.", "type": "number" }
+          }
+        }
+      }
+    },
+    "zeroengine_tce_effect_debug_log": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["componentId", "fields"],
+      "properties": {
+        "componentId": { "const": "zeroengine.tce.effect.debug_log" },
+        "fields": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "Message": { "description": "Log message emitted when the effect runs.", "type": "string" },
+            "Target": { "description": "Target actor selection used by the effect.", "type": "string", "enum": ["FromTrigger", "Self", "Source"] }
+          }
+        }
+      }
+    }
+  }
+}

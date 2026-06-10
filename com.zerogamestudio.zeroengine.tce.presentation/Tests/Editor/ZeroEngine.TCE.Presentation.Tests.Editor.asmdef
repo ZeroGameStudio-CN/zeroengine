@@ -1,0 +1,23 @@
+{
+  "name": "ZeroEngine.TCE.Presentation.Tests.Editor",
+  "rootNamespace": "ZeroEngine.TCE.Presentation.Tests.Editor",
+  "references": [
+    "ZeroEngine.TCE",
+    "ZeroEngine.TCE.Presentation",
+    "UnityEngine.TestRunner",
+    "UnityEditor.TestRunner"
+  ],
+  "includePlatforms": [
+    "Editor"
+  ],
+  "excludePlatforms": [],
+  "allowUnsafeCode": false,
+  "overrideReferences": false,
+  "precompiledReferences": [],
+  "autoReferenced": false,
+  "defineConstraints": [
+    "UNITY_INCLUDE_TESTS"
+  ],
+  "versionDefines": [],
+  "noEngineReferences": false
+}

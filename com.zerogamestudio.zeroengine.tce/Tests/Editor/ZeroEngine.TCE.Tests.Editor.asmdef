@@ -3,6 +3,8 @@
   "rootNamespace": "ZeroEngine.TCE.Tests.Editor",
   "references": [
     "ZeroEngine.TCE",
+    "ZeroEngine.TCE.Editor",
+    "ZeroEngine.TCE.EditorTesting",
     "UnityEngine.TestRunner",
     "UnityEditor.TestRunner"
   ],
