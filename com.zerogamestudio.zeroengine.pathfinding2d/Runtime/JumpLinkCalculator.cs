@@ -29,6 +29,18 @@ namespace ZeroEngine.Pathfinding2D
         [Tooltip("重力缩放 (Rigidbody2D.gravityScale)")]
         public float GravityScale = 3f;
 
+        [Tooltip("空中额外跳跃次数，0 表示仅地面起跳")]
+        public int AirJumpCount = 0;
+
+        [Tooltip("空中额外跳跃的 Y 初速度，0 表示沿用最大跳跃初速度")]
+        public float AirJumpVelocity = 0f;
+
+        [Tooltip("使用按目标高度计算的一次智能跳跃，不继承玩家多段跳")]
+        public bool UseSingleSmartJump = false;
+
+        [Tooltip("预留：是否允许墙面穿越建图。当前不参与链接生成。")]
+        public bool EnableWallTraversal = false;
+
         [Header("下落配置")]
         [Tooltip("最大下落高度")]
         public float MaxFallHeight = 10f;
@@ -63,6 +75,8 @@ namespace ZeroEngine.Pathfinding2D
     /// </summary>
     public class JumpLinkCalculator : MonoBehaviour
     {
+        private const float DefaultGravity = 9.81f;
+
         [SerializeField]
         private JumpLinkConfig config = new JumpLinkConfig();
 
@@ -106,6 +120,7 @@ namespace ZeroEngine.Pathfinding2D
             int jumpSkippedToNotEdge = 0;
             int fallSkippedToNotEdge = 0;
             int edgeNodeCount = 0;
+            float effectiveMaxJumpHeight = GetEffectiveMaxJumpHeight();
 
             // 预处理：为每个平台找到最近的边缘节点（用于去重）
             // 使用 Y 坐标分组（支持 Tilemap Composite Collider 场景，所有平台共享一个 Collider）
@@ -161,7 +176,7 @@ namespace ZeroEngine.Pathfinding2D
                     float verticalDist = toNode.Position.y - fromNode.Position.y;
 
                     // 目标在上方或同高度 - 尝试跳跃
-                    if (verticalDist >= -0.5f && verticalDist <= config.MaxJumpHeight)
+                    if (verticalDist >= -0.5f && verticalDist <= effectiveMaxJumpHeight)
                     {
                         // ★ 跳跃链接只从边缘节点发起（防止平台中间多个节点生成重复跳跃链接）
                         if (!isEdgeNode)
@@ -213,7 +228,7 @@ namespace ZeroEngine.Pathfinding2D
                             jumpFailedDistance++;
                         }
                     }
-                    else if (verticalDist > config.MaxJumpHeight)
+                    else if (verticalDist > effectiveMaxJumpHeight)
                     {
                         // 仅统计边缘节点的超高度失败，排除 Surface 节点的噪音
                         if (isEdgeNode) jumpFailedHeight++;
@@ -262,7 +277,7 @@ namespace ZeroEngine.Pathfinding2D
                 Debug.Log($"[JumpLinkCalculator] 跳跃诊断: 尝试={jumpAttempts}, 成功={jumpLinksCreated}, " +
                           $"超距离={jumpFailedDistance}, 超高度={jumpFailedHeight}, 不可达={jumpFailedReachable}, 轨迹阻挡={jumpFailedTrajectory}");
                 Debug.Log($"[JumpLinkCalculator] 过滤诊断: 起点非边缘={jumpSkippedNotEdge}, 终点非边缘(跳)={jumpSkippedToNotEdge}, 终点非边缘(落)={fallSkippedToNotEdge}");
-                Debug.Log($"[JumpLinkCalculator] 配置: MaxJumpHeight={config.MaxJumpHeight}, MaxHorizontalDistance={config.MaxHorizontalDistance}, " +
+                Debug.Log($"[JumpLinkCalculator] 配置: MaxJumpHeight={config.MaxJumpHeight}, EffectiveMaxJumpHeight={effectiveMaxJumpHeight}, MaxHorizontalDistance={config.MaxHorizontalDistance}, " +
                           $"MaxJumpVelocity={config.MaxJumpVelocity}, MaxAirHorizontalSpeed={config.MaxAirHorizontalSpeed}, " +
                           $"ObstacleLayer={obstacleLayer.value}, TrajectoryBlockerLayer={trajectoryBlockerLayer.value}");
             }
@@ -341,7 +356,7 @@ namespace ZeroEngine.Pathfinding2D
             var result = JumpMovementHandler.CalculateJump(
                 from.Position,
                 to.Position,
-                config.MaxJumpVelocity,
+                GetEffectiveMaxJumpVelocity(),
                 config.GravityScale,
                 config.Overshoot,
                 config.MaxAirHorizontalSpeed
@@ -377,6 +392,36 @@ namespace ZeroEngine.Pathfinding2D
 
             graphGenerator.Links.Add(link);
             return true;
+        }
+
+        private float GetEffectiveMaxJumpHeight()
+        {
+            if (config.UseSingleSmartJump)
+                return Mathf.Max(0f, config.MaxJumpHeight);
+
+            int airJumpCount = Mathf.Max(0, config.AirJumpCount);
+            if (airJumpCount == 0)
+                return Mathf.Max(0f, config.MaxJumpHeight);
+
+            float gravity = DefaultGravity * Mathf.Max(0.01f, config.GravityScale);
+            float groundJumpHeight = config.MaxJumpVelocity * config.MaxJumpVelocity / (2f * gravity);
+            float airJumpVelocity = config.AirJumpVelocity > 0f
+                ? config.AirJumpVelocity
+                : config.MaxJumpVelocity;
+            float airJumpHeight = airJumpVelocity * airJumpVelocity / (2f * gravity);
+            float profileJumpHeight = groundJumpHeight + airJumpCount * airJumpHeight;
+            return Mathf.Max(config.MaxJumpHeight, profileJumpHeight);
+        }
+
+        private float GetEffectiveMaxJumpVelocity()
+        {
+            if (config.UseSingleSmartJump || config.AirJumpCount > 0)
+            {
+                float gravity = DefaultGravity * Mathf.Max(0.01f, config.GravityScale);
+                return Mathf.Sqrt(2f * gravity * GetEffectiveMaxJumpHeight());
+            }
+
+            return config.MaxJumpVelocity;
         }
 
         /// <summary>
@@ -441,13 +486,8 @@ namespace ZeroEngine.Pathfinding2D
 
             if (!result.IsReachable) return false;
 
-            var trajectory = new[]
-            {
-                (Vector2)from.Position,
-                (Vector2)to.Position
-            };
             if (!JumpMovementHandler.ValidateTrajectory(
-                    trajectory,
+                    result.Trajectory,
                     obstacleLayer,
                     config.TrajectoryCheckRadius,
                     from.PlatformCollider,
@@ -499,13 +539,8 @@ namespace ZeroEngine.Pathfinding2D
 
                 if (!result.IsReachable) continue;
 
-                var trajectory = new[]
-                {
-                    startPos,
-                    (Vector2)toNode.Position
-                };
                 if (!JumpMovementHandler.ValidateTrajectory(
-                        trajectory,
+                        result.Trajectory,
                         obstacleLayer,
                         config.TrajectoryCheckRadius,
                         fromNode.PlatformCollider,

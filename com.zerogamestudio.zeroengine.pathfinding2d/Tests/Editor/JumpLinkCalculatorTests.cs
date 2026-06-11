@@ -89,6 +89,136 @@ namespace ZeroEngine.Pathfinding2D.Tests.Editor
         }
 
         [Test]
+        public void GenerateJumpLinks_LegacySingleJumpProfile_DoesNotUseAirJumpCapacity()
+        {
+            var host = new GameObject("LegacySingleJumpProfileHost");
+            var lower = CreatePlatform("LegacyProfileLower", GroundLayer, new Vector2(0f, 0f), new Vector2(2f, 0.2f));
+            var upper = CreatePlatform("LegacyProfileUpper", GroundLayer, new Vector2(3f, 5f), new Vector2(2f, 0.2f));
+
+            try
+            {
+                var graph = CreateGraph(host, groundMask: 1 << GroundLayer, oneWayMask: 0);
+                GenerateTwoPlatformGraph(graph);
+
+                var calculator = host.AddComponent<JumpLinkCalculator>();
+                calculator.Config.GravityScale = 1f;
+                calculator.Config.MaxJumpVelocity = 8f;
+                calculator.Config.MaxJumpHeight = 6f;
+                calculator.Config.MaxHorizontalDistance = 8f;
+                calculator.GenerateJumpLinks();
+
+                Assert.IsFalse(
+                    HasJumpLink(graph, lower.GetComponent<Collider2D>(), upper.GetComponent<Collider2D>()),
+                    "Legacy profile should remain constrained by its single jump velocity.");
+            }
+            finally
+            {
+                Object.DestroyImmediate(host);
+                Object.DestroyImmediate(lower);
+                Object.DestroyImmediate(upper);
+            }
+        }
+
+        [Test]
+        public void GenerateJumpLinks_PlayerAirJumpProfile_UsesTotalVerticalCapability()
+        {
+            var host = new GameObject("PlayerAirJumpProfileHost");
+            var lower = CreatePlatform("PlayerProfileLower", GroundLayer, new Vector2(0f, 0f), new Vector2(2f, 0.2f));
+            var upper = CreatePlatform("PlayerProfileUpper", GroundLayer, new Vector2(3f, 5f), new Vector2(2f, 0.2f));
+
+            try
+            {
+                var graph = CreateGraph(host, groundMask: 1 << GroundLayer, oneWayMask: 0);
+                GenerateTwoPlatformGraph(graph);
+
+                var calculator = host.AddComponent<JumpLinkCalculator>();
+                calculator.Config.GravityScale = 1f;
+                calculator.Config.MaxJumpVelocity = 8f;
+                calculator.Config.MaxJumpHeight = 6f;
+                calculator.Config.MaxHorizontalDistance = 8f;
+                calculator.Config.AirJumpCount = 1;
+                calculator.Config.AirJumpVelocity = 8f;
+                calculator.GenerateJumpLinks();
+
+                Assert.IsTrue(
+                    HasJumpLink(graph, lower.GetComponent<Collider2D>(), upper.GetComponent<Collider2D>()),
+                    "Player profile should use configured air jumps when estimating graph reachability.");
+            }
+            finally
+            {
+                Object.DestroyImmediate(host);
+                Object.DestroyImmediate(lower);
+                Object.DestroyImmediate(upper);
+            }
+        }
+
+        [Test]
+        public void GenerateJumpLinks_SmartJumpProfile_UsesTargetHeightInsteadOfAirJumpCount()
+        {
+            var host = new GameObject("SmartJumpProfileHost");
+            var lower = CreatePlatform("SmartProfileLower", GroundLayer, new Vector2(0f, 0f), new Vector2(2f, 0.2f));
+            var upper = CreatePlatform("SmartProfileUpper", GroundLayer, new Vector2(3f, 5f), new Vector2(2f, 0.2f));
+
+            try
+            {
+                var graph = CreateGraph(host, groundMask: 1 << GroundLayer, oneWayMask: 0);
+                GenerateTwoPlatformGraph(graph);
+
+                var calculator = host.AddComponent<JumpLinkCalculator>();
+                calculator.Config.GravityScale = 1f;
+                calculator.Config.MaxJumpVelocity = 8f;
+                calculator.Config.MaxJumpHeight = 6f;
+                calculator.Config.MaxHorizontalDistance = 8f;
+                calculator.Config.UseSingleSmartJump = true;
+                calculator.GenerateJumpLinks();
+
+                Assert.IsTrue(
+                    HasJumpLink(graph, lower.GetComponent<Collider2D>(), upper.GetComponent<Collider2D>()),
+                    "Smart jump profile should allow a single height-based jump within MaxJumpHeight.");
+            }
+            finally
+            {
+                Object.DestroyImmediate(host);
+                Object.DestroyImmediate(lower);
+                Object.DestroyImmediate(upper);
+            }
+        }
+
+        [Test]
+        public void GenerateJumpLinks_SmartJumpProfile_DoesNotInheritAirJumpCapacity()
+        {
+            var host = new GameObject("SmartJumpNoAirJumpProfileHost");
+            var lower = CreatePlatform("SmartNoAirLower", GroundLayer, new Vector2(0f, 0f), new Vector2(2f, 0.2f));
+            var upper = CreatePlatform("SmartNoAirUpper", GroundLayer, new Vector2(3f, 5f), new Vector2(2f, 0.2f));
+
+            try
+            {
+                var graph = CreateGraph(host, groundMask: 1 << GroundLayer, oneWayMask: 0);
+                GenerateTwoPlatformGraph(graph);
+
+                var calculator = host.AddComponent<JumpLinkCalculator>();
+                calculator.Config.GravityScale = 1f;
+                calculator.Config.MaxJumpVelocity = 8f;
+                calculator.Config.MaxJumpHeight = 3f;
+                calculator.Config.MaxHorizontalDistance = 8f;
+                calculator.Config.UseSingleSmartJump = true;
+                calculator.Config.AirJumpCount = 3;
+                calculator.Config.AirJumpVelocity = 20f;
+                calculator.GenerateJumpLinks();
+
+                Assert.IsFalse(
+                    HasJumpLink(graph, lower.GetComponent<Collider2D>(), upper.GetComponent<Collider2D>()),
+                    "Smart/entity profile must ignore AirJumpCount and stay bounded by MaxJumpHeight.");
+            }
+            finally
+            {
+                Object.DestroyImmediate(host);
+                Object.DestroyImmediate(lower);
+                Object.DestroyImmediate(upper);
+            }
+        }
+
+        [Test]
         public void GenerateJumpLinks_DropThrough_DoesNotPassIntermediateGround()
         {
             var host = new GameObject("DropThroughGroundBlockerHost");
@@ -148,6 +278,23 @@ namespace ZeroEngine.Pathfinding2D.Tests.Editor
             graph.Config.NodeSpacing = 1f;
             graph.Config.EdgeInset = 0.2f;
             return graph;
+        }
+
+        private static void GenerateTwoPlatformGraph(PlatformGraphGenerator graph)
+        {
+            graph.Config.ScanCenter = new Vector2(1.5f, 2.5f);
+            graph.Config.ScanSize = new Vector2(8f, 12f);
+            graph.GeneratePlatformGraph();
+        }
+
+        private static bool HasJumpLink(PlatformGraphGenerator graph, Collider2D from, Collider2D to)
+        {
+            return graph.Links.Any(link =>
+                link.LinkType == PlatformLinkType.Jump &&
+                graph.GetNode(link.FromNodeId).TryGetCollider(out var fromCollider) &&
+                graph.GetNode(link.ToNodeId).TryGetCollider(out var toCollider) &&
+                fromCollider == from &&
+                toCollider == to);
         }
 
         private static GameObject CreatePlatform(string name, int layer, Vector2 position, Vector2 size)

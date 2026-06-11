@@ -84,19 +84,38 @@ namespace ZeroEngine.Pathfinding2D
                     VelocityY = 0f,
                     VelocityX = fallVelocityX,
                     FlightTime = fallTime,
-                    MaxHeight = 0f
+                    MaxHeight = 0f,
+                    Trajectory = GenerateTrajectory(start, fallVelocityX, 0f, gravity, fallTime)
                 };
             }
 
             // 计算所需的跳跃高度
             // 需要跳到比目标高一点，以便落到目标上
-            float requiredHeight = deltaY > 0 ? deltaY * overshoot : Mathf.Max(0.5f, Mathf.Abs(deltaX) * 0.3f);
+            float requiredHeight;
+            float requiredVelocityY;
 
-            // 计算所需的初始 Y 速度: v = sqrt(2 * g * h)
-            float requiredVelocityY = Mathf.Sqrt(2f * gravity * requiredHeight);
+            if (deltaY > 0)
+            {
+                float minimumRequiredVelocityY = Mathf.Sqrt(2f * gravity * deltaY);
+                if (minimumRequiredVelocityY > maxJumpVelocity + 0.001f)
+                {
+                    return JumpCalculationResult.NotReachable;
+                }
+
+                float overshootHeight = Mathf.Max(deltaY, deltaY * overshoot);
+                float overshootVelocityY = Mathf.Sqrt(2f * gravity * overshootHeight);
+                requiredVelocityY = Mathf.Min(overshootVelocityY, maxJumpVelocity);
+                requiredHeight = requiredVelocityY * requiredVelocityY / (2f * gravity);
+            }
+            else
+            {
+                requiredHeight = Mathf.Max(0.5f, Mathf.Abs(deltaX) * 0.3f);
+                // 计算所需的初始 Y 速度: v = sqrt(2 * g * h)
+                requiredVelocityY = Mathf.Sqrt(2f * gravity * requiredHeight);
+            }
 
             // 检查是否超过最大跳跃能力
-            if (requiredVelocityY > maxJumpVelocity)
+            if (requiredVelocityY > maxJumpVelocity + 0.001f)
             {
                 return JumpCalculationResult.NotReachable;
             }
@@ -204,7 +223,8 @@ namespace ZeroEngine.Pathfinding2D
                 VelocityY = 0f,
                 VelocityX = velocityX,
                 FlightTime = fallTime,
-                MaxHeight = 0f
+                MaxHeight = 0f,
+                Trajectory = GenerateTrajectory(start, velocityX, 0f, gravity, fallTime)
             };
         }
 
@@ -341,6 +361,9 @@ namespace ZeroEngine.Pathfinding2D
                             endpointIgnoreDistance))
                         continue;
 
+                    if (ShouldIgnoreSelfPlatformGrazing(hit.collider, hit.centroid, fromPlatform, toPlatform))
+                        continue;
+
                     // 额外检查：如果碰撞点在起点附近（1.5m内），且是侧面擦边（非正面撞头），忽略
                     // 这处理了突出平台底部"擦边"起跳的情况
                     // 修复：如果碰撞点在起点正上方（水平距离很小），说明会撞头，不应忽略
@@ -414,6 +437,9 @@ namespace ZeroEngine.Pathfinding2D
                             endpointIgnoreDistance))
                         continue;
 
+                    if (ShouldIgnoreSelfPlatformGrazing(collider, sample, fromPlatform, toPlatform))
+                        continue;
+
                     return true;
                 }
             }
@@ -437,6 +463,18 @@ namespace ZeroEngine.Pathfinding2D
                 return true;
 
             return false;
+        }
+
+        private static bool ShouldIgnoreSelfPlatformGrazing(
+            Collider2D collider,
+            Vector2 trajectoryCenter,
+            Collider2D fromPlatform,
+            Collider2D toPlatform)
+        {
+            if (collider != fromPlatform && collider != toPlatform)
+                return false;
+
+            return !collider.OverlapPoint(trajectoryCenter);
         }
     }
 }
