@@ -1,4 +1,5 @@
 using System.IO;
+using System.Linq;
 using NUnit.Framework;
 using UnityEngine;
 
@@ -84,6 +85,19 @@ namespace ZeroEngine.ModSystem.Tests.Editor
             Assert.That(steamAsmdef, Does.Contain("ZeroEngine.ModSystem"));
             Assert.That(steamAsmdef, Does.Contain("com.rlabrecque.steamworks.net"));
             Assert.That(steamAsmdef, Does.Contain("STEAMWORKS_NET"));
+        }
+
+        [Test]
+        public void HiddenPackageFolders_DoNotShipUnityMetaFiles()
+        {
+            string[] hiddenFolderMetaFiles = Directory
+                .EnumerateFiles(PackageRoot, "*.meta", SearchOption.AllDirectories)
+                .Where(path => path.Replace('\\', '/').Contains("~/"))
+                .OrderBy(path => path)
+                .ToArray();
+
+            Assert.That(hiddenFolderMetaFiles, Is.Empty);
+            Assert.That(File.Exists(Path.Combine(PackageRoot, "Documentation~.meta")), Is.False);
         }
     }
 }
