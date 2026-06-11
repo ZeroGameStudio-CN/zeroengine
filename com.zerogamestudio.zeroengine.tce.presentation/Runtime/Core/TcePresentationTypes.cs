@@ -59,6 +59,9 @@ namespace ZeroEngine.TCE.Presentation
         [TceFieldDoc("Whether sprite playback should also write SpriteRenderer.color in addition to the tint shader property.")]
         public bool ApplySpriteRendererColor = true;
 
+        [TceFieldDoc("Whether alpha fade should also scale tint RGB channels, matching full Color-to-clear tweens.")]
+        public bool FadeTintRgbWithAlpha;
+
         [TceFieldDoc("Whether sprite playback should override captured sorting values.")]
         public bool OverrideSorting;
 

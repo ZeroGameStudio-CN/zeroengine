@@ -373,6 +373,59 @@ namespace ZeroEngine.TCE.Presentation.Tests.Editor
         }
 
         [Test]
+        public void Runner_SpriteSnapshot_CanFadeTintRgbWithAlpha()
+        {
+            var runnerObject = new GameObject(nameof(Runner_SpriteSnapshot_CanFadeTintRgbWithAlpha));
+            var texture = new Texture2D(2, 2);
+            var sprite = Sprite.Create(texture, new Rect(0, 0, 2, 2), Vector2.one * 0.5f);
+            TcePresentationHandle handle = null;
+
+            try
+            {
+                var rgbFadeField = typeof(TcePresentationPlaybackSettings).GetField("FadeTintRgbWithAlpha");
+                Assert.IsNotNull(rgbFadeField);
+
+                var runner = runnerObject.AddComponent<TcePresentationRunner>();
+                var snapshot = new TceSpriteSnapshot(Matrix4x4.identity, 0, sprite, 0, 17);
+                var settings = new TcePresentationPlaybackSettings
+                {
+                    Tint = new Color(2f, 4f, 6f, 0.8f),
+                    Duration = 1f,
+                    FadeDuration = 1f,
+                    TintPropertyName = "_BaseColor",
+                    AlphaEase = AnimationCurve.Linear(0f, 1f, 1f, 0f)
+                };
+                rgbFadeField.SetValue(settings, true);
+
+                var clock = new FakeClock(0f);
+                handle = runner.Play(snapshot, settings, clock);
+
+                var renderer = FindSpriteRenderer(sprite);
+                Assert.IsNotNull(renderer);
+
+                var block = new MaterialPropertyBlock();
+                renderer.GetPropertyBlock(block);
+                AssertColor(new Color(2f, 4f, 6f, 0.8f), block.GetColor(Shader.PropertyToID("_BaseColor")));
+
+                InvokeLateUpdate(runner);
+                renderer.GetPropertyBlock(block);
+                AssertColor(new Color(2f, 4f, 6f, 0.8f), block.GetColor(Shader.PropertyToID("_BaseColor")));
+
+                clock.Now = 0.5f;
+                InvokeLateUpdate(runner);
+                renderer.GetPropertyBlock(block);
+                AssertColor(new Color(1f, 2f, 3f, 0.4f), block.GetColor(Shader.PropertyToID("_BaseColor")));
+            }
+            finally
+            {
+                handle?.Dispose();
+                Object.DestroyImmediate(sprite);
+                Object.DestroyImmediate(texture);
+                Object.DestroyImmediate(runnerObject);
+            }
+        }
+
+        [Test]
         public void Runner_MeshSnapshot_UsesMaterialOverrideAndConfigurableShaderProperties()
         {
             string source = File.ReadAllText($"{PackagePath}/Runtime/Playback/TcePresentationRunner.cs");

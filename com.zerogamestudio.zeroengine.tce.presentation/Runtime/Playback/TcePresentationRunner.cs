@@ -109,8 +109,7 @@ namespace ZeroEngine.TCE.Presentation
                     return;
 
                 block.Clear();
-                Color tint = settings.Tint;
-                tint.a *= ResolveAlphaMultiplier(progress);
+                Color tint = ResolveTint(progress);
                 block.SetColor(tintPropertyId, tint);
                 if (meshSnapshot.MainTexture)
                     block.SetTexture(mainTexturePropertyId, meshSnapshot.MainTexture);
@@ -197,8 +196,7 @@ namespace ZeroEngine.TCE.Presentation
 
             private void UpdateSpriteAlpha(float progress)
             {
-                Color tint = settings.Tint;
-                tint.a *= ResolveAlphaMultiplier(progress);
+                Color tint = ResolveTint(progress);
                 foreach (SpriteRenderer renderer in spriteRenderers)
                 {
                     if (renderer)
@@ -214,6 +212,21 @@ namespace ZeroEngine.TCE.Presentation
                 if (settings.CopyMainTexture && renderer.sprite && renderer.sprite.texture)
                     spriteBlock.SetTexture(mainTexturePropertyId, renderer.sprite.texture);
                 renderer.SetPropertyBlock(spriteBlock);
+            }
+
+            private Color ResolveTint(float progress)
+            {
+                Color tint = settings.Tint;
+                float alphaMultiplier = ResolveAlphaMultiplier(progress);
+                if (settings.FadeTintRgbWithAlpha)
+                {
+                    tint.r *= alphaMultiplier;
+                    tint.g *= alphaMultiplier;
+                    tint.b *= alphaMultiplier;
+                }
+
+                tint.a *= alphaMultiplier;
+                return tint;
             }
 
             private float ResolveAlphaMultiplier(float progress)
