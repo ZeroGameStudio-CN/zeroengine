@@ -136,8 +136,8 @@ namespace ZeroEngine.TCE.Presentation
                 renderer.sprite = spriteSnapshot.Sprite;
                 renderer.sortingLayerID = spriteSnapshot.SortingLayerId;
                 renderer.sortingOrder = spriteSnapshot.SortingOrder;
-                ApplySpriteTint(renderer, settings.Tint);
                 ApplySpriteOverrides(renderer);
+                ApplySpriteTint(renderer, settings.Tint);
                 spriteRenderers.Add(renderer);
             }
 
@@ -158,8 +158,8 @@ namespace ZeroEngine.TCE.Presentation
                     renderer.enabled = layer.Enabled;
                     renderer.sortingLayerID = layer.SortingLayerId;
                     renderer.sortingOrder = layer.SortingOrder;
-                    ApplySpriteTint(renderer, settings.Tint);
                     ApplySpriteOverrides(renderer);
+                    ApplySpriteTint(renderer, settings.Tint);
                     spriteRenderers.Add(renderer);
                 }
             }
@@ -211,6 +211,8 @@ namespace ZeroEngine.TCE.Presentation
                 renderer.color = settings.ApplySpriteRendererColor ? tint : Color.white;
                 spriteBlock.Clear();
                 spriteBlock.SetColor(tintPropertyId, tint);
+                if (settings.CopyMainTexture && renderer.sprite && renderer.sprite.texture)
+                    spriteBlock.SetTexture(mainTexturePropertyId, renderer.sprite.texture);
                 renderer.SetPropertyBlock(spriteBlock);
             }
 

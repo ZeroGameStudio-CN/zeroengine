@@ -17,7 +17,7 @@ This package is visual-only. Presentation effects capture renderer state and pla
 Fields:
 
 - `Target`: Target actor selection inherited from TCE effects.
-- `Settings`: Visual playback settings including style, tint, duration, fade delay, fade duration, alpha curve, material override, sprite sorting override, sprite renderer color control, offset, direction, renderer tint property name, mesh main-texture property name, and main texture copy policy.
+- `Settings`: Visual playback settings including style, tint, duration, fade delay, fade duration, alpha curve, material override, sprite sorting override, sprite renderer color control, offset, direction, renderer tint property name, sprite/mesh main texture property name, and main texture copy policy.
 
 ### Spawn Soul Ghost
 

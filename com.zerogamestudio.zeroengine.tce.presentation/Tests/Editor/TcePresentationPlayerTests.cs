@@ -335,6 +335,44 @@ namespace ZeroEngine.TCE.Presentation.Tests.Editor
         }
 
         [Test]
+        public void Runner_SpriteSnapshot_CopiesSpriteTextureToConfiguredShaderProperty()
+        {
+            var runnerObject = new GameObject(nameof(Runner_SpriteSnapshot_CopiesSpriteTextureToConfiguredShaderProperty));
+            var texture = new Texture2D(2, 2);
+            var sprite = Sprite.Create(texture, new Rect(0, 0, 2, 2), Vector2.one * 0.5f);
+            TcePresentationHandle handle = null;
+
+            try
+            {
+                var runner = runnerObject.AddComponent<TcePresentationRunner>();
+                var snapshot = new TceSpriteSnapshot(Matrix4x4.identity, 0, sprite, 0, 17);
+                handle = runner.Play(
+                    snapshot,
+                    new TcePresentationPlaybackSettings
+                    {
+                        Duration = 1f,
+                        CopyMainTexture = true,
+                        MainTexturePropertyName = "_MainTex"
+                    },
+                    new FakeClock(0f));
+
+                var renderer = FindSpriteRenderer(sprite);
+                Assert.IsNotNull(renderer);
+
+                var block = new MaterialPropertyBlock();
+                renderer.GetPropertyBlock(block);
+                Assert.AreSame(texture, block.GetTexture(Shader.PropertyToID("_MainTex")));
+            }
+            finally
+            {
+                handle?.Dispose();
+                Object.DestroyImmediate(sprite);
+                Object.DestroyImmediate(texture);
+                Object.DestroyImmediate(runnerObject);
+            }
+        }
+
+        [Test]
         public void Runner_MeshSnapshot_UsesMaterialOverrideAndConfigurableShaderProperties()
         {
             string source = File.ReadAllText($"{PackagePath}/Runtime/Playback/TcePresentationRunner.cs");
