@@ -163,6 +163,144 @@ namespace ZeroEngine.TCE.Presentation.Tests.Editor
             }
         }
 
+        [Test]
+        public void Runner_SpriteSnapshot_UsesConfiguredAlphaCurveAndFadeWindow()
+        {
+            var runnerObject = new GameObject(nameof(Runner_SpriteSnapshot_UsesConfiguredAlphaCurveAndFadeWindow));
+            var texture = new Texture2D(2, 2);
+            var sprite = Sprite.Create(texture, new Rect(0, 0, 2, 2), Vector2.one * 0.5f);
+            TcePresentationHandle handle = null;
+
+            try
+            {
+                var clock = new FakeClock(0f);
+                var runner = runnerObject.AddComponent<TcePresentationRunner>();
+                var snapshot = new TceSpriteSnapshot(Matrix4x4.identity, 0, sprite, 0, 0);
+                handle = runner.Play(
+                    snapshot,
+                    new TcePresentationPlaybackSettings
+                    {
+                        Tint = Color.white,
+                        Duration = 1f,
+                        FadeDelay = 0.25f,
+                        FadeDuration = 0.5f,
+                        AlphaEase = AnimationCurve.Linear(0f, 1f, 1f, 0f)
+                    },
+                    clock);
+
+                var renderer = FindSpriteRenderer(sprite);
+                Assert.IsNotNull(renderer);
+
+                clock.Now = 0.125f;
+                InvokeLateUpdate(runner);
+                Assert.AreEqual(1f, renderer.color.a, 0.0001f);
+
+                clock.Now = 0.5f;
+                InvokeLateUpdate(runner);
+                Assert.AreEqual(0.5f, renderer.color.a, 0.0001f);
+            }
+            finally
+            {
+                handle?.Dispose();
+                Object.DestroyImmediate(sprite);
+                Object.DestroyImmediate(texture);
+                Object.DestroyImmediate(runnerObject);
+            }
+        }
+
+        [Test]
+        public void Runner_SpriteSnapshot_AppliesSortingAndMaterialOverrides()
+        {
+            var runnerObject = new GameObject(nameof(Runner_SpriteSnapshot_AppliesSortingAndMaterialOverrides));
+            var texture = new Texture2D(2, 2);
+            var sprite = Sprite.Create(texture, new Rect(0, 0, 2, 2), Vector2.one * 0.5f);
+            Material material = null;
+            TcePresentationHandle handle = null;
+
+            try
+            {
+                var shader = Shader.Find("Sprites/Default") ?? Shader.Find("Universal Render Pipeline/Unlit");
+                Assert.IsNotNull(shader);
+                material = new Material(shader) { name = "TcePresentationOverrideMaterial" };
+
+                var runner = runnerObject.AddComponent<TcePresentationRunner>();
+                var snapshot = new TceSpriteSnapshot(Matrix4x4.identity, 0, sprite, 0, 17);
+                handle = runner.Play(
+                    snapshot,
+                    new TcePresentationPlaybackSettings
+                    {
+                        Duration = 1f,
+                        OverrideSorting = true,
+                        SortingLayerId = 0,
+                        SortingOrder = 44,
+                        MaterialOverride = material
+                    },
+                    new FakeClock(0f));
+
+                var renderer = FindSpriteRenderer(sprite);
+                Assert.IsNotNull(renderer);
+                Assert.AreEqual(44, renderer.sortingOrder);
+                Assert.AreSame(material, renderer.sharedMaterial);
+            }
+            finally
+            {
+                handle?.Dispose();
+                if (material) Object.DestroyImmediate(material);
+                Object.DestroyImmediate(sprite);
+                Object.DestroyImmediate(texture);
+                Object.DestroyImmediate(runnerObject);
+            }
+        }
+
+        [Test]
+        public void Runner_SpriteSnapshot_UsesTintShaderPropertyName()
+        {
+            var runnerObject = new GameObject(nameof(Runner_SpriteSnapshot_UsesTintShaderPropertyName));
+            var texture = new Texture2D(2, 2);
+            var sprite = Sprite.Create(texture, new Rect(0, 0, 2, 2), Vector2.one * 0.5f);
+            TcePresentationHandle handle = null;
+
+            try
+            {
+                var tint = new Color(0.25f, 0.5f, 0.75f, 0.9f);
+                var runner = runnerObject.AddComponent<TcePresentationRunner>();
+                var snapshot = new TceSpriteSnapshot(Matrix4x4.identity, 0, sprite, 0, 17);
+                handle = runner.Play(
+                    snapshot,
+                    new TcePresentationPlaybackSettings
+                    {
+                        Tint = tint,
+                        Duration = 1f,
+                        TintPropertyName = "_BaseColor"
+                    },
+                    new FakeClock(0f));
+
+                var renderer = FindSpriteRenderer(sprite);
+                Assert.IsNotNull(renderer);
+
+                var block = new MaterialPropertyBlock();
+                renderer.GetPropertyBlock(block);
+                AssertColor(tint, block.GetColor(Shader.PropertyToID("_BaseColor")));
+            }
+            finally
+            {
+                handle?.Dispose();
+                Object.DestroyImmediate(sprite);
+                Object.DestroyImmediate(texture);
+                Object.DestroyImmediate(runnerObject);
+            }
+        }
+
+        [Test]
+        public void Runner_MeshSnapshot_UsesMaterialOverrideAndConfigurableShaderProperties()
+        {
+            string source = File.ReadAllText($"{PackagePath}/Runtime/Playback/TcePresentationRunner.cs");
+
+            StringAssert.Contains("settings.MaterialOverride ? settings.MaterialOverride : GetFallbackMaterial()", source);
+            StringAssert.Contains("settings.TintPropertyName", source);
+            StringAssert.Contains("settings.MainTexturePropertyName", source);
+        }
+
         private static void InvokeLateUpdate(TcePresentationRunner runner)
         {
             typeof(TcePresentationRunner)
@@ -179,6 +317,25 @@ namespace ZeroEngine.TCE.Presentation.Tests.Editor
             }
 
             return null;
+        }
+
+        private static SpriteRenderer FindSpriteRenderer(Sprite sprite)
+        {
+            foreach (SpriteRenderer renderer in Object.FindObjectsByType<SpriteRenderer>(FindObjectsInactive.Include, FindObjectsSortMode.None))
+            {
+                if (renderer.sprite == sprite)
+                    return renderer;
+            }
+
+            return null;
+        }
+
+        private static void AssertColor(Color expected, Color actual)
+        {
+            Assert.AreEqual(expected.r, actual.r, 0.0001f);
+            Assert.AreEqual(expected.g, actual.g, 0.0001f);
+            Assert.AreEqual(expected.b, actual.b, 0.0001f);
+            Assert.AreEqual(expected.a, actual.a, 0.0001f);
         }
 
         private static Mesh CreateTriangleMesh(string name)

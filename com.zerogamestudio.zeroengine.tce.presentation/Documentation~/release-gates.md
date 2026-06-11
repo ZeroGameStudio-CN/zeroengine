@@ -11,6 +11,14 @@ Run these Unity Test Runner assemblies:
 
 Expected result for each assembly: `total > 0` and `failed = 0`.
 
+The presentation test assembly must cover:
+
+- default-compatible playback cleanup;
+- alpha fade delay, fade duration, and custom alpha curve playback;
+- sprite material and sorting overrides;
+- sprite and mesh material override plus configurable tint/main-texture shader properties;
+- readable/unreadable mesh snapshot boundaries.
+
 ## Static Source Gates
 
 Run presentation runtime boundary checks:

@@ -9,6 +9,7 @@ The package depends on `ZeroEngine.TCE` and UnityEngine renderer APIs. It does n
 - `ITcePresentationSource` lets a project expose custom visual capture.
 - `ITcePresentationPlayer` and `TcePresentationHandle` play and dispose captured visuals.
 - `TceVisualSnapshot`, `TceMeshSnapshot`, `TceSpriteSnapshot`, and `TceSpriteLayerSnapshot` are the supported snapshot models.
+- `TcePresentationPlaybackSettings` controls style, tint, duration, fade window, alpha curve, material override, sprite sorting override, renderer tint property name, mesh texture property name, offset, direction, and texture copy policy.
 - `SpawnSnapshotEffectData` and `SpawnSoulGhostEffectData` are catalog-visible TCE effects.
 
 ## Quick Integration

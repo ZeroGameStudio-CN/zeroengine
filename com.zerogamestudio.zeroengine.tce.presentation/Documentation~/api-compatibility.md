@@ -16,6 +16,8 @@ These runtime contracts are stable for downstream adapters:
 - `TceVisualSnapshotRequest`
 - `TcePresentationPlaybackSettings`
 
+The `TcePresentationPlaybackSettings` contract is additive for `0.2.0` consumers. The default playback semantics remain total-duration linear alpha fade, package fallback material, captured sprite sorting, `_Color` renderer tint, and `_MainTex` mesh texture playback. Optional fields may override fade timing, alpha curve, material, sprite sorting, renderer tint property name, and mesh texture property name without changing those defaults.
+
 The `TcePresentationStyle` numeric values are stable:
 
 - `StaticSnapshot = 0`

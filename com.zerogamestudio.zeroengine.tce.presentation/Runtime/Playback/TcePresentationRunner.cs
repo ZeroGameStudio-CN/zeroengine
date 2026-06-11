@@ -41,15 +41,16 @@ namespace ZeroEngine.TCE.Presentation
 
         private sealed class Entry
         {
-            private static readonly int ColorId = Shader.PropertyToID("_Color");
-            private static readonly int MainTexId = Shader.PropertyToID("_MainTex");
             private static Material fallbackMaterial;
 
             private readonly TceVisualSnapshot snapshot;
             private readonly TcePresentationPlaybackSettings settings;
             private readonly ITceClock clock;
             private readonly float startTime;
+            private readonly int tintPropertyId;
+            private readonly int mainTexturePropertyId;
             private readonly MaterialPropertyBlock block = new();
+            private readonly MaterialPropertyBlock spriteBlock = new();
             private readonly List<SpriteRenderer> spriteRenderers = new();
             private GameObject spriteRoot;
             private Vector3 spriteStartPosition;
@@ -60,6 +61,8 @@ namespace ZeroEngine.TCE.Presentation
                 this.settings = settings;
                 this.clock = clock;
                 startTime = clock?.Now ?? Time.time;
+                tintPropertyId = GetShaderPropertyId(settings.TintPropertyName, "_Color");
+                mainTexturePropertyId = GetShaderPropertyId(settings.MainTexturePropertyName, "_MainTex");
 
                 if (snapshot is TceSpriteSnapshot spriteSnapshot)
                     CreateSpriteSnapshot(spriteSnapshot);
@@ -80,6 +83,7 @@ namespace ZeroEngine.TCE.Presentation
             {
                 snapshot.Dispose();
                 block.Clear();
+                spriteBlock.Clear();
 
                 if (spriteRoot)
                     DestroySnapshotObject(spriteRoot);
@@ -106,15 +110,15 @@ namespace ZeroEngine.TCE.Presentation
 
                 block.Clear();
                 Color tint = settings.Tint;
-                tint.a *= 1f - progress;
-                block.SetColor(ColorId, tint);
+                tint.a *= ResolveAlphaMultiplier(progress);
+                block.SetColor(tintPropertyId, tint);
                 if (meshSnapshot.MainTexture)
-                    block.SetTexture(MainTexId, meshSnapshot.MainTexture);
+                    block.SetTexture(mainTexturePropertyId, meshSnapshot.MainTexture);
 
                 Graphics.DrawMesh(
                     meshSnapshot.Mesh,
                     GetPlaybackMatrix(meshSnapshot.Matrix, progress),
-                    GetFallbackMaterial(),
+                    settings.MaterialOverride ? settings.MaterialOverride : GetFallbackMaterial(),
                     meshSnapshot.Layer,
                     null,
                     0,
@@ -132,7 +136,8 @@ namespace ZeroEngine.TCE.Presentation
                 renderer.sprite = spriteSnapshot.Sprite;
                 renderer.sortingLayerID = spriteSnapshot.SortingLayerId;
                 renderer.sortingOrder = spriteSnapshot.SortingOrder;
-                renderer.color = settings.Tint;
+                ApplySpriteTint(renderer, settings.Tint);
+                ApplySpriteOverrides(renderer);
                 spriteRenderers.Add(renderer);
             }
 
@@ -153,7 +158,8 @@ namespace ZeroEngine.TCE.Presentation
                     renderer.enabled = layer.Enabled;
                     renderer.sortingLayerID = layer.SortingLayerId;
                     renderer.sortingOrder = layer.SortingOrder;
-                    renderer.color = settings.Tint;
+                    ApplySpriteTint(renderer, settings.Tint);
+                    ApplySpriteOverrides(renderer);
                     spriteRenderers.Add(renderer);
                 }
             }
@@ -192,12 +198,58 @@ namespace ZeroEngine.TCE.Presentation
             private void UpdateSpriteAlpha(float progress)
             {
                 Color tint = settings.Tint;
-                tint.a *= 1f - progress;
+                tint.a *= ResolveAlphaMultiplier(progress);
                 foreach (SpriteRenderer renderer in spriteRenderers)
                 {
                     if (renderer)
-                        renderer.color = tint;
+                        ApplySpriteTint(renderer, tint);
                 }
+            }
+
+            private void ApplySpriteTint(SpriteRenderer renderer, Color tint)
+            {
+                renderer.color = tint;
+                spriteBlock.Clear();
+                spriteBlock.SetColor(tintPropertyId, tint);
+                renderer.SetPropertyBlock(spriteBlock);
+            }
+
+            private float ResolveAlphaMultiplier(float progress)
+            {
+                float duration = Mathf.Max(0.01f, settings.Duration);
+                float elapsed = Mathf.Clamp01(progress) * duration;
+                float fadeDelay = Mathf.Max(0f, settings.FadeDelay);
+                if (elapsed <= fadeDelay)
+                    return 1f;
+
+                float fadeDuration = settings.FadeDuration > 0f
+                    ? settings.FadeDuration
+                    : Mathf.Max(0.01f, duration - fadeDelay);
+                float fadeProgress = Mathf.Clamp01((elapsed - fadeDelay) / fadeDuration);
+                if (settings.AlphaEase != null && settings.AlphaEase.length > 0)
+                    return Mathf.Clamp01(settings.AlphaEase.Evaluate(fadeProgress));
+
+                return 1f - fadeProgress;
+            }
+
+            private void ApplySpriteOverrides(SpriteRenderer renderer)
+            {
+                if (!renderer)
+                    return;
+
+                if (settings.OverrideSorting)
+                {
+                    renderer.sortingLayerID = settings.SortingLayerId;
+                    renderer.sortingOrder = settings.SortingOrder;
+                }
+
+                if (settings.MaterialOverride)
+                    renderer.sharedMaterial = settings.MaterialOverride;
+            }
+
+            private static int GetShaderPropertyId(string propertyName, string fallbackName)
+            {
+                return Shader.PropertyToID(string.IsNullOrWhiteSpace(propertyName) ? fallbackName : propertyName);
             }
 
             private static Material GetFallbackMaterial()

@@ -38,6 +38,33 @@ namespace ZeroEngine.TCE.Presentation
         [TceFieldDoc("Duration in seconds measured by the supplied TCE clock.")]
         public float Duration = 0.35f;
 
+        [TceFieldDoc("Delay before alpha fade starts, measured in seconds by the supplied TCE clock.")]
+        public float FadeDelay;
+
+        [TceFieldDoc("Alpha fade duration in seconds. Values less than or equal to zero use the remaining playback duration.")]
+        public float FadeDuration;
+
+        [TceFieldDoc("Optional alpha multiplier curve evaluated over normalized fade progress.")]
+        public AnimationCurve AlphaEase;
+
+        [TceFieldDoc("Optional material used by sprite and mesh playback instead of the package fallback material.")]
+        public Material MaterialOverride;
+
+        [TceFieldDoc("Shader property name used for renderer tint playback.")]
+        public string TintPropertyName = "_Color";
+
+        [TceFieldDoc("Shader property name used for mesh main texture playback.")]
+        public string MainTexturePropertyName = "_MainTex";
+
+        [TceFieldDoc("Whether sprite playback should override captured sorting values.")]
+        public bool OverrideSorting;
+
+        [TceFieldDoc("Sorting layer id used when OverrideSorting is true.")]
+        public int SortingLayerId;
+
+        [TceFieldDoc("Sorting order used when OverrideSorting is true.")]
+        public int SortingOrder;
+
         [TceFieldDoc("World-space offset applied during capture or playback.")]
         public Vector3 Offset;
 
