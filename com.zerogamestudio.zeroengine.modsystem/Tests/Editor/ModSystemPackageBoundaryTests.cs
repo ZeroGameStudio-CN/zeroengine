@@ -1,0 +1,90 @@
+using System.IO;
+using NUnit.Framework;
+using UnityEngine;
+
+namespace ZeroEngine.ModSystem.Tests.Editor
+{
+    public sealed class ModSystemPackageBoundaryTests
+    {
+        private static readonly string PackageRoot = Path.GetFullPath(Path.Combine(
+            Application.dataPath,
+            "../Packages/com.zerogamestudio.zeroengine.modsystem"));
+
+        [Test]
+        public void CoreAssembly_DoesNotReferenceGameplayOrProjectPackages()
+        {
+            string coreAsmdef = File.ReadAllText(Path.Combine(PackageRoot, "Runtime/Core/ZeroEngine.ModSystem.asmdef"));
+
+            Assert.That(coreAsmdef, Does.Contain("ZeroEngine.ModSystem.Contracts"));
+            Assert.That(coreAsmdef, Does.Not.Contain("ZeroEngine.Combat"));
+            Assert.That(coreAsmdef, Does.Not.Contain("ZeroEngine.Data"));
+            Assert.That(coreAsmdef, Does.Not.Contain("ZeroEngine.Economy"));
+            Assert.That(coreAsmdef, Does.Not.Contain("ZeroEngine.TCE"));
+            Assert.That(coreAsmdef, Does.Not.Contain("POB"));
+            Assert.That(coreAsmdef, Does.Not.Contain("Steamworks"));
+        }
+
+        [Test]
+        public void LegacyAssembly_IsOnlyPlaceForBroadTypeRegistry()
+        {
+            string registryPath = Path.Combine(PackageRoot, "Runtime/Legacy/ZeroEngineTypeRegistry.cs");
+            string legacyAsmdef = File.ReadAllText(Path.Combine(PackageRoot, "Runtime/Legacy/ZeroEngine.ModSystem.Legacy.asmdef"));
+
+            Assert.That(File.Exists(registryPath), Is.True);
+            Assert.That(File.Exists(Path.Combine(PackageRoot, "Runtime/Legacy/ModLoader.cs")), Is.True);
+            Assert.That(File.Exists(Path.Combine(PackageRoot, "Runtime/Legacy/ModHotReloader.cs")), Is.True);
+            Assert.That(File.Exists(Path.Combine(PackageRoot, "Runtime/Legacy/ModSystemIntegration.cs")), Is.True);
+            Assert.That(File.Exists(Path.Combine(PackageRoot, "Runtime/Legacy/Scripting/LuaScriptRunner.cs")), Is.True);
+            Assert.That(File.Exists(Path.Combine(PackageRoot, "Runtime/Legacy/Scripting/ModScriptManager.cs")), Is.True);
+            Assert.That(legacyAsmdef, Does.Contain("ZeroEngine.Combat"));
+            Assert.That(legacyAsmdef, Does.Contain("ZeroEngine.Data"));
+            Assert.That(legacyAsmdef, Does.Contain("ZeroEngine.Economy"));
+            Assert.That(legacyAsmdef, Does.Contain("\"defineConstraints\""));
+            Assert.That(legacyAsmdef, Does.Contain("\"ZEROENGINE_MODSYSTEM_LEGACY\""));
+        }
+
+        [Test]
+        public void OldBasePackage_DoesNotKeepDuplicateRuntimeAssemblies()
+        {
+            string oldRuntimeRoot = Path.GetFullPath(Path.Combine(
+                Application.dataPath,
+                "../Packages/com.zerogamestudio.zeroengine/Runtime/ModSystem"));
+            string[] remainingEntries = Directory.GetFileSystemEntries(oldRuntimeRoot);
+
+            Assert.That(File.Exists(Path.Combine(oldRuntimeRoot, "ZeroEngine.ModSystem.asmdef")), Is.False);
+            Assert.That(File.Exists(Path.Combine(oldRuntimeRoot, "ModLoader.cs")), Is.False);
+            Assert.That(File.Exists(Path.Combine(oldRuntimeRoot, "ModManifest.cs")), Is.False);
+            Assert.That(remainingEntries, Is.EquivalentTo(new[]
+            {
+                Path.Combine(oldRuntimeRoot, "README.md"),
+                Path.Combine(oldRuntimeRoot, "README.md.meta")
+            }));
+        }
+
+        [Test]
+        public void LegacyEditorAssembly_MovedIntoStandalonePackage()
+        {
+            string editorAsmdefPath = Path.Combine(PackageRoot, "Editor/Legacy/ZeroEngine.ModSystem.Editor.asmdef");
+            string editorAsmdef = File.ReadAllText(editorAsmdefPath);
+
+            Assert.That(File.Exists(Path.Combine(PackageRoot, "Editor/Legacy/ModCreatorWindow.cs")), Is.True);
+            Assert.That(File.Exists(Path.Combine(PackageRoot, "Editor/Legacy/ModExporter.cs")), Is.True);
+            Assert.That(File.Exists(Path.Combine(PackageRoot, "Editor/Legacy/ModValidatorWindow.cs")), Is.True);
+            Assert.That(editorAsmdef, Does.Contain("ZeroEngine.ModSystem.Contracts"));
+            Assert.That(editorAsmdef, Does.Contain("ZeroEngine.ModSystem.Legacy"));
+            Assert.That(editorAsmdef, Does.Contain("\"defineConstraints\""));
+            Assert.That(editorAsmdef, Does.Contain("\"ZEROENGINE_MODSYSTEM_LEGACY\""));
+        }
+
+        [Test]
+        public void SteamAssembly_ReferencesSteamworksWhenVersionDefineEnablesSteam()
+        {
+            string steamAsmdefPath = Path.Combine(PackageRoot, "Runtime/Steam/ZeroEngine.ModSystem.Steam.asmdef");
+            string steamAsmdef = File.ReadAllText(steamAsmdefPath);
+
+            Assert.That(steamAsmdef, Does.Contain("ZeroEngine.ModSystem.Contracts"));
+            Assert.That(steamAsmdef, Does.Contain("com.rlabrecque.steamworks.net"));
+            Assert.That(steamAsmdef, Does.Contain("STEAMWORKS_NET"));
+        }
+    }
+}

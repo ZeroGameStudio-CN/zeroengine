@@ -1,0 +1,163 @@
+{
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "title": "ZeroEngine Ability Data",
+    "description": "AbilityDataSO for ZeroEngine mods",
+    "type": "object",
+    "required": [
+        "$type",
+        "AbilityName"
+    ],
+    "properties": {
+        "$type": {
+            "type": "string",
+            "const": "AbilityDataSO"
+        },
+        "AbilityName": {
+            "type": "string",
+            "description": "Name of the ability"
+        },
+        "Description": {
+            "type": "string",
+            "description": "Description of the ability"
+        },
+        "Icon": {
+            "type": "string",
+            "description": "Relative path to icon image"
+        },
+        "Triggers": {
+            "type": "array",
+            "description": "Trigger components",
+            "items": {
+                "$ref": "#/definitions/TriggerComponent"
+            }
+        },
+        "Conditions": {
+            "type": "array",
+            "description": "Condition components",
+            "items": {
+                "$ref": "#/definitions/ConditionComponent"
+            }
+        },
+        "Effects": {
+            "type": "array",
+            "description": "Effect components",
+            "items": {
+                "$ref": "#/definitions/EffectComponent"
+            }
+        }
+    },
+    "definitions": {
+        "TriggerComponent": {
+            "type": "object",
+            "required": [
+                "$type"
+            ],
+            "properties": {
+                "$type": {
+                    "type": "string",
+                    "enum": [
+                        "ManualTriggerData",
+                        "IntervalTriggerData",
+                        "OnHitTriggerData"
+                    ]
+                },
+                "TriggerMultipleTimes": {
+                    "type": "boolean"
+                },
+                "TriggerTimes": {
+                    "type": "integer",
+                    "minimum": 1
+                },
+                "ButtonName": {
+                    "type": "string"
+                },
+                "Interval": {
+                    "type": "number"
+                },
+                "StartImmediately": {
+                    "type": "boolean"
+                },
+                "TriggerOnDealingDamage": {
+                    "type": "boolean"
+                },
+                "TriggerOnTakingDamage": {
+                    "type": "boolean"
+                }
+            }
+        },
+        "ConditionComponent": {
+            "type": "object",
+            "required": [
+                "$type"
+            ],
+            "properties": {
+                "$type": {
+                    "type": "string",
+                    "enum": [
+                        "CooldownConditionData",
+                        "ResourceConditionData"
+                    ]
+                },
+                "CooldownSeconds": {
+                    "type": "number"
+                },
+                "Resource": {
+                    "type": "string",
+                    "enum": [
+                        "Health",
+                        "Mana",
+                        "Stamina"
+                    ]
+                },
+                "RequiredAmount": {
+                    "type": "integer"
+                }
+            }
+        },
+        "EffectComponent": {
+            "type": "object",
+            "required": [
+                "$type"
+            ],
+            "properties": {
+                "$type": {
+                    "type": "string",
+                    "enum": [
+                        "DamageEffectData",
+                        "HealEffectData",
+                        "ApplyBuffEffectData"
+                    ]
+                },
+                "TargetType": {
+                    "type": "string",
+                    "enum": [
+                        "Self",
+                        "Target",
+                        "All"
+                    ]
+                },
+                "DamageAmount": {
+                    "type": "integer"
+                },
+                "DamageType": {
+                    "type": "string",
+                    "enum": [
+                        "Physical",
+                        "Magical",
+                        "True"
+                    ]
+                },
+                "HealAmount": {
+                    "type": "integer"
+                },
+                "BuffToApply": {
+                    "type": "string",
+                    "description": "BuffData asset key or path"
+                },
+                "DurationOverride": {
+                    "type": "number"
+                }
+            }
+        }
+    }
+}

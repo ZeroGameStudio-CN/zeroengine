@@ -1,0 +1,96 @@
+{
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "title": "ZeroEngine Buff Data",
+    "description": "BuffData for ZeroEngine mods",
+    "type": "object",
+    "required": [
+        "$type",
+        "BuffId"
+    ],
+    "properties": {
+        "$type": {
+            "type": "string",
+            "const": "BuffData"
+        },
+        "BuffId": {
+            "type": "string",
+            "description": "Unique ID for the buff"
+        },
+        "Category": {
+            "type": "string",
+            "enum": [
+                "Positive",
+                "Negative",
+                "Neutral"
+            ],
+            "description": "Category of the buff"
+        },
+        "Icon": {
+            "type": "string",
+            "description": "Relative path to icon image"
+        },
+        "Duration": {
+            "type": "number",
+            "description": "Duration in seconds",
+            "default": 10
+        },
+        "MaxStacks": {
+            "type": "integer",
+            "description": "Maximum stack count",
+            "minimum": 1,
+            "default": 1
+        },
+        "TickInterval": {
+            "type": "number",
+            "description": "Tick interval in seconds",
+            "default": 1
+        },
+        "ExpireMode": {
+            "type": "string",
+            "enum": [
+                "RemoveAllStacks",
+                "RemoveOneStack"
+            ],
+            "default": "RemoveAllStacks"
+        },
+        "RefreshOnAddStack": {
+            "type": "boolean",
+            "default": true
+        },
+        "RefreshOnRemoveStack": {
+            "type": "boolean",
+            "default": false
+        },
+        "StatModifiers": {
+            "type": "array",
+            "description": "Stat modifiers applied by this buff",
+            "items": {
+                "type": "object",
+                "required": [
+                    "StatType",
+                    "Value",
+                    "ModType"
+                ],
+                "properties": {
+                    "StatType": {
+                        "type": "string",
+                        "description": "The stat to modify"
+                    },
+                    "Value": {
+                        "type": "number",
+                        "description": "Modifier value"
+                    },
+                    "ModType": {
+                        "type": "string",
+                        "enum": [
+                            "Flat",
+                            "PercentAdd",
+                            "PercentMult"
+                        ],
+                        "description": "Type of modification"
+                    }
+                }
+            }
+        }
+    }
+}

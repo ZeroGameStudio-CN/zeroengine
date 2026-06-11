@@ -1,0 +1,68 @@
+{
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "title": "ZeroEngine Mod Manifest",
+    "description": "Manifest file for ZeroEngine mods",
+    "type": "object",
+    "required": [
+        "Id",
+        "Name",
+        "Version"
+    ],
+    "properties": {
+        "Id": {
+            "type": "string",
+            "description": "Unique identifier for the mod (e.g., 'author.modname')",
+            "pattern": "^[a-z0-9_.-]+$"
+        },
+        "Name": {
+            "type": "string",
+            "description": "Display name of the mod"
+        },
+        "Version": {
+            "type": "string",
+            "description": "Semantic version (e.g., '1.0.0')",
+            "pattern": "^\\d+\\.\\d+\\.\\d+(-[a-z0-9.]+)?$"
+        },
+        "Author": {
+            "type": "string",
+            "description": "Author of the mod"
+        },
+        "Description": {
+            "type": "string",
+            "description": "Description of the mod"
+        },
+        "Dependencies": {
+            "type": "array",
+            "description": "List of mod IDs this mod depends on",
+            "items": {
+                "type": "string"
+            }
+        },
+        "Conflicts": {
+            "type": "array",
+            "description": "List of mod IDs this mod conflicts with",
+            "items": {
+                "type": "string"
+            }
+        },
+        "GameVersion": {
+            "type": "string",
+            "description": "Supported game version range (e.g., '>=1.0.0')"
+        },
+        "ContentPaths": {
+            "type": "array",
+            "description": "Relative paths to content directories",
+            "items": {
+                "type": "string"
+            },
+            "default": [
+                "content"
+            ]
+        },
+        "Enabled": {
+            "type": "boolean",
+            "description": "Whether the mod is enabled",
+            "default": true
+        }
+    }
+}
