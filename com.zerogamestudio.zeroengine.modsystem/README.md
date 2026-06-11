@@ -4,8 +4,7 @@ ZeroEngine ModSystem provides project-neutral mod discovery, manifest reading, p
 
 ## Assemblies
 
-- `ZeroEngine.ModSystem.Contracts`: neutral contracts for mod manifests, source discovery, and safe path resolution.
-- `ZeroEngine.ModSystem`: core loader orchestration with project-provided importers.
+- `ZeroEngine.ModSystem`: neutral contracts for mod manifests, source discovery, safe path resolution, and core loader orchestration with project-provided importers.
 - `ZeroEngine.ModSystem.Legacy`: opt-in compatibility for older `$type` JSON object parsing, singleton loader compatibility, hot reload, and Lua hooks.
 - `ZeroEngine.ModSystem.Steam`: optional Steam Workshop source adapter.
 - `ZeroEngine.ModSystem.Editor`: legacy editor tools for the older `$type` JSON workflow.

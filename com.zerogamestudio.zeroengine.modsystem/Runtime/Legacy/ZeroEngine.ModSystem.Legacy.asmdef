@@ -2,7 +2,6 @@
   "name": "ZeroEngine.ModSystem.Legacy",
   "rootNamespace": "ZeroEngine.ModSystem",
   "references": [
-    "ZeroEngine.ModSystem.Contracts",
     "ZeroEngine.ModSystem",
     "ZeroEngine",
     "ZeroEngine.Combat",

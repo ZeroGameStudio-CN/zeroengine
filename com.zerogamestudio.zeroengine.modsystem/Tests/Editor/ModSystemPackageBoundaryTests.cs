@@ -13,9 +13,8 @@ namespace ZeroEngine.ModSystem.Tests.Editor
         [Test]
         public void CoreAssembly_DoesNotReferenceGameplayOrProjectPackages()
         {
-            string coreAsmdef = File.ReadAllText(Path.Combine(PackageRoot, "Runtime/Core/ZeroEngine.ModSystem.asmdef"));
+            string coreAsmdef = File.ReadAllText(Path.Combine(PackageRoot, "Runtime/ZeroEngine.ModSystem.asmdef"));
 
-            Assert.That(coreAsmdef, Does.Contain("ZeroEngine.ModSystem.Contracts"));
             Assert.That(coreAsmdef, Does.Not.Contain("ZeroEngine.Combat"));
             Assert.That(coreAsmdef, Does.Not.Contain("ZeroEngine.Data"));
             Assert.That(coreAsmdef, Does.Not.Contain("ZeroEngine.Economy"));
@@ -70,7 +69,7 @@ namespace ZeroEngine.ModSystem.Tests.Editor
             Assert.That(File.Exists(Path.Combine(PackageRoot, "Editor/Legacy/ModCreatorWindow.cs")), Is.True);
             Assert.That(File.Exists(Path.Combine(PackageRoot, "Editor/Legacy/ModExporter.cs")), Is.True);
             Assert.That(File.Exists(Path.Combine(PackageRoot, "Editor/Legacy/ModValidatorWindow.cs")), Is.True);
-            Assert.That(editorAsmdef, Does.Contain("ZeroEngine.ModSystem.Contracts"));
+            Assert.That(editorAsmdef, Does.Contain("ZeroEngine.ModSystem"));
             Assert.That(editorAsmdef, Does.Contain("ZeroEngine.ModSystem.Legacy"));
             Assert.That(editorAsmdef, Does.Contain("\"defineConstraints\""));
             Assert.That(editorAsmdef, Does.Contain("\"ZEROENGINE_MODSYSTEM_LEGACY\""));
@@ -82,7 +81,7 @@ namespace ZeroEngine.ModSystem.Tests.Editor
             string steamAsmdefPath = Path.Combine(PackageRoot, "Runtime/Steam/ZeroEngine.ModSystem.Steam.asmdef");
             string steamAsmdef = File.ReadAllText(steamAsmdefPath);
 
-            Assert.That(steamAsmdef, Does.Contain("ZeroEngine.ModSystem.Contracts"));
+            Assert.That(steamAsmdef, Does.Contain("ZeroEngine.ModSystem"));
             Assert.That(steamAsmdef, Does.Contain("com.rlabrecque.steamworks.net"));
             Assert.That(steamAsmdef, Does.Contain("STEAMWORKS_NET"));
         }

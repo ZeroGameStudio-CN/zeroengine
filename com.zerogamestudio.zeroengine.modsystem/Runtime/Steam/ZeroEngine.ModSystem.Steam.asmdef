@@ -2,7 +2,7 @@
   "name": "ZeroEngine.ModSystem.Steam",
   "rootNamespace": "ZeroEngine.ModSystem.Steam",
   "references": [
-    "ZeroEngine.ModSystem.Contracts",
+    "ZeroEngine.ModSystem",
     "com.rlabrecque.steamworks.net"
   ],
   "includePlatforms": [],

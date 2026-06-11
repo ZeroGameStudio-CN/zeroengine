@@ -1,6 +1,6 @@
 # POB Adoption Notes
 
-POB should consume `ZeroEngine.ModSystem.Contracts` for:
+POB should consume `ZeroEngine.ModSystem` for:
 
 - `ModPathResolver`
 - `IModSource`

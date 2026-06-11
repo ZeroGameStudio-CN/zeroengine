@@ -3,7 +3,7 @@
     "rootNamespace": "ZeroEngine.ModSystem.Editor",
     "references": [
         "ZeroEngine",
-        "ZeroEngine.ModSystem.Contracts",
+        "ZeroEngine.ModSystem",
         "ZeroEngine.ModSystem.Legacy",
         "ZeroEngine.Combat",
         "ZeroEngine.Data",

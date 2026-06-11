@@ -2,7 +2,6 @@
   "name": "ZeroEngine.ModSystem.Tests.Editor",
   "rootNamespace": "ZeroEngine.ModSystem.Tests.Editor",
   "references": [
-    "ZeroEngine.ModSystem.Contracts",
     "ZeroEngine.ModSystem"
   ],
   "includePlatforms": [

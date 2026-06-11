@@ -1,5 +1,5 @@
 {
-  "name": "ZeroEngine.ModSystem.Contracts",
+  "name": "ZeroEngine.ModSystem",
   "rootNamespace": "ZeroEngine.ModSystem",
   "references": [],
   "includePlatforms": [],
@@ -9,6 +9,12 @@
   "precompiledReferences": [],
   "autoReferenced": true,
   "defineConstraints": [],
-  "versionDefines": [],
+  "versionDefines": [
+    {
+      "name": "com.unity.nuget.newtonsoft-json",
+      "expression": "",
+      "define": "NEWTONSOFT_JSON"
+    }
+  ],
   "noEngineReferences": false
 }
