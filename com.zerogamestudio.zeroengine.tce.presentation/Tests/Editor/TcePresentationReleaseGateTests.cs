@@ -1,5 +1,6 @@
 using System.IO;
 using NUnit.Framework;
+using UnityEditor.PackageManager;
 
 namespace ZeroEngine.TCE.Presentation.Tests.Editor
 {
@@ -9,12 +10,16 @@ namespace ZeroEngine.TCE.Presentation.Tests.Editor
         private const string PackagePath = "Packages/com.zerogamestudio.zeroengine.tce.presentation";
 
         [Test]
-        public void PackageManifest_DeclaresGraduatedVersionAndSingleTceDependency()
+        public void PackageManifest_DeclaresGraduatedVersionAndOnlyTceDependency()
         {
             string manifest = File.ReadAllText($"{PackagePath}/package.json");
+            PackageInfo packageInfo = PackageInfo.FindForAssetPath($"{PackagePath}/package.json");
 
-            StringAssert.Contains(@"""version"": ""0.2.0""", manifest);
-            StringAssert.Contains(@"""com.zerogamestudio.zeroengine.tce"": ""0.1.0""", manifest);
+            Assert.IsNotNull(packageInfo);
+            Assert.AreEqual("0.2.0", packageInfo.version);
+            Assert.AreEqual(1, packageInfo.dependencies.Length);
+            Assert.AreEqual("com.zerogamestudio.zeroengine.tce", packageInfo.dependencies[0].name);
+            Assert.AreEqual("0.1.0", packageInfo.dependencies[0].version);
             StringAssert.DoesNotContain("POB", manifest);
             StringAssert.DoesNotContain("DOTween", manifest);
             StringAssert.DoesNotContain("Sirenix", manifest);

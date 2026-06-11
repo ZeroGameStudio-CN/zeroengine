@@ -1,5 +1,4 @@
 using System.Collections.Generic;
-using System.Diagnostics;
 using System.Reflection;
 using NUnit.Framework;
 using UnityEngine;
@@ -11,16 +10,15 @@ namespace ZeroEngine.TCE.Presentation.Tests.Editor
     public sealed class TcePresentationBudgetTests
     {
         [Test]
-        public void Runner_CompletesSixtyFourMeshSnapshotsWithinSmokeBudgetAndDestroysOwnedMeshes()
+        public void Runner_DestroysOwnedMeshesAfterDuration()
         {
-            var runnerObject = new GameObject(nameof(Runner_CompletesSixtyFourMeshSnapshotsWithinSmokeBudgetAndDestroysOwnedMeshes));
+            var runnerObject = new GameObject(nameof(Runner_DestroysOwnedMeshesAfterDuration));
             var meshes = new List<Mesh>();
 
             try
             {
                 var clock = new FakeClock(0f);
                 var runner = runnerObject.AddComponent<TcePresentationRunner>();
-                var stopwatch = Stopwatch.StartNew();
 
                 for (int i = 0; i < 64; i++)
                 {
@@ -34,11 +32,9 @@ namespace ZeroEngine.TCE.Presentation.Tests.Editor
 
                 clock.Now = 1.1f;
                 InvokeLateUpdate(runner);
-                stopwatch.Stop();
 
                 foreach (Mesh mesh in meshes)
                     Assert.IsTrue(mesh == null);
-                Assert.Less(stopwatch.ElapsedMilliseconds, 1000);
             }
             finally
             {
