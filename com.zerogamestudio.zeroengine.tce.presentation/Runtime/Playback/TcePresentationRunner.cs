@@ -208,7 +208,7 @@ namespace ZeroEngine.TCE.Presentation
 
             private void ApplySpriteTint(SpriteRenderer renderer, Color tint)
             {
-                renderer.color = tint;
+                renderer.color = settings.ApplySpriteRendererColor ? tint : Color.white;
                 spriteBlock.Clear();
                 spriteBlock.SetColor(tintPropertyId, tint);
                 renderer.SetPropertyBlock(spriteBlock);

@@ -292,6 +292,49 @@ namespace ZeroEngine.TCE.Presentation.Tests.Editor
         }
 
         [Test]
+        public void Runner_SpriteSnapshot_CanDriveShaderTintWithoutSpriteRendererColor()
+        {
+            var runnerObject = new GameObject(nameof(Runner_SpriteSnapshot_CanDriveShaderTintWithoutSpriteRendererColor));
+            var texture = new Texture2D(2, 2);
+            var sprite = Sprite.Create(texture, new Rect(0, 0, 2, 2), Vector2.one * 0.5f);
+            TcePresentationHandle handle = null;
+
+            try
+            {
+                var colorField = typeof(TcePresentationPlaybackSettings).GetField("ApplySpriteRendererColor");
+                Assert.IsNotNull(colorField);
+
+                var tint = new Color(0.25f, 0.5f, 0.75f, 0.9f);
+                var runner = runnerObject.AddComponent<TcePresentationRunner>();
+                var snapshot = new TceSpriteSnapshot(Matrix4x4.identity, 0, sprite, 0, 17);
+                var settings = new TcePresentationPlaybackSettings
+                {
+                    Tint = tint,
+                    Duration = 1f,
+                    TintPropertyName = "_BaseColor"
+                };
+                colorField.SetValue(settings, false);
+
+                handle = runner.Play(snapshot, settings, new FakeClock(0f));
+
+                var renderer = FindSpriteRenderer(sprite);
+                Assert.IsNotNull(renderer);
+                AssertColor(Color.white, renderer.color);
+
+                var block = new MaterialPropertyBlock();
+                renderer.GetPropertyBlock(block);
+                AssertColor(tint, block.GetColor(Shader.PropertyToID("_BaseColor")));
+            }
+            finally
+            {
+                handle?.Dispose();
+                Object.DestroyImmediate(sprite);
+                Object.DestroyImmediate(texture);
+                Object.DestroyImmediate(runnerObject);
+            }
+        }
+
+        [Test]
         public void Runner_MeshSnapshot_UsesMaterialOverrideAndConfigurableShaderProperties()
         {
             string source = File.ReadAllText($"{PackagePath}/Runtime/Playback/TcePresentationRunner.cs");

@@ -56,6 +56,9 @@ namespace ZeroEngine.TCE.Presentation
         [TceFieldDoc("Shader property name used for mesh main texture playback.")]
         public string MainTexturePropertyName = "_MainTex";
 
+        [TceFieldDoc("Whether sprite playback should also write SpriteRenderer.color in addition to the tint shader property.")]
+        public bool ApplySpriteRendererColor = true;
+
         [TceFieldDoc("Whether sprite playback should override captured sorting values.")]
         public bool OverrideSorting;
 
