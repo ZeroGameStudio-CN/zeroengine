@@ -263,7 +263,7 @@ namespace ZeroEngine.World.Editor.WorldGraph
         {
             return !string.IsNullOrWhiteSpace(sceneText)
                    && !string.IsNullOrWhiteSpace(objectName)
-                   && sceneText.Contains("m_Name: " + objectName + "\n");
+                   && GetNameMarkers(objectName).Any(sceneText.Contains);
         }
 
         private static bool ShouldCreateSceneTravelPortal(WorldTravelMode travelMode)
@@ -296,22 +296,31 @@ namespace ZeroEngine.World.Editor.WorldGraph
             out string fileId)
         {
             fileId = string.Empty;
-            var nameMarker = "m_Name: " + objectName + "\n";
-            var nameIndex = sceneText.IndexOf(nameMarker, StringComparison.Ordinal);
-            while (nameIndex >= 0)
+            foreach (var nameMarker in GetNameMarkers(objectName))
             {
-                var blockStart = FindYamlBlockStart(sceneText, nameIndex);
-                var blockEnd = FindYamlBlockEnd(sceneText, nameIndex + nameMarker.Length);
-                var block = sceneText.Substring(blockStart, blockEnd - blockStart);
-                if (block.Contains("GameObject:") && TryReadYamlFileId(block, out fileId))
+                var nameIndex = sceneText.IndexOf(nameMarker, StringComparison.Ordinal);
+                while (nameIndex >= 0)
                 {
-                    return true;
-                }
+                    var blockStart = FindYamlBlockStart(sceneText, nameIndex);
+                    var blockEnd = FindYamlBlockEnd(sceneText, nameIndex + nameMarker.Length);
+                    var block = sceneText.Substring(blockStart, blockEnd - blockStart);
+                    if (block.Contains("GameObject:") && TryReadYamlFileId(block, out fileId))
+                    {
+                        return true;
+                    }
 
-                nameIndex = sceneText.IndexOf(nameMarker, nameIndex + nameMarker.Length, StringComparison.Ordinal);
+                    nameIndex = sceneText.IndexOf(nameMarker, nameIndex + nameMarker.Length, StringComparison.Ordinal);
+                }
             }
 
             return false;
+        }
+
+        private static IEnumerable<string> GetNameMarkers(string objectName)
+        {
+            yield return "m_Name: " + objectName + "\n";
+            yield return "m_Name: '" + objectName.Replace("'", "''") + "'\n";
+            yield return "m_Name: \"" + objectName.Replace("\\", "\\\\").Replace("\"", "\\\"") + "\"\n";
         }
 
         private static bool ComponentReferencesGameObject(
