@@ -22,8 +22,8 @@ namespace ZeroEngine.World.Map
 
             var min = WorldBounds.min;
             normalized = new Vector2(
-                Mathf.InverseLerp(min.x, min.x + size.x, worldPosition.x),
-                Mathf.InverseLerp(min.z, min.z + size.z, worldPosition.z));
+                (worldPosition.x - min.x) / size.x,
+                (worldPosition.z - min.z) / size.z);
             return normalized.x >= 0f && normalized.x <= 1f && normalized.y >= 0f && normalized.y <= 1f;
         }
 
