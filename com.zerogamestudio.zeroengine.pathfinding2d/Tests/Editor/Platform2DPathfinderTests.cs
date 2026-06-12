@@ -827,6 +827,54 @@ namespace ZeroEngine.Pathfinding2D.Tests.Editor
         }
 
         [Test]
+        public void GenerateJumpLinks_SameColliderEdgeFall_DoesNotSkipIntermediateLandingSurface()
+        {
+            var host = new GameObject("SameColliderLayeredFallTest");
+            var platform = CreateMultiPathPolygonPlatform(
+                "SameColliderLayeredFallPlatform",
+                (new Vector2(0f, 5.9f), new Vector2(4f, 0.2f)),
+                (new Vector2(3.85f, 3.9f), new Vector2(4.3f, 0.2f)),
+                (new Vector2(3.85f, 1.9f), new Vector2(4.3f, 0.2f)));
+
+            try
+            {
+                var graph = host.AddComponent<PlatformGraphGenerator>();
+                graph.Config.ScanCenter = new Vector2(2f, 4f);
+                graph.Config.ScanSize = new Vector2(12f, 10f);
+                graph.Config.GroundLayer = 1 << platform.gameObject.layer;
+                graph.Config.OneWayPlatformLayer = 0;
+                graph.Config.ObstacleLayer = 0;
+                graph.Config.NodeSpacing = 1f;
+                graph.Config.EdgeInset = 0.2f;
+
+                graph.GeneratePlatformGraph();
+                int upperGroup = graph.FindSurfaceGroupAt(new Vector2(2f, 6f), platform, 1f);
+                int middleGroup = graph.FindSurfaceGroupAt(new Vector2(2.1f, 4f), platform, 1f);
+                int lowerGroup = graph.FindSurfaceGroupAt(new Vector2(2.1f, 2f), platform, 1f);
+                Assert.GreaterOrEqual(upperGroup, 0, "Expected upper surface group.");
+                Assert.GreaterOrEqual(middleGroup, 0, "Expected middle surface group.");
+                Assert.GreaterOrEqual(lowerGroup, 0, "Expected lower surface group.");
+
+                var jumpLinkCalculator = host.AddComponent<JumpLinkCalculator>();
+                jumpLinkCalculator.Config.MaxFallHeight = 10f;
+                jumpLinkCalculator.Config.MaxFallHorizontalDistance = 2f;
+                jumpLinkCalculator.GenerateJumpLinks();
+
+                Assert.IsTrue(
+                    HasFallLink(graph, upperGroup, middleGroup),
+                    "The first landing surface below a same-collider edge should remain reachable.");
+                Assert.IsFalse(
+                    HasFallLink(graph, upperGroup, lowerGroup),
+                    "Same-collider edge fall links must not tunnel past an intermediate landing surface.");
+            }
+            finally
+            {
+                Object.DestroyImmediate(host);
+                Object.DestroyImmediate(platform.gameObject);
+            }
+        }
+
+        [Test]
         public void TryRequestPath_SameColliderTallStepDownAtEdge_ReachesLowerSurface()
         {
             var host = new GameObject("SameColliderTallStepDownRouteTest");
@@ -1255,6 +1303,22 @@ namespace ZeroEngine.Pathfinding2D.Tests.Editor
             var pathfinder = host.AddComponent<Platform2DPathfinder>();
             pathfinder.SetGraphGenerator(graph);
             return pathfinder;
+        }
+
+        private static bool HasFallLink(PlatformGraphGenerator graph, int fromGroup, int toGroup)
+        {
+            return graph.Links.Any(link =>
+            {
+                if (link.LinkType != PlatformLinkType.Fall)
+                    return false;
+
+                var from = graph.GetNode(link.FromNodeId);
+                var to = graph.GetNode(link.ToNodeId);
+                return from.HasValue &&
+                       to.HasValue &&
+                       from.Value.SurfaceGroupId == fromGroup &&
+                       to.Value.SurfaceGroupId == toGroup;
+            });
         }
 
         private static string BuildPathDebug(PlatformPathResult result)

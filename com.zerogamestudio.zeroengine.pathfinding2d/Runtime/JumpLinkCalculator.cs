@@ -557,7 +557,8 @@ namespace ZeroEngine.Pathfinding2D
 
                 float exitX = fromSegment.MaxX + exitOffset;
                 return toSegment.ContainsX(exitX, landingTolerance) &&
-                       to.Position.x >= from.Position.x - landingTolerance;
+                       to.Position.x >= from.Position.x - landingTolerance &&
+                       IsFirstSameColliderLandingBelowEdge(fromSegment, toSegment, exitX, landingTolerance);
             }
 
             if (from.NodeType == PlatformNodeType.LeftEdge)
@@ -567,10 +568,41 @@ namespace ZeroEngine.Pathfinding2D
 
                 float exitX = fromSegment.MinX - exitOffset;
                 return toSegment.ContainsX(exitX, landingTolerance) &&
-                       to.Position.x <= from.Position.x + landingTolerance;
+                       to.Position.x <= from.Position.x + landingTolerance &&
+                       IsFirstSameColliderLandingBelowEdge(fromSegment, toSegment, exitX, landingTolerance);
             }
 
             return false;
+        }
+
+        private bool IsFirstSameColliderLandingBelowEdge(
+            PlatformSurfaceSegment fromSegment,
+            PlatformSurfaceSegment toSegment,
+            float exitX,
+            float landingTolerance)
+        {
+            if (graphGenerator?.SurfaceSegments == null)
+                return false;
+
+            float verticalTolerance = Mathf.Max(0.05f, landingTolerance * 0.1f);
+            foreach (var segment in graphGenerator.SurfaceSegments)
+            {
+                if (segment == null ||
+                    segment.GroupId == fromSegment.GroupId ||
+                    segment.GroupId == toSegment.GroupId ||
+                    segment.Collider != fromSegment.Collider ||
+                    !segment.ContainsX(exitX, landingTolerance))
+                {
+                    continue;
+                }
+
+                bool belowStart = segment.Y < fromSegment.Y - verticalTolerance;
+                bool aboveTarget = segment.Y > toSegment.Y + verticalTolerance;
+                if (belowStart && aboveTarget)
+                    return false;
+            }
+
+            return true;
         }
 
         /// <summary>
