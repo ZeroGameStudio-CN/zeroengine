@@ -85,6 +85,12 @@ namespace ZeroEngine.ModSystem.Tests.Editor
             Assert.That(steamAsmdef, Does.Contain("ZeroEngine.ModSystem"));
             Assert.That(steamAsmdef, Does.Contain("com.rlabrecque.steamworks.net"));
             Assert.That(steamAsmdef, Does.Contain("STEAMWORKS_NET"));
+            Assert.That(steamAsmdef, Does.Contain("\"includePlatforms\""));
+            Assert.That(steamAsmdef, Does.Contain("Editor"));
+            Assert.That(steamAsmdef, Does.Contain("WindowsStandalone64"));
+            Assert.That(steamAsmdef, Does.Contain("LinuxStandalone64"));
+            Assert.That(steamAsmdef, Does.Contain("macOSStandalone"));
+            Assert.That(steamAsmdef, Does.Not.Contain("Android"));
         }
 
         [Test]
