@@ -80,7 +80,7 @@ namespace ZeroEngine.World.Editor.WorldGraph
                 if (block.Contains("m_Enabled: 1")
                     && block.Contains("_sourceId: " + profile.NavigationSourceId)
                     && block.Contains("_requiresBakedNavMeshData: 1")
-                    && block.Contains("guid: " + navMeshGuid))
+                    && ComponentBindsNavMeshData(block.Source, navMeshGuid))
                 {
                     return;
                 }
@@ -91,6 +91,29 @@ namespace ZeroEngine.World.Editor.WorldGraph
                 $"World cell scene must bind baked NavMeshData {navMeshPath}.",
                 scenePath,
                 cellId));
+        }
+
+        private static bool ComponentBindsNavMeshData(string componentBlock, string navMeshGuid)
+        {
+            if (string.IsNullOrWhiteSpace(componentBlock) || string.IsNullOrWhiteSpace(navMeshGuid))
+            {
+                return false;
+            }
+
+            var normalizedBlock = componentBlock.Replace("\r\n", "\n");
+            foreach (var line in normalizedBlock.Split('\n'))
+            {
+                var trimmedLine = line.TrimStart();
+                if (!trimmedLine.StartsWith("_navMeshData:", StringComparison.Ordinal))
+                {
+                    continue;
+                }
+
+                return trimmedLine.Contains("_navMeshData: {fileID:", StringComparison.Ordinal)
+                       && trimmedLine.Contains("guid: " + navMeshGuid, StringComparison.Ordinal);
+            }
+
+            return false;
         }
     }
 }
