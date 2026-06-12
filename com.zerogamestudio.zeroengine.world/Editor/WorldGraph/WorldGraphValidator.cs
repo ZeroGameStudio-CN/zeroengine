@@ -170,6 +170,10 @@ namespace ZeroEngine.World.Editor.WorldGraph
                     {
                         issues.Add(Error("WORLD_STREAMING_BOUNDARY_ID_EMPTY", $"Cell '{cell.CellId}' contains a streaming boundary without a stable id.", contextId: cell.CellId));
                     }
+                    else if (!IsStableId(boundary.BoundaryId))
+                    {
+                        issues.Add(Error("WORLD_STREAMING_BOUNDARY_ID_INVALID_FORMAT", $"Streaming boundary id '{boundary.BoundaryId}' must use stable lowercase id characters.", contextId: boundary.BoundaryId));
+                    }
                     else if (!boundaryIds.Add(boundary.BoundaryId))
                     {
                         issues.Add(Error("WORLD_STREAMING_BOUNDARY_ID_DUPLICATE", $"Duplicate streaming boundary id '{boundary.BoundaryId}'.", contextId: boundary.BoundaryId));
