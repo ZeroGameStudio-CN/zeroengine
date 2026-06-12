@@ -181,8 +181,7 @@ namespace ZeroEngine.World.Tests.Editor
             finally
             {
                 UnityEngine.Object.DestroyImmediate(graph);
-                AssetDatabase.DeleteAsset(QuotedNamesScenePath);
-                AssetDatabase.DeleteAsset(TempFolderPath);
+                EditorTestAssetCleanup.DeleteAssetFolder(TempFolderPath);
             }
         }
 
@@ -267,9 +266,7 @@ namespace ZeroEngine.World.Tests.Editor
             finally
             {
                 UnityEngine.Object.DestroyImmediate(graph);
-                AssetDatabase.DeleteAsset(NavigationScenePath);
-                AssetDatabase.DeleteAsset(NavigationDataPath);
-                AssetDatabase.DeleteAsset(TempFolderPath);
+                EditorTestAssetCleanup.DeleteAssetFolder(TempFolderPath);
             }
         }
 

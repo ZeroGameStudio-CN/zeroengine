@@ -42,7 +42,7 @@ namespace ZeroEngine.World.Tests.Editor
             }
             finally
             {
-                AssetDatabase.DeleteAsset(TempFolderPath);
+                EditorTestAssetCleanup.DeleteAssetFolder(TempFolderPath);
             }
         }
 
@@ -89,7 +89,7 @@ namespace ZeroEngine.World.Tests.Editor
             }
             finally
             {
-                AssetDatabase.DeleteAsset(TempFolderPath);
+                EditorTestAssetCleanup.DeleteAssetFolder(TempFolderPath);
             }
         }
 
