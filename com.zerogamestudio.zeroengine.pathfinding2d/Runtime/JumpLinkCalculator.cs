@@ -237,7 +237,7 @@ namespace ZeroEngine.Pathfinding2D
                     else if (verticalDist < -0.5f && Mathf.Abs(verticalDist) <= config.MaxFallHeight)
                     {
                         // 边缘节点：完整下落检测（水平 + 垂直）
-                        if (isEdgeNode && !fromNode.IsTransitionAnchor && horizontalDist <= config.MaxFallHorizontalDistance)
+                        if (isEdgeNode && CanStartFallFromEdgeNode(fromNode) && horizontalDist <= config.MaxFallHorizontalDistance)
                         {
                             // ★ 终点也必须是边缘节点
                             bool toIsEdge = toNode.NodeType == PlatformNodeType.LeftEdge ||
@@ -493,13 +493,84 @@ namespace ZeroEngine.Pathfinding2D
                     from.PlatformCollider,
                     to.PlatformCollider))
             {
-                return false;
+                if (!CanCreateSameColliderEdgeFallLink(from, to))
+                    return false;
             }
 
             // 创建下落链接
             var link = PlatformLinkData.CreateFall(from.NodeId, to.NodeId, result.FlightTime);
             graphGenerator.Links.Add(link);
             return true;
+        }
+
+        private bool CanStartFallFromEdgeNode(PlatformNodeData node)
+        {
+            if (!node.IsTransitionAnchor)
+                return true;
+
+            if (graphGenerator == null ||
+                node.SurfaceGroupId < 0 ||
+                !graphGenerator.TryGetSurfaceSegment(node.SurfaceGroupId, out var segment))
+            {
+                return false;
+            }
+
+            float edgeTolerance = Mathf.Max(graphGenerator.Config.EdgeInset + 0.1f, 0.25f);
+            return node.NodeType switch
+            {
+                PlatformNodeType.LeftEdge => Mathf.Abs(node.Position.x - segment.MinX) <= edgeTolerance,
+                PlatformNodeType.RightEdge => Mathf.Abs(node.Position.x - segment.MaxX) <= edgeTolerance,
+                _ => false
+            };
+        }
+
+        private bool CanCreateSameColliderEdgeFallLink(PlatformNodeData from, PlatformNodeData to)
+        {
+            if (graphGenerator == null ||
+                from.PlatformCollider == null ||
+                from.PlatformCollider != to.PlatformCollider ||
+                from.SurfaceGroupId < 0 ||
+                to.SurfaceGroupId < 0 ||
+                from.SurfaceGroupId == to.SurfaceGroupId)
+            {
+                return false;
+            }
+
+            if (to.Position.y >= from.Position.y - 0.5f)
+                return false;
+
+            if (!graphGenerator.TryGetSurfaceSegment(from.SurfaceGroupId, out var fromSegment) ||
+                !graphGenerator.TryGetSurfaceSegment(to.SurfaceGroupId, out var toSegment))
+            {
+                return false;
+            }
+
+            float edgeInset = Mathf.Max(0.05f, graphGenerator.Config.EdgeInset);
+            float edgeTolerance = edgeInset + 0.1f;
+            float exitOffset = Mathf.Max(0.05f, edgeInset * 0.5f);
+            float landingTolerance = Mathf.Max(edgeInset + 0.05f, 0.25f);
+
+            if (from.NodeType == PlatformNodeType.RightEdge)
+            {
+                if (Mathf.Abs(from.Position.x - fromSegment.MaxX) > edgeTolerance)
+                    return false;
+
+                float exitX = fromSegment.MaxX + exitOffset;
+                return toSegment.ContainsX(exitX, landingTolerance) &&
+                       to.Position.x >= from.Position.x - landingTolerance;
+            }
+
+            if (from.NodeType == PlatformNodeType.LeftEdge)
+            {
+                if (Mathf.Abs(from.Position.x - fromSegment.MinX) > edgeTolerance)
+                    return false;
+
+                float exitX = fromSegment.MinX - exitOffset;
+                return toSegment.ContainsX(exitX, landingTolerance) &&
+                       to.Position.x <= from.Position.x + landingTolerance;
+            }
+
+            return false;
         }
 
         /// <summary>
