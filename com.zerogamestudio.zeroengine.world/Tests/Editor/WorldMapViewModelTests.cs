@@ -99,7 +99,7 @@ namespace ZeroEngine.World.Tests.Editor
                 out var error,
                 includeOutOfBounds: true), error);
 
-            Assert.That(snapshot.Markers, Has.Count.EqualTo(1));
+            Assert.That(snapshot.Markers.Count, Is.EqualTo(1));
             Assert.False(snapshot.Markers[0].IsInViewport);
             Assert.That(snapshot.Markers[0].NormalizedPosition, Is.EqualTo(Vector2.one).Using(Vector2Comparer.Instance));
         }
