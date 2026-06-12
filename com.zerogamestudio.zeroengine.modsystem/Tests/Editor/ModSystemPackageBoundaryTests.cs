@@ -81,6 +81,7 @@ namespace ZeroEngine.ModSystem.Tests.Editor
         {
             string steamAsmdefPath = Path.Combine(PackageRoot, "Runtime/Steam/ZeroEngine.ModSystem.Steam.asmdef");
             string steamAsmdef = File.ReadAllText(steamAsmdefPath);
+            string steamWorkshopManager = File.ReadAllText(Path.Combine(PackageRoot, "Runtime/Steam/SteamWorkshopManager.cs"));
 
             Assert.That(steamAsmdef, Does.Contain("ZeroEngine.ModSystem"));
             Assert.That(steamAsmdef, Does.Contain("com.rlabrecque.steamworks.net"));
@@ -91,6 +92,9 @@ namespace ZeroEngine.ModSystem.Tests.Editor
             Assert.That(steamAsmdef, Does.Contain("LinuxStandalone64"));
             Assert.That(steamAsmdef, Does.Contain("macOSStandalone"));
             Assert.That(steamAsmdef, Does.Not.Contain("Android"));
+            Assert.That(steamWorkshopManager, Does.Contain("#if STEAMWORKS_NET && !UNITY_ANDROID"));
+            Assert.That(steamWorkshopManager, Does.Not.Contain("#if STEAMWORKS_NET\r"));
+            Assert.That(steamWorkshopManager, Does.Not.Contain("#if STEAMWORKS_NET\n"));
         }
 
         [Test]
