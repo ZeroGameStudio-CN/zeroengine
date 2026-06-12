@@ -4,7 +4,7 @@ using System.IO;
 using System.Threading.Tasks;
 using UnityEngine;
 
-#if STEAMWORKS_NET
+#if STEAMWORKS_NET && !UNITY_ANDROID
 using Steamworks;
 #endif
 
@@ -43,7 +43,7 @@ namespace ZeroEngine.ModSystem.Steam
         public bool IsInitialized => _isInitialized;
         public IReadOnlyList<WorkshopItem> SubscribedItems => _subscribedItems;
         
-#if STEAMWORKS_NET
+#if STEAMWORKS_NET && !UNITY_ANDROID
         private Callback<ItemInstalled_t> _itemInstalledCallback;
         private Callback<DownloadItemResult_t> _downloadResultCallback;
         
