@@ -17,6 +17,13 @@ namespace ZeroEngine.World.Editor.WorldGraph
 
             var issues = new List<AreaAuthoringIssue>();
             issues.AddRange(WorldGraphValidator.Validate(profile.Graph, WorldGraphValidationOptions.StrictProduction));
+            if (profile.ConnectionNetwork != null)
+            {
+                issues.AddRange(WorldGraphConnectionValidator.Validate(
+                    profile.ConnectionNetwork,
+                    profile.ConnectedGraphsById));
+            }
+
             issues.AddRange(ValidateRuntimeBindings(profile));
             issues.AddRange(ValidateTravelCoverage(profile));
             issues.AddRange(WorldAddressablesBindingValidator.Validate(profile));

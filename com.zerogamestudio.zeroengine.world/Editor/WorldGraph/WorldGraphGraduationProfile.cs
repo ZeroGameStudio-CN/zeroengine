@@ -26,7 +26,9 @@ namespace ZeroEngine.World.Editor.WorldGraph
             string geometryContentObjectName,
             string navigationReadinessSourceScriptGuid,
             string navigationSourceId,
-            bool requireStrictNavigationSceneBinding)
+            bool requireStrictNavigationSceneBinding,
+            WorldGraphConnectionNetworkSO connectionNetwork = null,
+            IReadOnlyDictionary<string, WorldGraphSO> connectedGraphsById = null)
         {
             Graph = graph;
             GraphAssetPath = graphAssetPath;
@@ -47,6 +49,8 @@ namespace ZeroEngine.World.Editor.WorldGraph
             NavigationReadinessSourceScriptGuid = navigationReadinessSourceScriptGuid;
             NavigationSourceId = navigationSourceId;
             RequireStrictNavigationSceneBinding = requireStrictNavigationSceneBinding;
+            ConnectionNetwork = connectionNetwork;
+            ConnectedGraphsById = connectedGraphsById ?? new Dictionary<string, WorldGraphSO>();
         }
 
         public WorldGraphSO Graph { get; }
@@ -68,6 +72,8 @@ namespace ZeroEngine.World.Editor.WorldGraph
         public string NavigationReadinessSourceScriptGuid { get; }
         public string NavigationSourceId { get; }
         public bool RequireStrictNavigationSceneBinding { get; }
+        public WorldGraphConnectionNetworkSO ConnectionNetwork { get; }
+        public IReadOnlyDictionary<string, WorldGraphSO> ConnectedGraphsById { get; }
     }
 
     public readonly struct WorldAddressablesGroupContract

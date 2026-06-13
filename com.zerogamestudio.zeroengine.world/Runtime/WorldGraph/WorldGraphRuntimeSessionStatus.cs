@@ -23,6 +23,11 @@ namespace ZeroEngine.World.WorldGraph
         ActiveCellMismatch = 18,
         Traveled = 19,
         LinkNotFound = 20,
-        OriginMismatch = 21
+        OriginMismatch = 21,
+        HandoffCompleted = 22,
+        HandoffConnectionMissing = 23,
+        HandoffConnectionNotWalkable = 24,
+        HandoffTargetLoadFailed = 25,
+        HandoffSwitchFailed = 26
     }
 }
