@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
@@ -94,6 +95,28 @@ namespace ZeroEngine.World.WorldGraph.Tests
         }
 
         [Test]
+        public async Task HandoffAsync_CancellationAfterSwitch_DoesNotCancelSourceCleanup()
+        {
+            var network = CreateNetwork(WorldTravelMode.SeamlessWalk);
+            using var cts = new CancellationTokenSource();
+            var host = new FakeWorldGraphRuntimeHost("world.map_a")
+            {
+                AfterSwitch = cts.Cancel
+            };
+            var service = new WorldGraphSeamlessHandoffService(network, host);
+
+            var result = await service.HandoffAsync(
+                new WorldGraphHandoffRequest("world.map_a", "cell.map_a.exit", "boundary.map_a.to_map_b"),
+                cts.Token);
+
+            Assert.AreEqual(WorldGraphRuntimeSessionStatus.HandoffCompleted, result.Status);
+            Assert.False(host.UnloadTokenCanBeCanceled, "Source cleanup after active graph switch must not be externally cancellable.");
+            CollectionAssert.AreEqual(
+                new[] { "load:world.map_b", "switch:world.map_b", "unload:world.map_a" },
+                host.Calls);
+        }
+
+        [Test]
         public async Task HandoffAsync_ConcurrentRequest_ReturnsBusy()
         {
             var network = CreateNetwork(WorldTravelMode.SeamlessWalk);
@@ -149,6 +172,8 @@ namespace ZeroEngine.World.WorldGraph.Tests
             public WorldGraphRuntimeSessionStatus SwitchResult { get; set; } = WorldGraphRuntimeSessionStatus.Loaded;
             public WorldGraphRuntimeSessionStatus UnloadResult { get; set; } = WorldGraphRuntimeSessionStatus.Unloaded;
             public TaskCompletionSource<bool> LoadGate { get; set; }
+            public Action AfterSwitch { get; set; }
+            public bool UnloadTokenCanBeCanceled { get; private set; }
 
             public async Task<WorldGraphRuntimeSessionResult> LoadTargetAsync(
                 WorldGraphConnectionDefinition connection,
@@ -169,6 +194,7 @@ namespace ZeroEngine.World.WorldGraph.Tests
             {
                 Calls.Add($"switch:{connection.TargetWorldGraphId}");
                 ActiveWorldGraphId = connection.TargetWorldGraphId;
+                AfterSwitch?.Invoke();
                 return Task.FromResult(new WorldGraphRuntimeSessionResult(SwitchResult));
             }
 
@@ -177,6 +203,7 @@ namespace ZeroEngine.World.WorldGraph.Tests
                 CancellationToken cancellationToken)
             {
                 Calls.Add($"unload:{connection.SourceWorldGraphId}");
+                UnloadTokenCanBeCanceled = cancellationToken.CanBeCanceled;
                 return Task.FromResult(new WorldGraphRuntimeSessionResult(UnloadResult));
             }
         }

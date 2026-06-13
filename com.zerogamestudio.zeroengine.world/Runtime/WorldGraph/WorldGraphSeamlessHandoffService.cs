@@ -76,7 +76,7 @@ namespace ZeroEngine.World.WorldGraph
                         switchResult);
                 }
 
-                var unloadSource = await _host.UnloadSourceAsync(connection, cancellationToken);
+                var unloadSource = await _host.UnloadSourceAsync(connection, CancellationToken.None);
                 if (!unloadSource.Succeeded)
                 {
                     return new WorldGraphHandoffResult(
