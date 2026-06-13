@@ -91,6 +91,78 @@ namespace ZeroEngine.TCE.Presentation.Tests.Editor
         }
 
         [Test]
+        public void Runner_SpriteSnapshot_PreservesNegativeRootScale()
+        {
+            var runnerObject = new GameObject(nameof(Runner_SpriteSnapshot_PreservesNegativeRootScale));
+            var texture = new Texture2D(2, 2);
+            var sprite = Sprite.Create(texture, new Rect(0, 0, 2, 2), Vector2.one * 0.5f);
+            TcePresentationHandle handle = null;
+
+            try
+            {
+                var runner = runnerObject.AddComponent<TcePresentationRunner>();
+                var matrix = Matrix4x4.TRS(new Vector3(3f, 4f, 0f), Quaternion.identity, new Vector3(-1f, 1f, 1f));
+                var snapshot = new TceSpriteSnapshot(matrix, 0, sprite, 0, 0);
+
+                handle = runner.Play(snapshot, new TcePresentationPlaybackSettings { Duration = 1f }, new FakeClock(0f));
+
+                Transform root = FindTransform("Tce Sprite Snapshot");
+                Assert.IsNotNull(root);
+                Assert.Less(root.localScale.x, 0f);
+                Assert.AreEqual(1f, Mathf.Abs(root.localScale.x), 0.0001f);
+                Assert.AreEqual(1f, root.localScale.y, 0.0001f);
+                Assert.AreEqual(1f, root.localScale.z, 0.0001f);
+                AssertQuaternion(Quaternion.identity, root.rotation);
+            }
+            finally
+            {
+                handle?.Dispose();
+                Object.DestroyImmediate(sprite);
+                Object.DestroyImmediate(texture);
+                Object.DestroyImmediate(runnerObject);
+            }
+        }
+
+        [Test]
+        public void Runner_SpriteLayerSnapshot_PreservesNegativeRootScale()
+        {
+            var runnerObject = new GameObject(nameof(Runner_SpriteLayerSnapshot_PreservesNegativeRootScale));
+            var texture = new Texture2D(2, 2);
+            var sprite = Sprite.Create(texture, new Rect(0, 0, 2, 2), Vector2.one * 0.5f);
+            TcePresentationHandle handle = null;
+
+            try
+            {
+                var runner = runnerObject.AddComponent<TcePresentationRunner>();
+                var matrix = Matrix4x4.TRS(new Vector3(3f, 4f, 0f), Quaternion.identity, new Vector3(-1f, 1f, 1f));
+                var snapshot = new TceSpriteLayerSnapshot(
+                    matrix,
+                    0,
+                    new[]
+                    {
+                        new TceSpriteLayerFrame(sprite, true, 0, 12, Vector3.zero, Quaternion.identity, Vector3.one)
+                    });
+
+                handle = runner.Play(snapshot, new TcePresentationPlaybackSettings { Duration = 1f }, new FakeClock(0f));
+
+                Transform root = FindTransform("Tce Sprite Layer Snapshot");
+                Assert.IsNotNull(root);
+                Assert.Less(root.localScale.x, 0f);
+                Assert.AreEqual(1f, Mathf.Abs(root.localScale.x), 0.0001f);
+                Assert.AreEqual(1f, root.localScale.y, 0.0001f);
+                Assert.AreEqual(1f, root.localScale.z, 0.0001f);
+                AssertQuaternion(Quaternion.identity, root.rotation);
+            }
+            finally
+            {
+                handle?.Dispose();
+                Object.DestroyImmediate(sprite);
+                Object.DestroyImmediate(texture);
+                Object.DestroyImmediate(runnerObject);
+            }
+        }
+
+        [Test]
         public void Runner_UsesClockDeltaWithoutDotweenDependency()
         {
             foreach (string file in Directory.GetFiles($"{PackagePath}/Runtime", "*.cs", SearchOption.AllDirectories))
@@ -470,6 +542,14 @@ namespace ZeroEngine.TCE.Presentation.Tests.Editor
             Assert.AreEqual(expected.g, actual.g, 0.0001f);
             Assert.AreEqual(expected.b, actual.b, 0.0001f);
             Assert.AreEqual(expected.a, actual.a, 0.0001f);
+        }
+
+        private static void AssertQuaternion(Quaternion expected, Quaternion actual)
+        {
+            Assert.AreEqual(expected.x, actual.x, 0.0001f);
+            Assert.AreEqual(expected.y, actual.y, 0.0001f);
+            Assert.AreEqual(expected.z, actual.z, 0.0001f);
+            Assert.AreEqual(expected.w, actual.w, 0.0001f);
         }
 
         private static Mesh CreateTriangleMesh(string name)

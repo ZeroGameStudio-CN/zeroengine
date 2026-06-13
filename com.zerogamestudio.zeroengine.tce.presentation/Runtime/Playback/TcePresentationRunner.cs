@@ -167,9 +167,50 @@ namespace ZeroEngine.TCE.Presentation
             {
                 var root = new GameObject(name) { layer = layer };
                 Vector4 column = matrix.GetColumn(3);
-                root.transform.SetPositionAndRotation(new Vector3(column.x, column.y, column.z), matrix.rotation);
-                root.transform.localScale = matrix.lossyScale;
+                Vector3 scale = ExtractSignedScale(matrix);
+                root.transform.SetPositionAndRotation(new Vector3(column.x, column.y, column.z), ExtractRotation(matrix, scale));
+                root.transform.localScale = scale;
                 return root;
+            }
+
+            private static Vector3 ExtractSignedScale(Matrix4x4 matrix)
+            {
+                var scale = new Vector3(
+                    GetColumnMagnitude(matrix, 0),
+                    GetColumnMagnitude(matrix, 1),
+                    GetColumnMagnitude(matrix, 2));
+
+                if (matrix.determinant < 0f)
+                    scale.x = -scale.x;
+
+                return scale;
+            }
+
+            private static Quaternion ExtractRotation(Matrix4x4 matrix, Vector3 signedScale)
+            {
+                if (Mathf.Approximately(signedScale.x, 0f)
+                    || Mathf.Approximately(signedScale.y, 0f)
+                    || Mathf.Approximately(signedScale.z, 0f))
+                    return matrix.rotation;
+
+                NormalizeColumn(ref matrix, 0, signedScale.x);
+                NormalizeColumn(ref matrix, 1, signedScale.y);
+                NormalizeColumn(ref matrix, 2, signedScale.z);
+                return matrix.rotation;
+            }
+
+            private static void NormalizeColumn(ref Matrix4x4 matrix, int index, float scale)
+            {
+                Vector4 column = matrix.GetColumn(index);
+                column /= scale;
+                column.w = 0f;
+                matrix.SetColumn(index, column);
+            }
+
+            private static float GetColumnMagnitude(Matrix4x4 matrix, int index)
+            {
+                Vector4 column = matrix.GetColumn(index);
+                return new Vector3(column.x, column.y, column.z).magnitude;
             }
 
             private Matrix4x4 GetPlaybackMatrix(Matrix4x4 matrix, float progress)
