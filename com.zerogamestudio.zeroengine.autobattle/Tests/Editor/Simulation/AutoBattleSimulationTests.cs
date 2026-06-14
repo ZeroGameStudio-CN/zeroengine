@@ -95,6 +95,44 @@ namespace ZeroEngine.AutoBattle.Tests.Editor.Simulation
             Assert.AreEqual(SimulationBattleResult.Timeout, simulation.Advance(1.1f));
         }
 
+        [Test]
+        public void BattleSimulation_AdvanceTick_MovesUnitTowardTarget()
+        {
+            var layout = new GridBattleSimulationLayout(5, 5);
+            var resolver = new TestActionResolver();
+            var simulation = new BattleSimulation(layout, resolver);
+            var player = Unit("player", SimulationTeam.Player, SimulationUnitRole.Damage, 100f, 100f, 0, 0);
+            var enemy = Unit("enemy", SimulationTeam.Enemy, SimulationUnitRole.Damage, 100f, 100f, 3, 0);
+            simulation.AddUnit(player);
+            simulation.AddUnit(enemy);
+
+            var result = simulation.AdvanceTick();
+
+            Assert.AreEqual(SimulationBattleResult.InProgress, result);
+            Assert.AreEqual(1, player.Row);
+            Assert.AreEqual(0, player.Col);
+            Assert.AreEqual(0, resolver.BasicAttackCount);
+        }
+
+        [Test]
+        public void BattleSimulation_AdvanceTick_UsesResolverWhenInRange()
+        {
+            var layout = new GridBattleSimulationLayout(5, 5);
+            var resolver = new TestActionResolver();
+            var simulation = new BattleSimulation(layout, resolver);
+            var player = Unit("player", SimulationTeam.Player, SimulationUnitRole.Damage, 100f, 100f, 0, 0);
+            var enemy = Unit("enemy", SimulationTeam.Enemy, SimulationUnitRole.Damage, 100f, 100f, 1, 0);
+            simulation.AddUnit(player);
+            simulation.AddUnit(enemy);
+
+            var result = simulation.AdvanceTick();
+
+            Assert.AreEqual(SimulationBattleResult.PlayerWin, result);
+            Assert.AreEqual(1, resolver.BasicAttackCount);
+            Assert.AreEqual("player", resolver.LastAttackerId);
+            Assert.AreEqual("enemy", resolver.LastTargetId);
+        }
+
         private static TestSimulationUnit Unit(
             string id,
             SimulationTeam team,
@@ -106,6 +144,21 @@ namespace ZeroEngine.AutoBattle.Tests.Editor.Simulation
             int attackRange = 1)
         {
             return new TestSimulationUnit(id, team, role, currentHealth, maxHealth, row, col, attackRange);
+        }
+
+        private sealed class TestActionResolver : IBattleSimulationActionResolver
+        {
+            public int BasicAttackCount { get; private set; }
+            public string LastAttackerId { get; private set; }
+            public string LastTargetId { get; private set; }
+
+            public void ResolveAction(ISimulationUnit actor, ISimulationUnit target, BattleSimulationContext context)
+            {
+                BasicAttackCount++;
+                LastAttackerId = actor.UnitId;
+                LastTargetId = target.UnitId;
+                target.ApplyDamage(target.CurrentHealth, actor);
+            }
         }
 
         private sealed class TestSimulationUnit : ISimulationUnit
