@@ -34,5 +34,33 @@ namespace ZeroEngine.TCE.Tests.Editor
             Assert.AreEqual(2, (int)TceComponentDocCategory.Effect);
             Assert.AreEqual(3, Enum.GetValues(typeof(TceComponentDocCategory)).Length);
         }
+
+        [Test]
+        public void TceValidationSeverity_HasStableValues()
+        {
+            Assert.AreEqual(0, (int)TceValidationSeverity.Info);
+            Assert.AreEqual(1, (int)TceValidationSeverity.Warning);
+            Assert.AreEqual(2, (int)TceValidationSeverity.Error);
+            Assert.AreEqual(3, Enum.GetValues(typeof(TceValidationSeverity)).Length);
+        }
+
+        [Test]
+        public void TceFlagLookupTarget_HasStableValues()
+        {
+            Assert.AreEqual(0, (int)TceFlagLookupTarget.Owner);
+            Assert.AreEqual(1, (int)TceFlagLookupTarget.TriggerTarget);
+            Assert.AreEqual(2, (int)TceFlagLookupTarget.Source);
+            Assert.AreEqual(3, Enum.GetValues(typeof(TceFlagLookupTarget)).Length);
+        }
+
+        [Test]
+        public void TceRandomLookupTarget_HasStableValues()
+        {
+            Assert.AreEqual(0, (int)TceRandomLookupTarget.Owner);
+            Assert.AreEqual(1, (int)TceRandomLookupTarget.TriggerTarget);
+            Assert.AreEqual(2, (int)TceRandomLookupTarget.InstallSource);
+            Assert.AreEqual(3, (int)TceRandomLookupTarget.TriggerSource);
+            Assert.AreEqual(4, Enum.GetValues(typeof(TceRandomLookupTarget)).Length);
+        }
     }
 }

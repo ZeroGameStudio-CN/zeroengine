@@ -22,9 +22,10 @@ namespace ZeroEngine.TCE
     }
 
     [Serializable]
-    [TceComponentDoc(TceComponentDocCategory.Effect, "Debug Log", "Writes a message through the TCE log hook.", "Use this effect in tests, examples, and adapter smoke checks. Production gameplay should prefer project-specific effects.")]
+    [TceComponentDoc(TceComponentDocCategory.Effect, "zeroengine.tce.effect.debug_log", "Debug Log", "Writes a message through the TCE log hook.", "Use this effect in tests, examples, and adapter smoke checks. Production gameplay should prefer project-specific effects.")]
     public sealed class DebugLogEffectData : TceEffectData<DebugLogEffect>
     {
+        [TceFieldDoc("Log message emitted when the effect runs.")]
         public string Message = string.Empty;
     }
 }

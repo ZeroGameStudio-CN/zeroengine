@@ -10,6 +10,7 @@ namespace ZeroEngine.TCE
     [Serializable]
     public abstract class TceTriggerData : TceComponentData
     {
+        [TceFieldDoc("Trigger ordering value used by authoring tools and docs.")]
         public int Order;
     }
 
@@ -33,6 +34,7 @@ namespace ZeroEngine.TCE
     [Serializable]
     public abstract class TceEffectData : TceComponentData
     {
+        [TceFieldDoc("Target actor selection used by the effect.")]
         public TceTargetMode Target = TceTargetMode.FromTrigger;
     }
 
