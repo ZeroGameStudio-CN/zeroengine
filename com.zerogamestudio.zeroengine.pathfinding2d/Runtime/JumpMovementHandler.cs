@@ -118,6 +118,13 @@ namespace ZeroEngine.Pathfinding2D
             // 计算所需的 X 速度
             float requiredVelocityX = deltaX / totalTime;
 
+            // 水平速度不能超过角色实际移动能力
+            float maxHorizontalSpeed = maxJumpVelocity * 0.6f;
+            if (Mathf.Abs(requiredVelocityX) > maxHorizontalSpeed)
+            {
+                return JumpCalculationResult.NotReachable;
+            }
+
             // 生成轨迹点
             var trajectory = GenerateTrajectory(start, requiredVelocityX, requiredVelocityY, gravity, totalTime);
 

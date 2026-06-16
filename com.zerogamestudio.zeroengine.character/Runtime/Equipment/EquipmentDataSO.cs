@@ -12,8 +12,8 @@ namespace ZeroEngine.Equipment
     [Serializable]
     public class StatModifierData
     {
-        [Tooltip("属性类型")]
-        public StatType StatType;
+        [Tooltip("属性 ID")]
+        public StatId StatId;
 
         [Tooltip("修饰类型")]
         public StatModType ModType = StatModType.Flat;
@@ -41,6 +41,18 @@ namespace ZeroEngine.Equipment
         }
     }
 
+    public readonly struct EquipmentStatModifier
+    {
+        public EquipmentStatModifier(StatId statId, StatModifier modifier)
+        {
+            StatId = statId;
+            Modifier = modifier;
+        }
+
+        public StatId StatId { get; }
+        public StatModifier Modifier { get; }
+    }
+
     /// <summary>
     /// 装备数据定义
     /// 继承自 InventoryItemSO，扩展装备特有属性
@@ -56,8 +68,8 @@ namespace ZeroEngine.Equipment
         public EquipmentSetSO BelongsToSet;
 
         [Header("属性")]
-        [Tooltip("基础属性列表")]
-        public List<StatModifierData> BaseStats = new List<StatModifierData>();
+        [Tooltip("属性修饰列表")]
+        public List<StatModifierData> StatModifiers = new List<StatModifierData>();
 
         [Header("强化配置")]
         [Tooltip("最大强化等级")]

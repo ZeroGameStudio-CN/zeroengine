@@ -1,4 +1,5 @@
 using System;
+using ZeroEngine.Economy;
 
 namespace ZeroEngine.Loot
 {
@@ -127,6 +128,10 @@ namespace ZeroEngine.Loot
 
         /// <summary>自定义数据</summary>
         public System.Collections.Generic.Dictionary<string, object> CustomData;
+
+        public IInventoryProvider InventoryProvider;
+        public ICurrencyProvider CurrencyProvider;
+        public IExternalSystemProvider ExternalSystemProvider;
 
         public LootContext()
         {

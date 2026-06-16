@@ -96,6 +96,14 @@ namespace ZeroEngine.Cinematic
                 }
             }
 
+            var context = new CinematicPlaybackContext(request, sequence);
+            var services = projectServices ?? CinematicProjectPlaybackServices.None;
+            var enterResult = services.Enter(context);
+            if (enterResult.Status != CinematicPlayStatus.None)
+            {
+                return enterResult;
+            }
+
             director.playableAsset = sequence.TimelineAsset;
             for (var i = 0; i < bindingRequirements.Count; i++)
             {
@@ -104,14 +112,6 @@ namespace ZeroEngine.Cinematic
                 {
                     director.SetGenericBinding(requirement.Track, binding);
                 }
-            }
-
-            var context = new CinematicPlaybackContext(request, sequence);
-            var services = projectServices ?? CinematicProjectPlaybackServices.None;
-            var enterResult = services.Enter(context);
-            if (enterResult.Status != CinematicPlayStatus.None)
-            {
-                return enterResult;
             }
 
             _activeContext = context;

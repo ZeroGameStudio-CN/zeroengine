@@ -12,10 +12,6 @@ using UnityEngine.AddressableAssets;
 using UnityEngine.ResourceManagement.AsyncOperations;
 #endif
 
-#if ODIN_INSPECTOR
-using Sirenix.OdinInspector;
-#endif
-
 namespace ZeroEngine.Pool
 {
     /// <summary>
@@ -42,14 +38,8 @@ namespace ZeroEngine.Pool
         [Serializable]
         private class SmartPool
         {
-#if ODIN_INSPECTOR
-            [ShowInInspector, ReadOnly]
-#endif
             private readonly Queue<GameObject> _queue = new();
 
-#if ODIN_INSPECTOR
-            [ShowInInspector, ReadOnly]
-#endif
             private readonly HashSet<GameObject> _activeObjects = new();
 
             private readonly GameObject _prefab;
@@ -132,15 +122,9 @@ namespace ZeroEngine.Pool
 
         #endregion
 
-#if ODIN_INSPECTOR
-        [ShowInInspector, ReadOnly, FoldoutGroup("Pools Overview")]
-#endif
         private readonly Dictionary<int, SmartPool> _poolsById = new();
 
 #if ADDRESSABLES_ENABLED
-#if ODIN_INSPECTOR
-        [ShowInInspector, ReadOnly, FoldoutGroup("Pools Overview")]
-#endif
         private readonly Dictionary<string, SmartPool> _poolsByAddressableKey = new();
 #endif
 

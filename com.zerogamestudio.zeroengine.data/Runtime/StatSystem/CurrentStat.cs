@@ -8,10 +8,16 @@ namespace ZeroEngine.StatSystem
     /// </summary>
     public enum IncreaseType
     {
+        /// <summary>只重新夹取当前值，不主动增加或保持百分比</summary>
+        None,
         /// <summary>按固定值增加</summary>
         Flat,
+        /// <summary>按修饰器原始值增加当前值</summary>
+        Increase,
         /// <summary>按百分比增加</summary>
-        Percent
+        Percent,
+        /// <summary>只影响当前值，不影响最大值</summary>
+        CurrentOnly
     }
 
     /// <summary>
@@ -39,7 +45,7 @@ namespace ZeroEngine.StatSystem
         /// <summary>
         /// 当前值（整数）
         /// </summary>
-        public int CurrentValueInt => _roundValues ? Mathf.RoundToInt(_currentValue) : (int)_currentValue;
+        public int CurrentValueInt => _roundValues ? RoundToIntSaturated(_currentValue) : (int)_currentValue;
 
         /// <summary>
         /// 当前值（浮点）
@@ -49,7 +55,7 @@ namespace ZeroEngine.StatSystem
         /// <summary>
         /// 最大值（整数）- 覆盖基类
         /// </summary>
-        public new int MaxValueInt => _roundValues ? Mathf.RoundToInt(Value) : (int)Value;
+        public new int MaxValueInt => _roundValues ? RoundToIntSaturated(Value) : (int)Value;
 
         /// <summary>
         /// 最大值（浮点，来自 Stat.Value）
@@ -119,6 +125,14 @@ namespace ZeroEngine.StatSystem
         /// <param name="increaseType">当前值调整方式</param>
         public void AddModifier(StatModifier modifier, object source, IncreaseType increaseType = IncreaseType.Flat)
         {
+            if (modifier == null) return;
+
+            if (increaseType == IncreaseType.CurrentOnly)
+            {
+                IncreaseCurrent(modifier.GetValue());
+                return;
+            }
+
             float oldMax = MaxValue;
             modifier.Source = source;
             base.AddModifier(modifier);
@@ -130,6 +144,14 @@ namespace ZeroEngine.StatSystem
                 // 保持百分比
                 float percent = _currentValue / oldMax;
                 _currentValue = percent * newMax;
+            }
+            else if (increaseType == IncreaseType.Increase)
+            {
+                _currentValue += modifier.GetValue();
+            }
+            else if (increaseType == IncreaseType.None)
+            {
+                // Do not actively change current value.
             }
             else
             {
@@ -150,17 +172,56 @@ namespace ZeroEngine.StatSystem
         /// </summary>
         public override bool RemoveModifier(StatModifier mod)
         {
-            float oldMax = MaxValue;
             bool removed = base.RemoveModifier(mod);
 
             if (removed)
             {
-                float newMax = MaxValue;
-                _currentValue = Mathf.Clamp(_currentValue, 0, newMax);
-                OnValueChange?.Invoke(_currentValue, newMax);
+                ClampCurrentAfterMaxChange(false, 0f);
             }
 
             return removed;
+        }
+
+        public override bool RemoveModifier(StatModifier mod, object source)
+        {
+            return RemoveModifier(mod, source, false);
+        }
+
+        public bool RemoveModifier(StatModifier mod, object source, bool preservePercent)
+        {
+            float oldPercent = Percent;
+            bool removed = base.RemoveModifier(mod, source);
+            if (removed)
+            {
+                ClampCurrentAfterMaxChange(preservePercent, oldPercent);
+            }
+
+            return removed;
+        }
+
+        public override bool RemoveAllModifiersFromSource(object source)
+        {
+            return RemoveAllModifiersFromSource(source, false);
+        }
+
+        public bool RemoveAllModifiersFromSource(object source, bool preservePercent)
+        {
+            float oldPercent = Percent;
+            bool removed = base.RemoveAllModifiersFromSource(source);
+            if (removed)
+            {
+                ClampCurrentAfterMaxChange(preservePercent, oldPercent);
+            }
+
+            return removed;
+        }
+
+        public override void RemoveAllModifiers()
+        {
+            if (ModifierCount == 0) return;
+
+            base.RemoveAllModifiers();
+            ClampCurrentAfterMaxChange(false, 0f);
         }
 
         /// <summary>
@@ -169,6 +230,13 @@ namespace ZeroEngine.StatSystem
         public void RestoreToFull()
         {
             SetCurrent(MaxValue);
+        }
+
+        private void ClampCurrentAfterMaxChange(bool preservePercent, float oldPercent)
+        {
+            float newMax = MaxValue;
+            _currentValue = preservePercent ? oldPercent * newMax : Mathf.Clamp(_currentValue, 0, newMax);
+            OnValueChange?.Invoke(_currentValue, newMax);
         }
 
         /// <summary>

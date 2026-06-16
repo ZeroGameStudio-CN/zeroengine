@@ -2,15 +2,27 @@
 
 > **用途**: 本文档面向AI助手，提供AbilitySystem模块的快速参考。
 
+## 毕业线说明
+
+新 TCE 正式线是 `AbilityDefinition` + `AbilityExecutor` + `IAbilityRuntimeServices`：
+
+- `AbilityDefinition` 保存稳定 ID、触发器、条件、效果、消耗、冷却和 Boost 配置。
+- `AbilityExecutor` 负责统一检查等级、冷却、资源、条件、效果执行和结构化结果。
+- `IAbilityRuntimeServices` 由项目侧适配资源、阵营、Buff、伤害和治疗；`IAbilityStatRuntimeServices` 是属性条件的可选扩展。
+- `AbilityDefinitionValidator` 是运行时/编辑器共用的配置校验入口。
+
+旧 `AbilityDataSO` / `AbilityHandler` / `ComponentData` 组件线只保留 legacy 兼容，已标记 `Obsolete`；新项目内容和编辑器工具不要再扩展旧线。
+
 ---
 
 ## 目录结构
 
 ```
 AbilitySystem/
-├── AbilityDataSO.cs      # 技能数据（ScriptableObject）
-├── AbilityComponents.cs  # 触发器/条件/效果组件
-├── AbilityHandler.cs     # (v1.1.0 重写) 技能施放系统 + AbilityInstance
+├── AbilityDefinition.cs  # 正式 TCE 数据、执行器、结果和 runtime service contract
+├── AbilityDataSO.cs      # legacy 技能数据（Obsolete）
+├── AbilityComponents.cs  # legacy 触发器/条件/效果组件（Obsolete）
+├── AbilityHandler.cs     # legacy 技能施放系统（Obsolete）
 └── ...
 ```
 

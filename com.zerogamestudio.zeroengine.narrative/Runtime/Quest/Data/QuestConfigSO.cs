@@ -64,10 +64,13 @@ namespace ZeroEngine.Quest
                 previews.Add($"经验值 +{expReward}");
             if (goldReward > 0)
                 previews.Add($"金币 +{goldReward}");
-            foreach (var itemId in itemRewards)
+            if (itemRewards != null)
             {
-                if (!string.IsNullOrEmpty(itemId))
-                    previews.Add(itemId);
+                foreach (var itemId in itemRewards)
+                {
+                    if (!string.IsNullOrEmpty(itemId))
+                        previews.Add(itemId);
+                }
             }
 
             // New rewards
@@ -147,11 +150,14 @@ namespace ZeroEngine.Quest
                 });
             }
 
-            foreach (var itemId in itemRewards)
+            if (itemRewards != null)
             {
-                if (!string.IsNullOrEmpty(itemId))
+                foreach (var itemId in itemRewards)
                 {
-                    Rewards.Add(new ItemReward { ItemId = itemId, Quantity = 1 });
+                    if (!string.IsNullOrEmpty(itemId))
+                    {
+                        Rewards.Add(new ItemReward { ItemId = itemId, Quantity = 1 });
+                    }
                 }
             }
 

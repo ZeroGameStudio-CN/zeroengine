@@ -1,27 +1,96 @@
 # ZeroEngine.StatSystem API 文档
 
-> **用途**: 本文档面向AI助手，提供StatSystem模块的快速参考。
+> 面向 AI 助手和玩法工程的快速参考。StatSystem 是 ZE 通用属性底座，属性身份使用 `StatId` 字符串值，不再提供 enum 桥接或旧字段兼容层。
 
----
+## 毕业线说明
+
+- `StatId` 是跨角色、装备、Buff、TCE、AI 和编辑器的唯一属性身份。
+- `StatCatalogSO` 负责属性定义、展示名、分组、排序、数值类型和 Excel 列映射。
+- `StatBlock` 是可序列化的 `{ StatId, Value }` 配置块，用于角色、敌人、成长、导入导出和项目侧数据。
+- `Stats` 是运行时属性容器，按 `StatId` 管理 `Stat` / `CurrentStat`，并支持批量修饰器增删。
+- `StatController` 是 MonoBehaviour 入口，适合组件化实体直接挂载。
 
 ## 目录结构
 
-```
+```text
 StatSystem/
-├── Stat.cs              # 属性类和修饰器
-├── StatController.cs    # 属性控制器
-├── StatType.cs          # 属性类型枚举
-└── Formula/
-    └── MathFormula.cs   # 公式计算
+├── Stat.cs              # 单个属性、修饰器、事件和有限数值保护
+├── CurrentStat.cs       # HP/MP 这类当前值 + 最大值属性
+├── StatDefinitions.cs   # StatId、StatDefinition、IStatProvider
+├── StatCatalogSO.cs     # 属性目录 ScriptableObject
+├── StatBlock.cs         # 可序列化属性值块
+├── Stats.cs             # 运行时属性容器
+├── StatController.cs    # MonoBehaviour 属性控制器
+└── MathFormula.cs       # 公式计算
 ```
 
----
+## 核心类型
 
-## Stat.cs
+```csharp
+[Serializable]
+public struct StatId : IEquatable<StatId>
+{
+    public string Value { get; }
+    public bool IsEmpty { get; }
+    public static implicit operator StatId(string value);
+    public static implicit operator string(StatId id);
+}
 
-**用途**: 单个属性及其修饰器
+public enum StatValueKind
+{
+    Integer,
+    Float,
+    Percent,
+    Multiplier
+}
 
-### StatModifier
+[Serializable]
+public sealed class StatDefinition
+{
+    public StatId Id;
+    public string DisplayName;
+    public string Group;
+    public int SortOrder;
+    public StatValueKind ValueKind;
+    public float DefaultValue;
+    public float MinValue;
+    public float MaxValue;
+    public string ExcelColumn;
+    public bool ShowInCharacterEditor;
+}
+
+public interface IStatProvider
+{
+    float GetStatValue(StatId id);
+}
+```
+
+`StatId` 会 trim 并转小写。项目侧推荐集中定义常量，例如 `P5StatIds.Offense.Attack`，编辑器通过 `StatCatalogSO` 提供下拉选择。
+
+## StatBlock
+
+```csharp
+[Serializable]
+public sealed class StatBlock
+{
+    IReadOnlyList<StatValueEntry> Values { get; }
+    int Count { get; }
+
+    float Get(StatId id, float fallback = 0f);
+    bool TryGet(StatId id, out float value);
+    void Set(StatId id, float value);
+    void Add(StatId id, float delta);
+    bool Remove(StatId id);
+    void Clear();
+    StatBlock Clone();
+    StatBlock Scaled(float multiplier);
+    StatBlock Merged(StatBlock other);
+    Dictionary<StatId, float> ToDictionary();
+    static StatBlock FromDictionary(Dictionary<StatId, float> values);
+}
+```
+
+## Stat / StatModifier
 
 ```csharp
 [Serializable]
@@ -29,199 +98,106 @@ public class StatModifier
 {
     public float Value;
     public StatModType ModType;    // Flat, PercentAdd, PercentMult
-    public int Order;              // 计算顺序
-    public object Source;          // 来源（用于追踪/移除）
-    public MathFormula Formula;    // 可选公式
-    
-    StatModifier(float value, StatModType type, int order = default, object source = null);
-    float GetValue(MathContext ctx = null);  // 支持公式计算
+    public int Order;
+    public object Source;
+    public MathFormula Formula;
+
+    float GetValue(MathContext ctx = null);
+    bool NeedsRuntimeValue { get; }
+    StatModifier CreateRuntime(MathContext ctx);
 }
-```
 
-### StatChangedEventArgs (v1.1.0+)
-
-```csharp
-public struct StatChangedEventArgs
-{
-    public float OldValue;
-    public float NewValue;
-    public float Delta { get; }  // NewValue - OldValue
-}
-```
-
-### Stat
-
-```csharp
 [Serializable]
 public class Stat
 {
     public float BaseValue;
-    public float MinValue = float.MinValue;  // 最终值下限
-    public float MaxValue = float.MaxValue;  // 最终值上限
-    public float Value { get; }  // 计算后的最终值（缓存，受上下限约束）
+    public float MinValue;
+    public float MaxValue;
+    public float Value { get; }
 
-    // 事件 (v1.1.0+)
-    event Action<StatChangedEventArgs> OnValueChanged;  // 值变化时触发
-
-    Stat();
-    Stat(float baseValue);
-    Stat(float baseValue, float minValue, float maxValue);  // 带上下限构造
+    event Action<StatChangedEventArgs> OnValueChanged;
 
     void AddModifier(StatModifier mod);
+    void AddModifier(StatModifier mod, object source);
     bool RemoveModifier(StatModifier mod);
+    bool RemoveModifier(StatModifier mod, object source);
+    bool RemoveAllModifiersFromSource(object source);
+    void RemoveAllModifiers();
+    void ForceRecalculate();
+    void ClearEventListeners();
+}
+```
+
+计算公式：`Clamp((Base + Flat) * (1 + PercentAdd) * PercentMult, MinValue, MaxValue)`。
+
+## Stats
+
+```csharp
+public class Stats
+{
+    int Count { get; }
+
+    Stat GetStat(StatId id);
+    T GetStat<T>(StatId id) where T : Stat;
+    T GetOrCreateAndInit<T>(StatId id, Action<T> initAction) where T : Stat, new();
+    T AddStat<T>(StatId id) where T : Stat, new();
+    void SetStat(StatId id, Stat stat);
+
+    bool TryGetStatValue(StatId id, out float value);
+    float GetStatValue(StatId id, float fallback = 0f);
+    Dictionary<StatId, float> GetValuesSnapshot();
+    StatBlock ToStatBlock();
+
+    void AddStatModifier(
+        Dictionary<StatId, List<StatModifier>> data,
+        object source,
+        Func<StatId, Stat> forceAddFactory = null,
+        MathContext ctx = null,
+        Func<StatId, IncreaseType> increaseTypeResolver = null);
+
+    void RemoveStatModifier(Dictionary<StatId, List<StatModifier>> data, object source, bool preserveCurrentPercent = false);
     void RemoveAllModifiersFromSource(object source);
-
-    // 新增 (v1.1.0+)
-    void ForceRecalculate();      // 强制重新计算并触发事件
-    void ClearEventListeners();   // 清理事件订阅（销毁时调用）
+    void Clear();
 }
 ```
 
-**计算公式**: `Clamp((Base + Flat) × (1 + PercentAdd) × PercentMult, MinValue, MaxValue)`
-
----
-
-## StatModType
-
-```csharp
-public enum StatModType
-{
-    Flat = 100,        // 加法
-    PercentAdd = 200,  // 百分比加法（累加后乘）
-    PercentMult = 300  // 百分比乘法（连乘）
-}
-```
-
-**示例**:
-```
-Base = 100
-+20 Flat → 120
-+0.5 PercentAdd (+50%) → 180
-×1.2 PercentMult → 216
-```
-
----
-
-## StatController.cs
-
-**用途**: 管理实体的所有属性
-
-### StatControllerChangedEventArgs (v1.1.0+)
-
-```csharp
-public struct StatControllerChangedEventArgs
-{
-    public StatType StatType;
-    public float OldValue;
-    public float NewValue;
-    public float Delta { get; }  // NewValue - OldValue
-}
-```
-
-### StatController
+## StatController
 
 ```csharp
 public class StatController : MonoBehaviour, IStatProvider
 {
-    // 事件 (v1.1.0+)
-    event Action<StatControllerChangedEventArgs> OnAnyStatChanged;  // 任意属性变化时触发
+    event Action<StatControllerChangedEventArgs> OnAnyStatChanged;
 
-    // 初始化 (v1.1.0+ 重载)
-    void InitStat(StatType type, float baseValue);
-    void InitStat(StatType type, float baseValue, float minValue, float maxValue);  // 带约束
-
-    // 获取属性
-    Stat GetStat(StatType type);
-    float GetStatValue(StatType type);
-
-    // 修饰器操作
-    void AddModifier(StatType type, StatModifier mod);
-    void RemoveModifier(StatType type, StatModifier mod);
-
-    // 刷新 (v1.1.0+)
-    void RefreshAllStats();  // 强制重新计算所有属性并触发事件
+    void InitStat(StatId id, float baseValue);
+    void InitStat(StatId id, float baseValue, float minValue, float maxValue);
+    Stat GetStat(StatId id);
+    float GetStatValue(StatId id);
+    void AddModifier(StatId id, StatModifier mod);
+    void RemoveModifier(StatId id, StatModifier mod);
+    void RefreshAllStats();
+    StatControllerSaveData ExportSaveData();
+    void ImportSaveData(StatControllerSaveData data);
+    void ResetStats();
 }
 ```
-
----
-
-## StatType（示例）
-
-```csharp
-public enum StatType
-{
-    MaxHealth,
-    MaxMana,
-    Attack,
-    Defense,
-    Speed,
-    CritRate,
-    CritDamage,
-    // 项目可扩展
-}
-```
-
----
-
-## MathFormula.cs
-
-**用途**: ScriptableObject公式，支持动态计算
-
-```csharp
-[CreateAssetMenu(menuName = "ZeroEngine/Stat System/Math Formula")]
-public class MathFormula : ScriptableObject
-{
-    public string Expression;  // 如 "base * 1.5 + level * 10"
-    
-    float Evaluate(MathContext ctx);
-}
-
-public class MathContext
-{
-    Dictionary<string, float> Variables;
-    
-    void Set(string name, float value);
-    float Get(string name);
-}
-```
-
----
 
 ## 使用示例
 
 ```csharp
-// 添加修饰器
-var attackBuff = new StatModifier(50, StatModType.Flat, source: buffHandler);
-statController.AddModifier(StatType.Attack, attackBuff);
+static readonly StatId Attack = "offense.attack";
+static readonly StatId CritRate = "combat.crit_rate";
 
-// 获取最终值
-float damage = statController.GetStatValue(StatType.Attack);
+statController.InitStat(Attack, 12f, 0f, 9999f);
 
-// 移除某来源的所有修饰器
-statController.RemoveAllModifiersFromSource(buffHandler);
+var attackBuff = new StatModifier(50f, StatModType.Flat, source: buffHandler);
+statController.AddModifier(Attack, attackBuff);
 
-// 使用上下限防止数值溢出
-var critRate = new Stat(0.05f, 0f, 1f);  // 暴击率: 0% ~ 100%
-critRate.AddModifier(new StatModifier(2.0f, StatModType.Flat));
-Debug.Log(critRate.Value);  // 输出 1.0，被限制在最大值
+float attack = statController.GetStatValue(Attack);
 
-var defense = new Stat(100) { MinValue = 0, MaxValue = 9999 };  // 防御: 0 ~ 9999
+var critRate = new Stat(0.05f, 0f, 1f);
+critRate.AddModifier(new StatModifier(0.2f, StatModType.PercentAdd));
 
-// v1.1.0+ 事件驱动示例
-var health = new Stat(100);
-health.OnValueChanged += args =>
-{
-    Debug.Log($"Health: {args.OldValue} -> {args.NewValue} (Delta: {args.Delta})");
-    if (args.NewValue <= 0) OnDeath();
-};
-
-// 控制器级别事件
-statController.OnAnyStatChanged += args =>
-{
-    Debug.Log($"{args.StatType} changed by {args.Delta}");
-    RefreshUI(args.StatType);
-};
-
-// 初始化时带约束
-statController.InitStat(StatType.CritRate, 0.1f, 0f, 1f);  // 暴击率限制在0-100%
+var block = new StatBlock();
+block.Set(Attack, 12f);
+block.Set(CritRate, 0.05f);
 ```

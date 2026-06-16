@@ -10,6 +10,8 @@ namespace ZeroEngine.Samples
     /// </summary>
     public class BuffSystemExample : MonoBehaviour
     {
+        private static readonly StatId Attack = "offense.attack";
+
         [Header("Buff Data")]
         [SerializeField] private BuffData testBuff;
 
@@ -62,7 +64,7 @@ namespace ZeroEngine.Samples
             // 使用 BuffUtils 创建运行时 Buff
             var tempBuff = BuffUtils.CreateStatBuff(
                 "temp_attack_boost",
-                StatType.Attack,
+                Attack,
                 10f,
                 StatModType.Flat,
                 duration: 5f

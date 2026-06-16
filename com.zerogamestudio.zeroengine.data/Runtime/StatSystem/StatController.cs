@@ -4,19 +4,16 @@ using UnityEngine;
 
 namespace ZeroEngine.StatSystem
 {
-    /// <summary>
-    /// Event args for controller-level stat changes.
-    /// </summary>
     public struct StatControllerChangedEventArgs
     {
-        public StatType StatType;
+        public StatId StatId;
         public float OldValue;
         public float NewValue;
         public float Delta => NewValue - OldValue;
 
-        public StatControllerChangedEventArgs(StatType type, float oldValue, float newValue)
+        public StatControllerChangedEventArgs(StatId statId, float oldValue, float newValue)
         {
-            StatType = type;
+            StatId = statId;
             OldValue = oldValue;
             NewValue = newValue;
         }
@@ -24,180 +21,234 @@ namespace ZeroEngine.StatSystem
 
     public class StatController : MonoBehaviour, IStatProvider
     {
-        [SerializeField] private Dictionary<StatType, Stat> _stats = new Dictionary<StatType, Stat>();
+        [SerializeField] private List<StatControllerEntry> _entries = new();
 
-        /// <summary>
-        /// Event fired when any stat on this controller changes.
-        /// </summary>
+        private readonly Dictionary<StatId, Stat> _stats = new();
+
         public event Action<StatControllerChangedEventArgs> OnAnyStatChanged;
 
-        /// <summary>
-        /// Initialize a stat with base value and subscribe to its changes.
-        /// </summary>
-        public void InitStat(StatType type, float baseValue)
+        public void InitStat(StatId id, float baseValue)
         {
-            if (_stats.ContainsKey(type))
+            EnsureRuntimeMap();
+            if (_stats.TryGetValue(id, out var existing))
             {
-                _stats[type].BaseValue = baseValue;
+                existing.BaseValue = baseValue;
+                return;
             }
-            else
-            {
-                var stat = new Stat(baseValue);
-                _stats[type] = stat;
-                SubscribeToStat(type, stat);
-            }
+
+            var stat = new Stat(baseValue);
+            _stats[id] = stat;
+            SubscribeToStat(id, stat);
+            UpsertEntry(id, stat);
         }
 
-        /// <summary>
-        /// Initialize a stat with base value, min and max constraints.
-        /// </summary>
-        public void InitStat(StatType type, float baseValue, float minValue, float maxValue)
+        public void InitStat(StatId id, float baseValue, float minValue, float maxValue)
         {
-            if (_stats.ContainsKey(type))
+            EnsureRuntimeMap();
+            if (_stats.TryGetValue(id, out var existing))
             {
-                var existing = _stats[type];
                 existing.BaseValue = baseValue;
                 existing.MinValue = minValue;
                 existing.MaxValue = maxValue;
+                UpsertEntry(id, existing);
+                return;
             }
-            else
+
+            var stat = new Stat(baseValue, minValue, maxValue);
+            _stats[id] = stat;
+            SubscribeToStat(id, stat);
+            UpsertEntry(id, stat);
+        }
+
+        public Stat GetStat(StatId id)
+        {
+            EnsureRuntimeMap();
+            return _stats.TryGetValue(id, out var stat) ? stat : null;
+        }
+
+        public float GetStatValue(StatId id)
+        {
+            EnsureRuntimeMap();
+            return _stats.TryGetValue(id, out var stat) ? stat.Value : 0f;
+        }
+
+        public void AddModifier(StatId id, StatModifier mod)
+        {
+            EnsureRuntimeMap();
+            if (!_stats.TryGetValue(id, out var stat))
             {
-                var stat = new Stat(baseValue, minValue, maxValue);
-                _stats[type] = stat;
-                SubscribeToStat(type, stat);
+                stat = new Stat(0);
+                _stats[id] = stat;
+                SubscribeToStat(id, stat);
             }
+
+            stat.AddModifier(mod);
+            UpsertEntry(id, stat);
         }
 
-        private void SubscribeToStat(StatType type, Stat stat)
+        public void RemoveModifier(StatId id, StatModifier mod)
         {
-            stat.OnValueChanged += args =>
-            {
-                OnAnyStatChanged?.Invoke(new StatControllerChangedEventArgs(type, args.OldValue, args.NewValue));
-            };
-        }
-
-        public Stat GetStat(StatType type)
-        {
-            if (_stats.TryGetValue(type, out var stat)) return stat;
-            return null;
-        }
-
-        public float GetStatValue(StatType type)
-        {
-            if (_stats.TryGetValue(type, out var stat)) return stat.Value;
-            return 0;
-        }
-
-        public void AddModifier(StatType type, StatModifier mod)
-        {
-            if (!_stats.ContainsKey(type))
-            {
-                var stat = new Stat(0);
-                _stats[type] = stat;
-                SubscribeToStat(type, stat);
-            }
-            _stats[type].AddModifier(mod);
-        }
-
-        public void RemoveModifier(StatType type, StatModifier mod)
-        {
-            if (_stats.TryGetValue(type, out var stat))
+            EnsureRuntimeMap();
+            if (_stats.TryGetValue(id, out var stat))
             {
                 stat.RemoveModifier(mod);
+                UpsertEntry(id, stat);
             }
         }
 
-        /// <summary>
-        /// Force recalculate all stats and fire change events.
-        /// </summary>
         public void RefreshAllStats()
         {
+            EnsureRuntimeMap();
             foreach (var stat in _stats.Values)
             {
                 stat.ForceRecalculate();
             }
         }
 
-        #region Save/Load Support
-
-        /// <summary>
-        /// 导出存档数据
-        /// </summary>
         public StatControllerSaveData ExportSaveData()
         {
+            EnsureRuntimeMap();
             var data = new StatControllerSaveData();
             foreach (var kvp in _stats)
             {
                 data.Stats.Add(new StatSaveData
                 {
-                    Type = kvp.Key,
+                    Id = kvp.Key,
                     BaseValue = kvp.Value.BaseValue,
                     MinValue = kvp.Value.MinValue,
                     MaxValue = kvp.Value.MaxValue
                 });
             }
+
             return data;
         }
 
-        /// <summary>
-        /// 导入存档数据
-        /// </summary>
         public void ImportSaveData(StatControllerSaveData data)
         {
-            if (data?.Stats == null) return;
+            if (data?.Stats == null)
+            {
+                return;
+            }
 
+            EnsureRuntimeMap();
             foreach (var statData in data.Stats)
             {
-                if (_stats.TryGetValue(statData.Type, out var existingStat))
+                if (_stats.TryGetValue(statData.Id, out var existingStat))
                 {
                     existingStat.BaseValue = statData.BaseValue;
                     existingStat.MinValue = statData.MinValue;
                     existingStat.MaxValue = statData.MaxValue;
+                    UpsertEntry(statData.Id, existingStat);
                 }
                 else
                 {
-                    InitStat(statData.Type, statData.BaseValue, statData.MinValue, statData.MaxValue);
+                    InitStat(statData.Id, statData.BaseValue, statData.MinValue, statData.MaxValue);
                 }
             }
         }
 
-        /// <summary>
-        /// 重置为初始状态
-        /// </summary>
         public void ResetStats()
         {
-            _stats.Clear();
-        }
-
-        #endregion
-
-        private void OnDestroy()
-        {
-            // Clean up event subscriptions
             foreach (var stat in _stats.Values)
             {
                 stat.ClearEventListeners();
             }
+
+            _stats.Clear();
+            _entries.Clear();
+        }
+
+        private void Awake()
+        {
+            EnsureRuntimeMap();
+        }
+
+        private void OnDestroy()
+        {
+            foreach (var stat in _stats.Values)
+            {
+                stat.ClearEventListeners();
+            }
+
             OnAnyStatChanged = null;
+        }
+
+        private void EnsureRuntimeMap()
+        {
+            if (_stats.Count > 0 || _entries.Count == 0)
+            {
+                return;
+            }
+
+            foreach (var entry in _entries)
+            {
+                if (entry.Id.IsEmpty)
+                {
+                    continue;
+                }
+
+                var stat = new Stat(entry.BaseValue, entry.MinValue, entry.MaxValue);
+                _stats[entry.Id] = stat;
+                SubscribeToStat(entry.Id, stat);
+            }
+        }
+
+        private void SubscribeToStat(StatId id, Stat stat)
+        {
+            stat.OnValueChanged += args =>
+            {
+                OnAnyStatChanged?.Invoke(new StatControllerChangedEventArgs(id, args.OldValue, args.NewValue));
+            };
+        }
+
+        private void UpsertEntry(StatId id, Stat stat)
+        {
+            for (var i = 0; i < _entries.Count; i++)
+            {
+                if (!_entries[i].Id.Equals(id))
+                {
+                    continue;
+                }
+
+                _entries[i] = new StatControllerEntry
+                {
+                    Id = id,
+                    BaseValue = stat.BaseValue,
+                    MinValue = stat.MinValue,
+                    MaxValue = stat.MaxValue
+                };
+                return;
+            }
+
+            _entries.Add(new StatControllerEntry
+            {
+                Id = id,
+                BaseValue = stat.BaseValue,
+                MinValue = stat.MinValue,
+                MaxValue = stat.MaxValue
+            });
         }
     }
 
-    /// <summary>
-    /// StatController 存档数据
-    /// </summary>
+    [Serializable]
+    public struct StatControllerEntry
+    {
+        public StatId Id;
+        public float BaseValue;
+        public float MinValue;
+        public float MaxValue;
+    }
+
     [Serializable]
     public class StatControllerSaveData
     {
-        public List<StatSaveData> Stats = new List<StatSaveData>();
+        public List<StatSaveData> Stats = new();
     }
 
-    /// <summary>
-    /// 单个 Stat 存档数据
-    /// </summary>
     [Serializable]
     public class StatSaveData
     {
-        public StatType Type;
+        public StatId Id;
         public float BaseValue;
         public float MinValue = float.MinValue;
         public float MaxValue = float.MaxValue;

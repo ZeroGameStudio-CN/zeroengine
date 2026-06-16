@@ -7,7 +7,8 @@
     "unityRelease": "0f1",
     "dependencies": {
         "com.zerogamestudio.zeroengine.core": "2.0.0",
-        "com.zerogamestudio.zeroengine.data": "2.0.0"
+        "com.zerogamestudio.zeroengine.data": "2.0.0",
+        "com.zerogamestudio.zeroengine.economy": "2.0.0"
     },
     "keywords": [
         "zeroengine",

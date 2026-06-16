@@ -1,0 +1,33 @@
+{
+  "name": "ZeroEngine.ModSystem.Legacy",
+  "rootNamespace": "ZeroEngine.ModSystem",
+  "references": [
+    "ZeroEngine.ModSystem",
+    "ZeroEngine",
+    "ZeroEngine.Combat",
+    "ZeroEngine.Data",
+    "ZeroEngine.Economy"
+  ],
+  "includePlatforms": [],
+  "excludePlatforms": [],
+  "allowUnsafeCode": false,
+  "overrideReferences": false,
+  "precompiledReferences": [],
+  "autoReferenced": false,
+  "defineConstraints": [
+    "ZEROENGINE_MODSYSTEM_LEGACY"
+  ],
+  "versionDefines": [
+    {
+      "name": "com.unity.nuget.newtonsoft-json",
+      "expression": "",
+      "define": "NEWTONSOFT_JSON"
+    },
+    {
+      "name": "com.moonsharp.interpreter",
+      "expression": "",
+      "define": "MOONSHARP"
+    }
+  ],
+  "noEngineReferences": false
+}

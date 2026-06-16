@@ -1,0 +1,26 @@
+{
+  "name": "ZeroEngine.Narrative.XNode",
+  "rootNamespace": "ZeroEngine",
+  "references": [
+    "ZeroEngine.Narrative",
+    "ZeroEngine.Core",
+    "XNode"
+  ],
+  "includePlatforms": [],
+  "excludePlatforms": [],
+  "allowUnsafeCode": false,
+  "overrideReferences": false,
+  "precompiledReferences": [],
+  "autoReferenced": true,
+  "defineConstraints": [
+    "XNODE_PRESENT"
+  ],
+  "versionDefines": [
+    {
+      "name": "com.github.siccity.xnode",
+      "expression": "",
+      "define": "XNODE_PRESENT"
+    }
+  ],
+  "noEngineReferences": false
+}

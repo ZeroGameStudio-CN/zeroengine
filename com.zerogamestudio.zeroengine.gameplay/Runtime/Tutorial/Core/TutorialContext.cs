@@ -156,7 +156,7 @@ namespace ZeroEngine.Tutorial
             // 2. 在 Canvas 下查找
             if (found == null)
             {
-                var canvases = UnityEngine.Object.FindObjectsOfType<Canvas>();
+                var canvases = UnityEngine.Object.FindObjectsByType<Canvas>(FindObjectsSortMode.None);
                 foreach (var canvas in canvases)
                 {
                     var transform = canvas.transform.Find(path);

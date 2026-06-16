@@ -1,0 +1,22 @@
+{
+  "name": "ZeroEngine.Combat.Editor.Tests",
+  "rootNamespace": "ZeroEngine.AbilitySystem.Editor.Tests",
+  "references": [
+    "ZeroEngine.Combat",
+    "ZeroEngine.Combat.Editor",
+    "ZeroEngine.Data",
+    "UnityEngine.TestRunner",
+    "UnityEditor.TestRunner"
+  ],
+  "includePlatforms": [
+    "Editor"
+  ],
+  "excludePlatforms": [],
+  "allowUnsafeCode": false,
+  "overrideReferences": false,
+  "precompiledReferences": [],
+  "autoReferenced": false,
+  "defineConstraints": [],
+  "versionDefines": [],
+  "noEngineReferences": false
+}

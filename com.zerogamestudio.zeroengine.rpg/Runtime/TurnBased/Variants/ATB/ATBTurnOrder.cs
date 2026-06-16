@@ -118,7 +118,8 @@ namespace ZeroEngine.RPG.TurnBased.Variants
 
                 // 计算填充速度: 基础速度 + 单位速度 * 系数
                 float chargeRate = BaseChargeRate + combatant.Speed * SpeedToChargeMultiplier;
-                float newValue = _atbValues[combatant] + chargeRate * deltaTime;
+                float previousValue = _atbValues[combatant];
+                float newValue = previousValue + chargeRate * deltaTime;
 
                 // 检查是否刚好填满
                 if (newValue >= MaxATB && _atbValues[combatant] < MaxATB)
@@ -131,10 +132,12 @@ namespace ZeroEngine.RPG.TurnBased.Variants
                         _readyQueue.Add(combatant);
                     }
 
+                    OnATBFull?.Invoke(combatant);
                     Debug.Log($"[ATBTurnOrder] {combatant.DisplayName} ATB 已满！");
                 }
 
                 _atbValues[combatant] = Mathf.Min(newValue, MaxATB);
+                OnATBChanged?.Invoke(combatant, previousValue, _atbValues[combatant]);
             }
 
             return newlyReady;

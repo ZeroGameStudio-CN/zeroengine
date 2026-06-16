@@ -94,7 +94,7 @@ namespace ZeroEngine.Pathfinding2D
         {
             if (graphGenerator == null)
             {
-                graphGenerator = FindObjectOfType<PlatformGraphGenerator>();
+                graphGenerator = FindFirstObjectByType<PlatformGraphGenerator>();
             }
         }
 

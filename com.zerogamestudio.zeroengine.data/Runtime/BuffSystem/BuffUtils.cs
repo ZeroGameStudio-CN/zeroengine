@@ -35,7 +35,7 @@ namespace ZeroEngine.BuffSystem
         /// </summary>
         public static BuffData CreateStatBuff(
             string buffId,
-            StatType statType,
+            StatId statId,
             float value,
             StatModType modType,
             float duration,
@@ -44,7 +44,7 @@ namespace ZeroEngine.BuffSystem
             var data = CreateTempBuff(buffId, duration, maxStacks);
             data.StatModifiers.Add(new BuffStatModifierConfig
             {
-                StatType = statType,
+                StatId = statId,
                 Value = value,
                 ModType = modType
             });
@@ -58,14 +58,14 @@ namespace ZeroEngine.BuffSystem
             string buffId,
             float duration,
             int maxStacks,
-            params (StatType type, float value, StatModType modType)[] modifiers)
+            params (StatId id, float value, StatModType modType)[] modifiers)
         {
             var data = CreateTempBuff(buffId, duration, maxStacks);
-            foreach (var (type, value, modType) in modifiers)
+            foreach (var (id, value, modType) in modifiers)
             {
                 data.StatModifiers.Add(new BuffStatModifierConfig
                 {
-                    StatType = type,
+                    StatId = id,
                     Value = value,
                     ModType = modType
                 });
@@ -82,13 +82,13 @@ namespace ZeroEngine.BuffSystem
         /// </summary>
         public static BuffData CreateBoostBuff(
             string buffId,
-            StatType statType,
+            StatId statId,
             float percentBoost,
             float duration)
         {
             return CreateStatBuff(
                 buffId,
-                statType,
+                statId,
                 percentBoost / 100f,
                 StatModType.PercentAdd,
                 duration
@@ -100,13 +100,13 @@ namespace ZeroEngine.BuffSystem
         /// </summary>
         public static BuffData CreateDebuffBuff(
             string buffId,
-            StatType statType,
+            StatId statId,
             float percentReduce,
             float duration)
         {
             return CreateStatBuff(
                 buffId,
-                statType,
+                statId,
                 -percentReduce / 100f,
                 StatModType.PercentAdd,
                 duration
@@ -118,14 +118,14 @@ namespace ZeroEngine.BuffSystem
         /// </summary>
         public static BuffData CreateFlatBuff(
             string buffId,
-            StatType statType,
+            StatId statId,
             float flatValue,
             float duration,
             int maxStacks = 1)
         {
             return CreateStatBuff(
                 buffId,
-                statType,
+                statId,
                 flatValue,
                 StatModType.Flat,
                 duration,
@@ -171,13 +171,13 @@ namespace ZeroEngine.BuffSystem
         public static BuffHandler AddStatBuff(
             this BuffReceiver receiver,
             string buffId,
-            StatType statType,
+            StatId statId,
             float value,
             StatModType modType,
             float duration,
             int stacks = 1)
         {
-            var data = CreateStatBuff(buffId, statType, value, modType, duration);
+            var data = CreateStatBuff(buffId, statId, value, modType, duration);
             return receiver.AddBuff(data, stacks);
         }
 
@@ -187,11 +187,11 @@ namespace ZeroEngine.BuffSystem
         public static BuffHandler AddPercentBoost(
             this BuffReceiver receiver,
             string buffId,
-            StatType statType,
+            StatId statId,
             float percentBoost,
             float duration)
         {
-            var data = CreateBoostBuff(buffId, statType, percentBoost, duration);
+            var data = CreateBoostBuff(buffId, statId, percentBoost, duration);
             return receiver.AddBuff(data);
         }
 
@@ -201,11 +201,11 @@ namespace ZeroEngine.BuffSystem
         public static BuffHandler AddPercentDebuff(
             this BuffReceiver receiver,
             string buffId,
-            StatType statType,
+            StatId statId,
             float percentReduce,
             float duration)
         {
-            var data = CreateDebuffBuff(buffId, statType, percentReduce, duration);
+            var data = CreateDebuffBuff(buffId, statId, percentReduce, duration);
             return receiver.AddBuff(data);
         }
 
@@ -215,12 +215,12 @@ namespace ZeroEngine.BuffSystem
         public static BuffHandler AddFlatBoost(
             this BuffReceiver receiver,
             string buffId,
-            StatType statType,
+            StatId statId,
             float flatValue,
             float duration,
             int stacks = 1)
         {
-            var data = CreateFlatBuff(buffId, statType, flatValue, duration);
+            var data = CreateFlatBuff(buffId, statId, flatValue, duration);
             return receiver.AddBuff(data, stacks);
         }
 
@@ -265,7 +265,7 @@ namespace ZeroEngine.BuffSystem
         /// </summary>
         public static IEnumerable<BuffHandler> GetBuffsAffectingStat(
             this BuffReceiver receiver,
-            StatType statType)
+            StatId statId)
         {
             foreach (var kvp in receiver.ActiveBuffs)
             {
@@ -274,7 +274,7 @@ namespace ZeroEngine.BuffSystem
                 {
                     foreach (var mod in data.StatModifiers)
                     {
-                        if (mod.StatType == statType)
+                        if (mod.StatId == statId)
                         {
                             yield return kvp.Value;
                             break;
@@ -289,7 +289,7 @@ namespace ZeroEngine.BuffSystem
         /// </summary>
         public static float GetTotalStatModification(
             this BuffReceiver receiver,
-            StatType statType,
+            StatId statId,
             StatModType modType)
         {
             float total = 0f;
@@ -303,7 +303,7 @@ namespace ZeroEngine.BuffSystem
                 {
                     foreach (var mod in data.StatModifiers)
                     {
-                        if (mod.StatType == statType && mod.ModType == modType)
+                        if (mod.StatId == statId && mod.ModType == modType)
                         {
                             total += mod.Value * handler.CurrentStacks;
                         }

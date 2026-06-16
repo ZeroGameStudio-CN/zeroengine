@@ -113,7 +113,10 @@ namespace ZeroEngine.Core
                             GameObject singletonObject = new GameObject();
                             _instance = singletonObject.AddComponent<T>();
                             singletonObject.name = $"[{typeof(T)}]";
-                            DontDestroyOnLoad(singletonObject);
+                                if (Application.isPlaying)
+                                {
+                                    DontDestroyOnLoad(singletonObject);
+                                }
                         }
                     }
 
@@ -127,7 +130,15 @@ namespace ZeroEngine.Core
             if (_instance == null)
             {
                 _instance = this as T;
-                DontDestroyOnLoad(gameObject);
+                if (transform.parent != null)
+                {
+                    transform.SetParent(null, false);
+                }
+
+                if (Application.isPlaying)
+                {
+                    DontDestroyOnLoad(gameObject);
+                }
             }
             else if (_instance != this)
             {

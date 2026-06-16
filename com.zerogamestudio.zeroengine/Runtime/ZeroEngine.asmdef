@@ -25,7 +25,6 @@
         "Unity.Netcode.Runtime",
         "Unity.TextMeshPro",
         "Unity.Networking.Transport",
-        "XNode",
         "Unity.ugui"
     ],
     "includePlatforms": [],
@@ -85,11 +84,6 @@
             "name": "com.unity.localization",
             "expression": "",
             "define": "LOCALIZATION_ENABLED"
-        },
-        {
-            "name": "com.github.siccity.xnode",
-            "expression": "",
-            "define": "XNODE_PRESENT"
         }
     ],
     "noEngineReferences": false

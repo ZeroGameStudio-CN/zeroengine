@@ -58,6 +58,22 @@ namespace ZeroEngine.RPG.TurnBased
         /// </summary>
         public bool IsSuccessful { get; set; }
 
+        public string DisplayName => ActionType switch
+        {
+            BattleActionType.Attack => "Attack",
+            BattleActionType.Skill => "Skill",
+            BattleActionType.Item => "Item",
+            BattleActionType.Defend => "Defend",
+            BattleActionType.Escape => "Escape",
+            _ => "None"
+        };
+
+        public bool RequiresTarget => ActionType == BattleActionType.Attack
+            || ActionType == BattleActionType.Skill
+            || ActionType == BattleActionType.Item;
+
+        public bool IsTargetedAction => RequiresTarget && Targets != null && Targets.Count > 0;
+
         /// <summary>
         /// 创建普通攻击行动
         /// </summary>

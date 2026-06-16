@@ -52,6 +52,9 @@ namespace ZeroEngine.Dialog
         /// <summary>Fired when an external callback is triggered.</summary>
         public event Action<string, string> OnCallback;
 
+        /// <summary>Fired when a callback is parsed as a structured command.</summary>
+        public event Action<DialogCommand> OnCommand;
+
         /// <summary>Fired when a variable changes.</summary>
         public event Action<string, object, object> OnVariableChanged;
 
@@ -106,29 +109,7 @@ namespace ZeroEngine.Dialog
         /// </summary>
         public void StartDialog(DialogGraphSO graph)
         {
-            if (graph == null)
-            {
-                Debug.LogWarning("[DialogRunner] Cannot start null dialog");
-                return;
-            }
-
-            StopDialog();
-
-            _dialogGraph = graph;
-            _provider = new DialogGraphProvider(graph);
-            _provider.OnCallback += HandleCallback;
-
-            if (_provider.Context != null)
-            {
-                _provider.Context.Variables.OnVariableChanged += HandleVariableChanged;
-            }
-
-            _provider.Begin();
-
-            OnDialogStart?.Invoke();
-
-            // Process first content
-            ProcessNext();
+            StartDialog(graph, new DialogVariables());
         }
 
         /// <summary>
@@ -356,6 +337,12 @@ namespace ZeroEngine.Dialog
 
         private void HandleCallback(string callbackId, string parameter)
         {
+            if (DialogCommandParser.TryParse(callbackId, parameter, out var command))
+            {
+                OnCommand?.Invoke(command);
+                return;
+            }
+
             OnCallback?.Invoke(callbackId, parameter);
         }
 

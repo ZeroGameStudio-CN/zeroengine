@@ -15,9 +15,14 @@ namespace ZeroEngine.Equipment
         public StatModifierData Effect;
         public int Tier;
 
-        public StatModifier CreateModifier(object source)
+        public EquipmentStatModifier? CreateModifier(object source)
         {
-            return Effect.CreateModifier(0, source);
+            if (Effect == null || Effect.StatId.IsEmpty)
+            {
+                return null;
+            }
+
+            return new EquipmentStatModifier(Effect.StatId, Effect.CreateModifier(0, source));
         }
     }
 
@@ -35,11 +40,17 @@ namespace ZeroEngine.Equipment
         /// <summary>
         /// 将宝石修饰器填充到目标列表（零分配版本）
         /// </summary>
-        public void GetModifiers(object source, List<StatModifier> results)
+        public void GetModifiers(object source, List<EquipmentStatModifier> results)
         {
             for (int i = 0; i < Effects.Count; i++)
             {
-                results.Add(Effects[i].CreateModifier(0, source));
+                var effect = Effects[i];
+                if (effect == null || effect.StatId.IsEmpty)
+                {
+                    continue;
+                }
+
+                results.Add(new EquipmentStatModifier(effect.StatId, effect.CreateModifier(0, source)));
             }
         }
     }
@@ -93,7 +104,7 @@ namespace ZeroEngine.Equipment
         private bool _scoreDirty = true;
 
         // 缓存的修饰器列表（避免重复计算）
-        private readonly List<StatModifier> _cachedModifiers = new List<StatModifier>();
+        private readonly List<EquipmentStatModifier> _cachedModifiers = new List<EquipmentStatModifier>();
         private bool _modifiersDirty = true;
 
         public EquipmentInstance() { }
@@ -146,7 +157,7 @@ namespace ZeroEngine.Equipment
         /// <summary>
         /// 获取所有计算后的属性修饰器
         /// </summary>
-        public IReadOnlyList<StatModifier> GetCalculatedModifiers()
+        public IReadOnlyList<EquipmentStatModifier> GetCalculatedModifiers()
         {
             if (_modifiersDirty)
             {
@@ -160,15 +171,19 @@ namespace ZeroEngine.Equipment
             _cachedModifiers.Clear();
 
             // 1. 基础属性
-            for (int i = 0; i < _data.BaseStats.Count; i++)
+            for (int i = 0; i < _data.StatModifiers.Count; i++)
             {
-                _cachedModifiers.Add(_data.BaseStats[i].CreateModifier(EnhanceLevel, this));
+                AddModifier(_data.StatModifiers[i], EnhanceLevel, this);
             }
 
             // 2. 附魔效果
             for (int i = 0; i < Enchantments.Count; i++)
             {
-                _cachedModifiers.Add(Enchantments[i].CreateModifier(this));
+                var modifier = Enchantments[i].CreateModifier(this);
+                if (modifier.HasValue)
+                {
+                    _cachedModifiers.Add(modifier.Value);
+                }
             }
 
             // 3. 宝石效果（使用零分配版本）
@@ -182,6 +197,16 @@ namespace ZeroEngine.Equipment
             }
 
             _modifiersDirty = false;
+        }
+
+        private void AddModifier(StatModifierData data, int enhanceLevel, object source)
+        {
+            if (data == null || data.StatId.IsEmpty)
+            {
+                return;
+            }
+
+            _cachedModifiers.Add(new EquipmentStatModifier(data.StatId, data.CreateModifier(enhanceLevel, source)));
         }
 
         /// <summary>
@@ -202,9 +227,10 @@ namespace ZeroEngine.Equipment
             float score = 0;
             var modifiers = GetCalculatedModifiers();
 
-            foreach (var mod in modifiers)
+            foreach (var entry in modifiers)
             {
                 // 简单评分：Flat 按 1:1，Percent 按 100:1
+                var mod = entry.Modifier;
                 if (mod.ModType == StatModType.Flat)
                 {
                     score += mod.Value;

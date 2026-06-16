@@ -212,6 +212,7 @@ namespace ZeroEngine.RPG.TurnBased.Variants
 
             // 更新时间轴位置
             _timeline[combatant] = _currentTick + delay;
+            OnTimelineChanged?.Invoke(combatant, _timeline[combatant]);
 
             // 推进当前 tick 到最近的行动点
             UpdateCurrentTick();
@@ -253,6 +254,7 @@ namespace ZeroEngine.RPG.TurnBased.Variants
             }
 
             _timeline[combatant] = _currentTick + initialTick;
+            OnTimelineChanged?.Invoke(combatant, _timeline[combatant]);
         }
 
         /// <summary>

@@ -66,6 +66,7 @@ namespace ZeroEngine.Tutorial
                 _canvasGroup.alpha = 0f;
             }
 
+            SetPosition(_defaultPosition);
             HideChoices();
         }
 

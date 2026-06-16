@@ -11,7 +11,7 @@ namespace ZeroEngine.TCE
     }
 
     [Serializable]
-    [TceComponentDoc(TceComponentDocCategory.Trigger, "On Install", "Fires once when the graph is installed.", "Use this trigger for immediate setup rules that should run after all conditions and effects are initialized.")]
+    [TceComponentDoc(TceComponentDocCategory.Trigger, "zeroengine.tce.trigger.on_install", "On Install", "Fires once when the graph is installed.", "Use this trigger for immediate setup rules that should run after all conditions and effects are initialized.")]
     public sealed class OnInstallTriggerData : TceTriggerData<OnInstallTrigger>
     {
     }

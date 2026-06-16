@@ -5,10 +5,6 @@ using System;
 using System.IO;
 using System.Collections.Generic;
 
-#if ES3
-using ES3Internal;
-#endif
-
 namespace ZeroEngine.Save
 {
     /// <summary>
@@ -252,24 +248,11 @@ namespace ZeroEngine.Save
         }
     }
 
-#if ES3
-    /// <summary>
-    /// ES3 save provider wrapper.
-    /// </summary>
-    public class ES3SaveProvider : ISaveProvider
-    {
-        public void Save<T>(string key, T data, string fileName) => ES3.Save(key, data, fileName);
-        public T Load<T>(string key, T defaultValue, string fileName) => ES3.Load(key, fileName, defaultValue);
-        public bool Exists(string key, string fileName) => ES3.KeyExists(key, fileName);
-        public void DeleteKey(string key, string fileName) => ES3.DeleteKey(key, fileName);
-        public void DeleteFile(string fileName) => ES3.DeleteFile(fileName);
-        public byte[] LoadBytes(string key, string fileName) => ES3.KeyExists(key, fileName) ? ES3.Load<byte[]>(key, fileName) : null;
-        public void SaveBytes(string key, byte[] bytes, string fileName) => ES3.Save(key, bytes, fileName);
-    }
-#endif
-
     public class SaveManager : Singleton<SaveManager>
     {
+        private const string ES3SaveProviderTypeName =
+            "ZeroEngine.Save.ES3SaveProvider, ZeroEngine.Persistence.ES3";
+
         public const string DefaultSaveFile = "SaveData.es3";
         public const string SettingsFile = "Settings.es3";
         public const string GlobalDataFile = "GlobalData.es3";
@@ -285,13 +268,16 @@ namespace ZeroEngine.Save
             {
                 if (_provider == null)
                 {
-#if ES3
-                    _provider = new ES3SaveProvider();
-                    ZeroLog.Info(ZeroLog.Modules.Save, "Using ES3 provider.");
-#else
-                    _provider = new JsonSaveProvider();
-                    ZeroLog.Info(ZeroLog.Modules.Save, "Using JSON provider (ES3 not available).");
-#endif
+                    if (TryCreateES3Provider(out var es3Provider))
+                    {
+                        _provider = es3Provider;
+                        ZeroLog.Info(ZeroLog.Modules.Save, "Using ES3 provider.");
+                    }
+                    else
+                    {
+                        _provider = new JsonSaveProvider();
+                        ZeroLog.Info(ZeroLog.Modules.Save, "Using JSON provider (ES3 not available).");
+                    }
                 }
                 return _provider;
             }
@@ -354,6 +340,28 @@ namespace ZeroEngine.Save
         public void SaveImage(string key, byte[] bytes, string fileName = DefaultSaveFile)
         {
             Provider.SaveBytes(key, bytes, fileName);
+        }
+
+        private static bool TryCreateES3Provider(out ISaveProvider provider)
+        {
+            provider = null;
+
+            var providerType = Type.GetType(ES3SaveProviderTypeName);
+            if (providerType == null || !typeof(ISaveProvider).IsAssignableFrom(providerType))
+            {
+                return false;
+            }
+
+            try
+            {
+                provider = Activator.CreateInstance(providerType) as ISaveProvider;
+                return provider != null;
+            }
+            catch (Exception e)
+            {
+                ZeroLog.Warning(ZeroLog.Modules.Save, $"Failed to initialize ES3 provider: {e.Message}");
+                return false;
+            }
         }
     }
 }

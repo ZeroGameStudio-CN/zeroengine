@@ -41,6 +41,23 @@ namespace ZeroEngine.StatSystem
     }
 
     /// <summary>
+    /// Runtime stat contract shared by data, combat and editor tooling.
+    /// </summary>
+    public interface IStat
+    {
+        float Value { get; }
+        int MaxValueInt { get; }
+        IReadOnlyList<StatModifier> GetModifiers();
+        void InitBase(float value, bool round = true);
+        void AddModifier(StatModifier mod);
+        void AddModifier(StatModifier mod, object source);
+        bool RemoveModifier(StatModifier mod);
+        bool RemoveModifier(StatModifier mod, object source);
+        bool RemoveAllModifiersFromSource(object source);
+        void RemoveAllModifiers();
+    }
+
+    /// <summary>
     /// 属性修饰器，用于修改属性的最终值。
     /// 可由 Buff、装备、技能等系统添加。
     /// </summary>
@@ -84,6 +101,28 @@ namespace ZeroEngine.StatSystem
             if (Formula != null) return Formula.Evaluate(ctx);
             return Value;
         }
+
+        public bool NeedsRuntimeValue => Formula != null;
+
+        public StatModifier Clone()
+        {
+            return new StatModifier(Value, ModType, Order, Source)
+            {
+                Formula = Formula
+            };
+        }
+
+        public StatModifier CreateRuntime(MathContext ctx)
+        {
+            var modifier = Clone();
+            if (Formula != null)
+            {
+                modifier.Value = Formula.Evaluate(ctx);
+                modifier.Formula = null;
+            }
+
+            return modifier;
+        }
     }
 
     /// <summary>
@@ -94,7 +133,7 @@ namespace ZeroEngine.StatSystem
     /// 结果会被 MinValue 和 MaxValue 限制。
     /// </remarks>
     [Serializable]
-    public class Stat
+    public class Stat : IStat
     {
         /// <summary>基础值</summary>
         public float BaseValue;
@@ -115,6 +154,8 @@ namespace ZeroEngine.StatSystem
         protected float _cachedValue;
 
         protected readonly List<StatModifier> _modifiers = new List<StatModifier>();
+
+        public Dictionary<object, List<StatModifier>> StatModifiersBySource { get; } = new Dictionary<object, List<StatModifier>>();
 
         /// <summary>
         /// Event fired when the stat value changes after recalculation.
@@ -177,7 +218,7 @@ namespace ZeroEngine.StatSystem
         /// <summary>
         /// 获取计算后的值（整数版本）
         /// </summary>
-        public int MaxValueInt => Mathf.RoundToInt(Value);
+        public int MaxValueInt => RoundToIntSaturated(Value);
 
         /// <summary>
         /// Forces recalculation and event firing even if not dirty.
@@ -209,8 +250,11 @@ namespace ZeroEngine.StatSystem
         /// <param name="mod">要添加的修饰器</param>
         public virtual void AddModifier(StatModifier mod)
         {
+            if (mod == null) return;
+
             _isDirty = true;
             _modifiers.Add(mod);
+            TrackModifierSource(mod.Source, mod);
             _modifiers.Sort(CompareModifierOrder);
         }
 
@@ -219,8 +263,20 @@ namespace ZeroEngine.StatSystem
         /// </summary>
         public virtual void AddModifier(StatModifier mod, object source)
         {
+            if (mod == null) return;
+
             mod.Source = source;
             AddModifier(mod);
+        }
+
+        public virtual void AddModifiersBatch(IReadOnlyList<StatModifier> modifiers, object source)
+        {
+            if (modifiers == null) return;
+
+            for (int i = 0; i < modifiers.Count; i++)
+            {
+                AddModifier(modifiers[i], source);
+            }
         }
 
         /// <summary>
@@ -230,19 +286,35 @@ namespace ZeroEngine.StatSystem
         /// <returns>是否成功移除</returns>
         public virtual bool RemoveModifier(StatModifier mod)
         {
-            if (_modifiers.Remove(mod))
+            int index = FindModifierIndex(mod);
+            if (index >= 0)
             {
+                var removed = _modifiers[index];
+                _modifiers.RemoveAt(index);
+                UntrackModifierSource(removed.Source, removed);
                 _isDirty = true;
                 return true;
             }
             return false;
         }
 
+        public virtual bool RemoveModifier(StatModifier mod, object source)
+        {
+            int index = FindModifierIndex(mod, source);
+            if (index < 0) return false;
+
+            var removed = _modifiers[index];
+            _modifiers.RemoveAt(index);
+            UntrackModifierSource(removed.Source, removed);
+            _isDirty = true;
+            return true;
+        }
+
         /// <summary>
         /// 移除来自指定来源的所有修饰器
         /// </summary>
         /// <param name="source">来源对象</param>
-        public virtual void RemoveAllModifiersFromSource(object source)
+        public virtual bool RemoveAllModifiersFromSource(object source)
         {
             // Manual loop to avoid Lambda closure GC allocation
             bool removed = false;
@@ -250,11 +322,74 @@ namespace ZeroEngine.StatSystem
             {
                 if (_modifiers[i].Source == source)
                 {
+                    var modifier = _modifiers[i];
                     _modifiers.RemoveAt(i);
+                    UntrackModifierSource(modifier.Source, modifier);
                     removed = true;
                 }
             }
             if (removed) _isDirty = true;
+            return removed;
+        }
+
+        public virtual void RemoveAllModifiers()
+        {
+            if (_modifiers.Count == 0) return;
+
+            _modifiers.Clear();
+            StatModifiersBySource.Clear();
+            _isDirty = true;
+        }
+
+        protected virtual int FindModifierIndex(StatModifier mod, object source = null)
+        {
+            for (int i = 0; i < _modifiers.Count; i++)
+            {
+                if (IsMatchingModifier(_modifiers[i], mod, source))
+                {
+                    return i;
+                }
+            }
+
+            return -1;
+        }
+
+        protected virtual bool IsMatchingModifier(StatModifier current, StatModifier expected, object source)
+        {
+            if (current == null || expected == null) return false;
+            if (source != null && current.Source != source) return false;
+            if (ReferenceEquals(current, expected)) return true;
+
+            return Math.Abs(current.Value - expected.Value) <= 0.0001f
+                && current.ModType == expected.ModType
+                && current.Order == expected.Order
+                && (source != null || current.Source == expected.Source);
+        }
+
+        protected void TrackModifierSource(object source, StatModifier modifier)
+        {
+            if (source == null || modifier == null) return;
+
+            if (!StatModifiersBySource.TryGetValue(source, out var modifiers))
+            {
+                modifiers = new List<StatModifier>();
+                StatModifiersBySource[source] = modifiers;
+            }
+
+            modifiers.Add(modifier);
+        }
+
+        protected void UntrackModifierSource(object source, StatModifier modifier)
+        {
+            if (source == null || modifier == null) return;
+
+            if (!StatModifiersBySource.TryGetValue(source, out var modifiers)) return;
+
+            modifiers.Remove(modifier);
+            if (modifiers.Count == 0)
+            {
+                StatModifiersBySource.Remove(source);
+            }
         }
 
         protected virtual int CompareModifierOrder(StatModifier a, StatModifier b)
@@ -294,7 +429,7 @@ namespace ZeroEngine.StatSystem
             for (int i = 0; i < _modifiers.Count; i++)
             {
                 var mod = _modifiers[i];
-                float val = mod.GetValue(); // No context here? For context we need CurrentStat logic or pass context.
+                float val = SanitizeFinite(mod.GetValue()); // No context here? For context we need CurrentStat logic or pass context.
                                             // Base Stat usually doesn't have dynamic context unless passed.
                                             // Assuming simple static value here.
 
@@ -308,9 +443,27 @@ namespace ZeroEngine.StatSystem
             finalValue *= percentMultProduct;
 
             // Apply min/max clamp to prevent overflow
+            finalValue = SanitizeFinite(finalValue);
             finalValue = Mathf.Clamp(finalValue, MinValue, MaxValue);
+            finalValue = SanitizeFinite(finalValue);
 
             return (float)Math.Round(finalValue, 4);
+        }
+
+        protected static float SanitizeFinite(float value)
+        {
+            if (float.IsNaN(value)) return 0f;
+            if (float.IsPositiveInfinity(value)) return float.MaxValue;
+            if (float.IsNegativeInfinity(value)) return float.MinValue;
+            return value;
+        }
+
+        protected static int RoundToIntSaturated(float value)
+        {
+            value = SanitizeFinite(value);
+            if (value >= int.MaxValue) return int.MaxValue;
+            if (value <= int.MinValue) return int.MinValue;
+            return Mathf.RoundToInt(value);
         }
     }
 }

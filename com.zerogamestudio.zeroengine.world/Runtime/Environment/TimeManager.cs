@@ -2,6 +2,7 @@ using System;
 using UnityEngine;
 using ZeroEngine.Core;
 using ZeroEngine.Save;
+using ZeroEngine.Timing;
 
 namespace ZeroEngine.EnvironmentSystem
 {
@@ -192,6 +193,7 @@ namespace ZeroEngine.EnvironmentSystem
         [SerializeField, Range(0f, 24f)] private float _currentHour = 12f;
         [SerializeField, Range(0f, 3600f)] private float _timeScale = 60f;
         [SerializeField] private bool _isPaused;
+        [SerializeField] private WorldClockDeltaPolicy _deltaPolicy = WorldClockDeltaPolicy.ScaledUnityDeltaTime;
 
         [Header("Time of Day Thresholds")]
         [SerializeField] private float _dawnStart = 5f;
@@ -219,6 +221,7 @@ namespace ZeroEngine.EnvironmentSystem
         public int CurrentHourInt => Mathf.FloorToInt(_currentHour);
         public bool IsPaused => _isPaused;
         public float TimeScale { get => _timeScale; set => _timeScale = Mathf.Max(0, value); }
+        public WorldClockDeltaPolicy DeltaPolicy { get => _deltaPolicy; set => _deltaPolicy = value; }
 
         public TimeOfDay CurrentTimeOfDay
         {
@@ -283,39 +286,11 @@ namespace ZeroEngine.EnvironmentSystem
         {
             if (_isPaused) return;
 
-            // 推进时间
-            float deltaHours = (Time.deltaTime / 3600f) * _timeScale;
-            _currentHour += deltaHours;
+            float deltaSeconds = _deltaPolicy == WorldClockDeltaPolicy.ScaledUnityDeltaTime
+                ? Time.deltaTime
+                : Time.unscaledDeltaTime;
 
-            // 循环 24 小时
-            if (_currentHour >= 24f) _currentHour -= 24f;
-            if (_currentHour < 0f) _currentHour += 24f;
-
-            // 每帧时间更新 - 使用简单 float 事件避免 boxing
-            // 注意: OnEnvironmentEvent(TimeChanged) 不在每帧触发以避免 GC
-            // 如需每帧时间，请使用 OnTimeChanged 事件
-            OnTimeChanged?.Invoke(_currentHour);
-
-            // 整点变更事件 (低频，可接受 boxing)
-            int currentHourInt = CurrentHourInt;
-            if (currentHourInt != _lastHour)
-            {
-                _lastHour = currentHourInt;
-                OnHourChanged?.Invoke(currentHourInt);
-                OnEnvironmentEvent?.Invoke(EnvironmentEventArgs.HourChanged(currentHourInt));
-                Log($"小时变更: {currentHourInt}:00");
-            }
-
-            // 时间段变更事件 (低频)
-            TimeOfDay currentToD = CurrentTimeOfDay;
-            if (currentToD != _lastTimeOfDay)
-            {
-                var previousToD = _lastTimeOfDay;
-                _lastTimeOfDay = currentToD;
-                OnTimeOfDayChanged?.Invoke(currentToD);
-                OnEnvironmentEvent?.Invoke(EnvironmentEventArgs.TimeOfDayChanged(currentToD, previousToD));
-                Log($"时间段变更: {previousToD} -> {currentToD}");
-            }
+            AdvanceSeconds(deltaSeconds, _deltaPolicy == WorldClockDeltaPolicy.UnscaledWorldClockDomain);
         }
 
         protected override void OnDestroy()
@@ -361,9 +336,13 @@ namespace ZeroEngine.EnvironmentSystem
         /// <summary>推进指定小时数</summary>
         public void AdvanceHours(float hours)
         {
-            _currentHour += hours;
-            if (_currentHour >= 24f) _currentHour -= 24f;
-            if (_currentHour < 0f) _currentHour += 24f;
+            AdvanceHoursInternal(hours);
+        }
+
+        public void AdvanceUnscaledSecondsForTests(float unscaledSeconds)
+        {
+            if (_isPaused) return;
+            AdvanceSeconds(unscaledSeconds, _deltaPolicy == WorldClockDeltaPolicy.UnscaledWorldClockDomain);
         }
 
         /// <summary>获取格式化时间字符串</summary>
@@ -377,6 +356,51 @@ namespace ZeroEngine.EnvironmentSystem
         #endregion
 
         #region Internal
+
+        private void AdvanceSeconds(float deltaSeconds, bool applyWorldClockScale)
+        {
+            float seconds = Mathf.Max(0f, deltaSeconds);
+            if (applyWorldClockScale)
+            {
+                seconds *= TimeControlLocator.Service.GetScale(TimeDomainIds.WorldClock);
+            }
+
+            float deltaHours = (seconds / 3600f) * _timeScale;
+            AdvanceHoursInternal(deltaHours);
+        }
+
+        private void AdvanceHoursInternal(float hours)
+        {
+            _currentHour = Mathf.Repeat(_currentHour + hours, 24f);
+            PublishTimeEvents();
+        }
+
+        private void PublishTimeEvents()
+        {
+            // 每帧时间更新 - 使用简单 float 事件避免 boxing
+            // 注意: OnEnvironmentEvent(TimeChanged) 不在每帧触发以避免 GC
+            // 如需每帧时间，请使用 OnTimeChanged 事件
+            OnTimeChanged?.Invoke(_currentHour);
+
+            int currentHourInt = CurrentHourInt;
+            if (currentHourInt != _lastHour)
+            {
+                _lastHour = currentHourInt;
+                OnHourChanged?.Invoke(currentHourInt);
+                OnEnvironmentEvent?.Invoke(EnvironmentEventArgs.HourChanged(currentHourInt));
+                Log($"小时变更: {currentHourInt}:00");
+            }
+
+            TimeOfDay currentToD = CurrentTimeOfDay;
+            if (currentToD != _lastTimeOfDay)
+            {
+                TimeOfDay previousToD = _lastTimeOfDay;
+                _lastTimeOfDay = currentToD;
+                OnTimeOfDayChanged?.Invoke(currentToD);
+                OnEnvironmentEvent?.Invoke(EnvironmentEventArgs.TimeOfDayChanged(currentToD, previousToD));
+                Log($"时间段变更: {previousToD} -> {currentToD}");
+            }
+        }
 
         [System.Diagnostics.Conditional("UNITY_EDITOR")]
         [System.Diagnostics.Conditional("ZEROENGINE_DEBUG")]

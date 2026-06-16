@@ -6,10 +6,6 @@ using UnityEngine;
 using UnityEngine.AddressableAssets;
 #endif
 
-#if ODIN_INSPECTOR
-using Sirenix.OdinInspector;
-#endif
-
 namespace ZeroEngine.UI
 {
     /// <summary>
@@ -19,12 +15,7 @@ namespace ZeroEngine.UI
     [CreateAssetMenu(fileName = "UIViewDatabase", menuName = "ZeroEngine/UI/View Database")]
     public class UIViewDatabase : ScriptableObject
     {
-#if ODIN_INSPECTOR
-        [Title("View Configurations")]
-        [ListDrawerSettings(ShowIndexLabels = true, ShowFoldout = true)]
-#else
         [Header("View Configurations")]
-#endif
         public List<UIViewEntry> views = new();
 
         /// <summary>
@@ -75,10 +66,6 @@ namespace ZeroEngine.UI
         }
 
 #if UNITY_EDITOR
-#if ODIN_INSPECTOR
-        [Title("Editor Tools")]
-        [Button("Validate Entries", ButtonSizes.Medium), GUIColor(0.5f, 0.8f, 1f)]
-#endif
         [ContextMenu("Validate Entries")]
         private void ValidateEntries()
         {
@@ -119,9 +106,6 @@ namespace ZeroEngine.UI
             }
         }
 
-#if ODIN_INSPECTOR
-        [Button("Sort by Layer", ButtonSizes.Medium), GUIColor(0.3f, 0.9f, 0.6f)]
-#endif
         [ContextMenu("Sort by Layer")]
         private void SortByLayer()
         {
@@ -136,9 +120,6 @@ namespace ZeroEngine.UI
             Debug.Log("[UIViewDatabase] Sorted entries by layer");
         }
 
-#if ODIN_INSPECTOR
-        [Button("Auto-Find Prefabs in Project", ButtonSizes.Medium), GUIColor(0.9f, 0.7f, 0.3f)]
-#endif
         [ContextMenu("Auto-Find Prefabs")]
         private void AutoFindPrefabs()
         {
@@ -174,105 +155,53 @@ namespace ZeroEngine.UI
     [Serializable]
     public class UIViewEntry
     {
-#if ODIN_INSPECTOR
-        [HorizontalGroup("Main", 0.3f)]
-        [LabelWidth(80)]
-#endif
         [Tooltip("View的唯一标识名称，通常与类名一致")]
         public string viewName;
 
-#if ODIN_INSPECTOR
-        [HorizontalGroup("Main")]
-        [LabelWidth(50)]
-#endif
         [Tooltip("View的Prefab引用")]
         public GameObject prefab;
 
 #if ZEROENGINE_ADDRESSABLES
-#if ODIN_INSPECTOR
-        [HorizontalGroup("Main")]
-        [LabelWidth(80)]
-#endif
         [Tooltip("Addressables引用（优先于直接引用）")]
         public AssetReferenceGameObject prefabRef;
 #endif
 
-#if ODIN_INSPECTOR
-        [FoldoutGroup("Settings")]
-#endif
         [Tooltip("UI所在层级")]
         public UILayer layer = UILayer.Screen;
 
-#if ODIN_INSPECTOR
-        [FoldoutGroup("Settings")]
-#endif
         [Tooltip("显示模式")]
         public UIShowMode showMode = UIShowMode.Normal;
 
-#if ODIN_INSPECTOR
-        [FoldoutGroup("Settings")]
-#endif
         [Tooltip("关闭模式")]
         public UICloseMode closeMode = UICloseMode.Hide;
 
-#if ODIN_INSPECTOR
-        [FoldoutGroup("Display")]
-#endif
         [Tooltip("是否显示遮罩")]
         public bool showMask = false;
 
-#if ODIN_INSPECTOR
-        [FoldoutGroup("Display")]
-#endif
         [Tooltip("遮罩颜色")]
         public Color maskColor = new Color(0, 0, 0, 0.5f);
 
-#if ODIN_INSPECTOR
-        [FoldoutGroup("Display")]
-#endif
         [Tooltip("点击遮罩是否关闭")]
         public bool maskClickClose = true;
 
-#if ODIN_INSPECTOR
-        [FoldoutGroup("Display")]
-#endif
         [Tooltip("是否阻挡输入")]
         public bool blockInput = true;
 
-#if ODIN_INSPECTOR
-        [FoldoutGroup("Display")]
-#endif
         [Tooltip("是否允许ESC键关闭")]
         public bool allowESCClose = true;
 
-#if ODIN_INSPECTOR
-        [FoldoutGroup("Display")]
-#endif
         [Tooltip("打开时是否暂停游戏")]
         public bool pauseGame = false;
 
-#if ODIN_INSPECTOR
-        [FoldoutGroup("Animation")]
-#endif
         [Tooltip("打开动画类型")]
         public UIAnimationType openAnimation = UIAnimationType.Fade;
 
-#if ODIN_INSPECTOR
-        [FoldoutGroup("Animation")]
-#endif
         [Tooltip("关闭动画类型")]
         public UIAnimationType closeAnimation = UIAnimationType.Fade;
 
-#if ODIN_INSPECTOR
-        [FoldoutGroup("Animation")]
-        [Range(0.05f, 1f)]
-#endif
         [Tooltip("动画持续时间")]
         public float animationDuration = 0.2f;
 
-#if ODIN_INSPECTOR
-        [FoldoutGroup("Cache")]
-#endif
         [Tooltip("是否缓存实例")]
         public bool cache = true;
 

@@ -1,0 +1,25 @@
+{
+    "name": "ZeroEngine.ModSystem.Editor",
+    "rootNamespace": "ZeroEngine.ModSystem.Editor",
+    "references": [
+        "ZeroEngine",
+        "ZeroEngine.ModSystem",
+        "ZeroEngine.ModSystem.Legacy",
+        "ZeroEngine.Combat",
+        "ZeroEngine.Data",
+        "ZeroEngine.Economy"
+    ],
+    "includePlatforms": [
+        "Editor"
+    ],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": false,
+    "defineConstraints": [
+        "ZEROENGINE_MODSYSTEM_LEGACY"
+    ],
+    "versionDefines": [],
+    "noEngineReferences": false
+}

@@ -546,6 +546,23 @@ namespace ZeroEngine.Quest
             return _saveData.activeQuests;
         }
 
+        public QuestStateSnapshot GetQuestStateSnapshot(string questId)
+        {
+            var runtime = FindActiveQuest(questId);
+            var config = GetConfig(questId);
+            return QuestSnapshotFactory.Create(runtime, config);
+        }
+
+        public List<QuestStateSnapshot> GetActiveQuestSnapshots()
+        {
+            var result = new List<QuestStateSnapshot>(_saveData.activeQuests.Count);
+            foreach (var quest in _saveData.activeQuests)
+            {
+                result.Add(QuestSnapshotFactory.Create(quest, GetConfig(quest.questId)));
+            }
+            return result;
+        }
+
         /// <summary>
         /// 获取指定生命周期的活跃任务 (v1.3.0+)
         /// </summary>

@@ -1,0 +1,21 @@
+{
+  "name": "ZeroEngine.ModSystem.Tests.Editor",
+  "rootNamespace": "ZeroEngine.ModSystem.Tests.Editor",
+  "references": [
+    "ZeroEngine.ModSystem"
+  ],
+  "includePlatforms": [
+    "Editor"
+  ],
+  "excludePlatforms": [],
+  "allowUnsafeCode": false,
+  "overrideReferences": false,
+  "precompiledReferences": [],
+  "autoReferenced": true,
+  "defineConstraints": [],
+  "versionDefines": [],
+  "noEngineReferences": false,
+  "optionalUnityReferences": [
+    "TestAssemblies"
+  ]
+}

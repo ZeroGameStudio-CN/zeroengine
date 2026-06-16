@@ -30,6 +30,7 @@ namespace ZeroEngine.AbilitySystem
     /// Runtime instance of an ability with level and cooldown tracking.
     /// </summary>
     [Serializable]
+    [Obsolete("Legacy runtime ability instance. Use AbilityDefinition with AbilityExecutor and project IAbilityRuntimeServices adapters for new TCE content.")]
     public class AbilityInstance
     {
         public AbilityDataSO Data;
@@ -91,6 +92,7 @@ namespace ZeroEngine.AbilitySystem
     /// <summary>
     /// Handles ability casting, cooldowns, interruption, and effects.
     /// </summary>
+    [Obsolete("Legacy ability handler. Use AbilityExecutor and project flow adapters for new TCE content.")]
     public class AbilityHandler : MonoBehaviour, IAbilitySource
     {
         [SerializeField] private List<AbilityInstance> _abilities = new List<AbilityInstance>();

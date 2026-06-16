@@ -152,14 +152,10 @@ Unity.exe -runTests -testPlatform EditMode -projectPath "<项目路径>" -testRe
 - **(v1.1.0)** `ReconnectionHandler`: 自动断线重连（指数退避）
 
 ### 15. ModSystem (Mod系统)
-- **ModLoader**: Mod加载器核心，支持加载/卸载/重载
-- **ModManifest**: Mod清单数据结构，支持依赖/冲突声明
-- **ITypeRegistry**: 类型注册表接口，游戏项目实现以支持自定义类型
-- **IAssetRegistry**: 资源注册表接口，统一管理mod资源
-- **ModContentParser**: 内容解析器，从JSON创建ScriptableObject实例
-- **ModHotReloader**: 热重载组件，失焦/聚焦时自动检测并重载变化的mod
-- **LuaScriptRunner**: Lua脚本执行器（需要MoonSharp包）
-- **SteamWorkshopManager**: Steam Workshop集成（需要Steamworks.NET）
+- **Package dependency**: ModSystem has graduated into `com.zerogamestudio.zeroengine.modsystem`.
+- **Core contracts**: new projects should depend on `ZeroEngine.ModSystem` from the standalone package.
+- **Legacy compatibility**: old `$type` JSON import, `ModLoader`, hot reload, Lua hooks, legacy editor tools, and Steam helpers are available from the standalone package's legacy/optional assemblies.
+- **Project adapters**: games own card, weapon, quest, localization, save, and runtime config semantics.
 
 ### 16. Pool (对象池) (v1.2.0+)
 - **ObjectPool**: 通用对象池实现
@@ -235,4 +231,3 @@ Unity.exe -runTests -testPlatform EditMode -projectPath "<项目路径>" -testRe
 - **ScheduleAction**: 日程行动基类
 - **NPCScheduleController**: NPC 日程控制器
 - **NPCScheduleSO**: 日程 ScriptableObject
-

@@ -422,7 +422,7 @@ namespace ZeroEngine.Tutorial
             }
 
             // 尝试从场景中的 Canvas 查找
-            var canvases = FindObjectsOfType<Canvas>();
+            var canvases = FindObjectsByType<Canvas>(FindObjectsSortMode.None);
             foreach (var canvas in canvases)
             {
                 var child = canvas.transform.Find(path);

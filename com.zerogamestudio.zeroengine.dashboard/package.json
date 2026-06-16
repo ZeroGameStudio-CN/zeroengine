@@ -5,7 +5,9 @@
     "description": "ZeroEngine 编辑器控制中心，支持轻量项目使用。通过条件编译自动适配已安装的包。",
     "unity": "2022.3",
     "dependencies": {
-        "com.zerogamestudio.zeroengine.core": "1.0.0"
+        "com.zerogamestudio.zeroengine.core": "2.0.0",
+        "com.zerogamestudio.zeroengine.economy": "2.0.0",
+        "com.zerogamestudio.zeroengine.persistence": "2.0.0"
     },
     "keywords": [
         "editor",

@@ -363,6 +363,54 @@ namespace ZeroEngine.Cinematic.Tests
         }
 
         [Test]
+        public void Play_WhenLifecycleEnterFails_DoesNotMutateDirectorAssetOrBindings()
+        {
+            var previousTimeline = ScriptableObject.CreateInstance<TimelineAsset>();
+            var previousTrack = previousTimeline.CreateTrack<ActivationTrack>(null, "previous.actor");
+            var nextTimeline = ScriptableObject.CreateInstance<TimelineAsset>();
+            var nextTrack = nextTimeline.CreateTrack<ActivationTrack>(null, "next.actor");
+            var sequence = ScriptableObject.CreateInstance<CinematicSequenceDefinition>();
+            SetString(sequence, "_sequenceId", "cinematic.test");
+            SetObject(sequence, "_timelineAsset", nextTimeline);
+            SetBindingRequirements(sequence, new[] { new BindingRequirementSetup("actor.storyteller", nextTrack) });
+            var directorObject = new GameObject("Director");
+            var director = directorObject.AddComponent<PlayableDirector>();
+            var previousBinding = new GameObject("PreviousBinding");
+            var nextBinding = new GameObject("NextBinding");
+            director.playableAsset = previousTimeline;
+            director.SetGenericBinding(previousTrack, previousBinding);
+            var registry = new CinematicBindingRegistry();
+            registry.Register("actor.storyteller", nextBinding);
+            var events = new List<string>();
+            var services = new CinematicProjectPlaybackServices(
+                new ICinematicProjectPlaybackService[]
+                {
+                    new ThrowingEnterPlaybackService("camera", events)
+                });
+            var adapter = new CinematicPlayableDirectorAdapter();
+
+            var result = adapter.Play(
+                CinematicPlayRequest.FromSequence(sequence),
+                sequence,
+                director,
+                registry,
+                services);
+
+            Assert.AreEqual(CinematicPlayStatus.Failed, result.Status);
+            Assert.AreSame(previousTimeline, director.playableAsset);
+            Assert.AreSame(previousBinding, director.GetGenericBinding(previousTrack));
+            Assert.IsNull(director.GetGenericBinding(nextTrack));
+            Assert.AreNotEqual(PlayState.Playing, director.state);
+            CollectionAssert.AreEqual(new[] { "enter:camera:cinematic.test" }, events);
+            Object.DestroyImmediate(nextBinding);
+            Object.DestroyImmediate(previousBinding);
+            Object.DestroyImmediate(directorObject);
+            Object.DestroyImmediate(sequence);
+            Object.DestroyImmediate(nextTimeline);
+            Object.DestroyImmediate(previousTimeline);
+        }
+
+        [Test]
         public void Stop_StopsDirectorAndInvokesLifecycleServicesInReverseOrder()
         {
             var timeline = ScriptableObject.CreateInstance<TimelineAsset>();

@@ -6,7 +6,13 @@
     "unity": "2022.3",
     "unityRelease": "0f1",
     "dependencies": {
-        "com.zerogamestudio.zeroengine.core": "2.0.0"
+        "com.zerogamestudio.zeroengine.core": "2.0.0",
+        "com.unity.netcode.gameobjects": "2.9.1",
+        "com.unity.services.core": "1.16.0",
+        "com.unity.services.authentication": "3.6.0",
+        "com.unity.services.lobby": "1.2.2",
+        "com.unity.services.relay": "1.1.1",
+        "com.unity.transport": "2.6.0"
     },
     "keywords": ["zeroengine", "network", "multiplayer"],
     "author": { "name": "ZeroGameStudio" }

@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using UnityEngine;
+using ZeroEngine.Economy;
 
 namespace ZeroEngine.Crafting
 {
@@ -124,18 +125,18 @@ namespace ZeroEngine.Crafting
         /// <summary>
         /// 检查材料是否充足
         /// </summary>
-        public bool Check(Inventory.InventoryManager inventory)
+        public bool Check(IInventoryProvider inventory)
         {
             if (Item == null) return true;
-            return inventory.GetItemCount(Item) >= Amount;
+            return inventory != null && inventory.GetItemCount(Item) >= Amount;
         }
 
         /// <summary>
         /// 消耗材料
         /// </summary>
-        public void Consume(Inventory.InventoryManager inventory)
+        public void Consume(IInventoryProvider inventory)
         {
-            if (Item == null || !IsConsumed) return;
+            if (inventory == null || Item == null || !IsConsumed) return;
             inventory.RemoveItem(Item, Amount);
         }
     }

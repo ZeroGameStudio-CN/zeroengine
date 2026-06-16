@@ -1,0 +1,23 @@
+{
+  "name": "ZeroEngine.TCE.ModSystem",
+  "rootNamespace": "ZeroEngine.TCE.ModSystem",
+  "references": [
+    "ZeroEngine.TCE",
+    "ZeroEngine.ModSystem"
+  ],
+  "includePlatforms": [],
+  "excludePlatforms": [],
+  "allowUnsafeCode": false,
+  "overrideReferences": false,
+  "precompiledReferences": [],
+  "autoReferenced": true,
+  "defineConstraints": [],
+  "versionDefines": [
+    {
+      "name": "com.unity.nuget.newtonsoft-json",
+      "expression": "",
+      "define": "NEWTONSOFT_JSON"
+    }
+  ],
+  "noEngineReferences": false
+}

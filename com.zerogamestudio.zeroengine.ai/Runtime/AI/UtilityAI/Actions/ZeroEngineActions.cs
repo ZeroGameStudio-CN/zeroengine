@@ -196,7 +196,8 @@ namespace ZeroEngine.AI.UtilityAI
         [SerializeField] private bool _loop = true;
 
         private NavMeshAgent _navAgent;
-        private Vector3[] _patrolPoints;
+        private Vector3[] _configuredPatrolPoints;
+        private Vector3[] _activePatrolPoints;
         private int _currentIndex;
         private bool _isWaiting;
         private float _waitTimer;
@@ -213,9 +214,13 @@ namespace ZeroEngine.AI.UtilityAI
 
             // 从黑板获取巡逻点
             _currentIndex = context.Blackboard.GetInt(BlackboardKeys.PatrolIndex, 0);
+            _activePatrolPoints = _configuredPatrolPoints;
+            if (!string.IsNullOrEmpty(_patrolPointsKey) &&
+                context.Blackboard.TryGet<Vector3[]>(_patrolPointsKey, out var patrolPoints))
+            {
+                _activePatrolPoints = patrolPoints;
+            }
 
-            // 假设巡逻点存储在黑板中
-            // 实际使用时可以通过其他方式设置
             context.IsMoving = true;
 
             MoveToCurrentPoint(context);
@@ -223,7 +228,7 @@ namespace ZeroEngine.AI.UtilityAI
 
         protected override AIActionResult OnUpdate(AIContext context, float deltaTime)
         {
-            if (_patrolPoints == null || _patrolPoints.Length == 0)
+            if (_activePatrolPoints == null || _activePatrolPoints.Length == 0)
             {
                 return AIActionResult.Failed("No patrol points");
             }
@@ -255,9 +260,9 @@ namespace ZeroEngine.AI.UtilityAI
 
         private void MoveToCurrentPoint(AIContext context)
         {
-            if (_navAgent != null && _patrolPoints != null && _currentIndex < _patrolPoints.Length)
+            if (_navAgent != null && _activePatrolPoints != null && _currentIndex < _activePatrolPoints.Length)
             {
-                _navAgent.SetDestination(_patrolPoints[_currentIndex]);
+                _navAgent.SetDestination(_activePatrolPoints[_currentIndex]);
             }
         }
 
@@ -265,7 +270,7 @@ namespace ZeroEngine.AI.UtilityAI
         {
             _currentIndex++;
 
-            if (_currentIndex >= _patrolPoints.Length)
+            if (_currentIndex >= _activePatrolPoints.Length)
             {
                 if (_loop)
                 {
@@ -273,7 +278,7 @@ namespace ZeroEngine.AI.UtilityAI
                 }
                 else
                 {
-                    _currentIndex = _patrolPoints.Length - 1;
+                    _currentIndex = _activePatrolPoints.Length - 1;
                 }
             }
 
@@ -290,7 +295,8 @@ namespace ZeroEngine.AI.UtilityAI
         /// </summary>
         public void SetPatrolPoints(Vector3[] points)
         {
-            _patrolPoints = points;
+            _configuredPatrolPoints = points;
+            _activePatrolPoints = points;
             _currentIndex = 0;
         }
     }

@@ -165,20 +165,50 @@ namespace ZeroEngine.Achievement
 
         #region Provider Management
 
+        private const string SteamAchievementProviderTypeName =
+            "ZeroEngine.Achievement.Providers.SteamAchievementProvider, ZeroEngine.Narrative.Steam";
+
         private void InitializeProviders()
         {
 #if STEAMWORKS_NET
             if (_autoInitializeSteam)
             {
-                var steamProvider = new Providers.SteamAchievementProvider();
-                if (steamProvider.Initialize())
+                TryAutoInitializeSteamProvider();
+            }
+#endif
+        }
+
+#if STEAMWORKS_NET
+        private void TryAutoInitializeSteamProvider()
+        {
+            try
+            {
+                var providerType = Type.GetType(SteamAchievementProviderTypeName);
+                if (providerType == null)
+                {
+                    Debug.LogWarning("[Achievement] Steam provider assembly was not found.");
+                    return;
+                }
+
+                if (!typeof(IAchievementProvider).IsAssignableFrom(providerType))
+                {
+                    Debug.LogWarning("[Achievement] Steam provider type does not implement IAchievementProvider.");
+                    return;
+                }
+
+                if (Activator.CreateInstance(providerType) is IAchievementProvider steamProvider &&
+                    steamProvider.Initialize())
                 {
                     _providers.Add(steamProvider);
                     Log("Steam Provider initialized.");
                 }
             }
-#endif
+            catch (Exception e)
+            {
+                Debug.LogWarning($"[Achievement] Failed to initialize Steam provider: {e.Message}");
+            }
         }
+#endif
 
         /// <summary>
         /// 注册外部成就提供者

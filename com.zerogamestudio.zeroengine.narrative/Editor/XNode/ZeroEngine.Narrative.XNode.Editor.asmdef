@@ -1,0 +1,28 @@
+{
+  "name": "ZeroEngine.Narrative.XNode.Editor",
+  "rootNamespace": "ZeroEngine.Editor.Dialog",
+  "references": [
+    "ZeroEngine.Narrative",
+    "ZeroEngine.Narrative.XNode",
+    "ZeroEngine.Core"
+  ],
+  "includePlatforms": [
+    "Editor"
+  ],
+  "excludePlatforms": [],
+  "allowUnsafeCode": false,
+  "overrideReferences": false,
+  "precompiledReferences": [],
+  "autoReferenced": true,
+  "defineConstraints": [
+    "XNODE_PRESENT"
+  ],
+  "versionDefines": [
+    {
+      "name": "com.github.siccity.xnode",
+      "expression": "",
+      "define": "XNODE_PRESENT"
+    }
+  ],
+  "noEngineReferences": false
+}

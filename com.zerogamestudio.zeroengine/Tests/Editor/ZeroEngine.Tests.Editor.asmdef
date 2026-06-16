@@ -10,6 +10,7 @@
         "ZeroEngine.Editor",
         "ZeroEngine.AI",
         "ZeroEngine.Economy",
+        "ZeroEngine.ModSystem",
         "ZeroEngine.Social",
         "ZeroEngine.UI",
         "UnityEngine.TestRunner",

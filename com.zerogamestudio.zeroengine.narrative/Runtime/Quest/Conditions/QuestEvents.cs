@@ -11,6 +11,11 @@ namespace ZeroEngine.Quest
         public const string Interacted = "Quest.Interacted";
         public const string LocationReached = "Quest.LocationReached";
         public const string SurviveCompleted = "Quest.SurviveCompleted";
+        public const string NpcTalked = "Quest.NpcTalked";
+        public const string ItemCollected = "Quest.ItemCollected";
+        public const string EnemyKilled = "Quest.EnemyKilled";
+        public const string BattleWon = "Quest.BattleWon";
+        public const string InteractionCompleted = "Quest.InteractionCompleted";
 
         // 任务状态事件
         public const string QuestAccepted = "Quest.Accepted";

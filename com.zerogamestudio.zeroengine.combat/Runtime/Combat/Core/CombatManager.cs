@@ -35,6 +35,12 @@ namespace ZeroEngine.Combat
         /// <summary>是否处于战斗中</summary>
         public bool IsInCombat => _activeContexts.Count > 0;
 
+        /// <summary>战斗单位是否应在 Awake 阶段自动注册</summary>
+        public bool AutoRegisterOnAwake => _autoRegisterOnAwake;
+
+        /// <summary>默认战斗退出延迟</summary>
+        public float CombatExitDelay => _combatExitDelay;
+
         /// <summary>战斗开始事件</summary>
         public event Action<CombatContext> OnCombatStarted;
 

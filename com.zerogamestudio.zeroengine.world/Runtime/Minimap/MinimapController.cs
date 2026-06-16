@@ -45,6 +45,7 @@ namespace ZeroEngine.Minimap
         private RenderTexture _renderTexture;
         private float _targetZoom;
         private Vector3 _targetPosition;
+        private bool _markerEventsSubscribed;
         private readonly Dictionary<MinimapMarkerType, MarkerIconConfig> _iconLookup = new Dictionary<MinimapMarkerType, MarkerIconConfig>();
 
         #region Properties
@@ -85,6 +86,16 @@ namespace ZeroEngine.Minimap
             base.Awake();
             BuildIconLookup();
             SetupCamera();
+        }
+
+        private void OnEnable()
+        {
+            SubscribeMarkerEvents();
+        }
+
+        private void OnDisable()
+        {
+            UnsubscribeMarkerEvents();
         }
 
         private void Start()
@@ -291,6 +302,34 @@ namespace ZeroEngine.Minimap
                 if (config != null)
                     _iconLookup[config.MarkerType] = config;
             }
+        }
+
+        private void SubscribeMarkerEvents()
+        {
+            if (_markerEventsSubscribed) return;
+
+            MinimapMarkerManager.OnMarkerRegistered += HandleMarkerRegistered;
+            MinimapMarkerManager.OnMarkerUnregistered += HandleMarkerUnregistered;
+            _markerEventsSubscribed = true;
+        }
+
+        private void UnsubscribeMarkerEvents()
+        {
+            if (!_markerEventsSubscribed) return;
+
+            MinimapMarkerManager.OnMarkerRegistered -= HandleMarkerRegistered;
+            MinimapMarkerManager.OnMarkerUnregistered -= HandleMarkerUnregistered;
+            _markerEventsSubscribed = false;
+        }
+
+        private void HandleMarkerRegistered(MinimapMarker marker)
+        {
+            OnMinimapEvent?.Invoke(MinimapEventArgs.MarkerAdded(marker));
+        }
+
+        private void HandleMarkerUnregistered(MinimapMarker marker)
+        {
+            OnMinimapEvent?.Invoke(MinimapEventArgs.MarkerRemoved(marker));
         }
 
         [System.Diagnostics.Conditional("UNITY_EDITOR")]

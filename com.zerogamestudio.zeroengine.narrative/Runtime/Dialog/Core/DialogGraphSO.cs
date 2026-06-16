@@ -134,44 +134,12 @@ namespace ZeroEngine.Dialog
         /// </summary>
         public List<string> Validate()
         {
-            var errors = new List<string>();
-            EnsureCache();
-
-            // Check for start node
-            bool hasStart = false;
-            bool hasEnd = false;
-
-            foreach (var node in Nodes)
+            var issues = DialogGraphValidator.Validate(this, DialogGraphValidationOptions.Default);
+            var errors = new List<string>(issues.Count);
+            foreach (var issue in issues)
             {
-                if (node.Type == DialogNodeType.Start) hasStart = true;
-                if (node.Type == DialogNodeType.End) hasEnd = true;
-
-                // Check output connections
-                var outputs = node.GetOutputNodeIds();
-                foreach (var outputId in outputs)
-                {
-                    if (!string.IsNullOrEmpty(outputId) &&
-                        outputId != "__END__" &&
-                        !_nodeCache.ContainsKey(outputId))
-                    {
-                        errors.Add($"Node '{node.Id}' references non-existent node '{outputId}'");
-                    }
-                }
+                errors.Add(issue.Message);
             }
-
-            if (!hasStart) errors.Add("Graph has no Start node");
-            if (!hasEnd) errors.Add("Graph has no End node");
-
-            // Check for duplicate IDs
-            var seenIds = new HashSet<string>();
-            foreach (var node in Nodes)
-            {
-                if (!seenIds.Add(node.Id))
-                {
-                    errors.Add($"Duplicate node ID: '{node.Id}'");
-                }
-            }
-
             return errors;
         }
 

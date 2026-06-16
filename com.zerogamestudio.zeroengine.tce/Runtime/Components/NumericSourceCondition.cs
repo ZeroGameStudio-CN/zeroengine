@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 
 namespace ZeroEngine.TCE
 {
@@ -48,10 +49,19 @@ namespace ZeroEngine.TCE
     }
 
     [Serializable]
-    [TceComponentDoc(TceComponentDocCategory.Condition, "Numeric Source", "Compares a numeric value supplied by the trigger source.", "Use this condition when the trigger source can expose a simple numeric value without depending on a project-specific stat, resource, or damage model.")]
-    public sealed class NumericSourceConditionData : TceConditionData<NumericSourceCondition>
+    [TceComponentDoc(TceComponentDocCategory.Condition, "zeroengine.tce.condition.numeric_source", "Numeric Source", "Compares a numeric value supplied by the trigger source.", "Use this condition when the trigger source can expose a simple numeric value without depending on a project-specific stat, resource, or damage model.")]
+    public sealed class NumericSourceConditionData : TceConditionData<NumericSourceCondition>, ITceComponentDataValidator
     {
+        [TceFieldDoc("Numeric threshold compared against the trigger source value.")]
         public float RequiredValue;
+
+        [TceFieldDoc("Comparison operation applied to the trigger source value.")]
         public TceComparison Comparison = TceComparison.GreaterThanOrEqualTo;
+
+        public void Validate(TceComponentValidationContext context, List<TceValidationIssue> issues)
+        {
+            if (!Enum.IsDefined(typeof(TceComparison), Comparison))
+                issues.Add(new TceValidationIssue(TceValidationSeverity.Error, TceValidationCodes.InvalidEnumValue, $"{context.Path}.Comparison", "Comparison must be a defined TceComparison value."));
+        }
     }
 }
