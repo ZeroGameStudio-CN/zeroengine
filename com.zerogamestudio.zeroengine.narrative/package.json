@@ -1,14 +1,27 @@
 {
-    "name": "com.zerogamestudio.zeroengine.narrative",
-    "version": "2.0.0",
-    "displayName": "ZeroEngine.Narrative",
-    "description": "Narrative and content systems for ZeroEngine. Includes Dialog System (node graph, branching, conditions), Quest System (objectives, rewards), and Achievement System (counters, Steam integration).",
-    "unity": "2022.3",
-    "unityRelease": "0f1",
-    "dependencies": {
-        "com.zerogamestudio.zeroengine.core": "2.0.0",
-        "com.zerogamestudio.zeroengine.persistence": "2.0.0"
-    },
-    "keywords": ["zeroengine", "dialog", "quest", "achievement"],
-    "author": { "name": "ZeroGameStudio" }
+  "name": "com.zerogamestudio.zeroengine.narrative",
+  "version": "2.0.0",
+  "displayName": "ZeroEngine.Narrative",
+  "description": "Narrative and content systems for ZeroEngine. Includes Dialog System (node graph, branching, conditions), Quest System (objectives, rewards), and Achievement System (counters, Steam integration).",
+  "unity": "2022.3",
+  "unityRelease": "0f1",
+  "dependencies": {
+    "com.zerogamestudio.zeroengine.core": "2.0.0",
+    "com.zerogamestudio.zeroengine.persistence": "2.0.0"
+  },
+  "keywords": [
+    "zeroengine",
+    "dialog",
+    "quest",
+    "achievement"
+  ],
+  "author": {
+    "name": "ZeroGameStudio"
+  },
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/liuzqk/zeroengine.git",
+    "directory": "com.zerogamestudio.zeroengine.narrative"
+  }
 }

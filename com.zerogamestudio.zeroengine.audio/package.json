@@ -1,14 +1,27 @@
 {
-    "name": "com.zerogamestudio.zeroengine.audio",
-    "version": "2.0.0",
-    "displayName": "ZeroEngine.Audio",
-    "description": "Audio management for ZeroEngine. Includes AudioManager with BGM/SFX channels, pooled audio sources, and volume control.",
-    "unity": "2022.3",
-    "unityRelease": "0f1",
-    "dependencies": {
-        "com.zerogamestudio.zeroengine.core": "2.0.0",
-        "com.zerogamestudio.zeroengine.persistence": "2.0.0"
-    },
-    "keywords": ["zeroengine", "audio", "sound", "music"],
-    "author": { "name": "ZeroGameStudio" }
+  "name": "com.zerogamestudio.zeroengine.audio",
+  "version": "2.0.0",
+  "displayName": "ZeroEngine.Audio",
+  "description": "Audio management for ZeroEngine. Includes AudioManager with BGM/SFX channels, pooled audio sources, and volume control.",
+  "unity": "2022.3",
+  "unityRelease": "0f1",
+  "dependencies": {
+    "com.zerogamestudio.zeroengine.core": "2.0.0",
+    "com.zerogamestudio.zeroengine.persistence": "2.0.0"
+  },
+  "keywords": [
+    "zeroengine",
+    "audio",
+    "sound",
+    "music"
+  ],
+  "author": {
+    "name": "ZeroGameStudio"
+  },
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/liuzqk/zeroengine.git",
+    "directory": "com.zerogamestudio.zeroengine.audio"
+  }
 }

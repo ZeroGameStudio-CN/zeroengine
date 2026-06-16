@@ -1,24 +1,30 @@
 {
-    "name": "com.zerogamestudio.zeroengine.persistence",
-    "version": "2.0.0",
-    "displayName": "ZeroEngine.Persistence",
-    "description": "Persistence systems for ZeroEngine. Includes multi-slot Save System with screenshot support, ISaveable interface, and Settings System for audio/graphics/language preferences.",
-    "unity": "2022.3",
-    "unityRelease": "0f1",
-    "dependencies": {
-        "com.zerogamestudio.zeroengine.core": "2.0.0"
-    },
-    "keywords": [
-        "zeroengine",
-        "save",
-        "load",
-        "persistence",
-        "settings",
-        "preferences",
-        "slot"
-    ],
-    "author": {
-        "name": "ZeroGameStudio",
-        "url": "https://github.com/zerogamestudio"
-    }
+  "name": "com.zerogamestudio.zeroengine.persistence",
+  "version": "2.0.0",
+  "displayName": "ZeroEngine.Persistence",
+  "description": "Persistence systems for ZeroEngine. Includes multi-slot Save System with screenshot support, ISaveable interface, and Settings System for audio/graphics/language preferences.",
+  "unity": "2022.3",
+  "unityRelease": "0f1",
+  "dependencies": {
+    "com.zerogamestudio.zeroengine.core": "2.0.0"
+  },
+  "keywords": [
+    "zeroengine",
+    "save",
+    "load",
+    "persistence",
+    "settings",
+    "preferences",
+    "slot"
+  ],
+  "author": {
+    "name": "ZeroGameStudio",
+    "url": "https://github.com/zerogamestudio"
+  },
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/liuzqk/zeroengine.git",
+    "directory": "com.zerogamestudio.zeroengine.persistence"
+  }
 }

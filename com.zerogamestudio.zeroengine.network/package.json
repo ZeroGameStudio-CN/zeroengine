@@ -1,13 +1,25 @@
 {
-    "name": "com.zerogamestudio.zeroengine.network",
-    "version": "2.0.0",
-    "displayName": "ZeroEngine.Network",
-    "description": "Network synchronization for ZeroEngine. Wraps Netcode for GameObjects with reconnection handling.",
-    "unity": "2022.3",
-    "unityRelease": "0f1",
-    "dependencies": {
-        "com.zerogamestudio.zeroengine.core": "2.0.0"
-    },
-    "keywords": ["zeroengine", "network", "multiplayer"],
-    "author": { "name": "ZeroGameStudio" }
+  "name": "com.zerogamestudio.zeroengine.network",
+  "version": "2.0.0",
+  "displayName": "ZeroEngine.Network",
+  "description": "Network synchronization for ZeroEngine. Wraps Netcode for GameObjects with reconnection handling.",
+  "unity": "2022.3",
+  "unityRelease": "0f1",
+  "dependencies": {
+    "com.zerogamestudio.zeroengine.core": "2.0.0"
+  },
+  "keywords": [
+    "zeroengine",
+    "network",
+    "multiplayer"
+  ],
+  "author": {
+    "name": "ZeroGameStudio"
+  },
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/liuzqk/zeroengine.git",
+    "directory": "com.zerogamestudio.zeroengine.network"
+  }
 }
