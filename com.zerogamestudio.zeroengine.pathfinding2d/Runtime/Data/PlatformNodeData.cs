@@ -183,7 +183,7 @@ namespace ZeroEngine.Pathfinding2D
                 FromNodeId = from,
                 ToNodeId = to,
                 LinkType = PlatformLinkType.Jump,
-                Cost = duration * 2f, // 跳跃代价较高
+                Cost = duration * 2f + Mathf.Abs(velocityX) * 0.5f,
                 JumpVelocityY = velocityY,
                 JumpVelocityX = velocityX,
                 Duration = duration,
