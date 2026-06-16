@@ -36,8 +36,8 @@
 
 ## Task 3: Verify, Review, Push
 
-- [ ] Run focused package tests for `ServiceRegistryTests` and `SourceGuardScannerTests`.
-- [ ] Run source checks showing no P5 references in the touched ZE packages.
-- [ ] Write `docs/reviews/2026-06-16-service-registry-source-guard-review.md`.
-- [ ] Commit and push the branch.
-- [ ] Record the pushed commit hash for P5 package pinning.
+- [x] Run focused package tests for `ServiceRegistryTests` and `SourceGuardScannerTests`.
+- [x] Run source checks showing no P5 references in the touched ZE packages.
+- [x] Write `docs/reviews/2026-06-16-service-registry-source-guard-review.md`.
+- [x] Commit and push the branch.
+- [x] Record the pushed commit hash for P5 package pinning.
