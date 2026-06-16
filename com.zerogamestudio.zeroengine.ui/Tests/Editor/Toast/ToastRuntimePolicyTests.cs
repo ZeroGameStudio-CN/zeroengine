@@ -163,24 +163,25 @@ namespace ZeroEngine.UI.Tests.Editor.Toast
             var presenter = new RecordingPresenter();
             manager.Configure(settings, null, presenter);
 
-            var startTime = Time.unscaledTime;
             manager.Show(ToastRequest.Text("one"));
             manager.Show(ToastRequest.Text("two"));
             manager.Show(ToastRequest.Text("three"));
 
-            Tick(manager, startTime + 0.49f);
+            var nextAllowedShowTime = GetNextAllowedShowTime(manager);
+            Tick(manager, nextAllowedShowTime - 0.01f);
             Assert.AreEqual(1, manager.ActiveCount);
             Assert.AreEqual(2, manager.QueuedCount);
 
-            Tick(manager, startTime + 0.5f);
+            Tick(manager, nextAllowedShowTime);
             Assert.AreEqual(2, manager.ActiveCount);
             Assert.AreEqual(1, manager.QueuedCount);
 
-            Tick(manager, startTime + 0.99f);
+            nextAllowedShowTime = GetNextAllowedShowTime(manager);
+            Tick(manager, nextAllowedShowTime - 0.01f);
             Assert.AreEqual(2, manager.ActiveCount);
             Assert.AreEqual(1, manager.QueuedCount);
 
-            Tick(manager, startTime + 1f);
+            Tick(manager, nextAllowedShowTime);
             Assert.AreEqual(3, manager.ActiveCount);
             Assert.AreEqual(0, manager.QueuedCount);
             Assert.AreEqual(3, presenter.ShowCount);
@@ -195,7 +196,6 @@ namespace ZeroEngine.UI.Tests.Editor.Toast
             var presenter = new RecordingPresenter();
             manager.Configure(settings, null, presenter);
 
-            var startTime = Time.unscaledTime;
             var first = manager.Show(ToastRequest.Text("one"));
             manager.Show(ToastRequest.Text("two"));
             manager.Show(ToastRequest.Text("three"));
@@ -203,21 +203,22 @@ namespace ZeroEngine.UI.Tests.Editor.Toast
             manager.Show(ToastRequest.Text("five"));
             manager.Show(ToastRequest.Text("six"));
 
-            Tick(manager, startTime + 0.5f);
-            Tick(manager, startTime + 1f);
-            Tick(manager, startTime + 1.5f);
-            Tick(manager, startTime + 2f);
+            Tick(manager, GetNextAllowedShowTime(manager));
+            Tick(manager, GetNextAllowedShowTime(manager));
+            Tick(manager, GetNextAllowedShowTime(manager));
+            Tick(manager, GetNextAllowedShowTime(manager));
 
             Assert.AreEqual(5, manager.ActiveCount);
             Assert.AreEqual(1, manager.QueuedCount);
             Assert.IsFalse(first.IsDismissed);
 
             first.Dismiss();
-            Tick(manager, startTime + 2.49f);
+            var nextAllowedShowTime = GetNextAllowedShowTime(manager);
+            Tick(manager, nextAllowedShowTime - 0.01f);
             Assert.AreEqual(4, manager.ActiveCount);
             Assert.AreEqual(1, manager.QueuedCount);
 
-            Tick(manager, startTime + 2.5f);
+            Tick(manager, nextAllowedShowTime);
             Assert.AreEqual(5, manager.ActiveCount);
             Assert.AreEqual(0, manager.QueuedCount);
             Assert.IsTrue(presenter.WasTextShown("six"));
@@ -753,6 +754,15 @@ namespace ZeroEngine.UI.Tests.Editor.Toast
                 System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.NonPublic);
             Assert.IsNotNull(method);
             method.Invoke(manager, new object[] { unscaledTime });
+        }
+
+        private static float GetNextAllowedShowTime(ToastManager manager)
+        {
+            var field = typeof(ToastManager).GetField(
+                "nextAllowedShowTime",
+                System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic);
+            Assert.IsNotNull(field);
+            return (float)field.GetValue(manager);
         }
 
         private static ToastContainer CreateContainer(Transform parent, ToastAnchor anchor, ToastItemView itemPrefab)
