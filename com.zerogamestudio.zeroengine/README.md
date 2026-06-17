@@ -14,8 +14,8 @@ ZeroEngine 是一个模块化的 Unity 游戏开发框架，提供常用游戏�
 | 文档 | 说明 |
 |------|------|
 | [CHANGELOG.md](CHANGELOG.md) | 版本历史和更新记录 |
-| [ROADMAP.md](../../ROADMAP.md) | 版本路线图和开发规划 |
-| [CLAUDE.md](../../CLAUDE.md) | AI 开发助手指南 |
+| [AGENTS.md](../AGENTS.md) | AI 开发助手和接入约束 |
+| [consumer-project-setup.md](../docs/consumer-project-setup.md) | 其他项目接入 ZeroEngine 的标准流程 |
 | `Runtime/{Module}/README.md` | 各模块 API 文档 |
 
 ---
@@ -102,9 +102,11 @@ ZeroEngine 是一个模块化的 Unity 游戏开发框架，提供常用游戏�
 - **ZeroEase**: 缓动曲线枚举（解耦 DOTween 依赖）
 
 ## 使用方式
-1. 将 `ZeroEngine` 文件夹导入项目
-2. 通过菜单 **ZeroEngine -> Dashboard** 打开管理面板
-3. 各模块单例在需要时自动初始化
+1. 在消费项目的 `Packages/manifest.json` 中通过 Git UPM URL 引用需要的 ZeroEngine 包，并 pin 到测试过的 commit。
+2. 若需要控制面板，添加 `com.zerogamestudio.zeroengine.dashboard` 后通过菜单 **ZeroEngine -> Dashboard** 打开。
+3. 各模块单例在需要时自动初始化。
+
+标准接入和升级流程见根目录的 [Consumer Project Setup](../docs/consumer-project-setup.md)。不要将 `ZeroEngine` 文件夹复制到消费项目中作为正式接入方式。
 
 ## 可选依赖
 - **UniTask**: 异步任务增强
@@ -235,4 +237,3 @@ Unity.exe -runTests -testPlatform EditMode -projectPath "<项目路径>" -testRe
 - **ScheduleAction**: 日程行动基类
 - **NPCScheduleController**: NPC 日程控制器
 - **NPCScheduleSO**: 日程 ScriptableObject
-

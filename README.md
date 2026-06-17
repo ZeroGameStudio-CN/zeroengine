@@ -41,10 +41,11 @@ network, RPG, social, world, and editor dashboard systems.
 ## Installation
 
 Add packages through Unity Package Manager using a Git URL with the package
-path you need:
+path you need. Consumer projects should use GitHub as the source of truth, not
+a copied `ZeroEngine` folder from a local checkout:
 
 ```text
-https://github.com/liuzqk/zeroengine.git?path=com.zerogamestudio.zeroengine.core#main
+https://github.com/liuzqk/zeroengine.git?path=com.zerogamestudio.zeroengine.core#<tested-commit>
 ```
 
 For example, a project `Packages/manifest.json` can pin several packages:
@@ -52,14 +53,17 @@ For example, a project `Packages/manifest.json` can pin several packages:
 ```json
 {
   "dependencies": {
-    "com.zerogamestudio.zeroengine.core": "https://github.com/liuzqk/zeroengine.git?path=com.zerogamestudio.zeroengine.core#main",
-    "com.zerogamestudio.zeroengine.pathfinding2d": "https://github.com/liuzqk/zeroengine.git?path=com.zerogamestudio.zeroengine.pathfinding2d#main",
-    "com.zerogamestudio.zeroengine.ui": "https://github.com/liuzqk/zeroengine.git?path=com.zerogamestudio.zeroengine.ui#main"
+    "com.zerogamestudio.zeroengine.core": "https://github.com/liuzqk/zeroengine.git?path=com.zerogamestudio.zeroengine.core#<tested-commit>",
+    "com.zerogamestudio.zeroengine.pathfinding2d": "https://github.com/liuzqk/zeroengine.git?path=com.zerogamestudio.zeroengine.pathfinding2d#<tested-commit>",
+    "com.zerogamestudio.zeroengine.ui": "https://github.com/liuzqk/zeroengine.git?path=com.zerogamestudio.zeroengine.ui#<tested-commit>"
   }
 }
 ```
 
-For production work I usually pin a tested commit hash instead of `#main`.
+Keep all ZeroEngine package entries in a consumer project on the same tested
+commit unless you are deliberately validating a version split. See
+[Consumer Project Setup](docs/consumer-project-setup.md) for the upgrade flow
+and the narrow case where a temporary local `file:` dependency is acceptable.
 
 ## Repository Layout
 

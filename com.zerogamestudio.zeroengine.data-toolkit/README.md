@@ -15,10 +15,10 @@ validating project data assets.
 Add the package through Unity Package Manager:
 
 ```text
-https://github.com/liuzqk/zeroengine.git?path=com.zerogamestudio.zeroengine.data-toolkit#main
+https://github.com/liuzqk/zeroengine.git?path=com.zerogamestudio.zeroengine.data-toolkit#<tested-commit>
 ```
 
-In production, pin a tested commit hash instead of `#main`.
+Use a tested commit hash for production projects.
 
 ## Requirements
 

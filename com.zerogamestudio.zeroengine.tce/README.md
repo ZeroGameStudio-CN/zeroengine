@@ -18,6 +18,17 @@ Game-specific projects should connect to the package through adapter assemblies.
 
 This first extraction slice is synchronous. Delayed trigger scheduling belongs in a later scheduler adapter after the owning game can route callbacks through its gameplay clock.
 
+## Install
+
+Use the package through Unity Package Manager from this repository:
+
+```text
+https://github.com/liuzqk/zeroengine.git?path=com.zerogamestudio.zeroengine.tce#<tested-commit>
+```
+
+Downstream projects should pin a tested ZeroEngine commit hash and keep related
+ZeroEngine packages on the same commit.
+
 ## First Generic Components
 
 - `OnInstallTrigger`

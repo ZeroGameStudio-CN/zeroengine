@@ -21,10 +21,12 @@ ZeroGameStudio 游戏分析 SDK，支持自建 ClickHouse 数据平台。
 ```json
 {
   "dependencies": {
-    "com.zerogamestudio.analytics": "https://github.com/liuzqk/zeroengine.git?path=com.zerogamestudio.analytics"
+    "com.zerogamestudio.analytics": "https://github.com/liuzqk/zeroengine.git?path=com.zerogamestudio.analytics#<tested-commit>"
   }
 }
 ```
+
+生产项目使用测试过的 commit，不要依赖浮动分支。
 
 ## 配置
 

@@ -13,20 +13,22 @@ ZeroEngine 编辑器控制中心，支持轻量项目使用。
 
 ### 方式 1：作为独立包（轻量项目）
 
-在 `Packages/manifest.json` 中添加：
+在 `Packages/manifest.json` 中通过 Git UPM 添加，并与其他 ZeroEngine 包使用同一个测试过的 commit：
 
 ```json
 {
   "dependencies": {
-    "com.zerogamestudio.zeroengine.core": "file:../../ZeroEngine/Packages/com.zerogamestudio.zeroengine.core",
-    "com.zerogamestudio.zeroengine.dashboard": "file:../../ZeroEngine/Packages/com.zerogamestudio.zeroengine.dashboard"
+    "com.zerogamestudio.zeroengine.core": "https://github.com/liuzqk/zeroengine.git?path=com.zerogamestudio.zeroengine.core#<tested-commit>",
+    "com.zerogamestudio.zeroengine.dashboard": "https://github.com/liuzqk/zeroengine.git?path=com.zerogamestudio.zeroengine.dashboard#<tested-commit>"
   }
 }
 ```
 
+本地 `file:` 依赖只用于临时联调，不应提交到共享分支。
+
 ### 方式 2：通过主包（完整项目）
 
-主包 `com.zerogamestudio.zeroengine` 已包含对本包的依赖，无需额外配置。
+主包 `com.zerogamestudio.zeroengine` 的 `package.json` 声明了对本包的依赖。通过 Git UPM 使用主包时，如果消费项目没有配置可解析 ZeroEngine 包的私有 registry，仍应在 `Packages/manifest.json` 中显式添加 dashboard 的 Git URL，并与主包使用同一个 commit。
 
 ## 条件编译宏
 
