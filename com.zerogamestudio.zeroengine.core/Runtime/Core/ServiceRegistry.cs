@@ -1,6 +1,8 @@
 using System;
 using System.Collections.Generic;
 
+#nullable enable
+
 namespace ZeroEngine.Core
 {
     public static class ServiceRegistry
@@ -21,7 +23,7 @@ namespace ZeroEngine.Core
             }
         }
 
-        public static bool TryResolve<TService>(out TService service) where TService : class
+        public static bool TryResolve<TService>(out TService? service) where TService : class
         {
             lock (SyncRoot)
             {
@@ -36,12 +38,12 @@ namespace ZeroEngine.Core
             return false;
         }
 
-        public static TService ResolveOrNull<TService>() where TService : class
+        public static TService? ResolveOrNull<TService>() where TService : class
         {
             return TryResolve<TService>(out var service) ? service : null;
         }
 
-        public static bool Unregister<TService>(TService service = null) where TService : class
+        public static bool Unregister<TService>(TService? service = null) where TService : class
         {
             lock (SyncRoot)
             {
@@ -73,7 +75,7 @@ namespace ZeroEngine.Core
                 var serviceType = typeof(TService);
                 var hadPrevious = Services.TryGetValue(serviceType, out var previous);
                 Services[serviceType] = service;
-                return new OverrideScope(serviceType, hadPrevious, previous);
+                return new OverrideScope(serviceType, hadPrevious, hadPrevious ? previous! : null!);
             }
         }
 
