@@ -44,21 +44,19 @@ namespace ZeroEngine.ModSystem.Tests.Editor
         }
 
         [Test]
-        public void OldBasePackage_DoesNotKeepDuplicateRuntimeAssemblies()
+        public void OldBasePackage_LegacySteamCopyUsesAndroidGuard()
         {
             string oldRuntimeRoot = Path.GetFullPath(Path.Combine(
                 Application.dataPath,
                 "../Packages/com.zerogamestudio.zeroengine/Runtime/ModSystem"));
-            string[] remainingEntries = Directory.GetFileSystemEntries(oldRuntimeRoot);
+            string steamWorkshopManager = File.ReadAllText(Path.Combine(oldRuntimeRoot, "Steam/SteamWorkshopManager.cs"));
 
-            Assert.That(File.Exists(Path.Combine(oldRuntimeRoot, "ZeroEngine.ModSystem.asmdef")), Is.False);
-            Assert.That(File.Exists(Path.Combine(oldRuntimeRoot, "ModLoader.cs")), Is.False);
-            Assert.That(File.Exists(Path.Combine(oldRuntimeRoot, "ModManifest.cs")), Is.False);
-            Assert.That(remainingEntries, Is.EquivalentTo(new[]
-            {
-                Path.Combine(oldRuntimeRoot, "README.md"),
-                Path.Combine(oldRuntimeRoot, "README.md.meta")
-            }));
+            Assert.That(File.Exists(Path.Combine(oldRuntimeRoot, "ZeroEngine.ModSystem.asmdef")), Is.True);
+            Assert.That(File.Exists(Path.Combine(oldRuntimeRoot, "ModLoader.cs")), Is.True);
+            Assert.That(File.Exists(Path.Combine(oldRuntimeRoot, "ModManifest.cs")), Is.True);
+            Assert.That(steamWorkshopManager, Does.Contain("#if STEAMWORKS_NET && !UNITY_ANDROID"));
+            Assert.That(steamWorkshopManager, Does.Not.Contain("#if STEAMWORKS_NET\r"));
+            Assert.That(steamWorkshopManager, Does.Not.Contain("#if STEAMWORKS_NET\n"));
         }
 
         [Test]
