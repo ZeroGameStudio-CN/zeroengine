@@ -12,6 +12,7 @@ ZeroEngine 框架的核心基础设施包。
 - `Singleton<T>` - 非持久单例基类
 - `MonoSingleton<T>` - Singleton 别名
 - `PersistentSingleton<T>` - 跨场景持久单例
+- `ServiceRegistry` - 轻量服务注册和测试覆盖工具
 - `EventManager` - 事件总线系统
 - `GameEvents` - 预定义事件常量
 
