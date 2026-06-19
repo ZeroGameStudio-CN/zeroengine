@@ -37,6 +37,8 @@ namespace ZGS.DataToolkit.Editor
         private readonly HashSet<IDataToolkitHeaderActionProvider> disabledHeaderActionProviders = new();
         private readonly HashSet<string> loggedProviderExceptionKeys = new();
 
+        [SerializeField] private string serializedProjectId;
+
         private DataToolkitContext context;
         private IReadOnlyList<IDataToolkitToolbarProvider> toolbarProviders = Array.Empty<IDataToolkitToolbarProvider>();
         private IReadOnlyList<IDataToolkitHeaderActionProvider> headerActionProviders = Array.Empty<IDataToolkitHeaderActionProvider>();
@@ -110,10 +112,13 @@ namespace ZGS.DataToolkit.Editor
             return window;
         }
 
-        private void Initialize(DataToolkitProjectProfile profile)
+        private void Initialize(DataToolkitProjectProfile profile, string serializedProjectIdOverride = null)
         {
             profile ??= DataToolkitProjectRegistry.CreateDefaultProfile();
             var settings = profile.Settings;
+            serializedProjectId = string.IsNullOrWhiteSpace(serializedProjectIdOverride)
+                ? settings.ProjectId
+                : serializedProjectIdOverride.Trim();
             context = new DataToolkitContext(settings);
             toolbarProviders = profile.ToolbarProviders;
             headerActionProviders = profile.HeaderActionProviders;
@@ -139,11 +144,12 @@ namespace ZGS.DataToolkit.Editor
 
         private void OnEnable()
         {
+            DataToolkitProjectRegistry.ProfilesChanged += RestoreRegisteredProfileForSerializedProjectId;
             DataToolkitProjectRegistry.DefaultProfileRegistered += RestoreDefaultProfileIfUsingGenericFallback;
 
             if (context == null)
             {
-                Initialize(DataToolkitProjectRegistry.CreateDefaultProfile());
+                InitializeFromSerializedProjectId();
             }
         }
 
@@ -160,6 +166,7 @@ namespace ZGS.DataToolkit.Editor
             safeInspector.Dispose();
             lazyPreviewInspector.Dispose();
             StopAssetCountWarmup();
+            DataToolkitProjectRegistry.ProfilesChanged -= RestoreRegisteredProfileForSerializedProjectId;
             DataToolkitProjectRegistry.DefaultProfileRegistered -= RestoreDefaultProfileIfUsingGenericFallback;
         }
 
@@ -190,12 +197,17 @@ namespace ZGS.DataToolkit.Editor
         {
             if (context == null)
             {
-                Initialize(DataToolkitProjectRegistry.CreateDefaultProfile());
+                InitializeFromSerializedProjectId();
             }
         }
 
         private void RestoreDefaultProfileIfUsingGenericFallback()
         {
+            if (RestoreRegisteredProfileForSerializedProjectId())
+            {
+                return;
+            }
+
             if (context != null && context.Settings.ProjectId != "ZGS")
             {
                 return;
@@ -203,6 +215,42 @@ namespace ZGS.DataToolkit.Editor
 
             Initialize(DataToolkitProjectRegistry.CreateDefaultProfile());
             Repaint();
+        }
+
+        private void InitializeFromSerializedProjectId()
+        {
+            var requestedProjectId = serializedProjectId;
+            var profile = ResolveSerializedOrDefaultProfile(requestedProjectId);
+            Initialize(profile, requestedProjectId);
+        }
+
+        private static DataToolkitProjectProfile ResolveSerializedOrDefaultProfile(string projectId)
+        {
+            return DataToolkitProjectRegistry.TryCreateProfile(projectId, out var profile)
+                ? profile
+                : DataToolkitProjectRegistry.CreateDefaultProfile();
+        }
+
+        private bool RestoreRegisteredProfileForSerializedProjectId()
+        {
+            if (string.IsNullOrWhiteSpace(serializedProjectId))
+            {
+                return false;
+            }
+
+            if (context != null && context.Settings.ProjectId == serializedProjectId)
+            {
+                return true;
+            }
+
+            if (!DataToolkitProjectRegistry.TryCreateProfile(serializedProjectId, out var profile))
+            {
+                return false;
+            }
+
+            Initialize(profile);
+            Repaint();
+            return true;
         }
 
         private float CalculateHeaderHeight(int visibleToolbarCount)

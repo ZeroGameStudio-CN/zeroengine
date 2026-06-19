@@ -64,6 +64,31 @@ namespace ZGS.DataToolkit.Editor.Tests
         }
 
         [Test]
+        public void LayoutRestoredWindow_RebindsSerializedProjectIdWhenProfileRegistersLater()
+        {
+            const string projectId = "LateRegisteredDataToolkitProject";
+            var window = ScriptableObject.CreateInstance<DataToolkitWindow>();
+            SetWindowField(window, "serializedProjectId", projectId);
+
+            InvokeWindowMethod(window, "InitializeFromSerializedProjectId");
+
+            Assert.AreEqual("ZGS", GetWindowContext(window).Settings.ProjectId);
+            Assert.AreEqual(projectId, GetWindowField(window, "serializedProjectId"));
+
+            DataToolkitProjectRegistry.Register(
+                projectId,
+                () => new DataToolkitProjectProfile(CreateSettings(
+                    projectId,
+                    "Late Registered Data Manager",
+                    "ZGS_LateRegisteredDataToolkitProject")));
+
+            InvokeWindowMethod(window, "RestoreRegisteredProfileForSerializedProjectId");
+
+            Assert.AreEqual(projectId, GetWindowContext(window).Settings.ProjectId);
+            Assert.AreEqual(projectId, GetWindowField(window, "serializedProjectId"));
+        }
+
+        [Test]
         public void ToolbarProviderException_IsLoggedOnceAndProviderIsDisabled()
         {
             LogAssert.ignoreFailingMessages = true;
@@ -119,11 +144,19 @@ namespace ZGS.DataToolkit.Editor.Tests
 
         private static DataToolkitProjectSettings CreateSettings()
         {
+            return CreateSettings(
+                "DataToolkitWindowPersistenceTests",
+                "Data Toolkit Test Window",
+                EditorPrefsPrefix);
+        }
+
+        private static DataToolkitProjectSettings CreateSettings(string projectId, string windowTitle, string editorPrefsPrefix)
+        {
             return new DataToolkitProjectSettings(
-                projectId: "DataToolkitWindowPersistenceTests",
-                windowTitle: "Data Toolkit Test Window",
+                projectId: projectId,
+                windowTitle: windowTitle,
                 menuPath: "Window/Data Toolkit Test",
-                editorPrefsPrefix: EditorPrefsPrefix,
+                editorPrefsPrefix: editorPrefsPrefix,
                 searchRoots: new[] { TestRoot },
                 excludedPaths: Array.Empty<string>());
         }
@@ -156,6 +189,18 @@ namespace ZGS.DataToolkit.Editor.Tests
             var field = typeof(DataToolkitWindow).GetField(fieldName, BindingFlags.Instance | BindingFlags.NonPublic);
             Assert.NotNull(field, $"{fieldName} should exist on DataToolkitWindow.");
             return field.GetValue(window);
+        }
+
+        private static void SetWindowField(DataToolkitWindow window, string fieldName, object value)
+        {
+            var field = typeof(DataToolkitWindow).GetField(fieldName, BindingFlags.Instance | BindingFlags.NonPublic);
+            Assert.NotNull(field, $"{fieldName} should exist on DataToolkitWindow.");
+            field.SetValue(window, value);
+        }
+
+        private static DataToolkitContext GetWindowContext(DataToolkitWindow window)
+        {
+            return (DataToolkitContext)GetWindowField(window, "context");
         }
 
         private sealed class ThrowingToolbarProvider : IDataToolkitToolbarProvider
