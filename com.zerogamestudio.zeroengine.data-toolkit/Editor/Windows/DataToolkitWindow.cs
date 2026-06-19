@@ -203,7 +203,7 @@ namespace ZGS.DataToolkit.Editor
 
         private void RestoreDefaultProfileIfUsingGenericFallback()
         {
-            if (RestoreRegisteredProfileForSerializedProjectId())
+            if (TryRestoreRegisteredProfileForSerializedProjectId())
             {
                 return;
             }
@@ -231,7 +231,12 @@ namespace ZGS.DataToolkit.Editor
                 : DataToolkitProjectRegistry.CreateDefaultProfile();
         }
 
-        private bool RestoreRegisteredProfileForSerializedProjectId()
+        private void RestoreRegisteredProfileForSerializedProjectId()
+        {
+            TryRestoreRegisteredProfileForSerializedProjectId();
+        }
+
+        private bool TryRestoreRegisteredProfileForSerializedProjectId()
         {
             if (string.IsNullOrWhiteSpace(serializedProjectId))
             {
