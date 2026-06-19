@@ -15,9 +15,12 @@ namespace ZGS.DataToolkit.Editor.Tests
         private const string OriginalAssetPath = TestRoot + "/Selected.asset";
         private const string EditorPrefsPrefix = "ZGS_DataToolkitWindowPersistenceTests";
 
+        private readonly List<DataToolkitWindow> testWindows = new();
+
         [SetUp]
         public void SetUp()
         {
+            testWindows.Clear();
             AssetDatabase.DeleteAsset(TestRoot);
             AssetDatabase.CreateFolder("Assets", "__ZGSDataToolkitWindowPersistenceTests");
             DeletePersistedSelection();
@@ -28,11 +31,15 @@ namespace ZGS.DataToolkit.Editor.Tests
         [TearDown]
         public void TearDown()
         {
-            foreach (var window in Resources.FindObjectsOfTypeAll<DataToolkitWindow>())
+            foreach (var window in testWindows)
             {
-                window.Close();
+                if (window != null)
+                {
+                    UnityEngine.Object.DestroyImmediate(window);
+                }
             }
 
+            testWindows.Clear();
             AssetDatabase.DeleteAsset(TestRoot);
             AssetDatabase.SaveAssets();
             DeletePersistedSelection();
@@ -47,16 +54,17 @@ namespace ZGS.DataToolkit.Editor.Tests
             CreateTestAsset(OriginalAssetPath);
             var profile = CreateProfile();
 
-            var firstWindow = DataToolkitWindow.Open(profile);
+            var firstWindow = Track(DataToolkitWindow.Open(profile));
             InvokeWindowMethod(firstWindow, "SelectType", typeof(SelectedToolkitTestData));
             InvokeWindowMethod(firstWindow, "SelectAssetByPath", OriginalAssetPath);
             Assert.AreEqual(OriginalAssetPath, EditorPrefs.GetString(EditorPrefsPrefix + "_SelectedAssetPath", string.Empty));
             var selectedAssetGuid = EditorPrefs.GetString(EditorPrefsPrefix + "_SelectedAssetGuid", string.Empty);
             Assert.IsNotEmpty(selectedAssetGuid);
             firstWindow.Close();
+            testWindows.Remove(firstWindow);
             AssetDiscoveryService.ClearCaches();
 
-            var reopenedWindow = DataToolkitWindow.Open(profile);
+            var reopenedWindow = Track(DataToolkitWindow.Open(profile));
 
             Assert.AreEqual(typeof(SelectedToolkitTestData), GetWindowField(reopenedWindow, "selectedType"));
             Assert.AreEqual(OriginalAssetPath, GetWindowField(reopenedWindow, "selectedAssetPath"));
@@ -67,7 +75,7 @@ namespace ZGS.DataToolkit.Editor.Tests
         public void LayoutRestoredWindow_RebindsSerializedProjectIdWhenProfileRegistersLater()
         {
             const string projectId = "LateRegisteredDataToolkitProject";
-            var window = ScriptableObject.CreateInstance<DataToolkitWindow>();
+            var window = Track(ScriptableObject.CreateInstance<DataToolkitWindow>());
             try
             {
                 SetWindowField(window, "serializedProjectId", projectId);
@@ -91,7 +99,7 @@ namespace ZGS.DataToolkit.Editor.Tests
             }
             finally
             {
-                UnityEngine.Object.DestroyImmediate(window);
+                DestroyTrackedWindow(window);
             }
         }
 
@@ -103,7 +111,7 @@ namespace ZGS.DataToolkit.Editor.Tests
             var profile = new DataToolkitProjectProfile(
                 CreateSettings(),
                 toolbarProviders: new[] { provider });
-            var window = DataToolkitWindow.Open(profile);
+            var window = Track(DataToolkitWindow.Open(profile));
 
             var messages = new List<string>();
             void HandleLog(string condition, string stackTrace, LogType type)
@@ -147,6 +155,21 @@ namespace ZGS.DataToolkit.Editor.Tests
         private static DataToolkitProjectProfile CreateProfile()
         {
             return new DataToolkitProjectProfile(CreateSettings());
+        }
+
+        private DataToolkitWindow Track(DataToolkitWindow window)
+        {
+            testWindows.Add(window);
+            return window;
+        }
+
+        private void DestroyTrackedWindow(DataToolkitWindow window)
+        {
+            testWindows.Remove(window);
+            if (window != null)
+            {
+                UnityEngine.Object.DestroyImmediate(window);
+            }
         }
 
         private static DataToolkitProjectSettings CreateSettings()
