@@ -68,24 +68,31 @@ namespace ZGS.DataToolkit.Editor.Tests
         {
             const string projectId = "LateRegisteredDataToolkitProject";
             var window = ScriptableObject.CreateInstance<DataToolkitWindow>();
-            SetWindowField(window, "serializedProjectId", projectId);
+            try
+            {
+                SetWindowField(window, "serializedProjectId", projectId);
 
-            InvokeWindowMethod(window, "InitializeFromSerializedProjectId");
+                InvokeWindowMethod(window, "InitializeFromSerializedProjectId");
 
-            Assert.AreNotEqual(projectId, GetWindowContext(window).Settings.ProjectId);
-            Assert.AreEqual(projectId, GetWindowField(window, "serializedProjectId"));
+                Assert.AreNotEqual(projectId, GetWindowContext(window).Settings.ProjectId);
+                Assert.AreEqual(projectId, GetWindowField(window, "serializedProjectId"));
 
-            DataToolkitProjectRegistry.Register(
-                projectId,
-                () => new DataToolkitProjectProfile(CreateSettings(
+                DataToolkitProjectRegistry.Register(
                     projectId,
-                    "Late Registered Data Manager",
-                    "ZGS_LateRegisteredDataToolkitProject")));
+                    () => new DataToolkitProjectProfile(CreateSettings(
+                        projectId,
+                        "Late Registered Data Manager",
+                        "ZGS_LateRegisteredDataToolkitProject")));
 
-            InvokeWindowMethod(window, "RestoreRegisteredProfileForSerializedProjectId");
+                InvokeWindowMethod(window, "RestoreRegisteredProfileForSerializedProjectId");
 
-            Assert.AreEqual(projectId, GetWindowContext(window).Settings.ProjectId);
-            Assert.AreEqual(projectId, GetWindowField(window, "serializedProjectId"));
+                Assert.AreEqual(projectId, GetWindowContext(window).Settings.ProjectId);
+                Assert.AreEqual(projectId, GetWindowField(window, "serializedProjectId"));
+            }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(window);
+            }
         }
 
         [Test]
