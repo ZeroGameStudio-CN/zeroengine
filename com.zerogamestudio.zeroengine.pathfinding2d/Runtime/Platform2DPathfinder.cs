@@ -1254,7 +1254,7 @@ namespace ZeroEngine.Pathfinding2D
                 {
                     float dist = Vector2.Distance(actualStart, firstNode.Value.Position);
                     generatedEnd = firstNode.Value.Position;
-                    if (dist > config.ArriveDistance && CanCreateWalkCommand(actualStart, firstNode.Value.Position))
+                    if (dist > config.WalkCommandArriveDistance && CanCreateWalkCommand(actualStart, firstNode.Value.Position))
                     {
                         // 计算朝向：根据目标 X 与起点 X 的差值
                         float deltaX = firstNode.Value.Position.x - actualStart.x;
@@ -1335,7 +1335,7 @@ namespace ZeroEngine.Pathfinding2D
                 if (lastNode.HasValue)
                 {
                     float dist = Vector2.Distance(lastNode.Value.Position, actualEnd);
-                    if (dist > config.ArriveDistance && CanCreateWalkCommand(lastNode.Value.Position, actualEnd))
+                    if (dist > config.WalkCommandArriveDistance && CanCreateWalkCommand(lastNode.Value.Position, actualEnd))
                     {
                         // 计算朝向
                         float deltaX = actualEnd.x - lastNode.Value.Position.x;
