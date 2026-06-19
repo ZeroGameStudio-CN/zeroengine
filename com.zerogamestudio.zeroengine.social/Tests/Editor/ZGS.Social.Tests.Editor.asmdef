@@ -1,0 +1,24 @@
+{
+  "name": "ZGS.Social.Tests.Editor",
+  "rootNamespace": "ZeroEngine.Social.Editor.Tests",
+  "references": [
+    "ZeroEngine.Social",
+    "ZeroEngine.Social.Editor",
+    "ZeroEngine.Economy",
+    "UnityEditor.TestRunner",
+    "UnityEngine.TestRunner"
+  ],
+  "includePlatforms": [
+    "Editor"
+  ],
+  "excludePlatforms": [],
+  "allowUnsafeCode": false,
+  "overrideReferences": false,
+  "precompiledReferences": [],
+  "autoReferenced": false,
+  "defineConstraints": [
+    "UNITY_INCLUDE_TESTS"
+  ],
+  "versionDefines": [],
+  "noEngineReferences": false
+}

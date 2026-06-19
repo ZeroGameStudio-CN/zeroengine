@@ -1,5 +1,8 @@
 using System;
+using System.Collections.Generic;
+using System.Linq;
 using UnityEngine;
+using UnityEditor;
 
 namespace ZGS.DataToolkit.Editor
 {
@@ -44,7 +47,46 @@ namespace ZGS.DataToolkit.Editor
                 menuPath: "Tools/Data Manager",
                 editorPrefsPrefix: "ZGS_DataToolkit",
                 searchRoots: new[] { "Assets" },
-                excludedPaths: Array.Empty<string>()));
+                excludedPaths: Array.Empty<string>()),
+                validationProviders: CreateDiscoveredValidationProviders());
+        }
+
+        private static IEnumerable<IDataToolkitValidationProvider> CreateDiscoveredValidationProviders()
+        {
+            foreach (var type in TypeCache.GetTypesDerivedFrom<IDataToolkitValidationProvider>()
+                         .OrderBy(type => type.FullName, StringComparer.Ordinal))
+            {
+                if (type.IsAbstract || type.IsInterface || type.ContainsGenericParameters)
+                {
+                    continue;
+                }
+
+                if (type.GetConstructor(
+                        System.Reflection.BindingFlags.Instance |
+                        System.Reflection.BindingFlags.Public |
+                        System.Reflection.BindingFlags.NonPublic,
+                        null,
+                        Type.EmptyTypes,
+                        null) == null)
+                {
+                    continue;
+                }
+
+                IDataToolkitValidationProvider provider = null;
+                try
+                {
+                    provider = (IDataToolkitValidationProvider)Activator.CreateInstance(type, nonPublic: true);
+                }
+                catch (Exception exception)
+                {
+                    Debug.LogException(exception);
+                }
+
+                if (provider != null)
+                {
+                    yield return provider;
+                }
+            }
         }
     }
 }

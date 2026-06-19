@@ -14,6 +14,7 @@
         "ZeroEngine.Gameplay",
         "ZeroEngine.Social",
         "ZeroEngine.Character",
+        "ZeroEngine.SpineSkin",
         "ZeroEngine.Audio",
         "Unity.InputSystem"
     ],

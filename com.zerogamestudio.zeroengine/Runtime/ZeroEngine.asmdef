@@ -25,7 +25,6 @@
         "Unity.Netcode.Runtime",
         "Unity.TextMeshPro",
         "Unity.Networking.Transport",
-        "XNode",
         "Unity.ugui"
     ],
     "includePlatforms": [],
@@ -40,11 +39,6 @@
             "name": "com.unity.netcode.gameobjects",
             "expression": "",
             "define": "ZEROENGINE_NETCODE"
-        },
-        {
-            "name": "com.cysharp.unitask",
-            "expression": "",
-            "define": "UNITASK"
         },
         {
             "name": "com.unity.addressables",
@@ -62,34 +56,9 @@
             "define": "UNITY_LOCALIZATION"
         },
         {
-            "name": "com.demigiant.dotween",
-            "expression": "",
-            "define": "DOTWEEN"
-        },
-        {
-            "name": "com.tuyoogame.yooasset",
-            "expression": "",
-            "define": "YOOASSET"
-        },
-        {
-            "name": "com.svermeulen.extenject",
-            "expression": "",
-            "define": "EXTENJECT"
-        },
-        {
-            "name": "com.inklestudios.ink-unity-integration",
-            "expression": "",
-            "define": "INK_PRESENT"
-        },
-        {
             "name": "com.unity.localization",
             "expression": "",
             "define": "LOCALIZATION_ENABLED"
-        },
-        {
-            "name": "com.github.siccity.xnode",
-            "expression": "",
-            "define": "XNODE_PRESENT"
         }
     ],
     "noEngineReferences": false

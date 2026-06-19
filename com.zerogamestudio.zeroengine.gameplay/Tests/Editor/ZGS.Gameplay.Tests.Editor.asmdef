@@ -1,0 +1,23 @@
+{
+  "name": "ZGS.Gameplay.Tests.Editor",
+  "rootNamespace": "ZeroEngine.Gameplay.Editor.Tests",
+  "references": [
+    "ZeroEngine.Gameplay",
+    "ZeroEngine.Gameplay.Editor",
+    "UnityEditor.TestRunner",
+    "UnityEngine.TestRunner"
+  ],
+  "includePlatforms": [
+    "Editor"
+  ],
+  "excludePlatforms": [],
+  "allowUnsafeCode": false,
+  "overrideReferences": false,
+  "precompiledReferences": [],
+  "autoReferenced": false,
+  "defineConstraints": [
+    "UNITY_INCLUDE_TESTS"
+  ],
+  "versionDefines": [],
+  "noEngineReferences": false
+}

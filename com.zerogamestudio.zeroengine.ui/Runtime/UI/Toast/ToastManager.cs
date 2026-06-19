@@ -374,8 +374,6 @@ namespace ZeroEngine.UI.Toast
 
         public static void EnsurePresenter(ToastSettings settings)
         {
-            if (UnityEngine.Object.FindObjectOfType<ToastRootPresenter>() != null) return;
-
             var root = new GameObject(RootName, typeof(RectTransform), typeof(Canvas), typeof(CanvasScaler), typeof(GraphicRaycaster));
             UnityEngine.Object.DontDestroyOnLoad(root);
 

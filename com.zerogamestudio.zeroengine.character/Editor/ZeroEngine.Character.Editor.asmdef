@@ -1,0 +1,20 @@
+{
+  "name": "ZeroEngine.Character.Editor",
+  "rootNamespace": "ZeroEngine.Character.Editor",
+  "references": [
+    "ZeroEngine.Character",
+    "ZeroEngine.Data",
+    "ZeroEngine.Economy"
+  ],
+  "includePlatforms": [
+    "Editor"
+  ],
+  "excludePlatforms": [],
+  "allowUnsafeCode": false,
+  "overrideReferences": false,
+  "precompiledReferences": [],
+  "autoReferenced": true,
+  "defineConstraints": [],
+  "versionDefines": [],
+  "noEngineReferences": false
+}

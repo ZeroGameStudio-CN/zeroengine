@@ -9,6 +9,12 @@ ZeroEngine.Dlc is the platform-neutral foundation for DLC and content-pack acces
 - `ContentAvailabilityService` checks whether a content pack can be used.
 - `LocalDlcEntitlementService` supports Editor, tests, demos, and non-store builds.
 
+## Designer Config Validation
+
+`ZeroEngine.Dlc.Editor` provides `DlcConfigValidator` for content pack catalogs.
+It reports missing pack IDs/display names, duplicate content pack IDs, and DLC
+packs that do not declare the required platform DLC ID.
+
 ## Adapter Boundary
 
 This package does not reference Steamworks, Unity Addressables, platform SDKs, P5, POB, remote catalogs, or CDN APIs.

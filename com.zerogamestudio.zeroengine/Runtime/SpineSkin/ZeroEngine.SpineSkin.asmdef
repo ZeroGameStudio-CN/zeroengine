@@ -2,7 +2,8 @@
     "name": "ZeroEngine.SpineSkin",
     "rootNamespace": "ZeroEngine.SpineSkin",
     "references": [
-        "ZeroEngine"
+        "ZeroEngine",
+        "Unity.TextMeshPro"
     ],
     "includePlatforms": [],
     "excludePlatforms": [],
@@ -10,9 +11,7 @@
     "overrideReferences": false,
     "precompiledReferences": [],
     "autoReferenced": true,
-    "defineConstraints": [
-        "SPINE_UNITY"
-    ],
+    "defineConstraints": [],
     "versionDefines": [
         {
             "name": "com.esotericsoftware.spine.spine-unity",

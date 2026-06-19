@@ -1,0 +1,23 @@
+{
+  "name": "ZGS.Audio.Tests.Editor",
+  "rootNamespace": "ZeroEngine.Audio.Editor.Tests",
+  "references": [
+    "ZeroEngine.Audio",
+    "ZeroEngine.Audio.Editor",
+    "UnityEditor.TestRunner",
+    "UnityEngine.TestRunner"
+  ],
+  "includePlatforms": [
+    "Editor"
+  ],
+  "excludePlatforms": [],
+  "allowUnsafeCode": false,
+  "overrideReferences": false,
+  "precompiledReferences": [],
+  "autoReferenced": false,
+  "defineConstraints": [
+    "UNITY_INCLUDE_TESTS"
+  ],
+  "versionDefines": [],
+  "noEngineReferences": false
+}

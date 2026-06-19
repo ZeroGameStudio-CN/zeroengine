@@ -44,13 +44,13 @@ QuestManager.Instance.ReloadConfigsFromSource();
 Projects that load configs asynchronously can also directly call
 `QuestManager.RegisterConfig(config)` after each config is available.
 
-If no project config source returns configs, `QuestManager` falls back to
-`Resources.LoadAll<QuestConfigSO>("Quests")` for simple projects and samples.
+If no project config source returns configs, `QuestManager` keeps an empty
+config registry. Production projects should provide a single explicit config
+source such as Addressables, a generated registry, or a project-owned asset
+database.
 
-When a project explicitly registers a custom config source, an empty result is
-treated as authoritative. In that mode `QuestManager` does not fall back to
-Resources, which lets production projects keep a single config source such as
-Addressables.
+Project config sources are treated as authoritative for runtime quest
+registration; the package does not silently search project-specific systems.
 
 ## Localization
 

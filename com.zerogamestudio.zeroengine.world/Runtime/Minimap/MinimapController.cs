@@ -89,12 +89,14 @@ namespace ZeroEngine.Minimap
 
         private void Start()
         {
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
             if (_followTarget == null)
             {
-                var player = GameObject.FindGameObjectWithTag("Player");
-                if (player != null)
-                    _followTarget = player.transform;
+                Debug.LogWarning(
+                    "[ZeroEngine.Minimap] MinimapController has no follow target. Assign FollowTarget in the inspector or set it through code before using player-follow minimap modes.",
+                    this);
             }
+#endif
 
             _targetZoom = _orthographicSize;
 

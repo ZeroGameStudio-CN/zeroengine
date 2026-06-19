@@ -201,12 +201,6 @@ namespace ZeroEngine.Party
         {
             if (_config == null)
             {
-                // 尝试从 Resources 加载配置
-                _config = Resources.Load<PartyConfigSO>("PartyConfig");
-            }
-
-            if (_config == null)
-            {
                 Debug.LogWarning("[PartyManager] 未配置 PartyConfigSO，使用默认值");
                 _config = ScriptableObject.CreateInstance<PartyConfigSO>();
             }

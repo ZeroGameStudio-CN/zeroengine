@@ -564,8 +564,7 @@ namespace ZeroEngine.UI
             }
             else if (!string.IsNullOrEmpty(config.resourcePath))
             {
-                // 使用 Resources 加载
-                prefab = await LoadViewPrefabFromResourcesAsync(config.resourcePath);
+                Debug.LogError($"[UIManager] Resources path loading is not supported for view '{viewName}'. Assign a prefab reference or Addressables reference.");
             }
 
             if (prefab == null)
@@ -619,22 +618,6 @@ namespace ZeroEngine.UI
             return null;
         }
 #endif
-
-        /// <summary>
-        /// Resources 加载
-        /// </summary>
-        private Task<GameObject> LoadViewPrefabFromResourcesAsync(string assetPath)
-        {
-            var tcs = new TaskCompletionSource<GameObject>();
-            var request = Resources.LoadAsync<GameObject>(assetPath);
-
-            request.completed += (op) =>
-            {
-                tcs.TrySetResult(request.asset as GameObject);
-            };
-
-            return tcs.Task;
-        }
 
         private Transform GetLayerContainer(UILayer layer)
         {

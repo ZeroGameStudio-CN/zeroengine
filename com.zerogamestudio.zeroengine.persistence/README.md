@@ -5,7 +5,14 @@
 ## 版本
 - **当前版本**: 2.0.0
 - **依赖**: ZeroEngine.Core
-- **可选依赖**: Easy Save 3 (ES3)
+- **可选集成**: Easy Save 3 code is disabled in the default runtime assembly until it is moved to an optional adapter assembly or supplied by project code.
+
+## Designer Config Validation
+
+`ZeroEngine.Persistence.Editor` provides `PersistenceConfigValidator` for
+settings definitions. It reports duplicate keys, missing display names,
+invalid numeric ranges, unparseable defaults, missing enum options, and broken
+setting dependencies.
 
 ## 包含模块
 
@@ -74,3 +81,10 @@ SettingsManager.Instance.ApplySettings();
 | 宏 | 说明 |
 |----|------|
 | `ES3` | 启用 Easy Save 3 后端 |
+
+## Dependency Pinning
+
+When this package is consumed through Git UPM, add every
+`com.zerogamestudio.*` dependency from `package.json` to the consumer project's
+`Packages/manifest.json` at the same tested commit. See
+[Consumer Project Setup](../docs/consumer-project-setup.md).

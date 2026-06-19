@@ -31,6 +31,7 @@ namespace ZGS.DataToolkit.Editor
         private DataToolkitContext context;
         private IReadOnlyList<IDataToolkitToolbarProvider> toolbarProviders = Array.Empty<IDataToolkitToolbarProvider>();
         private IReadOnlyList<IDataToolkitFooterProvider> footerProviders = Array.Empty<IDataToolkitFooterProvider>();
+        private IReadOnlyList<IDataToolkitValidationProvider> validationProviders = Array.Empty<IDataToolkitValidationProvider>();
         private Type[] typesToDisplay = Array.Empty<Type>();
         private Type selectedType;
         private string selectedAssetPath;
@@ -45,6 +46,14 @@ namespace ZGS.DataToolkit.Editor
         private string activeResizeKey;
         private bool isWarmingAssetCounts;
         private bool allowFullInspectorForSelectedAsset;
+        private DataValidationReport validationReport = DataValidationReport.Empty;
+        private bool hasValidationReport;
+        private DataAssetReferenceGraph referenceGraph = DataAssetReferenceGraph.Empty;
+        private bool hasReferenceGraph;
+        private bool showReferencePanel = true;
+        private bool showBatchEditPanel = true;
+        private string batchFieldPath = string.Empty;
+        private string batchNewValue = string.Empty;
 
         private readonly struct SelectionSnapshot
         {
@@ -107,6 +116,7 @@ namespace ZGS.DataToolkit.Editor
             context = new DataToolkitContext(settings);
             toolbarProviders = profile.ToolbarProviders;
             footerProviders = profile.FooterProviders;
+            validationProviders = profile.ValidationProviders;
             inspector.SetCustomInspectors(context, profile.AssetInspectorProviders);
             titleContent = new GUIContent(settings.WindowTitle);
             minSize = new Vector2(980f, 560f);
@@ -269,6 +279,26 @@ namespace ZGS.DataToolkit.Editor
                     RefreshCaches();
                 }
 
+                if (GUILayout.Button("Validate", GUILayout.Width(82f), GUILayout.Height(24f)))
+                {
+                    RunValidation();
+                }
+
+                if (GUILayout.Button("References", GUILayout.Width(92f), GUILayout.Height(24f)))
+                {
+                    BuildReferenceGraph();
+                }
+
+                if (GUILayout.Button("Import CSV", GUILayout.Width(92f), GUILayout.Height(24f)))
+                {
+                    ImportFieldCsv();
+                }
+
+                if (GUILayout.Button("Export CSV", GUILayout.Width(92f), GUILayout.Height(24f)))
+                {
+                    ExportValidationCsv();
+                }
+
                 EditorGUILayout.EndHorizontal();
                 DrawProjectToolbars(visibleToolbarProviders);
             }
@@ -389,7 +419,7 @@ namespace ZGS.DataToolkit.Editor
                 assetColumnScroll = EditorGUILayout.BeginScrollView(assetColumnScroll);
                 foreach (var assetPath in AssetDiscoveryService.GetAssetPathsForType(selectedType, context.Settings).Where(IsAssetVisible))
                 {
-                    if (DrawSelectableRow(Path.GetFileNameWithoutExtension(assetPath), null, assetPath == selectedAssetPath))
+                    if (DrawSelectableRow(Path.GetFileNameWithoutExtension(assetPath), GetAssetIssueLabel(assetPath), assetPath == selectedAssetPath))
                     {
                         SelectAssetByPath(assetPath);
                     }
@@ -419,6 +449,10 @@ namespace ZGS.DataToolkit.Editor
                     }
 
                     EditorGUILayout.EndHorizontal();
+
+                    DrawSelectedAssetIssues();
+                    DrawSelectedAssetReferences();
+                    DrawBatchEditTools();
 
                     if (ShouldDeferFullInspector(selectedAsset) && !HasCustomInspectorFor(selectedAsset) && !allowFullInspectorForSelectedAsset)
                     {
@@ -468,6 +502,117 @@ namespace ZGS.DataToolkit.Editor
                 inspector.SetTarget(selectedAsset);
                 Repaint();
             }
+        }
+
+        private void DrawSelectedAssetIssues()
+        {
+            if (!hasValidationReport || selectedAsset == null)
+            {
+                return;
+            }
+
+            var assetPath = ResolveSelectedAssetPath();
+            var issues = validationReport.GetIssuesForAssetPath(assetPath);
+            if (issues.Count == 0)
+            {
+                EditorGUILayout.HelpBox("Validation passed for this asset.", MessageType.Info);
+                return;
+            }
+
+            const int maxIssuesToShow = 8;
+            foreach (var issue in issues.Take(maxIssuesToShow))
+            {
+                var fieldPrefix = string.IsNullOrEmpty(issue.FieldPath) ? string.Empty : $"{issue.FieldPath}: ";
+                EditorGUILayout.HelpBox(fieldPrefix + issue.Message, ToMessageType(issue.Severity));
+            }
+
+            if (issues.Count > maxIssuesToShow)
+            {
+                EditorGUILayout.HelpBox($"{issues.Count - maxIssuesToShow} more validation issues are hidden.", MessageType.Warning);
+            }
+
+            EditorGUILayout.Space(4f);
+        }
+
+        private void DrawSelectedAssetReferences()
+        {
+            if (selectedAsset == null)
+            {
+                return;
+            }
+
+            showReferencePanel = EditorGUILayout.Foldout(showReferencePanel, "References", true);
+            if (!showReferencePanel)
+            {
+                return;
+            }
+
+            if (!hasReferenceGraph)
+            {
+                EditorGUILayout.HelpBox("Click References to build a cross-asset reference graph.", MessageType.Info);
+                return;
+            }
+
+            var assetPath = ResolveSelectedAssetPath();
+            var outgoing = referenceGraph.GetOutgoing(assetPath);
+            var incoming = referenceGraph.GetIncoming(assetPath);
+            EditorGUILayout.LabelField($"Outgoing {outgoing.Count} / Incoming {incoming.Count}", EditorStyles.miniBoldLabel);
+            DrawReferenceEdges("Uses", outgoing, edge => $"{edge.FieldPath} -> {edge.TargetName} ({edge.TargetType})");
+            DrawReferenceEdges("Used By", incoming, edge => $"{edge.SourceName} ({edge.SourceType}) via {edge.FieldPath}");
+            EditorGUILayout.Space(4f);
+        }
+
+        private static void DrawReferenceEdges(
+            string label,
+            IReadOnlyList<DataAssetReferenceEdge> edges,
+            Func<DataAssetReferenceEdge, string> formatter)
+        {
+            if (edges.Count == 0)
+            {
+                EditorGUILayout.LabelField(label, "(none)", EditorStyles.miniLabel);
+                return;
+            }
+
+            EditorGUILayout.LabelField(label, EditorStyles.miniBoldLabel);
+            foreach (var edge in edges.Take(8))
+            {
+                EditorGUILayout.LabelField("  " + formatter(edge), EditorStyles.miniLabel);
+            }
+
+            if (edges.Count > 8)
+            {
+                EditorGUILayout.LabelField($"  +{edges.Count - 8} more", EditorStyles.miniLabel);
+            }
+        }
+
+        private void DrawBatchEditTools()
+        {
+            if (selectedType == null)
+            {
+                return;
+            }
+
+            showBatchEditPanel = EditorGUILayout.Foldout(showBatchEditPanel, "Batch Edit Visible Assets", true);
+            if (!showBatchEditPanel)
+            {
+                return;
+            }
+
+            batchFieldPath = EditorGUILayout.TextField("Field Path", batchFieldPath);
+            batchNewValue = EditorGUILayout.TextField("New Value", batchNewValue);
+            using (new EditorGUILayout.HorizontalScope())
+            {
+                GUILayout.FlexibleSpace();
+                EditorGUI.BeginDisabledGroup(string.IsNullOrWhiteSpace(batchFieldPath));
+                if (GUILayout.Button("Preview Batch Edit", GUILayout.Width(150f), GUILayout.Height(24f)))
+                {
+                    PreviewBatchEdit();
+                }
+
+                EditorGUI.EndDisabledGroup();
+            }
+
+            EditorGUILayout.Space(4f);
         }
 
         private bool ShouldDeferFullInspector(UnityEngine.Object asset)
@@ -677,7 +822,26 @@ namespace ZGS.DataToolkit.Editor
         {
             var countedAssets = assetCountCache.Values.Sum();
             var suffix = assetCountCache.Count < typesToDisplay.Length ? "+" : string.Empty;
-            return $"{typesToDisplay.Length} types / {countedAssets}{suffix} assets";
+            var summary = $"{typesToDisplay.Length} types / {countedAssets}{suffix} assets";
+            return hasValidationReport
+                ? $"{summary} / E{validationReport.ErrorCount} W{validationReport.WarningCount}"
+                : summary;
+        }
+
+        private string GetAssetIssueLabel(string assetPath)
+        {
+            if (!hasValidationReport)
+            {
+                return null;
+            }
+
+            validationReport.GetIssueCountsForAssetPath(assetPath, out var errors, out var warnings);
+            if (errors == 0 && warnings == 0)
+            {
+                return "OK";
+            }
+
+            return errors > 0 ? $"E{errors} W{warnings}" : $"W{warnings}";
         }
 
         private string GetAssetCountLabel(Type type)
@@ -703,10 +867,148 @@ namespace ZGS.DataToolkit.Editor
             AssetDiscoveryService.ClearCaches();
             assetCountCache.Clear();
             pendingCountTypes.Clear();
+            validationReport = DataValidationReport.Empty;
+            hasValidationReport = false;
+            referenceGraph = DataAssetReferenceGraph.Empty;
+            hasReferenceGraph = false;
             typesToDisplay = ManageableDataTypeDiscovery.GetManageableScriptableObjectTypes().ToArray();
             RestoreSelectionAfterRefresh(selectionSnapshot);
             StartAssetCountWarmup();
             Repaint();
+        }
+
+        private void RunValidation()
+        {
+            validationReport = DataAssetValidationService.ValidateAssets(typesToDisplay, context.Settings, validationProviders);
+            hasValidationReport = true;
+
+            var message = validationReport.HasIssues
+                ? $"Validation finished: {validationReport.ErrorCount} errors, {validationReport.WarningCount} warnings."
+                : "Validation finished: no issues found.";
+            ShowNotification(new GUIContent(message));
+            Repaint();
+        }
+
+        private void BuildReferenceGraph()
+        {
+            referenceGraph = DataAssetReferenceGraphService.Build(LoadAssetsForTypes(typesToDisplay));
+            hasReferenceGraph = true;
+            ShowNotification(new GUIContent($"Reference graph: {referenceGraph.Edges.Count} references."));
+            Repaint();
+        }
+
+        private void PreviewBatchEdit()
+        {
+            var assets = GetVisibleAssetPathsForSelectedType()
+                .Select(path => AssetDatabase.LoadAssetAtPath<UnityEngine.Object>(path))
+                .Where(asset => asset != null)
+                .ToArray();
+            var preview = DataAssetBatchEditService.PreviewSetValue(assets, batchFieldPath, batchNewValue);
+            DataAssetChangePreviewWindow.ShowPreview(
+                "Batch Edit Preview",
+                preview,
+                appliedPreview =>
+                {
+                    var applied = DataAssetFieldChangeService.Apply(appliedPreview, "Batch Edit Data Assets");
+                    RefreshCaches();
+                    ShowNotification(new GUIContent($"Applied {applied} batch changes."));
+                });
+        }
+
+        private void ImportFieldCsv()
+        {
+            var inputPath = EditorUtility.OpenFilePanel(
+                "Import Data Field CSV",
+                Application.dataPath,
+                "csv");
+            if (string.IsNullOrEmpty(inputPath))
+            {
+                return;
+            }
+
+            DataAssetChangePreview preview;
+            try
+            {
+                preview = DataAssetCsvImporter.PreviewFieldUpdatesFromCsv(File.ReadAllText(inputPath));
+            }
+            catch (Exception exception)
+            {
+                Debug.LogException(exception);
+                EditorUtility.DisplayDialog("Import Failed", exception.Message, "OK");
+                return;
+            }
+
+            DataAssetChangePreviewWindow.ShowPreview(
+                "Import CSV Preview",
+                preview,
+                appliedPreview =>
+                {
+                    var applied = DataAssetFieldChangeService.Apply(appliedPreview, "Import Data Field CSV");
+                    RefreshCaches();
+                    ShowNotification(new GUIContent($"Applied {applied} imported changes."));
+                });
+        }
+
+        private IEnumerable<UnityEngine.Object> LoadAssetsForTypes(IEnumerable<Type> types)
+        {
+            foreach (var type in types ?? Array.Empty<Type>())
+            {
+                foreach (var assetPath in AssetDiscoveryService.GetAssetPathsForType(type, context.Settings))
+                {
+                    var asset = AssetDatabase.LoadAssetAtPath<UnityEngine.Object>(assetPath);
+                    if (asset != null)
+                    {
+                        yield return asset;
+                    }
+                }
+            }
+        }
+
+        private IEnumerable<string> GetVisibleAssetPathsForSelectedType()
+        {
+            return AssetDiscoveryService.GetAssetPathsForType(selectedType, context.Settings)
+                .Where(IsAssetVisible);
+        }
+
+        private void ExportValidationCsv()
+        {
+            if (!hasValidationReport)
+            {
+                RunValidation();
+            }
+
+            var defaultName = $"{context.Settings.ProjectId}_data_validation.csv";
+            var outputPath = EditorUtility.SaveFilePanel(
+                "Export Data Validation CSV",
+                Application.dataPath,
+                defaultName,
+                "csv");
+            if (string.IsNullOrEmpty(outputPath))
+            {
+                return;
+            }
+
+            try
+            {
+                DataAssetCsvExporter.ExportValidationSummary(outputPath, typesToDisplay, context.Settings, validationReport);
+                ShowNotification(new GUIContent("Data validation CSV exported."));
+                EditorUtility.RevealInFinder(outputPath);
+            }
+            catch (Exception exception)
+            {
+                Debug.LogException(exception);
+                EditorUtility.DisplayDialog("Export Failed", exception.Message, "OK");
+            }
+        }
+
+        private static MessageType ToMessageType(DataValidationSeverity severity)
+        {
+            return severity switch
+            {
+                DataValidationSeverity.Error => MessageType.Error,
+                DataValidationSeverity.Warning => MessageType.Warning,
+                _ => MessageType.Info
+            };
         }
 
         private SelectionSnapshot CaptureSelectionSnapshot()

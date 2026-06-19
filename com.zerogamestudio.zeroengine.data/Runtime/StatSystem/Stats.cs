@@ -107,7 +107,7 @@ namespace ZeroEngine.StatSystem
             {
                 if (_stats.TryGetValue(kvp.Key, out var stat))
                 {
-                    stat.BaseValue = kvp.Value;
+                    stat.InitBase(kvp.Value, round: false);
                 }
             }
         }

@@ -106,7 +106,7 @@ namespace ZeroEngine.Quest
         }
 
         /// <summary>
-        /// Reloads configs from the registered project source, then Resources fallback if no custom source is registered.
+        /// Reloads configs from the registered project source.
         /// </summary>
         public void ReloadConfigsFromSource()
         {
@@ -114,12 +114,6 @@ namespace ZeroEngine.Quest
 
             var serviceConfigs = QuestServiceRegistry.ConfigSource.LoadConfigs();
             RegisterConfigs(serviceConfigs);
-
-            if (_questConfigs.Count > 0 || QuestServiceRegistry.HasCustomConfigSource)
-                return;
-
-            var resourcesConfigs = Resources.LoadAll<QuestConfigSO>("Quests");
-            RegisterConfigs(resourcesConfigs);
         }
 
         #region Event Management

@@ -2,6 +2,14 @@
 
 All notable changes to this package will be documented in this file.
 
+## Unreleased
+
+### Changed
+
+- Updated the declared `com.zerogamestudio.zeroengine.core` dependency to `2.0.0`.
+- `Platform2DPathfinder` now requires an assigned `PlatformGraphGenerator` or explicit `SetGraphGenerator` call instead of searching the active scene at runtime.
+- Moved local `.claude` planning notes out of the UPM package into repository docs.
+
 ## [1.6.17] - 2026-05-08
 
 ### Added

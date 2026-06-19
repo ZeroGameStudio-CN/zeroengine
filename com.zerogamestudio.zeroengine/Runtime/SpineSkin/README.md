@@ -228,7 +228,7 @@ skinCustomizationView.OnConfirmed += () =>
 ## 文件结构
 
 ```
-Assets/ZeroEngine/SpineSkin/
+Packages/com.zerogamestudio.zeroengine/Runtime/SpineSkin/
 ├── ZeroEngine.SpineSkin.asmdef
 ├── README.md
 ├── Config/

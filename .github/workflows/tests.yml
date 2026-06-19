@@ -14,12 +14,14 @@ on:
   push:
     branches: [main, develop]
     paths:
-      - 'com.zerogamestudio.zeroengine*/**'
+      - 'com.zerogamestudio*/**'
+      - 'tools/**'
       - '.github/workflows/tests.yml'
   pull_request:
     branches: [main, develop]
     paths:
-      - 'com.zerogamestudio.zeroengine*/**'
+      - 'com.zerogamestudio*/**'
+      - 'tools/**'
       - '.github/workflows/tests.yml'
   # 允许手动触发
   workflow_dispatch:
@@ -41,6 +43,54 @@ jobs:
         with:
           lfs: true
 
+      - name: Validate package boundaries
+        shell: pwsh
+        run: ./tools/validate-package-boundaries.ps1
+
+      - name: Validate package metadata
+        shell: pwsh
+        run: ./tools/validate-package-metadata.ps1
+
+      - name: Validate package naming ownership
+        shell: pwsh
+        run: ./tools/validate-package-naming-ownership.ps1
+
+      - name: Validate consumer install docs
+        shell: pwsh
+        run: ./tools/validate-consumer-install-docs.ps1
+
+      - name: Validate package shipping cleanliness
+        shell: pwsh
+        run: ./tools/validate-package-shipping-cleanliness.ps1
+
+      - name: Validate Unity meta pairs
+        shell: pwsh
+        run: ./tools/validate-unity-meta-pairs.ps1
+
+      - name: Validate Unity test assemblies
+        shell: pwsh
+        run: ./tools/validate-test-assemblies.ps1
+
+      - name: Validate asmdef isolation
+        shell: pwsh
+        run: ./tools/validate-asmdef-isolation.ps1
+
+      - name: Validate Unity package dependencies
+        shell: pwsh
+        run: ./tools/validate-unity-package-dependencies.ps1
+
+      - name: Validate external assembly references
+        shell: pwsh
+        run: ./tools/validate-external-assembly-references.ps1
+
+      - name: Validate runtime source policy
+        shell: pwsh
+        run: ./tools/validate-runtime-source-policy.ps1
+
+      - name: Validate config workbench coverage
+        shell: pwsh
+        run: ./tools/validate-config-workbench-coverage.ps1
+
       # 创建最小 Unity 项目结构，将包作为本地包引用
       - name: Setup Unity Project
         run: |
@@ -49,7 +99,7 @@ jobs:
           mkdir -p TestProject/ProjectSettings
 
           # 复制包到 TestProject/Packages（避免符号链接在 Docker 中失效）
-          for pkg in com.zerogamestudio.zeroengine*; do
+          for pkg in com.zerogamestudio*; do
             if [ -d "$pkg" ]; then
               cp -r "$pkg" "TestProject/Packages/"
             fi
@@ -68,10 +118,21 @@ jobs:
           DEPS="$DEPS, \"com.unity.modules.particlesystem\": \"1.0.0\""
           DEPS="$DEPS, \"com.unity.modules.tilemap\": \"1.0.0\""
 
-          for pkg in TestProject/Packages/com.zerogamestudio.zeroengine*; do
+          for pkg in TestProject/Packages/com.zerogamestudio*; do
             if [ -d "$pkg" ]; then
               PKG_NAME=$(basename "$pkg")
               DEPS="$DEPS, \"$PKG_NAME\": \"file:$PKG_NAME\""
+            fi
+          done
+
+          TESTABLES=""
+          for pkg in TestProject/Packages/com.zerogamestudio*; do
+            if [ -d "$pkg/Tests" ]; then
+              PKG_NAME=$(basename "$pkg")
+              if [ -n "$TESTABLES" ]; then
+                TESTABLES="$TESTABLES,"
+              fi
+              TESTABLES="$TESTABLES \"$PKG_NAME\""
             fi
           done
 
@@ -81,7 +142,7 @@ jobs:
               $DEPS
             },
             "testables": [
-              "com.zerogamestudio.zeroengine"
+              $TESTABLES
             ]
           }
           EOF
@@ -95,7 +156,7 @@ jobs:
         uses: actions/cache@v4
         with:
           path: TestProject/Library
-          key: Library-${{ hashFiles('com.zerogamestudio.zeroengine*/package.json') }}
+          key: Library-${{ hashFiles('com.zerogamestudio*/package.json') }}
           restore-keys: |
             Library-
 

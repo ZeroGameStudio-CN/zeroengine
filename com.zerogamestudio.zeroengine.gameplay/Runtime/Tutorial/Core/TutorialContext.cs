@@ -134,11 +134,15 @@ namespace ZeroEngine.Tutorial
         }
 
         /// <summary>
-        /// 通过路径查找 UI 目标
+        /// 通过注册 ID 或 TutorialUIManager 配置容器下的相对路径查找 UI 目标
         /// </summary>
         public RectTransform FindUITarget(string path)
         {
-            // 缓存查找
+            if (string.IsNullOrEmpty(path))
+            {
+                return null;
+            }
+
             if (_targetCache.TryGetValue(path, out var cached))
             {
                 if (cached != null)
@@ -147,32 +151,14 @@ namespace ZeroEngine.Tutorial
                 }
             }
 
-            // 查找策略
-            GameObject found = null;
+            var found = TutorialUIManager.Instance != null
+                ? TutorialUIManager.Instance.FindUIByPath(path)
+                : null;
 
-            // 1. 直接名称查找
-            found = GameObject.Find(path);
-
-            // 2. 在 Canvas 下查找
-            if (found == null)
-            {
-                var canvases = UnityEngine.Object.FindObjectsOfType<Canvas>();
-                foreach (var canvas in canvases)
-                {
-                    var transform = canvas.transform.Find(path);
-                    if (transform != null)
-                    {
-                        found = transform.gameObject;
-                        break;
-                    }
-                }
-            }
-
-            // 缓存结果
             if (found != null)
             {
-                _targetCache[path] = found;
-                return found.GetComponent<RectTransform>();
+                _targetCache[path] = found.gameObject;
+                return found;
             }
 
             return null;

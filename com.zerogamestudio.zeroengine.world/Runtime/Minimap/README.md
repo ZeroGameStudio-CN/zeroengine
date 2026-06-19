@@ -360,6 +360,7 @@ public class MinimapSetup : MonoBehaviour
     [Header("UI")]
     [SerializeField] private RawImage _minimapImage;
     [SerializeField] private Slider _zoomSlider;
+    [SerializeField] private Transform _player;
 
     [Header("Icons")]
     [SerializeField] private Sprite _playerIcon;
@@ -378,11 +379,10 @@ public class MinimapSetup : MonoBehaviour
         });
 
         // 设置跟随目标
-        var player = GameObject.FindGameObjectWithTag("Player");
-        MinimapController.Instance.FollowTarget = player.transform;
+        MinimapController.Instance.FollowTarget = _player;
 
         // 添加玩家标记
-        var playerMarker = player.AddComponent<MinimapMarker>();
+        var playerMarker = _player.gameObject.AddComponent<MinimapMarker>();
         playerMarker.Setup(MinimapMarkerType.Player, _playerIcon, Color.blue);
     }
 }

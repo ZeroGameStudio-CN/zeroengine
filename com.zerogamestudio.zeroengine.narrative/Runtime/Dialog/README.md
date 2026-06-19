@@ -269,6 +269,7 @@ public class DialogBoxUI : MonoBehaviour
     public void UpdateText(string text);
     public void ShowChoices(List<DialogChoice> choices);
     public void SetContinueIndicatorVisible(bool visible);
+    public void RegisterPortrait(string key, Sprite sprite);
     public void Continue();
 
     // Events

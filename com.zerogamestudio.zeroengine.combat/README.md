@@ -4,7 +4,7 @@
 
 ## 版本
 - **当前版本**: 2.0.0
-- **依赖**: ZeroEngine.Core, ZeroEngine.Data
+- **依赖**: ZeroEngine.Core, ZeroEngine.Data, ZeroEngine.Economy
 
 ## 包含模块
 
@@ -29,6 +29,14 @@
 - `SpawnerBase` - 生成器基类
 - `WaveSpawner` - 波次生成器
 
+## 配置校验
+
+`ZeroEngine.Combat.Editor` 提供 `CombatConfigValidator`，用于在 Editor 测试或配置发布流程中检查：
+
+- `AbilityDataSO` 的技能名重复、空描述、非法冷却/等级、空 Trigger/Condition/Effect 和无效 TCE 参数。
+- `ProjectileDataSO` 的弹道 ID、显示名、Prefab、速度、生命周期、轨迹参数、暴击率、AOE、对象池参数。
+- `SpawnDataSO` 的生成 ID、显示名、间隔、随机范围、条目 Prefab、权重、数量、缩放和重复 ID。
+
 ## 快速使用
 
 ```csharp
@@ -45,3 +53,10 @@ CombatManager.Instance.DealDamage(damage, target);
 var selector = new TargetSelector(config);
 var target = selector.SelectTarget(candidates, origin);
 ```
+
+## Dependency Pinning
+
+When this package is consumed through Git UPM, add every
+`com.zerogamestudio.*` dependency from `package.json` to the consumer project's
+`Packages/manifest.json` at the same tested commit. See
+[Consumer Project Setup](../docs/consumer-project-setup.md).

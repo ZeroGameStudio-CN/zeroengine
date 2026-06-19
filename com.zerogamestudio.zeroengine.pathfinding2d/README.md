@@ -4,8 +4,8 @@
 
 ## 版本
 
-- **当前版本**: 1.3.0
-- **依赖**: ZeroEngine.Core >= 1.0.0
+- **当前版本**: 1.6.19
+- **依赖**: ZeroEngine.Core 2.0.0
 
 ## 概述
 
@@ -73,6 +73,9 @@ jumpLinkCalculator.GenerateJumpLinks();
 执行寻路请求，生成 MoveCommand 序列。
 
 ```csharp
+// 显式绑定平台图生成器，或使用 PlatformNavigationBootstrap 创建组件
+pathfinder.SetGraphGenerator(platformGraphGenerator);
+
 // 请求路径
 pathfinder.RequestPath(start, end);
 
@@ -250,3 +253,10 @@ var gui = gameObject.AddComponent<PathfindingDebugGUI>();
 - 跳跃链接计算
 - A* 寻路算法
 - MoveCommand 指令系统
+
+## Dependency Pinning
+
+When this package is consumed through Git UPM, add every
+`com.zerogamestudio.*` dependency from `package.json` to the consumer project's
+`Packages/manifest.json` at the same tested commit. See
+[Consumer Project Setup](../docs/consumer-project-setup.md).

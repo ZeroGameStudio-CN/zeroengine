@@ -1,0 +1,22 @@
+{
+  "name": "ZGS.Dungeon.Tests.Editor",
+  "rootNamespace": "ZeroEngine.Dungeon.Editor.Tests",
+  "references": [
+    "ZeroEngine.Dungeon",
+    "UnityEditor.TestRunner",
+    "UnityEngine.TestRunner"
+  ],
+  "includePlatforms": [
+    "Editor"
+  ],
+  "excludePlatforms": [],
+  "allowUnsafeCode": false,
+  "overrideReferences": false,
+  "precompiledReferences": [],
+  "autoReferenced": false,
+  "defineConstraints": [
+    "UNITY_INCLUDE_TESTS"
+  ],
+  "versionDefines": [],
+  "noEngineReferences": false
+}

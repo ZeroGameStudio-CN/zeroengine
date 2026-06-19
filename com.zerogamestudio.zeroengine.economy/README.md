@@ -27,6 +27,13 @@
 - `CraftingRecipeSO` - 配方数据
 - 技能经验系统
 
+## Editor Tooling
+
+- `ZeroEngine.Economy.Editor` contains package-level config validation.
+- `EconomyConfigValidator` checks item IDs, display names, stack/price ranges,
+  crafting ingredients and outputs, unlock requirements, loot table entries,
+  pity settings, shop item prices, stock, limits, schedules, and duplicate IDs.
+
 ## 快速使用
 
 ```csharp
@@ -42,3 +49,10 @@ var results = LootTableManager.Instance.Roll(lootTable);
 // 合成
 CraftingManager.Instance.StartCraft(recipe);
 ```
+
+## Dependency Pinning
+
+When this package is consumed through Git UPM, add every
+`com.zerogamestudio.*` dependency from `package.json` to the consumer project's
+`Packages/manifest.json` at the same tested commit. See
+[Consumer Project Setup](../docs/consumer-project-setup.md).

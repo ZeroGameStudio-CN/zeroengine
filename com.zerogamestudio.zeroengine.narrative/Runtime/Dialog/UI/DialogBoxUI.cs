@@ -55,7 +55,7 @@ namespace ZeroEngine.Dialog.UI
 
         [Header("Portrait Settings")]
         [SerializeField] private PortraitDisplayMode _portraitMode = PortraitDisplayMode.Single;
-        [SerializeField] private string _portraitResourcePath = "Portraits";
+        [SerializeField] private List<PortraitBinding> _portraitBindings = new List<PortraitBinding>();
         [SerializeField] private bool _cachePortraits = true;
 
         [Header("Narration Settings")]
@@ -78,6 +78,7 @@ namespace ZeroEngine.Dialog.UI
 
         private readonly List<Button> _activeChoiceButtons = new List<Button>();
         private readonly Dictionary<string, Sprite> _portraitCache = new Dictionary<string, Sprite>();
+        private readonly Dictionary<string, Sprite> _registeredPortraits = new Dictionary<string, Sprite>();
         private string _currentSpeaker;
         private bool _isShowingChoices;
 
@@ -257,25 +258,51 @@ namespace ZeroEngine.Dialog.UI
         {
             if (string.IsNullOrEmpty(key)) return null;
 
-            // Check cache
             if (_cachePortraits && _portraitCache.TryGetValue(key, out var cached))
             {
                 return cached;
             }
 
-            // Load from Resources
-            string path = string.IsNullOrEmpty(_portraitResourcePath)
-                ? key
-                : $"{_portraitResourcePath}/{key}";
+            if (_registeredPortraits.TryGetValue(key, out var registered))
+            {
+                CachePortrait(key, registered);
+                return registered;
+            }
 
-            Sprite sprite = Resources.Load<Sprite>(path);
+            foreach (var binding in _portraitBindings)
+            {
+                if (binding == null || string.IsNullOrEmpty(binding.Key) || binding.Sprite == null)
+                {
+                    continue;
+                }
 
-            if (sprite != null && _cachePortraits)
+                if (string.Equals(binding.Key, key, StringComparison.Ordinal))
+                {
+                    CachePortrait(key, binding.Sprite);
+                    return binding.Sprite;
+                }
+            }
+
+            return null;
+        }
+
+        public void RegisterPortrait(string key, Sprite sprite)
+        {
+            if (string.IsNullOrEmpty(key) || sprite == null)
+            {
+                return;
+            }
+
+            _registeredPortraits[key] = sprite;
+            CachePortrait(key, sprite);
+        }
+
+        private void CachePortrait(string key, Sprite sprite)
+        {
+            if (_cachePortraits && sprite != null)
             {
                 _portraitCache[key] = sprite;
             }
-
-            return sprite;
         }
 
         /// <summary>
@@ -338,5 +365,12 @@ namespace ZeroEngine.Dialog.UI
 
         /// <summary>Left and right portrait slots for conversations.</summary>
         LeftRight
+    }
+
+    [Serializable]
+    public sealed class PortraitBinding
+    {
+        public string Key;
+        public Sprite Sprite;
     }
 }

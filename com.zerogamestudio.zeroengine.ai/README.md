@@ -5,7 +5,14 @@ AI 决策系统包，包含 FSM、行为树、效用 AI、GOAP 和 NPC 日程系
 ## 版本
 - **当前版本**: 2.0.0
 - **依赖**: ZeroEngine.Core
-- **可选依赖**: crashkonijn/GOAP
+- **可选集成**: crashkonijn/GOAP adapter code is compiled only when a project provides the GOAP assembly reference and `CRASHKONIJN_GOAP` define.
+
+## Designer Config Validation
+
+`ZeroEngine.AI.Editor` provides `AIConfigValidator` for NPC schedules, schedule
+presets, and behavior tree assets. It reports missing stable IDs/display names,
+invalid schedule entries, missing actions, broken behavior tree roots, duplicate
+node IDs, and missing child references before play mode.
 
 ## 包含模块
 
@@ -91,4 +98,11 @@ controller.OnScheduleChanged += entry =>
 
 | 宏 | 说明 |
 |----|------|
-| `GOAP_INSTALLED` | 启用 crashkonijn/GOAP 集成 |
+| `CRASHKONIJN_GOAP` | 启用 crashkonijn/GOAP 集成 |
+
+## Dependency Pinning
+
+When this package is consumed through Git UPM, add every
+`com.zerogamestudio.*` dependency from `package.json` to the consumer project's
+`Packages/manifest.json` at the same tested commit. See
+[Consumer Project Setup](../docs/consumer-project-setup.md).
