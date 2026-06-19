@@ -76,3 +76,10 @@ map.MoveToNode(nextNode);
 - 程序化地图生成
 - 探索AI
 - 事件框架
+
+## Dependency Pinning
+
+When this package is consumed through Git UPM, add every
+`com.zerogamestudio.*` dependency from `package.json` to the consumer project's
+`Packages/manifest.json` at the same tested commit. See
+[Consumer Project Setup](../docs/consumer-project-setup.md).

@@ -1,0 +1,22 @@
+{
+  "name": "ZGS.DataToolkit.Tests.Editor",
+  "rootNamespace": "ZGS.DataToolkit.Editor.Tests",
+  "references": [
+    "ZGS.DataToolkit.Editor",
+    "UnityEditor.TestRunner",
+    "UnityEngine.TestRunner"
+  ],
+  "includePlatforms": [
+    "Editor"
+  ],
+  "excludePlatforms": [],
+  "allowUnsafeCode": false,
+  "overrideReferences": false,
+  "precompiledReferences": [],
+  "autoReferenced": false,
+  "defineConstraints": [
+    "UNITY_INCLUDE_TESTS"
+  ],
+  "versionDefines": [],
+  "noEngineReferences": false
+}

@@ -19,30 +19,40 @@ namespace ZeroEngine.Network.Core
 
         private static void ParseArgs()
         {
-            _args = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
-            var commandLineArgs = System.Environment.GetCommandLineArgs();
+            _args = ParseCommandLineArgs(System.Environment.GetCommandLineArgs());
+        }
 
-            for (int i = 0; i < commandLineArgs.Length; i++)
+        public static Dictionary<string, string> ParseCommandLineArgs(IReadOnlyList<string> commandLineArgs)
+        {
+            var parsedArgs = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+            if (commandLineArgs == null)
+            {
+                return parsedArgs;
+            }
+
+            for (int i = 0; i < commandLineArgs.Count; i++)
             {
                 var arg = commandLineArgs[i];
-                if (arg.StartsWith("-"))
+                if (!string.IsNullOrEmpty(arg) && arg.StartsWith("-", StringComparison.Ordinal))
                 {
                     var key = arg.Substring(1); // remove '-'
                     var value = "true";
 
                     // 检查下一个参数是否是值 (不以 - 开头)
-                    if (i + 1 < commandLineArgs.Length && !commandLineArgs[i + 1].StartsWith("-"))
+                    if (i + 1 < commandLineArgs.Count && !commandLineArgs[i + 1].StartsWith("-"))
                     {
                         value = commandLineArgs[i + 1];
                         i++; // 跳过下一个
                     }
                     
-                    if (_args.ContainsKey(key))
-                        _args[key] = value;
+                    if (parsedArgs.ContainsKey(key))
+                        parsedArgs[key] = value;
                     else
-                        _args.Add(key, value);
+                        parsedArgs.Add(key, value);
                 }
             }
+
+            return parsedArgs;
         }
 
         public static bool HasCheck(string key) => _args.ContainsKey(key);

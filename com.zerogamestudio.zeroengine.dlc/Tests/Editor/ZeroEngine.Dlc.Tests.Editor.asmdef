@@ -2,7 +2,10 @@
   "name": "ZeroEngine.Dlc.Tests.Editor",
   "rootNamespace": "ZeroEngine.Tests.Dlc",
   "references": [
-    "ZeroEngine.Dlc"
+    "ZeroEngine.Dlc",
+    "ZeroEngine.Dlc.Editor",
+    "UnityEngine.TestRunner",
+    "UnityEditor.TestRunner"
   ],
   "includePlatforms": [
     "Editor"

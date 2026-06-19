@@ -9,6 +9,9 @@ namespace ZGS.Analytics.Editor
     /// </summary>
     public class AnalyticsDashboardWindow : EditorWindow
     {
+        private const string DefaultConfigFolder = "Assets/ZGSAnalytics";
+        private const string DefaultConfigPath = DefaultConfigFolder + "/ZGSAnalyticsConfig.asset";
+
         private Vector2 _scrollPos;
         private GUIStyle _headerStyle;
         private GUIStyle _valueStyle;
@@ -83,7 +86,7 @@ namespace ZGS.Analytics.Editor
         {
             EditorGUILayout.LabelField("配置状态", _headerStyle);
 
-            var config = Resources.Load<ZGSAnalyticsConfig>("ZGSAnalyticsConfig");
+            var config = FindConfigAsset();
 
             if (config != null)
             {
@@ -103,7 +106,7 @@ namespace ZGS.Analytics.Editor
             }
             else
             {
-                EditorGUILayout.HelpBox("未找到 ZGSAnalyticsConfig\n请在 Resources 目录创建配置文件", MessageType.Warning);
+                EditorGUILayout.HelpBox("未找到 ZGSAnalyticsConfig 配置资产。请创建配置文件，并在项目启动代码中调用 AnalyticsBootstrap.Initialize(config)。", MessageType.Warning);
 
                 if (GUILayout.Button("创建配置文件"))
                 {
@@ -184,7 +187,7 @@ namespace ZGS.Analytics.Editor
 
             if (GUILayout.Button("打开服务器 Dashboard"))
             {
-                var config = Resources.Load<ZGSAnalyticsConfig>("ZGSAnalyticsConfig");
+                var config = FindConfigAsset();
                 if (config != null && !string.IsNullOrEmpty(config.zgsServerUrl))
                 {
                     // 从 API URL 推断 Dashboard URL (5001 -> 8501)
@@ -215,18 +218,36 @@ namespace ZGS.Analytics.Editor
 
         private void CreateConfig()
         {
-            // 确保 Resources 目录存在
-            if (!AssetDatabase.IsValidFolder("Assets/Resources"))
-            {
-                AssetDatabase.CreateFolder("Assets", "Resources");
-            }
-
+            EnsureDefaultConfigFolder();
             var config = CreateInstance<ZGSAnalyticsConfig>();
-            AssetDatabase.CreateAsset(config, "Assets/Resources/ZGSAnalyticsConfig.asset");
+            var path = AssetDatabase.GenerateUniqueAssetPath(DefaultConfigPath);
+            AssetDatabase.CreateAsset(config, path);
             AssetDatabase.SaveAssets();
 
             Selection.activeObject = config;
             EditorGUIUtility.PingObject(config);
+        }
+
+        private static ZGSAnalyticsConfig FindConfigAsset()
+        {
+            var guids = AssetDatabase.FindAssets("t:ZGSAnalyticsConfig");
+            if (guids == null || guids.Length == 0)
+            {
+                return null;
+            }
+
+            var path = AssetDatabase.GUIDToAssetPath(guids[0]);
+            return AssetDatabase.LoadAssetAtPath<ZGSAnalyticsConfig>(path);
+        }
+
+        private static void EnsureDefaultConfigFolder()
+        {
+            if (AssetDatabase.IsValidFolder(DefaultConfigFolder))
+            {
+                return;
+            }
+
+            AssetDatabase.CreateFolder("Assets", "ZGSAnalytics");
         }
 
         private void OnInspectorUpdate()

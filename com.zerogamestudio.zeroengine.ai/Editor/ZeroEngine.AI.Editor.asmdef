@@ -1,0 +1,18 @@
+{
+  "name": "ZeroEngine.AI.Editor",
+  "rootNamespace": "ZeroEngine.AI.Editor",
+  "references": [
+    "ZeroEngine.AI"
+  ],
+  "includePlatforms": [
+    "Editor"
+  ],
+  "excludePlatforms": [],
+  "allowUnsafeCode": false,
+  "overrideReferences": false,
+  "precompiledReferences": [],
+  "autoReferenced": true,
+  "defineConstraints": [],
+  "versionDefines": [],
+  "noEngineReferences": false
+}

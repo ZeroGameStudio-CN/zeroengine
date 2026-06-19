@@ -4,7 +4,14 @@
 
 ## 版本
 - **当前版本**: 2.0.0
-- **依赖**: ZeroEngine.Core, TextMeshPro
+- **依赖**: ZeroEngine.Core, Addressables, Input System, TextMeshPro
+
+## Designer Config Validation
+
+`ZeroEngine.UI.Editor` provides `UIConfigValidator` for UI view databases and
+toast settings. It reports duplicate view names, missing prefab references,
+invalid animation durations, duplicate toast severities, and invalid toast
+durations.
 
 ## 包含模块
 
@@ -46,4 +53,11 @@ UIManager.Instance.OnViewOpened += name => Debug.Log(name);
 | 宏 | 说明 |
 |----|------|
 | `ZEROENGINE_ADDRESSABLES` | Addressables 加载 |
-| `ODIN_INSPECTOR` | Odin 编辑器支持 |
+| `ODIN_INSPECTOR` | Reserved for a future optional Odin adapter assembly |
+
+## Dependency Pinning
+
+When this package is consumed through Git UPM, add every
+`com.zerogamestudio.*` dependency from `package.json` to the consumer project's
+`Packages/manifest.json` at the same tested commit. See
+[Consumer Project Setup](../docs/consumer-project-setup.md).

@@ -1,6 +1,8 @@
 # Consumer Project Setup
 
 This guide is for Unity projects that consume ZeroEngine packages.
+For package naming and ownership boundaries, see
+[Package Naming And Ownership](package-naming-ownership.md).
 
 ## Standard Source
 
@@ -22,6 +24,7 @@ Add each required ZeroEngine package to `Packages/manifest.json`:
 {
   "dependencies": {
     "com.zerogamestudio.zeroengine.core": "https://github.com/liuzqk/zeroengine.git?path=com.zerogamestudio.zeroengine.core#<tested-commit>",
+    "com.zerogamestudio.zeroengine.persistence": "https://github.com/liuzqk/zeroengine.git?path=com.zerogamestudio.zeroengine.persistence#<tested-commit>",
     "com.zerogamestudio.zeroengine.data": "https://github.com/liuzqk/zeroengine.git?path=com.zerogamestudio.zeroengine.data#<tested-commit>",
     "com.zerogamestudio.zeroengine.ui": "https://github.com/liuzqk/zeroengine.git?path=com.zerogamestudio.zeroengine.ui#<tested-commit>"
   }
@@ -36,6 +39,10 @@ Keep all ZeroEngine packages in one consumer project on the same commit unless
 you are deliberately testing a split. If Unity reports a missing
 `com.zerogamestudio.*` dependency, add that package to the manifest with the
 same commit.
+
+Use each package's `package.json` dependencies as the source of truth. When a
+package lists another `com.zerogamestudio.*` package, add that dependency to the
+consumer manifest with the same tested commit hash.
 
 ## Upgrade Flow
 

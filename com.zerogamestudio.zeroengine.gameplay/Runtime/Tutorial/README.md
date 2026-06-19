@@ -21,7 +21,7 @@ Tutorial Sequence SO:
         Dialogue Text: "欢迎来到游戏世界！"
         Wait For Confirm: true
     - Highlight Step:
-        Target Path: "Canvas/MainMenu/PlayButton"
+        Target Path: "MainMenu/PlayButton"
         Highlight Type: Circle
         Hint Text: "点击这里开始游戏"
         Wait For Click: true
@@ -30,6 +30,9 @@ Tutorial Sequence SO:
 ### 2. 注册并启动
 
 ```csharp
+// 设置教程上下文中的玩家对象
+TutorialManager.Instance.Player = playerGameObject;
+
 // 在 Inspector 中注册，或代码注册
 TutorialManager.Instance.RegisterSequence(myTutorialSO);
 
@@ -137,8 +140,9 @@ public override void OnEnter(TutorialContext ctx)
     ctx.SetVariable("visited", true);
     bool visited = ctx.GetVariable<bool>("visited");
 
-    // UI 目标
-    var button = ctx.FindUITarget("Canvas/Button");
+    // UI 目标。路径相对 TutorialUIManager 的 UI Container，也可以先 RegisterTarget。
+    ctx.RegisterTarget("play_button", playButton.gameObject);
+    var button = ctx.FindUITarget("play_button");
 
     // 玩家引用
     var player = ctx.Player;
@@ -217,7 +221,8 @@ public class WaitEventStep : TutorialStep
 [Serializable]
 public class MoveToStep : TutorialStep
 {
-    public Transform Target;
+    public Vector3 TargetPosition;
+    public string TargetObjectPath; // TutorialContext.RegisterTarget ID
     public float ArrivalDistance = 2f;
     public bool ShowArrow = true;
 }

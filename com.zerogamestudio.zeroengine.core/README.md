@@ -104,7 +104,11 @@ string hp = ZeroGC.CacheFormattedValue("hp", 100, v => $"{v} HP");
 
 ## 依赖
 
-- 无外部依赖 (可选: UniTask, Addressables, Input System)
+- `com.unity.addressables` (1.21.0) - PoolManager addressable spawning support
+- `com.unity.inputsystem` (1.7.0) - input utility assembly reference
+- UniTask and Odin code paths are disabled in the default runtime assembly until
+  they are moved to optional adapter assemblies or supplied by a project-specific
+  integration.
 
 ## 许可
 

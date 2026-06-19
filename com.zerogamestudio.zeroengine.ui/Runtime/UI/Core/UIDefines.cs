@@ -86,7 +86,7 @@ namespace ZeroEngine.UI
         public AssetReferenceGameObject prefabReference;
 #endif
 
-        [Tooltip("Resources 路径（备选）")]
+        [Tooltip("Legacy field. Runtime loading requires prefab or Addressables reference.")]
         public string resourcePath;
 
         [Tooltip("直接引用 Prefab（编辑器/小项目用）")]

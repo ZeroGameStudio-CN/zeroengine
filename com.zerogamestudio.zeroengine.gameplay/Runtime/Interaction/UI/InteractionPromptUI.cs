@@ -56,7 +56,7 @@ namespace ZeroEngine.Interaction
 
         [Header("Interaction Detector")]
         [SerializeField]
-        [Tooltip("交互检测器 (留空则自动查找)")]
+        [Tooltip("交互检测器；也可通过 SetDetector 显式注入")]
         private InteractionDetector _detector;
 
         #endregion
@@ -71,6 +71,7 @@ namespace ZeroEngine.Interaction
         private bool _isShowing;
         private float _fadeProgress;
         private bool _isFading;
+        private bool _isSubscribedToDetector;
 
         #endregion
 
@@ -97,24 +98,20 @@ namespace ZeroEngine.Interaction
 
         private void Start()
         {
-            // 自动查找检测器
+            SubscribeToDetector();
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
             if (_detector == null)
             {
-                _detector = FindObjectOfType<InteractionDetector>();
+                Debug.LogWarning(
+                    "[ZeroEngine.Interaction] InteractionPromptUI has no InteractionDetector. Assign one in the inspector, call SetDetector, or drive Show/Hide manually.",
+                    this);
             }
-
-            if (_detector != null)
-            {
-                _detector.OnTargetChanged += OnTargetChanged;
-            }
+#endif
         }
 
         private void OnDestroy()
         {
-            if (_detector != null)
-            {
-                _detector.OnTargetChanged -= OnTargetChanged;
-            }
+            UnsubscribeFromDetector();
         }
 
         private void Update()
@@ -365,19 +362,36 @@ namespace ZeroEngine.Interaction
         /// </summary>
         public void SetDetector(InteractionDetector detector)
         {
-            // 移除旧监听
-            if (_detector != null)
+            if (_detector == detector && _isSubscribedToDetector)
             {
-                _detector.OnTargetChanged -= OnTargetChanged;
+                return;
             }
 
+            UnsubscribeFromDetector();
             _detector = detector;
+            SubscribeToDetector();
+        }
 
-            // 添加新监听
-            if (_detector != null)
+        private void SubscribeToDetector()
+        {
+            if (_detector == null || _isSubscribedToDetector)
             {
-                _detector.OnTargetChanged += OnTargetChanged;
+                return;
             }
+
+            _detector.OnTargetChanged += OnTargetChanged;
+            _isSubscribedToDetector = true;
+        }
+
+        private void UnsubscribeFromDetector()
+        {
+            if (_detector == null || !_isSubscribedToDetector)
+            {
+                return;
+            }
+
+            _detector.OnTargetChanged -= OnTargetChanged;
+            _isSubscribedToDetector = false;
         }
 
         /// <summary>

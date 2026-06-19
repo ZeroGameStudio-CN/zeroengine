@@ -68,7 +68,7 @@ namespace ZeroEngine.Tutorial
             // 创建 UI 容器
             if (_uiContainer == null)
             {
-                var canvas = FindOrCreateCanvas();
+                var canvas = CreateDefaultCanvas();
                 _uiContainer = canvas.transform;
             }
 
@@ -81,16 +81,8 @@ namespace ZeroEngine.Tutorial
             _isInitialized = true;
         }
 
-        private Canvas FindOrCreateCanvas()
+        private Canvas CreateDefaultCanvas()
         {
-            // 尝试找到现有的 Tutorial Canvas
-            var existing = GameObject.Find("TutorialCanvas");
-            if (existing != null)
-            {
-                var canvas = existing.GetComponent<Canvas>();
-                if (canvas != null) return canvas;
-            }
-
             // 创建新的 Canvas
             var go = new GameObject("TutorialCanvas");
             go.transform.SetParent(transform);
@@ -408,24 +400,24 @@ namespace ZeroEngine.Tutorial
         #region Utility
 
         /// <summary>
-        /// 通过路径查找 UI 元素
+        /// 通过已配置 UI 容器下的相对路径查找 UI 元素
         /// </summary>
         public RectTransform FindUIByPath(string path)
         {
             if (string.IsNullOrEmpty(path)) return null;
 
-            // 尝试直接 Find
-            var go = GameObject.Find(path);
-            if (go != null)
+            if (_uiContainer != null)
             {
-                return go.GetComponent<RectTransform>();
+                var child = _uiContainer.Find(path);
+                if (child != null)
+                {
+                    return child.GetComponent<RectTransform>();
+                }
             }
 
-            // 尝试从场景中的 Canvas 查找
-            var canvases = FindObjectsOfType<Canvas>();
-            foreach (var canvas in canvases)
+            if (_worldSpaceContainer != null)
             {
-                var child = canvas.transform.Find(path);
+                var child = _worldSpaceContainer.Find(path);
                 if (child != null)
                 {
                     return child.GetComponent<RectTransform>();

@@ -1,0 +1,23 @@
+{
+  "name": "ZGS.Economy.Tests.Editor",
+  "rootNamespace": "ZeroEngine.Economy.Editor.Tests",
+  "references": [
+    "ZeroEngine.Economy",
+    "ZeroEngine.Economy.Editor",
+    "UnityEditor.TestRunner",
+    "UnityEngine.TestRunner"
+  ],
+  "includePlatforms": [
+    "Editor"
+  ],
+  "excludePlatforms": [],
+  "allowUnsafeCode": false,
+  "overrideReferences": false,
+  "precompiledReferences": [],
+  "autoReferenced": false,
+  "defineConstraints": [
+    "UNITY_INCLUDE_TESTS"
+  ],
+  "versionDefines": [],
+  "noEngineReferences": false
+}

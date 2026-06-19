@@ -1,0 +1,23 @@
+{
+  "name": "ZGS.World.Tests.Editor",
+  "rootNamespace": "ZeroEngine.World.Editor.Tests",
+  "references": [
+    "ZeroEngine.World",
+    "ZeroEngine.World.Editor",
+    "UnityEditor.TestRunner",
+    "UnityEngine.TestRunner"
+  ],
+  "includePlatforms": [
+    "Editor"
+  ],
+  "excludePlatforms": [],
+  "allowUnsafeCode": false,
+  "overrideReferences": false,
+  "precompiledReferences": [],
+  "autoReferenced": false,
+  "defineConstraints": [
+    "UNITY_INCLUDE_TESTS"
+  ],
+  "versionDefines": [],
+  "noEngineReferences": false
+}

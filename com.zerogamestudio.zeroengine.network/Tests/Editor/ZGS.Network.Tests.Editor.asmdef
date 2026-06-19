@@ -1,0 +1,23 @@
+{
+  "name": "ZGS.Network.Tests.Editor",
+  "rootNamespace": "ZeroEngine.Network.Editor.Tests",
+  "references": [
+    "ZeroEngine.Network",
+    "ZeroEngine.Network.Editor",
+    "UnityEditor.TestRunner",
+    "UnityEngine.TestRunner"
+  ],
+  "includePlatforms": [
+    "Editor"
+  ],
+  "excludePlatforms": [],
+  "allowUnsafeCode": false,
+  "overrideReferences": false,
+  "precompiledReferences": [],
+  "autoReferenced": false,
+  "defineConstraints": [
+    "UNITY_INCLUDE_TESTS"
+  ],
+  "versionDefines": [],
+  "noEngineReferences": false
+}

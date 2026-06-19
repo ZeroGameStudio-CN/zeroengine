@@ -137,8 +137,25 @@ namespace ZeroEngine.Quest.Tests.Editor
             StringAssert.Contains("Quest has no questId", source);
             StringAssert.Contains("QuestId has leading/trailing whitespace", source);
             StringAssert.Contains("Quest has no Conditions", source);
+            StringAssert.Contains("QuestId '{duplicateGroup.Key}' is duplicated", source);
+            StringAssert.Contains("\"KillCondition RequiredCount\"", source);
+            StringAssert.Contains("must be greater than 0", source);
+            StringAssert.Contains("\"ItemReward Quantity\"", source);
             StringAssert.Contains("QuestValidationSeverity.Error", source);
             StringAssert.Contains("QuestValidationSeverity.Warning", source);
+        }
+
+        [Test]
+        public void NarrativeEditorAsmdef_SplitsEditorValidationFromRuntime()
+        {
+            var asmdef = File.ReadAllText($"{PackageRoot}/Editor/ZeroEngine.Narrative.Editor.asmdef");
+            var tests = File.ReadAllText($"{PackageRoot}/Tests/Editor/ZeroEngine.Narrative.Tests.Editor.asmdef");
+
+            StringAssert.Contains("\"name\": \"ZeroEngine.Narrative.Editor\"", asmdef);
+            StringAssert.Contains("\"ZeroEngine.Narrative\"", asmdef);
+            StringAssert.Contains("\"includePlatforms\"", asmdef);
+            StringAssert.Contains("\"Editor\"", asmdef);
+            StringAssert.Contains("\"ZeroEngine.Narrative.Editor\"", tests);
         }
 
         [Test]

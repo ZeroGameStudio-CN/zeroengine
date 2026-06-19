@@ -2,12 +2,18 @@
 
 ZeroGameStudio 游戏分析 SDK，支持自建 ClickHouse 数据平台。
 
-**版本**: 1.2.0
+**版本**: 1.2.2
 **Unity**: 2021.3+
+
+## Designer Config Validation
+
+`ZGS.Analytics.Editor` provides `AnalyticsConfigValidator` for analytics
+configs. It reports enabled configs that are missing app IDs, server URLs, or
+authentication secrets, and rejects non-HTTP server URLs.
 
 ## 特性
 
-- **零代码初始化** - `[RuntimeInitializeOnLoadMethod]` 自动启动
+- **显式初始化** - 项目启动代码注入 `ZGSAnalyticsConfig`
 - **离线队列** - 断网自动缓存，联网后重传
 - **多 Provider** - 可同时向多个后端发送
 - **崩溃/Bug 报告** - 自动采集上下文 + 附件上传
@@ -31,12 +37,27 @@ ZeroGameStudio 游戏分析 SDK，支持自建 ClickHouse 数据平台。
 ## 配置
 
 1. 菜单 `Create > ZGS > Analytics Config`
-2. 放到 `Assets/Resources/ZGSAnalyticsConfig.asset`
-3. 填写配置：
+2. 填写配置：
    - `App ID` - 游戏标识 (如 POB, LLS)
    - `ZGS Server URL` - FastAPI 服务器地址
    - `ZGS Secret` - 认证密钥
    - `Debug Mode` - 编辑器日志开关
+3. 在项目启动代码中显式初始化：
+
+```csharp
+using UnityEngine;
+using ZGS.Analytics;
+
+public sealed class AnalyticsStartup : MonoBehaviour
+{
+    [SerializeField] private ZGSAnalyticsConfig analyticsConfig;
+
+    private void Awake()
+    {
+        AnalyticsBootstrap.Initialize(analyticsConfig);
+    }
+}
+```
 
 ## 自动采集
 

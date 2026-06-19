@@ -4,7 +4,13 @@
 
 ## 版本
 - **当前版本**: 2.0.0
-- **依赖**: ZeroEngine.Core
+- **依赖**: ZeroEngine.Core, ZeroEngine.Persistence
+
+## Designer Config Validation
+
+`ZeroEngine.Data.Editor` provides `DataConfigValidator` for buff data and math
+formulas. It reports duplicate or missing Buff IDs, invalid buff timing/stack
+settings, empty stat modifiers, and formula steps that divide by constant zero.
 
 ## 包含模块
 
@@ -66,3 +72,10 @@ var saveData = statController.ExportSaveData();
 // 导入
 statController.ImportSaveData(saveData);
 ```
+
+## Dependency Pinning
+
+When this package is consumed through Git UPM, add every
+`com.zerogamestudio.*` dependency from `package.json` to the consumer project's
+`Packages/manifest.json` at the same tested commit. See
+[Consumer Project Setup](../docs/consumer-project-setup.md).

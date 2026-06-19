@@ -5,6 +5,22 @@ All notable changes to this package will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## Unreleased
+
+### Changed
+
+- Declared split ZeroEngine package dependencies used by the umbrella assembly.
+- Declared Netcode for GameObjects and Unity Transport dependencies used by the umbrella assembly.
+- Removed the hard XNode assembly reference from the default umbrella assembly.
+- Renamed umbrella ModSystem assemblies to avoid duplicate asmdef names with the split ModSystem package.
+- Removed stale optional third-party version defines from the default umbrella assembly.
+- Fixed generated README text construction in the umbrella mod creator editor window.
+- Added package-level config validation for Spine skin configs.
+- Made the Spine skin runtime assembly compile on the default package smoke path and declared its TextMeshPro assembly dependency.
+- Added missing `.meta` files for umbrella sample scripts and removed a stale sample `.meta`.
+- Replaced stale `Assets/ZeroEngine` documentation paths with UPM package or consumer-owned config paths.
+- Moved local `.claude` specs out of the UPM package into repository docs.
+
 ## [2.7.0] - 2026-01-07
 
 ### Added

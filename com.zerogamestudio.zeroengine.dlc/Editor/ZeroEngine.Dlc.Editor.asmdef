@@ -1,0 +1,18 @@
+{
+  "name": "ZeroEngine.Dlc.Editor",
+  "rootNamespace": "ZeroEngine.Dlc.Editor",
+  "references": [
+    "ZeroEngine.Dlc"
+  ],
+  "includePlatforms": [
+    "Editor"
+  ],
+  "excludePlatforms": [],
+  "allowUnsafeCode": false,
+  "overrideReferences": false,
+  "precompiledReferences": [],
+  "autoReferenced": true,
+  "defineConstraints": [],
+  "versionDefines": [],
+  "noEngineReferences": false
+}

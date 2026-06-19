@@ -9,6 +9,23 @@ ZeroEngine 是一个模块化的 Unity 游戏开发框架，提供常用游戏�
 
 ---
 
+## Designer Config Validation
+
+`ZeroEngine.Editor` provides `SpineSkinConfigValidator` for the umbrella
+SpineSkin config. It reports missing skin naming tokens, invalid gender lists,
+invalid UI timing values, duplicate skin slots, and required slots without a
+default skin.
+
+---
+
+## 包依赖
+
+主包会引用拆分后的 ZeroEngine 功能程序集。通过 Git UPM 使用主包时，
+消费项目也应把相关 `com.zerogamestudio.zeroengine.*` 子包固定到同一个
+测试过的 commit，避免本地缓存或 registry 解析出不同版本。
+
+---
+
 ## 文档导航
 
 | 文档 | 说明 |
@@ -148,7 +165,7 @@ Unity.exe -runTests -testPlatform EditMode -projectPath "<项目路径>" -testRe
 
 ### 14. Network (网络)
 - **ZeroNetworkManager**: 基于 NGO 的网络管理器，支持配置化启动
-- **ServerConfig**: 服务器配置（Assets/ZeroEngine/Network/Config）
+- **ServerConfig**: 服务器配置 ScriptableObject。通过 `Create > ZeroEngine > Network` 创建后存放在消费项目自有配置目录中。
 - **启动参数**: 支持 `-port`, `-ip`, `-batchmode` 等标准参数控制
 - **(v1.1.0)** `ZeroNetworkBehaviour`: NetworkBehaviour 便捷基类
 - **(v1.1.0)** `ReconnectionHandler`: 自动断线重连（指数退避）
@@ -237,3 +254,10 @@ Unity.exe -runTests -testPlatform EditMode -projectPath "<项目路径>" -testRe
 - **ScheduleAction**: 日程行动基类
 - **NPCScheduleController**: NPC 日程控制器
 - **NPCScheduleSO**: 日程 ScriptableObject
+
+## Dependency Pinning
+
+When this package is consumed through Git UPM, add every
+`com.zerogamestudio.*` dependency from `package.json` to the consumer project's
+`Packages/manifest.json` at the same tested commit. See
+[Consumer Project Setup](../docs/consumer-project-setup.md).

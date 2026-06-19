@@ -109,10 +109,14 @@ namespace ZeroEngine.Pathfinding2D
 
         private void Awake()
         {
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
             if (graphGenerator == null)
             {
-                graphGenerator = FindObjectOfType<PlatformGraphGenerator>();
+                Debug.LogWarning(
+                    "[ZeroEngine.Pathfinding2D] Platform2DPathfinder has no PlatformGraphGenerator. Assign it in the inspector, add the pathfinder through PlatformNavigationBootstrap, or call SetGraphGenerator before requesting paths.",
+                    this);
             }
+#endif
         }
 
         /// <summary>

@@ -23,6 +23,11 @@ namespace ZeroEngine.Tutorial
         [Tooltip("已注册的教程序列")]
         private List<TutorialSequenceSO> _registeredSequences = new();
 
+        [Header("Runtime References")]
+        [SerializeField]
+        [Tooltip("教程上下文使用的玩家对象；也可通过 Player 属性在运行时设置")]
+        private GameObject _player;
+
         [Header("Settings")]
         [SerializeField]
         [Tooltip("启用教程系统")]
@@ -84,6 +89,13 @@ namespace ZeroEngine.Tutorial
 
         /// <summary>教程上下文</summary>
         public TutorialContext Context => _context;
+
+        /// <summary>教程上下文使用的玩家对象</summary>
+        public GameObject Player
+        {
+            get => _player;
+            set => _player = value;
+        }
 
         /// <summary>已完成的教程数量</summary>
         public int CompletedCount => _completedSequences.Count;
@@ -296,7 +308,7 @@ namespace ZeroEngine.Tutorial
             _isRunning = true;
 
             // 初始化上下文
-            _context.Initialize(sequence, FindPlayer());
+            _context.Initialize(sequence, ResolvePlayer());
 
             // 触发事件
             OnSequenceStarted?.Invoke(sequence);
@@ -688,10 +700,17 @@ namespace ZeroEngine.Tutorial
             }
         }
 
-        private GameObject FindPlayer()
+        private GameObject ResolvePlayer()
         {
-            // 尝试查找带 "Player" 标签的对象
-            return GameObject.FindGameObjectWithTag("Player");
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
+            if (_player == null)
+            {
+                Debug.LogWarning(
+                    "[ZeroEngine.Tutorial] TutorialManager has no Player reference. Assign Player in the inspector or set TutorialManager.Player before starting sequences that need ctx.Player.",
+                    this);
+            }
+#endif
+            return _player;
         }
 
         /// <summary>

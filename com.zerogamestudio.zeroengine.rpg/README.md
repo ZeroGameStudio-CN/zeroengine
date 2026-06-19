@@ -25,6 +25,16 @@
 - **Encounter** - 随机遭遇系统 ✅
 - **BattleReward** - 战斗结算系统 ✅
 
+## 配置校验
+
+`ZeroEngine.RPG.Editor` 提供 `RpgConfigValidator`，用于在 Editor 测试或配置发布流程中检查：
+
+- `BattleRewardConfigSO` 的经验/JP/金币倍率、上下限比例和通关奖励倍率。
+- `EncounterTableSO` 的遭遇表 ID、重复 ID、区域等级、遭遇率、冷却、精英概率、敌人条目和 Boss/Elite 标记。
+- `SkillVisualDataSO` 的显示名、描述、时间轴总时长、空事件、负延迟，以及动画、VFX、音效、伤害弹字、位移、相机事件参数。
+
+Spine 和 Timeline 相关配置位于可选宏路径中，默认 validator 不直接引用这些可选类型。
+
 ## 快速开始
 
 ### 1. 实现战斗单位
@@ -115,6 +125,13 @@ TurnManager.Instance.OnActionExecuted += args => Debug.Log($"{args.Action.Actor.
 ```
 
 ---
+
+## Dependency Pinning
+
+When this package is consumed through Git UPM, add every
+`com.zerogamestudio.*` dependency from `package.json` to the consumer project's
+`Packages/manifest.json` at the same tested commit. See
+[Consumer Project Setup](../docs/consumer-project-setup.md).
 
 ## Boost System (BP 强化)
 

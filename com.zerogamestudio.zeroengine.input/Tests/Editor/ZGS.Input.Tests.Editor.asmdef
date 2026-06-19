@@ -1,0 +1,24 @@
+{
+  "name": "ZGS.Input.Tests.Editor",
+  "rootNamespace": "ZeroEngine.Input.Editor.Tests",
+  "references": [
+    "ZeroEngine.Input",
+    "ZeroEngine.Core",
+    "Unity.InputSystem",
+    "UnityEditor.TestRunner",
+    "UnityEngine.TestRunner"
+  ],
+  "includePlatforms": [
+    "Editor"
+  ],
+  "excludePlatforms": [],
+  "allowUnsafeCode": false,
+  "overrideReferences": false,
+  "precompiledReferences": [],
+  "autoReferenced": false,
+  "defineConstraints": [
+    "UNITY_INCLUDE_TESTS"
+  ],
+  "versionDefines": [],
+  "noEngineReferences": false
+}

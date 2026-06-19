@@ -5,7 +5,10 @@
   "description": "Core infrastructure for ZeroEngine framework. Includes Singleton patterns (Singleton, MonoSingleton, PersistentSingleton), EventManager, Object Pooling (PoolManager, IPoolable), Performance utilities (ZeroGC, ListPool, FormattedValueCache), and common utilities (ZeroLog, DateUtils).",
   "unity": "2022.3",
   "unityRelease": "0f1",
-  "dependencies": {},
+  "dependencies": {
+    "com.unity.addressables": "1.21.0",
+    "com.unity.inputsystem": "1.7.0"
+  },
   "keywords": [
     "zeroengine",
     "core",

@@ -64,6 +64,8 @@ Keep all ZeroEngine package entries in a consumer project on the same tested
 commit unless you are deliberately validating a version split. See
 [Consumer Project Setup](docs/consumer-project-setup.md) for the upgrade flow
 and the narrow case where a temporary local `file:` dependency is acceptable.
+See [Package Naming And Ownership](docs/package-naming-ownership.md) for the
+ZeroEngine, ZGS service, and project-adapter naming lanes.
 
 ## Repository Layout
 

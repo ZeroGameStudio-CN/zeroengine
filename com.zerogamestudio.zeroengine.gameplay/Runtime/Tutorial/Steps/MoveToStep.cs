@@ -14,7 +14,7 @@ namespace ZeroEngine.Tutorial
         [Tooltip("目标位置 (World Space)")]
         public Vector3 TargetPosition;
 
-        [Tooltip("目标 Transform (优先于 TargetPosition)")]
+        [Tooltip("目标对象注册 ID (优先于 TargetPosition)")]
         public string TargetObjectPath;
 
         [Tooltip("到达距离")]
@@ -66,7 +66,7 @@ namespace ZeroEngine.Tutorial
             _targetTransform = null;
             if (!string.IsNullOrEmpty(TargetObjectPath))
             {
-                var obj = GameObject.Find(TargetObjectPath);
+                var obj = ctx.GetTarget(TargetObjectPath);
                 if (obj != null)
                 {
                     _targetTransform = obj.transform;
@@ -187,7 +187,7 @@ namespace ZeroEngine.Tutorial
         {
             if (TargetPosition == Vector3.zero && string.IsNullOrEmpty(TargetObjectPath))
             {
-                error = "Either TargetPosition or TargetObjectPath is required";
+                error = "Either TargetPosition or TargetObjectPath registered in TutorialContext is required";
                 return false;
             }
             if (ArrivalDistance <= 0)

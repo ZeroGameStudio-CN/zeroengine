@@ -5,7 +5,7 @@ ZeroEngine 编辑器控制中心，支持轻量项目使用。
 ## 特性
 
 - **通用化设计**：通过条件编译自动适配已安装的包
-- **无硬依赖**：只依赖 `zeroengine.core`，轻量项目也能使用
+- **明确依赖**：当前编辑器程序集直接依赖 `core`、`economy` 和 `persistence`
 - **插件检测**：自动检测 Odin、DOTween、EasySave、YooAsset 等插件状态
 - **可选功能**：根据已安装的包显示/隐藏对应功能
 
@@ -19,6 +19,8 @@ ZeroEngine 编辑器控制中心，支持轻量项目使用。
 {
   "dependencies": {
     "com.zerogamestudio.zeroengine.core": "https://github.com/liuzqk/zeroengine.git?path=com.zerogamestudio.zeroengine.core#<tested-commit>",
+    "com.zerogamestudio.zeroengine.economy": "https://github.com/liuzqk/zeroengine.git?path=com.zerogamestudio.zeroengine.economy#<tested-commit>",
+    "com.zerogamestudio.zeroengine.persistence": "https://github.com/liuzqk/zeroengine.git?path=com.zerogamestudio.zeroengine.persistence#<tested-commit>",
     "com.zerogamestudio.zeroengine.dashboard": "https://github.com/liuzqk/zeroengine.git?path=com.zerogamestudio.zeroengine.dashboard#<tested-commit>"
   }
 }
@@ -32,7 +34,7 @@ ZeroEngine 编辑器控制中心，支持轻量项目使用。
 
 ## 条件编译宏
 
-本包根据已安装的其他包自动定义以下编译宏：
+本包声明 `core`、`economy` 和 `persistence` 为当前硬依赖。其他集成根据已安装的包自动定义以下编译宏：
 
 | 包 | 编译宏 | 启用功能 |
 |----|--------|----------|
@@ -52,3 +54,10 @@ ZeroEngine 编辑器控制中心，支持轻量项目使用。
 - 从主包独立出来
 - 添加条件编译支持
 - 支持轻量项目使用
+
+## Dependency Pinning
+
+When this package is consumed through Git UPM, add every
+`com.zerogamestudio.*` dependency from `package.json` to the consumer project's
+`Packages/manifest.json` at the same tested commit. See
+[Consumer Project Setup](../docs/consumer-project-setup.md).

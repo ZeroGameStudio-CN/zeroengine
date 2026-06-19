@@ -154,19 +154,22 @@ namespace ZeroEngine.ModSystem.Editor
                 }
                 
                 // 创建README
-                var readme = $@"# {_modName}
-
-**Author:** {_author}
-**Version:** {_version}
-
-## Description
-
-{_description}
-
-## Installation
-
-Copy this folder to the game's `Mods` directory.
-";
+                var readme = string.Join("\n", new[]
+                {
+                    $"# {_modName}",
+                    string.Empty,
+                    $"**Author:** {_author}",
+                    $"**Version:** {_version}",
+                    string.Empty,
+                    "## Description",
+                    string.Empty,
+                    _description,
+                    string.Empty,
+                    "## Installation",
+                    string.Empty,
+                    "Copy this folder to the game's `Mods` directory.",
+                    string.Empty
+                });
                 File.WriteAllText(Path.Combine(modFolder, "README.md"), readme);
                 
                 EditorUtility.DisplayDialog("Success", $"Mod created successfully!\n\n{modFolder}", "OK");

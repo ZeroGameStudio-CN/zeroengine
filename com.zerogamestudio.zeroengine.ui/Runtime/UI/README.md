@@ -41,7 +41,7 @@ UI/
 - 遮罩管理 (可配置颜色/点击关闭)
 - ESC 键关闭 (可禁用)
 - 焦点管理 (手柄/键盘导航支持)
-- 资源异步加载 (Addressables 可选)
+- Prefab 直引用和 Addressables 异步加载
 - 预加载 API
 
 ### MVVM
@@ -208,7 +208,6 @@ class UIViewConfig {
     GameObject prefab;
     // Addressables (条件编译)
     AssetReferenceGameObject prefabReference;
-    string resourcePath;
 
     UILayer layer;
     UIShowMode showMode;

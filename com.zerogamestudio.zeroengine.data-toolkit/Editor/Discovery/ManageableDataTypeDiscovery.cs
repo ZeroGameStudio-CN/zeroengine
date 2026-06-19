@@ -10,6 +10,22 @@ namespace ZGS.DataToolkit.Editor
     {
         private const string LegacyAttributeName = "ManageableDataAttribute";
         private const string ToolkitAttributeFullName = "ZGS.DataToolkit.ManageableDataAttribute";
+        private static readonly string[] ConfigTypeSuffixes =
+        {
+            "Config",
+            "ConfigSO",
+            "Data",
+            "DataSO",
+            "Database",
+            "DatabaseSO",
+            "Definition",
+            "DefinitionSO",
+            "Preset",
+            "PresetSO",
+            "RecipeSO",
+            "TableSO",
+            "TreeAsset"
+        };
 
         private static Type[] cachedTypes;
 
@@ -22,11 +38,21 @@ namespace ZGS.DataToolkit.Editor
 
             cachedTypes = TypeCache.GetTypesDerivedFrom<ScriptableObject>()
                 .Where(type => type != null && !type.IsAbstract)
-                .Where(HasManageableDataAttribute)
+                .Where(IsManageableScriptableObjectType)
                 .OrderBy(type => type.Name, StringComparer.OrdinalIgnoreCase)
                 .ToArray();
 
             return cachedTypes;
+        }
+
+        public static bool IsManageableScriptableObjectType(Type type)
+        {
+            return type != null &&
+                   !type.IsAbstract &&
+                   typeof(ScriptableObject).IsAssignableFrom(type) &&
+                   (HasManageableDataAttribute(type) ||
+                    HasCreateAssetMenuAttribute(type) ||
+                    IsZeroEngineConfigLikeType(type));
         }
 
         public static void ClearCache()
@@ -47,6 +73,33 @@ namespace ZGS.DataToolkit.Editor
             }
 
             return false;
+        }
+
+        private static bool HasCreateAssetMenuAttribute(Type type)
+        {
+            return type.GetCustomAttributes(typeof(CreateAssetMenuAttribute), inherit: false).Length > 0;
+        }
+
+        private static bool IsZeroEngineConfigLikeType(Type type)
+        {
+            if (!IsZeroEngineNamespace(type.Namespace))
+            {
+                return false;
+            }
+
+            return ConfigTypeSuffixes.Any(suffix =>
+                type.Name.EndsWith(suffix, StringComparison.OrdinalIgnoreCase));
+        }
+
+        private static bool IsZeroEngineNamespace(string typeNamespace)
+        {
+            if (string.IsNullOrWhiteSpace(typeNamespace))
+            {
+                return false;
+            }
+
+            return typeNamespace.StartsWith("ZeroEngine", StringComparison.Ordinal) ||
+                   typeNamespace.StartsWith("ZGS", StringComparison.Ordinal);
         }
     }
 }

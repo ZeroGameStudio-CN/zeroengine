@@ -1,9 +1,9 @@
 {
-    "name": "ZeroEngine.ModSystem.Editor",
+    "name": "ZeroEngine.Umbrella.ModSystem.Editor",
     "rootNamespace": "ZeroEngine.ModSystem.Editor",
     "references": [
         "ZeroEngine",
-        "ZeroEngine.ModSystem",
+        "ZeroEngine.Umbrella.ModSystem",
         "ZeroEngine.Combat",
         "ZeroEngine.Data",
         "ZeroEngine.Economy"

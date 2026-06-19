@@ -1,0 +1,22 @@
+{
+  "name": "ZGS.AutoBattle.Tests.Editor",
+  "rootNamespace": "ZeroEngine.AutoBattle.Editor.Tests",
+  "references": [
+    "ZeroEngine.AutoBattle",
+    "UnityEditor.TestRunner",
+    "UnityEngine.TestRunner"
+  ],
+  "includePlatforms": [
+    "Editor"
+  ],
+  "excludePlatforms": [],
+  "allowUnsafeCode": false,
+  "overrideReferences": false,
+  "precompiledReferences": [],
+  "autoReferenced": false,
+  "defineConstraints": [
+    "UNITY_INCLUDE_TESTS"
+  ],
+  "versionDefines": [],
+  "noEngineReferences": false
+}

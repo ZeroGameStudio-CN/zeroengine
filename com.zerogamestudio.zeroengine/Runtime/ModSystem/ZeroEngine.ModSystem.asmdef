@@ -1,5 +1,5 @@
 {
-    "name": "ZeroEngine.ModSystem",
+    "name": "ZeroEngine.Umbrella.ModSystem",
     "rootNamespace": "ZeroEngine.ModSystem",
     "references": [
         "ZeroEngine",

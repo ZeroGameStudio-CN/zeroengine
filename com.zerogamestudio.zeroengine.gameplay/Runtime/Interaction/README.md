@@ -62,6 +62,9 @@ InteractionDetector:
 
 添加 `InteractionPromptUI` 组件到 Canvas：
 
+将玩家上的 `InteractionDetector` 拖到 `InteractionPromptUI` 的 Detector
+字段，或在初始化代码中调用 `promptUI.SetDetector(detector)`。
+
 ```csharp
 // 或在代码中监听事件
 detector.OnTargetChanged += target =>

@@ -12,6 +12,7 @@
         "ZeroEngine.Economy",
         "ZeroEngine.Social",
         "ZeroEngine.UI",
+        "ZeroEngine.SpineSkin",
         "UnityEngine.TestRunner",
         "UnityEditor.TestRunner"
     ],

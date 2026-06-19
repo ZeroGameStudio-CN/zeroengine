@@ -4,17 +4,20 @@ namespace ZGS.Analytics
 {
     public static class AnalyticsBootstrap
     {
-        [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.BeforeSceneLoad)]
-        private static void AutoInitialize()
+        private static bool initialized;
+
+        public static bool IsInitialized => initialized;
+
+        public static void Initialize(ZGSAnalyticsConfig config)
         {
-            var config = Resources.Load<ZGSAnalyticsConfig>("ZGSAnalyticsConfig");
             if (config == null)
             {
-                AnalyticsLog.LogWarning("[ZGS.Analytics] Config not found in Resources/ZGSAnalyticsConfig. Analytics disabled.");
+                AnalyticsLog.LogWarning("[ZGS.Analytics] Analytics config is null. Analytics disabled.");
                 return;
             }
 
             if (!config.EnableAnalytics) return;
+            if (initialized) return;
 
             // 设置 Debug 模式
             AnalyticsConfig.DebugMode = config.debugMode;
@@ -53,9 +56,19 @@ namespace ZGS.Analytics
 
             // 初始化所有 Provider (会触发 SessionInfo.Initialize)
             AnalyticsService.Initialize();
+            initialized = true;
 
             // 监听退出事件以释放资源
-            Application.quitting += AnalyticsService.Shutdown;
+            Application.quitting -= Shutdown;
+            Application.quitting += Shutdown;
+        }
+
+        public static void Shutdown()
+        {
+            if (!initialized) return;
+            initialized = false;
+            Application.quitting -= Shutdown;
+            AnalyticsService.Shutdown();
         }
     }
 }

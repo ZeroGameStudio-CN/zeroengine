@@ -142,18 +142,18 @@ namespace ZeroEngine.UI
         [ContextMenu("Auto-Find Prefabs")]
         private void AutoFindPrefabs()
         {
-            string[] searchPaths = { "Assets/Prefabs/UI", "Assets/Resources/UI", "Assets/UI" };
             int found = 0;
 
             foreach (var entry in views)
             {
                 if (entry.prefab != null) continue;
 
-                foreach (var searchPath in searchPaths)
+                var guids = UnityEditor.AssetDatabase.FindAssets($"{entry.viewName} t:Prefab");
+                foreach (var guid in guids)
                 {
-                    string path = $"{searchPath}/{entry.viewName}.prefab";
+                    var path = UnityEditor.AssetDatabase.GUIDToAssetPath(guid);
                     var prefab = UnityEditor.AssetDatabase.LoadAssetAtPath<GameObject>(path);
-                    if (prefab != null)
+                    if (prefab != null && string.Equals(prefab.name, entry.viewName, StringComparison.Ordinal))
                     {
                         entry.prefab = prefab;
                         found++;

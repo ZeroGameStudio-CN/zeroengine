@@ -1,0 +1,22 @@
+{
+  "name": "ZGS.Localization.Tests.Editor",
+  "rootNamespace": "ZeroEngine.Localization.Editor.Tests",
+  "references": [
+    "ZeroEngine.Localization",
+    "UnityEditor.TestRunner",
+    "UnityEngine.TestRunner"
+  ],
+  "includePlatforms": [
+    "Editor"
+  ],
+  "excludePlatforms": [],
+  "allowUnsafeCode": false,
+  "overrideReferences": false,
+  "precompiledReferences": [],
+  "autoReferenced": false,
+  "defineConstraints": [
+    "UNITY_INCLUDE_TESTS"
+  ],
+  "versionDefines": [],
+  "noEngineReferences": false
+}

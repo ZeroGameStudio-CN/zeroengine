@@ -1,0 +1,25 @@
+{
+  "name": "ZGS.Combat.Tests.Editor",
+  "rootNamespace": "ZeroEngine.Combat.Editor.Tests",
+  "references": [
+    "ZeroEngine.Combat",
+    "ZeroEngine.Combat.Editor",
+    "ZeroEngine.Data",
+    "ZeroEngine.Economy",
+    "UnityEditor.TestRunner",
+    "UnityEngine.TestRunner"
+  ],
+  "includePlatforms": [
+    "Editor"
+  ],
+  "excludePlatforms": [],
+  "allowUnsafeCode": false,
+  "overrideReferences": false,
+  "precompiledReferences": [],
+  "autoReferenced": false,
+  "defineConstraints": [
+    "UNITY_INCLUDE_TESTS"
+  ],
+  "versionDefines": [],
+  "noEngineReferences": false
+}

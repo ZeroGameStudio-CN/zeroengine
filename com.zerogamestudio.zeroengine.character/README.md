@@ -14,6 +14,20 @@
 
 ---
 
+## Designer Config Validation
+
+`ZeroEngine.Character.Editor` provides `CharacterConfigValidator` for package-level
+designer config checks across equipment, equipment sets, equipment slots, jobs,
+job skills, job passives, job databases, martial arts, martial art databases,
+realms, realm databases, sects, sect databases, party configs, formations,
+talent nodes, and talent trees.
+
+The validator reports stable ID collisions, missing display text, invalid
+numeric ranges, empty references, duplicate database entries, broken talent tree
+links, and authoring mistakes that should fail before play mode or build time.
+
+---
+
 ## Job System (职业系统) v2.5.0
 
 八方旅人风格的职业系统，支持主职业+副职业、技能学习、JP 经验。
@@ -439,6 +453,7 @@ var mods = talentController.GetAllStatModifiers();
 - `com.zerogamestudio.zeroengine.core` (2.0.0) - Core utilities
 - `com.zerogamestudio.zeroengine.data` (2.0.0) - StatSystem, BuffSystem
 - `com.zerogamestudio.zeroengine.persistence` (2.0.0) - Save/Load support
+- `com.zerogamestudio.zeroengine.economy` (2.0.0) - Equipment and item integration
 
 ---
 
@@ -467,3 +482,10 @@ var mods = talentController.GetAllStatModifiers();
 - 初始模块化发布 (从 ZeroEngine v1.17.0 拆分)
 - Equipment System
 - TalentTree System
+
+## Dependency Pinning
+
+When this package is consumed through Git UPM, add every
+`com.zerogamestudio.*` dependency from `package.json` to the consumer project's
+`Packages/manifest.json` at the same tested commit. See
+[Consumer Project Setup](../docs/consumer-project-setup.md).
