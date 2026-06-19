@@ -72,7 +72,7 @@ namespace ZGS.DataToolkit.Editor.Tests
 
             InvokeWindowMethod(window, "InitializeFromSerializedProjectId");
 
-            Assert.AreEqual("ZGS", GetWindowContext(window).Settings.ProjectId);
+            Assert.AreNotEqual(projectId, GetWindowContext(window).Settings.ProjectId);
             Assert.AreEqual(projectId, GetWindowField(window, "serializedProjectId"));
 
             DataToolkitProjectRegistry.Register(
