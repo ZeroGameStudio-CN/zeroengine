@@ -269,6 +269,42 @@ namespace ZeroEngine.Pathfinding2D.Tests.Editor
             }
         }
 
+        [Test]
+        public void GenerateJumpLinks_SeparateColliderPhysicalEdge_CreatesFallToLowerSurface()
+        {
+            var host = new GameObject("SeparateColliderEdgeFallHost");
+            var lower = CreatePlatform("EdgeFallLower", GroundLayer, new Vector2(0f, 2.5f), new Vector2(42f, 5f));
+            var upper = CreatePlatform("EdgeFallUpper", GroundLayer, new Vector2(-6f, 7.5f), new Vector2(30f, 5f));
+
+            try
+            {
+                var graph = CreateGraph(host, groundMask: 1 << GroundLayer, oneWayMask: 0);
+                graph.Config.ScanCenter = new Vector2(0f, 5f);
+                graph.Config.ScanSize = new Vector2(48f, 12f);
+                graph.GeneratePlatformGraph();
+
+                var calculator = host.AddComponent<JumpLinkCalculator>();
+                calculator.Config.MaxFallHeight = 8f;
+                calculator.Config.TrajectoryCheckRadius = 0.25f;
+                calculator.GenerateJumpLinks();
+
+                Assert.IsTrue(
+                    HasFallLinkNear(
+                        graph,
+                        upper.GetComponent<Collider2D>(),
+                        lower.GetComponent<Collider2D>(),
+                        new Vector2(9f, 10f),
+                        new Vector2(9.1f, 5f)),
+                    "A physical ledge should be able to fall to the first lower surface even when the two surfaces use separate colliders.");
+            }
+            finally
+            {
+                Object.DestroyImmediate(host);
+                Object.DestroyImmediate(lower);
+                Object.DestroyImmediate(upper);
+            }
+        }
+
         private static PlatformGraphGenerator CreateGraph(GameObject host, LayerMask groundMask, LayerMask oneWayMask)
         {
             var graph = host.AddComponent<PlatformGraphGenerator>();
@@ -295,6 +331,24 @@ namespace ZeroEngine.Pathfinding2D.Tests.Editor
                 graph.GetNode(link.ToNodeId).TryGetCollider(out var toCollider) &&
                 fromCollider == from &&
                 toCollider == to);
+        }
+
+        private static bool HasFallLinkNear(
+            PlatformGraphGenerator graph,
+            Collider2D from,
+            Collider2D to,
+            Vector2 expectedFrom,
+            Vector2 expectedTo)
+        {
+            const float tolerance = 0.35f;
+            return graph.Links.Any(link =>
+                link.LinkType == PlatformLinkType.Fall &&
+                graph.GetNode(link.FromNodeId) is { } fromNode &&
+                graph.GetNode(link.ToNodeId) is { } toNode &&
+                fromNode.PlatformCollider == from &&
+                toNode.PlatformCollider == to &&
+                Vector2.Distance(fromNode.Position, expectedFrom) <= tolerance &&
+                Vector2.Distance(toNode.Position, expectedTo) <= tolerance);
         }
 
         private static GameObject CreatePlatform(string name, int layer, Vector2 position, Vector2 size)

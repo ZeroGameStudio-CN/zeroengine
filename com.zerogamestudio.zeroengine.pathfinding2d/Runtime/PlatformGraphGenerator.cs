@@ -405,6 +405,7 @@ namespace ZeroEngine.Pathfinding2D
             // 按 Y 坐标升序排序
             var sortedByY = new List<(float left, float right, float y, int surfaceGroupId)>(edges);
             sortedByY.Sort((a, b) => a.y.CompareTo(b.y));
+            float ledgeExitOffset = Mathf.Max(0.05f, config.EdgeInset * 0.5f);
 
             // 检测相邻高度层的交界处
             for (int i = 0; i < sortedByY.Count; i++)
@@ -425,22 +426,24 @@ namespace ZeroEngine.Pathfinding2D
                     // 检查上层平台的边缘是否在下层平台的 X 范围内
                     // 如果是，说明存在高度交界点，需要在下层平台生成额外边缘节点
 
-                    // 上层左边缘在下层范围内 → 在下层的 upper.left 位置生成节点
-                    if (upper.left > lower.left + config.EdgeInset && upper.left < lower.right - config.EdgeInset)
+                    // 上层左边缘在下层范围内 → 在下层的 ledge 外侧生成落点节点
+                    float leftLandingX = upper.left - ledgeExitOffset;
+                    if (leftLandingX > lower.left + config.EdgeInset && leftLandingX < lower.right - config.EdgeInset)
                     {
-                        Vector3 transitionPos = new Vector3(upper.left, lower.y, 0f);
+                        Vector3 transitionPos = new Vector3(leftLandingX, lower.y, 0f);
                         // 检查是否已存在相近位置的节点
-                        if (!HasNodeNearPosition(transitionPos, 0.3f))
+                        if (!HasEdgeNodeNearPosition(transitionPos, 0.3f))
                         {
                             AddNode(PlatformNodeData.CreateEdge(nextNodeId++, transitionPos, collider, true, isOneWay, lower.surfaceGroupId, isTransitionAnchor: true));
                         }
                     }
 
-                    // 上层右边缘在下层范围内 → 在下层的 upper.right 位置生成节点
-                    if (upper.right > lower.left + config.EdgeInset && upper.right < lower.right - config.EdgeInset)
+                    // 上层右边缘在下层范围内 → 在下层的 ledge 外侧生成落点节点
+                    float rightLandingX = upper.right + ledgeExitOffset;
+                    if (rightLandingX > lower.left + config.EdgeInset && rightLandingX < lower.right - config.EdgeInset)
                     {
-                        Vector3 transitionPos = new Vector3(upper.right, lower.y, 0f);
-                        if (!HasNodeNearPosition(transitionPos, 0.3f))
+                        Vector3 transitionPos = new Vector3(rightLandingX, lower.y, 0f);
+                        if (!HasEdgeNodeNearPosition(transitionPos, 0.3f))
                         {
                             AddNode(PlatformNodeData.CreateEdge(nextNodeId++, transitionPos, collider, false, isOneWay, lower.surfaceGroupId, isTransitionAnchor: true));
                         }
@@ -465,6 +468,24 @@ namespace ZeroEngine.Pathfinding2D
             return false;
         }
 
+        private bool HasEdgeNodeNearPosition(Vector3 position, float threshold)
+        {
+            float thresholdSq = threshold * threshold;
+            foreach (var node in Nodes)
+            {
+                if (node.NodeType != PlatformNodeType.LeftEdge &&
+                    node.NodeType != PlatformNodeType.RightEdge)
+                    continue;
+
+                if ((node.Position - position).sqrMagnitude < thresholdSq)
+                {
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
         /// <summary>
         /// 全局高度转换节点生成（后处理）
         /// 检测跨 Collider 的高度交界，在下层平台生成额外边缘节点
@@ -480,6 +501,7 @@ namespace ZeroEngine.Pathfinding2D
             // 按 Y 坐标升序排序
             var sortedByY = new List<(float left, float right, float y, Collider2D collider, bool isOneWay, int surfaceGroupId)>(_allEdgesCache);
             sortedByY.Sort((a, b) => a.y.CompareTo(b.y));
+            float ledgeExitOffset = Mathf.Max(0.05f, config.EdgeInset * 0.5f);
 
             for (int i = 0; i < sortedByY.Count; i++)
             {
@@ -496,21 +518,23 @@ namespace ZeroEngine.Pathfinding2D
                     // 检查上层平台的边缘是否在下层平台的 X 范围内
                     float inset = config.EdgeInset;
 
-                    // 上层左边缘在下层范围内 → 在下层的 upper.left 位置生成节点
-                    if (upper.left > lower.left + inset && upper.left < lower.right - inset)
+                    // 上层左边缘在下层范围内 → 在下层的 ledge 外侧生成落点节点
+                    float leftLandingX = upper.left - ledgeExitOffset;
+                    if (leftLandingX > lower.left + inset && leftLandingX < lower.right - inset)
                     {
-                        Vector3 pos = new Vector3(upper.left, lower.y, 0f);
-                        if (!HasNodeNearPosition(pos, 0.3f))
+                        Vector3 pos = new Vector3(leftLandingX, lower.y, 0f);
+                        if (!HasEdgeNodeNearPosition(pos, 0.3f))
                         {
                             AddNode(PlatformNodeData.CreateEdge(nextNodeId++, pos, lower.collider, true, lower.isOneWay, lower.surfaceGroupId, isTransitionAnchor: true));
                         }
                     }
 
-                    // 上层右边缘在下层范围内 → 在下层的 upper.right 位置生成节点
-                    if (upper.right > lower.left + inset && upper.right < lower.right - inset)
+                    // 上层右边缘在下层范围内 → 在下层的 ledge 外侧生成落点节点
+                    float rightLandingX = upper.right + ledgeExitOffset;
+                    if (rightLandingX > lower.left + inset && rightLandingX < lower.right - inset)
                     {
-                        Vector3 pos = new Vector3(upper.right, lower.y, 0f);
-                        if (!HasNodeNearPosition(pos, 0.3f))
+                        Vector3 pos = new Vector3(rightLandingX, lower.y, 0f);
+                        if (!HasEdgeNodeNearPosition(pos, 0.3f))
                         {
                             AddNode(PlatformNodeData.CreateEdge(nextNodeId++, pos, lower.collider, false, lower.isOneWay, lower.surfaceGroupId, isTransitionAnchor: true));
                         }
@@ -524,7 +548,7 @@ namespace ZeroEngine.Pathfinding2D
                     if (lower.left > upper.left + inset && lower.left < upper.right - inset)
                     {
                         Vector3 pos = new Vector3(lower.left, upper.y, 0f);
-                        if (!HasNodeNearPosition(pos, 0.3f))
+                        if (!HasEdgeNodeNearPosition(pos, 0.3f))
                         {
                             AddNode(PlatformNodeData.CreateEdge(nextNodeId++, pos, upper.collider, true, upper.isOneWay, upper.surfaceGroupId, isTransitionAnchor: true));
                         }
@@ -534,7 +558,7 @@ namespace ZeroEngine.Pathfinding2D
                     if (lower.right > upper.left + inset && lower.right < upper.right - inset)
                     {
                         Vector3 pos = new Vector3(lower.right, upper.y, 0f);
-                        if (!HasNodeNearPosition(pos, 0.3f))
+                        if (!HasEdgeNodeNearPosition(pos, 0.3f))
                         {
                             AddNode(PlatformNodeData.CreateEdge(nextNodeId++, pos, upper.collider, false, upper.isOneWay, upper.surfaceGroupId, isTransitionAnchor: true));
                         }
@@ -726,7 +750,148 @@ namespace ZeroEngine.Pathfinding2D
         /// <summary>
         /// 为单条顶部边缘生成节点
         /// </summary>
+        // surface-clipping：采样行走面前按上方是否被实心盖住裁成裸露子段，每段独立 surface+Left/RightEdge,
+        // 避免在重叠实心台阶下生成"埋点"+穿实心体的 Walk link（修"图说可达但执行失败"缺口）。
+        private const float SurfaceClipProbeHeight = 0.5f;
+        private const float SurfaceClipMaxStep = 0.5f;
+        private const float SurfaceClipMinStep = 0.05f;
+        private const float SurfaceClipEpsilon = 0.001f;
+        private readonly List<(float left, float right)> _surfaceClipSpansCache = new List<(float, float)>(8);
+        private readonly List<(float left, float right, float y, int surfaceGroupId)> _generatedEdgeSpansCache
+            = new List<(float, float, float, int)>(8);
+
         private int GenerateNodesForEdge(float left, float right, float y, Collider2D collider, bool isOneWay)
+        {
+            _generatedEdgeSpansCache.Clear();
+
+            if (right < left)
+            {
+                float temp = left;
+                left = right;
+                right = temp;
+            }
+
+            Physics2D.SyncTransforms();
+            CollectExposedSurfaceSpans(left, right, y, collider);
+
+            int firstSurfaceGroupId = -1;
+            foreach (var span in _surfaceClipSpansCache)
+            {
+                int surfaceGroupId = GenerateNodesForExposedSpan(span.left, span.right, y, collider, isOneWay);
+                if (surfaceGroupId < 0)
+                    continue;
+
+                if (firstSurfaceGroupId < 0)
+                    firstSurfaceGroupId = surfaceGroupId;
+
+                _generatedEdgeSpansCache.Add((span.left, span.right, y, surfaceGroupId));
+            }
+
+            return firstSurfaceGroupId;
+        }
+
+        private void CollectExposedSurfaceSpans(float left, float right, float y, Collider2D collider)
+        {
+            _surfaceClipSpansCache.Clear();
+
+            if (right - left <= SurfaceClipEpsilon)
+                return;
+
+            float scanStep = Mathf.Max(
+                SurfaceClipMinStep,
+                Mathf.Min(config.ActualNodeSpacing, SurfaceClipMaxStep));
+
+            bool previousBuried = IsSurfaceBuriedAt(left, y, collider);
+            float previousX = left;
+            float exposedStart = previousBuried ? 0f : left;
+
+            for (float x = left + scanStep; x < right; x += scanStep)
+            {
+                bool buried = IsSurfaceBuriedAt(x, y, collider);
+                if (buried != previousBuried)
+                {
+                    float transitionX = FindSurfaceClipTransition(previousX, x, y, collider, previousBuried);
+                    if (previousBuried)
+                    {
+                        exposedStart = transitionX;
+                    }
+                    else
+                    {
+                        AddExposedSurfaceSpan(exposedStart, transitionX);
+                    }
+
+                    previousBuried = buried;
+                }
+
+                previousX = x;
+            }
+
+            bool rightBuried = IsSurfaceBuriedAt(right, y, collider);
+            if (rightBuried != previousBuried)
+            {
+                float transitionX = FindSurfaceClipTransition(previousX, right, y, collider, previousBuried);
+                if (previousBuried)
+                {
+                    exposedStart = transitionX;
+                }
+                else
+                {
+                    AddExposedSurfaceSpan(exposedStart, transitionX);
+                }
+
+                previousBuried = rightBuried;
+            }
+
+            if (!previousBuried)
+            {
+                AddExposedSurfaceSpan(exposedStart, right);
+            }
+        }
+
+        private float FindSurfaceClipTransition(
+            float left,
+            float right,
+            float y,
+            Collider2D collider,
+            bool leftBuried)
+        {
+            for (int i = 0; i < 10; i++)
+            {
+                float mid = (left + right) * 0.5f;
+                bool midBuried = IsSurfaceBuriedAt(mid, y, collider);
+                if (midBuried == leftBuried)
+                    left = mid;
+                else
+                    right = mid;
+            }
+
+            return (left + right) * 0.5f;
+        }
+
+        private bool IsSurfaceBuriedAt(float x, float y, Collider2D collider)
+        {
+            // Composite/Polygon colliders can contain both the lower floor and the step covering it.
+            // The probe is above the sampled top edge, so a self hit here is still overhead solid.
+            var cover = Physics2D.OverlapPoint(new Vector2(x, y + SurfaceClipProbeHeight), config.GroundLayer);
+            return cover != null;
+        }
+
+        private void AddExposedSurfaceSpan(float left, float right)
+        {
+            if (right < left)
+            {
+                float temp = left;
+                left = right;
+                right = temp;
+            }
+
+            if (right - left <= SurfaceClipEpsilon)
+                return;
+
+            _surfaceClipSpansCache.Add((left, right));
+        }
+
+        private int GenerateNodesForExposedSpan(float left, float right, float y, Collider2D collider, bool isOneWay)
         {
             int surfaceGroupId = AllocateSurfaceGroupId();
             RegisterSurfaceSegment(surfaceGroupId, left, right, y, collider, isOneWay);
@@ -737,11 +902,17 @@ namespace ZeroEngine.Pathfinding2D
             float width = right - left;
             float nodeSpacing = config.ActualNodeSpacing;
 
-            // 平台太窄，生成一个边缘节点（允许跳跃链接从此节点发起）
+            // 平台太窄时仍保留左右边界锚点；Jump/Fall 只在 edge 之间生成。
             if (width < config.MinPlatformWidth)
             {
-                Vector3 centerPos = new Vector3((left + right) / 2f, y, 0f);
-                AddNode(PlatformNodeData.CreateEdge(nextNodeId++, centerPos, collider, true, isOneWay, surfaceGroupId));
+                Vector3 leftPos = new Vector3(left, y, 0f);
+                AddNode(PlatformNodeData.CreateEdge(nextNodeId++, leftPos, collider, true, isOneWay, surfaceGroupId));
+
+                if (width > 0.05f)
+                {
+                    Vector3 rightPos = new Vector3(right, y, 0f);
+                    AddNode(PlatformNodeData.CreateEdge(nextNodeId++, rightPos, collider, false, isOneWay, surfaceGroupId));
+                }
                 return surfaceGroupId;
             }
 

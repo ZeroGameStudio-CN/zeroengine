@@ -493,7 +493,7 @@ namespace ZeroEngine.Pathfinding2D
                     from.PlatformCollider,
                     to.PlatformCollider))
             {
-                if (!CanCreateSameColliderEdgeFallLink(from, to))
+                if (!CanCreateEdgeFallLink(from, to))
                     return false;
             }
 
@@ -524,11 +524,11 @@ namespace ZeroEngine.Pathfinding2D
             };
         }
 
-        private bool CanCreateSameColliderEdgeFallLink(PlatformNodeData from, PlatformNodeData to)
+        private bool CanCreateEdgeFallLink(PlatformNodeData from, PlatformNodeData to)
         {
             if (graphGenerator == null ||
                 from.PlatformCollider == null ||
-                from.PlatformCollider != to.PlatformCollider ||
+                to.PlatformCollider == null ||
                 from.SurfaceGroupId < 0 ||
                 to.SurfaceGroupId < 0 ||
                 from.SurfaceGroupId == to.SurfaceGroupId)
@@ -558,7 +558,7 @@ namespace ZeroEngine.Pathfinding2D
                 float exitX = fromSegment.MaxX + exitOffset;
                 return toSegment.ContainsX(exitX, landingTolerance) &&
                        to.Position.x >= from.Position.x - landingTolerance &&
-                       IsFirstSameColliderLandingBelowEdge(fromSegment, toSegment, exitX, landingTolerance);
+                       IsFirstLandingBelowEdge(fromSegment, toSegment, exitX, landingTolerance);
             }
 
             if (from.NodeType == PlatformNodeType.LeftEdge)
@@ -569,13 +569,13 @@ namespace ZeroEngine.Pathfinding2D
                 float exitX = fromSegment.MinX - exitOffset;
                 return toSegment.ContainsX(exitX, landingTolerance) &&
                        to.Position.x <= from.Position.x + landingTolerance &&
-                       IsFirstSameColliderLandingBelowEdge(fromSegment, toSegment, exitX, landingTolerance);
+                       IsFirstLandingBelowEdge(fromSegment, toSegment, exitX, landingTolerance);
             }
 
             return false;
         }
 
-        private bool IsFirstSameColliderLandingBelowEdge(
+        private bool IsFirstLandingBelowEdge(
             PlatformSurfaceSegment fromSegment,
             PlatformSurfaceSegment toSegment,
             float exitX,
@@ -590,7 +590,6 @@ namespace ZeroEngine.Pathfinding2D
                 if (segment == null ||
                     segment.GroupId == fromSegment.GroupId ||
                     segment.GroupId == toSegment.GroupId ||
-                    segment.Collider != fromSegment.Collider ||
                     !segment.ContainsX(exitX, landingTolerance))
                 {
                     continue;
