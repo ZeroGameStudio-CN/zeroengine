@@ -74,7 +74,7 @@ namespace ZGS.DataToolkit.Editor.Tests
         [Test]
         public void LayoutRestoredWindow_RebindsSerializedProjectIdWhenProfileRegistersLater()
         {
-            const string projectId = "LateRegisteredDataToolkitProject";
+            var projectId = "LateRegisteredDataToolkitProject_" + Guid.NewGuid().ToString("N");
             var window = Track(ScriptableObject.CreateInstance<DataToolkitWindow>());
             try
             {
