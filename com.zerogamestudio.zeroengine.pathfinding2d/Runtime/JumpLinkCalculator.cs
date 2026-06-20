@@ -376,8 +376,16 @@ namespace ZeroEngine.Pathfinding2D
                 from.PlatformCollider,
                 to.PlatformCollider))
             {
-                failReason = "trajectory";
-                return false;
+                // 边对边"上台阶"兜底：两段平台在同一 X 边界垂直相邻（floor 右缘紧贴上方平台左缘）时，
+                // 连接它们的台阶/墙面落在跳跃轨迹里，严格检测会误杀，但玩家完全可以贴着墙跳上这级台阶。
+                // 镜像下落的 CanCreateEdgeFallLink：仅当几何是干净的相邻边上跳（起点在本段边缘、目标是
+                // 出口正上方第一段平台、在跳跃高度内）才放行。修复 navtest 016：floor→出口平台 Δ7 的
+                // 合法上跳被丢，而反向下落链接却存在。
+                if (!CanCreateEdgeJumpLink(from, to))
+                {
+                    failReason = "trajectory";
+                    return false;
+                }
             }
 
             // 创建跳跃链接（包含预计算的轨迹点用于可视化）
@@ -573,6 +581,93 @@ namespace ZeroEngine.Pathfinding2D
             }
 
             return false;
+        }
+
+        // Upward mirror of CanCreateEdgeFallLink: allow a near-vertical "step-up" jump between two
+        // vertically-adjacent platform edges (from at its segment edge, target the first surface directly
+        // above the exit point, within the jump envelope) even when ValidateTrajectory rejects it because the
+        // connecting step/wall lies in the arc. A player can jump up beside that wall onto the ledge.
+        private bool CanCreateEdgeJumpLink(PlatformNodeData from, PlatformNodeData to)
+        {
+            if (graphGenerator == null ||
+                from.PlatformCollider == null ||
+                to.PlatformCollider == null ||
+                from.SurfaceGroupId < 0 ||
+                to.SurfaceGroupId < 0 ||
+                from.SurfaceGroupId == to.SurfaceGroupId)
+            {
+                return false;
+            }
+
+            float rise = to.Position.y - from.Position.y;
+            if (rise <= 0.5f || rise > GetEffectiveMaxJumpHeight())
+                return false;
+
+            if (!graphGenerator.TryGetSurfaceSegment(from.SurfaceGroupId, out var fromSegment) ||
+                !graphGenerator.TryGetSurfaceSegment(to.SurfaceGroupId, out var toSegment))
+            {
+                return false;
+            }
+
+            float edgeInset = Mathf.Max(0.05f, graphGenerator.Config.EdgeInset);
+            float edgeTolerance = edgeInset + 0.1f;
+            float exitOffset = Mathf.Max(0.05f, edgeInset * 0.5f);
+            float landingTolerance = Mathf.Max(edgeInset + 0.05f, 0.25f);
+
+            if (from.NodeType == PlatformNodeType.RightEdge)
+            {
+                if (Mathf.Abs(from.Position.x - fromSegment.MaxX) > edgeTolerance)
+                    return false;
+
+                float exitX = fromSegment.MaxX + exitOffset;
+                return toSegment.ContainsX(exitX, landingTolerance) &&
+                       to.Position.x >= from.Position.x - landingTolerance &&
+                       IsFirstSurfaceAboveEdge(fromSegment, toSegment, exitX, landingTolerance);
+            }
+
+            if (from.NodeType == PlatformNodeType.LeftEdge)
+            {
+                if (Mathf.Abs(from.Position.x - fromSegment.MinX) > edgeTolerance)
+                    return false;
+
+                float exitX = fromSegment.MinX - exitOffset;
+                return toSegment.ContainsX(exitX, landingTolerance) &&
+                       to.Position.x <= from.Position.x + landingTolerance &&
+                       IsFirstSurfaceAboveEdge(fromSegment, toSegment, exitX, landingTolerance);
+            }
+
+            return false;
+        }
+
+        // True when toSegment is the FIRST walkable surface directly above the exit point (no intermediate
+        // platform between from and to at exitX) — so the step-up jump lands on `to`, not something between.
+        private bool IsFirstSurfaceAboveEdge(
+            PlatformSurfaceSegment fromSegment,
+            PlatformSurfaceSegment toSegment,
+            float exitX,
+            float landingTolerance)
+        {
+            if (graphGenerator?.SurfaceSegments == null)
+                return true;
+
+            float verticalTolerance = Mathf.Max(0.05f, landingTolerance * 0.1f);
+            foreach (var segment in graphGenerator.SurfaceSegments)
+            {
+                if (segment == null ||
+                    segment.GroupId == fromSegment.GroupId ||
+                    segment.GroupId == toSegment.GroupId ||
+                    !segment.ContainsX(exitX, landingTolerance))
+                {
+                    continue;
+                }
+
+                bool aboveStart = segment.Y > fromSegment.Y + verticalTolerance;
+                bool belowTarget = segment.Y < toSegment.Y - verticalTolerance;
+                if (aboveStart && belowTarget)
+                    return false;
+            }
+
+            return true;
         }
 
         private bool IsFirstLandingBelowEdge(
