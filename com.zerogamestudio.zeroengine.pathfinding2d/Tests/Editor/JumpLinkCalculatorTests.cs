@@ -9,6 +9,7 @@ namespace ZeroEngine.Pathfinding2D.Tests.Editor
     {
         private const int GroundLayer = 8;
         private const int OneWayLayer = 9;
+        private const int ObstacleLayer = 10;
 
         [Test]
         public void GenerateJumpLinks_GroundBetweenEndpoints_BlocksDirectJump()
@@ -305,6 +306,85 @@ namespace ZeroEngine.Pathfinding2D.Tests.Editor
             }
         }
 
+        [Test]
+        public void GenerateJumpLinks_EdgeStepUpFallback_AllowsCleanLandingClearance()
+        {
+            var host = new GameObject("CleanEdgeStepUpFallbackHost");
+            var lower = CreatePlatform("CleanStepLower", GroundLayer, new Vector2(0f, 0f), new Vector2(4f, 0.2f));
+            var upper = CreatePlatform("CleanStepUpper", GroundLayer, new Vector2(3f, 3f), new Vector2(2f, 0.2f));
+            var wall = CreatePlatform("CleanStepWall", ObstacleLayer, new Vector2(2.05f, 1.55f), new Vector2(0.2f, 2.9f));
+
+            try
+            {
+                var graph = GenerateEdgeStepUpGraph(host);
+
+                Assert.IsTrue(
+                    HasJumpLink(graph, lower.GetComponent<Collider2D>(), upper.GetComponent<Collider2D>()),
+                    "A clean edge-to-edge step-up with enough head clearance should keep the fallback jump link.");
+            }
+            finally
+            {
+                Object.DestroyImmediate(host);
+                Object.DestroyImmediate(lower);
+                Object.DestroyImmediate(upper);
+                Object.DestroyImmediate(wall);
+            }
+        }
+
+        [Test]
+        public void GenerateJumpLinks_EdgeStepUpFallback_RejectsSkippedIntermediateSurface()
+        {
+            var host = new GameObject("IntermediateEdgeStepUpFallbackHost");
+            var lower = CreatePlatform("IntermediateStepLower", GroundLayer, new Vector2(0f, 0f), new Vector2(4f, 0.2f));
+            var middle = CreatePlatform("IntermediateStepMiddle", GroundLayer, new Vector2(2.6f, 1.5f), new Vector2(1.2f, 0.2f));
+            var upper = CreatePlatform("IntermediateStepUpper", GroundLayer, new Vector2(3f, 3f), new Vector2(2f, 0.2f));
+            var wall = CreatePlatform("IntermediateStepWall", ObstacleLayer, new Vector2(2.05f, 1.55f), new Vector2(0.2f, 2.9f));
+
+            try
+            {
+                var graph = GenerateEdgeStepUpGraph(host);
+
+                Assert.IsFalse(
+                    HasJumpLink(graph, lower.GetComponent<Collider2D>(), upper.GetComponent<Collider2D>()),
+                    "The fallback must not skip over the first surface directly above the edge.");
+            }
+            finally
+            {
+                Object.DestroyImmediate(host);
+                Object.DestroyImmediate(lower);
+                Object.DestroyImmediate(middle);
+                Object.DestroyImmediate(upper);
+                Object.DestroyImmediate(wall);
+            }
+        }
+
+        [Test]
+        public void GenerateJumpLinks_EdgeStepUpFallback_RejectsBlockedLandingHeadClearance()
+        {
+            var host = new GameObject("CeilingEdgeStepUpFallbackHost");
+            var lower = CreatePlatform("CeilingStepLower", GroundLayer, new Vector2(0f, 0f), new Vector2(4f, 0.2f));
+            var upper = CreatePlatform("CeilingStepUpper", GroundLayer, new Vector2(3f, 3f), new Vector2(2f, 0.2f));
+            var wall = CreatePlatform("CeilingStepWall", ObstacleLayer, new Vector2(2.05f, 1.55f), new Vector2(0.2f, 2.9f));
+            var ceiling = CreatePlatform("CeilingStepBlocker", ObstacleLayer, new Vector2(2.1f, 4f), new Vector2(1.2f, 0.2f));
+
+            try
+            {
+                var graph = GenerateEdgeStepUpGraph(host);
+
+                Assert.IsFalse(
+                    HasJumpLink(graph, lower.GetComponent<Collider2D>(), upper.GetComponent<Collider2D>()),
+                    "A low ceiling above the landing surface should block the edge step-up fallback.");
+            }
+            finally
+            {
+                Object.DestroyImmediate(host);
+                Object.DestroyImmediate(lower);
+                Object.DestroyImmediate(upper);
+                Object.DestroyImmediate(wall);
+                Object.DestroyImmediate(ceiling);
+            }
+        }
+
         private static PlatformGraphGenerator CreateGraph(GameObject host, LayerMask groundMask, LayerMask oneWayMask)
         {
             var graph = host.AddComponent<PlatformGraphGenerator>();
@@ -321,6 +401,26 @@ namespace ZeroEngine.Pathfinding2D.Tests.Editor
             graph.Config.ScanCenter = new Vector2(1.5f, 2.5f);
             graph.Config.ScanSize = new Vector2(8f, 12f);
             graph.GeneratePlatformGraph();
+        }
+
+        private static PlatformGraphGenerator GenerateEdgeStepUpGraph(GameObject host)
+        {
+            var graph = CreateGraph(host, groundMask: 1 << GroundLayer, oneWayMask: 0);
+            graph.Config.ObstacleLayer = 1 << ObstacleLayer;
+            graph.Config.ScanCenter = new Vector2(1.5f, 2f);
+            graph.Config.ScanSize = new Vector2(8f, 8f);
+            graph.Config.CharacterRadius = 0.4f;
+            graph.Config.CharacterHeight = 1.8f;
+            graph.GeneratePlatformGraph();
+
+            var calculator = host.AddComponent<JumpLinkCalculator>();
+            calculator.Config.MaxJumpVelocity = 18f;
+            calculator.Config.MaxJumpHeight = 6f;
+            calculator.Config.MaxHorizontalDistance = 4f;
+            calculator.Config.TrajectoryCheckRadius = 0.4f;
+            calculator.GenerateJumpLinks();
+
+            return graph;
         }
 
         private static bool HasJumpLink(PlatformGraphGenerator graph, Collider2D from, Collider2D to)

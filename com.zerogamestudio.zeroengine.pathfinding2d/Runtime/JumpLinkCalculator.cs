@@ -622,7 +622,8 @@ namespace ZeroEngine.Pathfinding2D
                 float exitX = fromSegment.MaxX + exitOffset;
                 return toSegment.ContainsX(exitX, landingTolerance) &&
                        to.Position.x >= from.Position.x - landingTolerance &&
-                       IsFirstSurfaceAboveEdge(fromSegment, toSegment, exitX, landingTolerance);
+                       IsFirstSurfaceAboveEdge(fromSegment, toSegment, exitX, landingTolerance) &&
+                       HasLandingHeadClearance(exitX, toSegment.Y);
             }
 
             if (from.NodeType == PlatformNodeType.LeftEdge)
@@ -633,10 +634,37 @@ namespace ZeroEngine.Pathfinding2D
                 float exitX = fromSegment.MinX - exitOffset;
                 return toSegment.ContainsX(exitX, landingTolerance) &&
                        to.Position.x <= from.Position.x + landingTolerance &&
-                       IsFirstSurfaceAboveEdge(fromSegment, toSegment, exitX, landingTolerance);
+                       IsFirstSurfaceAboveEdge(fromSegment, toSegment, exitX, landingTolerance) &&
+                       HasLandingHeadClearance(exitX, toSegment.Y);
             }
 
             return false;
+        }
+
+        private bool HasLandingHeadClearance(float landingX, float landingSurfaceY)
+        {
+            if (graphGenerator == null)
+                return true;
+
+            var graphConfig = graphGenerator.Config;
+            float characterHeight = Mathf.Max(0.05f, graphConfig.CharacterHeight);
+            float clearanceBottom = landingSurfaceY + 0.05f;
+            float clearanceWidth = Mathf.Max(
+                graphConfig.CharacterRadius * 2f,
+                config.TrajectoryCheckRadius * 2f);
+            Vector2 center = new Vector2(landingX, clearanceBottom + characterHeight * 0.5f);
+            Vector2 size = new Vector2(clearanceWidth, characterHeight);
+            LayerMask blockerMask = graphConfig.GroundLayer | graphConfig.ObstacleLayer;
+
+            var blockers = Physics2D.OverlapBoxAll(center, size, 0f, blockerMask);
+            for (int i = 0; i < blockers.Length; i++)
+            {
+                var blocker = blockers[i];
+                if (blocker != null)
+                    return false;
+            }
+
+            return true;
         }
 
         // True when toSegment is the FIRST walkable surface directly above the exit point (no intermediate
