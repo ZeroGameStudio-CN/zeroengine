@@ -307,9 +307,9 @@ namespace ZeroEngine.Pathfinding2D.Tests.Editor
         }
 
         [Test]
-        public void GenerateJumpLinks_EdgeStepUpFallback_UsesSafeSameColliderLandingCenter()
+        public void GenerateJumpLinks_EdgeStepUpFallback_RejectsSameColliderStructuralLip()
         {
-            var host = new GameObject("SameColliderEdgeStepUpFallbackHost");
+            var host = new GameObject("SameColliderStructuralLipStepUpFallbackHost");
             var platform = CreateMultiPathPolygon(
                 "SameColliderStepPlatforms",
                 GroundLayer,
@@ -339,7 +339,7 @@ namespace ZeroEngine.Pathfinding2D.Tests.Editor
                         new Vector2(24f, 7f)),
                     "Same-collider edge step-up must not target the unsafe ledge edge where the character center cannot fit.");
 
-                Assert.IsTrue(
+                Assert.IsFalse(
                     HasJumpLinkToSafeLandingNearLedge(
                         graph,
                         platform,
@@ -348,7 +348,7 @@ namespace ZeroEngine.Pathfinding2D.Tests.Editor
                         minLandingX: minSafeLandingX,
                         maxLandingX: minSafeLandingX + 1.0f,
                         landingY: 7f),
-                    "Same-collider edge step-up should target the nearest safe landing center, not a distant interior surface node.");
+                    "Same-collider edge step-up must reject a trajectory whose radius clips the solid lip/underside before the landing point.");
 
                 Assert.IsFalse(
                     HasJumpLinkToSurfacePastX(
@@ -366,6 +366,41 @@ namespace ZeroEngine.Pathfinding2D.Tests.Editor
                 Object.DestroyImmediate(host);
                 Object.DestroyImmediate(platform.gameObject);
                 Object.DestroyImmediate(wall);
+            }
+        }
+
+        [Test]
+        public void GenerateJumpLinks_EdgeStepUpFallback_AllowsClearSameColliderSeparatedLanding()
+        {
+            var host = new GameObject("ClearSameColliderEdgeStepUpFallbackHost");
+            var platform = CreateMultiPathPlatform(
+                "ClearSameColliderStepPlatforms",
+                GroundLayer,
+                (new Vector2(0f, 0f), new Vector2(4f, 0.2f)),
+                (new Vector2(3f, 3f), new Vector2(2f, 0.2f)));
+
+            try
+            {
+                var graph = GenerateEdgeStepUpGraph(host);
+                float lowerRightEdgeX = 2f;
+                float landingY = 3.1f;
+                float minSafeLandingX = lowerRightEdgeX + graph.Config.CharacterRadius + 0.05f;
+
+                Assert.IsTrue(
+                    HasJumpLinkToSafeLandingNearLedge(
+                        graph,
+                        platform,
+                        platform,
+                        expectedFrom: new Vector2(lowerRightEdgeX, 0.1f),
+                        minLandingX: minSafeLandingX,
+                        maxLandingX: minSafeLandingX + 0.8f,
+                        landingY: landingY),
+                    "A same-collider step-up with separated thin platforms and no structural lip should keep the safe landing link.");
+            }
+            finally
+            {
+                Object.DestroyImmediate(host);
+                Object.DestroyImmediate(platform.gameObject);
             }
         }
 

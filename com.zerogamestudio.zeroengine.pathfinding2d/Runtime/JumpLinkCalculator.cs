@@ -369,7 +369,9 @@ namespace ZeroEngine.Pathfinding2D
                 return false;
             }
 
-            if (IsEdgeStepUpCandidate(from, to) && !CanCreateEdgeJumpLink(from, to))
+            bool edgeStepUpCandidate = IsEdgeStepUpCandidate(from, to);
+            bool canCreateEdgeJumpLink = edgeStepUpCandidate && CanCreateEdgeJumpLink(from, to);
+            if (edgeStepUpCandidate && !canCreateEdgeJumpLink)
             {
                 failReason = "unsafe-edge-step-up";
                 return false;
@@ -388,11 +390,17 @@ namespace ZeroEngine.Pathfinding2D
                 // 镜像下落的 CanCreateEdgeFallLink：仅当几何是干净的相邻边上跳（起点在本段边缘、目标是
                 // 出口正上方第一段平台、在跳跃高度内）才放行。修复 navtest 016：floor→出口平台 Δ7 的
                 // 合法上跳被丢，而反向下落链接却存在。
-                if (!CanCreateEdgeJumpLink(from, to))
+                if (!canCreateEdgeJumpLink)
                 {
                     failReason = "trajectory";
                     return false;
                 }
+            }
+
+            if (edgeStepUpCandidate && HasSameColliderStructuralTrajectoryBlocker(result.Trajectory, from, to))
+            {
+                failReason = "trajectory";
+                return false;
             }
 
             // 创建跳跃链接（包含预计算的轨迹点用于可视化）
@@ -407,6 +415,92 @@ namespace ZeroEngine.Pathfinding2D
 
             graphGenerator.Links.Add(link);
             return true;
+        }
+
+        private bool HasSameColliderStructuralTrajectoryBlocker(
+            Vector2[] trajectory,
+            PlatformNodeData from,
+            PlatformNodeData to)
+        {
+            if (graphGenerator == null ||
+                trajectory == null ||
+                trajectory.Length < 2 ||
+                from.PlatformCollider == null ||
+                from.PlatformCollider != to.PlatformCollider ||
+                from.SurfaceGroupId < 0 ||
+                to.SurfaceGroupId < 0 ||
+                from.SurfaceGroupId == to.SurfaceGroupId)
+            {
+                return false;
+            }
+
+            var sharedCollider = from.PlatformCollider;
+            LayerMask blockerMask = graphGenerator.Config.GroundLayer | graphGenerator.Config.ObstacleLayer;
+            float radius = Mathf.Max(0.01f, config.TrajectoryCheckRadius);
+            float endpointIgnoreDistance = radius + 0.05f;
+            Vector2 start = trajectory[0];
+            Vector2 end = trajectory[trajectory.Length - 1];
+
+            for (int i = 0; i < trajectory.Length - 1; i++)
+            {
+                Vector2 segmentStart = trajectory[i];
+                Vector2 segmentEnd = trajectory[i + 1];
+                float segmentDistance = Vector2.Distance(segmentStart, segmentEnd);
+                if (segmentDistance <= Mathf.Epsilon)
+                    continue;
+
+                Vector2 direction = (segmentEnd - segmentStart).normalized;
+                RaycastHit2D[] hits = Physics2D.CircleCastAll(
+                    segmentStart,
+                    radius,
+                    direction,
+                    segmentDistance,
+                    blockerMask);
+
+                for (int hitIndex = 0; hitIndex < hits.Length; hitIndex++)
+                {
+                    var hit = hits[hitIndex];
+                    if (hit.collider != sharedCollider)
+                        continue;
+
+                    if (IsEndpointTrajectoryContact(hit.point, hit.centroid, start, end, endpointIgnoreDistance))
+                        continue;
+
+                    return true;
+                }
+
+                int steps = Mathf.Max(1, Mathf.CeilToInt(segmentDistance / Mathf.Max(0.1f, radius)));
+                for (int step = 0; step <= steps; step++)
+                {
+                    Vector2 sample = Vector2.Lerp(segmentStart, segmentEnd, (float)step / steps);
+                    Collider2D[] overlaps = Physics2D.OverlapCircleAll(sample, radius, blockerMask);
+                    for (int overlapIndex = 0; overlapIndex < overlaps.Length; overlapIndex++)
+                    {
+                        if (overlaps[overlapIndex] != sharedCollider)
+                            continue;
+
+                        if (IsEndpointTrajectoryContact(sample, sample, start, end, endpointIgnoreDistance))
+                            continue;
+
+                        return true;
+                    }
+                }
+            }
+
+            return false;
+        }
+
+        private static bool IsEndpointTrajectoryContact(
+            Vector2 hitPoint,
+            Vector2 centroid,
+            Vector2 start,
+            Vector2 end,
+            float endpointIgnoreDistance)
+        {
+            return Vector2.Distance(hitPoint, start) <= endpointIgnoreDistance ||
+                   Vector2.Distance(hitPoint, end) <= endpointIgnoreDistance ||
+                   Vector2.Distance(centroid, start) <= endpointIgnoreDistance ||
+                   Vector2.Distance(centroid, end) <= endpointIgnoreDistance;
         }
 
         private float GetEffectiveMaxJumpHeight()
