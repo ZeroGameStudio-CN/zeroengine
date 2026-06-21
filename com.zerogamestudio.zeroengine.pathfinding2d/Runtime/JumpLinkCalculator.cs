@@ -397,7 +397,9 @@ namespace ZeroEngine.Pathfinding2D
                 }
             }
 
-            if (edgeStepUpCandidate && HasSameColliderStructuralTrajectoryBlocker(result.Trajectory, from, to))
+            if (edgeStepUpCandidate &&
+                !CanIgnoreLowStepUpBodyContact(from, to) &&
+                HasSameColliderStructuralTrajectoryBlocker(result.Trajectory, from, to))
             {
                 failReason = "trajectory";
                 return false;
@@ -415,6 +417,29 @@ namespace ZeroEngine.Pathfinding2D
 
             graphGenerator.Links.Add(link);
             return true;
+        }
+
+        private bool CanIgnoreLowStepUpBodyContact(PlatformNodeData from, PlatformNodeData to)
+        {
+            if (graphGenerator == null ||
+                to.NodeType != PlatformNodeType.Surface ||
+                from.SurfaceGroupId < 0 ||
+                to.SurfaceGroupId < 0 ||
+                from.SurfaceGroupId == to.SurfaceGroupId)
+            {
+                return false;
+            }
+
+            if (!graphGenerator.TryGetSurfaceSegment(from.SurfaceGroupId, out var fromSegment) ||
+                !graphGenerator.TryGetSurfaceSegment(to.SurfaceGroupId, out var toSegment))
+            {
+                return false;
+            }
+
+            float lowStepRise = Mathf.Max(
+                graphGenerator.Config.CharacterHeight + graphGenerator.Config.CharacterRadius * 3f,
+                graphGenerator.Config.CharacterHeight + config.TrajectoryCheckRadius * 3f);
+            return toSegment.Y - fromSegment.Y <= lowStepRise + 0.1f;
         }
 
         private bool HasSameColliderStructuralTrajectoryBlocker(
@@ -863,7 +888,8 @@ namespace ZeroEngine.Pathfinding2D
                 Mathf.Max(Mathf.Max(graphConfig.CharacterRadius, graphConfig.EdgeInset), config.TrajectoryCheckRadius) + 0.15f,
                 graphConfig.EdgeInset + 0.15f);
             float surfaceSlack = 0.15f;
-            float maxSurfaceOffset = safeInset + surfaceSlack;
+            float firstInteriorNodeSlack = Mathf.Max(0f, graphConfig.ActualNodeSpacing);
+            float maxSurfaceOffset = safeInset + firstInteriorNodeSlack + surfaceSlack;
 
             if (from.NodeType == PlatformNodeType.RightEdge)
                 return to.Position.x <= fromSegment.MaxX + maxSurfaceOffset;

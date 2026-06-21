@@ -405,6 +405,99 @@ namespace ZeroEngine.Pathfinding2D.Tests.Editor
         }
 
         [Test]
+        public void GenerateJumpLinks_EdgeStepUpFallback_AllowsShortAdjacentStairLandings()
+        {
+            var host = new GameObject("ShortAdjacentStairStepUpFallbackHost");
+            var platform = CreateMultiPathPlatform(
+                "ShortAdjacentStairStep",
+                GroundLayer,
+                (new Vector2(11f, -0.1f), new Vector2(22f, 0.2f)),
+                (new Vector2(27f, 1.9f), new Vector2(10f, 0.2f)),
+                (new Vector2(35f, 4.9f), new Vector2(6f, 0.2f)),
+                (new Vector2(53f, 9.9f), new Vector2(30f, 0.2f)));
+
+            try
+            {
+                var graph = GenerateRoom015StyleStairGraph(host);
+
+                Assert.IsTrue(
+                    HasJumpLinkToSafeLandingNearLedge(
+                        graph,
+                        platform,
+                        platform,
+                        expectedFrom: new Vector2(22f, 0f),
+                        minLandingX: 22.45f,
+                        maxLandingX: 22.75f,
+                        landingY: 2f),
+                    "Adjacent short stairs should keep the safe y0 -> y2 landing link.");
+
+                Assert.IsTrue(
+                    HasJumpLinkToSafeLandingNearLedge(
+                        graph,
+                        platform,
+                        platform,
+                        expectedFrom: new Vector2(32f, 2f),
+                        minLandingX: 32.45f,
+                        maxLandingX: 32.75f,
+                        landingY: 5f),
+                    "Adjacent short stairs should keep the safe y2 -> y5 landing link.");
+            }
+            finally
+            {
+                Object.DestroyImmediate(host);
+                Object.DestroyImmediate(platform.gameObject);
+            }
+        }
+
+        [Test]
+        public void GenerateJumpLinks_EdgeStepUpFallback_AllowsSolidShortStairInteriorLanding()
+        {
+            var host = new GameObject("SolidShortStairStepUpFallbackHost");
+            var platform = CreateMultiPathPolygon(
+                "SolidShortStairStep",
+                GroundLayer,
+                new[]
+                {
+                    new Vector2(0f, -0.2f),
+                    new Vector2(0f, 0f),
+                    new Vector2(22f, 0f),
+                    new Vector2(22f, 2f),
+                    new Vector2(32f, 2f),
+                    new Vector2(32f, 5f),
+                    new Vector2(38f, 5f),
+                    new Vector2(38f, 10f),
+                    new Vector2(68f, 10f),
+                    new Vector2(68f, 5f),
+                    new Vector2(74f, 5f),
+                    new Vector2(74f, 0f),
+                    new Vector2(103f, 0f),
+                    new Vector2(103f, -0.2f),
+                });
+
+            try
+            {
+                var graph = GenerateRoom015StyleStairGraph(host);
+
+                Assert.IsTrue(
+                    HasJumpLinkToSafeLandingNearLedge(
+                        graph,
+                        platform,
+                        platform,
+                        expectedFrom: new Vector2(22f, 0f),
+                        minLandingX: 23.4f,
+                        maxLandingX: 24.0f,
+                        landingY: 2f),
+                    "A solid short stair should keep a y0 -> y2 jump link to the first interior surface node.\n" +
+                    BuildLocalGraphDebug(graph, minX: 20f, maxX: 26f));
+            }
+            finally
+            {
+                Object.DestroyImmediate(host);
+                Object.DestroyImmediate(platform.gameObject);
+            }
+        }
+
+        [Test]
         public void GenerateJumpLinks_EdgeStepUpFallback_UsesSafeLowerPitLandingCenter()
         {
             var host = new GameObject("SameColliderLowerPitStepUpFallbackHost");
@@ -621,6 +714,32 @@ namespace ZeroEngine.Pathfinding2D.Tests.Editor
             return graph;
         }
 
+        private static PlatformGraphGenerator GenerateRoom015StyleStairGraph(GameObject host)
+        {
+            var graph = CreateGraph(host, groundMask: 1 << GroundLayer, oneWayMask: 0);
+            graph.Config.ObstacleLayer = 0;
+            graph.Config.ScanCenter = new Vector2(51.5f, 4.5f);
+            graph.Config.ScanSize = new Vector2(107f, 15f);
+            graph.Config.CharacterRadius = 0.4f;
+            graph.Config.CharacterHeight = 1.8f;
+            graph.Config.NodeSpacing = 1.5f;
+            graph.Config.EdgeInset = 0.3f;
+            graph.GeneratePlatformGraph();
+
+            var calculator = host.AddComponent<JumpLinkCalculator>();
+            calculator.Config.GravityScale = 5f;
+            calculator.Config.MaxJumpVelocity = 20f;
+            calculator.Config.MaxJumpHeight = 4f;
+            calculator.Config.MaxHorizontalDistance = 6f;
+            calculator.Config.MaxFallHeight = 15f;
+            calculator.Config.AirJumpCount = 1;
+            calculator.Config.AirJumpVelocity = 20f;
+            calculator.Config.TrajectoryCheckRadius = 0.4f;
+            calculator.GenerateJumpLinks();
+
+            return graph;
+        }
+
         private static bool HasJumpLink(PlatformGraphGenerator graph, Collider2D from, Collider2D to)
         {
             return graph.Links.Any(link =>
@@ -711,6 +830,24 @@ namespace ZeroEngine.Pathfinding2D.Tests.Editor
                 toNode.NodeType == PlatformNodeType.Surface &&
                 toNode.Position.x > minX &&
                 Mathf.Abs(toNode.Position.y - landingY) <= yTolerance);
+        }
+
+        private static string BuildLocalGraphDebug(PlatformGraphGenerator graph, float minX, float maxX)
+        {
+            var nodes = graph.Nodes
+                .Where(node => node.Position.x >= minX && node.Position.x <= maxX)
+                .Select(node => $"{node.NodeId}:{node.NodeType}@({node.Position.x:F2},{node.Position.y:F2})/g{node.SurfaceGroupId}/a{node.IsTransitionAnchor}");
+            var links = graph.Links
+                .Where(link => link.LinkType != PlatformLinkType.Walk)
+                .Select(link => (link, from: graph.GetNode(link.FromNodeId), to: graph.GetNode(link.ToNodeId)))
+                .Where(item =>
+                    item.from.HasValue &&
+                    item.to.HasValue &&
+                    (item.from.Value.Position.x >= minX && item.from.Value.Position.x <= maxX ||
+                     item.to.Value.Position.x >= minX && item.to.Value.Position.x <= maxX))
+                .Select(item => $"{item.link.LinkType} {item.link.FromNodeId}@({item.from.Value.Position.x:F2},{item.from.Value.Position.y:F2}) -> {item.link.ToNodeId}@({item.to.Value.Position.x:F2},{item.to.Value.Position.y:F2})");
+
+            return "nodes: " + string.Join(", ", nodes) + "\nlinks: " + string.Join(", ", links);
         }
 
         private static GameObject CreatePlatform(string name, int layer, Vector2 position, Vector2 size)
