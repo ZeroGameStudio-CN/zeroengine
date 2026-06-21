@@ -230,6 +230,55 @@ namespace ZeroEngine.Pathfinding2D.Tests.Editor
         }
 
         [Test]
+        public void TryRequestPath_ElevatedSameColliderStepUp_DoesNotRouteThroughLowerPit()
+        {
+            var host = new GameObject("SameColliderStepUpAvoidLowerPit");
+            var platform = CreateMultiPathPolygonPlatform(
+                "SameColliderStepUpWithLowerPit",
+                (new Vector2(11f, -0.1f), new Vector2(26f, 0.2f)),
+                (new Vector2(50.5f, 6.9f), new Vector2(53f, 0.2f)),
+                (new Vector2(42.5f, -7.1f), new Vector2(37f, 0.2f)));
+
+            try
+            {
+                var pathfinder = CreatePathfinderForSingleCollider(
+                    host,
+                    platform,
+                    scanCenter: new Vector2(43f, 4.5f),
+                    scanSize: new Vector2(102f, 35f),
+                    maxJumpVelocity: 20f,
+                    maxJumpHeight: 8.2f,
+                    maxHorizontalDistance: 6f,
+                    maxFallHeight: 35f);
+
+                bool success = pathfinder.TryRequestPath(
+                    new PlatformPathRequest(
+                        new Vector3(3f, 1.3f, 0f),
+                        new Vector3(29f, 9f, 0f),
+                        forceRequest: true,
+                        projectTargetToGround: true,
+                        projectionDistance: 12f),
+                    out var result);
+
+                Assert.IsTrue(success, BuildPathDebug(result));
+                Assert.AreEqual(PlatformPathCompletionKind.FullPath, result.CompletionKind, BuildPathDebug(result));
+                Assert.IsFalse(
+                    result.Path.Commands.Any(command => command.Target.y < -0.5f),
+                    $"Elevated same-collider step-up should not first route through the lower pit when a direct step-up exists. {BuildPathDebug(result)}");
+                Assert.IsTrue(
+                    result.Path.Commands.Any(command =>
+                        command.CommandType == MoveCommandType.Jump &&
+                        Mathf.Abs(command.Target.y - 7f) <= 0.5f),
+                    $"Expected the route to use the direct y0 -> y7 step-up jump. {BuildPathDebug(result)}");
+            }
+            finally
+            {
+                Object.DestroyImmediate(host);
+                Object.DestroyImmediate(platform.gameObject);
+            }
+        }
+
+        [Test]
         public void TryRequestPath_WhenUpperNodeIsCloserByDistance_StartsFromGroundSurface()
         {
             var host = new GameObject("StartSurfaceGroupRegression");
