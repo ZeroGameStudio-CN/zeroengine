@@ -236,7 +236,7 @@ namespace ZeroEngine.Pathfinding2D.Tests.Editor
             var platform = CreateMultiPathPolygonPlatform(
                 "SameColliderStepUpWithLowerPit",
                 (new Vector2(11f, -0.1f), new Vector2(26f, 0.2f)),
-                (new Vector2(50.5f, 6.9f), new Vector2(53f, 0.2f)),
+                (new Vector2(50.5f, 6.4f), new Vector2(53f, 0.2f)),
                 (new Vector2(42.5f, -7.1f), new Vector2(37f, 0.2f)));
             platform.gameObject.layer = 8;
 
@@ -255,7 +255,7 @@ namespace ZeroEngine.Pathfinding2D.Tests.Editor
                 bool success = pathfinder.TryRequestPath(
                     new PlatformPathRequest(
                         new Vector3(3f, 1.3f, 0f),
-                        new Vector3(29f, 9f, 0f),
+                        new Vector3(29f, 8.5f, 0f),
                         forceRequest: true,
                         projectTargetToGround: true,
                         projectionDistance: 12f),
@@ -269,8 +269,8 @@ namespace ZeroEngine.Pathfinding2D.Tests.Editor
                 Assert.IsTrue(
                     result.Path.Commands.Any(command =>
                         command.CommandType == MoveCommandType.Jump &&
-                        Mathf.Abs(command.Target.y - 7f) <= 0.5f),
-                    $"Expected the route to use the direct y0 -> y7 step-up jump. {BuildPathDebug(result)}");
+                        Mathf.Abs(command.Target.y - 6.5f) <= 0.5f),
+                    $"Expected the route to use the direct y0 -> upper step-up jump. {BuildPathDebug(result)}");
             }
             finally
             {
