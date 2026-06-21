@@ -307,6 +307,145 @@ namespace ZeroEngine.Pathfinding2D.Tests.Editor
         }
 
         [Test]
+        public void GenerateJumpLinks_EdgeStepUpFallback_UsesSafeSameColliderLandingCenter()
+        {
+            var host = new GameObject("SameColliderEdgeStepUpFallbackHost");
+            var platform = CreateMultiPathPolygon(
+                "SameColliderStepPlatforms",
+                GroundLayer,
+                CreateRectPath(new Vector2(11f, -0.1f), new Vector2(26f, 0.2f)),
+                new[]
+                {
+                    new Vector2(24f, -7f),
+                    new Vector2(24f, 8.8f),
+                    new Vector2(24.05f, 8.8f),
+                    new Vector2(24.05f, 7f),
+                    new Vector2(77f, 7f),
+                    new Vector2(77f, -7f)
+                });
+            var wall = CreatePlatform("SameColliderStepWall", ObstacleLayer, new Vector2(24f, 3.5f), new Vector2(0.2f, 7f));
+
+            try
+            {
+                var graph = GenerateRoom016StyleStepUpGraph(host);
+                float minSafeLandingX = 24f + graph.Config.CharacterRadius + 0.05f;
+
+                Assert.IsFalse(
+                    HasJumpLinkNear(
+                        graph,
+                        platform,
+                        platform,
+                        new Vector2(24f, 0f),
+                        new Vector2(24f, 7f)),
+                    "Same-collider edge step-up must not target the unsafe ledge edge where the character center cannot fit.");
+
+                Assert.IsTrue(
+                    HasJumpLinkToSafeLandingNearLedge(
+                        graph,
+                        platform,
+                        platform,
+                        expectedFrom: new Vector2(24f, 0f),
+                        minLandingX: minSafeLandingX,
+                        maxLandingX: minSafeLandingX + 1.0f,
+                        landingY: 7f),
+                    "Same-collider edge step-up should target the nearest safe landing center, not a distant interior surface node.");
+
+                Assert.IsFalse(
+                    HasJumpLinkToSurfacePastX(
+                        graph,
+                        platform,
+                        platform,
+                        expectedFrom: new Vector2(24f, 0f),
+                        minX: minSafeLandingX + 1.5f,
+                        landingY: 7f),
+                    "Same-collider edge step-up must not also create distant interior surface jump links.");
+
+            }
+            finally
+            {
+                Object.DestroyImmediate(host);
+                Object.DestroyImmediate(platform.gameObject);
+                Object.DestroyImmediate(wall);
+            }
+        }
+
+        [Test]
+        public void GenerateJumpLinks_EdgeStepUpFallback_UsesSafeLowerPitLandingCenter()
+        {
+            var host = new GameObject("SameColliderLowerPitStepUpFallbackHost");
+            var platform = CreateMultiPathPlatform(
+                "SameColliderLowerPitStep",
+                GroundLayer,
+                (new Vector2(11f, -0.1f), new Vector2(26f, 0.2f)),
+                (new Vector2(42.5f, -7.1f), new Vector2(37f, 0.2f)));
+            var wall = CreatePlatform("SameColliderLowerPitWall", ObstacleLayer, new Vector2(24f, -3.5f), new Vector2(0.2f, 7f));
+
+            try
+            {
+                var graph = GenerateRoom016StyleStepUpGraph(host);
+
+                Assert.IsFalse(
+                    HasJumpLinkNear(
+                        graph,
+                        platform,
+                        platform,
+                        new Vector2(24f, -7f),
+                        new Vector2(24f, 0f)),
+                    "Same-collider edge step-up must reject unsafe upper edge targets even when the raw trajectory is clear.");
+
+                Assert.IsTrue(
+                    HasJumpLinkToSafeLandingNearLedge(
+                        graph,
+                        platform,
+                        platform,
+                        expectedFrom: new Vector2(24f, -7f),
+                        minLandingX: 23.2f,
+                        maxLandingX: 23.6f,
+                        landingY: 0f),
+                    "Same-collider edge step-up from the lower pit should use the nearest safe surface center on the upper ledge.");
+            }
+            finally
+            {
+                Object.DestroyImmediate(host);
+                Object.DestroyImmediate(platform.gameObject);
+                Object.DestroyImmediate(wall);
+            }
+        }
+
+        [Test]
+        public void GenerateJumpLinks_EdgeStepUpFallback_RejectsSameColliderOverheadSurface()
+        {
+            var host = new GameObject("SameColliderOverheadStepUpFallbackHost");
+            var platform = CreateMultiPathPlatform(
+                "SameColliderStepWithOverhead",
+                GroundLayer,
+                (new Vector2(11f, -0.1f), new Vector2(26f, 0.2f)),
+                (new Vector2(50.5f, 0f), new Vector2(53f, 14f)),
+                (new Vector2(24.2f, 7.9f), new Vector2(1.4f, 0.2f)));
+            var wall = CreatePlatform("SameColliderOverheadStepWall", ObstacleLayer, new Vector2(24f, 3.5f), new Vector2(0.2f, 7f));
+
+            try
+            {
+                var graph = GenerateRoom016StyleStepUpGraph(host);
+
+                Assert.IsFalse(
+                    HasJumpLinkNear(
+                        graph,
+                        platform,
+                        platform,
+                        new Vector2(24f, 0f),
+                        new Vector2(24f, 7f)),
+                    "A same-collider surface inside the landing head-clearance box must still block the edge step-up fallback.");
+            }
+            finally
+            {
+                Object.DestroyImmediate(host);
+                Object.DestroyImmediate(platform.gameObject);
+                Object.DestroyImmediate(wall);
+            }
+        }
+
+        [Test]
         public void GenerateJumpLinks_EdgeStepUpFallback_AllowsCleanLandingClearance()
         {
             var host = new GameObject("CleanEdgeStepUpFallbackHost");
@@ -423,6 +562,30 @@ namespace ZeroEngine.Pathfinding2D.Tests.Editor
             return graph;
         }
 
+        private static PlatformGraphGenerator GenerateRoom016StyleStepUpGraph(GameObject host)
+        {
+            var graph = CreateGraph(host, groundMask: 1 << GroundLayer, oneWayMask: 0);
+            graph.Config.ObstacleLayer = 1 << ObstacleLayer;
+            graph.Config.ScanCenter = new Vector2(38f, 0.5f);
+            graph.Config.ScanSize = new Vector2(84f, 24f);
+            graph.Config.CharacterRadius = 0.4f;
+            graph.Config.CharacterHeight = 1.8f;
+            graph.GeneratePlatformGraph();
+
+            var calculator = host.AddComponent<JumpLinkCalculator>();
+            calculator.Config.GravityScale = 5f;
+            calculator.Config.MaxJumpVelocity = 20f;
+            calculator.Config.MaxJumpHeight = 4f;
+            calculator.Config.MaxHorizontalDistance = 6f;
+            calculator.Config.MaxFallHeight = 18f;
+            calculator.Config.AirJumpCount = 1;
+            calculator.Config.AirJumpVelocity = 20f;
+            calculator.Config.TrajectoryCheckRadius = 0.4f;
+            calculator.GenerateJumpLinks();
+
+            return graph;
+        }
+
         private static bool HasJumpLink(PlatformGraphGenerator graph, Collider2D from, Collider2D to)
         {
             return graph.Links.Any(link =>
@@ -451,6 +614,70 @@ namespace ZeroEngine.Pathfinding2D.Tests.Editor
                 Vector2.Distance(toNode.Position, expectedTo) <= tolerance);
         }
 
+        private static bool HasJumpLinkNear(
+            PlatformGraphGenerator graph,
+            Collider2D from,
+            Collider2D to,
+            Vector2 expectedFrom,
+            Vector2 expectedTo)
+        {
+            const float tolerance = 0.45f;
+            return graph.Links.Any(link =>
+                link.LinkType == PlatformLinkType.Jump &&
+                graph.GetNode(link.FromNodeId) is { } fromNode &&
+                graph.GetNode(link.ToNodeId) is { } toNode &&
+                fromNode.PlatformCollider == from &&
+                toNode.PlatformCollider == to &&
+                Vector2.Distance(fromNode.Position, expectedFrom) <= tolerance &&
+                Vector2.Distance(toNode.Position, expectedTo) <= tolerance);
+        }
+
+        private static bool HasJumpLinkToSafeLandingNearLedge(
+            PlatformGraphGenerator graph,
+            Collider2D from,
+            Collider2D to,
+            Vector2 expectedFrom,
+            float minLandingX,
+            float maxLandingX,
+            float landingY)
+        {
+            const float fromTolerance = 0.45f;
+            const float yTolerance = 0.05f;
+            return graph.Links.Any(link =>
+                link.LinkType == PlatformLinkType.Jump &&
+                graph.GetNode(link.FromNodeId) is { } fromNode &&
+                graph.GetNode(link.ToNodeId) is { } toNode &&
+                fromNode.PlatformCollider == from &&
+                toNode.PlatformCollider == to &&
+                Vector2.Distance(fromNode.Position, expectedFrom) <= fromTolerance &&
+                toNode.NodeType == PlatformNodeType.Surface &&
+                toNode.Position.x >= minLandingX &&
+                toNode.Position.x <= maxLandingX &&
+                Mathf.Abs(toNode.Position.y - landingY) <= yTolerance);
+        }
+
+        private static bool HasJumpLinkToSurfacePastX(
+            PlatformGraphGenerator graph,
+            Collider2D from,
+            Collider2D to,
+            Vector2 expectedFrom,
+            float minX,
+            float landingY)
+        {
+            const float fromTolerance = 0.45f;
+            const float yTolerance = 0.05f;
+            return graph.Links.Any(link =>
+                link.LinkType == PlatformLinkType.Jump &&
+                graph.GetNode(link.FromNodeId) is { } fromNode &&
+                graph.GetNode(link.ToNodeId) is { } toNode &&
+                fromNode.PlatformCollider == from &&
+                toNode.PlatformCollider == to &&
+                Vector2.Distance(fromNode.Position, expectedFrom) <= fromTolerance &&
+                toNode.NodeType == PlatformNodeType.Surface &&
+                toNode.Position.x > minX &&
+                Mathf.Abs(toNode.Position.y - landingY) <= yTolerance);
+        }
+
         private static GameObject CreatePlatform(string name, int layer, Vector2 position, Vector2 size)
         {
             var platform = new GameObject(name) { layer = layer };
@@ -459,6 +686,62 @@ namespace ZeroEngine.Pathfinding2D.Tests.Editor
             collider.size = size;
             Physics2D.SyncTransforms();
             return platform;
+        }
+
+        private static PolygonCollider2D CreateMultiPathPlatform(
+            string name,
+            int layer,
+            params (Vector2 center, Vector2 size)[] platforms)
+        {
+            var platform = new GameObject(name) { layer = layer };
+            var collider = platform.AddComponent<PolygonCollider2D>();
+            collider.pathCount = platforms.Length;
+
+            for (int i = 0; i < platforms.Length; i++)
+            {
+                var rect = platforms[i];
+                float halfWidth = rect.size.x * 0.5f;
+                float halfHeight = rect.size.y * 0.5f;
+                collider.SetPath(i, new[]
+                {
+                    new Vector2(rect.center.x - halfWidth, rect.center.y - halfHeight),
+                    new Vector2(rect.center.x - halfWidth, rect.center.y + halfHeight),
+                    new Vector2(rect.center.x + halfWidth, rect.center.y + halfHeight),
+                    new Vector2(rect.center.x + halfWidth, rect.center.y - halfHeight)
+                });
+            }
+
+            Physics2D.SyncTransforms();
+            return collider;
+        }
+
+        private static PolygonCollider2D CreateMultiPathPolygon(
+            string name,
+            int layer,
+            params Vector2[][] paths)
+        {
+            var platform = new GameObject(name) { layer = layer };
+            var collider = platform.AddComponent<PolygonCollider2D>();
+            collider.pathCount = paths.Length;
+
+            for (int i = 0; i < paths.Length; i++)
+                collider.SetPath(i, paths[i]);
+
+            Physics2D.SyncTransforms();
+            return collider;
+        }
+
+        private static Vector2[] CreateRectPath(Vector2 center, Vector2 size)
+        {
+            float halfWidth = size.x * 0.5f;
+            float halfHeight = size.y * 0.5f;
+            return new[]
+            {
+                new Vector2(center.x - halfWidth, center.y - halfHeight),
+                new Vector2(center.x - halfWidth, center.y + halfHeight),
+                new Vector2(center.x + halfWidth, center.y + halfHeight),
+                new Vector2(center.x + halfWidth, center.y - halfHeight)
+            };
         }
     }
 

@@ -1025,6 +1025,33 @@ namespace ZeroEngine.Pathfinding2D.Tests.Editor
         }
 
         [Test]
+        public void IsCurrentCommandComplete_JumpTargetAbovePlayer_DoesNotComplete()
+        {
+            var host = new GameObject("JumpCompletionBelowTargetTest");
+
+            try
+            {
+                var pathfinder = host.AddComponent<Platform2DPathfinder>();
+                pathfinder.Config.ArriveDistance = 2f;
+                var commands = new System.Collections.Generic.List<MoveCommand>
+                {
+                    MoveCommand.Jump(new Vector3(24.5f, 7f, 0f), 10f, 1f, 0.5f, facingDirection: 1)
+                };
+                var path = new Platform2DPath(
+                    new Vector3(24f, 0f, 0f),
+                    new Vector3(24.5f, 7f, 0f),
+                    commands);
+                SetCurrentPath(pathfinder, path);
+
+                Assert.IsFalse(pathfinder.IsCurrentCommandComplete(new Vector3(24.6f, 3.6f, 0f), isGrounded: true));
+            }
+            finally
+            {
+                Object.DestroyImmediate(host);
+            }
+        }
+
+        [Test]
         public void ValidatePath_JumpCommandAlignedXWithVerticalGap_RemainsValid()
         {
             var host = new GameObject("JumpValidationVerticalGapTest");

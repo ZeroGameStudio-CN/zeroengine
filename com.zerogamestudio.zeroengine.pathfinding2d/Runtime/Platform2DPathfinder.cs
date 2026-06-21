@@ -1015,6 +1015,11 @@ namespace ZeroEngine.Pathfinding2D
                     return !IsCurrentCommandTerminal() && verticalDelta > config.WalkCommandVerticalTolerance;
 
                 case MoveCommandType.Jump:
+                    if (!isGrounded) return false;
+                    if (currentPosition.y < command.Target.y - config.WalkCommandVerticalTolerance)
+                        return false;
+                    return Mathf.Abs(currentPosition.x - command.Target.x) < config.ArriveDistance * 2f;
+
                 case MoveCommandType.Fall:
                 case MoveCommandType.DropDown:
                     // 跳跃/下落：落地且接近目标位置

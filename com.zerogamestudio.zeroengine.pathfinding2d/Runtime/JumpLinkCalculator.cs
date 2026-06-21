@@ -185,10 +185,11 @@ namespace ZeroEngine.Pathfinding2D
                             continue;
                         }
 
-                        // ★ 终点也必须是边缘节点
+                        // ★ 常规跳跃终点必须是边缘节点。edge-step-up fallback 额外允许落到
+                        // 同一上层 surface 的安全内部点，避免把角色中心导向贴边假落点。
                         bool toIsEdge = toNode.NodeType == PlatformNodeType.LeftEdge ||
                                         toNode.NodeType == PlatformNodeType.RightEdge;
-                        if (!toIsEdge)
+                        if (!toIsEdge && !CanConsiderEdgeStepUpSurfaceTarget(fromNode, toNode, verticalDist))
                         {
                             jumpSkippedToNotEdge++;
                             continue;
@@ -365,6 +366,12 @@ namespace ZeroEngine.Pathfinding2D
             if (!result.IsReachable)
             {
                 failReason = "unreachable";
+                return false;
+            }
+
+            if (IsEdgeStepUpCandidate(from, to) && !CanCreateEdgeJumpLink(from, to))
+            {
+                failReason = "unsafe-edge-step-up";
                 return false;
             }
 
@@ -601,6 +608,72 @@ namespace ZeroEngine.Pathfinding2D
 
             float rise = to.Position.y - from.Position.y;
             if (rise <= 0.5f || rise > GetEffectiveMaxJumpHeight())
+            {
+                return false;
+            }
+
+            if (!graphGenerator.TryGetSurfaceSegment(from.SurfaceGroupId, out var fromSegment) ||
+                !graphGenerator.TryGetSurfaceSegment(to.SurfaceGroupId, out var toSegment))
+            {
+                return false;
+            }
+
+            float edgeInset = Mathf.Max(0.05f, graphGenerator.Config.EdgeInset);
+            float edgeTolerance = edgeInset + 0.1f;
+            float exitOffset = Mathf.Max(0.05f, edgeInset * 0.5f);
+            float landingTolerance = Mathf.Max(edgeInset + 0.05f, 0.25f);
+
+            if (from.NodeType == PlatformNodeType.RightEdge)
+            {
+                if (Mathf.Abs(from.Position.x - fromSegment.MaxX) > edgeTolerance)
+                {
+                    return false;
+                }
+
+                float exitX = fromSegment.MaxX + exitOffset;
+                return toSegment.ContainsX(exitX, landingTolerance) &&
+                       to.Position.x >= from.Position.x - landingTolerance &&
+                       IsNearEdgeStepUpLanding(from, to, fromSegment) &&
+                       HasSafeLandingCenter(to.Position.x, toSegment) &&
+                       IsFirstSurfaceAboveEdge(fromSegment, toSegment, exitX, landingTolerance) &&
+                       HasLandingHeadClearance(to.Position.x, toSegment);
+            }
+
+            if (from.NodeType == PlatformNodeType.LeftEdge)
+            {
+                if (Mathf.Abs(from.Position.x - fromSegment.MinX) > edgeTolerance)
+                    return false;
+
+                float exitX = fromSegment.MinX - exitOffset;
+                return toSegment.ContainsX(exitX, landingTolerance) &&
+                       to.Position.x <= from.Position.x + landingTolerance &&
+                       IsNearEdgeStepUpLanding(from, to, fromSegment) &&
+                       HasSafeLandingCenter(to.Position.x, toSegment) &&
+                       IsFirstSurfaceAboveEdge(fromSegment, toSegment, exitX, landingTolerance) &&
+                       HasLandingHeadClearance(to.Position.x, toSegment);
+            }
+
+            return false;
+        }
+
+        private bool IsEdgeStepUpCandidate(PlatformNodeData from, PlatformNodeData to)
+        {
+            if (graphGenerator == null ||
+                from.SurfaceGroupId < 0 ||
+                to.SurfaceGroupId < 0 ||
+                from.SurfaceGroupId == to.SurfaceGroupId)
+            {
+                return false;
+            }
+
+            if (from.NodeType != PlatformNodeType.LeftEdge &&
+                from.NodeType != PlatformNodeType.RightEdge)
+            {
+                return false;
+            }
+
+            float rise = to.Position.y - from.Position.y;
+            if (rise <= 0.5f || rise > GetEffectiveMaxJumpHeight())
                 return false;
 
             if (!graphGenerator.TryGetSurfaceSegment(from.SurfaceGroupId, out var fromSegment) ||
@@ -621,34 +694,74 @@ namespace ZeroEngine.Pathfinding2D
 
                 float exitX = fromSegment.MaxX + exitOffset;
                 return toSegment.ContainsX(exitX, landingTolerance) &&
-                       to.Position.x >= from.Position.x - landingTolerance &&
-                       IsFirstSurfaceAboveEdge(fromSegment, toSegment, exitX, landingTolerance) &&
-                       HasLandingHeadClearance(exitX, toSegment.Y);
+                       IsFirstSurfaceAboveEdge(fromSegment, toSegment, exitX, landingTolerance);
             }
+
+            if (Mathf.Abs(from.Position.x - fromSegment.MinX) > edgeTolerance)
+                return false;
+
+            float leftExitX = fromSegment.MinX - exitOffset;
+            return toSegment.ContainsX(leftExitX, landingTolerance) &&
+                   IsFirstSurfaceAboveEdge(fromSegment, toSegment, leftExitX, landingTolerance);
+        }
+
+        private bool CanConsiderEdgeStepUpSurfaceTarget(
+            PlatformNodeData from,
+            PlatformNodeData to,
+            float verticalDist)
+        {
+            if (to.NodeType != PlatformNodeType.Surface || verticalDist <= 0.5f)
+                return false;
+
+            return CanCreateEdgeJumpLink(from, to);
+        }
+
+        private bool IsNearEdgeStepUpLanding(
+            PlatformNodeData from,
+            PlatformNodeData to,
+            PlatformSurfaceSegment fromSegment)
+        {
+            if (to.NodeType != PlatformNodeType.Surface)
+                return true;
+
+            var graphConfig = graphGenerator.Config;
+            float safeInset = Mathf.Max(
+                Mathf.Max(Mathf.Max(graphConfig.CharacterRadius, graphConfig.EdgeInset), config.TrajectoryCheckRadius) + 0.15f,
+                graphConfig.EdgeInset + 0.15f);
+            float surfaceSlack = 0.15f;
+            float maxSurfaceOffset = safeInset + surfaceSlack;
+
+            if (from.NodeType == PlatformNodeType.RightEdge)
+                return to.Position.x <= fromSegment.MaxX + maxSurfaceOffset;
 
             if (from.NodeType == PlatformNodeType.LeftEdge)
-            {
-                if (Mathf.Abs(from.Position.x - fromSegment.MinX) > edgeTolerance)
-                    return false;
-
-                float exitX = fromSegment.MinX - exitOffset;
-                return toSegment.ContainsX(exitX, landingTolerance) &&
-                       to.Position.x <= from.Position.x + landingTolerance &&
-                       IsFirstSurfaceAboveEdge(fromSegment, toSegment, exitX, landingTolerance) &&
-                       HasLandingHeadClearance(exitX, toSegment.Y);
-            }
+                return to.Position.x >= fromSegment.MinX - maxSurfaceOffset;
 
             return false;
         }
 
-        private bool HasLandingHeadClearance(float landingX, float landingSurfaceY)
+        private bool HasSafeLandingCenter(float landingX, PlatformSurfaceSegment landingSegment)
         {
-            if (graphGenerator == null)
+            if (graphGenerator == null || landingSegment == null)
+                return false;
+
+            float horizontalClearance = Mathf.Max(
+                graphGenerator.Config.CharacterRadius,
+                config.TrajectoryCheckRadius) + 0.05f;
+
+            return landingX >= landingSegment.MinX + horizontalClearance &&
+                   landingX <= landingSegment.MaxX - horizontalClearance;
+        }
+
+        private bool HasLandingHeadClearance(float landingX, PlatformSurfaceSegment landingSegment)
+        {
+            if (graphGenerator == null || landingSegment == null)
                 return true;
 
             var graphConfig = graphGenerator.Config;
             float characterHeight = Mathf.Max(0.05f, graphConfig.CharacterHeight);
-            float clearanceBottom = landingSurfaceY + 0.05f;
+            float clearanceBottom = landingSegment.Y + 0.05f;
+            float clearanceTop = clearanceBottom + characterHeight;
             float clearanceWidth = Mathf.Max(
                 graphConfig.CharacterRadius * 2f,
                 config.TrajectoryCheckRadius * 2f);
@@ -660,11 +773,48 @@ namespace ZeroEngine.Pathfinding2D
             for (int i = 0; i < blockers.Length; i++)
             {
                 var blocker = blockers[i];
-                if (blocker != null)
-                    return false;
+                if (blocker == null)
+                    continue;
+
+                if (blocker == landingSegment.Collider &&
+                    !HasSameColliderSurfaceInsideClearance(blocker, landingSegment, landingX, clearanceBottom, clearanceTop))
+                {
+                    continue;
+                }
+
+                return false;
             }
 
             return true;
+        }
+
+        private bool HasSameColliderSurfaceInsideClearance(
+            Collider2D collider,
+            PlatformSurfaceSegment landingSegment,
+            float landingX,
+            float clearanceBottom,
+            float clearanceTop)
+        {
+            if (graphGenerator?.SurfaceSegments == null)
+                return false;
+
+            float xTolerance = Mathf.Max(0.05f, graphGenerator.Config.CharacterRadius);
+            for (int i = 0; i < graphGenerator.SurfaceSegments.Count; i++)
+            {
+                var segment = graphGenerator.SurfaceSegments[i];
+                if (segment == null ||
+                    segment == landingSegment ||
+                    segment.Collider != collider ||
+                    !segment.ContainsX(landingX, xTolerance))
+                {
+                    continue;
+                }
+
+                if (segment.Y > clearanceBottom && segment.Y <= clearanceTop)
+                    return true;
+            }
+
+            return false;
         }
 
         // True when toSegment is the FIRST walkable surface directly above the exit point (no intermediate
