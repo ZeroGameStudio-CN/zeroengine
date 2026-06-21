@@ -536,10 +536,13 @@ namespace ZeroEngine.Pathfinding2D
             if (segment == null)
                 return false;
 
-            float tolerance = radius + 0.05f;
-            return segment.ContainsX(point.x, tolerance) &&
-                   point.y >= segment.Y - tolerance &&
-                   point.y <= segment.Y + tolerance;
+            const float ledgeContactSlack = 0.2f;
+            float horizontalTolerance = radius + 0.05f;
+            float lowerTolerance = radius + ledgeContactSlack;
+            float upperTolerance = radius + 0.05f;
+            return segment.ContainsX(point.x, horizontalTolerance) &&
+                   point.y >= segment.Y - lowerTolerance &&
+                   point.y <= segment.Y + upperTolerance;
         }
 
         private float GetEffectiveMaxJumpHeight()
