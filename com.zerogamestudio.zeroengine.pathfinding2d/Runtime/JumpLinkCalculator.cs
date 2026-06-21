@@ -435,6 +435,12 @@ namespace ZeroEngine.Pathfinding2D
             }
 
             var sharedCollider = from.PlatformCollider;
+            if (!graphGenerator.TryGetSurfaceSegment(from.SurfaceGroupId, out var fromSegment) ||
+                !graphGenerator.TryGetSurfaceSegment(to.SurfaceGroupId, out var toSegment))
+            {
+                return false;
+            }
+
             LayerMask blockerMask = graphGenerator.Config.GroundLayer | graphGenerator.Config.ObstacleLayer;
             float radius = Mathf.Max(0.01f, config.TrajectoryCheckRadius);
             float endpointIgnoreDistance = radius + 0.05f;
@@ -466,6 +472,9 @@ namespace ZeroEngine.Pathfinding2D
                     if (IsEndpointTrajectoryContact(hit.point, hit.centroid, start, end, endpointIgnoreDistance))
                         continue;
 
+                    if (IsExpectedSurfaceContact(hit.point, hit.centroid, fromSegment, toSegment, radius))
+                        continue;
+
                     return true;
                 }
 
@@ -480,6 +489,9 @@ namespace ZeroEngine.Pathfinding2D
                             continue;
 
                         if (IsEndpointTrajectoryContact(sample, sample, start, end, endpointIgnoreDistance))
+                            continue;
+
+                        if (IsExpectedSurfaceContact(sample, sample, fromSegment, toSegment, radius))
                             continue;
 
                         return true;
@@ -501,6 +513,33 @@ namespace ZeroEngine.Pathfinding2D
                    Vector2.Distance(hitPoint, end) <= endpointIgnoreDistance ||
                    Vector2.Distance(centroid, start) <= endpointIgnoreDistance ||
                    Vector2.Distance(centroid, end) <= endpointIgnoreDistance;
+        }
+
+        private static bool IsExpectedSurfaceContact(
+            Vector2 hitPoint,
+            Vector2 centroid,
+            PlatformSurfaceSegment fromSegment,
+            PlatformSurfaceSegment toSegment,
+            float radius)
+        {
+            return IsNearSurfaceTop(hitPoint, fromSegment, radius) ||
+                   IsNearSurfaceTop(centroid, fromSegment, radius) ||
+                   IsNearSurfaceTop(hitPoint, toSegment, radius) ||
+                   IsNearSurfaceTop(centroid, toSegment, radius);
+        }
+
+        private static bool IsNearSurfaceTop(
+            Vector2 point,
+            PlatformSurfaceSegment segment,
+            float radius)
+        {
+            if (segment == null)
+                return false;
+
+            float tolerance = radius + 0.05f;
+            return segment.ContainsX(point.x, tolerance) &&
+                   point.y >= segment.Y - tolerance &&
+                   point.y <= segment.Y + tolerance;
         }
 
         private float GetEffectiveMaxJumpHeight()
