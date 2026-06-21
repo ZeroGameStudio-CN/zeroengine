@@ -488,10 +488,11 @@ namespace ZeroEngine.Pathfinding2D
                         if (overlaps[overlapIndex] != sharedCollider)
                             continue;
 
-                        if (IsEndpointTrajectoryContact(sample, sample, start, end, endpointIgnoreDistance))
+                        Vector2 contactPoint = sharedCollider.ClosestPoint(sample);
+                        if (IsEndpointTrajectoryContact(contactPoint, sample, start, end, endpointIgnoreDistance))
                             continue;
 
-                        if (IsExpectedSurfaceContact(sample, sample, fromSegment, toSegment, radius))
+                        if (IsExpectedSurfaceContact(contactPoint, sample, fromSegment, toSegment, radius))
                             continue;
 
                         return true;
@@ -536,13 +537,10 @@ namespace ZeroEngine.Pathfinding2D
             if (segment == null)
                 return false;
 
-            const float ledgeContactSlack = 0.2f;
-            float horizontalTolerance = radius + 0.05f;
-            float lowerTolerance = radius + ledgeContactSlack;
-            float upperTolerance = radius + 0.05f;
-            return segment.ContainsX(point.x, horizontalTolerance) &&
-                   point.y >= segment.Y - lowerTolerance &&
-                   point.y <= segment.Y + upperTolerance;
+            float tolerance = radius + 0.05f;
+            return segment.ContainsX(point.x, tolerance) &&
+                   point.y >= segment.Y - tolerance &&
+                   point.y <= segment.Y + tolerance;
         }
 
         private float GetEffectiveMaxJumpHeight()
