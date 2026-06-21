@@ -238,6 +238,7 @@ namespace ZeroEngine.Pathfinding2D.Tests.Editor
                 (new Vector2(11f, -0.1f), new Vector2(26f, 0.2f)),
                 (new Vector2(50.5f, 6.9f), new Vector2(53f, 0.2f)),
                 (new Vector2(42.5f, -7.1f), new Vector2(37f, 0.2f)));
+            platform.gameObject.layer = 8;
 
             try
             {
