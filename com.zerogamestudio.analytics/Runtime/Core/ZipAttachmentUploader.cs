@@ -31,8 +31,6 @@ namespace ZGS.Analytics
         private const string ManifestFileName = "UploadManifest.json";
         private const string CurrentPlayerLogFileName = "Player.log";
         private const string PreviousPlayerLogFileName = "Player-prev.log";
-        private static bool _hasUploaded;
-
         private enum AttachmentKind
         {
             Generic,
@@ -90,21 +88,12 @@ namespace ZGS.Analytics
                 yield break;
             }
 
-            if (_hasUploaded)
-            {
-                AnalyticsLog.LogWarning("[ZipAttachmentUploader] 已上传过反馈，本次忽略");
-                yield break;
-            }
-#if !UNITY_EDITOR
-            _hasUploaded = true;
-#endif
-
             string safeUserName = SanitizeFileName(request.UserName ?? "Unknown");
             string version = $"{Application.productName}_v{Application.version}".Replace(" ", "");
             string timestamp = DateTime.Now.ToString("yyyyMMdd_HHmmss");
-            string prefix = $"{version}_{safeUserName}_{timestamp}";
-            string prefixDir = prefix + "/";
-            string zipName = prefix + ".zip";
+            string zipEntryPrefix = BuildZipEntryPrefix(version, safeUserName, timestamp);
+            string prefixDir = zipEntryPrefix + "/";
+            string zipName = BuildZipFileName(zipEntryPrefix);
 
             // 使用持久化目录存储 ZIP（不会被系统清理）
             string feedbackDir = FeedbackUploadQueue.FeedbackDirectory;
@@ -114,7 +103,7 @@ namespace ZGS.Analytics
             // 临时目录用于处理截图等中间文件
             string tmpDir = Application.temporaryCachePath;
 
-            if (!TryCreateZip(request, zipPath, prefix, prefixDir, tmpDir, feedbackDir))
+            if (!TryCreateZip(request, zipPath, zipEntryPrefix, prefixDir, tmpDir, feedbackDir))
             {
                 AnalyticsLog.LogWarning("[ZipAttachmentUploader] 创建反馈 ZIP 失败，跳过上传");
                 yield break;
@@ -181,6 +170,9 @@ namespace ZGS.Analytics
         {
             try
             {
+                prefix = SanitizeZipEntryPathSegment(prefix);
+                prefixDir = NormalizeEntryDirectory(prefixDir);
+
                 string feedbackContent = $"User: {userName}\nMessage: {userMessage}\n\n---TIMELINE---\n{timelineJson}";
                 byte[] feedbackBytes = Encoding.UTF8.GetBytes(feedbackContent);
                 var manifest = new UploadManifest();
@@ -464,6 +456,7 @@ namespace ZGS.Analytics
 
         private static void AddBytesToZip(ZipArchive zip, byte[] bytes, string entryName)
         {
+            entryName = NormalizeEntryName(entryName);
             ZipArchiveEntry entry = zip.CreateEntry(entryName);
             using Stream entryStream = entry.Open();
             entryStream.Write(bytes, 0, bytes.Length);
@@ -657,6 +650,43 @@ namespace ZGS.Analytics
             return name;
         }
 
+        private static string BuildZipEntryPrefix(string version, string safeUserName, string timestamp)
+        {
+            string safeVersion = SanitizeZipEntryPathSegment(version);
+            string safeTimestamp = SanitizeZipEntryPathSegment(timestamp);
+            string safeUserSegment = ContainsAsciiLetterOrDigit(safeUserName)
+                ? SanitizeZipEntryPathSegment(safeUserName)
+                : string.Empty;
+
+            if (string.IsNullOrEmpty(safeUserSegment))
+                return $"{safeVersion}_{safeTimestamp}";
+
+            return $"{safeVersion}_{safeUserSegment}_{safeTimestamp}";
+        }
+
+        private static bool ContainsAsciiLetterOrDigit(string value)
+        {
+            if (string.IsNullOrEmpty(value))
+                return false;
+
+            foreach (char c in value)
+            {
+                if ((c >= 'A' && c <= 'Z') ||
+                    (c >= 'a' && c <= 'z') ||
+                    (c >= '0' && c <= '9'))
+                {
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
+        private static string BuildZipFileName(string zipEntryPrefix)
+        {
+            return SanitizeZipEntryPathSegment(zipEntryPrefix) + ".zip";
+        }
+
         private static bool TryPrepareScreenshot(string srcPath, string tmpDir, string prefix, out string outPath)
         {
             outPath = Path.Combine(tmpDir, $"{prefix}.jpg");
@@ -758,7 +788,61 @@ namespace ZGS.Analytics
 
         private static string NormalizeEntryName(string value)
         {
-            return (value ?? string.Empty).Replace('\\', '/');
+            string normalized = (value ?? string.Empty).Replace('\\', '/');
+            string[] parts = normalized.Split(new[] { '/' }, StringSplitOptions.RemoveEmptyEntries);
+            if (parts.Length == 0)
+                return "entry";
+
+            for (int i = 0; i < parts.Length; i++)
+                parts[i] = SanitizeZipEntryPathSegment(parts[i]);
+
+            return string.Join("/", parts);
+        }
+
+        private static string NormalizeEntryDirectory(string value)
+        {
+            return NormalizeEntryName(value) + "/";
+        }
+
+        private static string SanitizeZipEntryPathSegment(string value)
+        {
+            if (string.IsNullOrWhiteSpace(value))
+                return "entry";
+
+            var sb = new StringBuilder(value.Length);
+            foreach (char c in value)
+            {
+                if ((c >= 'A' && c <= 'Z') ||
+                    (c >= 'a' && c <= 'z') ||
+                    (c >= '0' && c <= '9') ||
+                    c == '.' ||
+                    c == '-' ||
+                    c == '_')
+                {
+                    sb.Append(c);
+                }
+                else
+                {
+                    sb.Append('_');
+                }
+            }
+
+            string segment = sb.ToString().Trim('_', '.', '-');
+            if (string.IsNullOrEmpty(segment) || segment == "." || segment == "..")
+                return "entry";
+
+            string extension = Path.GetExtension(value);
+            if (!string.IsNullOrEmpty(extension) && value.Length > extension.Length)
+            {
+                string safeExtension = SanitizeZipEntryPathSegment(extension.TrimStart('.'));
+                if (!string.IsNullOrEmpty(safeExtension) &&
+                    string.Equals(segment, safeExtension, StringComparison.Ordinal))
+                {
+                    return "entry." + safeExtension;
+                }
+            }
+
+            return segment;
         }
 
         private static string NormalizePath(string path)

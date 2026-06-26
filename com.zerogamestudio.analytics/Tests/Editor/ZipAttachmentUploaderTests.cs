@@ -42,6 +42,101 @@ namespace ZGS.Analytics.Tests.Editor
         }
 
         [Test]
+        public void BuildZipEntryPrefix_WithNonAsciiUserName_UsesAsciiSafeEntryFolder()
+        {
+            string prefix = InvokeBuildZipEntryPrefix(
+                "POB_vEA0.7.7.3",
+                "木有枝",
+                "20260626_004742");
+
+            Assert.AreEqual("POB_vEA0.7.7.3_20260626_004742", prefix);
+            Assert.IsTrue(prefix.All(c => c <= 127), prefix);
+        }
+
+        [Test]
+        public void BuildZipFileName_WithAsciiSafePrefix_UsesAsciiSafeUploadFileName()
+        {
+            string prefix = InvokeBuildZipEntryPrefix(
+                "POB_vEA0.7.7.3",
+                "木有枝",
+                "20260626_004742");
+
+            string fileName = InvokeBuildZipFileName(prefix);
+
+            Assert.AreEqual("POB_vEA0.7.7.3_20260626_004742.zip", fileName);
+            Assert.IsTrue(fileName.All(c => c <= 127), fileName);
+        }
+
+        [Test]
+        public void TryCreateZip_WithGeneratedNonAsciiUserPrefix_UsesAsciiTopLevelEntries()
+        {
+            using var fixture = new ZipFixture();
+            string prefix = InvokeBuildZipEntryPrefix(
+                "POB_vEA0.7.7.3",
+                "木有枝",
+                "20260626_004742");
+
+            Assert.IsTrue(InvokeCreateZip(
+                fixture,
+                "木有枝",
+                prefix,
+                prefix + "/",
+                Array.Empty<string>(),
+                Array.Empty<string>()));
+
+            using ZipArchive zip = ZipFile.OpenRead(fixture.ZipPath);
+            string[] entryNames = zip.Entries.Select(entry => entry.FullName).ToArray();
+            Assert.IsTrue(entryNames.All(name => name.All(c => c <= 127)), string.Join("\n", entryNames));
+            CollectionAssert.Contains(entryNames, prefix + "/Feedback.txt");
+            CollectionAssert.Contains(entryNames, prefix + "/UploadManifest.json");
+
+            string manifest = ReadEntryText(zip, prefix + "/UploadManifest.json");
+            string compactManifest = CompactJson(manifest);
+            StringAssert.Contains($"\"entryName\":\"{prefix}/Feedback.txt\"", compactManifest);
+        }
+
+        [Test]
+        public void TryCreateZip_WithNonAsciiNames_UsesAsciiEntryNamesAndPreservesFeedbackText()
+        {
+            using var fixture = new ZipFixture();
+            string nestedDir = Path.Combine(fixture.IncludeRoot, "中文目录");
+            Directory.CreateDirectory(nestedDir);
+            File.WriteAllText(Path.Combine(nestedDir, "报告.txt"), "nested payload");
+            string looseFile = Path.Combine(fixture.Root, "玩家记录.txt");
+            File.WriteAllText(looseFile, "loose payload");
+
+            Assert.IsTrue(InvokeCreateZip(
+                fixture,
+                "木有枝",
+                new[] { fixture.IncludeRoot },
+                new[] { looseFile }));
+
+            using ZipArchive zip = ZipFile.OpenRead(fixture.ZipPath);
+            string[] entryNames = zip.Entries.Select(entry => entry.FullName).ToArray();
+            Assert.IsTrue(entryNames.All(name => name.All(c => c <= 127)), string.Join("\n", entryNames));
+            CollectionAssert.Contains(entryNames, "Report/entry/entry.txt");
+            CollectionAssert.Contains(entryNames, "Report/entry.txt");
+
+            string feedback = ReadEntryText(zip, "Report/Feedback.txt");
+            StringAssert.Contains("User: 木有枝", feedback);
+
+            string manifest = ReadEntryText(zip, "Report/UploadManifest.json");
+            string compactManifest = CompactJson(manifest);
+            StringAssert.Contains("\"entryName\":\"Report/entry/entry.txt\"", compactManifest);
+            StringAssert.Contains("\"entryName\":\"Report/entry.txt\"", compactManifest);
+        }
+
+        [Test]
+        public void ZipAttachmentUploader_AllowsMultipleReportsInOneRun()
+        {
+            FieldInfo field = typeof(ZipAttachmentUploader).GetField(
+                "_hasUploaded",
+                BindingFlags.NonPublic | BindingFlags.Static);
+
+            Assert.IsNull(field, "Default analytics uploader should not keep process-wide one-shot upload state.");
+        }
+
+        [Test]
         public void TryCreateZip_WithHugePlayerLogs_TailsLogsAndMarksManifestTruncated()
         {
             using var fixture = new ZipFixture();
@@ -172,6 +267,32 @@ namespace ZGS.Analytics.Tests.Editor
             IEnumerable<string> directoriesToInclude,
             IEnumerable<string> filesToInclude)
         {
+            return InvokeCreateZip(fixture, "Tester", directoriesToInclude, filesToInclude);
+        }
+
+        private static bool InvokeCreateZip(
+            ZipFixture fixture,
+            string userName,
+            IEnumerable<string> directoriesToInclude,
+            IEnumerable<string> filesToInclude)
+        {
+            return InvokeCreateZip(
+                fixture,
+                userName,
+                "Report",
+                "Report/",
+                directoriesToInclude,
+                filesToInclude);
+        }
+
+        private static bool InvokeCreateZip(
+            ZipFixture fixture,
+            string userName,
+            string prefix,
+            string prefixDir,
+            IEnumerable<string> directoriesToInclude,
+            IEnumerable<string> filesToInclude)
+        {
             MethodInfo method = typeof(ZipAttachmentUploader)
                 .GetMethods(BindingFlags.NonPublic | BindingFlags.Static)
                 .Single(methodInfo =>
@@ -182,17 +303,37 @@ namespace ZGS.Analytics.Tests.Editor
                 null,
                 new object[]
                 {
-                    "Tester",
+                    userName,
                     "message",
                     "{}",
                     directoriesToInclude,
                     filesToInclude,
                     fixture.ZipPath,
-                    "Report",
-                    "Report/",
+                    prefix,
+                    prefixDir,
                     fixture.TempRoot,
                     fixture.FeedbackDirectory
                 });
+        }
+
+        private static string InvokeBuildZipEntryPrefix(string version, string userName, string timestamp)
+        {
+            MethodInfo method = typeof(ZipAttachmentUploader).GetMethod(
+                "BuildZipEntryPrefix",
+                BindingFlags.NonPublic | BindingFlags.Static);
+            Assert.IsNotNull(method);
+
+            return (string)method.Invoke(null, new object[] { version, userName, timestamp });
+        }
+
+        private static string InvokeBuildZipFileName(string zipEntryPrefix)
+        {
+            MethodInfo method = typeof(ZipAttachmentUploader).GetMethod(
+                "BuildZipFileName",
+                BindingFlags.NonPublic | BindingFlags.Static);
+            Assert.IsNotNull(method);
+
+            return (string)method.Invoke(null, new object[] { zipEntryPrefix });
         }
 
         private static string ReadEntryText(ZipArchive zip, string entryName)
