@@ -102,9 +102,9 @@ namespace ZGS.Analytics
             string safeUserName = SanitizeFileName(request.UserName ?? "Unknown");
             string version = $"{Application.productName}_v{Application.version}".Replace(" ", "");
             string timestamp = DateTime.Now.ToString("yyyyMMdd_HHmmss");
-            string prefix = $"{version}_{safeUserName}_{timestamp}";
-            string prefixDir = prefix + "/";
-            string zipName = prefix + ".zip";
+            string zipEntryPrefix = BuildZipEntryPrefix(version, safeUserName, timestamp);
+            string prefixDir = zipEntryPrefix + "/";
+            string zipName = zipEntryPrefix + ".zip";
 
             // 使用持久化目录存储 ZIP（不会被系统清理）
             string feedbackDir = FeedbackUploadQueue.FeedbackDirectory;
@@ -114,7 +114,7 @@ namespace ZGS.Analytics
             // 临时目录用于处理截图等中间文件
             string tmpDir = Application.temporaryCachePath;
 
-            if (!TryCreateZip(request, zipPath, prefix, prefixDir, tmpDir, feedbackDir))
+            if (!TryCreateZip(request, zipPath, zipEntryPrefix, prefixDir, tmpDir, feedbackDir))
             {
                 AnalyticsLog.LogWarning("[ZipAttachmentUploader] 创建反馈 ZIP 失败，跳过上传");
                 yield break;
@@ -758,7 +758,65 @@ namespace ZGS.Analytics
 
         private static string NormalizeEntryName(string value)
         {
-            return (value ?? string.Empty).Replace('\\', '/');
+            if (string.IsNullOrWhiteSpace(value))
+                return string.Empty;
+
+            var safeSegments = new List<string>();
+            string normalized = value.Replace('\\', '/');
+            foreach (string rawPart in normalized.Split('/'))
+            {
+                if (string.IsNullOrWhiteSpace(rawPart))
+                    continue;
+
+                string safePart = SanitizeZipEntrySegment(rawPart);
+                safeSegments.Add(string.IsNullOrEmpty(safePart) ? "Entry" : safePart);
+            }
+
+            return string.Join("/", safeSegments);
+        }
+
+        private static string BuildZipEntryPrefix(string version, string safeUserName, string timestamp)
+        {
+            string rawPrefix = $"{version}_{safeUserName}_{timestamp}";
+            string safePrefix = SanitizeZipEntrySegment(rawPrefix);
+            return string.IsNullOrEmpty(safePrefix) ? "Report" : safePrefix;
+        }
+
+        private static string SanitizeZipEntrySegment(string value)
+        {
+            if (string.IsNullOrWhiteSpace(value))
+                return string.Empty;
+
+            var sb = new StringBuilder(value.Length);
+            bool previousWasSeparator = false;
+
+            foreach (char c in value)
+            {
+                bool allowed =
+                    (c >= 'A' && c <= 'Z') ||
+                    (c >= 'a' && c <= 'z') ||
+                    (c >= '0' && c <= '9') ||
+                    c == '.' ||
+                    c == '-' ||
+                    c == '_';
+
+                if (allowed)
+                {
+                    if ((c == '.' || c == '-' || c == '_') && previousWasSeparator)
+                        continue;
+
+                    sb.Append(c);
+                    previousWasSeparator = c == '.' || c == '-' || c == '_';
+                }
+                else
+                {
+                    sb.Append('u');
+                    sb.Append(((int)c).ToString("X4"));
+                    previousWasSeparator = false;
+                }
+            }
+
+            return sb.ToString().Trim('_', '.', '-');
         }
 
         private static string NormalizePath(string path)

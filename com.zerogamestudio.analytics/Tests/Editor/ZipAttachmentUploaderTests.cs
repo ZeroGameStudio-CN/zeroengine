@@ -42,6 +42,43 @@ namespace ZGS.Analytics.Tests.Editor
         }
 
         [Test]
+        public void BuildZipEntryPrefix_WithNonAsciiUserName_UsesAsciiSafeEntryFolder()
+        {
+            string prefix = InvokeBuildZipEntryPrefix(
+                "POB_vEA0.7.7.3",
+                "木有枝",
+                "20260626_004742");
+
+            Assert.AreEqual("POB_vEA0.7.7.3_u6728u6709u679D_20260626_004742", prefix);
+            Assert.IsTrue(prefix.All(c => c <= 127), prefix);
+        }
+
+        [Test]
+        public void TryCreateZip_WithAsciiSafePrefix_WritesOnlyAsciiEntryNames()
+        {
+            using var fixture = new ZipFixture();
+            File.WriteAllText(Path.Combine(fixture.IncludeRoot, "data.txt"), "payload");
+            string nonAsciiAttachment = Path.Combine(fixture.Root, "玩家日志-extra.txt");
+            File.WriteAllText(nonAsciiAttachment, "extra payload");
+            string prefix = InvokeBuildZipEntryPrefix(
+                "POB_vEA0.7.7.3",
+                "木有枝",
+                "20260626_004742");
+
+            Assert.IsTrue(InvokeCreateZip(fixture, new[] { fixture.IncludeRoot }, new[] { nonAsciiAttachment }, prefix));
+
+            using ZipArchive zip = ZipFile.OpenRead(fixture.ZipPath);
+            foreach (ZipArchiveEntry entry in zip.Entries)
+                Assert.IsTrue(entry.FullName.All(c => c <= 127), entry.FullName);
+            CollectionAssert.Contains(
+                zip.Entries.Select(entry => entry.FullName).ToArray(),
+                prefix + "/Feedback.txt");
+            CollectionAssert.Contains(
+                zip.Entries.Select(entry => entry.FullName).ToArray(),
+                prefix + "/u73A9u5BB6u65E5u5FD7-extra.txt");
+        }
+
+        [Test]
         public void TryCreateZip_WithHugePlayerLogs_TailsLogsAndMarksManifestTruncated()
         {
             using var fixture = new ZipFixture();
@@ -170,7 +207,8 @@ namespace ZGS.Analytics.Tests.Editor
         private static bool InvokeCreateZip(
             ZipFixture fixture,
             IEnumerable<string> directoriesToInclude,
-            IEnumerable<string> filesToInclude)
+            IEnumerable<string> filesToInclude,
+            string prefix = "Report")
         {
             MethodInfo method = typeof(ZipAttachmentUploader)
                 .GetMethods(BindingFlags.NonPublic | BindingFlags.Static)
@@ -188,11 +226,23 @@ namespace ZGS.Analytics.Tests.Editor
                     directoriesToInclude,
                     filesToInclude,
                     fixture.ZipPath,
-                    "Report",
-                    "Report/",
+                    prefix,
+                    prefix + "/",
                     fixture.TempRoot,
                     fixture.FeedbackDirectory
                 });
+        }
+
+        private static string InvokeBuildZipEntryPrefix(string version, string safeUserName, string timestamp)
+        {
+            MethodInfo method = typeof(ZipAttachmentUploader).GetMethod(
+                "BuildZipEntryPrefix",
+                BindingFlags.NonPublic | BindingFlags.Static);
+            Assert.IsNotNull(method);
+
+            return (string)method.Invoke(
+                null,
+                new object[] { version, safeUserName, timestamp });
         }
 
         private static string ReadEntryText(ZipArchive zip, string entryName)
