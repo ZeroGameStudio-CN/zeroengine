@@ -68,6 +68,22 @@ namespace ZGS.Analytics.Tests.Editor
         }
 
         [Test]
+        public void BuildUploadVersion_WithConfiguredAppId_UsesAppIdInsteadOfProductName()
+        {
+            string version = InvokeBuildUploadVersion("LC", "POB", "EA 0.7.7.3");
+
+            Assert.AreEqual("LC_vEA0.7.7.3", version);
+        }
+
+        [Test]
+        public void BuildUploadVersion_WithBlankAppId_FallsBackToProductName()
+        {
+            string version = InvokeBuildUploadVersion(" ", "POB", "EA 0.7.7.3");
+
+            Assert.AreEqual("POB_vEA0.7.7.3", version);
+        }
+
+        [Test]
         public void TryCreateZip_WithGeneratedNonAsciiUserPrefix_UsesAsciiTopLevelEntries()
         {
             using var fixture = new ZipFixture();
@@ -334,6 +350,16 @@ namespace ZGS.Analytics.Tests.Editor
             Assert.IsNotNull(method);
 
             return (string)method.Invoke(null, new object[] { zipEntryPrefix });
+        }
+
+        private static string InvokeBuildUploadVersion(string appId, string productName, string appVersion)
+        {
+            MethodInfo method = typeof(ZipAttachmentUploader).GetMethod(
+                "BuildUploadVersion",
+                BindingFlags.NonPublic | BindingFlags.Static);
+            Assert.IsNotNull(method);
+
+            return (string)method.Invoke(null, new object[] { appId, productName, appVersion });
         }
 
         private static string ReadEntryText(ZipArchive zip, string entryName)

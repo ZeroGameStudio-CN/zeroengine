@@ -89,7 +89,7 @@ namespace ZGS.Analytics
             }
 
             string safeUserName = SanitizeFileName(request.UserName ?? "Unknown");
-            string version = $"{Application.productName}_v{Application.version}".Replace(" ", "");
+            string version = BuildUploadVersion(AnalyticsConfig.AppId, Application.productName, Application.version);
             string timestamp = DateTime.Now.ToString("yyyyMMdd_HHmmss");
             string zipEntryPrefix = BuildZipEntryPrefix(version, safeUserName, timestamp);
             string prefixDir = zipEntryPrefix + "/";
@@ -662,6 +662,16 @@ namespace ZGS.Analytics
                 return $"{safeVersion}_{safeTimestamp}";
 
             return $"{safeVersion}_{safeUserSegment}_{safeTimestamp}";
+        }
+
+        private static string BuildUploadVersion(string appId, string productName, string appVersion)
+        {
+            string gameCode = string.IsNullOrWhiteSpace(appId) ? productName : appId;
+            if (string.IsNullOrWhiteSpace(gameCode))
+                gameCode = "unknown";
+
+            string version = string.IsNullOrWhiteSpace(appVersion) ? "unknown" : appVersion;
+            return $"{gameCode.Trim()}_v{version.Trim()}".Replace(" ", "");
         }
 
         private static bool ContainsAsciiLetterOrDigit(string value)

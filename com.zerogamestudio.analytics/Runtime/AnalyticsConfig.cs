@@ -9,6 +9,9 @@ namespace ZGS.Analytics
         /// <summary>服务器 URL（事件 + 上传）</summary>
         public static string ServerUrl { get; set; }
 
+        /// <summary>应用/游戏标识（用于事件与反馈上传路由）</summary>
+        public static string AppId { get; set; }
+
         /// <summary>认证密钥</summary>
         public static string Secret { get; set; }
 
