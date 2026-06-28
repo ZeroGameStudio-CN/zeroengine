@@ -48,8 +48,8 @@ namespace ZGS.Analytics
                 if (FeedbackUploadQueue.PendingCount > 0)
                 {
                     AnalyticsLog.Log($"[ZGS.Analytics] 发现 {FeedbackUploadQueue.PendingCount} 个待上传的反馈文件");
-                    CoroutineRunner.Instance.StartCoroutine(FeedbackUploadQueue.ProcessPendingUploads());
                 }
+                FeedbackUploadQueue.StartBackgroundProcessing();
             }
 
             // 初始化所有 Provider (会触发 SessionInfo.Initialize)

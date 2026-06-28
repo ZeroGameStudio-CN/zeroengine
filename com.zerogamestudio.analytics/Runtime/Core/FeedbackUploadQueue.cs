@@ -17,9 +17,11 @@ namespace ZGS.Analytics
         private const int MaxPendingAgeDays = 7;
         private const int MaxRetries = 3;
         private static readonly int[] RetryDelays = { 2, 4, 8 }; // 秒
+        private static readonly float[] BackgroundRetryDelays = { 60f, 300f, 900f, 1800f };
 
         private static List<PendingUpload> _pendingUploads;
         private static bool _isProcessing;
+        private static bool _backgroundRunning;
 
         /// <summary>
         /// 待上传项
@@ -62,8 +64,22 @@ namespace ZGS.Analytics
         /// </summary>
         public static void Initialize()
         {
+            _isProcessing = false;
+            _backgroundRunning = false;
             LoadQueue();
             CleanupExpired();
+        }
+
+        /// <summary>
+        /// 启动后台补传循环。由包内 Bootstrap/Enqueue 调用，游戏项目无需额外接入。
+        /// </summary>
+        public static void StartBackgroundProcessing()
+        {
+            if (_backgroundRunning || !AnalyticsConfig.IsConfigured)
+                return;
+
+            _backgroundRunning = true;
+            CoroutineRunner.Instance.StartCoroutine(BackgroundProcessLoop());
         }
 
         /// <summary>
@@ -98,6 +114,7 @@ namespace ZGS.Analytics
             SaveQueue();
 
             AnalyticsLog.Log($"[FeedbackQueue] 已加入队列: {Path.GetFileName(zipPath)}");
+            StartBackgroundProcessing();
         }
 
         /// <summary>
@@ -158,7 +175,7 @@ namespace ZGS.Analytics
                 {
                     int delay = RetryDelays[Math.Min(i - 1, RetryDelays.Length - 1)];
                     AnalyticsLog.Log($"[FeedbackQueue] 第 {i} 次重试，等待 {delay} 秒...");
-                    yield return new WaitForSeconds(delay);
+                    yield return new WaitForSecondsRealtime(delay);
                 }
 
                 yield return DoUpload(zipPath, version, result => success = result);
@@ -232,6 +249,56 @@ namespace ZGS.Analytics
         private static IEnumerator TryUpload(PendingUpload pending, Action<bool> onComplete)
         {
             yield return DoUpload(pending.zipPath, pending.version, onComplete);
+        }
+
+        /// <summary>
+        /// 后台补传循环：有待传文件时按退避持续尝试，清空后退出，后续 Enqueue 会重新拉起。
+        /// </summary>
+        private static IEnumerator BackgroundProcessLoop()
+        {
+            int retryDelayIndex = 0;
+
+            try
+            {
+                while (AnalyticsConfig.IsConfigured)
+                {
+                    if (_pendingUploads == null)
+                        LoadQueue();
+
+                    if (_pendingUploads.Count == 0)
+                        yield break;
+
+                    int countBefore = _pendingUploads.Count;
+                    if (!_isProcessing)
+                        yield return ProcessPendingUploads();
+
+                    if (_pendingUploads == null)
+                        LoadQueue();
+
+                    if (_pendingUploads.Count == 0)
+                        yield break;
+
+                    bool madeProgress = _pendingUploads.Count < countBefore;
+                    if (madeProgress)
+                        retryDelayIndex = 0;
+
+                    float delay = GetBackgroundRetryDelaySeconds(retryDelayIndex);
+                    retryDelayIndex = Math.Min(retryDelayIndex + 1, BackgroundRetryDelays.Length - 1);
+
+                    AnalyticsLog.Log($"[FeedbackQueue] 后台补传仍有 {_pendingUploads.Count} 个待上传文件，{delay:0} 秒后重试");
+                    yield return new WaitForSecondsRealtime(delay);
+                }
+            }
+            finally
+            {
+                _backgroundRunning = false;
+            }
+        }
+
+        private static float GetBackgroundRetryDelaySeconds(int retryDelayIndex)
+        {
+            int index = Math.Max(0, Math.Min(retryDelayIndex, BackgroundRetryDelays.Length - 1));
+            return BackgroundRetryDelays[index];
         }
 
         /// <summary>

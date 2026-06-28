@@ -7,6 +7,7 @@ using System.Linq;
 using System.Reflection;
 using System.Text;
 using NUnit.Framework;
+using UnityEngine;
 
 namespace ZGS.Analytics.Tests.Editor
 {
@@ -150,6 +151,67 @@ namespace ZGS.Analytics.Tests.Editor
                 BindingFlags.NonPublic | BindingFlags.Static);
 
             Assert.IsNull(field, "Default analytics uploader should not keep process-wide one-shot upload state.");
+        }
+
+        [Test]
+        public void FeedbackUploadQueue_StartBackgroundProcessing_IsPublicPackageEntrypoint()
+        {
+            MethodInfo method = typeof(FeedbackUploadQueue).GetMethod(
+                "StartBackgroundProcessing",
+                BindingFlags.Public | BindingFlags.Static,
+                null,
+                Type.EmptyTypes,
+                null);
+
+            Assert.IsNotNull(method, "Feedback upload recovery must start from package bootstrap without game-specific code.");
+        }
+
+        [Test]
+        public void FeedbackUploadQueue_BackgroundRetryDelay_UsesCappedProgressiveSchedule()
+        {
+            MethodInfo method = typeof(FeedbackUploadQueue).GetMethod(
+                "GetBackgroundRetryDelaySeconds",
+                BindingFlags.NonPublic | BindingFlags.Static);
+            Assert.IsNotNull(method);
+
+            Assert.AreEqual(60f, (float)method.Invoke(null, new object[] { 0 }));
+            Assert.AreEqual(300f, (float)method.Invoke(null, new object[] { 1 }));
+            Assert.AreEqual(900f, (float)method.Invoke(null, new object[] { 2 }));
+            Assert.AreEqual(1800f, (float)method.Invoke(null, new object[] { 3 }));
+            Assert.AreEqual(1800f, (float)method.Invoke(null, new object[] { 99 }));
+        }
+
+        [Test]
+        public void FeedbackUploadQueue_UploadWithRetry_UsesRealtimeRetryDelay()
+        {
+            string previousServerUrl = AnalyticsConfig.ServerUrl;
+            string previousSecret = AnalyticsConfig.Secret;
+
+            try
+            {
+                AnalyticsConfig.ServerUrl = "";
+                AnalyticsConfig.Secret = "";
+                using var fixture = new ZipFixture();
+                File.WriteAllText(fixture.ZipPath, "zip");
+
+                IEnumerator coroutine = FeedbackUploadQueue.UploadWithRetry(
+                    fixture.ZipPath,
+                    "POB_vEA0.7.7.3",
+                    "Tester",
+                    _ => { });
+
+                Assert.IsTrue(coroutine.MoveNext());
+                Assert.IsInstanceOf<IEnumerator>(coroutine.Current);
+                ExhaustCoroutine((IEnumerator)coroutine.Current);
+
+                Assert.IsTrue(coroutine.MoveNext());
+                Assert.IsInstanceOf<WaitForSecondsRealtime>(coroutine.Current);
+            }
+            finally
+            {
+                AnalyticsConfig.ServerUrl = previousServerUrl;
+                AnalyticsConfig.Secret = previousSecret;
+            }
         }
 
         [Test]
@@ -360,6 +422,15 @@ namespace ZGS.Analytics.Tests.Editor
             Assert.IsNotNull(method);
 
             return (string)method.Invoke(null, new object[] { appId, productName, appVersion });
+        }
+
+        private static void ExhaustCoroutine(IEnumerator coroutine)
+        {
+            while (coroutine.MoveNext())
+            {
+                if (coroutine.Current is IEnumerator nested)
+                    ExhaustCoroutine(nested);
+            }
         }
 
         private static string ReadEntryText(ZipArchive zip, string entryName)
