@@ -28,7 +28,7 @@ namespace ZeroEngine.BuffSystem
 
         [Header("Stats")]
         /// <summary>
-        /// 持续时间（秒），0 表示永久
+        /// 持续时间（无量纲时间单位：实时项目按秒 Tick，回合制项目每回合 Tick(1f) 即按回合数），0 表示永久
         /// </summary>
         public float Duration = 10f;
 
@@ -77,9 +77,9 @@ namespace ZeroEngine.BuffSystem
     public class BuffStatModifierConfig
     {
         /// <summary>
-        /// 目标属性类型
+        /// 目标属性 ID（字符串目录体系，替代旧 StatType 枚举）
         /// </summary>
-        public StatType StatType;
+        public StatId StatId;
 
         /// <summary>
         /// 修饰值

@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using UnityEngine;
+using ZeroEngine.BuffSystem;
 
 namespace ZeroEngine.StatSystem
 {
@@ -22,7 +23,7 @@ namespace ZeroEngine.StatSystem
         }
     }
 
-    public class StatController : MonoBehaviour, IStatProvider
+    public class StatController : MonoBehaviour, IStatProvider, IBuffStatTarget
     {
         [SerializeField] private Dictionary<StatType, Stat> _stats = new Dictionary<StatType, Stat>();
 
