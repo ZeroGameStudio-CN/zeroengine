@@ -159,6 +159,19 @@ namespace ZeroEngine.BuffSystem
             Expire();
         }
 
+        /// <summary>
+        /// 从存档数据直接恢复剩余时长与层数，不触发 RefreshOnAddStack 等生命周期副作用。
+        /// 用于读档/角色重建；不应对已过期的 handler 调用。
+        /// </summary>
+        public void RestoreState(float remainingTime, int stacks)
+        {
+            RemainingTime = remainingTime;
+
+            var oldStacks = _currentStacks;
+            _currentStacks = Mathf.Clamp(stacks, 0, Data.MaxStacks);
+            UpdateStatModifiers(oldStacks, _currentStacks);
+        }
+
         private void HandleExpire()
         {
             if (Data.ExpireMode == BuffExpireMode.RemoveAllStacks)
