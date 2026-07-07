@@ -165,6 +165,13 @@ namespace ZeroEngine.BuffSystem
         /// </summary>
         public void RestoreState(float remainingTime, int stacks)
         {
+            if (IsExpired) return;
+
+            if (stacks < 0)
+            {
+                Debug.LogWarning($"BuffHandler.RestoreState received negative stacks ({stacks}) for buff '{Data?.BuffId}'; clamping to 0.");
+            }
+
             RemainingTime = remainingTime;
 
             var oldStacks = _currentStacks;
