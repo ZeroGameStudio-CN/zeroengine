@@ -34,6 +34,7 @@ namespace ZeroEngine.BuffSystem
         private int _currentStacks;
         private float _tickTimer;
         private IBuffStatTarget _targetStats;
+        private float? _durationOverride;
 
         // Refactored: Track type with modifier to allow removal
         private struct AppliedModifier
@@ -134,11 +135,22 @@ namespace ZeroEngine.BuffSystem
         }
 
         /// <summary>
-        /// 刷新持续时间 (v1.2.0+)
+        /// 按施放点覆盖本实例的持续时长（同一 BuffData 资产可被不同调用点以不同时长施加），
+        /// 并立即把 RemainingTime 刷新到该值。之后的 RefreshDuration() 调用会优先使用这个覆盖值
+        /// 而不是 Data.Duration。
+        /// </summary>
+        public void OverrideDuration(float duration)
+        {
+            _durationOverride = duration;
+            RemainingTime = duration;
+        }
+
+        /// <summary>
+        /// 刷新持续时间 (v1.2.0+)。若曾调用过 OverrideDuration，刷新到覆盖值；否则刷新到 Data.Duration。
         /// </summary>
         public void RefreshDuration()
         {
-            RemainingTime = Data.Duration;
+            RemainingTime = _durationOverride ?? Data.Duration;
         }
 
         /// <summary>
