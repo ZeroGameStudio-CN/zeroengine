@@ -1,8 +1,8 @@
 # ZeroEngine.BuffSystem API 文档
 
 > **用途**: 本文档面向AI助手，提供BuffSystem模块的快速参考。
-> **版本**: v1.2.0+
-> **最后更新**: 2025-12-31
+> **版本**: v3.1.0+
+> **最后更新**: 2026-07-08
 
 ---
 
@@ -81,7 +81,7 @@ public class BuffData : ScriptableObject
 [Serializable]
 public class BuffStatModifierConfig
 {
-    public StatType StatType;
+    public StatId StatId;        // 字符串目录体系，v3.0.0 起替代旧 StatType 枚举
     public float Value;
     public StatModType ModType;  // Flat/PercentAdd/PercentMult
 }
@@ -116,8 +116,30 @@ public class BuffHandler
     void RefreshDuration();
     void ResetStacks();
     void ForceExpire();
+
+    // v3.0.0+ 新增
+    void RestoreState(float remainingTime, int stacks);  // 读档/重建专用，不触发生命周期副作用，对已过期 handler 静默 no-op
+
+    // v3.1.0+ 新增
+    void OverrideDuration(float duration);  // 按施放点覆盖持续时长，之后 RefreshDuration() 优先用这个覆盖值
 }
 ```
+
+---
+
+## IBuffStatTarget.cs (v3.0.0+)
+
+**用途**: BuffHandler 应用/移除属性修饰器时依赖的最小契约，让调用方不必依赖具体的 `StatController` 实现。
+
+```csharp
+public interface IBuffStatTarget
+{
+    void AddModifier(StatId statId, StatModifier modifier);
+    void RemoveModifier(StatId statId, StatModifier modifier);
+}
+```
+
+`StatController` 实现了这个接口；任何自定义的属性容器（例如宿主项目自己的角色属性类）也可以实现它，直接传给 `BuffHandler` 构造函数，不需要是 `StatController`。
 
 ---
 
@@ -321,3 +343,5 @@ receiver.AddBuff(buffData, 3);
 |------|----------|
 | v1.0.0 | 基础 Buff 系统、层数、持续时间 |
 | v1.2.0 | 事件系统、BuffStackMode、BuffUtils 工具类 |
+| v3.0.0 | `StatId` 字符串目录替代 `StatType` 枚举；`IBuffStatTarget` 接口；`RestoreState` 读档恢复 |
+| v3.1.0 | `BuffHandler.OverrideDuration`：按施放点覆盖持续时长 |
