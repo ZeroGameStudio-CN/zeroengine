@@ -236,7 +236,7 @@ namespace ZeroEngine.ModSystem.Editor
             {
                 var modifiers = buff.StatModifiers.Select(m => new Dictionary<string, object>
                 {
-                    ["StatType"] = m.StatType.ToString(),
+                    ["StatId"] = m.StatId.Value,
                     ["Value"] = m.Value,
                     ["ModType"] = m.ModType.ToString()
                 }).ToList();
