@@ -1,5 +1,7 @@
 using System.IO;
 using NUnit.Framework;
+using UnityEditor.PackageManager;
+using ZeroEngine.EnvironmentSystem;
 
 namespace ZeroEngine.Tests.World
 {
@@ -7,8 +9,15 @@ namespace ZeroEngine.Tests.World
     [Category("Boundary")]
     public sealed class WeatherPresentationSourceGuardTests
     {
-        private const string EnvironmentRoot =
-            @"D:\unity\projects\ZeroEngine\Packages\com.zerogamestudio.zeroengine.world\Runtime\Environment";
+        private static string EnvironmentRoot
+        {
+            get
+            {
+                var packageInfo = PackageInfo.FindForAssembly(typeof(WeatherManager).Assembly);
+                Assert.That(packageInfo, Is.Not.Null);
+                return Path.Combine(packageInfo.resolvedPath, "Runtime", "Environment");
+            }
+        }
 
         [Test]
         public void WeatherManager_DoesNotOwnPresentationSideEffects()

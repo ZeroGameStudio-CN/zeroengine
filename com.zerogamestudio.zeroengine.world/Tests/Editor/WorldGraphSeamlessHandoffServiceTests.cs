@@ -1,24 +1,32 @@
 using System;
+using System.Collections;
 using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
 using NUnit.Framework;
 using UnityEngine;
+using UnityEngine.TestTools;
 
 namespace ZeroEngine.World.WorldGraph.Tests
 {
     public sealed class WorldGraphSeamlessHandoffServiceTests
     {
-        [Test]
-        public async Task HandoffAsync_WalkableBoundary_LoadsTargetBeforeUnloadingSource()
+        [UnityTest]
+        public IEnumerator HandoffAsync_WalkableBoundary_LoadsTargetBeforeUnloadingSource()
         {
             var network = CreateNetwork(WorldTravelMode.SeamlessWalk);
             var host = new FakeWorldGraphRuntimeHost("world.map_a");
             var service = new WorldGraphSeamlessHandoffService(network, host);
 
-            var result = await service.HandoffAsync(
+            var handoff = service.HandoffAsync(
                 new WorldGraphHandoffRequest("world.map_a", "cell.map_a.exit", "boundary.map_a.to_map_b"),
                 CancellationToken.None);
+            while (!handoff.IsCompleted)
+            {
+                yield return null;
+            }
+
+            var result = handoff.GetAwaiter().GetResult();
 
             Assert.AreEqual(WorldGraphRuntimeSessionStatus.HandoffCompleted, result.Status);
             CollectionAssert.AreEqual(
@@ -26,38 +34,50 @@ namespace ZeroEngine.World.WorldGraph.Tests
                 host.Calls);
         }
 
-        [Test]
-        public async Task HandoffAsync_MissingConnection_ReturnsMissing()
+        [UnityTest]
+        public IEnumerator HandoffAsync_MissingConnection_ReturnsMissing()
         {
             var network = ScriptableObject.CreateInstance<WorldGraphConnectionNetworkSO>();
             var service = new WorldGraphSeamlessHandoffService(
                 network,
                 new FakeWorldGraphRuntimeHost("world.map_a"));
 
-            var result = await service.HandoffAsync(
+            var handoff = service.HandoffAsync(
                 new WorldGraphHandoffRequest("world.map_a", "cell.map_a.exit", "boundary.missing"),
                 CancellationToken.None);
+            while (!handoff.IsCompleted)
+            {
+                yield return null;
+            }
+
+            var result = handoff.GetAwaiter().GetResult();
 
             Assert.AreEqual(WorldGraphRuntimeSessionStatus.HandoffConnectionMissing, result.Status);
         }
 
-        [Test]
-        public async Task HandoffAsync_FastTravelConnection_ReturnsNotWalkable()
+        [UnityTest]
+        public IEnumerator HandoffAsync_FastTravelConnection_ReturnsNotWalkable()
         {
             var network = CreateNetwork(WorldTravelMode.FastTravel);
             var service = new WorldGraphSeamlessHandoffService(
                 network,
                 new FakeWorldGraphRuntimeHost("world.map_a"));
 
-            var result = await service.HandoffAsync(
+            var handoff = service.HandoffAsync(
                 new WorldGraphHandoffRequest("world.map_a", "cell.map_a.exit", "boundary.map_a.to_map_b"),
                 CancellationToken.None);
+            while (!handoff.IsCompleted)
+            {
+                yield return null;
+            }
+
+            var result = handoff.GetAwaiter().GetResult();
 
             Assert.AreEqual(WorldGraphRuntimeSessionStatus.HandoffConnectionNotWalkable, result.Status);
         }
 
-        [Test]
-        public async Task HandoffAsync_TargetLoadFails_ReturnsTargetLoadFailed()
+        [UnityTest]
+        public IEnumerator HandoffAsync_TargetLoadFails_ReturnsTargetLoadFailed()
         {
             var network = CreateNetwork(WorldTravelMode.SeamlessWalk);
             var host = new FakeWorldGraphRuntimeHost("world.map_a")
@@ -66,16 +86,22 @@ namespace ZeroEngine.World.WorldGraph.Tests
             };
             var service = new WorldGraphSeamlessHandoffService(network, host);
 
-            var result = await service.HandoffAsync(
+            var handoff = service.HandoffAsync(
                 new WorldGraphHandoffRequest("world.map_a", "cell.map_a.exit", "boundary.map_a.to_map_b"),
                 CancellationToken.None);
+            while (!handoff.IsCompleted)
+            {
+                yield return null;
+            }
+
+            var result = handoff.GetAwaiter().GetResult();
 
             Assert.AreEqual(WorldGraphRuntimeSessionStatus.HandoffTargetLoadFailed, result.Status);
             CollectionAssert.AreEqual(new[] { "load:world.map_b" }, host.Calls);
         }
 
-        [Test]
-        public async Task HandoffAsync_SourceUnloadFails_ReturnsUnloadFailed()
+        [UnityTest]
+        public IEnumerator HandoffAsync_SourceUnloadFails_ReturnsUnloadFailed()
         {
             var network = CreateNetwork(WorldTravelMode.SeamlessWalk);
             var host = new FakeWorldGraphRuntimeHost("world.map_a")
@@ -84,9 +110,15 @@ namespace ZeroEngine.World.WorldGraph.Tests
             };
             var service = new WorldGraphSeamlessHandoffService(network, host);
 
-            var result = await service.HandoffAsync(
+            var handoff = service.HandoffAsync(
                 new WorldGraphHandoffRequest("world.map_a", "cell.map_a.exit", "boundary.map_a.to_map_b"),
                 CancellationToken.None);
+            while (!handoff.IsCompleted)
+            {
+                yield return null;
+            }
+
+            var result = handoff.GetAwaiter().GetResult();
 
             Assert.AreEqual(WorldGraphRuntimeSessionStatus.UnloadFailed, result.Status);
             CollectionAssert.AreEqual(
@@ -94,8 +126,8 @@ namespace ZeroEngine.World.WorldGraph.Tests
                 host.Calls);
         }
 
-        [Test]
-        public async Task HandoffAsync_CancellationAfterSwitch_DoesNotCancelSourceCleanup()
+        [UnityTest]
+        public IEnumerator HandoffAsync_CancellationAfterSwitch_DoesNotCancelSourceCleanup()
         {
             var network = CreateNetwork(WorldTravelMode.SeamlessWalk);
             using var cts = new CancellationTokenSource();
@@ -105,9 +137,15 @@ namespace ZeroEngine.World.WorldGraph.Tests
             };
             var service = new WorldGraphSeamlessHandoffService(network, host);
 
-            var result = await service.HandoffAsync(
+            var handoff = service.HandoffAsync(
                 new WorldGraphHandoffRequest("world.map_a", "cell.map_a.exit", "boundary.map_a.to_map_b"),
                 cts.Token);
+            while (!handoff.IsCompleted)
+            {
+                yield return null;
+            }
+
+            var result = handoff.GetAwaiter().GetResult();
 
             Assert.AreEqual(WorldGraphRuntimeSessionStatus.HandoffCompleted, result.Status);
             Assert.False(host.UnloadTokenCanBeCanceled, "Source cleanup after active graph switch must not be externally cancellable.");
@@ -116,8 +154,8 @@ namespace ZeroEngine.World.WorldGraph.Tests
                 host.Calls);
         }
 
-        [Test]
-        public async Task HandoffAsync_ConcurrentRequest_ReturnsBusy()
+        [UnityTest]
+        public IEnumerator HandoffAsync_ConcurrentRequest_ReturnsBusy()
         {
             var network = CreateNetwork(WorldTravelMode.SeamlessWalk);
             var loadGate = new TaskCompletionSource<bool>();
@@ -129,9 +167,20 @@ namespace ZeroEngine.World.WorldGraph.Tests
                 "boundary.map_a.to_map_b");
 
             var first = service.HandoffAsync(request, CancellationToken.None);
-            var busy = await service.HandoffAsync(request, CancellationToken.None);
+            var busyHandoff = service.HandoffAsync(request, CancellationToken.None);
+            while (!busyHandoff.IsCompleted)
+            {
+                yield return null;
+            }
+
+            var busy = busyHandoff.GetAwaiter().GetResult();
             loadGate.SetResult(true);
-            var completed = await first;
+            while (!first.IsCompleted)
+            {
+                yield return null;
+            }
+
+            var completed = first.GetAwaiter().GetResult();
 
             Assert.AreEqual(WorldGraphRuntimeSessionStatus.Busy, busy.Status);
             Assert.AreEqual(WorldGraphRuntimeSessionStatus.HandoffCompleted, completed.Status);
