@@ -77,12 +77,19 @@ namespace ZeroEngine.InputSystem
                 return false;
             }
 
-            var groups = binding.groups.Split(new[] { ';' }, StringSplitOptions.RemoveEmptyEntries);
-            for (var i = 0; i < groups.Length; i++)
+            var bindingGroups = binding.groups.Split(new[] { ';' }, StringSplitOptions.RemoveEmptyEntries);
+            var requestedGroups = bindingGroup.Split(new[] { ';' }, StringSplitOptions.RemoveEmptyEntries);
+            for (var i = 0; i < bindingGroups.Length; i++)
             {
-                if (string.Equals(groups[i].Trim(), bindingGroup, StringComparison.Ordinal))
+                for (var j = 0; j < requestedGroups.Length; j++)
                 {
-                    return true;
+                    if (string.Equals(
+                            bindingGroups[i].Trim(),
+                            requestedGroups[j].Trim(),
+                            StringComparison.Ordinal))
+                    {
+                        return true;
+                    }
                 }
             }
 

@@ -1,5 +1,6 @@
 using NUnit.Framework;
 using UnityEngine;
+using UnityEngine.InputSystem;
 
 namespace ZeroEngine.InputSystem.Tests
 {
@@ -42,6 +43,22 @@ namespace ZeroEngine.InputSystem.Tests
         }
 
         [Test]
+        public void SaveAndLoadOverrides_BindingWithMultipleGroups_RestoresOverride()
+        {
+            var asset = CreateMultiGroupAsset();
+            var key = new InputBindingKey("Player", "Shared", "Keyboard&Mouse");
+            InputBindingOverrideService.ApplyOverride(asset, key, "<Keyboard>/f");
+
+            var json = InputBindingOverrideService.SaveOverridesAsJson(asset);
+            var fresh = CreateMultiGroupAsset();
+            InputBindingOverrideService.LoadOverridesFromJson(fresh, json);
+
+            Assert.That(fresh.FindAction("Player/Shared").bindings[0].overridePath, Is.EqualTo("<Keyboard>/f"));
+            Object.DestroyImmediate(asset);
+            Object.DestroyImmediate(fresh);
+        }
+
+        [Test]
         public void ResetBinding_RemovesOverrideAndKeepsDefaultPath()
         {
             var asset = InputActionTestAssetFactory.Create();
@@ -54,6 +71,16 @@ namespace ZeroEngine.InputSystem.Tests
             Assert.IsTrue(reset.Success, reset.Diagnostic);
             Assert.That(display.EffectivePath, Is.EqualTo("<Keyboard>/e"));
             Object.DestroyImmediate(asset);
+        }
+
+        private static InputActionAsset CreateMultiGroupAsset()
+        {
+            var asset = ScriptableObject.CreateInstance<InputActionAsset>();
+            var player = new InputActionMap("Player");
+            player.AddAction("Shared", InputActionType.Button)
+                .AddBinding("<Keyboard>/e", groups: "Keyboard&Mouse;Gamepad");
+            asset.AddActionMap(player);
+            return asset;
         }
     }
 }
