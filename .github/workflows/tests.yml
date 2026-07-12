@@ -81,7 +81,21 @@ jobs:
               $DEPS
             },
             "testables": [
-              "com.zerogamestudio.zeroengine"
+              "com.zerogamestudio.zeroengine",
+              "com.zerogamestudio.zeroengine.cinematic",
+              "com.zerogamestudio.zeroengine.core",
+              "com.zerogamestudio.zeroengine.data",
+              "com.zerogamestudio.zeroengine.dlc",
+              "com.zerogamestudio.zeroengine.editortools",
+              "com.zerogamestudio.zeroengine.events",
+              "com.zerogamestudio.zeroengine.formula",
+              "com.zerogamestudio.zeroengine.gameplay",
+              "com.zerogamestudio.zeroengine.input",
+              "com.zerogamestudio.zeroengine.narrative",
+              "com.zerogamestudio.zeroengine.pathfinding2d",
+              "com.zerogamestudio.zeroengine.tce",
+              "com.zerogamestudio.zeroengine.ui",
+              "com.zerogamestudio.zeroengine.world"
             ]
           }
           EOF
