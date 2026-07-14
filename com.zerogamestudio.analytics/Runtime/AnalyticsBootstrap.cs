@@ -25,6 +25,7 @@ namespace ZGS.Analytics
             {
                 AnalyticsConfig.ServerUrl = config.zgsServerUrl;
                 AnalyticsConfig.Secret = config.zgsSecret;
+                AnalyticsConfig.UploadSecret = config.zgsUploadSecret;
                 var zgsProvider = new ZGSServerProvider(config.zgsServerUrl, config.zgsSecret, config.appId);
                 AnalyticsService.AddProvider(zgsProvider);
                 SessionManager.Instance.StartSession(zgsProvider);
@@ -38,8 +39,8 @@ namespace ZGS.Analytics
             // 初始化 CrashReporter (订阅 Unity 日志)
             CrashReporter.Initialize();
 
-            // 配置附件上传 - 统一使用 zgsSecret
-            if (AnalyticsConfig.IsConfigured)
+            // 配置附件上传
+            if (AnalyticsConfig.IsUploadConfigured)
             {
                 CrashReporter.RegisterAttachmentUploader(new ZipAttachmentUploader());
 

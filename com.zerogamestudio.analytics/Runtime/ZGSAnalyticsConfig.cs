@@ -20,6 +20,9 @@ namespace ZGS.Analytics
         public string zgsServerUrl = "";
         [Tooltip("Secret key for authentication")]
         public string zgsSecret = "";
+
+        [Tooltip("Optional feedback upload secret. Falls back to the event secret when empty.")]
+        public string zgsUploadSecret = "";
     }
 }
 

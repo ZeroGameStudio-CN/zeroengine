@@ -16,6 +16,7 @@ namespace ZGS.Analytics
         private const int MaxPendingCount = 10;
         private const int MaxPendingAgeDays = 7;
         private const int MaxRetries = 3;
+        private const string UploadSecretHeaderName = "X-Upload-Secret";
         private static readonly int[] RetryDelays = { 2, 4, 8 }; // 秒
         private static readonly float[] BackgroundRetryDelays = { 60f, 300f, 900f, 1800f };
 
@@ -75,7 +76,7 @@ namespace ZGS.Analytics
         /// </summary>
         public static void StartBackgroundProcessing()
         {
-            if (_backgroundRunning || !AnalyticsConfig.IsConfigured)
+            if (_backgroundRunning || !AnalyticsConfig.IsUploadConfigured)
                 return;
 
             _backgroundRunning = true;
@@ -199,7 +200,7 @@ namespace ZGS.Analytics
         /// </summary>
         private static IEnumerator DoUpload(string zipPath, string version, Action<bool> onComplete)
         {
-            if (!AnalyticsConfig.IsConfigured)
+            if (!AnalyticsConfig.IsUploadConfigured)
             {
                 onComplete?.Invoke(false);
                 yield break;
@@ -207,7 +208,6 @@ namespace ZGS.Analytics
 
             string baseUrl = AnalyticsConfig.ServerUrl.TrimEnd('/');
             string uploadUrl = baseUrl + "/upload";
-            string secret = AnalyticsConfig.Secret;
             string fileName = Path.GetFileName(zipPath);
             string timestamp = DateTime.Now.ToString("yyyyMMdd_HHmmss");
 
@@ -223,14 +223,7 @@ namespace ZGS.Analytics
                 yield break;
             }
 
-            var form = new WWWForm();
-            form.AddField("version", version);
-            form.AddField("timestamp", timestamp);
-            form.AddField("secret", secret);
-            form.AddBinaryData("file", fileData, fileName, "application/zip");
-
-            using var request = UnityWebRequest.Post(uploadUrl, form);
-            request.timeout = 60;
+            using var request = CreateUploadRequest(uploadUrl, version, timestamp, fileName, fileData);
 
             yield return request.SendWebRequest();
 
@@ -241,6 +234,24 @@ namespace ZGS.Analytics
             }
 
             onComplete?.Invoke(success);
+        }
+
+        private static UnityWebRequest CreateUploadRequest(
+            string uploadUrl,
+            string version,
+            string timestamp,
+            string fileName,
+            byte[] fileData)
+        {
+            var form = new WWWForm();
+            form.AddField("version", version);
+            form.AddField("timestamp", timestamp);
+            form.AddBinaryData("file", fileData, fileName, "application/zip");
+
+            UnityWebRequest request = UnityWebRequest.Post(uploadUrl, form);
+            request.SetRequestHeader(UploadSecretHeaderName, AnalyticsConfig.UploadSecret);
+            request.timeout = 60;
+            return request;
         }
 
         /// <summary>
@@ -260,7 +271,7 @@ namespace ZGS.Analytics
 
             try
             {
-                while (AnalyticsConfig.IsConfigured)
+                while (AnalyticsConfig.IsUploadConfigured)
                 {
                     if (_pendingUploads == null)
                         LoadQueue();
