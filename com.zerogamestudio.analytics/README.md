@@ -35,7 +35,8 @@ ZeroGameStudio 游戏分析 SDK，支持自建 ClickHouse 数据平台。
 3. 填写配置：
    - `App ID` - 游戏标识 (如 POB, LLS)
    - `ZGS Server URL` - FastAPI 服务器地址
-   - `ZGS Secret` - 认证密钥
+   - `ZGS Secret` - 事件上报认证密钥
+   - `ZGS Upload Secret` - 反馈上传认证密钥；为空时兼容使用事件密钥
    - `Debug Mode` - 编辑器日志开关
 
 ## 自动采集

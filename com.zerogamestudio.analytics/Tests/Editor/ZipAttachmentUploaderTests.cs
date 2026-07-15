@@ -8,6 +8,7 @@ using System.Reflection;
 using System.Text;
 using NUnit.Framework;
 using UnityEngine;
+using UnityEngine.Networking;
 
 namespace ZGS.Analytics.Tests.Editor
 {
@@ -211,6 +212,74 @@ namespace ZGS.Analytics.Tests.Editor
             {
                 AnalyticsConfig.ServerUrl = previousServerUrl;
                 AnalyticsConfig.Secret = previousSecret;
+            }
+        }
+
+        [Test]
+        public void AnalyticsConfig_UploadSecret_WhenUnset_FallsBackToEventSecret()
+        {
+            PropertyInfo uploadSecretProperty = typeof(AnalyticsConfig).GetProperty(
+                "UploadSecret",
+                BindingFlags.Public | BindingFlags.Static);
+            Assert.IsNotNull(uploadSecretProperty);
+
+            string previousEventSecret = AnalyticsConfig.Secret;
+            string previousUploadSecret = (string)uploadSecretProperty.GetValue(null);
+
+            try
+            {
+                AnalyticsConfig.Secret = "event-secret";
+                uploadSecretProperty.SetValue(null, string.Empty);
+
+                Assert.AreEqual("event-secret", uploadSecretProperty.GetValue(null));
+            }
+            finally
+            {
+                AnalyticsConfig.Secret = previousEventSecret;
+                uploadSecretProperty.SetValue(null, previousUploadSecret);
+            }
+        }
+
+        [Test]
+        public void FeedbackUploadQueue_CreateUploadRequest_UsesHeaderAndOmitsFormSecret()
+        {
+            PropertyInfo uploadSecretProperty = typeof(AnalyticsConfig).GetProperty(
+                "UploadSecret",
+                BindingFlags.Public | BindingFlags.Static);
+            MethodInfo createRequestMethod = typeof(FeedbackUploadQueue).GetMethod(
+                "CreateUploadRequest",
+                BindingFlags.NonPublic | BindingFlags.Static);
+            Assert.IsNotNull(uploadSecretProperty);
+            Assert.IsNotNull(createRequestMethod);
+
+            string previousEventSecret = AnalyticsConfig.Secret;
+            string previousUploadSecret = (string)uploadSecretProperty.GetValue(null);
+
+            try
+            {
+                AnalyticsConfig.Secret = "event-secret";
+                uploadSecretProperty.SetValue(null, "upload-secret");
+
+                using var request = (UnityWebRequest)createRequestMethod.Invoke(
+                    null,
+                    new object[]
+                    {
+                        "https://example.invalid/upload",
+                        "POB_vEA0.7.7.4",
+                        "20260714_215146",
+                        "feedback.zip",
+                        new byte[] { 1, 2, 3 }
+                    });
+
+                Assert.AreEqual("upload-secret", request.GetRequestHeader("X-Upload-Secret"));
+                string formBody = Encoding.UTF8.GetString(request.uploadHandler.data);
+                StringAssert.DoesNotContain("upload-secret", formBody);
+                StringAssert.DoesNotContain("name=\"secret\"", formBody);
+            }
+            finally
+            {
+                AnalyticsConfig.Secret = previousEventSecret;
+                uploadSecretProperty.SetValue(null, previousUploadSecret);
             }
         }
 
