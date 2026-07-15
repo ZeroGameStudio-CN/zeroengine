@@ -16,6 +16,7 @@ namespace ZGS.Analytics
         private static string _userId = string.Empty;
         private static int _sessionNumber;
         private static long _firstOpenTime;
+        private static long _eventSequence;
         private static DateTime _sessionStartTime;
         private static bool _initialized;
         
@@ -68,6 +69,7 @@ namespace ZGS.Analytics
             // 生成新的 session ID
             _sessionId = Guid.NewGuid().ToString();
             _sessionStartTime = DateTime.UtcNow;
+            _eventSequence = 0;
             
             // 加载或生成 user ID
             _userId = PlayerPrefs.GetString(UserIdKey, string.Empty);
@@ -97,6 +99,22 @@ namespace ZGS.Analytics
         #endregion
         
         #region Helpers
+
+        internal static long NextEventSequence()
+        {
+            lock (typeof(SessionInfo))
+            {
+                return ++_eventSequence;
+            }
+        }
+
+        internal static void ResetEventSequenceForTests()
+        {
+            lock (typeof(SessionInfo))
+            {
+                _eventSequence = 0;
+            }
+        }
         
         /// <summary>
         /// 获取会话属性的字典 (用于事件附加, 不含已在顶层的 session_id/user_id)

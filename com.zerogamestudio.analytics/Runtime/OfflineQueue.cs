@@ -20,17 +20,33 @@ namespace ZGS.Analytics
     /// </summary>
     public class OfflineQueue
     {
-        private const string QueueKey = "zgs_analytics_queue";
-        private const int MaxQueueSize = 500;
+        private const string DefaultQueueKey = "zgs_analytics_queue";
+        internal const int DefaultMaxQueueSize = 500;
         private const float SaveInterval = 5f; // 批量保存间隔（秒）
+        private const string DurablePrefix = "D\t";
+        private const string BufferedPrefix = "B\t";
 
-        private readonly Queue<string> _memoryQueue = new();
+        private readonly List<QueueItem> _memoryQueue = new();
+        private readonly string _queueKey;
+        private readonly int _maxQueueSize;
         private bool _isFlushing;
         private bool _isDirty;
         private float _lastSaveTime;
 
         public OfflineQueue()
+            : this(DefaultMaxQueueSize, DefaultQueueKey)
         {
+        }
+
+        internal OfflineQueue(int maxQueueSize, string queueKey)
+        {
+            if (maxQueueSize <= 0)
+                throw new ArgumentOutOfRangeException(nameof(maxQueueSize));
+            if (string.IsNullOrEmpty(queueKey))
+                throw new ArgumentException("Queue key is required.", nameof(queueKey));
+
+            _maxQueueSize = maxQueueSize;
+            _queueKey = queueKey;
             LoadFromStorage();
             _lastSaveTime = Time.realtimeSinceStartup;
         }
@@ -38,45 +54,85 @@ namespace ZGS.Analytics
         /// <summary>
         /// 将事件加入队列
         /// </summary>
-        public void Enqueue(ISerializableEvent payload)
+        public bool Enqueue(ISerializableEvent payload, bool durable = false)
         {
-            Enqueue(payload.ToJson());
+            if (payload == null)
+                return false;
+
+            try
+            {
+                return Enqueue(payload.ToJson(), durable);
+            }
+            catch (Exception exception)
+            {
+                AnalyticsLog.LogWarning($"[ZGS.Analytics] Failed to serialize event: {exception.Message}");
+                return false;
+            }
         }
 
         /// <summary>
         /// 将 JSON 字符串加入队列
         /// </summary>
-        public void Enqueue(string json)
+        public bool Enqueue(string json, bool durable = false)
         {
-            if (string.IsNullOrEmpty(json)) return;
+            if (string.IsNullOrEmpty(json))
+                return false;
 
             lock (_memoryQueue)
             {
-                _memoryQueue.Enqueue(json);
+                List<QueueItem> previousItems = durable
+                    ? new List<QueueItem>(_memoryQueue)
+                    : null;
 
-                // 防止内存溢出
-                while (_memoryQueue.Count > MaxQueueSize)
-                    _memoryQueue.Dequeue();
+                while (_memoryQueue.Count >= _maxQueueSize)
+                {
+                    if (!durable || !TryEvictOldestBufferedLocked())
+                    {
+                        AnalyticsLog.LogWarning(
+                            $"[ZGS.Analytics] Offline queue full; rejected {(durable ? "durable" : "buffered")} event.");
+                        return false;
+                    }
+                }
+
+                _memoryQueue.Add(new QueueItem(json, durable));
+                _isDirty = true;
+
+                if (durable)
+                {
+                    if (!SaveToStorageLocked())
+                    {
+                        _memoryQueue.Clear();
+                        _memoryQueue.AddRange(previousItems);
+                        return false;
+                    }
+
+                    _isDirty = false;
+                    _lastSaveTime = Time.realtimeSinceStartup;
+                }
+                else
+                {
+                    TrySaveIfNeededLocked();
+                }
             }
 
-            // 标记脏，延迟批量保存
-            _isDirty = true;
-            TrySaveIfNeeded();
+            return true;
         }
 
         /// <summary>
         /// 检查是否需要保存（防抖机制）
         /// </summary>
-        private void TrySaveIfNeeded()
+        private void TrySaveIfNeededLocked()
         {
             if (!_isDirty) return;
 
             float now = Time.realtimeSinceStartup;
             if (now - _lastSaveTime >= SaveInterval)
             {
-                SaveToStorage();
-                _isDirty = false;
-                _lastSaveTime = now;
+                if (SaveToStorageLocked())
+                {
+                    _isDirty = false;
+                    _lastSaveTime = now;
+                }
             }
         }
 
@@ -88,9 +144,14 @@ namespace ZGS.Analytics
             // Flush 前强制保存未持久化的数据
             if (_isDirty)
             {
-                SaveToStorage();
-                _isDirty = false;
-                _lastSaveTime = Time.realtimeSinceStartup;
+                lock (_memoryQueue)
+                {
+                    if (SaveToStorageLocked())
+                    {
+                        _isDirty = false;
+                        _lastSaveTime = Time.realtimeSinceStartup;
+                    }
+                }
             }
 
             if (_isFlushing) return;
@@ -104,16 +165,16 @@ namespace ZGS.Analytics
         {
             _isFlushing = true;
             
-            while (_memoryQueue.Count > 0)
+            while (true)
             {
-                string json;
+                QueueItem item;
                 lock (_memoryQueue)
                 {
                     if (_memoryQueue.Count == 0) break;
-                    json = _memoryQueue.Peek();
+                    item = _memoryQueue[0];
                 }
                 
-                string body = $"{{\"secret\":\"{secret}\",\"body\":{json}}}";
+                string body = $"{{\"secret\":\"{secret}\",\"body\":{item.Json}}}";
                 byte[] bodyRaw = Encoding.UTF8.GetBytes(body);
                 
                 using (var request = new UnityWebRequest(serverUrl, "POST"))
@@ -129,9 +190,11 @@ namespace ZGS.Analytics
                     {
                         lock (_memoryQueue)
                         {
-                            _memoryQueue.Dequeue();
+                            int sentIndex = _memoryQueue.IndexOf(item);
+                            if (sentIndex >= 0)
+                                _memoryQueue.RemoveAt(sentIndex);
+                            SaveToStorageLocked();
                         }
-                        SaveToStorage();
                     }
                     else
                     {
@@ -145,20 +208,54 @@ namespace ZGS.Analytics
             _isFlushing = false;
         }
 
-        private void SaveToStorage()
+        private bool TryEvictOldestBufferedLocked()
         {
-            lock (_memoryQueue)
+            for (int i = 0; i < _memoryQueue.Count; i++)
             {
-                var array = _memoryQueue.ToArray();
-                var serialized = string.Join("\n", array);
-                PlayerPrefs.SetString(QueueKey, serialized);
+                if (_memoryQueue[i].Durable)
+                    continue;
+
+                _memoryQueue.RemoveAt(i);
+                AnalyticsLog.LogWarning("[ZGS.Analytics] Evicted oldest buffered event to admit a durable event.");
+                return true;
+            }
+
+            return false;
+        }
+
+        private bool SaveToStorageLocked()
+        {
+            try
+            {
+                if (_memoryQueue.Count == 0)
+                {
+                    PlayerPrefs.DeleteKey(_queueKey);
+                }
+                else
+                {
+                    var lines = new string[_memoryQueue.Count];
+                    for (int i = 0; i < _memoryQueue.Count; i++)
+                    {
+                        QueueItem item = _memoryQueue[i];
+                        lines[i] = (item.Durable ? DurablePrefix : BufferedPrefix) + item.Json;
+                    }
+
+                    PlayerPrefs.SetString(_queueKey, string.Join("\n", lines));
+                }
+
                 PlayerPrefs.Save();
+                return true;
+            }
+            catch (Exception exception)
+            {
+                AnalyticsLog.LogWarning($"[ZGS.Analytics] Failed to persist offline queue: {exception.Message}");
+                return false;
             }
         }
 
         private void LoadFromStorage()
         {
-            var stored = PlayerPrefs.GetString(QueueKey, "");
+            var stored = PlayerPrefs.GetString(_queueKey, "");
             if (string.IsNullOrEmpty(stored)) return;
             
             var lines = stored.Split('\n');
@@ -174,13 +271,25 @@ namespace ZGS.Analytics
                     continue;
                 }
                 
-                _memoryQueue.Enqueue(line);
+                bool durable = false;
+                string json = line;
+                if (line.StartsWith(DurablePrefix, StringComparison.Ordinal))
+                {
+                    durable = true;
+                    json = line.Substring(DurablePrefix.Length);
+                }
+                else if (line.StartsWith(BufferedPrefix, StringComparison.Ordinal))
+                {
+                    json = line.Substring(BufferedPrefix.Length);
+                }
+
+                _memoryQueue.Add(new QueueItem(json, durable));
             }
             
             if (skipped > 0)
             {
                 AnalyticsLog.LogWarning($"[ZGS.Analytics] Skipped {skipped} corrupted events from storage");
-                SaveToStorage(); // 保存清理后的队列
+                SaveToStorageLocked(); // 保存清理后的队列
             }
             
             if (_memoryQueue.Count > 0)
@@ -196,12 +305,54 @@ namespace ZGS.Analytics
             {
                 _memoryQueue.Clear();
             }
-            PlayerPrefs.DeleteKey(QueueKey);
+            _isDirty = false;
+            PlayerPrefs.DeleteKey(_queueKey);
             PlayerPrefs.Save();
             AnalyticsLog.Log("[ZGS.Analytics] Queue cleared");
         }
 
-        public int Count => _memoryQueue.Count;
+        internal string[] GetPendingJsonSnapshot()
+        {
+            lock (_memoryQueue)
+            {
+                var result = new string[_memoryQueue.Count];
+                for (int i = 0; i < _memoryQueue.Count; i++)
+                    result[i] = _memoryQueue[i].Json;
+                return result;
+            }
+        }
+
+        internal bool[] GetDurabilitySnapshot()
+        {
+            lock (_memoryQueue)
+            {
+                var result = new bool[_memoryQueue.Count];
+                for (int i = 0; i < _memoryQueue.Count; i++)
+                    result[i] = _memoryQueue[i].Durable;
+                return result;
+            }
+        }
+
+        public int Count
+        {
+            get
+            {
+                lock (_memoryQueue)
+                    return _memoryQueue.Count;
+            }
+        }
+
+        private sealed class QueueItem
+        {
+            public QueueItem(string json, bool durable)
+            {
+                Json = json;
+                Durable = durable;
+            }
+
+            public string Json { get; }
+            public bool Durable { get; }
+        }
     }
 
     /// <summary>

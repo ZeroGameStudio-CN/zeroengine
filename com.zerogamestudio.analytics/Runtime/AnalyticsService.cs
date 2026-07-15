@@ -59,8 +59,45 @@ namespace ZGS.Analytics
         /// </summary>
         public static void LogEvent(string eventName, Dictionary<string, object> parameters = null)
         {
+            TryLogEvent(eventName, parameters, default);
+        }
+
+        /// <summary>
+        /// Builds one immutable event envelope and asks all configured providers to enqueue it.
+        /// </summary>
+        /// <returns>True when at least one upload provider accepted the envelope.</returns>
+        public static bool TryLogEvent(
+            string eventName,
+            Dictionary<string, object> parameters,
+            AnalyticsEventOptions options)
+        {
+            if (string.IsNullOrEmpty(eventName) || _providers.Count == 0)
+                return false;
+
+            if (!options.TryFreezeEnvelope(out var frozenOptions))
+            {
+                AnalyticsLog.LogWarning("[ZGS.Analytics] Event rejected because event_id is invalid.");
+                return false;
+            }
+
+            bool accepted = false;
             foreach (var provider in _providers)
-                provider.LogEvent(eventName, parameters);
+            {
+                try
+                {
+                    if (provider is IAnalyticsEnqueueProvider enqueueProvider)
+                        accepted |= enqueueProvider.TryLogEvent(eventName, parameters, frozenOptions);
+                    else
+                        provider.LogEvent(eventName, parameters);
+                }
+                catch (System.Exception exception)
+                {
+                    AnalyticsLog.LogWarning(
+                        $"[ZGS.Analytics] Provider rejected event with exception: {exception.Message}");
+                }
+            }
+
+            return accepted;
         }
 
         /// <summary>
@@ -204,5 +241,11 @@ namespace ZGS.Analytics
         }
 
         #endregion
+
+        internal static void ResetForTests()
+        {
+            _providers.Clear();
+            _initialized = false;
+        }
     }
 }

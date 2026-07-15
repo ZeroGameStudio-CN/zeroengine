@@ -3,7 +3,7 @@ using UnityEngine;
 
 namespace ZGS.Analytics
 {
-    public class DebugProvider : IAnalyticsProvider
+    public class DebugProvider : IAnalyticsEnqueueProvider
     {
         public void Initialize(string userId)
         {
@@ -11,6 +11,14 @@ namespace ZGS.Analytics
         }
 
         public void LogEvent(string eventName, Dictionary<string, object> parameters = null)
+        {
+            TryLogEvent(eventName, parameters, default);
+        }
+
+        public bool TryLogEvent(
+            string eventName,
+            Dictionary<string, object> parameters,
+            AnalyticsEventOptions options)
         {
             string paramsStr = "";
             if (parameters != null)
@@ -23,6 +31,7 @@ namespace ZGS.Analytics
                 paramsStr = string.Join(", ", list);
             }
             Debug.Log($"[DebugProvider] Event: {eventName} | Params: {{{paramsStr}}}");
+            return false;
         }
 
         public void SetUserProperty(string key, object value)

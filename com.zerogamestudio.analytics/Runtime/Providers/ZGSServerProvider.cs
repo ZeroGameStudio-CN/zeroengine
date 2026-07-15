@@ -9,7 +9,7 @@ namespace ZGS.Analytics
     /// ZGS Server Provider - 工业级事件上报
     /// 自动附加设备/会话信息到所有事件
     /// </summary>
-    public class ZGSServerProvider : IAnalyticsProvider
+    public class ZGSServerProvider : IAnalyticsEnqueueProvider
     {
         private readonly string _serverUrl;
         private readonly string _secret;
@@ -23,11 +23,16 @@ namespace ZGS.Analytics
         /// <param name="secret">密钥</param>
         /// <param name="appId">应用/游戏标识 (如 POB, LLS)</param>
         public ZGSServerProvider(string serverUrl, string secret, string appId = "default")
+            : this(serverUrl, secret, appId, new OfflineQueue())
+        {
+        }
+
+        internal ZGSServerProvider(string serverUrl, string secret, string appId, OfflineQueue queue)
         {
             _serverUrl = serverUrl.TrimEnd('/') + "/events";
             _secret = secret;
             _appId = appId;
-            _queue = new OfflineQueue();
+            _queue = queue ?? throw new ArgumentNullException(nameof(queue));
         }
 
         public void Initialize(string userId)
@@ -40,19 +45,40 @@ namespace ZGS.Analytics
             foreach (var kv in SessionInfo.ToDictionary())
                 props[kv.Key] = kv.Value;
             
-            LogEventInternal("session_start", props);
+            TryLogEvent(
+                "session_start",
+                props,
+                new AnalyticsEventOptions(durable: true));
             
             AnalyticsLog.Log($"[ZGS.Analytics] Initialized: user={SessionInfo.UserId.Substring(0, 8)}..., session #{SessionInfo.SessionNumber}");
         }
 
         public void LogEvent(string eventName, Dictionary<string, object> parameters = null)
         {
-            LogEventInternal(eventName, parameters);
+            TryLogEvent(eventName, parameters, default);
         }
 
-        private void LogEventInternal(string eventName, Dictionary<string, object> parameters)
+        public bool TryLogEvent(
+            string eventName,
+            Dictionary<string, object> parameters,
+            AnalyticsEventOptions options)
         {
-            var props = parameters ?? new Dictionary<string, object>();
+            if (string.IsNullOrEmpty(eventName))
+                return false;
+
+            if (!options.TryFreezeEnvelope(out var frozenOptions))
+            {
+                AnalyticsLog.LogWarning("[ZGS.Analytics] Event rejected because event_id is invalid.");
+                return false;
+            }
+
+            var props = parameters != null
+                ? new Dictionary<string, object>(parameters)
+                : new Dictionary<string, object>();
+
+            // Envelope-owned fields cannot be overridden or leaked into props.
+            props.Remove("event_id");
+            props["session_event_sequence"] = frozenOptions.SessionEventSequence;
             
             // 基础属性 (每个事件都带)
             if (!props.ContainsKey("is_editor"))
@@ -74,11 +100,12 @@ namespace ZGS.Analytics
                 Event = eventName,
                 UserId = SessionInfo.UserId,
                 SessionId = SessionInfo.SessionId,
-                Timestamp = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(),
+                EventId = frozenOptions.EventId,
+                Timestamp = frozenOptions.OccurredAtUnixMs,
                 Props = props
             };
             
-            _queue.Enqueue(payload);
+            return _queue.Enqueue(payload, frozenOptions.Durable);
         }
 
         public void SetUserProperty(string key, object value)
@@ -102,11 +129,14 @@ namespace ZGS.Analytics
 
         public void EndSession(int durationSeconds)
         {
-            LogEvent("session_end", new Dictionary<string, object>
-            {
-                ["duration_seconds"] = durationSeconds,
-                ["session_number"] = SessionInfo.SessionNumber
-            });
+            TryLogEvent(
+                "session_end",
+                new Dictionary<string, object>
+                {
+                    ["duration_seconds"] = durationSeconds,
+                    ["session_number"] = SessionInfo.SessionNumber
+                },
+                new AnalyticsEventOptions(durable: true));
             
             Flush();
         }
@@ -127,6 +157,7 @@ namespace ZGS.Analytics
             public string Event;
             public string UserId;
             public string SessionId;
+            public string EventId;
             public long Timestamp;
             public Dictionary<string, object> Props;
 
@@ -134,10 +165,16 @@ namespace ZGS.Analytics
             {
                 var sb = new StringBuilder(512);
                 sb.Append("{");
-                sb.AppendFormat("\"app_id\":\"{0}\",", AppId);
-                sb.AppendFormat("\"event\":\"{0}\",", Event);
-                sb.AppendFormat("\"user_id\":\"{0}\",", UserId);
-                sb.AppendFormat("\"session_id\":\"{0}\",", SessionId);
+                AppendProperty(sb, "event_id", EventId);
+                sb.Append(",");
+                AppendProperty(sb, "app_id", AppId);
+                sb.Append(",");
+                AppendProperty(sb, "event", Event);
+                sb.Append(",");
+                AppendProperty(sb, "user_id", UserId);
+                sb.Append(",");
+                AppendProperty(sb, "session_id", SessionId);
+                sb.Append(",");
                 sb.AppendFormat("\"ts\":{0},", Timestamp);
                 sb.Append("\"props\":{");
                 
@@ -148,12 +185,17 @@ namespace ZGS.Analytics
                     if (!first) sb.Append(",");
                     first = false;
                     
-                    sb.AppendFormat("\"{0}\":", kv.Key);
+                    sb.AppendFormat("\"{0}\":", EscapeJson(kv.Key));
                     AppendValue(sb, kv.Value);
                 }
                 
                 sb.Append("}}");
                 return sb.ToString();
+            }
+
+            private static void AppendProperty(StringBuilder sb, string key, string value)
+            {
+                sb.AppendFormat("\"{0}\":\"{1}\"", key, EscapeJson(value ?? string.Empty));
             }
 
             private static void AppendValue(StringBuilder sb, object value)
@@ -202,7 +244,7 @@ namespace ZGS.Analytics
                         {
                             if (!firstDict) sb.Append(",");
                             firstDict = false;
-                            sb.AppendFormat("\"{0}\":", entry.Key);
+                            sb.AppendFormat("\"{0}\":", EscapeJson(entry.Key?.ToString() ?? string.Empty));
                             AppendValue(sb, entry.Value);
                         }
                         sb.Append("}");
