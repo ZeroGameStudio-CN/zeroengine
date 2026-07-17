@@ -21,6 +21,7 @@ namespace POB.Extraction
         public List<string> OpenedSafeIds = new();
         public List<string> RaidFlagIds = new();
         public List<string> LootedSourceIds = new();
+        public ExtractionActiveRaidContentState Content = new();
 
         public ExtractionRaidSession(
             ExtractionMapDefinition map,
@@ -90,6 +91,17 @@ namespace POB.Extraction
 
             if (!RaidFlagIds.Contains(flagId))
                 RaidFlagIds.Add(flagId);
+        }
+
+        internal void EnsureInitialized()
+        {
+            LoadoutItemInstanceIds ??= new List<string>();
+            SecureItemInstanceIds ??= new List<string>();
+            OpenedSafeIds ??= new List<string>();
+            RaidFlagIds ??= new List<string>();
+            LootedSourceIds ??= new List<string>();
+            Content ??= new ExtractionActiveRaidContentState();
+            Content.EnsureInitialized();
         }
     }
 }

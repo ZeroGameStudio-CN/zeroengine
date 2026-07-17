@@ -9,6 +9,7 @@ namespace POB.Extraction
     {
         public ExtractionItemGrid RaidBackpack;
         public ExtractionItemGrid SecureContainer;
+        public ExtractionEquipmentState Equipment = new();
 
         public ExtractionRaidInventoryState(
             int raidBackpackWidth,
@@ -18,6 +19,12 @@ namespace POB.Extraction
         {
             RaidBackpack = new ExtractionItemGrid(raidBackpackWidth, raidBackpackHeight);
             SecureContainer = new ExtractionItemGrid(secureWidth, secureHeight);
+        }
+
+        internal void EnsureInitialized()
+        {
+            Equipment ??= new ExtractionEquipmentState();
+            Equipment.EnsureInitialized();
         }
     }
 }

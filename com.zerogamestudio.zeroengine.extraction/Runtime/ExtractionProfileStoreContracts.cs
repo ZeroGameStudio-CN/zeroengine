@@ -1,7 +1,6 @@
 using System;
 using System.Security.Cryptography;
 using System.Text;
-using UnityEngine;
 
 namespace POB.Extraction
 {
@@ -307,8 +306,8 @@ namespace POB.Extraction
         public static ExtractionProfileSaveData Clone(ExtractionProfileSaveData profile)
         {
             profile ??= ExtractionProfileSaveData.CreateEmpty();
-            string json = JsonUtility.ToJson(profile);
-            var clone = JsonUtility.FromJson<ExtractionProfileSaveData>(json)
+            string json = ExtractionProfileSerialization.ToJson(profile);
+            var clone = ExtractionProfileSerialization.FromJson(json)
                         ?? ExtractionProfileSaveData.CreateEmpty();
             clone.EnsureInitialized();
             return clone;

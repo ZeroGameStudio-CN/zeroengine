@@ -16,12 +16,7 @@ namespace POB.Extraction
                 return false;
             if (FindEntry(item.InstanceId) != null) return false;
 
-            Entries.Add(new ExtractionItemInstance(
-                item.InstanceId,
-                item.DefinitionId,
-                item.Quantity,
-                item.SourceKind,
-                item.SourceId));
+            Entries.Add(new ExtractionItemInstance(item));
             return true;
         }
 
