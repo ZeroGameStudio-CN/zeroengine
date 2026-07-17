@@ -8,6 +8,7 @@ namespace POB.Extraction
         public int RaidBackpackHeight;
         public int SecureContainerWidth;
         public int SecureContainerHeight;
+        public ExtractionCharacterConfig Character = new();
         public List<ExtractionMapDefinition> Maps = new();
         public List<ExtractionPointDefinition> ExtractionPoints = new();
         public List<ExtractionItemDefinition> ItemDefinitions = new();
