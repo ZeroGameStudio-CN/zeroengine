@@ -169,6 +169,20 @@ namespace ZGS.Analytics.Tests.Editor
             Assert.AreEqual(1, provider.LogEventCalls);
         }
 
+        [Test]
+        public void AnalyticsService_Flush_InvokesOnlyFlushCapableProviders()
+        {
+            var legacyProvider = new LegacyProvider();
+            var flushProvider = new FlushProvider();
+            AnalyticsService.AddProvider(legacyProvider);
+            AnalyticsService.AddProvider(flushProvider);
+
+            AnalyticsService.Flush();
+
+            Assert.AreEqual(0, legacyProvider.FlushCalls);
+            Assert.AreEqual(1, flushProvider.FlushCalls);
+        }
+
         private static long ExtractSequence(string json)
         {
             Match match = Regex.Match(json, "\\\"session_event_sequence\\\":(?<value>[0-9]+)");
@@ -187,6 +201,7 @@ namespace ZGS.Analytics.Tests.Editor
         private sealed class LegacyProvider : IAnalyticsProvider
         {
             public int LogEventCalls { get; private set; }
+            public int FlushCalls { get; private set; }
 
             public void Initialize(string userId) { }
 
@@ -198,7 +213,19 @@ namespace ZGS.Analytics.Tests.Editor
             public void SetUserProperty(string key, object value) { }
             public void TrackScreen(string screenName) { }
             public void LogError(string error, string stackTrace) { }
-            public void Flush() { }
+            public void Flush() { FlushCalls++; }
+        }
+
+        private sealed class FlushProvider : IAnalyticsFlushProvider
+        {
+            public int FlushCalls { get; private set; }
+
+            public void Initialize(string userId) { }
+            public void LogEvent(string eventName, Dictionary<string, object> parameters = null) { }
+            public void SetUserProperty(string key, object value) { }
+            public void TrackScreen(string screenName) { }
+            public void LogError(string error, string stackTrace) { }
+            public void Flush() { FlushCalls++; }
         }
     }
 }

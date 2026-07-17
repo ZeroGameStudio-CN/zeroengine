@@ -72,6 +72,9 @@ bool accepted = AnalyticsService.TryLogEvent(
         occurredAtUnixMs: occurredAtUnixMs,
         durable: true));
 
+// 立即开始上传支持显式刷新的 Provider 队列
+AnalyticsService.Flush();
+
 // 屏幕追踪
 AnalyticsService.TrackScreen("MainMenu");
 
@@ -178,6 +181,9 @@ Streamlit Dashboard (可视化)
    - 格式：`- [模块] 修改内容描述`。
 
 ## 更新日志
+
+### v1.6.1
+- API: 新增 `AnalyticsService.Flush()` 与可选的 `IAnalyticsFlushProvider`，允许按需启动队列上传
 
 ### v1.6.0
 - Event envelope: 新增顶层 `event_id`、逻辑发生时间和不可覆盖的 session 内事件序号

@@ -9,7 +9,7 @@ namespace ZGS.Analytics
     /// ZGS Server Provider - 工业级事件上报
     /// 自动附加设备/会话信息到所有事件
     /// </summary>
-    public class ZGSServerProvider : IAnalyticsEnqueueProvider
+    public class ZGSServerProvider : IAnalyticsEnqueueProvider, IAnalyticsFlushProvider
     {
         private readonly string _serverUrl;
         private readonly string _secret;
