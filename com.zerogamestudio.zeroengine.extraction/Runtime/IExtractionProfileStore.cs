@@ -2,7 +2,9 @@ namespace POB.Extraction
 {
     public interface IExtractionProfileStore
     {
+        ExtractionProfileLoadResult Load();
+        ExtractionProfileCommitResult Commit(ExtractionProfileDraft draft);
         ExtractionProfileSaveData LoadProfile();
-        void SaveProfile(ExtractionProfileSaveData profile);
+        ExtractionProfileCommitResult SaveProfile(ExtractionProfileSaveData profile);
     }
 }
