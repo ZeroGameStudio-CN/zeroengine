@@ -1,11 +1,20 @@
 using System.IO;
 using NUnit.Framework;
+using UnityEditor.PackageManager;
 
 namespace POB.Extraction.Core.Package.Tests.Editor
 {
     public class ExtractionCorePackageBoundaryTests
     {
-        private const string PackageRoot = "Packages/com.zerogamestudio.zeroengine.extraction";
+        private static string PackageRoot
+        {
+            get
+            {
+                PackageInfo packageInfo = PackageInfo.FindForAssembly(typeof(ExtractionCorePackageBoundaryTests).Assembly);
+                Assert.That(packageInfo, Is.Not.Null, "The extraction test assembly must resolve to an installed UPM package.");
+                return packageInfo.resolvedPath;
+            }
+        }
 
         [Test]
         public void PackageManifest_UsesZeroEnginePackageName()
