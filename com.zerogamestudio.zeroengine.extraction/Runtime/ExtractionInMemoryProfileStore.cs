@@ -16,7 +16,11 @@ namespace POB.Extraction
             authoritativeProfile = ExtractionProfileCloneUtility.Clone(initialProfile);
         }
 
-        public ExtractionProfileSaveData Profile => ExtractionProfileCloneUtility.Clone(authoritativeProfile);
+        /// <summary>
+        /// Legacy mutable view retained for in-memory fixture seeding and inspection.
+        /// Production mutations must use Load/CreateDraft/Commit so failures remain observable.
+        /// </summary>
+        public ExtractionProfileSaveData Profile => authoritativeProfile;
         public ExtractionProfileInMemoryCommitFault NextCommitFault { get; set; }
 
         public ExtractionProfileLoadResult Load()

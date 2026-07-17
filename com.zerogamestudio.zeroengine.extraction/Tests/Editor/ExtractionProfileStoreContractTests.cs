@@ -18,6 +18,16 @@ namespace POB.Extraction.Core.Package.Tests.Editor
         }
 
         [Test]
+        public void Profile_LegacyMutableView_CanSeedInMemoryFixture()
+        {
+            var store = CreateStore("old");
+
+            store.Profile.activeRaidId = "seeded";
+
+            Assert.AreEqual("seeded", store.Load().Profile.activeRaidId);
+        }
+
+        [Test]
         public void Commit_ValidDraft_ReplacesAuthorityAndAdvancesRevision()
         {
             var store = CreateStore("old");
