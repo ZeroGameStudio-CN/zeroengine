@@ -166,6 +166,7 @@ namespace POB.Extraction.Core.Package.Tests.Editor
             Assert.AreEqual(1, (int)ExtractionOperationState.Committed);
             Assert.AreEqual(2, (int)ExtractionOperationState.Completed);
             Assert.AreEqual(3, (int)ExtractionOperationState.Compensated);
+            Assert.AreEqual(4, (int)ExtractionOperationState.CompensationPending);
 
             var journal = new ExtractionOperationJournal();
             Assert.IsTrue(ExtractionOperationJournalService.TryPrepare(

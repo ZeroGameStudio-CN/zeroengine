@@ -8,7 +8,8 @@ namespace POB.Extraction
         Prepared = 0,
         Committed = 1,
         Completed = 2,
-        Compensated = 3
+        Compensated = 3,
+        CompensationPending = 4
     }
 
     public enum ExtractionOperationReplayAction
@@ -16,7 +17,8 @@ namespace POB.Extraction
         Conflict = 0,
         ApplyDomain = 1,
         ReplayPresentation = 2,
-        NoOp = 3
+        NoOp = 3,
+        ResumeCompensation = 4
     }
 
     [Serializable]
@@ -124,6 +126,9 @@ namespace POB.Extraction
                 case ExtractionOperationState.Compensated:
                     replayAction = ExtractionOperationReplayAction.NoOp;
                     return true;
+                case ExtractionOperationState.CompensationPending:
+                    replayAction = ExtractionOperationReplayAction.ResumeCompensation;
+                    return true;
                 default:
                     return false;
             }
@@ -156,10 +161,23 @@ namespace POB.Extraction
             if (entry == null || !entry.TryGetState(out var state)) return false;
             if (state == ExtractionOperationState.Compensated) return true;
             if (state == ExtractionOperationState.Completed) return false;
-            if (state != ExtractionOperationState.Prepared && state != ExtractionOperationState.Committed)
+            if (state != ExtractionOperationState.Prepared
+                && state != ExtractionOperationState.Committed
+                && state != ExtractionOperationState.CompensationPending)
                 return false;
 
             entry.State = ExtractionOperationStateCodec.ToSerializedValue(ExtractionOperationState.Compensated);
+            return true;
+        }
+
+        public static bool TryMarkCompensationPending(ExtractionOperationJournalEntry entry)
+        {
+            if (entry == null || !entry.TryGetState(out var state)) return false;
+            if (state == ExtractionOperationState.CompensationPending) return true;
+            if (state != ExtractionOperationState.Prepared && state != ExtractionOperationState.Committed)
+                return false;
+
+            entry.State = ExtractionOperationStateCodec.ToSerializedValue(ExtractionOperationState.CompensationPending);
             return true;
         }
 
@@ -204,6 +222,8 @@ namespace POB.Extraction
                     return "Completed";
                 case ExtractionOperationState.Compensated:
                     return "Compensated";
+                case ExtractionOperationState.CompensationPending:
+                    return "CompensationPending";
                 default:
                     throw new ArgumentOutOfRangeException(nameof(state), state, null);
             }
@@ -224,6 +244,9 @@ namespace POB.Extraction
                     return true;
                 case "Compensated":
                     state = ExtractionOperationState.Compensated;
+                    return true;
+                case "CompensationPending":
+                    state = ExtractionOperationState.CompensationPending;
                     return true;
                 default:
                     state = default;
