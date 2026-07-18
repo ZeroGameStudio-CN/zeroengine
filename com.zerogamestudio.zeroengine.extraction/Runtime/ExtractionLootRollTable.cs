@@ -61,10 +61,9 @@ namespace POB.Extraction
                 cursor += entry.Weight;
                 if (target >= cursor) continue;
 
-                pickup = new ExtractionLootPickup(
-                    new ExtractionItemInstance(instanceId, entry.DefinitionId, entry.Quantity),
-                    definition,
-                    entry.CanEnterSecureContainer);
+                var item = new ExtractionItemInstance(instanceId, entry.DefinitionId, entry.Quantity);
+                ExtractionItemActionPolicyService.ApplyDefinitionPolicyToInstance(definition, item);
+                pickup = new ExtractionLootPickup(item, definition, entry.CanEnterSecureContainer);
                 return pickup.IsValid;
             }
 

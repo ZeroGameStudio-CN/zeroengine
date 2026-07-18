@@ -18,6 +18,7 @@ namespace POB.Extraction
         public bool AllowEmergencyExtraction;
         public List<string> LoadoutItemInstanceIds = new();
         public List<string> SecureItemInstanceIds = new();
+        public List<ExtractionEquipmentSlotState> EquipmentSlots = new();
         public List<string> OpenedSafeIds = new();
         public List<string> RaidFlagIds = new();
         public List<string> LootedSourceIds = new();
@@ -37,6 +38,18 @@ namespace POB.Extraction
             AllowEmergencyExtraction = map.AllowEmergencyExtraction;
             LoadoutItemInstanceIds.AddRange(request.LoadoutItemInstanceIds);
             SecureItemInstanceIds.AddRange(request.SecureItemInstanceIds);
+            if (request.EquipmentSlots != null)
+            {
+                foreach (var slot in request.EquipmentSlots)
+                {
+                    if (slot == null) continue;
+                    EquipmentSlots.Add(
+                        new ExtractionEquipmentSlotState(
+                            slot.SlotId,
+                            slot.ItemInstanceId,
+                            slot.EffectReceiptId));
+                }
+            }
         }
 
         public bool HasOpenedSafe(string safeId)
@@ -97,6 +110,7 @@ namespace POB.Extraction
         {
             LoadoutItemInstanceIds ??= new List<string>();
             SecureItemInstanceIds ??= new List<string>();
+            EquipmentSlots ??= new List<ExtractionEquipmentSlotState>();
             OpenedSafeIds ??= new List<string>();
             RaidFlagIds ??= new List<string>();
             LootedSourceIds ??= new List<string>();

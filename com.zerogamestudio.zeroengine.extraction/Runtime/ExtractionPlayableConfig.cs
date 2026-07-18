@@ -19,6 +19,9 @@ namespace POB.Extraction
         public List<ExtractionFacilityDefinition> FacilityDefinitions = new();
         public List<ExtractionIntelHintDefinition> IntelHintDefinitions = new();
         public List<ExtractionMerchantOfferDefinition> MerchantOfferDefinitions = new();
+        public List<ExtractionMerchantOfferPoolDefinition> MerchantOfferPools = new();
+        public List<ExtractionMerchantSlotDefinition> MerchantSlots = new();
+        public ExtractionMerchantRotationSettings MerchantRotation = new();
         public List<ExtractionCraftingRecipeDefinition> CraftingRecipeDefinitions = new();
         public List<ExtractionTrainingPassiveDefinition> TrainingPassiveDefinitions = new();
         public List<ExtractionMedicalTreatmentDefinition> MedicalTreatmentDefinitions = new();
@@ -32,6 +35,9 @@ namespace POB.Extraction
         public List<ExtractionLootRegionDefinition> LootRegions = new();
         public List<ExtractionContainerDefinition> ContainerDefinitions = new();
         public List<ExtractionContainerSpawnDefinition> ContainerSpawns = new();
+        public List<ExtractionLockDefinition> LockDefinitions = new();
+        public List<ExtractionLeverDefinition> LeverDefinitions = new();
+        public List<ExtractionWeaponGrowthDefinition> WeaponGrowthDefinitions = new();
 
         // M2 SW.2：负重容量(总重达到此值=100%负重)+档位表；容量默认 0(=不参与负重系统，
         // TrySelectTier 对 capacity<=0 直接返回 false)，向后兼容不配负重的旧配置/mod。

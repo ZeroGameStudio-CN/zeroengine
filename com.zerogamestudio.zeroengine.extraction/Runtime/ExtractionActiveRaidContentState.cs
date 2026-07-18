@@ -12,6 +12,11 @@ namespace POB.Extraction
         public List<string> UsedExtractionPointIds = new();
         public List<string> WorldPickupItemInstanceIds = new();
         public List<string> AppliedReceiptIds = new();
+        public int DeadlineExtensionSeconds;
+        public int ThreatLevelDelta;
+        public List<string> UnlockedBonusContainerGroupIds = new();
+        public List<ExtractionPointRuntimeState> ExtractionPointStates = new();
+        public ExtractionRaidLootManifest LootManifest;
 
         internal void EnsureInitialized()
         {
@@ -21,6 +26,9 @@ namespace POB.Extraction
             UsedExtractionPointIds ??= new List<string>();
             WorldPickupItemInstanceIds ??= new List<string>();
             AppliedReceiptIds ??= new List<string>();
+            UnlockedBonusContainerGroupIds ??= new List<string>();
+            ExtractionPointStates ??= new List<ExtractionPointRuntimeState>();
+            LootManifest?.EnsureInitialized();
         }
     }
 }

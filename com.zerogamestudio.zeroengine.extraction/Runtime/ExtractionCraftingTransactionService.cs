@@ -24,6 +24,7 @@ namespace POB.Extraction
                 outputItemInstanceId,
                 recipe.OutputItemDefinitionId,
                 recipe.OutputQuantity);
+            ExtractionItemActionPolicyService.ApplyDefinitionPolicyToInstance(outputDefinition, outputItem);
             if (!CanPlace(targetGrid, outputItem, outputDefinition, x, y, rotated)) return false;
             if (!ExtractionItemCostService.HasEnoughItems(profile, costs, ingredientSourceContainers)) return false;
             if (!ExtractionItemCostService.TryConsumeCosts(profile, costs, ingredientSourceContainers, out var costReceipt)) return false;

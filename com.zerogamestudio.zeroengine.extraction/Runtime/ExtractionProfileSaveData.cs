@@ -34,6 +34,7 @@ namespace POB.Extraction
         public ExtractionEquipmentState Equipment = new();
         public ExtractionMerchantState Merchant = new();
         public ExtractionOperationJournal OperationJournal = new();
+        public List<string> ItemActionReceiptIds = new();
 
         // 兼容既有调用方；v2 JSON 只序列化 CarryGrid。旧 Unity 序列化数据由
         // FormerlySerializedAs 兼容，旧 JSON 则由 ExtractionProfileSerialization 的

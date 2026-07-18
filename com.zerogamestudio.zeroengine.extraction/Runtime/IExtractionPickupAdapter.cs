@@ -26,6 +26,7 @@ namespace POB.Extraction
                 request.Quantity,
                 request.SourceKind,
                 request.SourceId);
+            ExtractionItemActionPolicyService.ApplyDefinitionPolicyToInstance(definition, item);
             pickup = new ExtractionLootPickup(item, definition, request.CanEnterSecureContainer);
             return pickup.IsValid;
         }

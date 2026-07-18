@@ -52,6 +52,7 @@ namespace POB.Extraction
             profile.Merchant.EnsureInitialized();
             profile.OperationJournal ??= new ExtractionOperationJournal();
             profile.OperationJournal.EnsureInitialized();
+            profile.ItemActionReceiptIds ??= new List<string>();
         }
 
         private static void EnsureItemState(ExtractionProfileSaveData profile)

@@ -59,7 +59,9 @@ namespace POB.Extraction
             {
                 grid = inventory.SecureContainer;
                 container = ExtractionInventoryContainerType.InSecureContainer;
-                return pickup.CanEnterSecureContainer && grid != null;
+                return pickup.CanEnterSecureContainer
+                       && ExtractionItemActionPolicyService.CanPlaceInSecure(pickup.Definition)
+                       && grid != null;
             }
 
             grid = null;

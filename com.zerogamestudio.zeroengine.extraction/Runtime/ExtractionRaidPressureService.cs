@@ -1,3 +1,5 @@
+using System;
+
 namespace POB.Extraction
 {
     public static class ExtractionRaidPressureService
@@ -7,7 +9,7 @@ namespace POB.Extraction
             if (session == null || session.DurationSeconds <= 0) return 0;
 
             long elapsed = GetElapsedSeconds(session, currentUnixSeconds);
-            long remaining = session.DurationSeconds - elapsed;
+            long remaining = GetEffectiveDurationSeconds(session) - elapsed;
             if (remaining <= 0) return 0;
             return remaining > int.MaxValue ? int.MaxValue : (int)remaining;
         }
@@ -18,7 +20,8 @@ namespace POB.Extraction
         public static bool ShouldFailForTimeout(ExtractionRaidSession session, long currentUnixSeconds, int graceSeconds = 0)
         {
             if (session == null || session.DurationSeconds <= 0) return false;
-            return GetElapsedSeconds(session, currentUnixSeconds) >= session.DurationSeconds + graceSeconds;
+            long deadline = (long)GetEffectiveDurationSeconds(session) + Math.Max(0, graceSeconds);
+            return GetElapsedSeconds(session, currentUnixSeconds) >= deadline;
         }
 
         public static bool CanStartExtraction(
@@ -31,8 +34,9 @@ namespace POB.Extraction
             if (ShouldFailForTimeout(session, currentUnixSeconds)) return false;
 
             long elapsed = GetElapsedSeconds(session, currentUnixSeconds);
+            if (point.SingleUse && session.Content.UsedExtractionPointIds.Contains(point.PointId)) return false;
             if (point.DefaultOpen) return true;
-            if (elapsed >= point.OpenAtElapsedSeconds) return true;
+            if (elapsed >= GetEffectiveOpenAtElapsedSeconds(session, point)) return true;
 
             return hasEmergencyOverride
                    && session.AllowEmergencyExtraction
@@ -59,6 +63,34 @@ namespace POB.Extraction
         {
             long elapsed = currentUnixSeconds - session.StartedAtUnixSeconds;
             return elapsed < 0 ? 0 : elapsed;
+        }
+
+        public static int GetEffectiveDurationSeconds(ExtractionRaidSession session)
+        {
+            if (session == null) return 0;
+            long duration = (long)session.DurationSeconds + (session.Content?.DeadlineExtensionSeconds ?? 0);
+            return duration <= 0 ? 0 : duration > int.MaxValue ? int.MaxValue : (int)duration;
+        }
+
+        public static int GetEffectiveThreatLevel(ExtractionRaidSession session)
+        {
+            if (session == null) return 0;
+            long threat = (long)session.ThreatLevel + (session.Content?.ThreatLevelDelta ?? 0);
+            return threat <= 0 ? 0 : threat > int.MaxValue ? int.MaxValue : (int)threat;
+        }
+
+        public static int GetEffectiveOpenAtElapsedSeconds(
+            ExtractionRaidSession session,
+            ExtractionPointDefinition point)
+        {
+            if (session?.Content?.ExtractionPointStates != null && point != null)
+            {
+                foreach (var state in session.Content.ExtractionPointStates)
+                    if (state != null && state.PointId == point.PointId)
+                        return Math.Max(0, state.EffectiveOpenAtElapsedSeconds);
+            }
+
+            return Math.Max(0, point?.OpenAtElapsedSeconds ?? 0);
         }
     }
 }

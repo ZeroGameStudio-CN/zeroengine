@@ -227,7 +227,8 @@ namespace POB.Extraction
             if (!profile.Ownership.TryGetContainer(itemId, out source)) return false;
             return source == ExtractionInventoryContainerType.InRaid
                    || source == ExtractionInventoryContainerType.RaidBackpack
-                   || source == ExtractionInventoryContainerType.InSecureContainer;
+                   || source == ExtractionInventoryContainerType.InSecureContainer
+                   || source == ExtractionInventoryContainerType.EquipmentSlot;
         }
 
         private static bool TryGetFailureLostSource(
@@ -241,7 +242,8 @@ namespace POB.Extraction
             // lostItemIds(它们走独立的 secureItemIds 参数)，这里放宽不影响任何既有行为。
             return source == ExtractionInventoryContainerType.InRaid
                    || source == ExtractionInventoryContainerType.RaidBackpack
-                   || source == ExtractionInventoryContainerType.InSecureContainer;
+                   || source == ExtractionInventoryContainerType.InSecureContainer
+                   || source == ExtractionInventoryContainerType.EquipmentSlot;
         }
 
         private static void Rollback(ExtractionProfileSaveData profile, List<OwnershipMove> movedItems)

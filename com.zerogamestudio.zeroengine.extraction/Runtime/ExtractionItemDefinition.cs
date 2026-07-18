@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using UnityEngine.Scripting.APIUpdating;
 
 namespace POB.Extraction
@@ -26,6 +27,11 @@ namespace POB.Extraction
         // M2 SW.1 新增（additive，同上原则）：Weight 是负重系统的单位重量基准（每份数量的重量，
         // 总重=Weight×Quantity 累加），默认 0 = 不参与负重计算，兼容未配置该字段的旧物品/mod。
         public int Weight;
+
+        // 耐久工具/钥匙配置。MaxDurability=0 表示普通物品；兼容目标使用稳定 actor ID。
+        public int MaxDurability;
+        public List<string> CompatibleTargetIds = new();
+        public ExtractionItemActionPolicy ActionPolicy = ExtractionItemActionPolicy.CreateDefaultLoot();
 
         public ExtractionItemDefinition(string definitionId, int width, int height, bool canRotate, int maxStack)
             : this(definitionId, width, height, canRotate, maxStack, false)

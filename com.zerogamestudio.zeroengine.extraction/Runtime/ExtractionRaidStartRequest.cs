@@ -13,6 +13,8 @@ namespace POB.Extraction
         public long StartedAtUnixSeconds;
         public List<string> LoadoutItemInstanceIds = new();
         public List<string> SecureItemInstanceIds = new();
+        public List<ExtractionEquipmentSlotState> EquipmentSlots = new();
+        public bool UseUnifiedItemLocations;
 
         public bool IsValid => !string.IsNullOrEmpty(RaidId);
 

@@ -218,6 +218,7 @@ namespace POB.Extraction
         public bool Always;
         public bool ChancePerRaid;
         public float Chance;
+        public string BonusGroupId;
 
         public ExtractionContainerSpawnDefinition(
             string spawnId,

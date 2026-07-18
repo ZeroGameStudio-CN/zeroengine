@@ -28,6 +28,7 @@ namespace POB.Extraction
 
             if (!profile.Items.TryGet(itemInstanceId, out var soldItem)) return false;
             if (!itemCatalog.TryGetItemDefinition(soldItem.DefinitionId, out var soldDefinition)) return false;
+            if (!ExtractionItemActionPolicyService.CanSell(soldDefinition, soldItem)) return false;
             if (!profile.Ownership.TryGetContainer(itemInstanceId, out var sourceContainer)) return false;
             if (!sourceContainers.Contains(sourceContainer)) return false;
             if (!TryGetGrid(profile, sourceContainer, out var sourceGrid)) return false;

@@ -23,6 +23,7 @@ namespace POB.Extraction
                 purchasedItemInstanceId,
                 offer.ItemDefinitionId,
                 offer.Quantity);
+            ExtractionItemActionPolicyService.ApplyDefinitionPolicyToInstance(purchasedDefinition, purchasedItem);
             if (!CanPlace(targetGrid, purchasedItem, purchasedDefinition, x, y, rotated)) return false;
 
             var costs = new List<ExtractionItemCost>

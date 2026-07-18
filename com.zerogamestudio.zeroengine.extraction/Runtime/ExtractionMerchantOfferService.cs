@@ -35,8 +35,9 @@ namespace POB.Extraction
             ExtractionMerchantOfferDefinition offer,
             IExtractionItemCatalog itemCatalog)
         {
-            return itemCatalog.TryGetItemDefinition(offer.ItemDefinitionId, out _)
-                && itemCatalog.TryGetItemDefinition(offer.PriceItemDefinitionId, out _);
+            if (!itemCatalog.TryGetItemDefinition(offer.ItemDefinitionId, out _)) return false;
+            return offer.UsesSharedBloodSample
+                   || itemCatalog.TryGetItemDefinition(offer.PriceItemDefinitionId, out _);
         }
 
         private static bool MeetsMetaRequirements(
