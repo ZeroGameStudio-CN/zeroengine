@@ -145,6 +145,7 @@ namespace POB.Extraction.Core.Package.Tests.Editor
         {
             var weapon = AddDefinition("weapon", 1, 1, 2, ExtractionEquipmentSlotType.Weapon);
             profile.ActiveRaid = CreateRaid();
+            profile.activeRaidId = profile.ActiveRaid.RaidId;
             profile.ActiveRaidInventory = new ExtractionRaidInventoryState(4, 4, 2, 2);
             var item = AddItemToGrid(
                 "weapon-persist",
@@ -187,6 +188,7 @@ namespace POB.Extraction.Core.Package.Tests.Editor
         public void RaidBackpackAndSecure_MovePreservesSingleLocationAndPolicy()
         {
             profile.ActiveRaid = CreateRaid();
+            profile.activeRaidId = profile.ActiveRaid.RaidId;
             profile.ActiveRaidInventory = new ExtractionRaidInventoryState(4, 4, 2, 2);
             var allowed = AddDefinition("secure-allowed", 1, 1, 1);
             var denied = AddDefinition("secure-denied", 1, 1, 1);
@@ -371,6 +373,7 @@ namespace POB.Extraction.Core.Package.Tests.Editor
         public void DeathPolicy_SecureAndKeepItemsSurvive_DropItemMovesToCorpse_RaidBoundDestroys()
         {
             profile.ActiveRaid = CreateRaid();
+            profile.activeRaidId = profile.ActiveRaid.RaidId;
             profile.ActiveRaidInventory = new ExtractionRaidInventoryState(5, 5, 2, 2);
             var drop = AddDefinition("drop", 1, 1, 1);
             var keep = AddDefinition("keep", 1, 1, 1);
