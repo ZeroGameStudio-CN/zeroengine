@@ -509,10 +509,17 @@ namespace POB.Extraction
                 {
                     int minimum = profile.MinimumGeneratedDropsByRarity.Get(rarity);
                     if (minimum <= 0) continue;
-                    if (!GuaranteedSpawnsContainRarity(guaranteedSpawns, containers, tables, items, rarity))
+                    int rarityCapacity = GetMinimumGuaranteedCapacityForRarity(
+                        guaranteedSpawns,
+                        containers,
+                        tables,
+                        items,
+                        rarity);
+                    if (minimum > rarityCapacity)
                     {
                         report.AddError(
-                            $"掉落配置 '{profile.LootProfileId}' 为 {rarity} 配置了最低生成数，但固定容器没有该品质的合法物品。");
+                            $"掉落配置 '{profile.LootProfileId}' 为 {rarity} 配置了最低生成数 {minimum}，" +
+                            $"但固定容器在所有候选结果下只能承载 {rarityCapacity} 个该品质合法物品。");
                         return;
                     }
                 }
@@ -551,24 +558,35 @@ namespace POB.Extraction
             }
         }
 
-        private static bool GuaranteedSpawnsContainRarity(
+        private static int GetMinimumGuaranteedCapacityForRarity(
             List<ExtractionContainerSpawnDefinition> guaranteedSpawns,
             Dictionary<string, ExtractionContainerDefinition> containers,
             Dictionary<string, ExtractionLootTableDefinition> tables,
             Dictionary<string, ExtractionItemDefinition> items,
             ExtractionItemRarity rarity)
         {
+            int total = 0;
             foreach (var spawn in guaranteedSpawns)
             {
+                int minimum = int.MaxValue;
                 foreach (var candidate in spawn.Candidates)
                 {
                     if (candidate == null || !containers.TryGetValue(candidate.ContainerTypeId, out var container))
-                        continue;
-                    if (HasReachableItem(container, tables, items, rarity, false)) return true;
+                    {
+                        minimum = 0;
+                        break;
+                    }
+                    if (!HasReachableItem(container, tables, items, rarity, false))
+                    {
+                        minimum = 0;
+                        break;
+                    }
+                    minimum = Math.Min(minimum, container.MaximumContentCount);
                 }
+                if (minimum != int.MaxValue) total += minimum;
             }
 
-            return false;
+            return total;
         }
 
         private static int GetMinimumGuaranteedCapacity(

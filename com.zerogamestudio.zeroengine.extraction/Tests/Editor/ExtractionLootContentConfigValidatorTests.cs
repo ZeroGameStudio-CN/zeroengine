@@ -129,6 +129,25 @@ namespace POB.Extraction.Core.Package.Tests.Editor
         }
 
         [Test]
+        public void Validate_MinimumRarityOnlyExistsInOneWeightedCandidate_ReturnsError()
+        {
+            var config = CreateValidConfig();
+            var commonOnly = new ExtractionContainerDefinition("common-only", 2, 1, 2, 1f);
+            commonOnly.LootTableIds.Add("common-table");
+            config.ContainerDefinitions.Add(commonOnly);
+            config.LootRegions[0].AllowedContainerTypeIds.Add("common-only");
+            config.ContainerSpawns[0].Candidates.Add(
+                new ExtractionWeightedContainerCandidate("common-only", 1));
+
+            var report = ExtractionLootContentConfigValidator.Validate(config);
+
+            Assert.IsFalse(report.IsValid);
+            StringAssert.Contains("Rare", report.FirstError);
+            StringAssert.Contains("所有候选结果", report.FirstError);
+            StringAssert.Contains("只能承载 0 个", report.FirstError);
+        }
+
+        [Test]
         public void Validate_UniformRarityCurve_ProducesIneffectiveWarning()
         {
             var config = CreateValidConfig();
