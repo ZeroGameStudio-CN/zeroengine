@@ -140,7 +140,8 @@ namespace POB.Extraction.Core.Package.Tests.Editor
             Assert.IsTrue(report.IsValid, report.FirstError);
             Assert.That(report.Warnings, Has.Count.EqualTo(1));
             StringAssert.Contains("统一倍率", report.Warnings[0]);
-            StringAssert.Contains("不会改变概率", report.Warnings[0]);
+            StringAssert.Contains("不会改变", report.Warnings[0]);
+            StringAssert.Contains("掉落概率", report.Warnings[0]);
         }
 
         [Test]
