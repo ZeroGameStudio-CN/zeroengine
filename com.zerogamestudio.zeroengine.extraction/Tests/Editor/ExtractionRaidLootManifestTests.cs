@@ -124,6 +124,18 @@ namespace POB.Extraction.Core.Package.Tests.Editor
 
     public class ExtractionContainerLootServiceTests
     {
+        [SetUp]
+        public void SetUp()
+        {
+            ExtractionFeatureSwitch.SetEnabledForTests(true);
+        }
+
+        [TearDown]
+        public void TearDown()
+        {
+            ExtractionFeatureSwitch.SetEnabledForTests(false);
+        }
+
         [Test]
         public void Open_FirstOpenCommitsResultsOrderPityAndReceipt_ReopenDoesNotReroll()
         {
