@@ -22,6 +22,11 @@ namespace POB.Extraction
         public List<string> SpawnPointIds = new();
         public List<string> CorpseRegionIds = new();
 
+        // C2 内容奖励档。两者都留空时继续使用旧 lootTableIds；新内容地图必须同时填写，
+        // 且 LootProfile.ContentTierId 必须与 ContentTierId 一致。
+        public string ContentTierId;
+        public string LootProfileId;
+
         // M1 SC.1 新增（additive）：进 raid 时自动发放的起始武器，值须等于一个可解析的
         // WeaponDataSO.ID；留空/未设置 = 本地图不发放起始武器（老配置零改动兼容）。
         public string StarterWeaponDefinitionId;

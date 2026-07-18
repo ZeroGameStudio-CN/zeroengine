@@ -25,6 +25,14 @@ namespace POB.Extraction
         public List<ExtractionBlueprintDefinition> BlueprintDefinitions = new();
         public List<ExtractionMetaExchangeDefinition> MetaExchangeDefinitions = new();
 
+        // C2 内容配置：旧配置不声明任何一项时继续走既有地图 lootTableIds 路径；
+        // 只要开始声明，就由 ExtractionLootContentConfigValidator 校验整套引用。
+        public List<ExtractionContentTierDefinition> ContentTiers = new();
+        public List<ExtractionLootProfileDefinition> LootProfiles = new();
+        public List<ExtractionLootRegionDefinition> LootRegions = new();
+        public List<ExtractionContainerDefinition> ContainerDefinitions = new();
+        public List<ExtractionContainerSpawnDefinition> ContainerSpawns = new();
+
         // M2 SW.2：负重容量(总重达到此值=100%负重)+档位表；容量默认 0(=不参与负重系统，
         // TrySelectTier 对 capacity<=0 直接返回 false)，向后兼容不配负重的旧配置/mod。
         public int EncumbranceCapacity;
