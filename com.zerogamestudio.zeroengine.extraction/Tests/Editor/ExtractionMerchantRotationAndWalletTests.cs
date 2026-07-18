@@ -84,7 +84,8 @@ namespace POB.Extraction.Core.Package.Tests.Editor
             var initial = ExtractionProfileSaveData.CreateEmpty();
             Assert.IsTrue(ExtractionMerchantRotationService.TryInitialize(initial, config, "initial", 1));
             string offerId = initial.Merchant.Offers[0].OfferId;
-            Assert.IsTrue(ExtractionMerchantRotationService.TryGetOffer(config, offerId, out var offer));
+            var offer = config.MerchantOfferDefinitions.Find(candidate => candidate.OfferId == offerId);
+            Assert.IsNotNull(offer);
             var store = new ExtractionInMemoryProfileStore(initial);
             var wallet = new TestWallet(100);
             var service = new ExtractionMerchantWalletTransactionService(store, wallet, config);
