@@ -8,12 +8,15 @@ using ZeroEngine.Save;
 namespace ZeroEngine.Audio
 {
     /// <summary>
-    /// Standard Audio Manager for ZeroEngine.
-    /// Manages Background Music (BGM) and Sound Effects (SFX).
-    /// Supports AudioMixer for volume control.
+    /// Pooled Unity audio backend with music, SFX and AudioMixer volume control.
+    /// Existing PlaySFX and PlayMusic entry points remain supported.
     /// </summary>
     public class AudioManager : Singleton<AudioManager>
     {
+        public const string MasterVolumeParameter = "MasterVolume";
+        public const string MusicVolumeParameter = "BGMVolume";
+        public const string SfxVolumeParameter = "SFXVolume";
+
         [Header("Mixer Settings")]
         [SerializeField] private AudioMixer _audioMixer;
         [SerializeField] private AudioMixerGroup _bgmGroup;
@@ -21,25 +24,42 @@ namespace ZeroEngine.Audio
 
         [Header("BGM")]
         [SerializeField] private AudioSource _bgmSource;
-        [SerializeField] private float _crossFadeTime = 1.0f;
+        [SerializeField] private AudioSource _secondaryBgmSource;
+        [SerializeField] private float _crossFadeTime = 1f;
 
         [Header("SFX Pooling")]
-        [SerializeField] private int _initialPoolSize = 10;
-        private Queue<AudioEmitter> _sfxPool = new Queue<AudioEmitter>();
-        private List<AudioEmitter> _activeEmitters = new List<AudioEmitter>();
+        [SerializeField, Min(1)] private int _initialPoolSize = 10;
+        [SerializeField, Min(1)] private int _maximumPoolSize = 32;
+
+        [Header("Persistence")]
+        [SerializeField] private bool _persistVolumeWithSaveManager = true;
+
+        private readonly Queue<AudioEmitter> _sfxPool = new();
+        private readonly List<AudioEmitter> _activeEmitters = new();
+        private readonly List<AudioEmitter> _emitterScratch = new();
+        private readonly Dictionary<AudioCueSO, float> _cueCooldowns = new();
+        private readonly List<AudioCueSO> _cooldownKeys = new();
+        private readonly AudioSource[] _musicSources = new AudioSource[2];
+
         private GameObject _poolRoot;
-
-        // Cooldown Tracking
-        private Dictionary<AudioCueSO, float> _cueCooldowns = new Dictionary<AudioCueSO, float>();
-
-        // Music State
+        private int _createdEmitterCount;
+        private int _activeMusicSourceIndex;
         private Coroutine _bgmRoutine;
         private AudioMusicSO _currentMusic;
+        private float _masterVolume = 1f;
+        private float _musicVolume = 1f;
+        private float _sfxVolume = 1f;
+
+        public AudioMusicSO CurrentMusic => _currentMusic;
+        public int ActiveEmitterCount => _activeEmitters.Count;
 
         protected override void Awake()
         {
             base.Awake();
-            if (Instance != this) return;
+            if (Instance != this)
+            {
+                return;
+            }
 
             InitializePool();
             InitializeBGM();
@@ -48,29 +68,82 @@ namespace ZeroEngine.Audio
 
         private void Update()
         {
-            // Update Cooldowns
-            if (_cueCooldowns.Count > 0)
+            if (_cueCooldowns.Count == 0)
             {
-                var keys = new List<AudioCueSO>(_cueCooldowns.Keys);
-                foreach (var key in keys)
+                return;
+            }
+
+            _cooldownKeys.Clear();
+            _cooldownKeys.AddRange(_cueCooldowns.Keys);
+            foreach (AudioCueSO cue in _cooldownKeys)
+            {
+                float remaining = _cueCooldowns[cue] - Time.unscaledDeltaTime;
+                if (remaining <= 0f)
                 {
-                    _cueCooldowns[key] -= Time.deltaTime;
-                    if (_cueCooldowns[key] <= 0f)
-                    {
-                        _cueCooldowns.Remove(key);
-                    }
+                    _cueCooldowns.Remove(cue);
+                }
+                else
+                {
+                    _cueCooldowns[cue] = remaining;
                 }
             }
         }
 
-        #region SFX System
+        public void Configure(
+            AudioMixer audioMixer,
+            AudioMixerGroup musicGroup,
+            AudioMixerGroup sfxGroup,
+            bool persistVolumeWithSaveManager)
+        {
+            _audioMixer = audioMixer;
+            _bgmGroup = musicGroup;
+            _sfxGroup = sfxGroup;
+            _persistVolumeWithSaveManager = persistVolumeWithSaveManager;
+
+            InitializeBGM();
+            foreach (AudioSource source in _musicSources)
+            {
+                if (source != null)
+                {
+                    source.outputAudioMixerGroup = _bgmGroup;
+                }
+            }
+
+            foreach (AudioEmitter emitter in _sfxPool)
+            {
+                emitter.Source.outputAudioMixerGroup = _sfxGroup;
+            }
+
+            foreach (AudioEmitter emitter in _activeEmitters)
+            {
+                if (emitter.CurrentCue == null || emitter.CurrentCue.Group == null)
+                {
+                    emitter.Source.outputAudioMixerGroup = _sfxGroup;
+                }
+            }
+
+            ApplyMixerVolumes();
+        }
+
+        public void SetVolumePersistenceEnabled(bool enabled)
+        {
+            _persistVolumeWithSaveManager = enabled;
+        }
+
+        #region SFX
 
         private void InitializePool()
         {
-            _poolRoot = new GameObject("SFX_Pool");
-            _poolRoot.transform.SetParent(transform);
+            if (_poolRoot != null)
+            {
+                return;
+            }
 
-            for (int i = 0; i < _initialPoolSize; i++)
+            _maximumPoolSize = Mathf.Max(_initialPoolSize, _maximumPoolSize);
+            _poolRoot = new GameObject("SFX_Pool");
+            _poolRoot.transform.SetParent(transform, false);
+
+            for (int index = 0; index < _initialPoolSize; index++)
             {
                 CreateNewEmitter();
             }
@@ -78,326 +151,436 @@ namespace ZeroEngine.Audio
 
         private AudioEmitter CreateNewEmitter()
         {
-            GameObject obj = new GameObject($"SFX_Emitter_{_sfxPool.Count + _activeEmitters.Count}");
-            obj.transform.SetParent(_poolRoot.transform);
-            AudioSource source = obj.AddComponent<AudioSource>();
-            source.outputAudioMixerGroup = _sfxGroup;
+            if (_createdEmitterCount >= _maximumPoolSize)
+            {
+                return null;
+            }
 
-            AudioEmitter emitter = obj.AddComponent<AudioEmitter>();
+            var emitterObject = new GameObject($"SFX_Emitter_{_createdEmitterCount}");
+            _createdEmitterCount++;
+            emitterObject.transform.SetParent(_poolRoot.transform, false);
+
+            AudioSource source = emitterObject.AddComponent<AudioSource>();
+            source.outputAudioMixerGroup = _sfxGroup;
+            source.playOnAwake = false;
+
+            AudioEmitter emitter = emitterObject.AddComponent<AudioEmitter>();
             emitter.Initialize(OnEmitterFinished);
-            
-            obj.SetActive(false);
+            emitterObject.SetActive(false);
             _sfxPool.Enqueue(emitter);
-            
             return emitter;
+        }
+
+        private AudioEmitter AcquireEmitter()
+        {
+            if (_sfxPool.Count == 0)
+            {
+                CreateNewEmitter();
+            }
+
+            return _sfxPool.Count > 0 ? _sfxPool.Dequeue() : null;
         }
 
         private void OnEmitterFinished(AudioEmitter emitter)
         {
-            if (_activeEmitters.Contains(emitter))
-            {
-                _activeEmitters.Remove(emitter);
-                
-                // Call OnDespawn interface
-                emitter.OnDespawn();
-                
-                emitter.gameObject.SetActive(false);
-                emitter.transform.SetParent(_poolRoot.transform);
-                _sfxPool.Enqueue(emitter);
-            }
-        }
-
-        /// <summary>
-        /// Play an AudioCue at a specific position.
-        /// </summary>
-        public void PlaySFX(AudioCueSO cue, Vector3 position = default)
-        {
-            if (cue == null) return;
-
-            // Check Cooldown
-            if (cue.Cooldown > 0f && _cueCooldowns.ContainsKey(cue))
+            if (emitter == null || !_activeEmitters.Remove(emitter))
             {
                 return;
             }
 
-            // Apply Cooldown
+            emitter.OnDespawn();
+            emitter.gameObject.SetActive(false);
+            emitter.transform.SetParent(_poolRoot.transform, false);
+            _sfxPool.Enqueue(emitter);
+        }
+
+        public void PlaySFX(AudioCueSO cue, Vector3 position = default)
+        {
+            TryPlaySFX(cue, position);
+        }
+
+        public bool TryPlaySFX(AudioCueSO cue, Vector3 position = default)
+        {
+            if (cue == null || !cue.HasPlayableClip())
+            {
+                return false;
+            }
+
+            if (cue.Cooldown > 0f && _cueCooldowns.ContainsKey(cue))
+            {
+                return false;
+            }
+
+            if (cue.MaxInstances > 0)
+            {
+                int instanceCount = 0;
+                foreach (AudioEmitter active in _activeEmitters)
+                {
+                    if (active.CurrentCue == cue)
+                    {
+                        instanceCount++;
+                    }
+                }
+
+                if (instanceCount >= cue.MaxInstances)
+                {
+                    return false;
+                }
+            }
+
+            AudioEmitter emitter = AcquireEmitter();
+            if (emitter == null)
+            {
+                return false;
+            }
+
             if (cue.Cooldown > 0f)
             {
                 _cueCooldowns[cue] = cue.Cooldown;
             }
 
-            // Get Emitter
-            AudioEmitter emitter = _sfxPool.Count > 0 ? _sfxPool.Dequeue() : CreateNewEmitter();
-            
-            // Call OnSpawn interface
             emitter.OnSpawn();
-            
-            // Keep parented to root to avoid hierarchy clutter
-            // emitter.transform.SetParent(null); // REMOVED
-            
-            if (position != default)
-            {
-                emitter.transform.position = position;
-            }
-            else
-            {
-                // If 2D sound, attach to camera or keep local zero?
-                // Just keep it at root (0,0,0) or rely on SpatialBlend=0 ignoring position.
-                emitter.transform.localPosition = Vector3.zero;
-            }
-
+            emitter.transform.position = position == default ? transform.position : position;
             emitter.gameObject.SetActive(true);
             _activeEmitters.Add(emitter);
-            
-            // Override Mixer Group if Cue has one, else use default SFX Group
-            if (cue.Group == null) emitter.Source.outputAudioMixerGroup = _sfxGroup;
+
+            if (cue.Group == null)
+            {
+                emitter.Source.outputAudioMixerGroup = _sfxGroup;
+            }
+
+            emitter.Play(cue);
+            return true;
+        }
+
+        public void StopSFX(AudioCueSO cue)
+        {
+            if (cue == null)
+            {
+                return;
+            }
+
+            _emitterScratch.Clear();
+            foreach (AudioEmitter emitter in _activeEmitters)
+            {
+                if (emitter.CurrentCue == cue)
+                {
+                    _emitterScratch.Add(emitter);
+                }
+            }
+
+            foreach (AudioEmitter emitter in _emitterScratch)
+            {
+                emitter.Stop();
+            }
+        }
+
+        public void StopAllSFX()
+        {
+            _emitterScratch.Clear();
+            _emitterScratch.AddRange(_activeEmitters);
+            foreach (AudioEmitter emitter in _emitterScratch)
+            {
+                emitter.Stop();
+            }
+        }
+
+        public void PlaySFX(AudioClip clip, float volume = 1f)
+        {
+            if (clip == null)
+            {
+                return;
+            }
+
+            AudioEmitter emitter = AcquireEmitter();
+            if (emitter == null)
+            {
+                return;
+            }
+
+            emitter.OnSpawn();
+            emitter.gameObject.SetActive(true);
+            _activeEmitters.Add(emitter);
+
+            emitter.Source.clip = clip;
+            emitter.Source.volume = Mathf.Clamp01(volume);
+            emitter.Source.pitch = 1f;
+            emitter.Source.loop = false;
+            emitter.Source.spatialBlend = 0f;
+            emitter.Source.priority = 128;
+            emitter.Source.outputAudioMixerGroup = _sfxGroup;
+            emitter.Source.Play();
 
 #if UNITY_EDITOR
             if (!Application.isPlaying)
             {
-                // Editor Mode: Just play, don't use Emitter.Play which starts Coroutine
-                // Actually Emitter.Play starts coroutine for auto-return.
-                // We can't run coroutine.
-                // We'll manually set clips and play.
-                AudioClip clip = cue.GetRandomClip();
-                if (clip != null)
-                {
-                    emitter.Source.clip = clip;
-                    emitter.Source.volume = cue.GetRandomVolume();
-                    emitter.Source.pitch = cue.GetRandomPitch();
-                    emitter.Source.spatialBlend = cue.SpatialBlend;
-                    emitter.Source.Play();
-                    // We can't auto-recycle in Editor easily without EditorUpdate.
-                    // It's just a preview, let it sit there.
-                }
                 return;
             }
-#endif
-
-            emitter.Play(cue);
-        }
-
-        /// <summary>
-        /// Legacy helper for simple clips (wraps internally).
-        /// Note: No cooldown support here.
-        /// </summary>
-        public void PlaySFX(AudioClip clip, float volume = 1f)
-        {
-            if (clip == null) return;
-            
-            AudioEmitter emitter = _sfxPool.Count > 0 ? _sfxPool.Dequeue() : CreateNewEmitter();
-            emitter.gameObject.SetActive(true);
-            _activeEmitters.Add(emitter);
-            
-            emitter.Source.clip = clip;
-            emitter.Source.volume = volume;
-            emitter.Source.pitch = 1f;
-            emitter.Source.loop = false;
-            emitter.Source.spatialBlend = 0f;
-            emitter.Source.outputAudioMixerGroup = _sfxGroup;
-            emitter.Source.Play();
-            
-#if UNITY_EDITOR
-            if (!Application.isPlaying) return; // No coroutine in editor
 #endif
             StartCoroutine(ReturnEmitterDelayed(emitter, clip.length + 0.1f));
         }
 
         private IEnumerator ReturnEmitterDelayed(AudioEmitter emitter, float delay)
         {
-            yield return new WaitForSeconds(delay);
+            yield return new WaitForSecondsRealtime(delay);
             OnEmitterFinished(emitter);
         }
 
         #endregion
 
-        #region BGM System
+        #region Music
 
         private void InitializeBGM()
         {
             if (_bgmSource == null)
             {
                 _bgmSource = gameObject.AddComponent<AudioSource>();
-                _bgmSource.outputAudioMixerGroup = _bgmGroup;
-                _bgmSource.loop = true;
-                _bgmSource.playOnAwake = false;
+            }
+
+            if (_secondaryBgmSource == null)
+            {
+                _secondaryBgmSource = gameObject.AddComponent<AudioSource>();
+            }
+
+            _musicSources[0] = _bgmSource;
+            _musicSources[1] = _secondaryBgmSource;
+            foreach (AudioSource source in _musicSources)
+            {
+                source.outputAudioMixerGroup = _bgmGroup;
+                source.loop = true;
+                source.playOnAwake = false;
             }
         }
 
-        public void PlayMusic(AudioMusicSO music, float fadeDuration = -1.0f)
+        public void PlayMusic(AudioMusicSO music, float fadeDuration = -1f)
         {
-            if (music == null) return;
-            if (_currentMusic == music) return; // Already playing
+            if (music == null || (music.IntroClip == null && music.LoopClip == null))
+            {
+                return;
+            }
 
-            if (fadeDuration < 0f) fadeDuration = _crossFadeTime;
+            AudioSource activeSource = _musicSources[_activeMusicSourceIndex];
+            if (_currentMusic == music && activeSource != null && activeSource.isPlaying)
+            {
+                return;
+            }
 
+            float duration = fadeDuration < 0f ? _crossFadeTime : Mathf.Max(0f, fadeDuration);
             _currentMusic = music;
-            
+
 #if UNITY_EDITOR
             if (!Application.isPlaying)
             {
-                if (_bgmSource == null) InitializeBGM();
-                // Editor mode: Direct switch, no fade coroutines
-                if (_bgmRoutine != null) { StopCoroutine(_bgmRoutine); _bgmRoutine = null; }
-                
-                _bgmSource.Stop();
-                if (music.IntroClip != null)
-                {
-                    // Can't easily sequence Intro->Loop in Editor without update loop
-                    // Just play Loop for preview, or Intro? Let's play Loop.
-                    _bgmSource.clip = music.LoopClip != null ? music.LoopClip : music.IntroClip;
-                    _bgmSource.loop = true;
-                }
-                else
-                {
-                    _bgmSource.clip = music.LoopClip;
-                    _bgmSource.loop = true;
-                }
-                
-                _bgmSource.volume = music.Volume;
-                _bgmSource.Play();
+                PlayMusicImmediate(music);
                 return;
             }
 #endif
 
-            if (_bgmRoutine != null) StopCoroutine(_bgmRoutine);
-            _bgmRoutine = StartCoroutine(PlayMusicRoutine(music, fadeDuration));
+            if (_bgmRoutine != null)
+            {
+                StopCoroutine(_bgmRoutine);
+            }
+
+            _bgmRoutine = StartCoroutine(TransitionMusicRoutine(music, duration));
         }
 
-        public void StopMusic(float fadeDuration = 1.0f)
+        public void StopMusic(float fadeDuration = 1f)
         {
-#if UNITY_EDITOR
-            if (!Application.isPlaying)
-            {
-                if (_bgmSource != null) _bgmSource.Stop();
-                _currentMusic = null;
-                return;
-            }
-#endif
-            if (_bgmRoutine != null) StopCoroutine(_bgmRoutine);
-            _bgmRoutine = StartCoroutine(FadeOutBGM(fadeDuration));
             _currentMusic = null;
+
+#if UNITY_EDITOR
+            if (!Application.isPlaying)
+            {
+                StopMusicSources();
+                return;
+            }
+#endif
+
+            if (_bgmRoutine != null)
+            {
+                StopCoroutine(_bgmRoutine);
+            }
+
+            if (fadeDuration <= 0f || !isActiveAndEnabled || !gameObject.activeInHierarchy)
+            {
+                StopMusicSources();
+                _bgmRoutine = null;
+                return;
+            }
+
+            _bgmRoutine = StartCoroutine(FadeOutAllMusic(Mathf.Max(0f, fadeDuration)));
         }
 
-        private IEnumerator PlayMusicRoutine(AudioMusicSO music, float fadeDuration)
+        private IEnumerator TransitionMusicRoutine(AudioMusicSO music, float duration)
         {
-            // 1. Fade Out current if playing
-            if (_bgmSource.isPlaying)
-            {
-                yield return FadeOutBGM(fadeDuration * 0.5f);
-            }
+            int previousIndex = _activeMusicSourceIndex;
+            int nextIndex = 1 - previousIndex;
+            AudioSource previous = _musicSources[previousIndex];
+            AudioSource next = _musicSources[nextIndex];
 
-            // 2. Setup new
-            _bgmSource.volume = 0f;
-            float targetVolume = music.Volume;
+            next.Stop();
+            next.clip = music.IntroClip != null ? music.IntroClip : music.LoopClip;
+            next.loop = music.IntroClip == null;
+            next.volume = 0f;
+            next.Play();
+            _activeMusicSourceIndex = nextIndex;
 
-            // 3. Intro?
-            if (music.IntroClip != null)
+            float previousStartVolume = previous.isPlaying ? previous.volume : 0f;
+            float elapsed = 0f;
+            while (elapsed < duration)
             {
-                _bgmSource.clip = music.IntroClip;
-                _bgmSource.loop = false;
-                _bgmSource.Play();
-                
-                // Fade In
-                yield return FadeInBGM(targetVolume, fadeDuration * 0.5f);
-
-                // Wait for Intro
-                yield return new WaitForSeconds(music.IntroClip.length - _bgmSource.time); // Wait remainder
-                
-                // Switch to Loop
-                _bgmSource.clip = music.LoopClip;
-                _bgmSource.loop = true;
-                _bgmSource.Play();
-            }
-            else
-            {
-                // Just Loop
-                _bgmSource.clip = music.LoopClip;
-                _bgmSource.loop = true;
-                _bgmSource.Play();
-                yield return FadeInBGM(targetVolume, fadeDuration * 0.5f);
-            }
-        }
-
-        private IEnumerator FadeOutBGM(float duration)
-        {
-            float startVol = _bgmSource.volume;
-            float t = 0f;
-            while (t < duration)
-            {
-                t += Time.deltaTime;
-                _bgmSource.volume = Mathf.Lerp(startVol, 0f, t / duration);
+                elapsed += Time.unscaledDeltaTime;
+                float progress = duration <= 0f ? 1f : Mathf.Clamp01(elapsed / duration);
+                previous.volume = Mathf.Lerp(previousStartVolume, 0f, progress);
+                next.volume = Mathf.Lerp(0f, music.Volume, progress);
                 yield return null;
             }
-            _bgmSource.Stop();
+
+            previous.Stop();
+            previous.clip = null;
+            next.volume = music.Volume;
+
+            if (music.IntroClip != null && music.LoopClip != null)
+            {
+                while (_currentMusic == music && next.isPlaying && next.clip == music.IntroClip)
+                {
+                    yield return null;
+                }
+
+                if (_currentMusic == music)
+                {
+                    next.clip = music.LoopClip;
+                    next.loop = true;
+                    next.Play();
+                }
+            }
+
+            _bgmRoutine = null;
         }
 
-        private IEnumerator FadeInBGM(float targetVol, float duration)
+        private IEnumerator FadeOutAllMusic(float duration)
         {
-            float t = 0f;
-            while (t < duration)
+            float firstVolume = _musicSources[0].volume;
+            float secondVolume = _musicSources[1].volume;
+            float elapsed = 0f;
+            while (elapsed < duration)
             {
-                t += Time.deltaTime;
-                _bgmSource.volume = Mathf.Lerp(0f, targetVol, t / duration);
+                elapsed += Time.unscaledDeltaTime;
+                float progress = duration <= 0f ? 1f : Mathf.Clamp01(elapsed / duration);
+                _musicSources[0].volume = Mathf.Lerp(firstVolume, 0f, progress);
+                _musicSources[1].volume = Mathf.Lerp(secondVolume, 0f, progress);
                 yield return null;
             }
-            _bgmSource.volume = targetVol;
+
+            StopMusicSources();
+            _bgmRoutine = null;
+        }
+
+        private void PlayMusicImmediate(AudioMusicSO music)
+        {
+            StopMusicSources();
+            AudioSource source = _musicSources[0];
+            source.clip = music.LoopClip != null ? music.LoopClip : music.IntroClip;
+            source.loop = music.LoopClip != null;
+            source.volume = music.Volume;
+            source.Play();
+            _activeMusicSourceIndex = 0;
+        }
+
+        private void StopMusicSources()
+        {
+            foreach (AudioSource source in _musicSources)
+            {
+                if (source == null)
+                {
+                    continue;
+                }
+
+                source.Stop();
+                source.clip = null;
+                source.volume = 0f;
+            }
         }
 
         #endregion
 
-        #region Volume Control
-
-        private const string VOL_MASTER = "MasterVolume";
-        private const string VOL_BGM = "BGMVolume";
-        private const string VOL_SFX = "SFXVolume";
+        #region Volume
 
         private void InitializeVolume()
         {
-            if (_audioMixer == null) return;
-            
-            // Load saved volumes (0-1), default to 1.0f
-            float master = SaveManager.Instance.Load(VOL_MASTER, 1.0f, SaveManager.SettingsFile);
-            float bgm = SaveManager.Instance.Load(VOL_BGM, 1.0f, SaveManager.SettingsFile);
-            float sfx = SaveManager.Instance.Load(VOL_SFX, 1.0f, SaveManager.SettingsFile);
-            
-            SetMasterVolume(master);
-            SetBGMVolume(bgm);
-            SetSFXVolume(sfx);
+            if (_persistVolumeWithSaveManager)
+            {
+                _masterVolume = SaveManager.Instance.Load(
+                    MasterVolumeParameter,
+                    1f,
+                    SaveManager.SettingsFile);
+                _musicVolume = SaveManager.Instance.Load(
+                    MusicVolumeParameter,
+                    1f,
+                    SaveManager.SettingsFile);
+                _sfxVolume = SaveManager.Instance.Load(
+                    SfxVolumeParameter,
+                    1f,
+                    SaveManager.SettingsFile);
+            }
+
+            ApplyMixerVolumes();
         }
 
         public void SetMasterVolume(float volume)
         {
-            SetMixerVolume(VOL_MASTER, volume);
-            SaveManager.Instance.Save(VOL_MASTER, volume, SaveManager.SettingsFile);
+            _masterVolume = Mathf.Clamp01(volume);
+            SetMixerVolume(MasterVolumeParameter, _masterVolume);
+            SaveVolumeIfEnabled(MasterVolumeParameter, _masterVolume);
         }
 
         public void SetBGMVolume(float volume)
         {
-            SetMixerVolume(VOL_BGM, volume);
-            SaveManager.Instance.Save(VOL_BGM, volume, SaveManager.SettingsFile);
+            _musicVolume = Mathf.Clamp01(volume);
+            SetMixerVolume(MusicVolumeParameter, _musicVolume);
+            SaveVolumeIfEnabled(MusicVolumeParameter, _musicVolume);
         }
 
         public void SetSFXVolume(float volume)
         {
-            SetMixerVolume(VOL_SFX, volume);
-            SaveManager.Instance.Save(VOL_SFX, volume, SaveManager.SettingsFile);
+            _sfxVolume = Mathf.Clamp01(volume);
+            SetMixerVolume(SfxVolumeParameter, _sfxVolume);
+            SaveVolumeIfEnabled(SfxVolumeParameter, _sfxVolume);
         }
 
-        public float GetMasterVolume() => SaveManager.Instance.Load(VOL_MASTER, 1.0f, SaveManager.SettingsFile);
-        public float GetBGMVolume() => SaveManager.Instance.Load(VOL_BGM, 1.0f, SaveManager.SettingsFile);
-        public float GetSFXVolume() => SaveManager.Instance.Load(VOL_SFX, 1.0f, SaveManager.SettingsFile);
+        public float GetMasterVolume() => _masterVolume;
+        public float GetBGMVolume() => _musicVolume;
+        public float GetSFXVolume() => _sfxVolume;
+
+        public static float NormalizedToDecibels(float normalizedVolume)
+        {
+            float clamped = Mathf.Clamp01(normalizedVolume);
+            return clamped <= 0.001f ? -80f : Mathf.Log10(clamped) * 20f;
+        }
+
+        private void ApplyMixerVolumes()
+        {
+            SetMixerVolume(MasterVolumeParameter, _masterVolume);
+            SetMixerVolume(MusicVolumeParameter, _musicVolume);
+            SetMixerVolume(SfxVolumeParameter, _sfxVolume);
+        }
+
+        private void SaveVolumeIfEnabled(string parameter, float volume)
+        {
+            if (_persistVolumeWithSaveManager)
+            {
+                SaveManager.Instance.Save(parameter, volume, SaveManager.SettingsFile);
+            }
+        }
 
         private void SetMixerVolume(string parameter, float volume)
         {
-            if (_audioMixer)
+            if (_audioMixer == null)
             {
-                // Convert 0-1 to Decibel
-                // Log10(0) is undefined, so clamp min volume.
-                // -80dB is effective silence in AudioMixer.
-                float db = volume <= 0.001f ? -80f : Mathf.Log10(volume) * 20f;
-                _audioMixer.SetFloat(parameter, db);
+                return;
             }
+
+            _audioMixer.SetFloat(parameter, NormalizedToDecibels(volume));
         }
 
         #endregion
