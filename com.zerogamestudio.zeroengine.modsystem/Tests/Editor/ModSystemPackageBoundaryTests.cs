@@ -49,6 +49,13 @@ namespace ZeroEngine.ModSystem.Tests.Editor
             string oldRuntimeRoot = Path.GetFullPath(Path.Combine(
                 Application.dataPath,
                 "../Packages/com.zerogamestudio.zeroengine/Runtime/ModSystem"));
+            if (!Directory.Exists(oldRuntimeRoot))
+            {
+                oldRuntimeRoot = Path.GetFullPath(Path.Combine(
+                    Application.dataPath,
+                    "../../com.zerogamestudio.zeroengine/Runtime/ModSystem"));
+            }
+
             string steamWorkshopManager = File.ReadAllText(Path.Combine(oldRuntimeRoot, "Steam/SteamWorkshopManager.cs"));
 
             Assert.That(File.Exists(Path.Combine(oldRuntimeRoot, "ZeroEngine.ModSystem.asmdef")), Is.True);
