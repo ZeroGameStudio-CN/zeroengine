@@ -70,8 +70,12 @@ namespace ZeroEngine.Audio.Tests
             cue.Clips = new AudioClip[] { null };
             cue.VolumeRange = new Vector2(0.8f, 0.2f);
             cue.PitchRange = new Vector2(1.2f, 0.8f);
+            cue.PanStereo = 2f;
+            cue.MinDistance = 5f;
+            cue.MaxDistance = 2f;
             AudioMusicSO music = Create<AudioMusicSO>();
             music.Volume = 2f;
+            music.TransitionDuration = -2f;
             AudioBankSO bank = Create<AudioBankSO>();
             bank.ConfigureForEditor(
                 new[] { new AudioCueEventBinding("piece.pickup", cue) },
@@ -83,8 +87,10 @@ namespace ZeroEngine.Audio.Tests
             Assert.That(errors, Has.Some.Contains("no playable AudioClip"));
             Assert.That(errors, Has.Some.Contains("invalid volume range"));
             Assert.That(errors, Has.Some.Contains("invalid pitch range"));
+            Assert.That(errors, Has.Some.Contains("invalid spatial audio settings"));
             Assert.That(errors, Has.Some.Contains("no playable music clip"));
             Assert.That(errors, Has.Some.Contains("invalid music volume"));
+            Assert.That(errors, Has.Some.Contains("invalid music transition settings"));
         }
 
         [TestCase(0f, -80f)]

@@ -80,6 +80,13 @@ namespace ZeroEngine.Audio
             _source.pitch = cue.GetRandomPitch();
             _source.loop = cue.Loop;
             _source.spatialBlend = cue.SpatialBlend;
+            _source.panStereo = cue.PanStereo;
+            _source.rolloffMode = cue.RolloffMode;
+            _source.minDistance = cue.MinDistance;
+            _source.maxDistance = cue.MaxDistance;
+            _source.dopplerLevel = cue.DopplerLevel;
+            _source.spread = cue.Spread;
+            _source.reverbZoneMix = cue.ReverbZoneMix;
             _source.priority = cue.Priority;
 
             _source.Play();

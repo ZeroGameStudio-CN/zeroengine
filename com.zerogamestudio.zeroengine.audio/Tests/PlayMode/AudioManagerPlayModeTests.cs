@@ -17,7 +17,9 @@ namespace ZeroEngine.Audio.Tests
         public IEnumerator SetUp()
         {
             Time.timeScale = 1f;
-            foreach (AudioManager existing in Object.FindObjectsOfType<AudioManager>(true))
+            foreach (AudioManager existing in Object.FindObjectsByType<AudioManager>(
+                         FindObjectsInactive.Include,
+                         FindObjectsSortMode.None))
             {
                 Object.Destroy(existing.gameObject);
             }
@@ -93,6 +95,56 @@ namespace ZeroEngine.Audio.Tests
             yield return new WaitForSecondsRealtime(0.08f);
             Assert.That(_manager.TryPlaySFX(cue), Is.True);
             _manager.StopSFX(cue);
+        }
+
+        [UnityTest]
+        public IEnumerator CuePlayback_AppliesSpatialAudioSettings()
+        {
+            AudioCueSO cue = CreateCue("spatial loop", true, 22050);
+            cue.SpatialBlend = 0.75f;
+            cue.PanStereo = -0.2f;
+            cue.RolloffMode = AudioRolloffMode.Linear;
+            cue.MinDistance = 2f;
+            cue.MaxDistance = 24f;
+            cue.DopplerLevel = 0.4f;
+            cue.Spread = 35f;
+            cue.ReverbZoneMix = 0.65f;
+
+            Assert.That(_manager.TryPlaySFX(cue), Is.True);
+            var emitters = (List<AudioEmitter>)typeof(AudioManager)
+                .GetField("_activeEmitters", BindingFlags.Instance | BindingFlags.NonPublic)
+                ?.GetValue(_manager);
+            AudioSource source = emitters?.Single().Source;
+
+            Assert.That(source, Is.Not.Null);
+            Assert.That(source.spatialBlend, Is.EqualTo(0.75f));
+            Assert.That(source.panStereo, Is.EqualTo(-0.2f));
+            Assert.That(source.rolloffMode, Is.EqualTo(AudioRolloffMode.Linear));
+            Assert.That(source.minDistance, Is.EqualTo(2f));
+            Assert.That(source.maxDistance, Is.EqualTo(24f));
+            Assert.That(source.dopplerLevel, Is.EqualTo(0.4f));
+            Assert.That(source.spread, Is.EqualTo(35f));
+            Assert.That(source.reverbZoneMix, Is.EqualTo(0.65f));
+
+            _manager.StopSFX(cue);
+            yield return null;
+        }
+
+        [UnityTest]
+        public IEnumerator PlaybackPolicy_CanBeConfiguredAfterInitialization()
+        {
+            _manager.ConfigurePlayback(0.35f, 0.6f, 12, 18);
+
+            Assert.That(_manager.CrossFadeTime, Is.EqualTo(0.35f));
+            Assert.That(_manager.MusicFadeOutTime, Is.EqualTo(0.6f));
+            Assert.That(_manager.InitialPoolSize, Is.EqualTo(12));
+            Assert.That(_manager.MaximumPoolSize, Is.EqualTo(18));
+            Assert.That(
+                Object.FindObjectsByType<AudioEmitter>(
+                    FindObjectsInactive.Include,
+                    FindObjectsSortMode.None).Length,
+                Is.GreaterThanOrEqualTo(12));
+            yield return null;
         }
 
         [UnityTest]
