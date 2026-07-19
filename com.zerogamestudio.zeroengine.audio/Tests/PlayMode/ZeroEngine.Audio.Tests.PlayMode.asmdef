@@ -1,0 +1,22 @@
+{
+    "name": "ZeroEngine.Audio.Tests.PlayMode",
+    "rootNamespace": "ZeroEngine.Audio.Tests",
+    "references": [
+        "ZeroEngine.Audio",
+        "ZeroEngine.Core"
+    ],
+    "includePlatforms": [],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": false,
+    "defineConstraints": [
+        "UNITY_INCLUDE_TESTS"
+    ],
+    "versionDefines": [],
+    "noEngineReferences": false,
+    "optionalUnityReferences": [
+        "TestAssemblies"
+    ]
+}

@@ -25,6 +25,34 @@ namespace ZeroEngine.Audio
         [Tooltip("0 = 2D (UI/BGM), 1 = 3D (World).")]
         public float SpatialBlend = 1f;
 
+        [Header("Spatial Audio")]
+        [Range(-1f, 1f)]
+        [Tooltip("Stereo pan. -1 = left, 0 = center, 1 = right.")]
+        public float PanStereo;
+
+        [Tooltip("Distance rolloff curve used by 3D sounds.")]
+        public AudioRolloffMode RolloffMode = AudioRolloffMode.Logarithmic;
+
+        [Min(0f)]
+        [Tooltip("Distance where 3D attenuation begins.")]
+        public float MinDistance = 1f;
+
+        [Min(0.01f)]
+        [Tooltip("Distance where 3D attenuation reaches the end of the rolloff curve.")]
+        public float MaxDistance = 500f;
+
+        [Range(0f, 5f)]
+        [Tooltip("Amount of Doppler pitch shift for moving 3D sounds.")]
+        public float DopplerLevel = 1f;
+
+        [Range(0f, 360f)]
+        [Tooltip("Speaker spread angle for 3D sounds.")]
+        public float Spread;
+
+        [Range(0f, 1.1f)]
+        [Tooltip("Amount sent to Unity audio reverb zones.")]
+        public float ReverbZoneMix = 1f;
+
         [Header("Randomization")]
         [Tooltip("Random volume range.")]
         public Vector2 VolumeRange = new Vector2(0.9f, 1.0f);
@@ -35,23 +63,82 @@ namespace ZeroEngine.Audio
         [Header("Spam Protection")]
         [Tooltip("Minimum time (seconds) before this cue can be played again.")]
         public float Cooldown = 0.1f;
+
+        [Min(0)]
+        [Tooltip("Maximum simultaneous instances. Zero means unlimited.")]
+        public int MaxInstances;
+
+        [Range(0, 256)]
+        [Tooltip("Unity AudioSource priority. Lower values are more important.")]
+        public int Priority = 128;
         
         // --- Helper Methods ---
+
+        public bool HasPlayableClip()
+        {
+            if (Clips == null)
+            {
+                return false;
+            }
+
+            foreach (AudioClip clip in Clips)
+            {
+                if (clip != null)
+                {
+                    return true;
+                }
+            }
+
+            return false;
+        }
         
         public AudioClip GetRandomClip()
         {
             if (Clips == null || Clips.Length == 0) return null;
-            return Clips[Random.Range(0, Clips.Length)];
+
+            int start = Random.Range(0, Clips.Length);
+            for (int offset = 0; offset < Clips.Length; offset++)
+            {
+                AudioClip clip = Clips[(start + offset) % Clips.Length];
+                if (clip != null)
+                {
+                    return clip;
+                }
+            }
+
+            return null;
         }
 
         public float GetRandomVolume()
         {
-            return Random.Range(VolumeRange.x, VolumeRange.y);
+            return Random.Range(
+                Mathf.Min(VolumeRange.x, VolumeRange.y),
+                Mathf.Max(VolumeRange.x, VolumeRange.y));
         }
 
         public float GetRandomPitch()
         {
-            return Random.Range(PitchRange.x, PitchRange.y);
+            return Random.Range(
+                Mathf.Min(PitchRange.x, PitchRange.y),
+                Mathf.Max(PitchRange.x, PitchRange.y));
+        }
+
+        private void OnValidate()
+        {
+            VolumeRange = new Vector2(
+                Mathf.Clamp01(VolumeRange.x),
+                Mathf.Clamp01(VolumeRange.y));
+            PitchRange = new Vector2(
+                Mathf.Clamp(PitchRange.x, 0.01f, 3f),
+                Mathf.Clamp(PitchRange.y, 0.01f, 3f));
+            PanStereo = Mathf.Clamp(PanStereo, -1f, 1f);
+            MinDistance = Mathf.Max(0f, MinDistance);
+            MaxDistance = Mathf.Max(MinDistance, MaxDistance);
+            DopplerLevel = Mathf.Clamp(DopplerLevel, 0f, 5f);
+            Spread = Mathf.Clamp(Spread, 0f, 360f);
+            ReverbZoneMix = Mathf.Clamp(ReverbZoneMix, 0f, 1.1f);
+            Cooldown = Mathf.Max(0f, Cooldown);
+            MaxInstances = Mathf.Max(0, MaxInstances);
         }
     }
 }
