@@ -15,6 +15,9 @@ namespace ZeroEngine.Audio
         private AudioSource _source;
         private Coroutine _playingRoutine;
         private Action<AudioEmitter> _onFinishCallback;
+        private bool _isFinishing;
+
+        public AudioCueSO CurrentCue { get; private set; }
 
         public AudioSource Source
         {
@@ -36,7 +39,8 @@ namespace ZeroEngine.Audio
 
         public void OnSpawn()
         {
-            // Reset for fresh use if needed
+            _isFinishing = false;
+            CurrentCue = null;
         }
 
         public void OnDespawn()
@@ -49,11 +53,15 @@ namespace ZeroEngine.Audio
                 _source.Stop();
                 _source.clip = null;
             }
+
+            CurrentCue = null;
         }
 
         public void Play(AudioCueSO cue)
         {
             if (_playingRoutine != null) StopCoroutine(_playingRoutine);
+
+            CurrentCue = cue;
 
             AudioClip clip = cue.GetRandomClip();
             if (clip == null)
@@ -64,11 +72,15 @@ namespace ZeroEngine.Audio
 
             // Apply Settings
             Source.clip = clip; // Ensure Source property is used
-            _source.outputAudioMixerGroup = cue.Group; 
+            if (cue.Group != null)
+            {
+                _source.outputAudioMixerGroup = cue.Group;
+            }
             _source.volume = cue.GetRandomVolume();
             _source.pitch = cue.GetRandomPitch();
             _source.loop = cue.Loop;
             _source.spatialBlend = cue.SpatialBlend;
+            _source.priority = cue.Priority;
 
             _source.Play();
 
@@ -89,16 +101,18 @@ namespace ZeroEngine.Audio
 #if UNITY_EDITOR
             if (!Application.isPlaying) yield break;
 #endif
-            yield return new WaitForSeconds(duration + 0.1f);
+            yield return new WaitForSecondsRealtime(duration + 0.1f);
             HandleFinish();
         }
 
         private void HandleFinish()
         {
-            // AudioManager will call OnDespawn when handling the callback logic
-            // or we call it here?
-            // Since AudioManager manages the pool, it should call OnDespawn when putting back.
-            // But we trigger it.
+            if (_isFinishing)
+            {
+                return;
+            }
+
+            _isFinishing = true;
             _onFinishCallback?.Invoke(this);
         }
     }
