@@ -128,6 +128,18 @@ namespace ZGS.Analytics
         }
 
         /// <summary>
+        /// Starts delivery of events queued by providers that support explicit flushing.
+        /// </summary>
+        public static void Flush()
+        {
+            foreach (var provider in _providers)
+            {
+                if (provider is IAnalyticsFlushProvider flushProvider)
+                    flushProvider.Flush();
+            }
+        }
+
+        /// <summary>
         /// 设置平台身份 (如 Steam, Epic, 公司UID等)
         /// </summary>
         public static void SetIdentity(UserIdentity identity)
