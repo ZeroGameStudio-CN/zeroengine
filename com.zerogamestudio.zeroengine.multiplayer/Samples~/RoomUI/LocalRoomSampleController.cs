@@ -80,7 +80,19 @@ namespace ZeroEngine.Multiplayer.Samples
                 : _options.Compatibility;
         }
 
+        public CompatibilityDescriptor GetCompatibility(string gameRoomId)
+        {
+            return GetCompatibility();
+        }
+
         public Task<OperationResult> PrepareSessionAsync(
+            MultiplayerSessionContext context,
+            CancellationToken cancellationToken)
+        {
+            return Task.FromResult(OperationResult.Success());
+        }
+
+        public Task<OperationResult> SynchronizeLocalAsync(
             MultiplayerSessionContext context,
             CancellationToken cancellationToken)
         {

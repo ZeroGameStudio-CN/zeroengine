@@ -101,6 +101,11 @@ namespace ZeroEngine.Multiplayer.Tests
 
         public void EmitRoomEvent(PlatformRoomEvent roomEvent)
         {
+            if (roomEvent.Snapshot != null)
+            {
+                CurrentRoom = roomEvent.Snapshot;
+            }
+
             Action<PlatformRoomEvent> handler = RoomEvent;
             if (handler != null)
             {
@@ -193,6 +198,17 @@ namespace ZeroEngine.Multiplayer.Tests
 
         public void Emit(ConnectionEvent connectionEvent)
         {
+            if (connectionEvent.Type == ConnectionEventType.LocalDisconnected ||
+                connectionEvent.Type == ConnectionEventType.Failed)
+            {
+                Phase = ConnectionPhase.Failed;
+                IsClient = false;
+                if (connectionEvent.Type == ConnectionEventType.Failed)
+                {
+                    IsServer = false;
+                }
+            }
+
             Action<ConnectionEvent> handler = ConnectionEvent;
             if (handler != null)
             {
@@ -207,9 +223,11 @@ namespace ZeroEngine.Multiplayer.Tests
 
         public CompatibilityDescriptor Compatibility { get; set; } = TestData.Compatibility;
         public OperationResult DefaultPrepareResult { get; set; } = OperationResult.Success();
+        public OperationResult LocalSynchronizeResult { get; set; } = OperationResult.Success();
         public OperationResult SynchronizeResult { get; set; } = OperationResult.Success();
         public OperationResult RestoreResult { get; set; } = OperationResult.Success();
         public int PrepareCalls { get; private set; }
+        public int LocalSynchronizeCalls { get; private set; }
         public int SynchronizeCalls { get; private set; }
         public int RestoreCalls { get; private set; }
         public int PeerDisconnectedCalls { get; private set; }
@@ -217,6 +235,11 @@ namespace ZeroEngine.Multiplayer.Tests
         public int SessionEndedCalls { get; private set; }
 
         public CompatibilityDescriptor GetCompatibility()
+        {
+            return Compatibility;
+        }
+
+        public CompatibilityDescriptor GetCompatibility(string gameRoomId)
         {
             return Compatibility;
         }
@@ -229,6 +252,14 @@ namespace ZeroEngine.Multiplayer.Tests
             return Task.FromResult(_prepareResults.Count > 0
                 ? _prepareResults.Dequeue()
                 : DefaultPrepareResult);
+        }
+
+        public Task<OperationResult> SynchronizeLocalAsync(
+            MultiplayerSessionContext context,
+            CancellationToken cancellationToken)
+        {
+            LocalSynchronizeCalls++;
+            return Task.FromResult(LocalSynchronizeResult);
         }
 
         public Task<OperationResult> SynchronizePeerAsync(

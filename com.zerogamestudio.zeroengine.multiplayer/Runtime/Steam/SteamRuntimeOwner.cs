@@ -26,6 +26,27 @@ namespace ZeroEngine.Multiplayer.Steam
         public PlatformUser LocalUser => _localUser;
         public bool OwnsRuntime => _ownsRuntime;
 
+        public OperationResult Configure(uint configuredAppId, bool shouldRestartAppIfNecessary)
+        {
+            if (_initialized)
+            {
+                return OperationResult.Failure(
+                    MultiplayerErrorCode.InvalidState,
+                    "multiplayer.steam.runtime_already_initialized");
+            }
+
+            if (configuredAppId == 0)
+            {
+                return OperationResult.Failure(
+                    MultiplayerErrorCode.InvalidArgument,
+                    "multiplayer.steam.app_id_invalid");
+            }
+
+            appId = configuredAppId;
+            restartAppIfNecessary = shouldRestartAppIfNecessary;
+            return OperationResult.Success();
+        }
+
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
         private static void ResetStatics()
         {

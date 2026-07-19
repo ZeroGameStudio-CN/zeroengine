@@ -53,20 +53,24 @@ namespace ZeroEngine.Multiplayer
                     return target == SessionPhase.Connecting || target == SessionPhase.Failed;
                 case SessionPhase.Connecting:
                     return target == SessionPhase.InRoom || target == SessionPhase.Synchronizing ||
-                           target == SessionPhase.Failed;
+                           target == SessionPhase.Recovery || target == SessionPhase.Failed;
                 case SessionPhase.InRoom:
-                    return target == SessionPhase.Synchronizing || target == SessionPhase.Leaving;
+                    return target == SessionPhase.Synchronizing || target == SessionPhase.Recovery ||
+                           target == SessionPhase.Leaving;
                 case SessionPhase.Synchronizing:
                     return target == SessionPhase.Ready || target == SessionPhase.InRoom ||
-                           target == SessionPhase.InGame || target == SessionPhase.Failed;
+                           target == SessionPhase.InGame || target == SessionPhase.Reconnecting ||
+                           target == SessionPhase.Recovery || target == SessionPhase.Failed;
                 case SessionPhase.Ready:
                     return target == SessionPhase.Starting || target == SessionPhase.InRoom ||
-                           target == SessionPhase.Leaving;
+                           target == SessionPhase.InGame || target == SessionPhase.Recovery ||
+                           target == SessionPhase.Leaving || target == SessionPhase.Failed;
                 case SessionPhase.Starting:
                     return target == SessionPhase.InGame || target == SessionPhase.Ready ||
-                           target == SessionPhase.Failed;
+                           target == SessionPhase.Recovery || target == SessionPhase.Failed;
                 case SessionPhase.InGame:
-                    return target == SessionPhase.Reconnecting || target == SessionPhase.Leaving;
+                    return target == SessionPhase.Reconnecting || target == SessionPhase.Recovery ||
+                           target == SessionPhase.Leaving;
                 case SessionPhase.Reconnecting:
                     return target == SessionPhase.Synchronizing || target == SessionPhase.Recovery;
                 case SessionPhase.Recovery:
@@ -477,7 +481,8 @@ namespace ZeroEngine.Multiplayer
             bool operationInProgress,
             RetryOperationKind retryOperation,
             OperationResult lastResult,
-            TimeSpan reconnectRemaining)
+            TimeSpan reconnectRemaining,
+            int reconnectAttempt = 0)
         {
             Phase = phase;
             Room = room;
@@ -487,6 +492,7 @@ namespace ZeroEngine.Multiplayer
             RetryOperation = retryOperation;
             LastResult = lastResult;
             ReconnectRemaining = reconnectRemaining;
+            ReconnectAttempt = reconnectAttempt;
         }
 
         public SessionPhase Phase { get; }
@@ -497,5 +503,6 @@ namespace ZeroEngine.Multiplayer
         public RetryOperationKind RetryOperation { get; }
         public OperationResult LastResult { get; }
         public TimeSpan ReconnectRemaining { get; }
+        public int ReconnectAttempt { get; }
     }
 }

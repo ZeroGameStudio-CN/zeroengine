@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -15,6 +16,8 @@ namespace ZeroEngine.Multiplayer
         private readonly OperationGenerationGate _operationGeneration = new OperationGenerationGate();
         private readonly InviteRouter _inviteRouter = new InviteRouter();
         private readonly SemaphoreSlim _operationLock = new SemaphoreSlim(1, 1);
+        private readonly Dictionary<PlatformUserId, CancellationTokenSource> _peerReconnectExpiry =
+            new Dictionary<PlatformUserId, CancellationTokenSource>();
 
         private RoomSnapshot _room;
         private OperationResult _lastResult = OperationResult.Success();
@@ -24,6 +27,8 @@ namespace ZeroEngine.Multiplayer
         private bool _intentionalLeave;
         private bool _disposed;
         private TimeSpan _reconnectRemaining;
+        private int _reconnectAttempt;
+        private CancellationTokenSource _activeReconnectCancellation;
 
         public MultiplayerSessionCoordinator(
             MultiplayerSessionConfig config,
@@ -60,7 +65,8 @@ namespace ZeroEngine.Multiplayer
                 _operationInProgress,
                 _retryOperation,
                 _lastResult,
-                _reconnectRemaining);
+                _reconnectRemaining,
+                _reconnectAttempt);
         }
 
         public Task<OperationResult> InitializeAsync(CancellationToken cancellationToken)
@@ -157,6 +163,26 @@ namespace ZeroEngine.Multiplayer
                 }
 
                 _room = create.Value;
+                OperationResult prepare = await RunWithTimeout(
+                    token => _game.PrepareSessionAsync(
+                        new MultiplayerSessionContext(_room, _platform.LocalUser, true),
+                        token),
+                    _config.InitialSyncTimeout,
+                    cancellationToken,
+                    MultiplayerErrorCode.SynchronizationFailed,
+                    "multiplayer.error.host_prepare_failed");
+
+                if (!IsCurrent(generation))
+                {
+                    return StaleRoomResult();
+                }
+
+                if (!prepare.Succeeded)
+                {
+                    await CleanupFailedJoinAsync();
+                    return FailRoomOperation(prepare);
+                }
+
                 transition = Transition(SessionPhase.Connecting);
                 if (!transition.Succeeded)
                 {
@@ -181,26 +207,6 @@ namespace ZeroEngine.Multiplayer
                 {
                     await CleanupFailedJoinAsync();
                     return FailRoomOperation(start);
-                }
-
-                OperationResult prepare = await RunWithTimeout(
-                    token => _game.PrepareSessionAsync(
-                        new MultiplayerSessionContext(_room, _platform.LocalUser, true),
-                        token),
-                    _config.InitialSyncTimeout,
-                    cancellationToken,
-                    MultiplayerErrorCode.SynchronizationFailed,
-                    "multiplayer.error.host_prepare_failed");
-
-                if (!IsCurrent(generation))
-                {
-                    return StaleRoomResult();
-                }
-
-                if (!prepare.Succeeded)
-                {
-                    await CleanupFailedJoinAsync();
-                    return FailRoomOperation(prepare);
                 }
 
                 _room = _room
@@ -301,7 +307,7 @@ namespace ZeroEngine.Multiplayer
                 CompatibilityDescriptor localCompatibility;
                 try
                 {
-                    localCompatibility = _game.GetCompatibility();
+                    localCompatibility = _game.GetCompatibility(_room.GameRoomId);
                 }
                 catch (Exception exception)
                 {
@@ -321,6 +327,26 @@ namespace ZeroEngine.Multiplayer
                 {
                     await CleanupFailedJoinAsync();
                     return FailRoomOperation(compatibility);
+                }
+
+                OperationResult prepare = await RunWithTimeout(
+                    token => _game.PrepareSessionAsync(
+                        new MultiplayerSessionContext(_room, _platform.LocalUser, false),
+                        token),
+                    _config.InitialSyncTimeout,
+                    cancellationToken,
+                    MultiplayerErrorCode.SynchronizationFailed,
+                    "multiplayer.error.client_prepare_failed");
+
+                if (!IsCurrent(generation))
+                {
+                    return StaleRoomResult();
+                }
+
+                if (!prepare.Succeeded)
+                {
+                    await CleanupFailedJoinAsync();
+                    return FailRoomOperation(prepare);
                 }
 
                 transition = Transition(SessionPhase.Connecting);
@@ -355,27 +381,42 @@ namespace ZeroEngine.Multiplayer
                 }
 
                 Transition(SessionPhase.Synchronizing);
-                OperationResult prepare = await RunWithTimeout(
-                    token => _game.PrepareSessionAsync(
+                OperationResult synchronize = await RunWithTimeout(
+                    token => _game.SynchronizeLocalAsync(
                         new MultiplayerSessionContext(_room, _platform.LocalUser, false),
                         token),
                     _config.InitialSyncTimeout,
                     cancellationToken,
                     MultiplayerErrorCode.SynchronizationFailed,
-                    "multiplayer.error.client_prepare_failed");
+                    "multiplayer.error.client_sync_failed");
 
                 if (!IsCurrent(generation))
                 {
                     return StaleRoomResult();
                 }
 
-                if (!prepare.Succeeded)
+                if (!synchronize.Succeeded)
                 {
                     await CleanupFailedJoinAsync();
-                    return FailRoomOperation(prepare);
+                    return FailRoomOperation(synchronize);
                 }
 
-                _room = _room.WithMemberPhase(_platform.LocalUser.Id, MemberConnectionPhase.Synchronizing);
+                _room = _room.WithMemberPhase(_platform.LocalUser.Id, MemberConnectionPhase.Ready);
+                SessionPhase target = _room.HasStarted || _room.Phase == SessionPhase.InGame
+                    ? SessionPhase.InGame
+                    : SessionPhase.Ready;
+                _room = _room.WithSession(
+                    _room.SessionGeneration,
+                    target,
+                    target == SessionPhase.InGame,
+                    _room.IsJoinable);
+                transition = Transition(target);
+                if (!transition.Succeeded)
+                {
+                    await CleanupFailedJoinAsync();
+                    return FailRoomOperation(transition);
+                }
+
                 _retryOperation = RetryOperationKind.None;
                 SetLastResult(OperationResult.Success());
                 return OperationResult<RoomSnapshot>.Success(_room);
@@ -419,6 +460,20 @@ namespace ZeroEngine.Multiplayer
             }
 
             return await JoinRoomAsync(request.RoomId, cancellationToken);
+        }
+
+        public OperationResult DismissJoinRequest()
+        {
+            if (!_inviteRouter.HasPending)
+            {
+                return SetLastResult(OperationResult.Failure(
+                    MultiplayerErrorCode.InvalidState,
+                    "multiplayer.error.no_pending_invite"));
+            }
+
+            _inviteRouter.Clear();
+            NotifyChanged();
+            return SetLastResult(OperationResult.Success());
         }
 
         public OperationResult Invite()
@@ -557,6 +612,52 @@ namespace ZeroEngine.Multiplayer
                 target == SessionPhase.InGame,
                 _room.IsJoinable);
             OperationResult transition = Transition(target);
+            return SetLastResult(transition);
+        }
+
+        public OperationResult ConfirmRemoteSessionStarted(
+            SessionId sessionId,
+            long sessionGeneration)
+        {
+            if (_driver.IsServer || _room == null || _room.IsHost(_platform.LocalUser.Id))
+            {
+                return SetLastResult(OperationResult.Failure(
+                    MultiplayerErrorCode.InvalidState,
+                    "multiplayer.error.remote_start_confirmation_unavailable"));
+            }
+
+            bool validGeneration =
+                (Phase == SessionPhase.Ready &&
+                 sessionGeneration == _room.SessionGeneration + 1) ||
+                (Phase == SessionPhase.Starting &&
+                 sessionGeneration == _room.SessionGeneration) ||
+                (Phase == SessionPhase.InGame &&
+                 sessionGeneration == _room.SessionGeneration);
+            if (_room.SessionId != sessionId || !validGeneration)
+            {
+                return SetLastResult(OperationResult.Failure(
+                    MultiplayerErrorCode.SessionMismatch,
+                    "multiplayer.error.remote_start_session_mismatch"));
+            }
+
+            if (Phase == SessionPhase.InGame)
+            {
+                return SetLastResult(OperationResult.Success());
+            }
+
+            if (Phase != SessionPhase.Ready && Phase != SessionPhase.Starting)
+            {
+                return SetLastResult(OperationResult.Failure(
+                    MultiplayerErrorCode.InvalidState,
+                    "multiplayer.error.remote_start_confirmation_unexpected"));
+            }
+
+            _room = _room.WithSession(
+                sessionGeneration,
+                SessionPhase.InGame,
+                true,
+                _config.AllowJoinInProgress);
+            OperationResult transition = Transition(SessionPhase.InGame);
             return SetLastResult(transition);
         }
 
@@ -716,12 +817,209 @@ namespace ZeroEngine.Multiplayer
                 if (_room != null)
                 {
                     _room = _room.WithMemberPhase(peer.User.Id, MemberConnectionPhase.Ready);
+                    OperationResult publish = PublishCurrentRoomState();
+                    if (!publish.Succeeded)
+                    {
+                        return SetLastResult(publish);
+                    }
                 }
 
                 return SetLastResult(OperationResult.Success());
             }
             finally
             {
+                EndOperation();
+            }
+        }
+
+        public async Task<OperationResult> ReconnectClientAsync(CancellationToken cancellationToken)
+        {
+            if (Phase != SessionPhase.Reconnecting || _driver.IsServer || _room == null)
+            {
+                return SetLastResult(OperationResult.Failure(
+                    MultiplayerErrorCode.InvalidState,
+                    "multiplayer.error.client_reconnect_not_available"));
+            }
+
+            OperationResult busy;
+            if (!TryBeginOperation(out busy))
+            {
+                return busy;
+            }
+
+            CancellationTokenSource reconnectCancellation =
+                CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+            _activeReconnectCancellation = reconnectCancellation;
+            try
+            {
+                int generation = _operationGeneration.Begin();
+                RoomSnapshot reconnectRoom = _room;
+                ReconnectPolicy policy = _config.CreateReconnectPolicy();
+                Stopwatch stopwatch = Stopwatch.StartNew();
+                OperationResult lastFailure = OperationResult.Failure(
+                    MultiplayerErrorCode.TransportFailed,
+                    "multiplayer.error.connection_lost");
+
+                for (int attemptIndex = 0; attemptIndex < policy.MaxAttempts; attemptIndex++)
+                {
+                    if (!IsCurrent(generation) || Phase != SessionPhase.Reconnecting)
+                    {
+                        return SetLastResult(OperationResult.Failure(
+                            MultiplayerErrorCode.Cancelled,
+                            "multiplayer.error.reconnect_cancelled"));
+                    }
+
+                    ReconnectBlockReason block = policy.Evaluate(
+                        attemptIndex,
+                        stopwatch.Elapsed,
+                        reconnectCancellation.IsCancellationRequested,
+                        out ReconnectAttempt attempt);
+                    if (block != ReconnectBlockReason.None)
+                    {
+                        break;
+                    }
+
+                    _reconnectAttempt = attempt.Number;
+                    UpdateReconnectElapsed(stopwatch.Elapsed);
+                    try
+                    {
+                        if (attempt.Delay > TimeSpan.Zero)
+                        {
+                            await Task.Delay(attempt.Delay, reconnectCancellation.Token);
+                        }
+                    }
+                    catch (OperationCanceledException)
+                    {
+                        return SetLastResult(OperationResult.Failure(
+                            MultiplayerErrorCode.Cancelled,
+                            "multiplayer.error.reconnect_cancelled"));
+                    }
+
+                    UpdateReconnectElapsed(stopwatch.Elapsed);
+                    OperationResult<RoomSnapshot> refresh = await RunWithTimeout(
+                        token => _platform.RefreshAsync(token),
+                        attempt.Timeout,
+                        reconnectCancellation.Token,
+                        MultiplayerErrorCode.RoomNotFound,
+                        "multiplayer.error.reconnect_refresh_failed");
+                    if (!refresh.Succeeded)
+                    {
+                        lastFailure = refresh.Result;
+                        if (refresh.ErrorCode == MultiplayerErrorCode.HostLeft)
+                        {
+                            EnterHostLeftRecovery();
+                            return SetLastResult(refresh.Result);
+                        }
+
+                        continue;
+                    }
+
+                    RoomSnapshot refreshedRoom = refresh.Value;
+                    if (refreshedRoom == null || refreshedRoom.HostId != reconnectRoom.HostId ||
+                        refreshedRoom.SessionId != reconnectRoom.SessionId ||
+                        refreshedRoom.SessionGeneration > reconnectRoom.SessionGeneration)
+                    {
+                        EnterHostLeftRecovery();
+                        return SetLastResult(OperationResult.Failure(
+                            MultiplayerErrorCode.HostLeft,
+                            "multiplayer.error.reconnect_session_replaced"));
+                    }
+
+                    if (refreshedRoom.SessionGeneration == reconnectRoom.SessionGeneration)
+                    {
+                        _room = MergeConnectionPhases(reconnectRoom, refreshedRoom).WithSession(
+                            reconnectRoom.SessionGeneration,
+                            reconnectRoom.Phase,
+                            reconnectRoom.HasStarted,
+                            reconnectRoom.IsJoinable);
+                    }
+                    else
+                    {
+                        _room = reconnectRoom;
+                    }
+
+                    MultiplayerSessionContext context = new MultiplayerSessionContext(
+                        _room,
+                        _platform.LocalUser,
+                        false);
+                    OperationResult prepare = await RunWithTimeout(
+                        token => _game.PrepareSessionAsync(context, token),
+                        attempt.Timeout,
+                        reconnectCancellation.Token,
+                        MultiplayerErrorCode.SynchronizationFailed,
+                        "multiplayer.error.reconnect_prepare_failed");
+                    if (!prepare.Succeeded)
+                    {
+                        lastFailure = prepare;
+                        continue;
+                    }
+
+                    OperationResult start = await RunWithTimeout(
+                        token => _driver.StartClientAsync(
+                            new ClientConnectionOptions(
+                                _room.Id,
+                                _room.HostId,
+                                _room.SessionId,
+                                _room.SessionGeneration,
+                                _room.ConnectionAddress),
+                            token),
+                        attempt.Timeout,
+                        reconnectCancellation.Token,
+                        MultiplayerErrorCode.TransportFailed,
+                        "multiplayer.error.reconnect_transport_failed");
+                    if (!start.Succeeded)
+                    {
+                        lastFailure = start;
+                        continue;
+                    }
+
+                    if (Phase == SessionPhase.Reconnecting)
+                    {
+                        Transition(SessionPhase.Synchronizing);
+                    }
+
+                    OperationResult synchronize = await RunWithTimeout(
+                        token => _game.SynchronizeLocalAsync(context, token),
+                        Minimum(attempt.Timeout, _config.InitialSyncTimeout),
+                        reconnectCancellation.Token,
+                        MultiplayerErrorCode.SynchronizationFailed,
+                        "multiplayer.error.reconnect_sync_failed");
+                    if (synchronize.Succeeded)
+                    {
+                        _reconnectAttempt = 0;
+                        _reconnectRemaining = TimeSpan.Zero;
+                        return ConfirmLocalSynchronization(_room.SessionId, _room.SessionGeneration);
+                    }
+
+                    lastFailure = synchronize;
+                    await RunWithTimeout(
+                        token => _driver.StopAsync(DisconnectIntent.Failure, token),
+                        _config.LeaveTimeout,
+                        CancellationToken.None,
+                        MultiplayerErrorCode.LeaveFailed,
+                        "multiplayer.error.reconnect_cleanup_failed");
+                    if (Phase == SessionPhase.Synchronizing)
+                    {
+                        Transition(SessionPhase.Reconnecting);
+                    }
+                }
+
+                _reconnectAttempt = policy.MaxAttempts;
+                if (Phase == SessionPhase.Reconnecting)
+                {
+                    return ExpireReconnect();
+                }
+
+                return SetLastResult(lastFailure);
+            }
+            finally
+            {
+                if (ReferenceEquals(_activeReconnectCancellation, reconnectCancellation))
+                {
+                    _activeReconnectCancellation = null;
+                }
+
+                reconnectCancellation.Dispose();
                 EndOperation();
             }
         }
@@ -750,8 +1048,10 @@ namespace ZeroEngine.Multiplayer
                     "multiplayer.error.reconnect_not_active"));
             }
 
+            _activeReconnectCancellation?.Cancel();
             _operationGeneration.Invalidate();
             _reconnectRemaining = TimeSpan.Zero;
+            _reconnectAttempt = 0;
             Transition(SessionPhase.Recovery);
             return SetLastResult(OperationResult.Failure(
                 MultiplayerErrorCode.Cancelled,
@@ -769,6 +1069,7 @@ namespace ZeroEngine.Multiplayer
 
             _operationGeneration.Invalidate();
             _reconnectRemaining = TimeSpan.Zero;
+            _reconnectAttempt = 0;
             Transition(SessionPhase.Recovery);
             return SetLastResult(OperationResult.Failure(
                 MultiplayerErrorCode.ReconnectExpired,
@@ -850,6 +1151,7 @@ namespace ZeroEngine.Multiplayer
                 _retryRoomId = default(RoomId);
                 _inviteRouter.Clear();
                 _reconnectRemaining = TimeSpan.Zero;
+                _reconnectAttempt = 0;
                 Transition(SessionPhase.Idle);
 
                 OperationResult result = !stop.Succeeded ? stop : leave;
@@ -869,6 +1171,14 @@ namespace ZeroEngine.Multiplayer
             }
 
             _disposed = true;
+            _activeReconnectCancellation?.Cancel();
+            _activeReconnectCancellation = null;
+            var expiries = new List<CancellationTokenSource>(_peerReconnectExpiry.Values);
+            _peerReconnectExpiry.Clear();
+            foreach (CancellationTokenSource expiry in expiries)
+            {
+                expiry.Cancel();
+            }
             _stateMachine.PhaseChanged -= OnPhaseChanged;
             _platform.RoomEvent -= OnRoomEvent;
             _platform.JoinRequested -= OnJoinRequested;
@@ -998,6 +1308,11 @@ namespace ZeroEngine.Multiplayer
                 "multiplayer.error.stale_operation");
         }
 
+        private static TimeSpan Minimum(TimeSpan left, TimeSpan right)
+        {
+            return left <= right ? left : right;
+        }
+
         private OperationResult SetLastResult(OperationResult result)
         {
             _lastResult = result;
@@ -1060,15 +1375,39 @@ namespace ZeroEngine.Multiplayer
 
         private void OnRoomEvent(PlatformRoomEvent roomEvent)
         {
-            if (_room == null || roomEvent.RoomId != _room.Id ||
-                roomEvent.SessionGeneration != _room.SessionGeneration)
+            if (_room == null || roomEvent.RoomId != _room.Id)
             {
+                return;
+            }
+
+            if (roomEvent.SessionGeneration != _room.SessionGeneration &&
+                !IsValidRemoteGenerationAdvance(roomEvent.Snapshot))
+            {
+                return;
+            }
+
+            if (roomEvent.Type == RoomEventType.HostLeft)
+            {
+                EnterHostLeftRecovery();
+                NotifyChanged();
+                return;
+            }
+
+            if (roomEvent.Type == RoomEventType.MemberLeft && Phase == SessionPhase.InGame)
+            {
+                MultiplayerPeer disconnectedPeer;
+                if (TryGetPeer(roomEvent.MemberId, out disconnectedPeer))
+                {
+                    MarkPeerDisconnected(disconnectedPeer);
+                }
+
                 return;
             }
 
             if (roomEvent.Snapshot != null)
             {
                 _room = MergeConnectionPhases(_room, roomEvent.Snapshot);
+                ApplyRemoteRoomPhase();
             }
 
             if (roomEvent.Type == RoomEventType.MemberLeft)
@@ -1088,12 +1427,53 @@ namespace ZeroEngine.Multiplayer
                     }
                 }
             }
-            else if (roomEvent.Type == RoomEventType.HostLeft)
+            NotifyChanged();
+        }
+
+        private void ApplyRemoteRoomPhase()
+        {
+            if (_room == null || _room.IsHost(_platform.LocalUser.Id))
             {
-                EnterHostLeftRecovery();
+                return;
             }
 
-            NotifyChanged();
+            if (_room.Phase == SessionPhase.Starting && Phase == SessionPhase.Ready)
+            {
+                Transition(SessionPhase.Starting);
+            }
+            else if (_room.Phase == SessionPhase.InGame &&
+                     (Phase == SessionPhase.Ready || Phase == SessionPhase.Starting ||
+                      Phase == SessionPhase.Synchronizing))
+            {
+                Transition(SessionPhase.InGame);
+            }
+            else if (_room.Phase == SessionPhase.Ready && Phase == SessionPhase.Starting)
+            {
+                Transition(SessionPhase.Ready);
+            }
+            else if (_room.Phase == SessionPhase.Failed &&
+                     MultiplayerSessionStateMachine.CanTransition(Phase, SessionPhase.Failed))
+            {
+                Transition(SessionPhase.Failed);
+                SetLastResult(OperationResult.Failure(
+                    MultiplayerErrorCode.SynchronizationFailed,
+                    "multiplayer.error.remote_session_failed"));
+            }
+        }
+
+        private bool IsValidRemoteGenerationAdvance(RoomSnapshot incoming)
+        {
+            if (incoming == null || _room == null || _room.IsHost(_platform.LocalUser.Id) ||
+                incoming.Id != _room.Id || incoming.SessionId != _room.SessionId ||
+                incoming.SessionGeneration <= _room.SessionGeneration)
+            {
+                return false;
+            }
+
+            return incoming.Phase == SessionPhase.Starting ||
+                   incoming.Phase == SessionPhase.InGame ||
+                   incoming.Phase == SessionPhase.Ready ||
+                   incoming.Phase == SessionPhase.Failed;
         }
 
         private static RoomSnapshot MergeConnectionPhases(
@@ -1192,16 +1572,43 @@ namespace ZeroEngine.Multiplayer
                 return;
             }
 
+            if (connectionEvent.Type == ConnectionEventType.PeerConnected && _driver.IsServer)
+            {
+                MultiplayerPeer connectedPeer;
+                if (TryGetPeer(connectionEvent.UserId, out connectedPeer))
+                {
+                    CancelPeerReconnectExpiry(connectedPeer.User.Id);
+                    if (Phase == SessionPhase.InGame)
+                    {
+                        _ = SynchronizeConnectedPeerAsync(connectedPeer, true);
+                    }
+                    else if (Phase == SessionPhase.InRoom || Phase == SessionPhase.Ready)
+                    {
+                        _ = SynchronizeConnectedPeerAsync(connectedPeer, false);
+                    }
+                }
+
+                return;
+            }
+
+            bool localIsHost = _room != null && _room.IsHost(_platform.LocalUser.Id);
             if (connectionEvent.Type == ConnectionEventType.LocalDisconnected &&
-                Phase == SessionPhase.InGame && _config.ReconnectEnabled)
+                Phase == SessionPhase.InGame && _config.ReconnectEnabled && !localIsHost)
             {
                 _reconnectRemaining = _config.ReconnectHardDeadline;
+                _reconnectAttempt = 0;
                 Transition(SessionPhase.Reconnecting);
                 SetLastResult(OperationResult.Failure(
                     MultiplayerErrorCode.TransportFailed,
                     string.IsNullOrWhiteSpace(connectionEvent.MessageKey)
                         ? "multiplayer.error.connection_lost"
                         : connectionEvent.MessageKey));
+            }
+            else if ((connectionEvent.Type == ConnectionEventType.LocalDisconnected ||
+                      connectionEvent.Type == ConnectionEventType.Failed) &&
+                     Phase == SessionPhase.InGame && localIsHost)
+            {
+                EnterTransportRecovery(connectionEvent);
             }
             else if (connectionEvent.Type == ConnectionEventType.ClientConnected &&
                      Phase == SessionPhase.Reconnecting)
@@ -1214,16 +1621,120 @@ namespace ZeroEngine.Multiplayer
                 MultiplayerPeer peer;
                 if (TryGetPeer(connectionEvent.UserId, out peer))
                 {
-                    _room = _room.WithMemberPhase(peer.User.Id, MemberConnectionPhase.Disconnected);
-                    OperationResult publish = PublishCurrentRoomState();
-                    if (!publish.Succeeded)
-                    {
-                        SetLastResult(publish);
-                    }
-
-                    _game.OnPeerDisconnected(peer, _config.ReconnectGracePeriod);
-                    NotifyChanged();
+                    MarkPeerDisconnected(peer);
                 }
+            }
+        }
+
+        private void EnterTransportRecovery(ConnectionEvent connectionEvent)
+        {
+            if (!MultiplayerSessionStateMachine.CanTransition(Phase, SessionPhase.Recovery))
+            {
+                return;
+            }
+
+            _reconnectRemaining = TimeSpan.Zero;
+            _reconnectAttempt = 0;
+            Transition(SessionPhase.Recovery);
+            SetLastResult(OperationResult.Failure(
+                connectionEvent.ErrorCode == MultiplayerErrorCode.None
+                    ? MultiplayerErrorCode.TransportFailed
+                    : connectionEvent.ErrorCode,
+                string.IsNullOrWhiteSpace(connectionEvent.MessageKey)
+                    ? "multiplayer.error.host_transport_failed"
+                    : connectionEvent.MessageKey));
+        }
+
+        private async Task SynchronizeConnectedPeerAsync(MultiplayerPeer peer, bool restoring)
+        {
+            try
+            {
+                if (restoring)
+                {
+                    await RestorePeerAsync(peer, CancellationToken.None);
+                }
+                else
+                {
+                    await SynchronizePeerAsync(peer, CancellationToken.None);
+                }
+            }
+            catch (Exception exception)
+            {
+                SetLastResult(OperationResult.Failure(
+                    MultiplayerErrorCode.SynchronizationFailed,
+                    "multiplayer.error.peer_sync_exception",
+                    exception.GetType().Name));
+            }
+        }
+
+        private void MarkPeerDisconnected(MultiplayerPeer peer)
+        {
+            if (_room == null || Phase != SessionPhase.InGame)
+            {
+                return;
+            }
+
+            _room = _room.WithMemberPhase(peer.User.Id, MemberConnectionPhase.Disconnected);
+            OperationResult publish = PublishCurrentRoomState();
+            if (!publish.Succeeded)
+            {
+                SetLastResult(publish);
+            }
+
+            _game.OnPeerDisconnected(peer, _config.ReconnectGracePeriod);
+            SchedulePeerReconnectExpiry(peer);
+            NotifyChanged();
+        }
+
+        private void SchedulePeerReconnectExpiry(MultiplayerPeer peer)
+        {
+            CancelPeerReconnectExpiry(peer.User.Id);
+            var cancellation = new CancellationTokenSource();
+            _peerReconnectExpiry[peer.User.Id] = cancellation;
+            _ = ExpirePeerReconnectAfterDelayAsync(
+                peer,
+                _room == null ? default(SessionId) : _room.SessionId,
+                _room == null ? 0 : _room.SessionGeneration,
+                cancellation);
+        }
+
+        private async Task ExpirePeerReconnectAfterDelayAsync(
+            MultiplayerPeer peer,
+            SessionId sessionId,
+            long sessionGeneration,
+            CancellationTokenSource cancellation)
+        {
+            try
+            {
+                await Task.Delay(_config.ReconnectGracePeriod, cancellation.Token);
+                if (!cancellation.IsCancellationRequested && _room != null &&
+                    _room.SessionId == sessionId && _room.SessionGeneration == sessionGeneration &&
+                    Phase == SessionPhase.InGame)
+                {
+                    ExpirePeerReconnect(peer);
+                }
+            }
+            catch (OperationCanceledException)
+            {
+            }
+            finally
+            {
+                if (_peerReconnectExpiry.TryGetValue(peer.User.Id, out CancellationTokenSource current) &&
+                    ReferenceEquals(current, cancellation))
+                {
+                    _peerReconnectExpiry.Remove(peer.User.Id);
+                }
+
+                cancellation.Dispose();
+            }
+        }
+
+        private void CancelPeerReconnectExpiry(PlatformUserId userId)
+        {
+            if (_peerReconnectExpiry.TryGetValue(userId, out CancellationTokenSource cancellation))
+            {
+                _peerReconnectExpiry.Remove(userId);
+                cancellation.Cancel();
             }
         }
 
@@ -1253,9 +1764,11 @@ namespace ZeroEngine.Multiplayer
                 Transition(SessionPhase.Reconnecting);
             }
 
-            if (Phase == SessionPhase.Reconnecting)
+            if (Phase == SessionPhase.Reconnecting ||
+                MultiplayerSessionStateMachine.CanTransition(Phase, SessionPhase.Recovery))
             {
                 _reconnectRemaining = TimeSpan.Zero;
+                _reconnectAttempt = 0;
                 Transition(SessionPhase.Recovery);
                 SetLastResult(OperationResult.Failure(
                     MultiplayerErrorCode.HostLeft,

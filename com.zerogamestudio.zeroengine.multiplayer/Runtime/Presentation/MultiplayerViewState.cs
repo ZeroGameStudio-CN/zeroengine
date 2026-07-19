@@ -17,7 +17,8 @@ namespace ZeroEngine.Multiplayer.Presentation
             string errorMessageKey,
             IReadOnlyList<string> errorArguments,
             string progressMessageKey,
-            TimeSpan reconnectRemaining)
+            TimeSpan reconnectRemaining,
+            int reconnectAttempt)
         {
             Phase = phase;
             Room = room;
@@ -31,6 +32,7 @@ namespace ZeroEngine.Multiplayer.Presentation
             ErrorArguments = errorArguments ?? Array.Empty<string>();
             ProgressMessageKey = progressMessageKey ?? string.Empty;
             ReconnectRemaining = reconnectRemaining;
+            ReconnectAttempt = reconnectAttempt;
         }
 
         public SessionPhase Phase { get; }
@@ -45,6 +47,7 @@ namespace ZeroEngine.Multiplayer.Presentation
         public IReadOnlyList<string> ErrorArguments { get; }
         public string ProgressMessageKey { get; }
         public TimeSpan ReconnectRemaining { get; }
+        public int ReconnectAttempt { get; }
 
         public static MultiplayerViewState Create(
             MultiplayerSessionSnapshot snapshot,
@@ -75,7 +78,8 @@ namespace ZeroEngine.Multiplayer.Presentation
                 snapshot.LastResult.Succeeded ? string.Empty : snapshot.LastResult.MessageKey,
                 snapshot.LastResult.Succeeded ? Array.Empty<string>() : snapshot.LastResult.MessageArguments,
                 GetProgressMessageKey(snapshot.Phase),
-                snapshot.ReconnectRemaining);
+                snapshot.ReconnectRemaining,
+                snapshot.ReconnectAttempt);
         }
 
         private static bool MeetsReadyConditions(RoomSnapshot room, int minimumPlayers)

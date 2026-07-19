@@ -61,8 +61,13 @@ namespace ZeroEngine.Multiplayer
     public interface IMultiplayerGameAdapter
     {
         CompatibilityDescriptor GetCompatibility();
+        CompatibilityDescriptor GetCompatibility(string gameRoomId);
 
         Task<OperationResult> PrepareSessionAsync(
+            MultiplayerSessionContext context,
+            CancellationToken cancellationToken);
+
+        Task<OperationResult> SynchronizeLocalAsync(
             MultiplayerSessionContext context,
             CancellationToken cancellationToken);
 

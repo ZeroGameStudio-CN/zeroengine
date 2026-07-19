@@ -17,6 +17,12 @@ namespace ZeroEngine.Multiplayer.Tests
         public void SetUp()
         {
             _config = ScriptableObject.CreateInstance<MultiplayerSessionConfig>();
+            typeof(MultiplayerSessionConfig)
+                .GetField(
+                    "reconnectRetryIntervalsSeconds",
+                    System.Reflection.BindingFlags.Instance |
+                    System.Reflection.BindingFlags.NonPublic)
+                .SetValue(_config, new[] { 0f, 0f, 0f });
             _platform = new FakePlatformRoomService
             {
                 LocalUser = TestData.Host,
@@ -182,7 +188,7 @@ namespace ZeroEngine.Multiplayer.Tests
         }
 
         [Test]
-        public void JoinSuccess_WaitsForAuthoritativeSynchronizationConfirmation()
+        public void JoinSuccess_PreparesConnectsAndSynchronizesBeforeReady()
         {
             _platform.LocalUser = TestData.Guest;
             Assert.IsTrue(Complete(_coordinator.InitializeAsync(CancellationToken.None)).Succeeded);
@@ -192,19 +198,9 @@ namespace ZeroEngine.Multiplayer.Tests
                 CancellationToken.None));
 
             Assert.IsTrue(join.Succeeded);
-            Assert.AreEqual(SessionPhase.Synchronizing, _coordinator.Phase);
-
-            OperationResult staleConfirmation = _coordinator.ConfirmLocalSynchronization(
-                join.Value.SessionId,
-                join.Value.SessionGeneration + 1);
-            Assert.AreEqual(MultiplayerErrorCode.SessionMismatch, staleConfirmation.ErrorCode);
-            Assert.AreEqual(SessionPhase.Synchronizing, _coordinator.Phase);
-
-            OperationResult confirmation = _coordinator.ConfirmLocalSynchronization(
-                join.Value.SessionId,
-                join.Value.SessionGeneration);
-            Assert.IsTrue(confirmation.Succeeded);
             Assert.AreEqual(SessionPhase.Ready, _coordinator.Phase);
+            Assert.AreEqual(1, _game.PrepareCalls);
+            Assert.AreEqual(1, _game.LocalSynchronizeCalls);
         }
 
         [Test]
@@ -221,7 +217,7 @@ namespace ZeroEngine.Multiplayer.Tests
             Assert.IsTrue(result.Succeeded);
             Assert.AreEqual(1, _platform.LeaveCalls);
             Assert.AreEqual(1, _platform.JoinCalls);
-            Assert.AreEqual(SessionPhase.Synchronizing, _coordinator.Phase);
+            Assert.AreEqual(SessionPhase.Ready, _coordinator.Phase);
         }
 
         [Test]
@@ -299,11 +295,11 @@ namespace ZeroEngine.Multiplayer.Tests
         [Test]
         public void UnexpectedDisconnect_EntersReconnectAndCanBeCancelledToRecovery()
         {
-            ReachInGameHost();
+            ReachInGameGuest();
 
             _driver.Emit(new ConnectionEvent(
                 ConnectionEventType.LocalDisconnected,
-                TestData.Host.Id,
+                TestData.Guest.Id,
                 MultiplayerErrorCode.TransportFailed,
                 "test.connection_lost"));
             _coordinator.UpdateReconnectElapsed(System.TimeSpan.FromSeconds(3));
@@ -319,21 +315,201 @@ namespace ZeroEngine.Multiplayer.Tests
         [Test]
         public void HostLeftDuringReconnect_EndsInRecoveryImmediately()
         {
-            ReachInGameHost();
+            ReachInGameGuest();
             _driver.Emit(new ConnectionEvent(
                 ConnectionEventType.LocalDisconnected,
-                TestData.Host.Id,
+                TestData.Guest.Id,
                 MultiplayerErrorCode.TransportFailed,
                 "test.connection_lost"));
 
             _driver.Emit(new ConnectionEvent(
                 ConnectionEventType.LocalDisconnected,
-                TestData.Host.Id,
+                TestData.Guest.Id,
                 MultiplayerErrorCode.HostLeft,
                 "test.host_left"));
 
             Assert.AreEqual(SessionPhase.Recovery, _coordinator.Phase);
             Assert.AreEqual(MultiplayerErrorCode.HostLeft, _coordinator.GetSnapshot().LastResult.ErrorCode);
+        }
+
+        [Test]
+        public void ClientReconnect_RestoresSameSessionAndReturnsToInGame()
+        {
+            ReachInGameGuest();
+            _driver.Emit(new ConnectionEvent(
+                ConnectionEventType.LocalDisconnected,
+                TestData.Guest.Id,
+                MultiplayerErrorCode.TransportFailed,
+                "test.connection_lost"));
+
+            OperationResult result = Complete(
+                _coordinator.ReconnectClientAsync(CancellationToken.None));
+
+            Assert.IsTrue(result.Succeeded);
+            Assert.AreEqual(SessionPhase.InGame, _coordinator.Phase);
+            Assert.AreEqual(2, _driver.StartClientCalls);
+            Assert.AreEqual(2, _game.PrepareCalls);
+            Assert.AreEqual(2, _game.LocalSynchronizeCalls);
+            Assert.AreEqual(0, _coordinator.GetSnapshot().ReconnectAttempt);
+            Assert.AreEqual(System.TimeSpan.Zero, _coordinator.GetSnapshot().ReconnectRemaining);
+        }
+
+        [Test]
+        public void ClientReconnect_AcceptsStalePlatformDescriptorAfterAuthenticatedStart()
+        {
+            ReachReadyGuest();
+            RoomSnapshot ready = _coordinator.CurrentRoom;
+            Assert.IsTrue(_coordinator.ConfirmRemoteSessionStarted(
+                ready.SessionId,
+                ready.SessionGeneration + 1).Succeeded);
+            Assert.Less(
+                _platform.CurrentRoom.SessionGeneration,
+                _coordinator.CurrentRoom.SessionGeneration);
+            _driver.Emit(new ConnectionEvent(
+                ConnectionEventType.LocalDisconnected,
+                TestData.Guest.Id,
+                MultiplayerErrorCode.TransportFailed,
+                "test.connection_lost"));
+
+            OperationResult result = Complete(
+                _coordinator.ReconnectClientAsync(CancellationToken.None));
+
+            Assert.IsTrue(result.Succeeded);
+            Assert.AreEqual(SessionPhase.InGame, _coordinator.Phase);
+            Assert.AreEqual(
+                ready.SessionGeneration + 1,
+                _coordinator.CurrentRoom.SessionGeneration);
+        }
+
+        [Test]
+        public void ClientReconnect_AttemptsExhaustedReportsReconnectExpired()
+        {
+            ReachInGameGuest();
+            _driver.Emit(new ConnectionEvent(
+                ConnectionEventType.LocalDisconnected,
+                TestData.Guest.Id,
+                MultiplayerErrorCode.TransportFailed,
+                "test.connection_lost"));
+            _driver.StartClientResult = OperationResult.Failure(
+                MultiplayerErrorCode.TransportFailed,
+                "test.reconnect_failed");
+
+            OperationResult result = Complete(
+                _coordinator.ReconnectClientAsync(CancellationToken.None));
+
+            Assert.IsFalse(result.Succeeded);
+            Assert.AreEqual(MultiplayerErrorCode.ReconnectExpired, result.ErrorCode);
+            Assert.AreEqual(SessionPhase.Recovery, _coordinator.Phase);
+            Assert.AreEqual(
+                MultiplayerErrorCode.ReconnectExpired,
+                _coordinator.GetSnapshot().LastResult.ErrorCode);
+            Assert.AreEqual(4, _driver.StartClientCalls);
+        }
+
+        [Test]
+        public void HostTransportFailure_EntersRecoveryWithoutClientReconnect()
+        {
+            ReachInGameHost();
+
+            _driver.Emit(new ConnectionEvent(
+                ConnectionEventType.Failed,
+                TestData.Host.Id,
+                MultiplayerErrorCode.TransportFailed,
+                "test.server_failed"));
+
+            Assert.AreEqual(SessionPhase.Recovery, _coordinator.Phase);
+            Assert.AreEqual(MultiplayerErrorCode.TransportFailed,
+                _coordinator.GetSnapshot().LastResult.ErrorCode);
+        }
+
+        [Test]
+        public void ClientAcceptsHostStartGenerationAdvance()
+        {
+            ReachReadyGuest();
+            long generation = _coordinator.CurrentRoom.SessionGeneration + 1;
+            RoomSnapshot starting = _coordinator.CurrentRoom.WithSession(
+                generation,
+                SessionPhase.Starting,
+                false,
+                false);
+            _platform.EmitRoomEvent(new PlatformRoomEvent(
+                RoomEventType.RoomUpdated,
+                starting.Id,
+                starting.SessionGeneration,
+                starting,
+                default(PlatformUserId)));
+            Assert.AreEqual(SessionPhase.Starting, _coordinator.Phase);
+
+            RoomSnapshot inGame = starting.WithSession(
+                generation,
+                SessionPhase.InGame,
+                true,
+                false);
+            _platform.EmitRoomEvent(new PlatformRoomEvent(
+                RoomEventType.RoomUpdated,
+                inGame.Id,
+                inGame.SessionGeneration,
+                inGame,
+                default(PlatformUserId)));
+
+            Assert.AreEqual(SessionPhase.InGame, _coordinator.Phase);
+            Assert.AreEqual(generation, _coordinator.CurrentRoom.SessionGeneration);
+        }
+
+        [Test]
+        public void ClientAcceptsAuthenticatedGameStartWithoutPlatformRoomUpdate()
+        {
+            ReachReadyGuest();
+            RoomSnapshot ready = _coordinator.CurrentRoom;
+            long generation = ready.SessionGeneration + 1;
+
+            OperationResult result = _coordinator.ConfirmRemoteSessionStarted(
+                ready.SessionId,
+                generation);
+
+            Assert.IsTrue(result.Succeeded);
+            Assert.AreEqual(SessionPhase.InGame, _coordinator.Phase);
+            Assert.AreEqual(generation, _coordinator.CurrentRoom.SessionGeneration);
+            Assert.IsTrue(_coordinator.CurrentRoom.HasStarted);
+        }
+
+        [Test]
+        public void ClientRejectsAuthenticatedGameStartWithoutGenerationAdvance()
+        {
+            ReachReadyGuest();
+            RoomSnapshot ready = _coordinator.CurrentRoom;
+
+            OperationResult result = _coordinator.ConfirmRemoteSessionStarted(
+                ready.SessionId,
+                ready.SessionGeneration);
+
+            Assert.IsFalse(result.Succeeded);
+            Assert.AreEqual(MultiplayerErrorCode.SessionMismatch, result.ErrorCode);
+            Assert.AreEqual(SessionPhase.Ready, _coordinator.Phase);
+        }
+
+        [Test]
+        public void ClientAcceptsHostFailedGenerationAdvance()
+        {
+            ReachReadyGuest();
+            long generation = _coordinator.CurrentRoom.SessionGeneration + 1;
+            RoomSnapshot failed = _coordinator.CurrentRoom.WithSession(
+                generation,
+                SessionPhase.Failed,
+                false,
+                false);
+
+            _platform.EmitRoomEvent(new PlatformRoomEvent(
+                RoomEventType.RoomUpdated,
+                failed.Id,
+                failed.SessionGeneration,
+                failed,
+                default(PlatformUserId)));
+
+            Assert.AreEqual(SessionPhase.Failed, _coordinator.Phase);
+            Assert.AreEqual(
+                MultiplayerErrorCode.SynchronizationFailed,
+                _coordinator.GetSnapshot().LastResult.ErrorCode);
         }
 
         [Test]
@@ -418,6 +594,34 @@ namespace ZeroEngine.Multiplayer.Tests
         {
             ReachReadyHost();
             Assert.IsTrue(Complete(_coordinator.StartGameAsync(CancellationToken.None)).Succeeded);
+            Assert.AreEqual(SessionPhase.InGame, _coordinator.Phase);
+        }
+
+        private void ReachReadyGuest()
+        {
+            _platform.LocalUser = TestData.Guest;
+            Assert.IsTrue(Complete(_coordinator.InitializeAsync(CancellationToken.None)).Succeeded);
+            Assert.IsTrue(Complete(_coordinator.JoinRoomAsync(
+                new RoomId("room-1"),
+                CancellationToken.None)).Succeeded);
+            Assert.AreEqual(SessionPhase.Ready, _coordinator.Phase);
+        }
+
+        private void ReachInGameGuest()
+        {
+            ReachReadyGuest();
+            long generation = _coordinator.CurrentRoom.SessionGeneration + 1;
+            RoomSnapshot inGame = _coordinator.CurrentRoom.WithSession(
+                generation,
+                SessionPhase.InGame,
+                true,
+                false);
+            _platform.EmitRoomEvent(new PlatformRoomEvent(
+                RoomEventType.RoomUpdated,
+                inGame.Id,
+                inGame.SessionGeneration,
+                inGame,
+                default(PlatformUserId)));
             Assert.AreEqual(SessionPhase.InGame, _coordinator.Phase);
         }
 

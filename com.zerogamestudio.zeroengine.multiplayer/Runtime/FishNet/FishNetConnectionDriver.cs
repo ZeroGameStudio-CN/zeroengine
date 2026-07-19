@@ -5,6 +5,7 @@ using System.Threading.Tasks;
 using FishNet.Connection;
 using FishNet.Managing;
 using FishNet.Transporting;
+using FishNet.Transporting.Multipass;
 using UnityEngine;
 
 namespace ZeroEngine.Multiplayer.FishNet
@@ -13,6 +14,7 @@ namespace ZeroEngine.Multiplayer.FishNet
     {
         [SerializeField] private NetworkManager networkManager;
         [SerializeField] private Transport transport;
+        [SerializeField] private Transport routedTransport;
         [SerializeField] private FishNetIdentityBridge identityBridge;
         [SerializeField] private TransportMode transportMode = TransportMode.LocalDirect;
         [SerializeField] private string localAddress = "127.0.0.1";
@@ -26,11 +28,14 @@ namespace ZeroEngine.Multiplayer.FishNet
         private bool _wasServerActive;
         private PlatformUserId _activeHostId;
         private IRemoteConnectionAuthorizer _remoteAuthorizer;
+        private int _multipassTransportIndex = -1;
 
         public ConnectionPhase Phase { get; private set; } = ConnectionPhase.Stopped;
         public bool IsServer => networkManager != null && networkManager.IsServerStarted;
         public bool IsClient => networkManager != null && networkManager.IsClientStarted;
         public TransportMode TransportMode => transportMode;
+        public Transport ActiveTransport => transport;
+        public Transport RoutedTransport => routedTransport;
         public string LocalAddress => localAddress ?? string.Empty;
         public ushort Port => port;
         public bool HasRemoteAuthorizer => _remoteAuthorizer != null;
@@ -56,14 +61,35 @@ namespace ZeroEngine.Multiplayer.FishNet
             string address,
             ushort selectedPort)
         {
+            Configure(
+                manager,
+                selectedTransport,
+                selectedTransport,
+                selectedIdentityBridge,
+                mode,
+                address,
+                selectedPort);
+        }
+
+        public void Configure(
+            NetworkManager manager,
+            Transport activeTransport,
+            Transport selectedRoute,
+            FishNetIdentityBridge selectedIdentityBridge,
+            TransportMode mode,
+            string address,
+            ushort selectedPort)
+        {
             Unsubscribe();
             networkManager = manager;
-            transport = selectedTransport;
+            transport = activeTransport;
+            routedTransport = selectedRoute;
             identityBridge = selectedIdentityBridge;
             transportMode = mode;
             localAddress = string.IsNullOrWhiteSpace(address) ? "127.0.0.1" : address.Trim();
             port = selectedPort;
             ResolveReferences();
+            ConfigureMultipassRoute();
             Subscribe();
         }
 
@@ -88,6 +114,12 @@ namespace ZeroEngine.Multiplayer.FishNet
                 return OperationResult.Failure(
                     MultiplayerErrorCode.TransportUnavailable,
                     "multiplayer.fishnet.active_transport_mismatch");
+            }
+
+            OperationResult route = ConfigureMultipassRoute();
+            if (!route.Succeeded)
+            {
+                return route;
             }
 
             if (identityBridge == null || port == 0 || string.IsNullOrWhiteSpace(localAddress))
@@ -134,12 +166,11 @@ namespace ZeroEngine.Multiplayer.FishNet
             Phase = ConnectionPhase.StartingHost;
             _intentionalStop = false;
             _remoteUsers.Clear();
-            transport.SetPort(port);
-            transport.SetClientAddress(localAddress);
+            ConfigureSelectedTransport(localAddress);
 
             try
             {
-                if (!networkManager.IsServerStarted && !transport.StartConnection(true))
+                if (!networkManager.IsServerStarted && !StartSelectedConnection(true))
                 {
                     return Fail("multiplayer.fishnet.server_start_rejected");
                 }
@@ -148,7 +179,7 @@ namespace ZeroEngine.Multiplayer.FishNet
                 _wasServerActive = true;
 
                 _hostLocalClientStarting = true;
-                if (!networkManager.IsClientStarted && !transport.StartConnection(false))
+                if (!networkManager.IsClientStarted && !StartSelectedConnection(false))
                 {
                     await StopStartedTransportsAsync();
                     return Fail("multiplayer.fishnet.host_client_start_rejected");
@@ -206,12 +237,11 @@ namespace ZeroEngine.Multiplayer.FishNet
             Phase = ConnectionPhase.StartingClient;
             _intentionalStop = false;
             _activeHostId = options.HostId;
-            transport.SetPort(port);
-            transport.SetClientAddress(address);
+            ConfigureSelectedTransport(address);
 
             try
             {
-                if (!networkManager.IsClientStarted && !transport.StartConnection(false))
+                if (!networkManager.IsClientStarted && !StartSelectedConnection(false))
                 {
                     return Fail("multiplayer.fishnet.client_start_rejected");
                 }
@@ -250,19 +280,19 @@ namespace ZeroEngine.Multiplayer.FishNet
             _intentionalStop = true;
             try
             {
-                if (transport.GetConnectionState(false) != LocalConnectionState.Stopped)
+                if (GetSelectedConnectionState(false) != LocalConnectionState.Stopped)
                 {
-                    transport.StopConnection(false);
+                    StopSelectedConnection(false);
                     await WaitUntilAsync(
-                        () => transport.GetConnectionState(false) == LocalConnectionState.Stopped,
+                        () => GetSelectedConnectionState(false) == LocalConnectionState.Stopped,
                         cancellationToken);
                 }
 
-                if (transport.GetConnectionState(true) != LocalConnectionState.Stopped)
+                if (GetSelectedConnectionState(true) != LocalConnectionState.Stopped)
                 {
-                    transport.StopConnection(true);
+                    StopSelectedConnection(true);
                     await WaitUntilAsync(
-                        () => transport.GetConnectionState(true) == LocalConnectionState.Stopped,
+                        () => GetSelectedConnectionState(true) == LocalConnectionState.Stopped,
                         cancellationToken);
                 }
 
@@ -299,6 +329,11 @@ namespace ZeroEngine.Multiplayer.FishNet
             if (networkManager != null && transport == null && networkManager.TransportManager != null)
             {
                 transport = networkManager.TransportManager.Transport;
+            }
+
+            if (routedTransport == null)
+            {
+                routedTransport = transport;
             }
 
             if (identityBridge == null)
@@ -461,14 +496,14 @@ namespace ZeroEngine.Multiplayer.FishNet
             _intentionalStop = true;
             try
             {
-                if (transport != null && transport.GetConnectionState(false) != LocalConnectionState.Stopped)
+                if (transport != null && GetSelectedConnectionState(false) != LocalConnectionState.Stopped)
                 {
-                    transport.StopConnection(false);
+                    StopSelectedConnection(false);
                 }
 
-                if (transport != null && transport.GetConnectionState(true) != LocalConnectionState.Stopped)
+                if (transport != null && GetSelectedConnectionState(true) != LocalConnectionState.Stopped)
                 {
-                    transport.StopConnection(true);
+                    StopSelectedConnection(true);
                 }
 
                 await Task.Yield();
@@ -488,6 +523,99 @@ namespace ZeroEngine.Multiplayer.FishNet
                 cancellationToken.ThrowIfCancellationRequested();
                 await Task.Yield();
             }
+        }
+
+        private OperationResult ConfigureMultipassRoute()
+        {
+            _multipassTransportIndex = -1;
+            if (transport == null)
+            {
+                return OperationResult.Failure(
+                    MultiplayerErrorCode.TransportUnavailable,
+                    "multiplayer.fishnet.transport_missing");
+            }
+
+            if (!(transport is Multipass multipass))
+            {
+                if (routedTransport == null)
+                {
+                    routedTransport = transport;
+                }
+
+                return ReferenceEquals(transport, routedTransport)
+                    ? OperationResult.Success()
+                    : OperationResult.Failure(
+                        MultiplayerErrorCode.InvalidConfiguration,
+                        "multiplayer.fishnet.route_requires_multipass");
+            }
+
+            if (routedTransport == null)
+            {
+                return OperationResult.Failure(
+                    MultiplayerErrorCode.InvalidConfiguration,
+                    "multiplayer.fishnet.routed_transport_missing");
+            }
+
+            for (int index = 0; index < multipass.Transports.Count; index++)
+            {
+                if (ReferenceEquals(multipass.Transports[index], routedTransport))
+                {
+                    _multipassTransportIndex = index;
+                    break;
+                }
+            }
+
+            if (_multipassTransportIndex < 0)
+            {
+                return OperationResult.Failure(
+                    MultiplayerErrorCode.InvalidConfiguration,
+                    "multiplayer.fishnet.routed_transport_not_registered");
+            }
+
+            if (multipass.GlobalServerActions)
+            {
+                return OperationResult.Failure(
+                    MultiplayerErrorCode.InvalidConfiguration,
+                    "multiplayer.fishnet.multipass_global_server_actions_enabled");
+            }
+
+            multipass.SetClientTransport(_multipassTransportIndex);
+            return OperationResult.Success();
+        }
+
+        private void ConfigureSelectedTransport(string address)
+        {
+            if (transport is Multipass multipass)
+            {
+                multipass.SetClientTransport(_multipassTransportIndex);
+                multipass.SetPort(port, _multipassTransportIndex);
+                multipass.SetClientAddress(address, _multipassTransportIndex);
+                return;
+            }
+
+            transport.SetPort(port);
+            transport.SetClientAddress(address);
+        }
+
+        private bool StartSelectedConnection(bool server)
+        {
+            return transport is Multipass multipass
+                ? multipass.StartConnection(server, _multipassTransportIndex)
+                : transport.StartConnection(server);
+        }
+
+        private bool StopSelectedConnection(bool server)
+        {
+            return transport is Multipass multipass
+                ? multipass.StopConnection(server, _multipassTransportIndex)
+                : transport.StopConnection(server);
+        }
+
+        private LocalConnectionState GetSelectedConnectionState(bool server)
+        {
+            return transport is Multipass multipass
+                ? multipass.GetConnectionState(server, _multipassTransportIndex)
+                : transport.GetConnectionState(server);
         }
 
         private OperationResult Fail(string messageKey, params string[] arguments)
