@@ -26,6 +26,7 @@ namespace ZeroEngine.Audio
         [SerializeField] private AudioSource _bgmSource;
         [SerializeField] private AudioSource _secondaryBgmSource;
         [SerializeField] private float _crossFadeTime = 1f;
+        [SerializeField] private float _musicFadeOutTime = 1f;
 
         [Header("SFX Pooling")]
         [SerializeField, Min(1)] private int _initialPoolSize = 10;
@@ -52,6 +53,10 @@ namespace ZeroEngine.Audio
 
         public AudioMusicSO CurrentMusic => _currentMusic;
         public int ActiveEmitterCount => _activeEmitters.Count;
+        public float CrossFadeTime => _crossFadeTime;
+        public float MusicFadeOutTime => _musicFadeOutTime;
+        public int InitialPoolSize => _initialPoolSize;
+        public int MaximumPoolSize => _maximumPoolSize;
 
         protected override void Awake()
         {
@@ -128,6 +133,32 @@ namespace ZeroEngine.Audio
         public void SetVolumePersistenceEnabled(bool enabled)
         {
             _persistVolumeWithSaveManager = enabled;
+        }
+
+        /// <summary>
+        /// Configures runtime playback policy independently from mixer routing.
+        /// Call before activation when pool sizes must apply to initial allocation.
+        /// </summary>
+        public void ConfigurePlayback(
+            float crossFadeTime,
+            float musicFadeOutTime,
+            int initialPoolSize,
+            int maximumPoolSize)
+        {
+            _crossFadeTime = Mathf.Max(0f, crossFadeTime);
+            _musicFadeOutTime = Mathf.Max(0f, musicFadeOutTime);
+            _initialPoolSize = Mathf.Max(1, initialPoolSize);
+            _maximumPoolSize = Mathf.Max(
+                Mathf.Max(_initialPoolSize, maximumPoolSize),
+                _createdEmitterCount);
+
+            if (_poolRoot != null)
+            {
+                while (_createdEmitterCount < _initialPoolSize)
+                {
+                    CreateNewEmitter();
+                }
+            }
         }
 
         #region SFX
@@ -365,7 +396,12 @@ namespace ZeroEngine.Audio
                 return;
             }
 
-            float duration = fadeDuration < 0f ? _crossFadeTime : Mathf.Max(0f, fadeDuration);
+            float duration = fadeDuration >= 0f
+                ? fadeDuration
+                : music.TransitionDuration >= 0f
+                    ? music.TransitionDuration
+                    : _crossFadeTime;
+            duration = Mathf.Max(0f, duration);
             _currentMusic = music;
 
 #if UNITY_EDITOR
@@ -384,9 +420,16 @@ namespace ZeroEngine.Audio
             _bgmRoutine = StartCoroutine(TransitionMusicRoutine(music, duration));
         }
 
-        public void StopMusic(float fadeDuration = 1f)
+        public void StopMusic(float fadeDuration = -1f)
         {
+            AudioMusicSO stoppingMusic = _currentMusic;
             _currentMusic = null;
+            float duration = fadeDuration >= 0f
+                ? fadeDuration
+                : stoppingMusic != null && stoppingMusic.FadeOutDuration >= 0f
+                    ? stoppingMusic.FadeOutDuration
+                    : _musicFadeOutTime;
+            duration = Mathf.Max(0f, duration);
 
 #if UNITY_EDITOR
             if (!Application.isPlaying)
@@ -401,14 +444,14 @@ namespace ZeroEngine.Audio
                 StopCoroutine(_bgmRoutine);
             }
 
-            if (fadeDuration <= 0f || !isActiveAndEnabled || !gameObject.activeInHierarchy)
+            if (duration <= 0f || !isActiveAndEnabled || !gameObject.activeInHierarchy)
             {
                 StopMusicSources();
                 _bgmRoutine = null;
                 return;
             }
 
-            _bgmRoutine = StartCoroutine(FadeOutAllMusic(Mathf.Max(0f, fadeDuration)));
+            _bgmRoutine = StartCoroutine(FadeOutAllMusic(duration));
         }
 
         private IEnumerator TransitionMusicRoutine(AudioMusicSO music, float duration)

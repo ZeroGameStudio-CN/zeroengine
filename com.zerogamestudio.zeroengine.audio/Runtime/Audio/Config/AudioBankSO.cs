@@ -160,6 +160,20 @@ namespace ZeroEngine.Audio
                 errors.Add($"Audio bank event '{id}' has an invalid spatial blend.");
             }
 
+            if (cue.PanStereo < -1f
+                || cue.PanStereo > 1f
+                || cue.MinDistance < 0f
+                || cue.MaxDistance < cue.MinDistance
+                || cue.DopplerLevel < 0f
+                || cue.DopplerLevel > 5f
+                || cue.Spread < 0f
+                || cue.Spread > 360f
+                || cue.ReverbZoneMix < 0f
+                || cue.ReverbZoneMix > 1.1f)
+            {
+                errors.Add($"Audio bank event '{id}' has invalid spatial audio settings.");
+            }
+
             if (cue.Cooldown < 0f || cue.MaxInstances < 0 || cue.Priority < 0 || cue.Priority > 256)
             {
                 errors.Add($"Audio bank event '{id}' has invalid playback limits.");
@@ -179,6 +193,11 @@ namespace ZeroEngine.Audio
             if (music.Volume < 0f || music.Volume > 1f)
             {
                 errors.Add($"Audio bank event '{id}' has an invalid music volume.");
+            }
+
+            if (music.TransitionDuration < -1f || music.FadeOutDuration < -1f)
+            {
+                errors.Add($"Audio bank event '{id}' has invalid music transition settings.");
             }
         }
     }

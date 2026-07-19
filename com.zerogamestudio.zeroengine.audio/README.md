@@ -5,8 +5,8 @@ Unity-native audio management with stable event ids.
 ## Features
 
 - `AudioCueSO` random clip, volume and pitch variants
-- pooled 2D/3D SFX with cooldown and concurrency limits
-- intro/loop music with two-source unscaled-time crossfades
+- pooled 2D/3D SFX with configurable rolloff, distances, pan, Doppler, spread, reverb, cooldown, and concurrency limits
+- intro/loop music with per-track or manager-default unscaled-time crossfades and fade-outs
 - `AudioBankSO` registration for Addressables-style content scopes
 - `UnityAudioEventService` facade for project-owned semantic event ids
 - AudioMixer Master/BGM/SFX volume control
@@ -34,7 +34,12 @@ Projects with their own settings persistence should call
 `AudioManager.Configure(..., persistVolumeWithSaveManager: false)` and apply
 their saved Master/BGM/SFX values after configuration.
 
+Project-level playback defaults can be supplied with
+`AudioManager.ConfigurePlayback(crossFadeTime, musicFadeOutTime, initialPoolSize,
+maximumPoolSize)`. Set an `AudioMusicSO` transition value to `-1` to inherit
+those defaults.
+
 ## Version
 
-2.1.0 - Audio banks, stable scoped registration, concurrency limits, loop stop,
-and true unscaled-time music crossfades.
+2.2.0 - Configurable spatial SFX, per-track music transitions, and project-level
+music/pool playback defaults.
