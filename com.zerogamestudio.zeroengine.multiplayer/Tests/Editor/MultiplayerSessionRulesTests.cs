@@ -207,6 +207,58 @@ namespace ZeroEngine.Multiplayer.Tests
             }
         }
 
+        [Test]
+        public void UnityConfig_AdditionalValidation_IsPreservedThroughSettingsInterface()
+        {
+            MultiplayerSessionConfig config = ScriptableObject.CreateInstance<MultiplayerSessionConfig>();
+            try
+            {
+                typeof(MultiplayerSessionConfig)
+                    .GetField(
+                        "metadataPrefix",
+                        System.Reflection.BindingFlags.Instance |
+                        System.Reflection.BindingFlags.NonPublic)
+                    .SetValue(config, string.Empty);
+
+                CollectionAssert.Contains(
+                    MultiplayerSessionSettings.Validate(config),
+                    "multiplayer.config.metadata_prefix_missing");
+            }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(config);
+            }
+        }
+
+        [Test]
+        public void PlainSettings_AreValidatedWithoutUnityConfiguration()
+        {
+            FakeSessionSettings settings = new FakeSessionSettings();
+
+            Assert.IsEmpty(MultiplayerSessionSettings.Validate(settings));
+
+            ReconnectPolicy policy = MultiplayerSessionSettings.CreateReconnectPolicy(settings);
+            ReconnectAttempt first;
+            Assert.AreEqual(
+                ReconnectBlockReason.None,
+                policy.Evaluate(0, TimeSpan.Zero, false, out first));
+            Assert.AreEqual(TimeSpan.FromSeconds(0.5), first.Delay);
+        }
+
+        [Test]
+        public void PlainSettings_InvalidPlayerCount_IsRejected()
+        {
+            FakeSessionSettings settings = new FakeSessionSettings
+            {
+                MaxPlayers = 0,
+                MinimumPlayersToStart = 1
+            };
+
+            CollectionAssert.Contains(
+                MultiplayerSessionSettings.Validate(settings),
+                "multiplayer.config.max_players_invalid");
+        }
+
         private static ReconnectPolicy CreateReconnectPolicy()
         {
             return new ReconnectPolicy(

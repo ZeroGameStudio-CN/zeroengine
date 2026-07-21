@@ -1,8 +1,8 @@
 {
   "name": "com.zerogamestudio.zeroengine.multiplayer",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "displayName": "ZeroEngine.Multiplayer",
-  "description": "Configurable multiplayer room, FishNet connection, Steam lobby, LocalDirect, retry, and reconnect orchestration for ZeroEngine projects.",
+  "description": "SDK-neutral multiplayer session orchestration with optional FishNet, Steam, and LocalDirect adapters for ZeroEngine projects.",
   "unity": "2022.3",
   "unityRelease": "0f1",
   "dependencies": {},

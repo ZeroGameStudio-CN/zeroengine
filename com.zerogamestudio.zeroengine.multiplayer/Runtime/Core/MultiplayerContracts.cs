@@ -1,9 +1,37 @@
 using System;
+using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
 
 namespace ZeroEngine.Multiplayer
 {
+    public interface IMultiplayerSessionSettings
+    {
+        RoomVisibility DefaultVisibility { get; }
+        int MaxPlayers { get; }
+        int MinimumPlayersToStart { get; }
+        bool AllowJoinInProgress { get; }
+        TimeSpan CreateTimeout { get; }
+        TimeSpan JoinTimeout { get; }
+        TimeSpan ConnectionTimeout { get; }
+        TimeSpan InitialSyncTimeout { get; }
+        TimeSpan StartTimeout { get; }
+        TimeSpan LeaveTimeout { get; }
+        bool ReconnectEnabled { get; }
+        TimeSpan ReconnectGracePeriod { get; }
+        int ReconnectMaxAttempts { get; }
+        TimeSpan ReconnectAttemptTimeout { get; }
+        IReadOnlyList<TimeSpan> ReconnectRetryIntervals { get; }
+        TimeSpan ReconnectHardDeadline { get; }
+        string ProtocolVersion { get; }
+        BuildMatchPolicy BuildMatchPolicy { get; }
+    }
+
+    public interface IMultiplayerSessionSettingsValidator
+    {
+        IReadOnlyList<string> ValidateAdditionalSettings();
+    }
+
     public interface IPlatformRoomService : IAsyncDisposable
     {
         bool IsAvailable { get; }

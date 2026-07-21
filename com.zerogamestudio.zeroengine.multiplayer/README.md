@@ -2,12 +2,12 @@
 
 Configurable room and multiplayer-session orchestration for ZeroEngine projects.
 
-The `Core` assembly owns public models, configuration, state transitions, compatibility checks, invite routing, reconnect policy, stable-seat validation, and the session coordinator. It does not reference Steamworks, FishNet, or a game project's runtime types. Optional assemblies provide LocalDirect rooms, FishNet transport control, Steam lobbies, editor validation, and a read-only presentation state.
+`ZeroEngine.Multiplayer.Core` owns public contracts and models, state transitions, compatibility checks, invite routing, reconnect policy, stable-seat validation, and the session coordinator. It has no Unity engine, networking SDK, or consumer-game dependency. `ZeroEngine.Multiplayer.Configuration` contains the optional Unity `ScriptableObject` configuration. Other optional assemblies provide LocalDirect rooms, FishNet transport control, Steam lobbies, editor validation, and a read-only presentation state.
 
 ## Status
 
-Version `0.2.0` contains the shared room/session implementation used by the
-GalleryKeeper M4 integration:
+Version `0.3.0` promotes the shared room/session implementation to an SDK-neutral
+foundation while retaining the previously validated GalleryKeeper integration:
 
 - `LocalDevelopmentRoomService` and a stable command-line descriptor for two-process development rooms.
 - `FishNetConnectionDriver` for Tugboat LocalDirect or FishySteamworks SteamP2P, including selected-route control behind one FishNet `Multipass`, plus an identity bridge based on FishNet's authenticated connection event.
@@ -19,11 +19,24 @@ GalleryKeeper M4 integration:
 
 LocalDirect identities are explicitly untrusted development identities. SteamP2P resolves the remote platform identity from FishySteamworks' authenticated server connection address.
 
-This package is separate from `com.zerogamestudio.zeroengine.network`; it does not replace or migrate that package's NGO/UGS path.
+This package is the preferred foundation for new ZeroEngine multiplayer work. The older `com.zerogamestudio.zeroengine.network` package remains a legacy NGO/UGS-specific wrapper; it is not a compatible runtime replacement and must not be installed as a second gameplay networking stack.
+
+## Assembly boundaries
+
+| Assembly | Responsibility | Hard dependency |
+| --- | --- | --- |
+| `ZeroEngine.Multiplayer.Core` | Contracts, session state, compatibility, reconnect, orchestration | None, including no Unity engine reference |
+| `ZeroEngine.Multiplayer.Configuration` | Unity `MultiplayerSessionConfig` asset | Core + Unity |
+| `ZeroEngine.Multiplayer.Local` | LocalDirect development room service and launch descriptor | Core only |
+| `ZeroEngine.Multiplayer.Presentation` | Read-only UI state projection | Core only |
+| `ZeroEngine.Multiplayer.FishNet` | FishNet connection and identity bridge | Enabled only when the supported FishNet package is present |
+| `ZeroEngine.Multiplayer.Steam` | Steam runtime ownership, lobby, and invitation adapter | Enabled only when the supported Steamworks.NET package is present |
+
+Game-specific authority, entity replication, save/checkpoint state, content manifests, and UI remain in each consumer's `IMultiplayerGameAdapter`. The package does not claim to synchronize arbitrary gameplay automatically.
 
 ## Optional dependency baseline
 
-The package itself has no hard UPM dependency so `Core`, `Local`, `Presentation`, and editor configuration tooling still compile without a networking SDK. The FishNet and Steam assemblies become active only when their packages are present.
+The package itself has no hard networking UPM dependency, so `Core`, `Configuration`, `Local`, `Presentation`, and editor tooling compile without a networking SDK. The FishNet and Steam assemblies become active only when their packages are present.
 
 The tested baseline is fixed to:
 
@@ -40,11 +53,11 @@ Pin the FishNet and Steamworks.NET source commits; do not track a moving branch.
 "com.rlabrecque.steamworks.net": "https://github.com/rlabrecque/Steamworks.NET.git?path=com.rlabrecque.steamworks.net#a2fc889ab2672981ec3e6225d551d86ce6923121"
 ```
 
-This exact dependency set passed all 59 package EditMode tests in a fresh Unity 2022.3.62f3 project. Do not use LLS's Unity-6-modified FishNet copy as the Unity 2022 source, and do not retain Asset-folder copies with the same assembly names when installing these UPM packages.
+This exact dependency set passed 74/74 package EditMode tests in a fresh Unity 2022.3.62f3 project. A second fresh project with no FishNet, Steamworks.NET, NGO, UGS, or other networking SDK installed passed the 70/70 applicable core/configuration tests. Do not use LLS's Unity-6-modified FishNet copy as the Unity 2022 source, and do not retain Asset-folder copies with the same assembly names when installing these UPM packages.
 
 ## Core flow
 
-1. Construct `MultiplayerSessionCoordinator` with one `MultiplayerSessionConfig`, an `IPlatformRoomService`, an `INetworkConnectionDriver`, and an `IMultiplayerGameAdapter`.
+1. Construct `MultiplayerSessionCoordinator` with any `IMultiplayerSessionSettings`, an `IPlatformRoomService`, an `INetworkConnectionDriver`, and an `IMultiplayerGameAdapter`. Unity projects normally pass `MultiplayerSessionConfig`; pure tests and headless hosts may use a plain .NET implementation.
 2. Initialize, create or join, and consume `MultiplayerSessionSnapshot` or `MultiplayerViewState` from project UI.
 3. `PrepareSessionAsync` runs before the selected transport starts, so the project can load and register its network scene without racing the first connection. `SynchronizeLocalAsync` runs after the connection is established and must wait for the authoritative local snapshot before the client becomes `Ready` or returns to `InGame`.
 4. A client may learn that the host started through platform room metadata. A project with a static development descriptor instead calls `ConfirmRemoteSessionStarted` from its authenticated server-to-client game message; the call is generation-checked and idempotent.
@@ -53,7 +66,7 @@ This exact dependency set passed all 59 package EditMode tests in a fresh Unity 
 
 Host room services may implement `IRoomStatePublisher`; the coordinator then publishes `InRoom`, `Ready`, `Starting`, rollback, and `InGame` state without exposing platform APIs to UI or game code. A room service used by `MultiplayerBootstrap` as a FishNet host must implement `IRemoteConnectionAuthorizer`. The bootstrap wires this automatically: Steam re-reads current Lobby metadata and membership before admitting an authenticated FishySteamworks identity, while LocalDirect accepts only the explicitly configured development identity.
 
-`MultiplayerSessionConfig` exposes room sizing, operation timeouts, compatibility metadata, transport defaults, logging, and reconnect limits. Its default reconnect schedule is three attempts with 0.5/1.5/3 second delays, four seconds per attempt, an 18 second client deadline, and a 20 second server seat grace period.
+`MultiplayerSessionConfig` exposes room sizing, operation timeouts, compatibility metadata, transport defaults, logging, and reconnect limits without leaking Unity into Core. Existing serialized config assets migrate from the former Core assembly through `MovedFrom`. Its default reconnect schedule is three attempts with 0.5/1.5/3 second delays, four seconds per attempt, an 18 second client deadline, and a 20 second server seat grace period.
 
 ## Steam ownership
 
@@ -67,7 +80,7 @@ Import **LocalDirect Room UI** from Package Manager, follow its README to create
 
 Real Steam remains a manual two-account test: compile/setup validation and LocalDirect dual-process testing do not prove overlay, friend invitation, relay connectivity, or account entitlement.
 
-The GalleryKeeper Unity 6000.3.10f1 integration currently runs 67 package EditMode tests inside its 110-test integrated EditMode suite. Its Development Player dual-process smoke covers `Ready`, authoritative start, an unexpected client disconnect, reconnect, restored snapshot, full puzzle completion, and leave. This does not replace the fresh Unity 2022 dependency-baseline result above or the real Steam matrix.
+The preceding `0.2.0` GalleryKeeper Unity 6000.3.10f1 integration recorded 67 package EditMode tests inside its 110-test integrated EditMode suite. Its Development Player dual-process smoke covered `Ready`, authoritative start, an unexpected client disconnect, reconnect, restored snapshot, full puzzle completion, and leave. Consumer projects must rerun their own integration gates before updating their pinned commit; this historical result does not replace the fresh Unity 2022 dependency-baseline result above or the real Steam matrix.
 
 ## Temporary local development
 

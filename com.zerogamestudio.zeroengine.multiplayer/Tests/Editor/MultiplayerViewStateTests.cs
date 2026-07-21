@@ -1,24 +1,23 @@
 using System;
 using NUnit.Framework;
-using UnityEngine;
 using ZeroEngine.Multiplayer.Presentation;
 
 namespace ZeroEngine.Multiplayer.Tests
 {
     public sealed class MultiplayerViewStateTests
     {
-        private MultiplayerSessionConfig _config;
+        private FakeSessionSettings _config;
 
         [SetUp]
         public void SetUp()
         {
-            _config = ScriptableObject.CreateInstance<MultiplayerSessionConfig>();
+            _config = new FakeSessionSettings();
         }
 
         [TearDown]
         public void TearDown()
         {
-            UnityEngine.Object.DestroyImmediate(_config);
+            _config = null;
         }
 
         [Test]

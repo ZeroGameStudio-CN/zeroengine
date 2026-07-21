@@ -3,6 +3,7 @@
   "rootNamespace": "ZeroEngine.Multiplayer.FishNet",
   "references": [
     "ZeroEngine.Multiplayer.Core",
+    "ZeroEngine.Multiplayer.Configuration",
     "FishNet.Runtime"
   ],
   "includePlatforms": [],

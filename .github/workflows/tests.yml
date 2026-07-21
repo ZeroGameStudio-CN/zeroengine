@@ -81,7 +81,8 @@ jobs:
               $DEPS
             },
             "testables": [
-              "com.zerogamestudio.zeroengine"
+              "com.zerogamestudio.zeroengine",
+              "com.zerogamestudio.zeroengine.multiplayer"
             ]
           }
           EOF

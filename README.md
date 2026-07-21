@@ -37,7 +37,9 @@ mixing in game-specific content.
 | `com.zerogamestudio.analytics` | Self-hostable analytics and bug feedback SDK. |
 
 There are also packages for AI, audio, combat, economy, input, localization,
-network, RPG, social, world, and editor dashboard systems.
+RPG, social, world, and editor dashboard systems. The older
+`com.zerogamestudio.zeroengine.network` NGO/UGS wrapper is legacy-only;
+new projects should start from `com.zerogamestudio.zeroengine.multiplayer`.
 
 ## Installation
 

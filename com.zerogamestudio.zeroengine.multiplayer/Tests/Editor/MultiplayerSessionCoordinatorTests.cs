@@ -1,13 +1,12 @@
 using System.Threading;
 using System.Threading.Tasks;
 using NUnit.Framework;
-using UnityEngine;
 
 namespace ZeroEngine.Multiplayer.Tests
 {
     public sealed class MultiplayerSessionCoordinatorTests
     {
-        private MultiplayerSessionConfig _config;
+        private FakeSessionSettings _config;
         private FakePlatformRoomService _platform;
         private FakeConnectionDriver _driver;
         private FakeGameAdapter _game;
@@ -16,13 +15,10 @@ namespace ZeroEngine.Multiplayer.Tests
         [SetUp]
         public void SetUp()
         {
-            _config = ScriptableObject.CreateInstance<MultiplayerSessionConfig>();
-            typeof(MultiplayerSessionConfig)
-                .GetField(
-                    "reconnectRetryIntervalsSeconds",
-                    System.Reflection.BindingFlags.Instance |
-                    System.Reflection.BindingFlags.NonPublic)
-                .SetValue(_config, new[] { 0f, 0f, 0f });
+            _config = new FakeSessionSettings
+            {
+                ReconnectRetryIntervals = new[] { System.TimeSpan.Zero, System.TimeSpan.Zero, System.TimeSpan.Zero }
+            };
             _platform = new FakePlatformRoomService
             {
                 LocalUser = TestData.Host,
@@ -42,10 +38,7 @@ namespace ZeroEngine.Multiplayer.Tests
                 _coordinator.DisposeAsync().GetAwaiter().GetResult();
             }
 
-            if (_config != null)
-            {
-                Object.DestroyImmediate(_config);
-            }
+            _config = null;
         }
 
         [Test]

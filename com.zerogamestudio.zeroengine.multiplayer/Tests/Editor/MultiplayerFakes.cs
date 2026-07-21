@@ -5,6 +5,29 @@ using System.Threading.Tasks;
 
 namespace ZeroEngine.Multiplayer.Tests
 {
+    internal sealed class FakeSessionSettings : IMultiplayerSessionSettings
+    {
+        public RoomVisibility DefaultVisibility { get; set; } = RoomVisibility.FriendsOnly;
+        public int MaxPlayers { get; set; } = 2;
+        public int MinimumPlayersToStart { get; set; } = 2;
+        public bool AllowJoinInProgress { get; set; }
+        public TimeSpan CreateTimeout { get; set; } = TimeSpan.FromSeconds(10);
+        public TimeSpan JoinTimeout { get; set; } = TimeSpan.FromSeconds(10);
+        public TimeSpan ConnectionTimeout { get; set; } = TimeSpan.FromSeconds(10);
+        public TimeSpan InitialSyncTimeout { get; set; } = TimeSpan.FromSeconds(15);
+        public TimeSpan StartTimeout { get; set; } = TimeSpan.FromSeconds(15);
+        public TimeSpan LeaveTimeout { get; set; } = TimeSpan.FromSeconds(5);
+        public bool ReconnectEnabled { get; set; } = true;
+        public TimeSpan ReconnectGracePeriod { get; set; } = TimeSpan.FromSeconds(20);
+        public int ReconnectMaxAttempts { get; set; } = 3;
+        public TimeSpan ReconnectAttemptTimeout { get; set; } = TimeSpan.FromSeconds(4);
+        public IReadOnlyList<TimeSpan> ReconnectRetryIntervals { get; set; } =
+            new[] { TimeSpan.FromSeconds(0.5), TimeSpan.FromSeconds(1.5), TimeSpan.FromSeconds(3) };
+        public TimeSpan ReconnectHardDeadline { get; set; } = TimeSpan.FromSeconds(18);
+        public string ProtocolVersion { get; set; } = "1";
+        public BuildMatchPolicy BuildMatchPolicy { get; set; } = BuildMatchPolicy.Exact;
+    }
+
     internal sealed class FakePlatformRoomService : IPlatformRoomService, IRoomStatePublisher
     {
         public bool IsAvailable { get; set; } = true;

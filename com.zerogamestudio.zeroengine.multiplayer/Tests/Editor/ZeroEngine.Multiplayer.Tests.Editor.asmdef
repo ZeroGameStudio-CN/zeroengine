@@ -3,6 +3,7 @@
   "rootNamespace": "ZeroEngine.Multiplayer.Tests",
   "references": [
     "ZeroEngine.Multiplayer.Core",
+    "ZeroEngine.Multiplayer.Configuration",
     "ZeroEngine.Multiplayer.Local",
     "ZeroEngine.Multiplayer.Editor",
     "ZeroEngine.Multiplayer.Presentation",

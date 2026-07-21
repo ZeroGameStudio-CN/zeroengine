@@ -1,5 +1,10 @@
 # ZeroEngine.Network
 
+> **Legacy NGO/UGS wrapper.** This package is retained for existing consumers only.
+> New shared multiplayer work should use `com.zerogamestudio.zeroengine.multiplayer`
+> and select one networking/runtime adapter. Do not install both packages as two
+> competing gameplay networking stacks.
+
 Networking utilities and Netcode for GameObjects wrapper.
 
 ## Features

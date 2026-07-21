@@ -8,7 +8,7 @@ namespace ZeroEngine.Multiplayer
 {
     public sealed class MultiplayerSessionCoordinator : IAsyncDisposable
     {
-        private readonly MultiplayerSessionConfig _config;
+        private readonly IMultiplayerSessionSettings _config;
         private readonly IPlatformRoomService _platform;
         private readonly INetworkConnectionDriver _driver;
         private readonly IMultiplayerGameAdapter _game;
@@ -31,7 +31,7 @@ namespace ZeroEngine.Multiplayer
         private CancellationTokenSource _activeReconnectCancellation;
 
         public MultiplayerSessionCoordinator(
-            MultiplayerSessionConfig config,
+            IMultiplayerSessionSettings config,
             IPlatformRoomService platform,
             INetworkConnectionDriver driver,
             IMultiplayerGameAdapter game)
@@ -854,7 +854,7 @@ namespace ZeroEngine.Multiplayer
             {
                 int generation = _operationGeneration.Begin();
                 RoomSnapshot reconnectRoom = _room;
-                ReconnectPolicy policy = _config.CreateReconnectPolicy();
+                ReconnectPolicy policy = MultiplayerSessionSettings.CreateReconnectPolicy(_config);
                 Stopwatch stopwatch = Stopwatch.StartNew();
                 OperationResult lastFailure = OperationResult.Failure(
                     MultiplayerErrorCode.TransportFailed,
@@ -1215,7 +1215,7 @@ namespace ZeroEngine.Multiplayer
                     return SetLastResult(transition);
                 }
 
-                IReadOnlyList<string> configErrors = _config.ValidateConfiguration();
+                IReadOnlyList<string> configErrors = MultiplayerSessionSettings.Validate(_config);
                 if (configErrors.Count > 0)
                 {
                     OperationResult failure = OperationResult.Failure(

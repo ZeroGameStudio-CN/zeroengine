@@ -51,7 +51,7 @@ namespace ZeroEngine.Multiplayer.Presentation
 
         public static MultiplayerViewState Create(
             MultiplayerSessionSnapshot snapshot,
-            MultiplayerSessionConfig config)
+            IMultiplayerSessionSettings config)
         {
             if (config == null)
             {

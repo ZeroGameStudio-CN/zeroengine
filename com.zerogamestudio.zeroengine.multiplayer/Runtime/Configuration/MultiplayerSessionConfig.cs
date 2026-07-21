@@ -1,11 +1,15 @@
 using System;
 using System.Collections.Generic;
 using UnityEngine;
+using UnityEngine.Scripting.APIUpdating;
 
 namespace ZeroEngine.Multiplayer
 {
     [CreateAssetMenu(fileName = "MultiplayerSessionConfig", menuName = "ZeroEngine/Multiplayer/Session Config")]
-    public sealed class MultiplayerSessionConfig : ScriptableObject
+    [MovedFrom(true, "ZeroEngine.Multiplayer", "ZeroEngine.Multiplayer.Core", "MultiplayerSessionConfig")]
+    public sealed class MultiplayerSessionConfig : ScriptableObject,
+        IMultiplayerSessionSettings,
+        IMultiplayerSessionSettingsValidator
     {
         [Header("Room")]
         [SerializeField] private RoomVisibility defaultVisibility = RoomVisibility.FriendsOnly;
@@ -59,6 +63,20 @@ namespace ZeroEngine.Multiplayer
         public int ReconnectMaxAttempts => reconnectMaxAttempts;
         public TimeSpan ReconnectAttemptTimeout => TimeSpan.FromSeconds(reconnectAttemptTimeoutSeconds);
         public IReadOnlyList<float> ReconnectRetryIntervalsSeconds => reconnectRetryIntervalsSeconds;
+        public IReadOnlyList<TimeSpan> ReconnectRetryIntervals
+        {
+            get
+            {
+                TimeSpan[] intervals = new TimeSpan[
+                    reconnectRetryIntervalsSeconds == null ? 0 : reconnectRetryIntervalsSeconds.Length];
+                for (int i = 0; i < intervals.Length; i++)
+                {
+                    intervals[i] = TimeSpan.FromSeconds(reconnectRetryIntervalsSeconds[i]);
+                }
+
+                return Array.AsReadOnly(intervals);
+            }
+        }
         public TimeSpan ReconnectHardDeadline => TimeSpan.FromSeconds(reconnectHardDeadlineSeconds);
         public string ProtocolVersion => protocolVersion ?? string.Empty;
         public BuildMatchPolicy BuildMatchPolicy => buildMatchPolicy;
@@ -72,29 +90,12 @@ namespace ZeroEngine.Multiplayer
 
         public IReadOnlyList<string> ValidateConfiguration()
         {
+            return MultiplayerSessionSettings.Validate(this);
+        }
+
+        IReadOnlyList<string> IMultiplayerSessionSettingsValidator.ValidateAdditionalSettings()
+        {
             List<string> errors = new List<string>();
-
-            if (maxPlayers < 1)
-            {
-                errors.Add("multiplayer.config.max_players_invalid");
-            }
-
-            if (minimumPlayersToStart < 1 || minimumPlayersToStart > maxPlayers)
-            {
-                errors.Add("multiplayer.config.minimum_players_invalid");
-            }
-
-            if (createTimeoutSeconds <= 0f || joinTimeoutSeconds <= 0f ||
-                connectionTimeoutSeconds <= 0f || initialSyncTimeoutSeconds <= 0f ||
-                startTimeoutSeconds <= 0f || leaveTimeoutSeconds <= 0f)
-            {
-                errors.Add("multiplayer.config.timeout_invalid");
-            }
-
-            if (string.IsNullOrWhiteSpace(protocolVersion))
-            {
-                errors.Add("multiplayer.config.protocol_version_missing");
-            }
 
             if (string.IsNullOrWhiteSpace(metadataPrefix))
             {
@@ -106,66 +107,12 @@ namespace ZeroEngine.Multiplayer
                 errors.Add("multiplayer.config.local_port_invalid");
             }
 
-            if (reconnectEnabled)
-            {
-                ValidateReconnect(errors);
-            }
-
             return errors.AsReadOnly();
         }
 
         public ReconnectPolicy CreateReconnectPolicy()
         {
-            TimeSpan[] delays = new TimeSpan[reconnectRetryIntervalsSeconds == null ? 0 : reconnectRetryIntervalsSeconds.Length];
-            for (int i = 0; i < delays.Length; i++)
-            {
-                delays[i] = TimeSpan.FromSeconds(reconnectRetryIntervalsSeconds[i]);
-            }
-
-            return new ReconnectPolicy(
-                reconnectMaxAttempts,
-                ReconnectAttemptTimeout,
-                delays,
-                ReconnectHardDeadline,
-                ReconnectGracePeriod);
-        }
-
-        private void ValidateReconnect(List<string> errors)
-        {
-            if (reconnectMaxAttempts < 1 || reconnectAttemptTimeoutSeconds <= 0f ||
-                reconnectHardDeadlineSeconds <= 0f || reconnectGraceSeconds <= 0f)
-            {
-                errors.Add("multiplayer.config.reconnect_limits_invalid");
-                return;
-            }
-
-            if (reconnectRetryIntervalsSeconds == null || reconnectRetryIntervalsSeconds.Length < reconnectMaxAttempts)
-            {
-                errors.Add("multiplayer.config.reconnect_intervals_missing");
-                return;
-            }
-
-            double scheduleSeconds = reconnectAttemptTimeoutSeconds * reconnectMaxAttempts;
-            for (int i = 0; i < reconnectMaxAttempts; i++)
-            {
-                if (reconnectRetryIntervalsSeconds[i] < 0f)
-                {
-                    errors.Add("multiplayer.config.reconnect_interval_negative");
-                    return;
-                }
-
-                scheduleSeconds += reconnectRetryIntervalsSeconds[i];
-            }
-
-            if (scheduleSeconds > reconnectHardDeadlineSeconds)
-            {
-                errors.Add("multiplayer.config.reconnect_schedule_exceeds_deadline");
-            }
-
-            if (reconnectHardDeadlineSeconds > reconnectGraceSeconds)
-            {
-                errors.Add("multiplayer.config.reconnect_deadline_exceeds_grace");
-            }
+            return MultiplayerSessionSettings.CreateReconnectPolicy(this);
         }
     }
 }
