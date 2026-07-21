@@ -53,7 +53,7 @@ Pin the FishNet and Steamworks.NET source commits; do not track a moving branch.
 "com.rlabrecque.steamworks.net": "https://github.com/rlabrecque/Steamworks.NET.git?path=com.rlabrecque.steamworks.net#a2fc889ab2672981ec3e6225d551d86ce6923121"
 ```
 
-This exact dependency set passed 74/74 package EditMode tests in a fresh Unity 2022.3.62f3 project. A second fresh project with no FishNet, Steamworks.NET, NGO, UGS, or other networking SDK installed passed the 70/70 applicable core/configuration tests. Do not use LLS's Unity-6-modified FishNet copy as the Unity 2022 source, and do not retain Asset-folder copies with the same assembly names when installing these UPM packages.
+This exact dependency set passed 75/75 package EditMode tests in a fresh Unity 2022.3.62f3 project. A second fresh project with no FishNet, Steamworks.NET, NGO, UGS, or other networking SDK installed passed the 71/71 applicable core/configuration tests. Do not use LLS's Unity-6-modified FishNet copy as the Unity 2022 source, and do not retain Asset-folder copies with the same assembly names when installing these UPM packages.
 
 ## Core flow
 

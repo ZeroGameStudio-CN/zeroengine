@@ -5,9 +5,10 @@
 - Isolate `MultiplayerSessionConfig` in `ZeroEngine.Multiplayer.Configuration` and preserve existing serialized assets with `MovedFrom` metadata.
 - Make `ZeroEngine.Multiplayer.Core`, `.Local`, and `.Presentation` free of Unity engine references.
 - Add `IMultiplayerSessionSettings` so session orchestration and presentation rules can run with plain .NET configuration objects.
+- Reject invalid room-visibility and build-match enum values supplied by custom settings implementations.
 - Add permanent package-boundary tests for consumer-project, Unity, FishNet, Steamworks, NGO, and UGS dependency leaks.
 - Keep FishNet and Steamworks integrations version-gated and optional at package install time.
-- Validate 74/74 EditMode tests with the pinned FishNet/Steamworks dependencies and 70/70 applicable tests in a networking-SDK-free Unity 2022.3.62f3 project.
+- Validate 75/75 EditMode tests with the pinned FishNet/Steamworks dependencies and 71/71 applicable tests in a networking-SDK-free Unity 2022.3.62f3 project.
 
 ## [0.2.0] - Unreleased
 

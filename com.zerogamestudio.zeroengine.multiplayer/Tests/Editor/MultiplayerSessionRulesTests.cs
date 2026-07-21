@@ -259,6 +259,21 @@ namespace ZeroEngine.Multiplayer.Tests
                 "multiplayer.config.max_players_invalid");
         }
 
+        [Test]
+        public void PlainSettings_InvalidEnums_AreRejected()
+        {
+            FakeSessionSettings settings = new FakeSessionSettings
+            {
+                DefaultVisibility = (RoomVisibility)99,
+                BuildMatchPolicy = (BuildMatchPolicy)99
+            };
+
+            IReadOnlyList<string> errors = MultiplayerSessionSettings.Validate(settings);
+
+            CollectionAssert.Contains(errors, "multiplayer.config.visibility_invalid");
+            CollectionAssert.Contains(errors, "multiplayer.config.build_match_policy_invalid");
+        }
+
         private static ReconnectPolicy CreateReconnectPolicy()
         {
             return new ReconnectPolicy(

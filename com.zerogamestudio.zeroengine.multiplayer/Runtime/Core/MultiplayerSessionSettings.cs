@@ -25,6 +25,16 @@ namespace ZeroEngine.Multiplayer
                 errors.Add("multiplayer.config.minimum_players_invalid");
             }
 
+            if (!Enum.IsDefined(typeof(RoomVisibility), settings.DefaultVisibility))
+            {
+                errors.Add("multiplayer.config.visibility_invalid");
+            }
+
+            if (!Enum.IsDefined(typeof(BuildMatchPolicy), settings.BuildMatchPolicy))
+            {
+                errors.Add("multiplayer.config.build_match_policy_invalid");
+            }
+
             if (settings.CreateTimeout <= TimeSpan.Zero ||
                 settings.JoinTimeout <= TimeSpan.Zero ||
                 settings.ConnectionTimeout <= TimeSpan.Zero ||
