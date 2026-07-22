@@ -10,4 +10,12 @@ namespace ZGS.Analytics
         void TrackScreen(string screenName);
         void LogError(string error, string stackTrace);
     }
+
+    /// <summary>
+    /// Optional provider capability for explicitly starting delivery of queued events.
+    /// </summary>
+    public interface IAnalyticsFlushProvider : IAnalyticsProvider
+    {
+        void Flush();
+    }
 }

@@ -18,12 +18,14 @@ namespace ZGS.Analytics
 
             // 设置 Debug 模式
             AnalyticsConfig.DebugMode = config.debugMode;
+            AnalyticsConfig.AppId = config.appId;
 
             // ZGS Server Provider
             if (!string.IsNullOrEmpty(config.zgsServerUrl))
             {
                 AnalyticsConfig.ServerUrl = config.zgsServerUrl;
                 AnalyticsConfig.Secret = config.zgsSecret;
+                AnalyticsConfig.UploadSecret = config.zgsUploadSecret;
                 var zgsProvider = new ZGSServerProvider(config.zgsServerUrl, config.zgsSecret, config.appId);
                 AnalyticsService.AddProvider(zgsProvider);
                 SessionManager.Instance.StartSession(zgsProvider);
@@ -37,8 +39,8 @@ namespace ZGS.Analytics
             // 初始化 CrashReporter (订阅 Unity 日志)
             CrashReporter.Initialize();
 
-            // 配置附件上传 - 统一使用 zgsSecret
-            if (AnalyticsConfig.IsConfigured)
+            // 配置附件上传
+            if (AnalyticsConfig.IsUploadConfigured)
             {
                 CrashReporter.RegisterAttachmentUploader(new ZipAttachmentUploader());
 
@@ -47,8 +49,8 @@ namespace ZGS.Analytics
                 if (FeedbackUploadQueue.PendingCount > 0)
                 {
                     AnalyticsLog.Log($"[ZGS.Analytics] 发现 {FeedbackUploadQueue.PendingCount} 个待上传的反馈文件");
-                    CoroutineRunner.Instance.StartCoroutine(FeedbackUploadQueue.ProcessPendingUploads());
                 }
+                FeedbackUploadQueue.StartBackgroundProcessing();
             }
 
             // 初始化所有 Provider (会触发 SessionInfo.Initialize)

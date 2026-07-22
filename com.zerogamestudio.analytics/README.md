@@ -2,13 +2,14 @@
 
 ZeroGameStudio 游戏分析 SDK，支持自建 ClickHouse 数据平台。
 
-**版本**: 1.2.0
+**版本**: 1.6.0
 **Unity**: 2021.3+
 
 ## 特性
 
 - **零代码初始化** - `[RuntimeInitializeOnLoadMethod]` 自动启动
 - **离线队列** - 断网自动缓存，联网后重传
+- **可靠事件信封** - 支持顶层 `event_id`、逻辑发生时间和返回前持久化
 - **多 Provider** - 可同时向多个后端发送
 - **崩溃/Bug 报告** - 自动采集上下文 + 附件上传
 - **Timeline 日志** - 本地流水账，支持存档/还原
@@ -35,7 +36,8 @@ ZeroGameStudio 游戏分析 SDK，支持自建 ClickHouse 数据平台。
 3. 填写配置：
    - `App ID` - 游戏标识 (如 POB, LLS)
    - `ZGS Server URL` - FastAPI 服务器地址
-   - `ZGS Secret` - 认证密钥
+   - `ZGS Secret` - 事件上报认证密钥
+   - `ZGS Upload Secret` - 反馈上传认证密钥；为空时兼容使用事件密钥
    - `Debug Mode` - 编辑器日志开关
 
 ## 自动采集
@@ -60,6 +62,18 @@ AnalyticsService.LogEvent("level_complete", new Dictionary<string, object>
     ["level_id"] = "boss_001",
     ["time_spent"] = 120
 });
+
+// 需要幂等重试和本地持久化的生命周期事件
+bool accepted = AnalyticsService.TryLogEvent(
+    "game_end",
+    new Dictionary<string, object> { ["run_id"] = runId },
+    new AnalyticsEventOptions(
+        eventId: deterministicEventId,
+        occurredAtUnixMs: occurredAtUnixMs,
+        durable: true));
+
+// 立即开始上传支持显式刷新的 Provider 队列
+AnalyticsService.Flush();
 
 // 屏幕追踪
 AnalyticsService.TrackScreen("MainMenu");
@@ -167,6 +181,14 @@ Streamlit Dashboard (可视化)
    - 格式：`- [模块] 修改内容描述`。
 
 ## 更新日志
+
+### v1.6.1
+- API: 新增 `AnalyticsService.Flush()` 与可选的 `IAnalyticsFlushProvider`，允许按需启动队列上传
+
+### v1.6.0
+- Event envelope: 新增顶层 `event_id`、逻辑发生时间和不可覆盖的 session 内事件序号
+- OfflineQueue: durable 事件在返回前落盘，满队列优先淘汰 buffered 事件并显式报告失败
+- API: 新增返回 enqueue 结果的 `TryLogEvent`，保留原有 `LogEvent` 与 `IAnalyticsProvider` 源码兼容；自定义上传 Provider 可实现 `IAnalyticsEnqueueProvider`
 
 ### v1.2.0
 - OfflineQueue: 添加防抖批量保存 (5秒间隔)
