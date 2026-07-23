@@ -1,32 +1,66 @@
-# ZeroEngine.DataToolkit
+# ZeroEngine Data Toolkit
 
-Reusable Unity editor tooling for discovering, browsing, inspecting, and
-validating project data assets.
+ZeroEngine Data Toolkit is a reusable Unity package for marking, browsing, searching, inspecting, and validating project data assets.
 
-## Use Cases
+## Install
 
-- Browse ScriptableObject data collections from a single editor window.
-- Inspect large data assets without forcing expensive full inspector rendering.
-- Add project-specific actions and footers around reusable data views.
-- Keep designer-facing data workflows outside game-specific editor code.
+Add the package through Unity Package Manager using the Git URL for this repository and the `com.zerogamestudio.zeroengine.data-toolkit` path. Production projects should pin a release tag or reviewed commit.
 
-## Installation
+## Project Profile
 
-Add the package through Unity Package Manager:
+Projects register a profile at editor load time:
 
-```text
-https://github.com/liuzqk/zeroengine.git?path=com.zerogamestudio.zeroengine.data-toolkit#<tested-commit>
+```csharp
+using UnityEditor;
+using ZGS.DataToolkit.Editor;
+
+[InitializeOnLoad]
+public static class ExampleDataToolkitRegistration
+{
+    static ExampleDataToolkitRegistration()
+    {
+        DataToolkitProjectRegistry.RegisterDefault(CreateProfile);
+    }
+
+    public static DataToolkitProjectProfile CreateProfile()
+    {
+        return new DataToolkitProjectProfile(
+            new DataToolkitProjectSettings(
+                projectId: "Example",
+                windowTitle: "Example Data Manager",
+                menuPath: "Tools/Data Manager",
+                editorPrefsPrefix: "Example_DataManager",
+                searchRoots: new[] { "Assets/Data" },
+                excludedPaths: new[] { "Assets/Data/Generated" },
+                defaultInspectorMode: DataToolkitDefaultInspectorMode.LazyPreview));
+    }
+}
 ```
 
-Use a tested commit hash for production projects.
+## Manageable Data
 
-## Requirements
+Data types are shown when they are non-abstract `ScriptableObject` types marked with `ZGS.DataToolkit.ManageableDataAttribute`. Existing projects that already define a project-local `ManageableDataAttribute` remain supported for compatibility.
 
-- Unity 2022.3 or newer.
-- Optional Odin/Sirenix integrations are used only when a downstream project
-  has those assemblies available.
+```csharp
+using UnityEngine;
+using ZGS.DataToolkit;
 
-## Notes For Maintainers
+[ManageableData]
+public sealed class ItemData : ScriptableObject
+{
+}
+```
 
-This package is intentionally editor-only. Keep runtime dependencies out of the
-package unless the data browsing workflow cannot work without them.
+## Inspector Coverage
+
+Custom inspector providers can make high-value data types first-class. Types without custom providers fall back to the configured default inspector mode. Use **Diagnostics** in the window header to review current type coverage and asset counts.
+
+## Release Checklist
+
+Before updating a production project:
+
+1. Run Data Toolkit package EditMode tests.
+2. Run the consuming project's Data Manager integration tests.
+3. Review `CHANGELOG.md`.
+4. Run the designer acceptance checklist in `Documentation~/DesignerAcceptance.md`.
+5. Pin the consuming project to a reviewed tag or commit.

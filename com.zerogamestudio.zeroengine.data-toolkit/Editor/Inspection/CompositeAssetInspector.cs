@@ -8,8 +8,8 @@ namespace ZGS.DataToolkit.Editor
 {
     public sealed class CompositeAssetInspector : IAssetInspector
     {
+        private readonly IAssetInspector nativeInspector = new UnityFallbackAssetInspector();
         private readonly IAssetInspector odinInspector = new OdinReflectionAssetInspector();
-        private readonly IAssetInspector fallbackInspector = new UnityFallbackAssetInspector();
         private readonly Dictionary<IDataToolkitAssetInspectorProvider, IAssetInspector> customInspectors = new();
         private IReadOnlyList<IDataToolkitAssetInspectorProvider> customInspectorProviders = Array.Empty<IDataToolkitAssetInspectorProvider>();
         private IDataToolkitAssetInspectorProvider activeInspectorProvider;
@@ -50,9 +50,11 @@ namespace ZGS.DataToolkit.Editor
             var nextInspectorProvider = TryGetCustomInspectorProvider(asset, out var provider) ? provider : null;
             var nextInspector = nextInspectorProvider != null
                 ? GetOrCreateCustomInspector(nextInspectorProvider)
-                : odinInspector.CanInspect(asset)
-                    ? odinInspector
-                    : fallbackInspector;
+                : nativeInspector.CanInspect(asset)
+                    ? nativeInspector
+                    : odinInspector.CanInspect(asset)
+                        ? odinInspector
+                        : null;
 
             if (activeInspector != nextInspector)
             {
@@ -65,7 +67,7 @@ namespace ZGS.DataToolkit.Editor
                 activeInspectorProvider = nextInspectorProvider;
             }
 
-            activeInspector.SetTarget(asset);
+            activeInspector?.SetTarget(asset);
         }
 
         public void Draw()
@@ -75,8 +77,8 @@ namespace ZGS.DataToolkit.Editor
 
         public void Dispose()
         {
+            nativeInspector.Dispose();
             odinInspector.Dispose();
-            fallbackInspector.Dispose();
             foreach (var customInspector in customInspectors.Values)
             {
                 customInspector?.Dispose();
@@ -91,12 +93,12 @@ namespace ZGS.DataToolkit.Editor
         {
             if (customInspectors.TryGetValue(provider, out var inspector))
             {
-                return inspector ?? fallbackInspector;
+                return inspector ?? nativeInspector;
             }
 
             inspector = provider.CreateInspector(context);
             customInspectors[provider] = inspector;
-            return inspector ?? fallbackInspector;
+            return inspector ?? nativeInspector;
         }
 
         private bool TryGetCustomInspectorProvider(Object asset, out IDataToolkitAssetInspectorProvider provider)

@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using System.Linq;
 
@@ -11,7 +12,9 @@ namespace ZGS.DataToolkit.Editor
             string menuPath,
             string editorPrefsPrefix,
             IEnumerable<string> searchRoots,
-            IEnumerable<string> excludedPaths)
+            IEnumerable<string> excludedPaths,
+            DataToolkitDefaultInspectorMode defaultInspectorMode = DataToolkitDefaultInspectorMode.FullInspector,
+            IEnumerable<DataToolkitSafeInspectorRule> safeInspectorRules = null)
         {
             ProjectId = string.IsNullOrWhiteSpace(projectId) ? "ZGS" : projectId.Trim();
             WindowTitle = string.IsNullOrWhiteSpace(windowTitle) ? "Data Manager" : windowTitle.Trim();
@@ -19,6 +22,8 @@ namespace ZGS.DataToolkit.Editor
             EditorPrefsPrefix = string.IsNullOrWhiteSpace(editorPrefsPrefix) ? ProjectId : editorPrefsPrefix.Trim();
             SearchRoots = NormalizePaths(searchRoots).ToArray();
             ExcludedPaths = NormalizePaths(excludedPaths).ToArray();
+            DefaultInspectorMode = defaultInspectorMode;
+            SafeInspectorRules = NormalizeSafeInspectorRules(safeInspectorRules).ToArray();
         }
 
         public string ProjectId { get; }
@@ -27,6 +32,8 @@ namespace ZGS.DataToolkit.Editor
         public string EditorPrefsPrefix { get; }
         public IReadOnlyList<string> SearchRoots { get; }
         public IReadOnlyList<string> ExcludedPaths { get; }
+        public DataToolkitDefaultInspectorMode DefaultInspectorMode { get; }
+        public IReadOnlyList<DataToolkitSafeInspectorRule> SafeInspectorRules { get; }
 
         public string PrefKey(string suffix)
         {
@@ -49,6 +56,12 @@ namespace ZGS.DataToolkit.Editor
 
                 yield return path.Replace('\\', '/').TrimEnd('/');
             }
+        }
+
+        private static IEnumerable<DataToolkitSafeInspectorRule> NormalizeSafeInspectorRules(
+            IEnumerable<DataToolkitSafeInspectorRule> rules)
+        {
+            return (rules ?? Array.Empty<DataToolkitSafeInspectorRule>()).Where(rule => rule != null);
         }
     }
 }

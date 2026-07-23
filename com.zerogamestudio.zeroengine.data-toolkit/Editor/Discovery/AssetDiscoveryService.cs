@@ -33,7 +33,6 @@ namespace ZGS.DataToolkit.Editor
                 .Where(path => !string.IsNullOrEmpty(path))
                 .Select(NormalizePath)
                 .Where(path => !IsExcluded(path, settings))
-                .Where(path => ContainsAssetOfType(path, type))
                 .OrderBy(path => Path.GetFileNameWithoutExtension(path), StringComparer.OrdinalIgnoreCase)
                 .ToArray();
 
@@ -41,27 +40,38 @@ namespace ZGS.DataToolkit.Editor
             return paths;
         }
 
-        public static void ClearCaches()
+        public static UnityEngine.Object LoadFirstAssetOfType(string path, Type type)
         {
-            AssetPathCache.Clear();
-        }
+            if (string.IsNullOrEmpty(path) || type == null)
+            {
+                return null;
+            }
 
-        private static bool ContainsAssetOfType(string path, Type type)
-        {
+            var mainAsset = AssetDatabase.LoadAssetAtPath(path, type);
+            if (mainAsset != null)
+            {
+                return mainAsset;
+            }
+
             if (type == typeof(GameObject))
             {
-                return AssetDatabase.LoadAssetAtPath(path, type) != null;
+                return null;
             }
 
             foreach (var asset in AssetDatabase.LoadAllAssetsAtPath(path))
             {
                 if (asset != null && type.IsInstanceOfType(asset))
                 {
-                    return true;
+                    return asset;
                 }
             }
 
-            return false;
+            return null;
+        }
+
+        public static void ClearCaches()
+        {
+            AssetPathCache.Clear();
         }
 
         private static bool IsExcluded(string path, DataToolkitProjectSettings settings)

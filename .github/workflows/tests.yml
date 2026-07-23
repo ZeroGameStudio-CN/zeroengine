@@ -98,6 +98,11 @@ jobs:
             fi
           done
 
+          TESTABLES='"com.zerogamestudio.zeroengine"'
+          if [ -d "TestProject/Packages/com.zerogamestudio.zeroengine.data-toolkit/Tests" ]; then
+            TESTABLES="$TESTABLES, \"com.zerogamestudio.zeroengine.data-toolkit\""
+          fi
+
           cat > TestProject/Packages/manifest.json << EOF
           {
             "dependencies": {
