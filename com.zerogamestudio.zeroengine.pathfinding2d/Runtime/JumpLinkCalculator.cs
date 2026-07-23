@@ -20,11 +20,26 @@ namespace ZeroEngine.Pathfinding2D
         [Tooltip("最大水平跳跃距离")]
         public float MaxHorizontalDistance = 6f;
 
+        [Tooltip("最大空中水平速度，0 表示不限制")]
+        public float MaxAirHorizontalSpeed = 0f;
+
         [Tooltip("最大跳跃高度")]
         public float MaxJumpHeight = 6f;
 
         [Tooltip("重力缩放 (Rigidbody2D.gravityScale)")]
         public float GravityScale = 3f;
+
+        [Tooltip("空中额外跳跃次数，0 表示仅地面起跳")]
+        public int AirJumpCount = 0;
+
+        [Tooltip("空中额外跳跃的 Y 初速度，0 表示沿用最大跳跃初速度")]
+        public float AirJumpVelocity = 0f;
+
+        [Tooltip("使用按目标高度计算的一次智能跳跃，不继承玩家多段跳")]
+        public bool UseSingleSmartJump = false;
+
+        [Tooltip("预留：是否允许墙面穿越建图。当前不参与链接生成。")]
+        public bool EnableWallTraversal = false;
 
         [Header("下落配置")]
         [Tooltip("最大下落高度")]
@@ -60,6 +75,8 @@ namespace ZeroEngine.Pathfinding2D
     /// </summary>
     public class JumpLinkCalculator : MonoBehaviour
     {
+        private const float DefaultGravity = 9.81f;
+
         [SerializeField]
         private JumpLinkConfig config = new JumpLinkConfig();
 
@@ -86,7 +103,8 @@ namespace ZeroEngine.Pathfinding2D
             }
 
             var nodes = graphGenerator.Nodes;
-            var obstacleLayer = graphGenerator.Config.ObstacleLayer;
+            LayerMask obstacleLayer = graphGenerator.Config.ObstacleLayer;
+            LayerMask trajectoryBlockerLayer = graphGenerator.Config.GroundLayer | graphGenerator.Config.ObstacleLayer;
 
             int jumpLinksCreated = 0;
             int fallLinksCreated = 0;
@@ -102,6 +120,7 @@ namespace ZeroEngine.Pathfinding2D
             int jumpSkippedToNotEdge = 0;
             int fallSkippedToNotEdge = 0;
             int edgeNodeCount = 0;
+            float effectiveMaxJumpHeight = GetEffectiveMaxJumpHeight();
 
             // 预处理：为每个平台找到最近的边缘节点（用于去重）
             // 使用 Y 坐标分组（支持 Tilemap Composite Collider 场景，所有平台共享一个 Collider）
@@ -157,7 +176,7 @@ namespace ZeroEngine.Pathfinding2D
                     float verticalDist = toNode.Position.y - fromNode.Position.y;
 
                     // 目标在上方或同高度 - 尝试跳跃
-                    if (verticalDist >= -0.5f && verticalDist <= config.MaxJumpHeight)
+                    if (verticalDist >= -0.5f && verticalDist <= effectiveMaxJumpHeight)
                     {
                         // ★ 跳跃链接只从边缘节点发起（防止平台中间多个节点生成重复跳跃链接）
                         if (!isEdgeNode)
@@ -186,7 +205,7 @@ namespace ZeroEngine.Pathfinding2D
                         if (horizontalDist <= config.MaxHorizontalDistance)
                         {
                             jumpAttempts++;
-                            if (TryCreateJumpLink(fromNode, toNode, obstacleLayer, out string failReason))
+                            if (TryCreateJumpLink(fromNode, toNode, trajectoryBlockerLayer, out string failReason))
                             {
                                 jumpLinksCreated++;
                             }
@@ -209,7 +228,7 @@ namespace ZeroEngine.Pathfinding2D
                             jumpFailedDistance++;
                         }
                     }
-                    else if (verticalDist > config.MaxJumpHeight)
+                    else if (verticalDist > effectiveMaxJumpHeight)
                     {
                         // 仅统计边缘节点的超高度失败，排除 Surface 节点的噪音
                         if (isEdgeNode) jumpFailedHeight++;
@@ -218,7 +237,7 @@ namespace ZeroEngine.Pathfinding2D
                     else if (verticalDist < -0.5f && Mathf.Abs(verticalDist) <= config.MaxFallHeight)
                     {
                         // 边缘节点：完整下落检测（水平 + 垂直）
-                        if (isEdgeNode && !fromNode.IsTransitionAnchor && horizontalDist <= config.MaxFallHorizontalDistance)
+                        if (isEdgeNode && CanStartFallFromEdgeNode(fromNode) && horizontalDist <= config.MaxFallHorizontalDistance)
                         {
                             // ★ 终点也必须是边缘节点
                             bool toIsEdge = toNode.NodeType == PlatformNodeType.LeftEdge ||
@@ -232,7 +251,7 @@ namespace ZeroEngine.Pathfinding2D
                             // ★ 工业级方案：尝试连接所有可达边缘节点（不只是最近的）
                             // 让轨迹验证决定是否创建链接，而非位置去重
 
-                            if (TryCreateFallLink(fromNode, toNode, obstacleLayer))
+                            if (TryCreateFallLink(fromNode, toNode, trajectoryBlockerLayer))
                             {
                                 fallLinksCreated++;
                             }
@@ -243,7 +262,7 @@ namespace ZeroEngine.Pathfinding2D
                 // 检查穿透单向平台下落（单向平台任意位置都可下穿，不限于边缘节点）
                 if (fromNode.IsOneWay)
                 {
-                    var dropLinks = CreateDropThroughLinks(fromNode, nodes, obstacleLayer);
+                    var dropLinks = CreateDropThroughLinks(fromNode, nodes, trajectoryBlockerLayer);
                     dropLinksCreated += dropLinks;
                 }
             }
@@ -258,8 +277,9 @@ namespace ZeroEngine.Pathfinding2D
                 Debug.Log($"[JumpLinkCalculator] 跳跃诊断: 尝试={jumpAttempts}, 成功={jumpLinksCreated}, " +
                           $"超距离={jumpFailedDistance}, 超高度={jumpFailedHeight}, 不可达={jumpFailedReachable}, 轨迹阻挡={jumpFailedTrajectory}");
                 Debug.Log($"[JumpLinkCalculator] 过滤诊断: 起点非边缘={jumpSkippedNotEdge}, 终点非边缘(跳)={jumpSkippedToNotEdge}, 终点非边缘(落)={fallSkippedToNotEdge}");
-                Debug.Log($"[JumpLinkCalculator] 配置: MaxJumpHeight={config.MaxJumpHeight}, MaxHorizontalDistance={config.MaxHorizontalDistance}, " +
-                          $"MaxJumpVelocity={config.MaxJumpVelocity}, ObstacleLayer={obstacleLayer.value}");
+                Debug.Log($"[JumpLinkCalculator] 配置: MaxJumpHeight={config.MaxJumpHeight}, EffectiveMaxJumpHeight={effectiveMaxJumpHeight}, MaxHorizontalDistance={config.MaxHorizontalDistance}, " +
+                          $"MaxJumpVelocity={config.MaxJumpVelocity}, MaxAirHorizontalSpeed={config.MaxAirHorizontalSpeed}, " +
+                          $"ObstacleLayer={obstacleLayer.value}, TrajectoryBlockerLayer={trajectoryBlockerLayer.value}");
             }
 
             // 构建邻接表，优化 A* 寻路性能（O(n) -> O(1)）
@@ -336,9 +356,10 @@ namespace ZeroEngine.Pathfinding2D
             var result = JumpMovementHandler.CalculateJump(
                 from.Position,
                 to.Position,
-                config.MaxJumpVelocity,
+                GetEffectiveMaxJumpVelocity(),
                 config.GravityScale,
-                config.Overshoot
+                config.Overshoot,
+                config.MaxAirHorizontalSpeed
             );
 
             if (!result.IsReachable)
@@ -371,6 +392,36 @@ namespace ZeroEngine.Pathfinding2D
 
             graphGenerator.Links.Add(link);
             return true;
+        }
+
+        private float GetEffectiveMaxJumpHeight()
+        {
+            if (config.UseSingleSmartJump)
+                return Mathf.Max(0f, config.MaxJumpHeight);
+
+            int airJumpCount = Mathf.Max(0, config.AirJumpCount);
+            if (airJumpCount == 0)
+                return Mathf.Max(0f, config.MaxJumpHeight);
+
+            float gravity = DefaultGravity * Mathf.Max(0.01f, config.GravityScale);
+            float groundJumpHeight = config.MaxJumpVelocity * config.MaxJumpVelocity / (2f * gravity);
+            float airJumpVelocity = config.AirJumpVelocity > 0f
+                ? config.AirJumpVelocity
+                : config.MaxJumpVelocity;
+            float airJumpHeight = airJumpVelocity * airJumpVelocity / (2f * gravity);
+            float profileJumpHeight = groundJumpHeight + airJumpCount * airJumpHeight;
+            return Mathf.Max(config.MaxJumpHeight, profileJumpHeight);
+        }
+
+        private float GetEffectiveMaxJumpVelocity()
+        {
+            if (config.UseSingleSmartJump || config.AirJumpCount > 0)
+            {
+                float gravity = DefaultGravity * Mathf.Max(0.01f, config.GravityScale);
+                return Mathf.Sqrt(2f * gravity * GetEffectiveMaxJumpHeight());
+            }
+
+            return config.MaxJumpVelocity;
         }
 
         /// <summary>
@@ -429,31 +480,127 @@ namespace ZeroEngine.Pathfinding2D
             var result = JumpMovementHandler.CalculateFall(
                 from.Position,
                 to.Position,
-                config.GravityScale
+                config.GravityScale,
+                config.MaxAirHorizontalSpeed
             );
 
             if (!result.IsReachable) return false;
 
-            // 简单的直线碰撞检测
-            Vector2 direction = ((Vector2)to.Position - (Vector2)from.Position).normalized;
-            float distance = Vector2.Distance(from.Position, to.Position);
-
-            RaycastHit2D hit = Physics2D.CircleCast(
-                from.Position,
-                config.TrajectoryCheckRadius,
-                direction,
-                distance,
-                obstacleLayer
-            );
-
-            if (hit.collider != null && hit.collider != to.PlatformCollider)
+            if (!JumpMovementHandler.ValidateTrajectory(
+                    result.Trajectory,
+                    obstacleLayer,
+                    config.TrajectoryCheckRadius,
+                    from.PlatformCollider,
+                    to.PlatformCollider))
             {
-                return false;
+                if (!CanCreateEdgeFallLink(from, to))
+                    return false;
             }
 
             // 创建下落链接
             var link = PlatformLinkData.CreateFall(from.NodeId, to.NodeId, result.FlightTime);
             graphGenerator.Links.Add(link);
+            return true;
+        }
+
+        private bool CanStartFallFromEdgeNode(PlatformNodeData node)
+        {
+            if (!node.IsTransitionAnchor)
+                return true;
+
+            if (graphGenerator == null ||
+                node.SurfaceGroupId < 0 ||
+                !graphGenerator.TryGetSurfaceSegment(node.SurfaceGroupId, out var segment))
+            {
+                return false;
+            }
+
+            float edgeTolerance = Mathf.Max(graphGenerator.Config.EdgeInset + 0.1f, 0.25f);
+            return node.NodeType switch
+            {
+                PlatformNodeType.LeftEdge => Mathf.Abs(node.Position.x - segment.MinX) <= edgeTolerance,
+                PlatformNodeType.RightEdge => Mathf.Abs(node.Position.x - segment.MaxX) <= edgeTolerance,
+                _ => false
+            };
+        }
+
+        private bool CanCreateEdgeFallLink(PlatformNodeData from, PlatformNodeData to)
+        {
+            if (graphGenerator == null ||
+                from.PlatformCollider == null ||
+                to.PlatformCollider == null ||
+                from.SurfaceGroupId < 0 ||
+                to.SurfaceGroupId < 0 ||
+                from.SurfaceGroupId == to.SurfaceGroupId)
+            {
+                return false;
+            }
+
+            if (to.Position.y >= from.Position.y - 0.5f)
+                return false;
+
+            if (!graphGenerator.TryGetSurfaceSegment(from.SurfaceGroupId, out var fromSegment) ||
+                !graphGenerator.TryGetSurfaceSegment(to.SurfaceGroupId, out var toSegment))
+            {
+                return false;
+            }
+
+            float edgeInset = Mathf.Max(0.05f, graphGenerator.Config.EdgeInset);
+            float edgeTolerance = edgeInset + 0.1f;
+            float exitOffset = Mathf.Max(0.05f, edgeInset * 0.5f);
+            float landingTolerance = Mathf.Max(edgeInset + 0.05f, 0.25f);
+
+            if (from.NodeType == PlatformNodeType.RightEdge)
+            {
+                if (Mathf.Abs(from.Position.x - fromSegment.MaxX) > edgeTolerance)
+                    return false;
+
+                float exitX = fromSegment.MaxX + exitOffset;
+                return toSegment.ContainsX(exitX, landingTolerance) &&
+                       to.Position.x >= from.Position.x - landingTolerance &&
+                       IsFirstLandingBelowEdge(fromSegment, toSegment, exitX, landingTolerance);
+            }
+
+            if (from.NodeType == PlatformNodeType.LeftEdge)
+            {
+                if (Mathf.Abs(from.Position.x - fromSegment.MinX) > edgeTolerance)
+                    return false;
+
+                float exitX = fromSegment.MinX - exitOffset;
+                return toSegment.ContainsX(exitX, landingTolerance) &&
+                       to.Position.x <= from.Position.x + landingTolerance &&
+                       IsFirstLandingBelowEdge(fromSegment, toSegment, exitX, landingTolerance);
+            }
+
+            return false;
+        }
+
+        private bool IsFirstLandingBelowEdge(
+            PlatformSurfaceSegment fromSegment,
+            PlatformSurfaceSegment toSegment,
+            float exitX,
+            float landingTolerance)
+        {
+            if (graphGenerator?.SurfaceSegments == null)
+                return false;
+
+            float verticalTolerance = Mathf.Max(0.05f, landingTolerance * 0.1f);
+            foreach (var segment in graphGenerator.SurfaceSegments)
+            {
+                if (segment == null ||
+                    segment.GroupId == fromSegment.GroupId ||
+                    segment.GroupId == toSegment.GroupId ||
+                    !segment.ContainsX(exitX, landingTolerance))
+                {
+                    continue;
+                }
+
+                bool belowStart = segment.Y < fromSegment.Y - verticalTolerance;
+                bool aboveTarget = segment.Y > toSegment.Y + verticalTolerance;
+                if (belowStart && aboveTarget)
+                    return false;
+            }
+
             return true;
         }
 
@@ -486,9 +633,23 @@ namespace ZeroEngine.Pathfinding2D
                 if (verticalDist <= 0.5f || verticalDist > config.MaxFallHeight) continue;
 
                 // 计算下落时间
-                var result = JumpMovementHandler.CalculateFall(startPos, toNode.Position, config.GravityScale);
+                var result = JumpMovementHandler.CalculateFall(
+                    startPos,
+                    toNode.Position,
+                    config.GravityScale,
+                    config.MaxAirHorizontalSpeed);
 
                 if (!result.IsReachable) continue;
+
+                if (!JumpMovementHandler.ValidateTrajectory(
+                        result.Trajectory,
+                        obstacleLayer,
+                        config.TrajectoryCheckRadius,
+                        fromNode.PlatformCollider,
+                        toNode.PlatformCollider))
+                {
+                    continue;
+                }
 
                 // 创建穿透下落链接
                 var link = PlatformLinkData.CreateDropThrough(fromNode.NodeId, toNode.NodeId, result.FlightTime);

@@ -729,6 +729,197 @@ namespace ZeroEngine.Pathfinding2D.Tests.Editor
         }
 
         [Test]
+        public void TryRequestPath_SameColliderStepDownAcrossSharedEdge_ReachesLowerSurface()
+        {
+            var host = new GameObject("SameColliderStepDownRouteTest");
+            var platform = CreateMultiPathPolygonPlatform(
+                "SameColliderStepDownPlatform",
+                (new Vector2(15f, -0.1f), new Vector2(80f, 0.2f)),
+                (new Vector2(59.5f, 3.9f), new Vector2(9f, 0.2f)),
+                (new Vector2(94.5f, -0.1f), new Vector2(61f, 0.2f)));
+
+            try
+            {
+                var pathfinder = CreatePathfinderForSingleCollider(
+                    host,
+                    platform,
+                    scanCenter: new Vector2(50f, 1.5f),
+                    scanSize: new Vector2(160f, 14f),
+                    maxJumpVelocity: 18f,
+                    maxJumpHeight: 8f,
+                    maxHorizontalDistance: 8f,
+                    maxFallHeight: 20f);
+
+                bool success = pathfinder.TryRequestPath(
+                    new PlatformPathRequest(
+                        new Vector3(50.21f, 0.12f, 0f),
+                        new Vector3(85f, 2f, 0f),
+                        forceRequest: true,
+                        projectTargetToGround: true,
+                        projectionDistance: 4f),
+                    out var result);
+
+                Assert.IsTrue(success, BuildPathDebug(result));
+                Assert.AreEqual(PlatformPathCompletionKind.FullPath, result.CompletionKind, BuildPathDebug(result));
+                Assert.IsTrue(
+                    result.Path.Commands.Any(command => command.CommandType == MoveCommandType.Fall),
+                    BuildPathDebug(result));
+                Assert.Greater(result.Path.EndPosition.x, 80f, BuildPathDebug(result));
+                Assert.AreEqual(0f, result.Path.EndPosition.y, 0.5f, BuildPathDebug(result));
+            }
+            finally
+            {
+                Object.DestroyImmediate(host);
+                Object.DestroyImmediate(platform.gameObject);
+            }
+        }
+
+        [Test]
+        public void GenerateJumpLinks_PhysicalEdgeTransitionAnchor_CanStartFall()
+        {
+            var host = new GameObject("PhysicalEdgeTransitionFallTest");
+            var platform = CreateMultiPathPolygonPlatform(
+                "PhysicalEdgeTransitionFallPlatform",
+                (new Vector2(2f, -0.1f), new Vector2(4f, 0.2f)),
+                (new Vector2(7f, -4.1f), new Vector2(6f, 0.2f)));
+
+            try
+            {
+                var graph = host.AddComponent<PlatformGraphGenerator>();
+                graph.Config.ScanCenter = new Vector2(5f, -2f);
+                graph.Config.ScanSize = new Vector2(14f, 10f);
+                graph.Config.GroundLayer = 1 << platform.gameObject.layer;
+                graph.Config.OneWayPlatformLayer = 0;
+                graph.Config.ObstacleLayer = 0;
+                graph.Config.NodeSpacing = 1f;
+                graph.Config.EdgeInset = 0.4f;
+
+                graph.GeneratePlatformGraph();
+                int upperGroup = graph.FindSurfaceGroupAt(new Vector2(4f, 0f), platform, 1f);
+                int lowerGroup = graph.FindSurfaceGroupAt(new Vector2(4f, -4f), platform, 1f);
+                Assert.GreaterOrEqual(upperGroup, 0, "Expected upper surface group.");
+                Assert.GreaterOrEqual(lowerGroup, 0, "Expected lower surface group.");
+
+                var jumpLinkCalculator = host.AddComponent<JumpLinkCalculator>();
+                jumpLinkCalculator.Config.MaxFallHeight = 10f;
+                jumpLinkCalculator.Config.MaxFallHorizontalDistance = 0.25f;
+                jumpLinkCalculator.GenerateJumpLinks();
+
+                Assert.IsTrue(graph.Links.Any(link =>
+                {
+                    if (link.LinkType != PlatformLinkType.Fall)
+                        return false;
+
+                    var from = graph.GetNode(link.FromNodeId);
+                    var to = graph.GetNode(link.ToNodeId);
+                    return from.HasValue &&
+                           to.HasValue &&
+                           from.Value.IsTransitionAnchor &&
+                           from.Value.SurfaceGroupId == upperGroup &&
+                           to.Value.SurfaceGroupId == lowerGroup;
+                }), "Physical edge transition anchors should be valid Fall starts; inset edge nodes can be too far away for narrow step-downs.");
+            }
+            finally
+            {
+                Object.DestroyImmediate(host);
+                Object.DestroyImmediate(platform.gameObject);
+            }
+        }
+
+        [Test]
+        public void GenerateJumpLinks_SameColliderEdgeFall_DoesNotSkipIntermediateLandingSurface()
+        {
+            var host = new GameObject("SameColliderLayeredFallTest");
+            var platform = CreateMultiPathPolygonPlatform(
+                "SameColliderLayeredFallPlatform",
+                (new Vector2(0f, 5.9f), new Vector2(4f, 0.2f)),
+                (new Vector2(3.85f, 3.9f), new Vector2(4.3f, 0.2f)),
+                (new Vector2(3.85f, 1.9f), new Vector2(4.3f, 0.2f)));
+
+            try
+            {
+                var graph = host.AddComponent<PlatformGraphGenerator>();
+                graph.Config.ScanCenter = new Vector2(2f, 4f);
+                graph.Config.ScanSize = new Vector2(12f, 10f);
+                graph.Config.GroundLayer = 1 << platform.gameObject.layer;
+                graph.Config.OneWayPlatformLayer = 0;
+                graph.Config.ObstacleLayer = 0;
+                graph.Config.NodeSpacing = 1f;
+                graph.Config.EdgeInset = 0.2f;
+
+                graph.GeneratePlatformGraph();
+                int upperGroup = graph.FindSurfaceGroupAt(new Vector2(2f, 6f), platform, 1f);
+                int middleGroup = graph.FindSurfaceGroupAt(new Vector2(2.1f, 4f), platform, 1f);
+                int lowerGroup = graph.FindSurfaceGroupAt(new Vector2(2.1f, 2f), platform, 1f);
+                Assert.GreaterOrEqual(upperGroup, 0, "Expected upper surface group.");
+                Assert.GreaterOrEqual(middleGroup, 0, "Expected middle surface group.");
+                Assert.GreaterOrEqual(lowerGroup, 0, "Expected lower surface group.");
+
+                var jumpLinkCalculator = host.AddComponent<JumpLinkCalculator>();
+                jumpLinkCalculator.Config.MaxFallHeight = 10f;
+                jumpLinkCalculator.Config.MaxFallHorizontalDistance = 2f;
+                jumpLinkCalculator.GenerateJumpLinks();
+
+                Assert.IsTrue(
+                    HasFallLink(graph, upperGroup, middleGroup),
+                    "The first landing surface below a same-collider edge should remain reachable.");
+                Assert.IsFalse(
+                    HasFallLink(graph, upperGroup, lowerGroup),
+                    "Same-collider edge fall links must not tunnel past an intermediate landing surface.");
+            }
+            finally
+            {
+                Object.DestroyImmediate(host);
+                Object.DestroyImmediate(platform.gameObject);
+            }
+        }
+
+        [Test]
+        public void TryRequestPath_SameColliderTallStepDownAtEdge_ReachesLowerSurface()
+        {
+            var host = new GameObject("SameColliderTallStepDownRouteTest");
+            var platform = CreateMultiPathPolygonPlatform(
+                "SameColliderTallStepDownPlatform",
+                (new Vector2(18.5f, -0.1f), new Vector2(35f, 0.2f)),
+                (new Vector2(54f, -12.1f), new Vector2(36f, 0.2f)));
+
+            try
+            {
+                var pathfinder = CreatePathfinderForSingleCollider(
+                    host,
+                    platform,
+                    scanCenter: new Vector2(36f, -6f),
+                    scanSize: new Vector2(80f, 30f),
+                    maxJumpVelocity: 18f,
+                    maxJumpHeight: 8f,
+                    maxHorizontalDistance: 8f,
+                    maxFallHeight: 40f);
+
+                bool success = pathfinder.TryRequestPath(
+                    new PlatformPathRequest(
+                        new Vector3(35.8f, 0.12f, 0f),
+                        new Vector3(60f, -10.1f, 0f),
+                        forceRequest: true,
+                        projectTargetToGround: true,
+                        projectionDistance: 4f),
+                    out var result);
+
+                Assert.IsTrue(success, BuildPathDebug(result));
+                Assert.AreEqual(PlatformPathCompletionKind.FullPath, result.CompletionKind, BuildPathDebug(result));
+                Assert.IsTrue(
+                    result.Path.Commands.Any(command => command.CommandType == MoveCommandType.Fall),
+                    BuildPathDebug(result));
+                Assert.Greater(result.Path.EndPosition.x, 55f, BuildPathDebug(result));
+                Assert.AreEqual(-12f, result.Path.EndPosition.y, 0.5f, BuildPathDebug(result));
+            }
+            finally
+            {
+                Object.DestroyImmediate(host);
+                Object.DestroyImmediate(platform.gameObject);
+            }
+        }
+
+        [Test]
         public void IsCurrentCommandComplete_WalkTargetAbovePlayer_DoesNotComplete()
         {
             var host = new GameObject("WalkCompletionHeightTest");
@@ -1044,9 +1235,32 @@ namespace ZeroEngine.Pathfinding2D.Tests.Editor
             float maxJumpVelocity,
             bool oneWay = false)
         {
+            return CreatePathfinderForSingleCollider(
+                host,
+                platform,
+                scanCenter: new Vector2(0f, 1.5f),
+                scanSize: new Vector2(16f, 8f),
+                maxJumpVelocity: maxJumpVelocity,
+                maxJumpHeight: 6f,
+                maxHorizontalDistance: 6f,
+                maxFallHeight: 10f,
+                oneWay: oneWay);
+        }
+
+        private static Platform2DPathfinder CreatePathfinderForSingleCollider(
+            GameObject host,
+            Collider2D platform,
+            Vector2 scanCenter,
+            Vector2 scanSize,
+            float maxJumpVelocity,
+            float maxJumpHeight,
+            float maxHorizontalDistance,
+            float maxFallHeight,
+            bool oneWay = false)
+        {
             var graph = host.AddComponent<PlatformGraphGenerator>();
-            graph.Config.ScanCenter = new Vector2(0f, 1.5f);
-            graph.Config.ScanSize = new Vector2(16f, 8f);
+            graph.Config.ScanCenter = scanCenter;
+            graph.Config.ScanSize = scanSize;
             graph.Config.GroundLayer = oneWay ? 0 : 1 << platform.gameObject.layer;
             graph.Config.OneWayPlatformLayer = oneWay ? 1 << platform.gameObject.layer : 0;
             graph.Config.ObstacleLayer = 0;
@@ -1056,6 +1270,9 @@ namespace ZeroEngine.Pathfinding2D.Tests.Editor
             graph.GeneratePlatformGraph();
             var jumpLinkCalculator = host.AddComponent<JumpLinkCalculator>();
             jumpLinkCalculator.Config.MaxJumpVelocity = maxJumpVelocity;
+            jumpLinkCalculator.Config.MaxJumpHeight = maxJumpHeight;
+            jumpLinkCalculator.Config.MaxHorizontalDistance = maxHorizontalDistance;
+            jumpLinkCalculator.Config.MaxFallHeight = maxFallHeight;
             jumpLinkCalculator.GenerateJumpLinks();
 
             var pathfinder = host.AddComponent<Platform2DPathfinder>();
@@ -1086,6 +1303,22 @@ namespace ZeroEngine.Pathfinding2D.Tests.Editor
             var pathfinder = host.AddComponent<Platform2DPathfinder>();
             pathfinder.SetGraphGenerator(graph);
             return pathfinder;
+        }
+
+        private static bool HasFallLink(PlatformGraphGenerator graph, int fromGroup, int toGroup)
+        {
+            return graph.Links.Any(link =>
+            {
+                if (link.LinkType != PlatformLinkType.Fall)
+                    return false;
+
+                var from = graph.GetNode(link.FromNodeId);
+                var to = graph.GetNode(link.ToNodeId);
+                return from.HasValue &&
+                       to.HasValue &&
+                       from.Value.SurfaceGroupId == fromGroup &&
+                       to.Value.SurfaceGroupId == toGroup;
+            });
         }
 
         private static string BuildPathDebug(PlatformPathResult result)

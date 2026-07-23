@@ -45,6 +45,7 @@ namespace ZeroEngine.Minimap
         private RenderTexture _renderTexture;
         private float _targetZoom;
         private Vector3 _targetPosition;
+        private bool _listeningForMarkerEvents;
         private readonly Dictionary<MinimapMarkerType, MarkerIconConfig> _iconLookup = new Dictionary<MinimapMarkerType, MarkerIconConfig>();
 
         #region Properties
@@ -102,6 +103,16 @@ namespace ZeroEngine.Minimap
                 _targetPosition = GetCameraPosition(_followTarget.position);
         }
 
+        private void OnEnable()
+        {
+            BindMarkerEvents();
+        }
+
+        private void OnDisable()
+        {
+            UnbindMarkerEvents();
+        }
+
         private void LateUpdate()
         {
             if (_minimapCamera == null) return;
@@ -113,6 +124,8 @@ namespace ZeroEngine.Minimap
 
         protected override void OnDestroy()
         {
+            UnbindMarkerEvents();
+
             if (_renderTexture != null)
             {
                 _renderTexture.Release();
@@ -227,6 +240,40 @@ namespace ZeroEngine.Minimap
             _minimapCamera.transform.rotation = Quaternion.Euler(90f, 0f, 0f);
 
             Log($"相机初始化: Size={_renderTextureSize}, Ortho={_orthographicSize}");
+        }
+
+        private void BindMarkerEvents()
+        {
+            if (_listeningForMarkerEvents)
+            {
+                return;
+            }
+
+            MinimapMarkerManager.OnMarkerRegistered += HandleMarkerRegistered;
+            MinimapMarkerManager.OnMarkerUnregistered += HandleMarkerUnregistered;
+            _listeningForMarkerEvents = true;
+        }
+
+        private void UnbindMarkerEvents()
+        {
+            if (!_listeningForMarkerEvents)
+            {
+                return;
+            }
+
+            MinimapMarkerManager.OnMarkerRegistered -= HandleMarkerRegistered;
+            MinimapMarkerManager.OnMarkerUnregistered -= HandleMarkerUnregistered;
+            _listeningForMarkerEvents = false;
+        }
+
+        private void HandleMarkerRegistered(MinimapMarker marker)
+        {
+            OnMinimapEvent?.Invoke(MinimapEventArgs.MarkerAdded(marker));
+        }
+
+        private void HandleMarkerUnregistered(MinimapMarker marker)
+        {
+            OnMinimapEvent?.Invoke(MinimapEventArgs.MarkerRemoved(marker));
         }
 
         private void UpdateCameraPosition()

@@ -1254,7 +1254,9 @@ namespace ZeroEngine.Pathfinding2D
                 {
                     float dist = Vector2.Distance(actualStart, firstNode.Value.Position);
                     generatedEnd = firstNode.Value.Position;
-                    if (dist > config.ArriveDistance && CanCreateWalkCommand(actualStart, firstNode.Value.Position))
+                    if (dist > config.WalkCommandArriveDistance &&
+                        CanCreateWalkCommand(actualStart, firstNode.Value.Position) &&
+                        !IsShortInitialBacktrack(actualStart, firstNode.Value.Position, dist, linkPath))
                     {
                         // 计算朝向：根据目标 X 与起点 X 的差值
                         float deltaX = firstNode.Value.Position.x - actualStart.x;
@@ -1335,7 +1337,7 @@ namespace ZeroEngine.Pathfinding2D
                 if (lastNode.HasValue)
                 {
                     float dist = Vector2.Distance(lastNode.Value.Position, actualEnd);
-                    if (dist > config.ArriveDistance && CanCreateWalkCommand(lastNode.Value.Position, actualEnd))
+                    if (dist > config.WalkCommandArriveDistance && CanCreateWalkCommand(lastNode.Value.Position, actualEnd))
                     {
                         // 计算朝向
                         float deltaX = actualEnd.x - lastNode.Value.Position.x;
@@ -1351,8 +1353,35 @@ namespace ZeroEngine.Pathfinding2D
                 }
             }
 
-         return new Platform2DPath(commandStart, generatedEnd, commands);
-     }
+            return new Platform2DPath(commandStart, generatedEnd, commands);
+        }
+
+        private bool IsShortInitialBacktrack(
+            Vector3 actualStart,
+            Vector3 firstNodePosition,
+            float distanceToFirstNode,
+            List<PlatformLinkData> linkPath)
+        {
+            if (distanceToFirstNode > config.ArriveDistance ||
+                linkPath == null ||
+                linkPath.Count == 0 ||
+                graphGenerator == null)
+            {
+                return false;
+            }
+
+            var nextNode = graphGenerator.GetNode(linkPath[0].ToNodeId);
+            if (!nextNode.HasValue)
+                return false;
+
+            const float directionEpsilon = 0.05f;
+            float initialDx = firstNodePosition.x - actualStart.x;
+            float routeDx = nextNode.Value.Position.x - firstNodePosition.x;
+
+            return Mathf.Abs(initialDx) > directionEpsilon &&
+                   Mathf.Abs(routeDx) > directionEpsilon &&
+                   Mathf.Sign(initialDx) != Mathf.Sign(routeDx);
+        }
 
         private int ResolveEdgeExitFacing(PlatformNodeData node)
         {
