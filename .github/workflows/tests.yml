@@ -32,8 +32,16 @@ permissions:
 
 jobs:
   test:
-    name: Run Unity Tests
+    name: Run Unity Tests (${{ matrix.name }})
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - lane: legacy
+            name: Legacy package
+          - lane: modular
+            name: Modular packages
 
     steps:
       - name: Checkout repository
@@ -48,9 +56,17 @@ jobs:
           mkdir -p TestProject/Packages
           mkdir -p TestProject/ProjectSettings
 
-          # 复制包到 TestProject/Packages（避免符号链接在 Docker 中失效）
+          # 旧单体包仍包含 ModSystem 的兼容副本，不能与独立 ModSystem 包同时加载。
+          # 分成 legacy 与 modular 两条测试通道，避免 asmdef 名称和 .meta GUID 冲突。
           for pkg in com.zerogamestudio.zeroengine*; do
             if [ -d "$pkg" ]; then
+              PKG_NAME=$(basename "$pkg")
+              if [ "${{ matrix.lane }}" = "legacy" ] && [ "$PKG_NAME" = "com.zerogamestudio.zeroengine.modsystem" ]; then
+                continue
+              fi
+              if [ "${{ matrix.lane }}" = "modular" ] && [ "$PKG_NAME" = "com.zerogamestudio.zeroengine" ]; then
+                continue
+              fi
               cp -r "$pkg" "TestProject/Packages/"
             fi
           done
@@ -68,10 +84,17 @@ jobs:
           DEPS="$DEPS, \"com.unity.modules.particlesystem\": \"1.0.0\""
           DEPS="$DEPS, \"com.unity.modules.tilemap\": \"1.0.0\""
 
+          TESTABLES=''
           for pkg in TestProject/Packages/com.zerogamestudio.zeroengine*; do
             if [ -d "$pkg" ]; then
               PKG_NAME=$(basename "$pkg")
               DEPS="$DEPS, \"$PKG_NAME\": \"file:$PKG_NAME\""
+              if [ "${{ matrix.lane }}" = "modular" ] || [ "$PKG_NAME" = "com.zerogamestudio.zeroengine" ]; then
+                if [ -n "$TESTABLES" ]; then
+                  TESTABLES="$TESTABLES, "
+                fi
+                TESTABLES="$TESTABLES\"$PKG_NAME\""
+              fi
             fi
           done
 
@@ -81,7 +104,7 @@ jobs:
               $DEPS
             },
             "testables": [
-              "com.zerogamestudio.zeroengine"
+              $TESTABLES
             ]
           }
           EOF
@@ -95,7 +118,7 @@ jobs:
         uses: actions/cache@v4
         with:
           path: TestProject/Library
-          key: Library-${{ hashFiles('com.zerogamestudio.zeroengine*/package.json') }}
+          key: Library-${{ matrix.lane }}-${{ hashFiles('com.zerogamestudio.zeroengine*/package.json') }}
           restore-keys: |
             Library-
 
@@ -112,13 +135,13 @@ jobs:
           projectPath: TestProject
           testMode: EditMode
           artifactsPath: TestResults
-          checkName: EditMode Test Results
+          checkName: EditMode Test Results (${{ matrix.name }})
 
       - name: Upload Test Results
         uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: Test Results
+          name: Test Results - ${{ matrix.lane }}
           path: TestResults
           if-no-files-found: warn
           retention-days: 14
@@ -128,4 +151,4 @@ jobs:
         if: always()
         with:
           files: TestResults/*.xml
-          check_name: Unity Test Report
+          check_name: Unity Test Report (${{ matrix.name }})
