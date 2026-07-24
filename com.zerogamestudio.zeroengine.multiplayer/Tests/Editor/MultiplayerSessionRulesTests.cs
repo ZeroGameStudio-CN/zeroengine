@@ -54,7 +54,8 @@ namespace ZeroEngine.Multiplayer.Tests
                 Key(SessionPhase.Failed, SessionPhase.JoiningRoom),
                 Key(SessionPhase.Failed, SessionPhase.Idle),
                 Key(SessionPhase.Failed, SessionPhase.Leaving),
-                Key(SessionPhase.Leaving, SessionPhase.Idle)
+                Key(SessionPhase.Leaving, SessionPhase.Idle),
+                Key(SessionPhase.Leaving, SessionPhase.Failed)
             };
 
             Array phases = Enum.GetValues(typeof(SessionPhase));

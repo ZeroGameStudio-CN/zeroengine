@@ -21,6 +21,8 @@ namespace ZeroEngine.Multiplayer.FishNet
         [SerializeField] private ushort port = 7770;
 
         private readonly Dictionary<int, PlatformUserId> _remoteUsers = new Dictionary<int, PlatformUserId>();
+        private readonly Dictionary<int, NetworkConnection> _deferredAuthenticatedConnections =
+            new Dictionary<int, NetworkConnection>();
         private bool _subscribed;
         private bool _intentionalStop;
         private bool _hostLocalClientStarting;
@@ -51,6 +53,8 @@ namespace ZeroEngine.Multiplayer.FishNet
         private void OnDisable()
         {
             Unsubscribe();
+            _hostLocalClientStarting = false;
+            _deferredAuthenticatedConnections.Clear();
         }
 
         public void Configure(
@@ -165,7 +169,9 @@ namespace ZeroEngine.Multiplayer.FishNet
 
             Phase = ConnectionPhase.StartingHost;
             _intentionalStop = false;
+            _hostLocalClientStarting = false;
             _remoteUsers.Clear();
+            _deferredAuthenticatedConnections.Clear();
             ConfigureSelectedTransport(localAddress);
 
             try
@@ -181,12 +187,18 @@ namespace ZeroEngine.Multiplayer.FishNet
                 _hostLocalClientStarting = true;
                 if (!networkManager.IsClientStarted && !StartSelectedConnection(false))
                 {
+                    _hostLocalClientStarting = false;
                     await StopStartedTransportsAsync();
                     return Fail("multiplayer.fishnet.host_client_start_rejected");
                 }
 
-                await WaitUntilAsync(() => networkManager.IsClientStarted, cancellationToken);
+                await WaitUntilAsync(
+                    () => networkManager.IsClientStarted &&
+                          networkManager.ClientManager != null &&
+                          networkManager.ClientManager.Connection != null,
+                    cancellationToken);
                 _hostLocalClientStarting = false;
+                DrainDeferredAuthenticatedConnections();
                 _wasClientActive = true;
                 Phase = ConnectionPhase.Hosting;
                 Raise(ConnectionEventType.HostStarted, default(PlatformUserId));
@@ -195,6 +207,7 @@ namespace ZeroEngine.Multiplayer.FishNet
             catch (OperationCanceledException)
             {
                 _hostLocalClientStarting = false;
+                _deferredAuthenticatedConnections.Clear();
                 await StopStartedTransportsAsync();
                 Phase = ConnectionPhase.Stopped;
                 throw;
@@ -202,6 +215,7 @@ namespace ZeroEngine.Multiplayer.FishNet
             catch (Exception exception)
             {
                 _hostLocalClientStarting = false;
+                _deferredAuthenticatedConnections.Clear();
                 await StopStartedTransportsAsync();
                 return Fail("multiplayer.fishnet.host_start_exception", exception.GetType().Name);
             }
@@ -297,6 +311,8 @@ namespace ZeroEngine.Multiplayer.FishNet
                 }
 
                 _remoteUsers.Clear();
+                _deferredAuthenticatedConnections.Clear();
+                _hostLocalClientStarting = false;
                 _wasClientActive = false;
                 _wasServerActive = false;
                 _activeHostId = default(PlatformUserId);
@@ -380,7 +396,23 @@ namespace ZeroEngine.Multiplayer.FishNet
 
         private void OnAuthenticationResult(NetworkConnection connection, bool authenticated)
         {
-            if (!authenticated || connection == null || _hostLocalClientStarting || IsLocalHostConnection(connection))
+            if (!authenticated || connection == null)
+            {
+                return;
+            }
+
+            if (_hostLocalClientStarting)
+            {
+                _deferredAuthenticatedConnections[connection.ClientId] = connection;
+                return;
+            }
+
+            ProcessAuthenticatedConnection(connection);
+        }
+
+        private void ProcessAuthenticatedConnection(NetworkConnection connection)
+        {
+            if (connection == null || IsLocalHostConnection(connection))
             {
                 return;
             }
@@ -425,6 +457,23 @@ namespace ZeroEngine.Multiplayer.FishNet
             Raise(ConnectionEventType.PeerConnected, identity.Value);
         }
 
+        private void DrainDeferredAuthenticatedConnections()
+        {
+            if (_deferredAuthenticatedConnections.Count == 0)
+            {
+                return;
+            }
+
+            NetworkConnection[] connections =
+                new NetworkConnection[_deferredAuthenticatedConnections.Count];
+            _deferredAuthenticatedConnections.Values.CopyTo(connections, 0);
+            _deferredAuthenticatedConnections.Clear();
+            for (int i = 0; i < connections.Length; i++)
+            {
+                ProcessAuthenticatedConnection(connections[i]);
+            }
+        }
+
         private void OnRemoteConnectionState(
             NetworkConnection connection,
             RemoteConnectionStateArgs state)
@@ -434,6 +483,7 @@ namespace ZeroEngine.Multiplayer.FishNet
                 return;
             }
 
+            _deferredAuthenticatedConnections.Remove(state.ConnectionId);
             PlatformUserId userId;
             if (_remoteUsers.TryGetValue(state.ConnectionId, out userId))
             {
@@ -507,6 +557,8 @@ namespace ZeroEngine.Multiplayer.FishNet
                 }
 
                 await Task.Yield();
+                _deferredAuthenticatedConnections.Clear();
+                _hostLocalClientStarting = false;
                 _wasClientActive = false;
                 _wasServerActive = false;
             }

@@ -79,7 +79,7 @@ namespace ZeroEngine.Multiplayer
                     return target == SessionPhase.CreatingRoom || target == SessionPhase.JoiningRoom ||
                            target == SessionPhase.Idle || target == SessionPhase.Leaving;
                 case SessionPhase.Leaving:
-                    return target == SessionPhase.Idle;
+                    return target == SessionPhase.Idle || target == SessionPhase.Failed;
                 default:
                     return false;
             }

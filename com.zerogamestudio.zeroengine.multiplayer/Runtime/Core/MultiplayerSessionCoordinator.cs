@@ -25,6 +25,7 @@ namespace ZeroEngine.Multiplayer
         private RoomId _retryRoomId;
         private bool _operationInProgress;
         private bool _intentionalLeave;
+        private bool _cleanupIncomplete;
         private bool _disposed;
         private TimeSpan _reconnectRemaining;
         private int _reconnectAttempt;
@@ -89,6 +90,13 @@ namespace ZeroEngine.Multiplayer
 
         public async Task<OperationResult<RoomSnapshot>> CreateRoomAsync(CancellationToken cancellationToken)
         {
+            if (_cleanupIncomplete)
+            {
+                return OperationResult<RoomSnapshot>.Failure(
+                    MultiplayerErrorCode.InvalidState,
+                    "multiplayer.error.cleanup_required");
+            }
+
             OperationResult busy;
             if (!TryBeginOperation(out busy))
             {
@@ -156,8 +164,7 @@ namespace ZeroEngine.Multiplayer
 
                 if (create.Value == null)
                 {
-                    await CleanupFailedJoinAsync();
-                    return FailRoomOperation(OperationResult.Failure(
+                    return await FailAfterCleanupAsync(OperationResult.Failure(
                         MultiplayerErrorCode.CreateFailed,
                         "multiplayer.error.create_returned_no_room"));
                 }
@@ -179,14 +186,13 @@ namespace ZeroEngine.Multiplayer
 
                 if (!prepare.Succeeded)
                 {
-                    await CleanupFailedJoinAsync();
-                    return FailRoomOperation(prepare);
+                    return await FailAfterCleanupAsync(prepare);
                 }
 
                 transition = Transition(SessionPhase.Connecting);
                 if (!transition.Succeeded)
                 {
-                    return FailRoomOperation(transition);
+                    return await FailAfterCleanupAsync(transition);
                 }
 
                 OperationResult start = await RunWithTimeout(
@@ -205,8 +211,31 @@ namespace ZeroEngine.Multiplayer
 
                 if (!start.Succeeded)
                 {
-                    await CleanupFailedJoinAsync();
-                    return FailRoomOperation(start);
+                    return await FailAfterCleanupAsync(start);
+                }
+
+                transition = Transition(SessionPhase.Synchronizing);
+                if (!transition.Succeeded)
+                {
+                    return await FailAfterCleanupAsync(transition);
+                }
+
+                OperationResult synchronize = await RunWithTimeout(
+                    token => _game.SynchronizeLocalAsync(
+                        new MultiplayerSessionContext(_room, _platform.LocalUser, true),
+                        token),
+                    _config.InitialSyncTimeout,
+                    cancellationToken,
+                    MultiplayerErrorCode.SynchronizationFailed,
+                    "multiplayer.error.host_sync_failed");
+                if (!IsCurrent(generation))
+                {
+                    return StaleRoomResult();
+                }
+
+                if (!synchronize.Succeeded)
+                {
+                    return await FailAfterCleanupAsync(synchronize);
                 }
 
                 _room = _room
@@ -215,14 +244,13 @@ namespace ZeroEngine.Multiplayer
                 OperationResult publish = PublishCurrentRoomState();
                 if (!publish.Succeeded)
                 {
-                    await CleanupFailedJoinAsync();
-                    return FailRoomOperation(publish);
+                    return await FailAfterCleanupAsync(publish);
                 }
 
                 transition = Transition(SessionPhase.InRoom);
                 if (!transition.Succeeded)
                 {
-                    return FailRoomOperation(transition);
+                    return await FailAfterCleanupAsync(transition);
                 }
 
                 _retryOperation = RetryOperationKind.None;
@@ -239,6 +267,13 @@ namespace ZeroEngine.Multiplayer
             RoomId roomId,
             CancellationToken cancellationToken)
         {
+            if (_cleanupIncomplete)
+            {
+                return OperationResult<RoomSnapshot>.Failure(
+                    MultiplayerErrorCode.InvalidState,
+                    "multiplayer.error.cleanup_required");
+            }
+
             if (roomId.IsEmpty)
             {
                 return OperationResult<RoomSnapshot>.Failure(
@@ -286,8 +321,7 @@ namespace ZeroEngine.Multiplayer
 
                 if (join.Value == null)
                 {
-                    await CleanupFailedJoinAsync();
-                    return FailRoomOperation(OperationResult.Failure(
+                    return await FailAfterCleanupAsync(OperationResult.Failure(
                         MultiplayerErrorCode.JoinFailed,
                         "multiplayer.error.join_returned_no_room"));
                 }
@@ -295,8 +329,7 @@ namespace ZeroEngine.Multiplayer
                 _room = join.Value;
                 if (!_room.IsJoinable)
                 {
-                    await CleanupFailedJoinAsync();
-                    return FailRoomOperation(OperationResult.Failure(
+                    return await FailAfterCleanupAsync(OperationResult.Failure(
                         _room.HasStarted || _room.Phase == SessionPhase.Starting ||
                         _room.Phase == SessionPhase.InGame
                             ? MultiplayerErrorCode.RoomStarted
@@ -311,8 +344,7 @@ namespace ZeroEngine.Multiplayer
                 }
                 catch (Exception exception)
                 {
-                    await CleanupFailedJoinAsync();
-                    return FailRoomOperation(OperationResult.Failure(
+                    return await FailAfterCleanupAsync(OperationResult.Failure(
                         MultiplayerErrorCode.InvalidConfiguration,
                         "multiplayer.error.compatibility_provider_failed",
                         exception.GetType().Name));
@@ -325,8 +357,7 @@ namespace ZeroEngine.Multiplayer
                     _config.BuildMatchPolicy);
                 if (!compatibility.Succeeded)
                 {
-                    await CleanupFailedJoinAsync();
-                    return FailRoomOperation(compatibility);
+                    return await FailAfterCleanupAsync(compatibility);
                 }
 
                 OperationResult prepare = await RunWithTimeout(
@@ -345,14 +376,13 @@ namespace ZeroEngine.Multiplayer
 
                 if (!prepare.Succeeded)
                 {
-                    await CleanupFailedJoinAsync();
-                    return FailRoomOperation(prepare);
+                    return await FailAfterCleanupAsync(prepare);
                 }
 
                 transition = Transition(SessionPhase.Connecting);
                 if (!transition.Succeeded)
                 {
-                    return FailRoomOperation(transition);
+                    return await FailAfterCleanupAsync(transition);
                 }
 
                 OperationResult start = await RunWithTimeout(
@@ -376,11 +406,15 @@ namespace ZeroEngine.Multiplayer
 
                 if (!start.Succeeded)
                 {
-                    await CleanupFailedJoinAsync();
-                    return FailRoomOperation(start);
+                    return await FailAfterCleanupAsync(start);
                 }
 
-                Transition(SessionPhase.Synchronizing);
+                transition = Transition(SessionPhase.Synchronizing);
+                if (!transition.Succeeded)
+                {
+                    return await FailAfterCleanupAsync(transition);
+                }
+
                 OperationResult synchronize = await RunWithTimeout(
                     token => _game.SynchronizeLocalAsync(
                         new MultiplayerSessionContext(_room, _platform.LocalUser, false),
@@ -397,8 +431,7 @@ namespace ZeroEngine.Multiplayer
 
                 if (!synchronize.Succeeded)
                 {
-                    await CleanupFailedJoinAsync();
-                    return FailRoomOperation(synchronize);
+                    return await FailAfterCleanupAsync(synchronize);
                 }
 
                 _room = _room.WithMemberPhase(_platform.LocalUser.Id, MemberConnectionPhase.Ready);
@@ -413,8 +446,7 @@ namespace ZeroEngine.Multiplayer
                 transition = Transition(target);
                 if (!transition.Succeeded)
                 {
-                    await CleanupFailedJoinAsync();
-                    return FailRoomOperation(transition);
+                    return await FailAfterCleanupAsync(transition);
                 }
 
                 _retryOperation = RetryOperationKind.None;
@@ -1145,6 +1177,15 @@ namespace ZeroEngine.Multiplayer
                     MultiplayerErrorCode.LeaveFailed,
                     "multiplayer.error.leave_failed");
 
+                OperationResult result = !stop.Succeeded ? stop : leave;
+                if (!result.Succeeded)
+                {
+                    _cleanupIncomplete = true;
+                    Transition(SessionPhase.Failed);
+                    return SetLastResult(result);
+                }
+
+                _cleanupIncomplete = false;
                 _game.OnSessionEnded(SessionEndReason.IntentionalLeave);
                 _room = null;
                 _retryOperation = RetryOperationKind.None;
@@ -1153,8 +1194,6 @@ namespace ZeroEngine.Multiplayer
                 _reconnectRemaining = TimeSpan.Zero;
                 _reconnectAttempt = 0;
                 Transition(SessionPhase.Idle);
-
-                OperationResult result = !stop.Succeeded ? stop : leave;
                 return SetLastResult(result);
             }
             finally
@@ -1339,21 +1378,36 @@ namespace ZeroEngine.Multiplayer
             return true;
         }
 
-        private async Task CleanupFailedJoinAsync()
+        private async Task<OperationResult> CleanupFailedJoinAsync()
         {
-            await RunWithTimeout(
+            OperationResult stop = await RunWithTimeout(
                 token => _driver.StopAsync(DisconnectIntent.Failure, token),
                 _config.LeaveTimeout,
                 CancellationToken.None,
                 MultiplayerErrorCode.LeaveFailed,
                 "multiplayer.error.cleanup_stop_failed");
 
-            await RunWithTimeout(
+            OperationResult leave = await RunWithTimeout(
                 token => _platform.LeaveAsync(token),
                 _config.LeaveTimeout,
                 CancellationToken.None,
                 MultiplayerErrorCode.LeaveFailed,
                 "multiplayer.error.cleanup_leave_failed");
+            return !stop.Succeeded ? stop : leave;
+        }
+
+        private async Task<OperationResult<RoomSnapshot>> FailAfterCleanupAsync(
+            OperationResult failure)
+        {
+            OperationResult cleanup = await CleanupFailedJoinAsync();
+            _cleanupIncomplete = !cleanup.Succeeded;
+            if (_cleanupIncomplete)
+            {
+                _retryOperation = RetryOperationKind.None;
+                return FailRoomOperation(cleanup);
+            }
+
+            return FailRoomOperation(failure);
         }
 
         private void OnPhaseChanged(SessionPhase previous, SessionPhase current)

@@ -54,8 +54,55 @@ namespace ZeroEngine.Multiplayer.Tests
             Assert.AreSame(result.Value, _coordinator.CurrentRoom);
             Assert.AreEqual(1, _driver.StartHostCalls);
             Assert.AreEqual(1, _game.PrepareCalls);
+            Assert.AreEqual(1, _game.LocalSynchronizeCalls);
             Assert.AreEqual(RetryOperationKind.None, _coordinator.GetSnapshot().RetryOperation);
             Assert.AreEqual(SessionPhase.InRoom, _platform.PublishedRooms[0].Phase);
+        }
+
+        [Test]
+        public void CreateRoom_HostSynchronizationFailureCleansTransportAndLobby()
+        {
+            _game.LocalSynchronizeResult = OperationResult.Failure(
+                MultiplayerErrorCode.SynchronizationFailed,
+                "test.host_sync_failed");
+            Assert.IsTrue(Complete(_coordinator.InitializeAsync(CancellationToken.None)).Succeeded);
+
+            OperationResult<RoomSnapshot> result = Complete(
+                _coordinator.CreateRoomAsync(CancellationToken.None));
+
+            Assert.IsFalse(result.Succeeded);
+            Assert.AreEqual(MultiplayerErrorCode.SynchronizationFailed, result.ErrorCode);
+            Assert.AreEqual(1, _driver.StopCalls);
+            Assert.AreEqual(1, _platform.LeaveCalls);
+            Assert.IsNull(_coordinator.CurrentRoom);
+            Assert.AreEqual(SessionPhase.Failed, _coordinator.Phase);
+        }
+
+        [Test]
+        public void CreateRoom_CleanupFailureBlocksRetryUntilLeaveSucceeds()
+        {
+            _game.LocalSynchronizeResult = OperationResult.Failure(
+                MultiplayerErrorCode.SynchronizationFailed,
+                "test.host_sync_failed");
+            _driver.StopResult = OperationResult.Failure(
+                MultiplayerErrorCode.LeaveFailed,
+                "test.cleanup_stop_failed");
+            Assert.IsTrue(Complete(_coordinator.InitializeAsync(CancellationToken.None)).Succeeded);
+
+            OperationResult<RoomSnapshot> result = Complete(
+                _coordinator.CreateRoomAsync(CancellationToken.None));
+            OperationResult<RoomSnapshot> blocked = Complete(
+                _coordinator.CreateRoomAsync(CancellationToken.None));
+
+            Assert.IsFalse(result.Succeeded);
+            Assert.AreEqual("test.cleanup_stop_failed", result.MessageKey);
+            Assert.AreEqual(MultiplayerErrorCode.InvalidState, blocked.ErrorCode);
+            Assert.AreEqual("multiplayer.error.cleanup_required", blocked.MessageKey);
+
+            _driver.StopResult = OperationResult.Success();
+            Assert.IsTrue(Complete(_coordinator.LeaveAsync(CancellationToken.None)).Succeeded);
+            _game.LocalSynchronizeResult = OperationResult.Success();
+            Assert.IsTrue(Complete(_coordinator.CreateRoomAsync(CancellationToken.None)).Succeeded);
         }
 
         [Test]
@@ -269,7 +316,7 @@ namespace ZeroEngine.Multiplayer.Tests
         }
 
         [Test]
-        public void IntentionalLeave_DoesNotEnterReconnectAndEndsIdleEvenWhenCleanupFails()
+        public void IntentionalLeave_CleanupFailureRemainsFailedUntilRetrySucceeds()
         {
             ReachInGameHost();
             _driver.EmitDisconnectOnStop = true;
@@ -280,6 +327,12 @@ namespace ZeroEngine.Multiplayer.Tests
             OperationResult result = Complete(_coordinator.LeaveAsync(CancellationToken.None));
 
             Assert.IsFalse(result.Succeeded);
+            Assert.AreEqual(SessionPhase.Failed, _coordinator.Phase);
+            Assert.IsNotNull(_coordinator.CurrentRoom);
+            Assert.AreEqual(0, _game.SessionEndedCalls);
+
+            _driver.StopResult = OperationResult.Success();
+            Assert.IsTrue(Complete(_coordinator.LeaveAsync(CancellationToken.None)).Succeeded);
             Assert.AreEqual(SessionPhase.Idle, _coordinator.Phase);
             Assert.IsNull(_coordinator.CurrentRoom);
             Assert.AreEqual(1, _game.SessionEndedCalls);
