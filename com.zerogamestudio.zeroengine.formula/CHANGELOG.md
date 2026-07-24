@@ -20,6 +20,8 @@
 - Added a shared Formula Catalog window that aggregates formulas, references,
   scan issues, catalog metadata, Markdown reports, and draft missing-entry
   generation for project profiles.
+- Added searchable enum parameter dropdowns for large enum catalogs while
+  preserving serialized numeric values.
 
 ## 0.1.0
 

@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Reflection;
 using UnityEditor;
+using UnityEditor.IMGUI.Controls;
 using UnityEngine;
 
 namespace ZeroEngine.Formula.Editor
@@ -278,20 +279,54 @@ namespace ZeroEngine.Formula.Editor
                 return;
             }
 
-            var values = Enum.GetValues(descriptor.EnumType);
-            var names = Enum.GetNames(descriptor.EnumType);
-            var selectedIndex = 0;
-            for (var i = 0; i < values.Length; i++)
+            var options = FormulaEnumDropdownUtility.CreateOptions(descriptor.EnumType);
+            if (options.Length == 0)
             {
-                if (Convert.ToInt32(values.GetValue(i)) == intValue.intValue)
-                {
-                    selectedIndex = i;
-                    break;
-                }
+                EditorGUILayout.PropertyField(intValue, content);
+                return;
             }
 
-            var nextIndex = EditorGUILayout.Popup(content, selectedIndex, names);
-            intValue.intValue = Convert.ToInt32(values.GetValue(nextIndex));
+            var selectedIndex = FormulaEnumDropdownUtility.FindSelectedIndex(options, intValue.intValue);
+            if (!FormulaEnumDropdownUtility.ShouldUseSearchableDropdown(options.Length))
+            {
+                var names = new string[options.Length];
+                for (var i = 0; i < options.Length; i++)
+                    names[i] = options[i].Name;
+
+                var nextIndex = EditorGUILayout.Popup(content, selectedIndex, names);
+                intValue.intValue = options[nextIndex].Value;
+                return;
+            }
+
+            var position = EditorGUILayout.GetControlRect();
+            EditorGUI.BeginProperty(position, content, intValue);
+            var buttonPosition = EditorGUI.PrefixLabel(position, content);
+            if (EditorGUI.DropdownButton(
+                    buttonPosition,
+                    new GUIContent(options[selectedIndex].Name),
+                    FocusType.Keyboard))
+            {
+                var propertyPath = intValue.propertyPath;
+                var targetObjects = intValue.serializedObject.targetObjects;
+                var dropdown = new FormulaEnumDropdown(
+                    new AdvancedDropdownState(),
+                    content.text,
+                    options,
+                    option =>
+                    {
+                        Undo.RecordObjects(targetObjects, $"Change {content.text}");
+                        var serializedTargets = new SerializedObject(targetObjects);
+                        var serializedValue = serializedTargets.FindProperty(propertyPath);
+                        if (serializedValue == null)
+                            return;
+
+                        serializedValue.intValue = option.Value;
+                        serializedTargets.ApplyModifiedProperties();
+                    });
+                dropdown.Show(buttonPosition);
+            }
+
+            EditorGUI.EndProperty();
         }
 
         private static void DrawNestedFormula(SerializedProperty source)
@@ -350,6 +385,100 @@ namespace ZeroEngine.Formula.Editor
             list.Add(FormulaStep.Create(FormulaOperationType.Add, FormulaValueSource.Constant(0f)));
             EditorUtility.SetDirty(formula);
             serializedObject.Update();
+        }
+    }
+
+    internal readonly struct FormulaEnumOption
+    {
+        public FormulaEnumOption(string name, int value)
+        {
+            Name = name;
+            Value = value;
+        }
+
+        public string Name { get; }
+
+        public int Value { get; }
+    }
+
+    internal static class FormulaEnumDropdownUtility
+    {
+        internal const int SearchableDropdownThreshold = 20;
+
+        public static FormulaEnumOption[] CreateOptions(Type enumType)
+        {
+            if (enumType == null || !enumType.IsEnum)
+                return Array.Empty<FormulaEnumOption>();
+
+            var names = Enum.GetNames(enumType);
+            var values = Enum.GetValues(enumType);
+            var options = new FormulaEnumOption[names.Length];
+            for (var i = 0; i < options.Length; i++)
+                options[i] = new FormulaEnumOption(names[i], Convert.ToInt32(values.GetValue(i)));
+
+            return options;
+        }
+
+        public static int FindSelectedIndex(IReadOnlyList<FormulaEnumOption> options, int value)
+        {
+            for (var i = 0; i < options.Count; i++)
+            {
+                if (options[i].Value == value)
+                    return i;
+            }
+
+            return 0;
+        }
+
+        public static bool ShouldUseSearchableDropdown(int optionCount)
+        {
+            return optionCount >= SearchableDropdownThreshold;
+        }
+    }
+
+    internal sealed class FormulaEnumDropdown : AdvancedDropdown
+    {
+        private readonly string title;
+        private readonly IReadOnlyList<FormulaEnumOption> options;
+        private readonly Action<FormulaEnumOption> onSelected;
+
+        public FormulaEnumDropdown(
+            AdvancedDropdownState state,
+            string title,
+            IReadOnlyList<FormulaEnumOption> options,
+            Action<FormulaEnumOption> onSelected)
+            : base(state)
+        {
+            this.title = title;
+            this.options = options;
+            this.onSelected = onSelected;
+            minimumSize = new Vector2(260f, 320f);
+        }
+
+        protected override AdvancedDropdownItem BuildRoot()
+        {
+            var root = new AdvancedDropdownItem(title);
+            for (var i = 0; i < options.Count; i++)
+                root.AddChild(new FormulaEnumDropdownItem(options[i]));
+
+            return root;
+        }
+
+        protected override void ItemSelected(AdvancedDropdownItem item)
+        {
+            if (item is FormulaEnumDropdownItem enumItem)
+                onSelected?.Invoke(enumItem.Option);
+        }
+
+        private sealed class FormulaEnumDropdownItem : AdvancedDropdownItem
+        {
+            public FormulaEnumDropdownItem(FormulaEnumOption option)
+                : base(option.Name)
+            {
+                Option = option;
+            }
+
+            public FormulaEnumOption Option { get; }
         }
     }
 }
