@@ -60,6 +60,31 @@ namespace ZeroEngine.Multiplayer.Tests
         }
 
         [Test]
+        public void CreateRoom_PeerConnectedDuringHostStartupSynchronizesAfterCreateCompletes()
+        {
+            _platform.CreateResult = OperationResult<RoomSnapshot>.Success(
+                TestData.CreateRoom(
+                    TestData.Host,
+                    guestPhase: MemberConnectionPhase.Connected));
+            _driver.StartHostAction = () => _driver.Emit(new ConnectionEvent(
+                ConnectionEventType.PeerConnected,
+                TestData.Guest.Id,
+                MultiplayerErrorCode.None,
+                string.Empty));
+            Assert.IsTrue(Complete(_coordinator.InitializeAsync(CancellationToken.None)).Succeeded);
+
+            OperationResult<RoomSnapshot> result = Complete(
+                _coordinator.CreateRoomAsync(CancellationToken.None));
+
+            Assert.IsTrue(result.Succeeded);
+            Assert.AreEqual(1, _game.SynchronizeCalls);
+            Assert.AreEqual(SessionPhase.Ready, _coordinator.Phase);
+            Assert.AreEqual(
+                MemberConnectionPhase.Ready,
+                _coordinator.CurrentRoom.Members[1].ConnectionPhase);
+        }
+
+        [Test]
         public void CreateRoom_HostSynchronizationFailureCleansTransportAndLobby()
         {
             _game.LocalSynchronizeResult = OperationResult.Failure(

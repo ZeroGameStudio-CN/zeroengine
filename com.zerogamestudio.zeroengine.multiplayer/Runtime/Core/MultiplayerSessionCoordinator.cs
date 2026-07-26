@@ -18,6 +18,9 @@ namespace ZeroEngine.Multiplayer
         private readonly SemaphoreSlim _operationLock = new SemaphoreSlim(1, 1);
         private readonly Dictionary<PlatformUserId, CancellationTokenSource> _peerReconnectExpiry =
             new Dictionary<PlatformUserId, CancellationTokenSource>();
+        private readonly object _pendingPeerConnectionLock = new object();
+        private readonly HashSet<PlatformUserId> _pendingPeerConnections =
+            new HashSet<PlatformUserId>();
 
         private RoomSnapshot _room;
         private OperationResult _lastResult = OperationResult.Success();
@@ -30,6 +33,7 @@ namespace ZeroEngine.Multiplayer
         private TimeSpan _reconnectRemaining;
         private int _reconnectAttempt;
         private CancellationTokenSource _activeReconnectCancellation;
+        private bool _peerConnectionPumpRunning;
 
         public MultiplayerSessionCoordinator(
             IMultiplayerSessionSettings config,
@@ -1156,6 +1160,7 @@ namespace ZeroEngine.Multiplayer
             {
                 _operationGeneration.Invalidate();
                 _intentionalLeave = true;
+                ClearPendingPeerConnections();
 
                 OperationResult transition = Transition(SessionPhase.Leaving);
                 if (!transition.Succeeded)
@@ -1210,6 +1215,7 @@ namespace ZeroEngine.Multiplayer
             }
 
             _disposed = true;
+            ClearPendingPeerConnections();
             _activeReconnectCancellation?.Cancel();
             _activeReconnectCancellation = null;
             var expiries = new List<CancellationTokenSource>(_peerReconnectExpiry.Values);
@@ -1294,6 +1300,7 @@ namespace ZeroEngine.Multiplayer
             _operationInProgress = false;
             _operationLock.Release();
             NotifyChanged();
+            TryStartPendingPeerSynchronization();
         }
 
         private OperationResult Transition(SessionPhase target)
@@ -1330,6 +1337,7 @@ namespace ZeroEngine.Multiplayer
         private OperationResult<RoomSnapshot> FailRoomOperation(OperationResult failure)
         {
             TransitionToFailedIfAllowed();
+            ClearPendingPeerConnections();
             _room = null;
             SetLastResult(failure);
             return OperationResult<RoomSnapshot>.FromFailure(failure);
@@ -1413,6 +1421,7 @@ namespace ZeroEngine.Multiplayer
         private void OnPhaseChanged(SessionPhase previous, SessionPhase current)
         {
             NotifyChanged();
+            TryStartPendingPeerSynchronization();
         }
 
         private void OnJoinRequested(JoinRequest request)
@@ -1445,6 +1454,11 @@ namespace ZeroEngine.Multiplayer
                 EnterHostLeftRecovery();
                 NotifyChanged();
                 return;
+            }
+
+            if (roomEvent.Type == RoomEventType.MemberLeft)
+            {
+                RemovePendingPeerConnection(roomEvent.MemberId);
             }
 
             if (roomEvent.Type == RoomEventType.MemberLeft && Phase == SessionPhase.InGame)
@@ -1482,6 +1496,7 @@ namespace ZeroEngine.Multiplayer
                 }
             }
             NotifyChanged();
+            TryStartPendingPeerSynchronization();
         }
 
         private void ApplyRemoteRoomPhase()
@@ -1632,17 +1647,15 @@ namespace ZeroEngine.Multiplayer
                 if (TryGetPeer(connectionEvent.UserId, out connectedPeer))
                 {
                     CancelPeerReconnectExpiry(connectedPeer.User.Id);
-                    if (Phase == SessionPhase.InGame)
-                    {
-                        _ = SynchronizeConnectedPeerAsync(connectedPeer, true);
-                    }
-                    else if (Phase == SessionPhase.InRoom || Phase == SessionPhase.Ready)
-                    {
-                        _ = SynchronizeConnectedPeerAsync(connectedPeer, false);
-                    }
                 }
 
+                QueuePendingPeerConnection(connectionEvent.UserId);
                 return;
+            }
+
+            if (connectionEvent.Type == ConnectionEventType.PeerDisconnected)
+            {
+                RemovePendingPeerConnection(connectionEvent.UserId);
             }
 
             bool localIsHost = _room != null && _room.IsHost(_platform.LocalUser.Id);
@@ -1699,22 +1712,135 @@ namespace ZeroEngine.Multiplayer
                     : connectionEvent.MessageKey));
         }
 
-        private async Task SynchronizeConnectedPeerAsync(MultiplayerPeer peer, bool restoring)
+        private void QueuePendingPeerConnection(PlatformUserId userId)
+        {
+            if (userId.IsEmpty || userId == _platform.LocalUser.Id)
+            {
+                return;
+            }
+
+            lock (_pendingPeerConnectionLock)
+            {
+                if (_disposed || _intentionalLeave)
+                {
+                    return;
+                }
+
+                _pendingPeerConnections.Add(userId);
+            }
+
+            TryStartPendingPeerSynchronization();
+        }
+
+        private void RemovePendingPeerConnection(PlatformUserId userId)
+        {
+            lock (_pendingPeerConnectionLock)
+            {
+                _pendingPeerConnections.Remove(userId);
+            }
+        }
+
+        private void ClearPendingPeerConnections()
+        {
+            lock (_pendingPeerConnectionLock)
+            {
+                _pendingPeerConnections.Clear();
+            }
+        }
+
+        private void TryStartPendingPeerSynchronization()
+        {
+            lock (_pendingPeerConnectionLock)
+            {
+                if (_peerConnectionPumpRunning || _pendingPeerConnections.Count == 0 ||
+                    _disposed || _intentionalLeave || _operationInProgress || !_driver.IsServer ||
+                    (Phase != SessionPhase.InRoom &&
+                     Phase != SessionPhase.Ready &&
+                     Phase != SessionPhase.InGame))
+                {
+                    return;
+                }
+
+                _peerConnectionPumpRunning = true;
+            }
+
+            _ = DrainPendingPeerConnectionsAsync();
+        }
+
+        private async Task DrainPendingPeerConnectionsAsync()
+        {
+            while (true)
+            {
+                PlatformUserId userId = default(PlatformUserId);
+                MultiplayerPeer peer = default(MultiplayerPeer);
+                bool restoring = false;
+
+                lock (_pendingPeerConnectionLock)
+                {
+                    if (_disposed || _intentionalLeave || _operationInProgress || !_driver.IsServer ||
+                        (Phase != SessionPhase.InRoom &&
+                         Phase != SessionPhase.Ready &&
+                         Phase != SessionPhase.InGame))
+                    {
+                        _peerConnectionPumpRunning = false;
+                        return;
+                    }
+
+                    bool found = false;
+                    foreach (PlatformUserId pendingUserId in _pendingPeerConnections)
+                    {
+                        if (!TryGetPeer(pendingUserId, out peer))
+                        {
+                            continue;
+                        }
+
+                        userId = pendingUserId;
+                        found = true;
+                        break;
+                    }
+
+                    if (!found)
+                    {
+                        _peerConnectionPumpRunning = false;
+                        return;
+                    }
+
+                    _pendingPeerConnections.Remove(userId);
+                    restoring = Phase == SessionPhase.InGame;
+                }
+
+                OperationResult result = await SynchronizeConnectedPeerAsync(peer, restoring);
+                if (!result.Succeeded && result.ErrorCode == MultiplayerErrorCode.Busy)
+                {
+                    lock (_pendingPeerConnectionLock)
+                    {
+                        _pendingPeerConnections.Add(userId);
+                        _peerConnectionPumpRunning = false;
+                    }
+
+                    await Task.Yield();
+                    TryStartPendingPeerSynchronization();
+                    return;
+                }
+            }
+        }
+
+        private async Task<OperationResult> SynchronizeConnectedPeerAsync(
+            MultiplayerPeer peer,
+            bool restoring)
         {
             try
             {
                 if (restoring)
                 {
-                    await RestorePeerAsync(peer, CancellationToken.None);
+                    return await RestorePeerAsync(peer, CancellationToken.None);
                 }
-                else
-                {
-                    await SynchronizePeerAsync(peer, CancellationToken.None);
-                }
+
+                return await SynchronizePeerAsync(peer, CancellationToken.None);
             }
             catch (Exception exception)
             {
-                SetLastResult(OperationResult.Failure(
+                return SetLastResult(OperationResult.Failure(
                     MultiplayerErrorCode.SynchronizationFailed,
                     "multiplayer.error.peer_sync_exception",
                     exception.GetType().Name));

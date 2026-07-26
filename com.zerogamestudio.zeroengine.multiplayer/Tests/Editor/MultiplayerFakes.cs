@@ -155,6 +155,7 @@ namespace ZeroEngine.Multiplayer.Tests
         public OperationResult StartClientResult { get; set; } = OperationResult.Success();
         public OperationResult StopResult { get; set; } = OperationResult.Success();
         public bool EmitDisconnectOnStop { get; set; }
+        public Action StartHostAction { get; set; }
         public int StartHostCalls { get; private set; }
         public int StartClientCalls { get; private set; }
         public int StopCalls { get; private set; }
@@ -177,6 +178,7 @@ namespace ZeroEngine.Multiplayer.Tests
                 Phase = ConnectionPhase.Failed;
             }
 
+            StartHostAction?.Invoke();
             return Task.FromResult(StartHostResult);
         }
 

@@ -9,7 +9,7 @@
 - Add permanent package-boundary tests for consumer-project, Unity, FishNet, Steamworks, NGO, and UGS dependency leaks.
 - Keep FishNet and Steamworks integrations version-gated and optional at package install time.
 - Do not report host room creation complete until the host client has authenticated and completed local synchronization.
-- Preserve remote FishNet authentication callbacks that arrive while the host's local client identity is still starting.
+- Preserve remote FishNet authentication callbacks that arrive while the host's local client identity is still starting, then synchronize those peers after host room creation reaches a stable phase.
 - Keep failed transport/platform cleanup visible and retryable instead of returning to an apparently clean idle state.
 - Validate 75/75 EditMode tests with the pinned FishNet/Steamworks dependencies and 71/71 applicable tests in a networking-SDK-free Unity 2022.3.62f3 project.
 
