@@ -4,7 +4,7 @@
 
 This repository is the ZeroEngine development workspace. Other Unity projects
 consume ZeroEngine through Unity Package Manager Git dependencies that point at
-`https://github.com/liuzqk/zeroengine.git`.
+`https://github.com/ZeroGameStudio-CN/zeroengine.git`.
 
 Do not tell consumer projects to copy a `ZeroEngine` folder into `Assets` or to
 depend on this local checkout as their normal setup.
@@ -12,7 +12,7 @@ depend on this local checkout as their normal setup.
 ## Consumer Project Rules
 
 - Use Git UPM URLs in `Packages/manifest.json`:
-  `https://github.com/liuzqk/zeroengine.git?path=<package>#<tested-commit>`.
+  `https://github.com/ZeroGameStudio-CN/zeroengine.git?path=<package>#<tested-commit>`.
 - Pin production and shared branches to a tested commit, not `#main`.
 - Keep all ZeroEngine packages in the same consumer project on the same commit
   unless the task is explicitly testing a version split.
