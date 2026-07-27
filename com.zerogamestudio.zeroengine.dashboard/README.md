@@ -18,8 +18,8 @@ ZeroEngine 编辑器控制中心，支持轻量项目使用。
 ```json
 {
   "dependencies": {
-    "com.zerogamestudio.zeroengine.core": "https://github.com/liuzqk/zeroengine.git?path=com.zerogamestudio.zeroengine.core#<tested-commit>",
-    "com.zerogamestudio.zeroengine.dashboard": "https://github.com/liuzqk/zeroengine.git?path=com.zerogamestudio.zeroengine.dashboard#<tested-commit>"
+    "com.zerogamestudio.zeroengine.core": "https://github.com/ZeroGameStudio-CN/zeroengine.git?path=com.zerogamestudio.zeroengine.core#<tested-commit>",
+    "com.zerogamestudio.zeroengine.dashboard": "https://github.com/ZeroGameStudio-CN/zeroengine.git?path=com.zerogamestudio.zeroengine.dashboard#<tested-commit>"
   }
 }
 ```

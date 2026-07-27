@@ -20,7 +20,7 @@ Each package should keep a valid `package.json` with:
 
 - `name`, `version`, `displayName`, `description`, `unity`, and `author`.
 - `license` set to `MIT`.
-- `repository.url` pointing to `https://github.com/liuzqk/zeroengine.git`.
+- `repository.url` pointing to `https://github.com/ZeroGameStudio-CN/zeroengine.git`.
 - `repository.directory` matching the top-level package folder.
 
 ## Testing

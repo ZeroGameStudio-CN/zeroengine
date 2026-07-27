@@ -1,6 +1,6 @@
 # ZeroEngine
 
-[![Unity Tests](https://github.com/liuzqk/zeroengine/actions/workflows/tests.yml/badge.svg)](https://github.com/liuzqk/zeroengine/actions/workflows/tests.yml)
+[![Unity Tests](https://github.com/ZeroGameStudio-CN/zeroengine/actions/workflows/tests.yml/badge.svg)](https://github.com/ZeroGameStudio-CN/zeroengine/actions/workflows/tests.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Unity 2022.3+](https://img.shields.io/badge/Unity-2022.3%2B-black.svg)](https://unity.com/releases/editor/archive)
 
@@ -45,7 +45,7 @@ path you need. Consumer projects should use GitHub as the source of truth, not
 a copied `ZeroEngine` folder from a local checkout:
 
 ```text
-https://github.com/liuzqk/zeroengine.git?path=com.zerogamestudio.zeroengine.core#<tested-commit>
+https://github.com/ZeroGameStudio-CN/zeroengine.git?path=com.zerogamestudio.zeroengine.core#<tested-commit>
 ```
 
 For example, a project `Packages/manifest.json` can pin several packages:
@@ -53,9 +53,9 @@ For example, a project `Packages/manifest.json` can pin several packages:
 ```json
 {
   "dependencies": {
-    "com.zerogamestudio.zeroengine.core": "https://github.com/liuzqk/zeroengine.git?path=com.zerogamestudio.zeroengine.core#<tested-commit>",
-    "com.zerogamestudio.zeroengine.pathfinding2d": "https://github.com/liuzqk/zeroengine.git?path=com.zerogamestudio.zeroengine.pathfinding2d#<tested-commit>",
-    "com.zerogamestudio.zeroengine.ui": "https://github.com/liuzqk/zeroengine.git?path=com.zerogamestudio.zeroengine.ui#<tested-commit>"
+    "com.zerogamestudio.zeroengine.core": "https://github.com/ZeroGameStudio-CN/zeroengine.git?path=com.zerogamestudio.zeroengine.core#<tested-commit>",
+    "com.zerogamestudio.zeroengine.pathfinding2d": "https://github.com/ZeroGameStudio-CN/zeroengine.git?path=com.zerogamestudio.zeroengine.pathfinding2d#<tested-commit>",
+    "com.zerogamestudio.zeroengine.ui": "https://github.com/ZeroGameStudio-CN/zeroengine.git?path=com.zerogamestudio.zeroengine.ui#<tested-commit>"
   }
 }
 ```
@@ -93,7 +93,7 @@ tests narrow and package-scoped.
 
 ## Support and Security
 
-- Use [GitHub issues](https://github.com/liuzqk/zeroengine/issues) for
+- Use [GitHub issues](https://github.com/ZeroGameStudio-CN/zeroengine/issues) for
   reproducible bugs and focused feature requests.
 - See [SUPPORT.md](SUPPORT.md) for the information maintainers need.
 - See [SECURITY.md](SECURITY.md) for private security reporting guidance.

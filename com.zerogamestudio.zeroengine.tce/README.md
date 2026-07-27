@@ -23,7 +23,7 @@ This first extraction slice is synchronous. Delayed trigger scheduling belongs i
 Use the package through Unity Package Manager from this repository:
 
 ```text
-https://github.com/liuzqk/zeroengine.git?path=com.zerogamestudio.zeroengine.tce#<tested-commit>
+https://github.com/ZeroGameStudio-CN/zeroengine.git?path=com.zerogamestudio.zeroengine.tce#<tested-commit>
 ```
 
 Downstream projects should pin a tested ZeroEngine commit hash and keep related

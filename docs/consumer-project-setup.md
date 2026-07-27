@@ -7,7 +7,7 @@ This guide is for Unity projects that consume ZeroEngine packages.
 Use Unity Package Manager Git dependencies that point at this repository:
 
 ```text
-https://github.com/liuzqk/zeroengine.git?path=<package-directory>#<tested-commit>
+https://github.com/ZeroGameStudio-CN/zeroengine.git?path=<package-directory>#<tested-commit>
 ```
 
 The local `zeroengine-git` checkout is the development workspace for
@@ -21,9 +21,9 @@ Add each required ZeroEngine package to `Packages/manifest.json`:
 ```json
 {
   "dependencies": {
-    "com.zerogamestudio.zeroengine.core": "https://github.com/liuzqk/zeroengine.git?path=com.zerogamestudio.zeroengine.core#<tested-commit>",
-    "com.zerogamestudio.zeroengine.data": "https://github.com/liuzqk/zeroengine.git?path=com.zerogamestudio.zeroengine.data#<tested-commit>",
-    "com.zerogamestudio.zeroengine.ui": "https://github.com/liuzqk/zeroengine.git?path=com.zerogamestudio.zeroengine.ui#<tested-commit>"
+    "com.zerogamestudio.zeroengine.core": "https://github.com/ZeroGameStudio-CN/zeroengine.git?path=com.zerogamestudio.zeroengine.core#<tested-commit>",
+    "com.zerogamestudio.zeroengine.data": "https://github.com/ZeroGameStudio-CN/zeroengine.git?path=com.zerogamestudio.zeroengine.data#<tested-commit>",
+    "com.zerogamestudio.zeroengine.ui": "https://github.com/ZeroGameStudio-CN/zeroengine.git?path=com.zerogamestudio.zeroengine.ui#<tested-commit>"
   }
 }
 ```
