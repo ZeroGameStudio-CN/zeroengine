@@ -1,0 +1,23 @@
+{
+  "name": "ZeroEngine.PlayerSettings",
+  "rootNamespace": "ZeroEngine.PlayerSettings",
+  "references": [
+    "ZeroEngine.Core",
+    "ZeroEngine.Audio",
+    "ZeroEngine.Persistence",
+    "ZeroEngine.Input",
+    "ZeroEngine.Localization",
+    "Unity.InputSystem",
+    "Unity.Localization",
+    "Unity.ResourceManager"
+  ],
+  "includePlatforms": [],
+  "excludePlatforms": [],
+  "allowUnsafeCode": false,
+  "overrideReferences": false,
+  "precompiledReferences": [],
+  "autoReferenced": true,
+  "defineConstraints": [],
+  "versionDefines": [],
+  "noEngineReferences": false
+}

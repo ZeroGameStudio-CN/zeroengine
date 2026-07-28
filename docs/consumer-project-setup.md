@@ -57,7 +57,7 @@ ZeroEngine and a consumer project together before a ZeroEngine commit exists:
 ```json
 {
   "dependencies": {
-    "com.zerogamestudio.zeroengine.core": "file:../zeroengine-git/com.zerogamestudio.zeroengine.core"
+    "com.zerogamestudio.zeroengine.core": "file:../../zeroengine-git/com.zerogamestudio.zeroengine.core"
   }
 }
 ```

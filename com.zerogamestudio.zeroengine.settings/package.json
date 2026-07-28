@@ -1,0 +1,32 @@
+{
+  "name": "com.zerogamestudio.zeroengine.settings",
+  "version": "1.0.0",
+  "displayName": "ZeroEngine.Settings",
+  "description": "Transactional, versioned player settings for ZeroEngine games.",
+  "unity": "2022.3",
+  "unityRelease": "0f1",
+  "dependencies": {
+    "com.zerogamestudio.zeroengine.core": "2.0.0",
+    "com.zerogamestudio.zeroengine.persistence": "2.0.0",
+    "com.zerogamestudio.zeroengine.audio": "2.2.0",
+    "com.zerogamestudio.zeroengine.input": "2.1.0",
+    "com.zerogamestudio.zeroengine.localization": "2.0.0"
+  },
+  "keywords": [
+    "zeroengine",
+    "settings",
+    "preferences",
+    "localization",
+    "input"
+  ],
+  "author": {
+    "name": "ZeroGameStudio",
+    "url": "https://github.com/zerogamestudio"
+  },
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/liuzqk/zeroengine.git",
+    "directory": "com.zerogamestudio.zeroengine.settings"
+  }
+}

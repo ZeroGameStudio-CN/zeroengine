@@ -1,5 +1,15 @@
 # ZeroEngine.Input
 
+## 2.1 additions
+
+- `InputBindingService` resolves actions and bindings by GUID, supports
+  Swap/Reject/Allow conflicts, rejects continuous pointer/touch coordinates,
+  resets one or all overrides, and round-trips the complete asset override JSON.
+- `InputDevicePresentationTracker` separates generic binding families from
+  Xbox/PlayStation/Nintendo glyph presentation. Call `RecordIntent` only for
+  deliberate input; `IsDeliberatePointerIntent` filters passive mouse movement.
+- Existing `InputManager` APIs remain compatible.
+
 输入管理包。
 
 ## 版本
