@@ -1,0 +1,17 @@
+{
+  "name": "ZeroEngine.Settings.UI",
+  "rootNamespace": "ZeroEngine.PlayerSettings.UI",
+  "references": [
+    "ZeroEngine.PlayerSettings",
+    "UnityEngine.UI"
+  ],
+  "includePlatforms": [],
+  "excludePlatforms": [],
+  "allowUnsafeCode": false,
+  "overrideReferences": false,
+  "precompiledReferences": [],
+  "autoReferenced": true,
+  "defineConstraints": [],
+  "versionDefines": [],
+  "noEngineReferences": false
+}

@@ -10,7 +10,8 @@
     "com.zerogamestudio.zeroengine.persistence": "2.0.0",
     "com.zerogamestudio.zeroengine.audio": "2.2.0",
     "com.zerogamestudio.zeroengine.input": "2.1.0",
-    "com.zerogamestudio.zeroengine.localization": "2.0.0"
+    "com.zerogamestudio.zeroengine.localization": "2.0.0",
+    "com.unity.ugui": "1.0.0"
   },
   "keywords": [
     "zeroengine",

@@ -1,3 +1,4 @@
+using System;
 using NUnit.Framework;
 using UnityEngine;
 using UnityEngine.InputSystem;
@@ -7,6 +8,7 @@ namespace ZeroEngine.InputSystem.Tests
     public sealed class InputBindingServiceTests
     {
         private InputActionAsset _asset;
+        private InputActionMap _map;
         private InputAction _jump;
         private InputAction _use;
 
@@ -14,16 +16,16 @@ namespace ZeroEngine.InputSystem.Tests
         public void SetUp()
         {
             _asset = ScriptableObject.CreateInstance<InputActionAsset>();
-            var map = new InputActionMap("Player");
-            _asset.AddActionMap(map);
-            _jump = map.AddAction("Jump", InputActionType.Button);
+            _map = new InputActionMap("Player");
+            _asset.AddActionMap(_map);
+            _jump = _map.AddAction("Jump", InputActionType.Button);
             _jump.AddBinding("<Keyboard>/space", groups: "KeyboardMouse");
-            _use = map.AddAction("Use", InputActionType.Button);
+            _use = _map.AddAction("Use", InputActionType.Button);
             _use.AddBinding("<Keyboard>/e", groups: "KeyboardMouse");
         }
 
         [TearDown]
-        public void TearDown() => Object.DestroyImmediate(_asset);
+        public void TearDown() => UnityEngine.Object.DestroyImmediate(_asset);
 
         [Test]
         public void ApplyOverride_UsesActionAndBindingGuids()
@@ -89,6 +91,63 @@ namespace ZeroEngine.InputSystem.Tests
 
             Assert.That(service.TryLoadOverrides(json), Is.True);
             Assert.That(_jump.bindings[0].effectivePath, Is.EqualTo("<Keyboard>/q"));
+        }
+
+        [Test]
+        public void CompositeParts_DisplayRebindResetAndRoundTripByGuid()
+        {
+            InputAction combo = _map.AddAction("Combo", InputActionType.Button);
+            combo.AddCompositeBinding("OneModifier")
+                .With("Modifier", "<Gamepad>/leftShoulder", groups: "Gamepad")
+                .With("Binding", "<Gamepad>/buttonWest", groups: "Gamepad");
+            combo.AddBinding("<Gamepad>/buttonNorth", groups: "Gamepad");
+            Guid modifierId = combo.bindings[1].id;
+            Guid buttonId = combo.bindings[2].id;
+            var parts = new[] { modifierId, buttonId };
+            var service = new InputBindingService(_asset);
+
+            string initialDisplay = service.GetBindingDisplayString(combo.id, parts);
+            Assert.That(
+                initialDisplay,
+                Is.EqualTo(
+                    service.GetBindingDisplayString(combo.id, modifierId)
+                    + " + "
+                    + service.GetBindingDisplayString(combo.id, buttonId)));
+
+            Assert.That(
+                service.TryApplyOverride(
+                    combo.id,
+                    modifierId,
+                    "<Gamepad>/rightShoulder",
+                    InputBindingConflictPolicy.Allow).Success,
+                Is.True);
+            Assert.That(
+                service.TryApplyOverride(
+                    combo.id,
+                    buttonId,
+                    "<Gamepad>/buttonSouth",
+                    InputBindingConflictPolicy.Allow).Success,
+                Is.True);
+            string json = service.SaveOverrides();
+            service.ResetAll();
+            Assert.That(service.TryLoadOverrides(json), Is.True);
+            Assert.That(
+                combo.bindings[1].effectivePath,
+                Is.EqualTo("<Gamepad>/rightShoulder"));
+            Assert.That(
+                combo.bindings[2].effectivePath,
+                Is.EqualTo("<Gamepad>/buttonSouth"));
+            Assert.That(service.ResetBindings(combo.id, parts), Is.True);
+            Assert.That(
+                combo.bindings[1].effectivePath,
+                Is.EqualTo("<Gamepad>/leftShoulder"));
+            Assert.That(
+                combo.bindings[2].effectivePath,
+                Is.EqualTo("<Gamepad>/buttonWest"));
+            Assert.That(
+                combo.bindings[3].effectivePath,
+                Is.EqualTo("<Gamepad>/buttonNorth"),
+                "The action keeps a single-button alternative binding.");
         }
 
         [Test]

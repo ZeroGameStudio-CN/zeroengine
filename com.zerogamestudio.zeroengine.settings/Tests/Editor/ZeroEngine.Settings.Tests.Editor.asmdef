@@ -3,6 +3,8 @@
   "rootNamespace": "ZeroEngine.PlayerSettings.Tests",
   "references": [
     "ZeroEngine.PlayerSettings",
+    "ZeroEngine.Settings.UI",
+    "UnityEngine.UI",
     "UnityEngine.TestRunner",
     "UnityEditor.TestRunner"
   ],

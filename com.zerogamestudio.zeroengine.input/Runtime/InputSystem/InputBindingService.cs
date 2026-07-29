@@ -60,6 +60,29 @@ namespace ZeroEngine.InputSystem
                 : string.Empty;
         }
 
+        public string GetBindingDisplayString(
+            Guid actionId,
+            IReadOnlyList<Guid> bindingIds,
+            string separator = " + ")
+        {
+            if (bindingIds == null || bindingIds.Count == 0)
+            {
+                return string.Empty;
+            }
+
+            var parts = new List<string>(bindingIds.Count);
+            foreach (Guid bindingId in bindingIds)
+            {
+                string part = GetBindingDisplayString(actionId, bindingId);
+                if (!string.IsNullOrWhiteSpace(part))
+                {
+                    parts.Add(part);
+                }
+            }
+
+            return string.Join(separator ?? " + ", parts);
+        }
+
         public string GetEffectivePath(Guid actionId, Guid bindingId)
         {
             return TryFindAction(actionId, out var action)
@@ -230,6 +253,22 @@ namespace ZeroEngine.InputSystem
 
             action.RemoveBindingOverride(index);
             return true;
+        }
+
+        public bool ResetBindings(Guid actionId, IReadOnlyList<Guid> bindingIds)
+        {
+            if (bindingIds == null || bindingIds.Count == 0)
+            {
+                return false;
+            }
+
+            bool success = true;
+            foreach (Guid bindingId in bindingIds)
+            {
+                success &= ResetBinding(actionId, bindingId);
+            }
+
+            return success;
         }
 
         public void ResetAll() => _asset.RemoveAllBindingOverrides();
