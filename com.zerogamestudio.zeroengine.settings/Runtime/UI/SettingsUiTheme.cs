@@ -91,11 +91,7 @@ namespace ZeroEngine.PlayerSettings.UI
                 return preferredFont;
             }
 
-#if UNITY_6000_0_OR_NEWER
             return Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
-#else
-            return Resources.GetBuiltinResource<Font>("Arial.ttf");
-#endif
         }
     }
 }
