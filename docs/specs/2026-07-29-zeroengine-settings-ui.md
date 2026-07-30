@@ -1,19 +1,19 @@
 # ZeroEngine 通用设置 UI
 
-- 状态：Implemented（待人工视觉验收与发布）
-- 更新日期：2026-07-29
-- 基线：ZeroEngine `080ad66bdfbbe319d4809f00dd400e325c4f0356`；GalleryKeeper Plastic `cs:38`
+- 状态：Implemented（待消费项目固定提交与人工视觉验收）
+- 更新日期：2026-07-30
+- 基线：ZeroEngine `194392dd24b83bd16ac5602a60c5484088c67b82`；GalleryKeeper Plastic `cs:42`；GameShopKeeper Plastic `cs:11`
 
 ## 目标
 
-在 `com.zerogamestudio.zeroengine.settings` 内提供可直接使用、可换肤的 UGUI 设置页保底布局。新游戏不再手写设置页坐标，只需提供设置绑定、文案及可选的字体、颜色和 Sprite；未提供主题素材时仍能生成可操作界面。
+在 `com.zerogamestudio.zeroengine.settings` 内提供可直接使用、可换肤的完整 UGUI 标准设置页与改键页。安装同一包版本的游戏默认得到相同的设置 ID、分类、控件和设备切换能力；游戏只需提供设置读写、动作描述、文案及可选主题素材，并以追加方式放入项目专属设置。
 
 ## 非目标
 
 - 不改变 `ISettingsService`、`SettingsSession`、存档格式或迁移协议。
 - 不替代项目的主菜单、Logo、背景和美术构图。
-- 不自动推断项目专属设置、InputAction 列表或按键绑定文案；项目通过现有绑定层接入。
-- 本阶段不提交、合并、打标签或正式发布。
+- 不自动推断项目专属设置或 InputAction 业务含义；项目显式提供动作描述和项目扩展。
+- 不强制项目使用同一主菜单背景、Logo、字体或美术主题。
 
 ## 当前问题
 
@@ -43,6 +43,16 @@ GalleryKeeper 的设置控件由 `GalleryStartScreen` 使用固定像素位置�
    - 键盘、鼠标和手柄均能切换设备、遍历动作及完成/取消，焦点移动到遮罩外动作时自动滚入可见区。
 9. 同时展示所有设备不是通用包强制规范。Microsoft 的要求是所有受支持输入方式都能完成导航和改键，并未要求同屏并列；并排视图可作为宽屏项目皮肤，设备页签作为更稳健的通用默认。
 10. 组合键使用 Unity Input System composite 的 part binding GUID 表示，显示值可组合成 `LB + X`。通用输入服务继续按 part 重绑定和持久化；包含组合键的动作还应提供可映射为单键的替代 binding，避免把同时按键作为不可绕过的操作门槛。
+11. `StandardSettingsUiBuilder` 是完整标准设置页的唯一清单所有者，固定生成：
+    - 操作：键鼠灵敏度、手柄灵敏度、手柄死区、反转 Y、震动、手柄图标、改键入口；
+    - 显示：窗口模式、分辨率、刷新率、垂直同步、帧率上限、画质；
+    - 声音：主音量、音乐音量、音效音量；
+    - 辅助：UI 缩放、高对比度、减少动态效果、语言。
+    隐藏的 `BindingOverrides` 不直接显示，由改键入口管理。
+12. 标准 builder 返回按 `StandardSettingIds` 索引的强类型控件集合。消费项目负责读写值和业务预览，但不能通过传入子集静默删掉标准控件；项目专属设置只能追加到分类末尾。
+13. `StandardSettingsUiText` 内置简体中文和英文保底文案，可由项目按需覆盖。主题、字体、Sprite 和文案替换不改变标准清单与布局契约。
+14. `StandardSettingsUiProfile` 集中定义滑条范围、步长和默认显示格式；GalleryKeeper 与 GameShopKeeper 不再各自复制这些 UI 常量。
+15. Project 8 与 Project 9 必须由同一 `StandardSettingsUiBuilder` 生成标准部分。两边允许保留各自 adapter、即时预览和项目专属项，但源代码测试要阻止再次手写或筛选标准清单。
 
 设计依据：
 
@@ -56,10 +66,12 @@ ZeroEngine：
 
 - `com.zerogamestudio.zeroengine.settings/Runtime/UI/SettingsUiTheme.cs`
 - `com.zerogamestudio.zeroengine.settings/Runtime/UI/SettingsUiLayoutBuilder.cs`
+- `com.zerogamestudio.zeroengine.settings/Runtime/UI/StandardSettingsUiBuilder.cs`
 - `com.zerogamestudio.zeroengine.settings/Runtime/UI/SettingsRebindUiLayoutBuilder.cs`
 - `com.zerogamestudio.zeroengine.settings/Runtime/UI/SettingsUiSelectionScroller.cs`
 - `com.zerogamestudio.zeroengine.settings/Runtime/UI/ZeroEngine.Settings.UI.asmdef`
 - `com.zerogamestudio.zeroengine.settings/Tests/Editor/SettingsUiLayoutTests.cs`
+- `com.zerogamestudio.zeroengine.settings/Tests/Editor/StandardSettingsUiBuilderTests.cs`
 - `com.zerogamestudio.zeroengine.input/Runtime/InputSystem/InputBindingService.cs`
 - `com.zerogamestudio.zeroengine.input/Tests/Editor/InputBindingServiceTests.cs`
 - `com.zerogamestudio.zeroengine.settings/package.json`
@@ -87,11 +99,22 @@ Slider slider = builder.CreateSliderRow(category, id, label, out Text value);
 Toggle toggle = builder.CreateToggleRow(category, id, label);
 Button choice = builder.CreateChoiceRow(category, id, label, out Text value);
 Button footer = builder.CreateFooterButton(shell, "Save Button", label, primary);
+
+var standard = new StandardSettingsUiBuilder(host, font, theme)
+    .Build(StandardSettingsUiText.SimplifiedChinese);
+Slider pointer = standard.Slider(StandardSettingIds.PointerSensitivity);
+Toggle invertY = standard.Toggle(StandardSettingIds.InvertY);
+Button quality = standard.Choice(StandardSettingIds.Quality);
+SettingsUiCategoryView display = standard.Category(StandardSettingsUiCategory.Display);
+
+// 项目专属设置只能追加。
+standard.Layout.CreateSliderRow(display, "Field Of View", "视野范围", out _);
 ```
 
 ## 兼容与回退
 
 - 自定义设置 UI 可继续直接使用 settings 后端，不受新程序集影响。
+- 标准快速接入路径不得删减基线；确需完全自定义的项目可继续直接使用底层服务，但不得宣称已接入标准菜单。
 - Builder 只操作自己创建的对象；销毁宿主即可完整回滚。
 - Gallery 可通过撤销 builder 接入并恢复原生成代码回滚，设置数据无需迁移。
 - 主题缺失不阻断启动；CJK 项目应传入本地化字体，否则仅保证内置字体可显示其支持字符。
@@ -99,20 +122,23 @@ Button footer = builder.CreateFooterButton(shell, "Save Button", label, primary)
 ## 验证
 
 - EditMode：在 690×708、560×600、960×720 宿主尺寸生成完整设置页，强制重建布局。
+- EditMode：枚举标准控件，断言除隐藏存储项外的全部 `StandardSettingIds` 恰好出现一次，四个分类及顺序稳定。
 - 断言标签、控件和值列不互相覆盖，分类内容可滚动，所有交互控件保持在宿主范围内。
 - Gallery EditMode：设置页不再调用带 Y 坐标的旧行工厂，并引用 `ZeroEngine.Settings.UI`。
 - Gallery PlayMode：打开显示分类，验证“垂直同步”、开关、帧率滑条位于同一内容区，分类切换、保存和返回仍可用。
+- Gallery/GameShop 源码契约：两项目均引用 `StandardSettingsUiBuilder`，不维护标准 ID 子集，不手写标准行。
 - 改键布局：在 690×708、560×600、960×720 宿主内生成 2 个设备页签和至少 40 个动作；所有行控件保持在行及遮罩横向范围内，末项可由焦点自动滚入可见区，页脚不移动。
 - 组合键：以两个 part binding GUID 验证组合显示、单 part 覆盖、恢复和整资产 JSON 往返。
 - 人工：1920×1080 与 3840×2160 Game View 检查显示页；键鼠与手柄各走一次分类切换。
 
 ## 实现结果
 
-- Unity 6000.3.10f1 EditMode：settings 完整程序集 17/17 通过；其中改键 UI 覆盖 690×708、560×600、960×720、40 个动作和焦点自动滚动。
+- `StandardSettingsUiBuilder` 固定生成 21 个标准 ID 对应的 20 行控件、四个分类、统一范围、双语保底文案、分类切换及键盘/手柄导航；分辨率行共同承载宽高，绑定 JSON 由改键入口承载。
+- Unity 6000.3.10f1 EditMode：settings 完整程序集 22/22 通过；其中标准设置页覆盖 690×708、560×600、960×720，改键 UI 覆盖 40 个动作和焦点自动滚动。
 - Input EditMode：完整程序集 9/9 通过；组合键覆盖多 part 显示、分别覆盖、恢复及整资产 JSON 往返。
-- Gallery EditMode：共享 UI 程序集接入约束 1/1 通过。
-- Gallery PlayMode：开始界面设置/改键布局、暂停界面手柄改键布局、改键弹窗英文覆盖共 3/3 通过；开始界面与暂停界面均已使用包内同一 builder。
-- 全公开页面英文回归另有 0/1：在进入设置前被任务外新增房间资产的中文描述阻断，不由本次改键变更引入；本次新增的改键弹窗英文专项测试通过。
+- Gallery EditMode：标准 builder 接入约束 1/1 通过。
+- Gallery PlayMode：设置/改键响应式流程 1/1、全公开页面英文覆盖 1/1 通过。
+- GameShop PlayMode：完整标准定义、设置布局、语言切换与改键流程 1/1 通过。
 - 测试发现并修复了 Toggle 误锚到行顶以及旧改键双列越界问题；当前 Toggle、动作行、绑定按钮、单项恢复、内容遮罩、固定页脚及装饰分割线边界均有回归断言。
 - 1920×1080 / 3840×2160 人工视觉检查、真实键鼠/手柄走查及提交发布仍待消费项目验收。
 
@@ -130,3 +156,6 @@ Button footer = builder.CreateFooterButton(shell, "Save Button", label, primary)
 10. 设备页签与动作行可完全使用鼠标、键盘方向键和手柄数字导航；选中不可见动作会自动滚入遮罩。
 11. Input composite 的多个 part 可按 GUID 显示为组合、分别重绑定和恢复；组合动作存在单键替代路径。
 12. Gallery 默认 8 个动作下，动作名、绑定按钮和单项恢复按钮均不越出改键弹窗。
+13. Project 8 与 Project 9 锁定同一 settings/input 包提交时，标准设置 ID、分类、控件类型、顺序和保底文案完全一致。
+14. 所有可见标准项恰好生成一次；`BindingOverrides` 仅由改键入口管理。
+15. 项目可换主题、替换文案并追加专属项，但这些操作不改变或删除标准基线。

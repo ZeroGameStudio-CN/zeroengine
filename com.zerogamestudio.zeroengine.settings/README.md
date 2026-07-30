@@ -9,9 +9,10 @@ with the deprecated slot-oriented types historically shipped by Persistence.
 ## Ownership
 
 The package owns validation, preview/commit/cancel/reset, migration, backup
-recovery, standard adapters and an optional UGUI fallback layout. The game owns
-defaults, enabled definitions, InputActionAsset, AudioMixer and localization
-content.
+recovery, the complete `StandardSettingsCatalog`, standard adapters and a
+complete UGUI fallback menu. A standard consumer enables the whole catalog.
+The game owns defaults, project-specific additive definitions, InputActionAsset,
+AudioMixer and optional localization/theme overrides.
 
 Create a project `SettingsBootstrap` subclass, build a `SettingsCatalog`, choose
 one `ISettingsStore`, register appliers, then wait for `Ready` before showing the
@@ -29,10 +30,31 @@ mouse and generic gamepad rebinding. Save its whole-asset override JSON in
 
 ## Fallback settings UI
 
-`ZeroEngine.PlayerSettings.UI.SettingsUiLayoutBuilder` creates a responsive
-title, equal-width tabs, scrollable categories, aligned slider/toggle/choice
-rows and a fixed footer. It uses anchors and layout groups rather than per-game
-pixel coordinates.
+`ZeroEngine.PlayerSettings.UI.StandardSettingsUiBuilder` is the default entry
+point. It always creates the same controls, display, audio and accessibility
+baseline, including language, display mode/resolution/refresh rate, separate
+audio buses and a rebinding entry. It returns controls keyed by
+`StandardSettingIds`; games bind values and append project-specific rows to the
+returned categories.
+
+```csharp
+StandardSettingsUiView view =
+    new StandardSettingsUiBuilder(host, font, theme)
+        .Build(StandardSettingsUiText.SimplifiedChinese);
+
+view.Slider(StandardSettingIds.PointerSensitivity)
+    .onValueChanged.AddListener(SetPointerSensitivity);
+view.Layout.CreateSliderRow(
+    view.Category(StandardSettingsUiCategory.Display),
+    "Project Field Of View",
+    "Field Of View",
+    out _);
+view.Rebuild();
+```
+
+`SettingsUiLayoutBuilder` remains available as the lower-level layout API for a
+fully custom menu. It creates a responsive title, equal-width tabs, scrollable
+categories, aligned rows and a fixed footer using anchors and layout groups.
 
 Pass a localized `Font` and an optional `SettingsUiTheme`. With no theme, the
 builder uses a code-only palette, built-in font and plain UGUI graphics, so a
