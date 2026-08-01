@@ -15,12 +15,16 @@ on:
     branches: [main, develop]
     paths:
       - 'com.zerogamestudio.zeroengine*/**'
+      - 'Tools/unity-mcp-supervisor/**'
       - '.github/workflows/tests.yml'
+      - '.github/workflows/unity-mcp-supervisor.yml'
   pull_request:
     branches: [main, develop]
     paths:
       - 'com.zerogamestudio.zeroengine*/**'
+      - 'Tools/unity-mcp-supervisor/**'
       - '.github/workflows/tests.yml'
+      - '.github/workflows/unity-mcp-supervisor.yml'
   # 允许手动触发
   workflow_dispatch:
 

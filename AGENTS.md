@@ -16,6 +16,9 @@ depend on this local checkout as their normal setup.
 - Pin production and shared branches to a tested commit, not `#main`.
 - Keep all ZeroEngine packages in the same consumer project on the same commit
   unless the task is explicitly testing a version split.
+- `com.zerogamestudio.unity-mcp-control` is tooling bundled under
+  `Tools/unity-mcp-supervisor`; pin it to the tested CLI commit independently
+  of gameplay/runtime package pins.
 - Use `file:` dependencies only for temporary local debugging. Replace them
   with pinned Git URLs before handoff.
 - If a consumed package depends on another `com.zerogamestudio.*` package, make
