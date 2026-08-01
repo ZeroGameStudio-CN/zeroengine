@@ -89,6 +89,8 @@ namespace ZeroEngine.AutoBattle.Battle
         // 事件
         public event Action<float, float> OnHealthChanged;
         public event Action OnDeath;
+        public event Action<IBattleUnit> OnAttackPerformed;
+        public event Action<SkillData, IBattleUnit> OnSkillUsed;
 
         protected BattleUnitBase(string unitId, BattleTeam team, int skillSlotCount = 4)
         {
@@ -176,10 +178,10 @@ namespace ZeroEngine.AutoBattle.Battle
             if (target == null) return;
 
             // 尝试使用技能
-            var availableSkill = SkillSlots.GetAvailableSkill(this, target);
-            if (availableSkill != null)
+            if (SkillSlots.TryGetAvailableSkill(
+                this, battleManager, target, out var availableSkill, out var skillTarget))
             {
-                UseSkill(availableSkill, target, battleManager);
+                UseSkill(availableSkill, skillTarget, battleManager);
                 return;
             }
 
@@ -216,24 +218,26 @@ namespace ZeroEngine.AutoBattle.Battle
             // 根据 AI 配置选择目标
             return AIConfig.TargetPriority switch
             {
-                TargetPriority.Nearest => FindNearestTarget(enemies),
+                TargetPriority.Nearest => FindNearestTarget(enemies, battleManager),
+                TargetPriority.Farthest => FindFarthestTarget(enemies, battleManager),
                 TargetPriority.LowestHealth => FindLowestHealthTarget(enemies),
                 TargetPriority.HighestHealth => FindHighestHealthTarget(enemies),
-                TargetPriority.BackRow => FindBackRowTarget(enemies),
-                TargetPriority.FrontRow => FindFrontRowTarget(enemies),
+                TargetPriority.BackRow => FindBackRowTarget(enemies, battleManager),
+                TargetPriority.FrontRow => FindFrontRowTarget(enemies, battleManager),
                 _ => enemies[0]
             };
         }
 
-        private IBattleUnit FindNearestTarget(System.Collections.Generic.IReadOnlyList<IBattleUnit> enemies)
+        private IBattleUnit FindNearestTarget(
+            System.Collections.Generic.IReadOnlyList<IBattleUnit> enemies,
+            AutoBattleManager battleManager)
         {
             IBattleUnit nearest = null;
             int minDistance = int.MaxValue;
 
             foreach (var enemy in enemies)
             {
-                if (enemy.CurrentCell == null || CurrentCell == null) continue;
-                int distance = GridBoard.GetManhattanDistance(CurrentCell, enemy.CurrentCell);
+                int distance = battleManager.GetDistance(this, enemy);
                 if (distance < minDistance)
                 {
                     minDistance = distance;
@@ -242,6 +246,26 @@ namespace ZeroEngine.AutoBattle.Battle
             }
 
             return nearest ?? enemies[0];
+        }
+
+        private IBattleUnit FindFarthestTarget(
+            System.Collections.Generic.IReadOnlyList<IBattleUnit> enemies,
+            AutoBattleManager battleManager)
+        {
+            IBattleUnit farthest = null;
+            int maxDistance = -1;
+
+            foreach (var enemy in enemies)
+            {
+                int distance = battleManager.GetDistance(this, enemy);
+                if (distance > maxDistance && distance < int.MaxValue)
+                {
+                    maxDistance = distance;
+                    farthest = enemy;
+                }
+            }
+
+            return farthest ?? enemies[0];
         }
 
         private IBattleUnit FindLowestHealthTarget(System.Collections.Generic.IReadOnlyList<IBattleUnit> enemies)
@@ -278,16 +302,19 @@ namespace ZeroEngine.AutoBattle.Battle
             return highest ?? enemies[0];
         }
 
-        private IBattleUnit FindBackRowTarget(System.Collections.Generic.IReadOnlyList<IBattleUnit> enemies)
+        private IBattleUnit FindBackRowTarget(
+            System.Collections.Generic.IReadOnlyList<IBattleUnit> enemies,
+            AutoBattleManager battleManager)
         {
             IBattleUnit backRow = null;
-            int maxColumn = -1;
+            int maxDepth = -1;
 
             foreach (var enemy in enemies)
             {
-                if (enemy.CurrentCell != null && enemy.CurrentCell.X > maxColumn)
+                int depth = battleManager.GetDepthFromFront(enemy);
+                if (depth > maxDepth && depth < int.MaxValue)
                 {
-                    maxColumn = enemy.CurrentCell.X;
+                    maxDepth = depth;
                     backRow = enemy;
                 }
             }
@@ -295,16 +322,19 @@ namespace ZeroEngine.AutoBattle.Battle
             return backRow ?? enemies[0];
         }
 
-        private IBattleUnit FindFrontRowTarget(System.Collections.Generic.IReadOnlyList<IBattleUnit> enemies)
+        private IBattleUnit FindFrontRowTarget(
+            System.Collections.Generic.IReadOnlyList<IBattleUnit> enemies,
+            AutoBattleManager battleManager)
         {
             IBattleUnit frontRow = null;
-            int minColumn = int.MaxValue;
+            int minDepth = int.MaxValue;
 
             foreach (var enemy in enemies)
             {
-                if (enemy.CurrentCell != null && enemy.CurrentCell.X < minColumn)
+                int depth = battleManager.GetDepthFromFront(enemy);
+                if (depth < minDepth)
                 {
-                    minColumn = enemy.CurrentCell.X;
+                    minDepth = depth;
                     frontRow = enemy;
                 }
             }
@@ -320,29 +350,12 @@ namespace ZeroEngine.AutoBattle.Battle
             if (CurrentCell == null || target.CurrentCell == null)
                 return false;
 
-            // 同阵营：直接曼哈顿距离
-            if (target.Team == Team)
+            if (battleManager == null)
             {
-                int dist = Mathf.Abs(CurrentCell.X - target.CurrentCell.X)
-                         + Mathf.Abs(CurrentCell.Y - target.CurrentCell.Y);
-                return dist <= AttackRange;
+                return GridBoard.GetManhattanDistance(CurrentCell, target.CurrentCell) <= AttackRange;
             }
 
-            // 跨阵营：两个棋盘相邻
-            // 玩家棋盘右边缘(X=W-1) 紧邻 敌方棋盘左边缘(X=0)
-            int boardWidth = battleManager?.PlayerBoard?.Width ?? AutoBattleManager.DefaultBoardWidth;
-            int xDist;
-            if (Team == BattleTeam.Player)
-            {
-                xDist = (boardWidth - 1 - CurrentCell.X) + target.CurrentCell.X + 1;
-            }
-            else
-            {
-                xDist = (boardWidth - 1 - CurrentCell.X) + target.CurrentCell.X + 1;
-            }
-            int yDist = Mathf.Abs(CurrentCell.Y - target.CurrentCell.Y);
-
-            return (xDist + yDist) <= AttackRange;
+            return battleManager.GetDistance(this, target) <= AttackRange;
         }
 
         /// <summary>
@@ -389,6 +402,7 @@ namespace ZeroEngine.AutoBattle.Battle
         {
             if (target is BattleUnitBase targetUnit)
             {
+                OnAttackPerformed?.Invoke(target);
                 targetUnit.TakeDamage(Attack, this);
             }
         }
@@ -398,6 +412,7 @@ namespace ZeroEngine.AutoBattle.Battle
         /// </summary>
         protected virtual void UseSkill(SkillData skill, IBattleUnit target, AutoBattleManager battleManager)
         {
+            OnSkillUsed?.Invoke(skill, target);
             skill.Execute(this, target, battleManager);
             SkillSlots.StartCooldown(skill);
         }

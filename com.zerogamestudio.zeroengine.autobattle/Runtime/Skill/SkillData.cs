@@ -89,6 +89,29 @@ namespace ZeroEngine.AutoBattle.Skill
         }
 
         /// <summary>
+        /// Checks target validity and configured range in the active battle.
+        /// </summary>
+        public virtual bool CanUse(
+            IBattleUnit owner,
+            IBattleUnit target,
+            AutoBattleManager battleManager)
+        {
+            if (!CanUse(owner, target))
+            {
+                return false;
+            }
+
+            if (TargetType == SkillTargetType.Self || TargetType == SkillTargetType.AllAllies)
+            {
+                return true;
+            }
+
+            return battleManager != null
+                && target != null
+                && battleManager.GetDistance(owner, target) <= Range;
+        }
+
+        /// <summary>
         /// 执行技能
         /// </summary>
         public abstract void Execute(IBattleUnit owner, IBattleUnit target, AutoBattleManager battleManager);

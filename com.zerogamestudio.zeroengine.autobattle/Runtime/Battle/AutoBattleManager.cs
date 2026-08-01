@@ -41,6 +41,11 @@ namespace ZeroEngine.AutoBattle.Battle
         public float TimeScale { get; set; } = 1f;
 
         /// <summary>
+        /// Statistics collected from actual health and death events.
+        /// </summary>
+        public AutoBattleStatistics Statistics { get; } = new AutoBattleStatistics();
+
+        /// <summary>
         /// 玩家方单位列表
         /// </summary>
         private readonly List<IBattleUnit> _playerUnits = new();
@@ -49,6 +54,8 @@ namespace ZeroEngine.AutoBattle.Battle
         /// 敌方单位列表
         /// </summary>
         private readonly List<IBattleUnit> _enemyUnits = new();
+
+        private readonly Dictionary<IBattleUnit, UnitSubscriptions> _unitSubscriptions = new();
 
         // 事件
         public event Action OnBattleStart;
@@ -84,6 +91,7 @@ namespace ZeroEngine.AutoBattle.Battle
             if (PlayerBoard.PlaceUnit(unit, position))
             {
                 _playerUnits.Add(unit);
+                SubscribeUnit(unit);
             }
         }
 
@@ -101,6 +109,7 @@ namespace ZeroEngine.AutoBattle.Battle
             if (EnemyBoard.PlaceUnit(unit, position))
             {
                 _enemyUnits.Add(unit);
+                SubscribeUnit(unit);
             }
         }
 
@@ -117,6 +126,7 @@ namespace ZeroEngine.AutoBattle.Battle
 
             State = BattleState.Preparing;
             BattleTime = 0f;
+            Statistics.Reset();
         }
 
         /// <summary>
@@ -163,12 +173,12 @@ namespace ZeroEngine.AutoBattle.Battle
             OnBattleTick?.Invoke(scaledDelta);
 
             // 驱动所有存活单位的 AI
-            for (int i = 0; i < _playerUnits.Count; i++)
+            for (int i = _playerUnits.Count - 1; i >= 0; i--)
             {
                 if (_playerUnits[i].IsAlive && _playerUnits[i] is BattleUnitBase playerUnit)
                     playerUnit.BattleTick(scaledDelta, this);
             }
-            for (int i = 0; i < _enemyUnits.Count; i++)
+            for (int i = _enemyUnits.Count - 1; i >= 0; i--)
             {
                 if (_enemyUnits[i].IsAlive && _enemyUnits[i] is BattleUnitBase enemyUnit)
                     enemyUnit.BattleTick(scaledDelta, this);
@@ -186,24 +196,28 @@ namespace ZeroEngine.AutoBattle.Battle
                 return BattleResult.Timeout;
             }
 
-            // 检查存活单位
-            int playerAlive = 0;
-            int enemyAlive = 0;
-
-            foreach (var unit in _playerUnits)
+            bool hasAliveEnemy = false;
+            for (int i = 0; i < _enemyUnits.Count; i++)
             {
-                if (unit.IsAlive) playerAlive++;
+                if (_enemyUnits[i].IsAlive)
+                {
+                    hasAliveEnemy = true;
+                    break;
+                }
             }
-
-            foreach (var unit in _enemyUnits)
-            {
-                if (unit.IsAlive) enemyAlive++;
-            }
-
-            if (enemyAlive == 0)
+            if (!hasAliveEnemy)
                 return BattleResult.Victory;
 
-            if (playerAlive == 0)
+            bool hasAlivePlayer = false;
+            for (int i = 0; i < _playerUnits.Count; i++)
+            {
+                if (_playerUnits[i].IsAlive)
+                {
+                    hasAlivePlayer = true;
+                    break;
+                }
+            }
+            if (!hasAlivePlayer)
                 return BattleResult.Defeat;
 
             return BattleResult.None;
@@ -215,7 +229,9 @@ namespace ZeroEngine.AutoBattle.Battle
         private void EndBattle(BattleResult result)
         {
             State = BattleState.Ended;
+            Statistics.Complete(result, BattleTime);
             OnBattleEnd?.Invoke(result);
+            UnsubscribeAllUnits();
         }
 
         /// <summary>
@@ -223,6 +239,20 @@ namespace ZeroEngine.AutoBattle.Battle
         /// </summary>
         public void NotifyUnitDeath(IBattleUnit unit)
         {
+            if (unit == null)
+            {
+                return;
+            }
+
+            bool removed = unit.Team == BattleTeam.Player
+                ? _playerUnits.Remove(unit)
+                : _enemyUnits.Remove(unit);
+            if (!removed)
+            {
+                return;
+            }
+
+            Statistics.RecordDeath(unit.Team);
             OnUnitDeath?.Invoke(unit);
 
             // 从棋盘移除
@@ -241,12 +271,7 @@ namespace ZeroEngine.AutoBattle.Battle
         /// </summary>
         public IReadOnlyList<IBattleUnit> GetAlivePlayerUnits()
         {
-            var result = new List<IBattleUnit>();
-            foreach (var unit in _playerUnits)
-            {
-                if (unit.IsAlive) result.Add(unit);
-            }
-            return result;
+            return _playerUnits;
         }
 
         /// <summary>
@@ -254,12 +279,47 @@ namespace ZeroEngine.AutoBattle.Battle
         /// </summary>
         public IReadOnlyList<IBattleUnit> GetAliveEnemyUnits()
         {
-            var result = new List<IBattleUnit>();
-            foreach (var unit in _enemyUnits)
+            return _enemyUnits;
+        }
+
+        /// <summary>
+        /// Gets the distance between units while treating the two boards as adjacent and mirrored.
+        /// </summary>
+        public int GetDistance(IBattleUnit source, IBattleUnit target)
+        {
+            if (source?.CurrentCell == null || target?.CurrentCell == null)
             {
-                if (unit.IsAlive) result.Add(unit);
+                return int.MaxValue;
             }
-            return result;
+
+            int yDistance = Mathf.Abs(source.CurrentCell.Y - target.CurrentCell.Y);
+            if (source.Team == target.Team)
+            {
+                return Mathf.Abs(source.CurrentCell.X - target.CurrentCell.X) + yDistance;
+            }
+
+            int sourceDepth = source.Team == BattleTeam.Player
+                ? PlayerBoard.Width - 1 - source.CurrentCell.X
+                : source.CurrentCell.X;
+            int targetDepth = target.Team == BattleTeam.Player
+                ? PlayerBoard.Width - 1 - target.CurrentCell.X
+                : target.CurrentCell.X;
+            return sourceDepth + targetDepth + 1 + yDistance;
+        }
+
+        /// <summary>
+        /// Gets a unit's depth from its own front edge. Zero is the front row.
+        /// </summary>
+        public int GetDepthFromFront(IBattleUnit unit)
+        {
+            if (unit?.CurrentCell == null)
+            {
+                return int.MaxValue;
+            }
+
+            return unit.Team == BattleTeam.Player
+                ? PlayerBoard.Width - 1 - unit.CurrentCell.X
+                : unit.CurrentCell.X;
         }
 
         /// <summary>
@@ -267,6 +327,7 @@ namespace ZeroEngine.AutoBattle.Battle
         /// </summary>
         public void Reset()
         {
+            UnsubscribeAllUnits();
             State = BattleState.Idle;
             BattleTime = 0f;
             TimeScale = 1f;
@@ -276,6 +337,50 @@ namespace ZeroEngine.AutoBattle.Battle
 
             _playerUnits.Clear();
             _enemyUnits.Clear();
+            Statistics.Reset();
+        }
+
+        private void SubscribeUnit(IBattleUnit unit)
+        {
+            if (unit is not BattleUnitBase battleUnit || _unitSubscriptions.ContainsKey(unit))
+            {
+                return;
+            }
+
+            Action deathHandler = () => NotifyUnitDeath(unit);
+            Action<float, float> healthHandler = (oldHealth, newHealth) =>
+                Statistics.RecordHealthChange(unit.Team, oldHealth, newHealth);
+
+            battleUnit.OnDeath += deathHandler;
+            battleUnit.OnHealthChanged += healthHandler;
+            _unitSubscriptions.Add(unit, new UnitSubscriptions(battleUnit, deathHandler, healthHandler));
+        }
+
+        private void UnsubscribeAllUnits()
+        {
+            foreach (var subscription in _unitSubscriptions.Values)
+            {
+                subscription.Unit.OnDeath -= subscription.DeathHandler;
+                subscription.Unit.OnHealthChanged -= subscription.HealthHandler;
+            }
+            _unitSubscriptions.Clear();
+        }
+
+        private readonly struct UnitSubscriptions
+        {
+            public BattleUnitBase Unit { get; }
+            public Action DeathHandler { get; }
+            public Action<float, float> HealthHandler { get; }
+
+            public UnitSubscriptions(
+                BattleUnitBase unit,
+                Action deathHandler,
+                Action<float, float> healthHandler)
+            {
+                Unit = unit;
+                DeathHandler = deathHandler;
+                HealthHandler = healthHandler;
+            }
         }
     }
 

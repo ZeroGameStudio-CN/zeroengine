@@ -145,6 +145,89 @@ namespace ZeroEngine.AutoBattle.Skill
         }
 
         /// <summary>
+        /// Finds the first ready skill and resolves a target matching its target type.
+        /// </summary>
+        public bool TryGetAvailableSkill(
+            IBattleUnit owner,
+            AutoBattleManager battleManager,
+            IBattleUnit primaryEnemyTarget,
+            out SkillData skill,
+            out IBattleUnit target)
+        {
+            for (int i = 0; i < _equippedSkills.Length; i++)
+            {
+                skill = _equippedSkills[i];
+                if (skill == null || !IsSkillReady(skill))
+                {
+                    continue;
+                }
+
+                target = ResolveTarget(skill, owner, battleManager, primaryEnemyTarget);
+                if (skill.CanUse(owner, target, battleManager))
+                {
+                    return true;
+                }
+            }
+
+            skill = null;
+            target = null;
+            return false;
+        }
+
+        private static IBattleUnit ResolveTarget(
+            SkillData skill,
+            IBattleUnit owner,
+            AutoBattleManager battleManager,
+            IBattleUnit primaryEnemyTarget)
+        {
+            switch (skill.TargetType)
+            {
+                case SkillTargetType.Self:
+                    return owner;
+
+                case SkillTargetType.SingleAlly:
+                case SkillTargetType.AllAllies:
+                    var allies = owner.Team == BattleTeam.Player
+                        ? battleManager.GetAlivePlayerUnits()
+                        : battleManager.GetAliveEnemyUnits();
+                    var ally = FindLowestHealthRatio(allies);
+                    if (skill.Type == SkillType.Heal
+                        && ally is BattleUnitBase battleUnit
+                        && battleUnit.CurrentHealth >= battleUnit.MaxHealth)
+                    {
+                        return null;
+                    }
+                    return ally;
+
+                default:
+                    return primaryEnemyTarget;
+            }
+        }
+
+        private static IBattleUnit FindLowestHealthRatio(IReadOnlyList<IBattleUnit> units)
+        {
+            IBattleUnit selected = null;
+            float lowestRatio = float.MaxValue;
+
+            for (int i = 0; i < units.Count; i++)
+            {
+                if (units[i] is not BattleUnitBase unit || unit.MaxHealth <= 0f)
+                {
+                    continue;
+                }
+
+                float ratio = unit.CurrentHealth / unit.MaxHealth;
+                if (ratio < lowestRatio)
+                {
+                    lowestRatio = ratio;
+                    selected = unit;
+                }
+            }
+
+            return selected;
+        }
+
+        /// <summary>
         /// 重置所有冷却
         /// </summary>
         public void ResetAllCooldowns()
