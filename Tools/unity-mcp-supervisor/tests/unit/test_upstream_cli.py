@@ -9,6 +9,25 @@ from unity_mcp_supervisor import upstream_cli
 from unity_mcp_supervisor.service_state import Settings
 
 
+def test_entry_path_uses_current_environment_scripts(
+    monkeypatch, tmp_path: Path
+) -> None:
+    scripts = tmp_path / "tool" / ("Scripts" if os.name == "nt" else "bin")
+    scripts.mkdir(parents=True)
+    suffix = ".exe" if os.name == "nt" else ""
+    entry = scripts / f"mcp-for-unity{suffix}"
+    entry.touch()
+    monkeypatch.setattr(upstream_cli.sysconfig, "get_path", lambda _name: str(scripts))
+    monkeypatch.setattr(
+        upstream_cli.sys,
+        "executable",
+        str(tmp_path / "framework" / f"python{suffix}"),
+    )
+    monkeypatch.setattr(upstream_cli.shutil, "which", lambda _name: None)
+
+    assert upstream_cli._entry_path("mcp-for-unity") == entry
+
+
 def test_passthrough_injects_exact_endpoint_hash_and_json(
     monkeypatch, tmp_path: Path
 ) -> None:

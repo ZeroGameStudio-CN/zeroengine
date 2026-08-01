@@ -6,6 +6,7 @@ import os
 import shutil
 import subprocess
 import sys
+import sysconfig
 from pathlib import Path
 from typing import Any
 from urllib.parse import urlparse
@@ -23,9 +24,14 @@ def upstream_version() -> str:
 
 def _entry_path(name: str) -> Path | None:
     suffix = ".exe" if os.name == "nt" else ""
-    sibling = Path(sys.executable).resolve().parent / f"{name}{suffix}"
-    if sibling.is_file():
-        return sibling
+    scripts = sysconfig.get_path("scripts")
+    candidates = []
+    if scripts:
+        candidates.append(Path(scripts) / f"{name}{suffix}")
+    candidates.append(Path(sys.executable).parent / f"{name}{suffix}")
+    for candidate in candidates:
+        if candidate.is_file():
+            return candidate
     found = shutil.which(name)
     return Path(found) if found else None
 
