@@ -1,0 +1,16 @@
+{
+  "name": "com.zerogamestudio.unity-mcp-control",
+  "version": "0.3.0",
+  "displayName": "Unity MCP Supervisor Control",
+  "description": "Project-scoped, local-only CLI control channel for MCP for Unity Editor connections.",
+  "unity": "2021.3",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/ZeroGameStudio-CN/zeroengine.git",
+    "directory": "Tools/unity-mcp-supervisor/src/unity_mcp_supervisor/unity_package"
+  },
+  "author": {
+    "name": "ZeroGameStudio"
+  }
+}
