@@ -1,6 +1,6 @@
 {
   "name": "com.zerogamestudio.zeroengine.modsystem",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "displayName": "ZeroEngine ModSystem",
   "description": "Project-neutral mod discovery, manifest, path safety, source, and import orchestration foundation for ZeroEngine projects.",
   "unity": "2022.3",

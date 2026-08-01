@@ -1,11 +1,13 @@
 using System;
 using System.IO;
 using System.Linq;
+using System.Threading;
+using System.Threading.Tasks;
 using ZeroEngine.ModSystem;
 
 namespace ZeroEngine.ModSystem.Steam
 {
-    public sealed class SteamWorkshopModSource : IModSource
+    public sealed class SteamWorkshopModSource : IAsyncModSource
     {
         private readonly SteamWorkshopManager workshopManager;
 
@@ -17,13 +19,22 @@ namespace ZeroEngine.ModSystem.Steam
         public string SourceId => "steam";
         public bool IsAvailable => workshopManager != null && workshopManager.IsInitialized;
 
+        [Obsolete("Use QueryInstalledModFoldersAsync.")]
         public void QueryInstalledModFolders(Action<ModSourceQueryResult> onCompleted)
         {
+            onCompleted?.Invoke(QueryInstalledModFolders());
+        }
+
+        public Task<ModSourceQueryResult> QueryInstalledModFoldersAsync(CancellationToken cancellationToken)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            return Task.FromResult(QueryInstalledModFolders());
+        }
+
+        private ModSourceQueryResult QueryInstalledModFolders()
+        {
             if (!IsAvailable)
-            {
-                onCompleted?.Invoke(ModSourceQueryResult.Failed(SourceId, "Steam Workshop is not initialized."));
-                return;
-            }
+                return ModSourceQueryResult.Failed(SourceId, "Steam Workshop is not initialized.");
 
             workshopManager.RefreshSubscribedItems();
             var folders = workshopManager.SubscribedItems
@@ -31,7 +42,7 @@ namespace ZeroEngine.ModSystem.Steam
                 .Select(item => item.LocalPath)
                 .ToArray();
 
-            onCompleted?.Invoke(ModSourceQueryResult.Success(SourceId, folders));
+            return ModSourceQueryResult.Success(SourceId, folders);
         }
     }
 }

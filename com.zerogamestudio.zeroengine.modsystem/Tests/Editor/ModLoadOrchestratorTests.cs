@@ -1,8 +1,12 @@
 using System;
+using System.Collections;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Threading;
+using System.Threading.Tasks;
 using NUnit.Framework;
+using UnityEngine.TestTools;
 
 namespace ZeroEngine.ModSystem.Tests.Editor
 {
@@ -184,6 +188,173 @@ namespace ZeroEngine.ModSystem.Tests.Editor
             Assert.That(importer.ImportedIds, Is.EqualTo(new[] { "author.pob" }));
         }
 
+        [UnityTest]
+        public IEnumerator LoadFromSourcesAsync_WaitsForDelayedSourceBeforeImporting()
+        {
+            string modRoot = CreateMod("delayed.mod", "Delayed Mod");
+            var source = new DelayedAsyncSource("delayed");
+            var importer = new RecordingImporter();
+
+            Task<ModLoadReport> loadTask = ModLoadOrchestrator.LoadFromSourcesAsync(
+                new IModSource[] { source },
+                new IModContentImporter[] { importer },
+                new ModLoadOptions { SourceQueryTimeout = TimeSpan.FromSeconds(1) });
+
+            Assert.That(loadTask.IsCompleted, Is.False);
+            Assert.That(importer.ImportedIds, Is.Empty);
+
+            source.Complete(ModSourceQueryResult.Success(source.SourceId, new[] { modRoot }));
+            while (!loadTask.IsCompleted)
+                yield return null;
+            ModLoadReport report = loadTask.GetAwaiter().GetResult();
+
+            Assert.That(report.LoadedManifests.Select(manifest => manifest.Id), Is.EqualTo(new[] { "delayed.mod" }));
+            Assert.That(report.LoadedManifests.Single().SourceId, Is.EqualTo("delayed"));
+            Assert.That(importer.ImportedIds, Is.EqualTo(new[] { "delayed.mod" }));
+        }
+
+        [UnityTest]
+        public IEnumerator LoadFromSourcesAsync_WhenOneSourceTimesOut_ImportsCompletedSources()
+        {
+            string modRoot = CreateMod("ready.mod", "Ready Mod");
+            var importer = new RecordingImporter();
+
+            Task<ModLoadReport> loadTask = ModLoadOrchestrator.LoadFromSourcesAsync(
+                new IModSource[]
+                {
+                    new NeverCompletingAsyncSource("slow"),
+                    new FixedSource(modRoot)
+                },
+                new IModContentImporter[] { importer },
+                new ModLoadOptions { SourceQueryTimeout = TimeSpan.FromMilliseconds(25) });
+            while (!loadTask.IsCompleted)
+                yield return null;
+            ModLoadReport report = loadTask.GetAwaiter().GetResult();
+
+            Assert.That(report.LoadedManifests.Select(manifest => manifest.Id), Is.EqualTo(new[] { "ready.mod" }));
+            Assert.That(importer.ImportedIds, Is.EqualTo(new[] { "ready.mod" }));
+            Assert.That(report.Issues.Any(issue => issue.ReasonCode == "source_timeout" && issue.Path == "slow"), Is.True);
+        }
+
+        [UnityTest]
+        public IEnumerator LoadFromSourcesAsync_WhenSourcesCompleteOutOfOrder_UsesInputPriority()
+        {
+            string firstRoot = CreateMod("first.mod", "First Mod");
+            string secondRoot = CreateMod("second.mod", "Second Mod");
+            var first = new DelayedAsyncSource("first-source");
+            var second = new DelayedAsyncSource("second-source");
+            var importer = new RecordingImporter();
+
+            Task<ModLoadReport> loadTask = ModLoadOrchestrator.LoadFromSourcesAsync(
+                new IModSource[] { first, second },
+                new IModContentImporter[] { importer },
+                new ModLoadOptions { SourceQueryTimeout = TimeSpan.FromSeconds(1) });
+
+            second.Complete(ModSourceQueryResult.Success(second.SourceId, new[] { secondRoot }));
+            first.Complete(ModSourceQueryResult.Success(first.SourceId, new[] { firstRoot }));
+            while (!loadTask.IsCompleted)
+                yield return null;
+            ModLoadReport report = loadTask.GetAwaiter().GetResult();
+
+            Assert.That(report.LoadedManifests.Select(manifest => manifest.Id),
+                Is.EqualTo(new[] { "first.mod", "second.mod" }));
+            Assert.That(report.LoadedManifests.Select(manifest => manifest.SourceId),
+                Is.EqualTo(new[] { "first-source", "second-source" }));
+            Assert.That(importer.ImportedIds, Is.EqualTo(new[] { "first.mod", "second.mod" }));
+        }
+
+        [UnityTest]
+        public IEnumerator LoadFromSourcesAsync_WhenLegacySourceCompletesTwice_UsesFirstResultOnce()
+        {
+            string firstRoot = CreateMod("first.mod", "First Mod");
+            string ignoredRoot = CreateMod("ignored.mod", "Ignored Mod");
+            var importer = new RecordingImporter();
+
+            Task<ModLoadReport> loadTask = ModLoadOrchestrator.LoadFromSourcesAsync(
+                new IModSource[] { new DoubleCompletingLegacySource(firstRoot, ignoredRoot) },
+                new IModContentImporter[] { importer },
+                new ModLoadOptions { SourceQueryTimeout = TimeSpan.FromSeconds(1) });
+            while (!loadTask.IsCompleted)
+                yield return null;
+            ModLoadReport report = loadTask.GetAwaiter().GetResult();
+
+            Assert.That(report.LoadedManifests.Select(manifest => manifest.Id), Is.EqualTo(new[] { "first.mod" }));
+            Assert.That(importer.ImportedIds, Is.EqualTo(new[] { "first.mod" }));
+        }
+
+        [UnityTest]
+        public IEnumerator LoadFromSourcesAsync_WhenDependencyImportFails_BlocksDependentImport()
+        {
+            string dependency = CreateMod("dependency.mod", "Dependency Mod");
+            string dependent = CreateMod(
+                "dependent.mod",
+                "Dependent Mod",
+                dependencies: new[] { "dependency.mod" });
+            var recordingImporter = new RecordingImporter();
+
+            Task<ModLoadReport> loadTask = ModLoadOrchestrator.LoadFromSourcesAsync(
+                new IModSource[] { new FixedSource(dependency, dependent) },
+                new IModContentImporter[]
+                {
+                    new SelectiveFailingImporter("dependency.mod"),
+                    recordingImporter
+                });
+            while (!loadTask.IsCompleted)
+                yield return null;
+            ModLoadReport report = loadTask.GetAwaiter().GetResult();
+
+            Assert.That(report.LoadedManifests, Is.Empty);
+            Assert.That(recordingImporter.ImportedIds, Is.EqualTo(new[] { "dependency.mod" }));
+            Assert.That(report.Issues.Any(issue =>
+                issue.ReasonCode == "dependency_import_failed" && issue.ModId == "dependent.mod"), Is.True);
+        }
+
+        [UnityTest]
+        public IEnumerator LoadFromSourcesAsync_WithDisabledMod_SkipsImportWithStableReason()
+        {
+            string disabled = CreateMod("disabled.mod", "Disabled Mod");
+            var importer = new RecordingImporter();
+            Task<ModLoadReport> loadTask = ModLoadOrchestrator.LoadFromSourcesAsync(
+                new IModSource[] { new FixedSource(disabled) },
+                new IModContentImporter[] { importer },
+                new ModLoadOptions
+                {
+                    DisabledModIds = new HashSet<string>(StringComparer.Ordinal) { "disabled.mod" }
+                });
+            while (!loadTask.IsCompleted)
+                yield return null;
+            ModLoadReport report = loadTask.GetAwaiter().GetResult();
+
+            Assert.That(importer.ImportedIds, Is.Empty);
+            Assert.That(report.Issues.Any(issue =>
+                issue.ReasonCode == "mod_disabled" && issue.ModId == "disabled.mod"), Is.True);
+        }
+
+        [UnityTest]
+        public IEnumerator LoadFromSourcesAsync_WithDisabledDependency_SkipsDependentTransitively()
+        {
+            string dependency = CreateMod("dependency.mod", "Dependency Mod");
+            string dependent = CreateMod("dependent.mod", "Dependent Mod", dependencies: new[] { "dependency.mod" });
+            string transitive = CreateMod("transitive.mod", "Transitive Mod", dependencies: new[] { "dependent.mod" });
+            var importer = new RecordingImporter();
+            Task<ModLoadReport> loadTask = ModLoadOrchestrator.LoadFromSourcesAsync(
+                new IModSource[] { new FixedSource(dependency, dependent, transitive) },
+                new IModContentImporter[] { importer },
+                new ModLoadOptions
+                {
+                    DisabledModIds = new HashSet<string>(StringComparer.Ordinal) { "dependency.mod" }
+                });
+            while (!loadTask.IsCompleted)
+                yield return null;
+            ModLoadReport report = loadTask.GetAwaiter().GetResult();
+
+            Assert.That(importer.ImportedIds, Is.Empty);
+            Assert.That(report.Issues.Any(issue =>
+                issue.ReasonCode == "dependency_disabled" && issue.ModId == "dependent.mod"), Is.True);
+            Assert.That(report.Issues.Any(issue =>
+                issue.ReasonCode == "dependency_disabled" && issue.ModId == "transitive.mod"), Is.True);
+        }
+
         private string CreateMod(
             string id,
             string name,
@@ -236,6 +407,80 @@ namespace ZeroEngine.ModSystem.Tests.Editor
             }
         }
 
+        private sealed class DelayedAsyncSource : IAsyncModSource
+        {
+            private readonly TaskCompletionSource<ModSourceQueryResult> completion =
+                new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+            public DelayedAsyncSource(string sourceId)
+            {
+                SourceId = sourceId;
+            }
+
+            public string SourceId { get; }
+            public bool IsAvailable => true;
+
+            public Task<ModSourceQueryResult> QueryInstalledModFoldersAsync(CancellationToken cancellationToken)
+            {
+                cancellationToken.Register(() => completion.TrySetCanceled(cancellationToken));
+                return completion.Task;
+            }
+
+            public void QueryInstalledModFolders(Action<ModSourceQueryResult> onCompleted)
+            {
+                completion.Task.GetAwaiter().OnCompleted(() => onCompleted?.Invoke(completion.Task.Result));
+            }
+
+            public void Complete(ModSourceQueryResult result)
+            {
+                completion.TrySetResult(result);
+            }
+        }
+
+        private sealed class NeverCompletingAsyncSource : IAsyncModSource
+        {
+            public NeverCompletingAsyncSource(string sourceId)
+            {
+                SourceId = sourceId;
+            }
+
+            public string SourceId { get; }
+            public bool IsAvailable => true;
+
+            public Task<ModSourceQueryResult> QueryInstalledModFoldersAsync(CancellationToken cancellationToken)
+            {
+                var completion = new TaskCompletionSource<ModSourceQueryResult>(
+                    TaskCreationOptions.RunContinuationsAsynchronously);
+                cancellationToken.Register(() => completion.TrySetCanceled(cancellationToken));
+                return completion.Task;
+            }
+
+            public void QueryInstalledModFolders(Action<ModSourceQueryResult> onCompleted)
+            {
+            }
+        }
+
+        private sealed class DoubleCompletingLegacySource : IModSource
+        {
+            private readonly string first;
+            private readonly string second;
+
+            public DoubleCompletingLegacySource(string first, string second)
+            {
+                this.first = first;
+                this.second = second;
+            }
+
+            public string SourceId => "legacy-double";
+            public bool IsAvailable => true;
+
+            public void QueryInstalledModFolders(Action<ModSourceQueryResult> onCompleted)
+            {
+                onCompleted?.Invoke(ModSourceQueryResult.Success(SourceId, new[] { first }));
+                onCompleted?.Invoke(ModSourceQueryResult.Success(SourceId, new[] { second }));
+            }
+        }
+
         private sealed class RecordingImporter : IModContentImporter
         {
             public List<string> ImportedIds { get; } = new();
@@ -256,6 +501,27 @@ namespace ZeroEngine.ModSystem.Tests.Editor
                     context.Manifest.Id,
                     string.Empty,
                     "Importer failed."));
+            }
+        }
+
+        private sealed class SelectiveFailingImporter : IModContentImporter
+        {
+            private readonly string failedId;
+
+            public SelectiveFailingImporter(string failedId)
+            {
+                this.failedId = failedId;
+            }
+
+            public ModContentImportResult Import(ModImportContext context)
+            {
+                return context.Manifest.Id == failedId
+                    ? ModContentImportResult.Failed(new ModLoadIssue(
+                        ModIssueSeverity.Error,
+                        context.Manifest.Id,
+                        string.Empty,
+                        "Importer failed."))
+                    : ModContentImportResult.Success();
             }
         }
     }
