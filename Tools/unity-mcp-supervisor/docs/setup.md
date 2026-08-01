@@ -46,8 +46,8 @@ umcp control package-path
 ```
 
 Use that local `file:` directory only for an isolated trial. Formal projects
-must pin the package from the same tested ZeroEngine commit as the installed
-CLI and commit both `Packages/manifest.json` and `Packages/packages-lock.json`:
+must pin the package from a tested ZeroEngine commit and commit both
+`Packages/manifest.json` and `Packages/packages-lock.json`:
 
 ```text
 https://github.com/ZeroGameStudio-CN/zeroengine.git?path=Tools/unity-mcp-supervisor/src/unity_mcp_supervisor/unity_package#<tested-commit>
@@ -55,6 +55,11 @@ https://github.com/ZeroGameStudio-CN/zeroengine.git?path=Tools/unity-mcp-supervi
 
 The package remains separate from `com.coplaydev.unity-mcp`, so upstream
 updates never overwrite it.
+
+The CLI and companion pins may advance independently when their protocol
+versions remain compatible. A CLI-only fix does not require project manifest
+or lock-file churn; update the project pin only when companion code or its
+compatibility contract changes.
 
 Open the Unity project normally, let the package compile, then run:
 

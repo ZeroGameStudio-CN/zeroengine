@@ -14,9 +14,10 @@ previously recorded owned Server whose token, PID, process creation time,
 pidfile, endpoint listener, version, and REST contract all still match; this
 avoids a Server or Editor restart while leaving ordinary external Servers alone.
 
-The reviewed source of truth lives in the ZeroEngine monorepo. Install both the
-CLI and companion from the same tested ZeroEngine commit so their control
-protocol versions cannot drift.
+The reviewed source of truth lives in the ZeroEngine monorepo. Pin the CLI and
+companion to tested ZeroEngine commits and require compatible control protocol
+versions. The pins may advance independently for CLI-only or companion-only
+fixes that do not change that compatibility contract.
 
 ```powershell
 # Development checkout
