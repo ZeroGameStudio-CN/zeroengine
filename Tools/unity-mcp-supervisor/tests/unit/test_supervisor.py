@@ -342,7 +342,11 @@ def test_known_worker_loss_restarts_without_waiting_for_health_failures(
 def test_daemon_spawn_uses_no_console_window(monkeypatch, tmp_path: Path) -> None:
     manager = ServiceManager(Settings(state_dir=tmp_path))
     captured: dict = {}
+    executable = tmp_path / "python.exe"
+    windowless_executable = tmp_path / "pythonw.exe"
+    windowless_executable.touch()
 
+    monkeypatch.setattr(supervisor.sys, "executable", str(executable))
     monkeypatch.setattr(
         supervisor.subprocess,
         "Popen",
@@ -357,6 +361,7 @@ def test_daemon_spawn_uses_no_console_window(monkeypatch, tmp_path: Path) -> Non
         | supervisor.subprocess.CREATE_BREAKAWAY_FROM_JOB
     )
     assert captured["creationflags"] == expected_flags
+    assert captured["command"][0] == str(windowless_executable)
     assert captured["stdin"] is supervisor.subprocess.DEVNULL
     assert captured["stdout"] is supervisor.subprocess.DEVNULL
     assert captured["stderr"] is supervisor.subprocess.DEVNULL

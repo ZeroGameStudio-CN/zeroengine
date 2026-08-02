@@ -744,8 +744,13 @@ class ServiceManager:
             )
 
     def _spawn_daemon(self, token: str) -> None:
+        executable = Path(sys.executable)
+        if os.name == "nt":
+            windowless_executable = executable.with_name("pythonw.exe")
+            if windowless_executable.exists():
+                executable = windowless_executable
         command = [
-            sys.executable,
+            str(executable),
             "-m",
             "unity_mcp_supervisor.cli",
             "--state-dir",
