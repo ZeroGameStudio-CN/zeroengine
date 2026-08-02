@@ -159,6 +159,10 @@ class StatePaths:
         return self.root / "locks"
 
     @property
+    def project_leases(self) -> Path:
+        return self.root / "project-leases"
+
+    @property
     def logs(self) -> Path:
         return self.root / "logs"
 
@@ -173,6 +177,7 @@ class StatePaths:
     def ensure(self) -> None:
         ensure_private_directory(self.root)
         ensure_private_directory(self.locks)
+        ensure_private_directory(self.project_leases)
         ensure_private_directory(self.logs)
         ensure_private_directory(self.editor_discovery)
         ensure_private_directory(self.editor_requests)
@@ -187,6 +192,7 @@ class Settings:
     bootstrap_timeout_seconds: float = 300.0
     reconnect_timeout_seconds: float = 300.0
     project_lock_timeout_seconds: float = 600.0
+    project_lease_ttl_seconds: float = 1800.0
     service_start_timeout_seconds: float = 30.0
     health_interval_seconds: float = 5.0
     health_failure_limit: int = 3
@@ -247,6 +253,7 @@ class Settings:
             bootstrap_timeout_seconds=self.bootstrap_timeout_seconds,
             reconnect_timeout_seconds=self.reconnect_timeout_seconds,
             project_lock_timeout_seconds=self.project_lock_timeout_seconds,
+            project_lease_ttl_seconds=self.project_lease_ttl_seconds,
             service_start_timeout_seconds=self.service_start_timeout_seconds,
             health_interval_seconds=self.health_interval_seconds,
             health_failure_limit=self.health_failure_limit,

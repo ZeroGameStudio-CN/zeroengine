@@ -283,3 +283,149 @@ def test_run_injects_verified_hash_into_pinned_upstream_cli(
             )
         finally:
             _stop_manager(ServiceManager(settings))
+
+
+def test_lease_commands_emit_sanitized_state_and_release(tmp_path: Path) -> None:
+    project = create_unity_project(tmp_path / "Project")
+    state = tmp_path / "state"
+    runner = CliRunner()
+
+    acquired = runner.invoke(
+        cli,
+        [
+            "--state-dir",
+            str(state),
+            "lease",
+            "acquire",
+            "--project",
+            str(project),
+            "--owner",
+            "contract-test",
+            "--wait",
+            "0",
+        ],
+    )
+    assert acquired.exit_code == 0, acquired.output
+    acquired_payload = json.loads(acquired.output)
+    lease_id = acquired_payload["result"]["lease_id"]
+
+    status = runner.invoke(
+        cli,
+        ["--state-dir", str(state), "lease", "status", "--project", str(project)],
+    )
+    assert status.exit_code == 0, status.output
+    status_payload = json.loads(status.output)
+    assert status_payload["result"]["active"] is True
+    assert status_payload["result"]["owner"] == "contract-test"
+    assert "lease_id" not in status_payload["result"]
+
+    released = runner.invoke(
+        cli,
+        [
+            "--state-dir",
+            str(state),
+            "lease",
+            "release",
+            "--project",
+            str(project),
+            "--lease-id",
+            lease_id,
+        ],
+    )
+    assert released.exit_code == 0, released.output
+    assert json.loads(released.output)["result"]["released"] is True
+
+
+def test_active_lease_blocks_unclaimed_call_and_allows_owner(
+    monkeypatch, tmp_path: Path
+) -> None:
+    project = create_unity_project(tmp_path / "Project")
+    state = tmp_path / "state"
+    project_hash = unity_project_hash_candidate(project)
+    instances = [
+        {
+            "hash": project_hash,
+            "project": "Project",
+            "unity_version": "2022.3.62f3",
+            "connected_at": "now",
+            "project_root": str(project),
+        }
+    ]
+    monkeypatch.setenv("UMCP_TEST_MODE", "1")
+    monkeypatch.setenv("UMCP_TEST_SERVER_SCRIPT", str(FAKE_SERVER))
+    runner = CliRunner()
+    lease_id = ""
+
+    with fake_http_server(instances) as endpoint:
+        settings = Settings.load(state, endpoint)
+        try:
+            acquired = runner.invoke(
+                cli,
+                [
+                    "--state-dir",
+                    str(state),
+                    "--endpoint",
+                    endpoint,
+                    "lease",
+                    "acquire",
+                    "--project",
+                    str(project),
+                    "--owner",
+                    "contract-test",
+                    "--wait",
+                    "0",
+                ],
+            )
+            lease_id = json.loads(acquired.output)["result"]["lease_id"]
+
+            blocked = runner.invoke(
+                cli,
+                [
+                    "--state-dir",
+                    str(state),
+                    "--endpoint",
+                    endpoint,
+                    "call",
+                    "read_console",
+                    "--project",
+                    str(project),
+                ],
+            )
+            assert blocked.exit_code == 5, blocked.output
+            blocked_payload = json.loads(blocked.output)
+            assert blocked_payload["code"] == "project_busy"
+            assert blocked_payload["result"]["owner"] == "contract-test"
+            assert "lease_id" not in blocked_payload["result"]
+
+            allowed = runner.invoke(
+                cli,
+                [
+                    "--state-dir",
+                    str(state),
+                    "--endpoint",
+                    endpoint,
+                    "call",
+                    "read_console",
+                    "--project",
+                    str(project),
+                    "--lease-id",
+                    lease_id,
+                ],
+            )
+            assert allowed.exit_code == 0, allowed.output
+        finally:
+            if lease_id:
+                runner.invoke(
+                    cli,
+                    [
+                        "--state-dir",
+                        str(state),
+                        "lease",
+                        "release",
+                        "--project",
+                        str(project),
+                        "--lease-id",
+                        lease_id,
+                    ],
+                )
+            _stop_manager(ServiceManager(settings))

@@ -102,15 +102,35 @@ Agents use only `umcp`; remove their direct Unity MCP `/mcp` client entries
 after the two-Editor acceptance run passes.
 
 ```powershell
-umcp status --project D:\unity\projects\POB
-umcp call get_project_info --project D:\unity\projects\POB --params '{}'
-umcp run --project D:\unity\projects\POB -- status
+$lease = umcp lease acquire --project D:\unity\projects\POB --owner task-label | ConvertFrom-Json
+$env:UMCP_PROJECT_LEASE_ID = $lease.result.lease_id
+try {
+    umcp connect --project D:\unity\projects\POB
+    umcp call get_project_info --project D:\unity\projects\POB --params '{}'
+    umcp run --project D:\unity\projects\POB -- status
+} finally {
+    umcp lease release --project D:\unity\projects\POB
+    Remove-Item Env:UMCP_PROJECT_LEASE_ID -ErrorAction SilentlyContinue
+}
 ```
 
-All live calls to the same project path are serialized across processes.
-Different project paths may run concurrently. Two Editors cannot share the
-same absolute project path; use a separate workspace/worktree for true Editor
-parallelism.
+Acquire one lease before the first live Editor operation and keep it through
+refresh, compilation, Domain Reload, tests, Prefab/Scene changes, and final
+Console inspection. A second task queues in `lease acquire` for up to 600
+seconds by default. The 30-minute lease TTL is refreshed by the owner’s live
+commands and recovers abandoned leases; long idle tasks can use `lease renew`.
+Always release in cleanup.
+
+An active lease makes unclaimed or incorrectly claimed `connect`, `call`, and
+`run` fail with `project_busy` before dispatch. With no active task lease,
+pre-v0.4 commands remain compatible and retain their per-command serialization.
+Use `umcp lease status` or `umcp doctor` to see the owner and expiry without
+exposing its lease ID. Manual service stop/restart is refused while a lease is
+active.
+
+Different project paths may hold leases and run concurrently. Two Editors
+cannot share the same absolute project path; use a separate workspace/worktree
+for true Editor parallelism.
 
 If a business request loses its response after dispatch, `umcp` exits with code
 7 and `outcome_unknown=true`. Do not replay a write unless its effect has been

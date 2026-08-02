@@ -10,8 +10,8 @@ import psutil
 import pytest
 
 from tests.helpers import create_unity_project
-from unity_mcp_supervisor import __version__
 from unity_mcp_supervisor.editor_control import (
+    COMPANION_VERSION,
     CONTROL_PACKAGE_NAME,
     EditorControlResult,
     companion_package_path,
@@ -67,7 +67,7 @@ def test_companion_package_is_included_without_upstream_compile_reference() -> N
         (package / "package.json").read_text(encoding="utf-8")
     )
     assert package_manifest["name"] == CONTROL_PACKAGE_NAME
-    assert package_manifest["version"] == __version__
+    assert package_manifest["version"] == COMPANION_VERSION
     asmdef = json.loads(
         (package / "Editor" / "ZeroGameStudio.UnityMcpControl.Editor.asmdef").read_text(
             encoding="utf-8"
@@ -78,7 +78,7 @@ def test_companion_package_is_included_without_upstream_compile_reference() -> N
     )
     assert asmdef["references"] == []
     assert "using MCPForUnity" not in source
-    assert f'CompanionVersion = "{__version__}"' in source
+    assert f'CompanionVersion = "{COMPANION_VERSION}"' in source
     assert "AssetDatabase.IsAssetImportWorkerProcess()" in source
     assert "if (!OwnsDiscovery())" in source
     assert 'request.command != "connect" && request.command != "status"' in source

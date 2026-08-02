@@ -15,6 +15,12 @@ from .editor_bootstrap import bootstrap_diagnostics, ensure_project_connection
 from .editor_control import companion_package_path
 from .errors import ProjectError, ServiceError, UmcpError, UsageError
 from .locking import project_lock
+from .project_lease import (
+    acquire_project_lease,
+    inspect_project_lease,
+    release_project_lease,
+    require_project_lease,
+)
 from .project_resolver import (
     ProjectResolver,
     canonical_project_root,
@@ -296,6 +302,110 @@ def _resolved_payload(resolved: Any) -> dict[str, Any]:
     }
 
 
+def _lease_status_payload(settings: Settings, canonical: str) -> dict[str, Any]:
+    lease = inspect_project_lease(settings.paths, canonical)
+    return lease.public_payload() if lease is not None else {"active": False}
+
+
+@cli.group("lease")
+def lease_group() -> None:
+    """Coordinate one live-operation owner for a complete project task."""
+
+
+@lease_group.command("acquire")
+@click.option("--project", type=click.Path(path_type=Path), default=Path.cwd)
+@click.option("--owner", required=True, help="Short task owner label for diagnostics.")
+@click.option(
+    "--wait", type=float, default=None, help="Maximum lease queue wait in seconds."
+)
+@click.option("--ttl", type=float, default=None, help="Lease lifetime in seconds.")
+@click.pass_obj
+def lease_acquire(
+    app: AppContext,
+    project: Path,
+    owner: str,
+    wait: float | None,
+    ttl: float | None,
+) -> None:
+    def action() -> ActionResult:
+        settings = app.settings()
+        root = _project_root(project)
+        canonical = canonical_project_root(root)
+        lease = acquire_project_lease(
+            settings.paths,
+            canonical,
+            owner,
+            ttl if ttl is not None else settings.project_lease_ttl_seconds,
+            wait if wait is not None else settings.project_lock_timeout_seconds,
+        )
+        return ActionResult("Project task lease acquired.", lease.private_payload())
+
+    _execute(app, action)
+
+
+@lease_group.command("status")
+@click.option("--project", type=click.Path(path_type=Path), default=Path.cwd)
+@click.pass_obj
+def lease_status(app: AppContext, project: Path) -> None:
+    def action() -> ActionResult:
+        settings = app.settings()
+        root = _project_root(project)
+        canonical = canonical_project_root(root)
+        return ActionResult(
+            "Project task lease inspected.",
+            _lease_status_payload(settings, canonical),
+        )
+
+    _execute(app, action)
+
+
+@lease_group.command("renew")
+@click.option("--project", type=click.Path(path_type=Path), default=Path.cwd)
+@click.option(
+    "--lease-id", envvar="UMCP_PROJECT_LEASE_ID", required=True, hide_input=True
+)
+@click.option("--ttl", type=float, default=None, help="Lease lifetime in seconds.")
+@click.pass_obj
+def lease_renew(
+    app: AppContext, project: Path, lease_id: str, ttl: float | None
+) -> None:
+    def action() -> ActionResult:
+        settings = app.settings()
+        root = _project_root(project)
+        canonical = canonical_project_root(root)
+        lease = require_project_lease(
+            settings.paths,
+            canonical,
+            lease_id,
+            ttl if ttl is not None else settings.project_lease_ttl_seconds,
+        )
+        if lease is None:
+            raise UsageError("No active project task lease exists to renew.")
+        return ActionResult("Project task lease renewed.", lease.private_payload())
+
+    _execute(app, action)
+
+
+@lease_group.command("release")
+@click.option("--project", type=click.Path(path_type=Path), default=Path.cwd)
+@click.option(
+    "--lease-id", envvar="UMCP_PROJECT_LEASE_ID", required=True, hide_input=True
+)
+@click.pass_obj
+def lease_release(app: AppContext, project: Path, lease_id: str) -> None:
+    def action() -> ActionResult:
+        settings = app.settings()
+        root = _project_root(project)
+        canonical = canonical_project_root(root)
+        released = release_project_lease(settings.paths, canonical, lease_id)
+        return ActionResult(
+            "Project task lease released." if released else "No active lease remained.",
+            {"released": released},
+        )
+
+    _execute(app, action)
+
+
 @cli.command("connect")
 @click.option("--project", type=click.Path(path_type=Path), default=Path.cwd)
 @click.option(
@@ -306,19 +416,30 @@ def _resolved_payload(resolved: Any) -> dict[str, Any]:
     is_flag=True,
     help="Normally close and silently relaunch the target Unity Editor.",
 )
+@click.option(
+    "--lease-id", envvar="UMCP_PROJECT_LEASE_ID", default=None, hide_input=True
+)
 @click.pass_obj
 def connect_command(
     app: AppContext,
     project: Path,
     timeout: float | None,
     restart_editor: bool,
+    lease_id: str | None,
 ) -> None:
     def action() -> ActionResult:
         settings = app.settings()
         root = _project_root(project)
         compatibility = require_compatible(root, settings.approved_plugin_refs)
-        ServiceManager(settings).ensure()
         canonical = canonical_project_root(root)
+        require_project_lease(
+            settings.paths,
+            canonical,
+            lease_id,
+            settings.project_lease_ttl_seconds,
+            renew=False,
+        )
+        ServiceManager(settings).ensure()
         budget = timeout if timeout is not None else settings.bootstrap_timeout_seconds
         if budget <= 0:
             raise UsageError("Connection timeout must be greater than zero.")
@@ -329,6 +450,12 @@ def connect_command(
             "connect",
             min(settings.project_lock_timeout_seconds, budget),
         ):
+            require_project_lease(
+                settings.paths,
+                canonical,
+                lease_id,
+                settings.project_lease_ttl_seconds,
+            )
             remaining = budget - (time.monotonic() - started)
             if remaining <= 0:
                 raise ProjectError(
@@ -366,6 +493,9 @@ def status_command(app: AppContext, project: Path) -> None:
             "service": service_value,
             "compatibility": compatibility.__dict__,
             "project": None,
+            "task_lease": _lease_status_payload(
+                settings, canonical_project_root(root)
+            ),
         }
         project_hash = None
         if service_value["healthy"]:
@@ -407,6 +537,9 @@ def _load_params(value: str) -> dict[str, Any]:
 @click.option(
     "--timeout", type=float, default=None, help="Unity command timeout in seconds."
 )
+@click.option(
+    "--lease-id", envvar="UMCP_PROJECT_LEASE_ID", default=None, hide_input=True
+)
 @click.pass_obj
 def call_command(
     app: AppContext,
@@ -414,6 +547,7 @@ def call_command(
     params: str,
     project: Path,
     timeout: float | None,
+    lease_id: str | None,
 ) -> None:
     def action() -> ActionResult:
         parsed_params = _load_params(params)
@@ -422,14 +556,27 @@ def call_command(
         settings = app.settings()
         root = _project_root(project)
         require_compatible(root, settings.approved_plugin_refs)
-        ServiceManager(settings).ensure()
         canonical = canonical_project_root(root)
+        require_project_lease(
+            settings.paths,
+            canonical,
+            lease_id,
+            settings.project_lease_ttl_seconds,
+            renew=False,
+        )
+        ServiceManager(settings).ensure()
         with project_lock(
             settings.paths,
             canonical,
             command_type,
             settings.project_lock_timeout_seconds,
         ):
+            require_project_lease(
+                settings.paths,
+                canonical,
+                lease_id,
+                settings.project_lease_ttl_seconds,
+            )
             client = RestClient(settings.endpoint, settings.command_timeout_seconds)
             resolved, _ = ensure_project_connection(
                 root, settings, client, settings.bootstrap_timeout_seconds
@@ -450,23 +597,44 @@ def call_command(
     context_settings={"ignore_unknown_options": True, "allow_extra_args": True},
 )
 @click.option("--project", type=click.Path(path_type=Path), default=Path.cwd)
+@click.option(
+    "--lease-id", envvar="UMCP_PROJECT_LEASE_ID", default=None, hide_input=True
+)
 @click.argument("upstream_args", nargs=-1, type=click.UNPROCESSED)
 @click.pass_obj
-def run_command(app: AppContext, project: Path, upstream_args: tuple[str, ...]) -> None:
+def run_command(
+    app: AppContext,
+    project: Path,
+    lease_id: str | None,
+    upstream_args: tuple[str, ...],
+) -> None:
     def action() -> ActionResult:
         if not upstream_args:
             raise UsageError("Pass an upstream unity-mcp command after '--'.")
         settings = app.settings()
         root = _project_root(project)
         require_compatible(root, settings.approved_plugin_refs)
-        ServiceManager(settings).ensure()
         canonical = canonical_project_root(root)
+        require_project_lease(
+            settings.paths,
+            canonical,
+            lease_id,
+            settings.project_lease_ttl_seconds,
+            renew=False,
+        )
+        ServiceManager(settings).ensure()
         with project_lock(
             settings.paths,
             canonical,
             "upstream-cli",
             settings.project_lock_timeout_seconds,
         ):
+            require_project_lease(
+                settings.paths,
+                canonical,
+                lease_id,
+                settings.project_lease_ttl_seconds,
+            )
             client = RestClient(settings.endpoint, settings.command_timeout_seconds)
             resolved, _ = ensure_project_connection(
                 root, settings, client, settings.bootstrap_timeout_seconds
@@ -495,6 +663,9 @@ def doctor_command(app: AppContext, project: Path) -> None:
                 root, settings.endpoint, settings.state_dir
             ),
             "project": None,
+            "task_lease": _lease_status_payload(
+                settings, canonical_project_root(root)
+            ),
             "diagnosis": service_value["status"],
         }
         project_hash = None

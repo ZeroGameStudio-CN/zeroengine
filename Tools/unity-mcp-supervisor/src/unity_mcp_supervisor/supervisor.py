@@ -17,6 +17,7 @@ from filelock import FileLock, Timeout
 from .editor_bootstrap import clear_editor_server_ownership, enforce_editor_prefs
 from .errors import EditorControlUnsupportedError, ForeignListenerError, ServiceError
 from .locking import lifecycle_gate, live_operation_owners, service_lock
+from .project_lease import live_project_lease_owners
 from .rest_client import EndpointKind, RestClient
 from .service_state import ServiceRecord, Settings, StateStore, process_alive
 from .upstream_cli import server_command, upstream_version
@@ -732,7 +733,10 @@ class ServiceManager:
         return False
 
     def _refuse_while_live_operations(self) -> None:
-        owners = live_operation_owners(self.paths)
+        owners = [
+            *live_operation_owners(self.paths),
+            *live_project_lease_owners(self.paths),
+        ]
         if owners:
             raise ServiceError(
                 "Lifecycle mutation refused while live operations are active.",
