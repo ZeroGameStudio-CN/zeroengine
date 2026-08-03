@@ -260,7 +260,7 @@ def test_open_editor_uses_companion_hot_connect(
     monkeypatch.setattr(
         "unity_mcp_supervisor.editor_control.request_editor_connect",
         lambda _root, _settings, pid, _budget: EditorControlResult(
-            pid, "0.3.0", "10.1.0"
+            pid, "0.3.0", "10.1.2"
         ),
     )
     resolved, evidence = ensure_project_connection(

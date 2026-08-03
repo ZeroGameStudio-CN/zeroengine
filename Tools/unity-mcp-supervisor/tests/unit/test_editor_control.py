@@ -52,7 +52,7 @@ def _write_discovery(
         "session_id": session_id,
         "token": token,
         "companion_version": "0.3.0",
-        "upstream_version": "10.1.0",
+        "upstream_version": "10.1.2",
     }
     _atomic_write(
         settings.paths.editor_discovery / f"{project_hash}.json",
@@ -123,7 +123,7 @@ def test_connect_uses_exact_project_mailbox_and_validated_response(
             "code": "ok",
             "message": "connected",
             "companion_version": "0.3.0",
-            "upstream_version": "10.1.0",
+            "upstream_version": "10.1.2",
         }
         _atomic_write(
             settings.paths.editor_responses
@@ -137,7 +137,7 @@ def test_connect_uses_exact_project_mailbox_and_validated_response(
     result = request_editor_connect(project, settings, os.getpid(), 3.0)
     worker.join(timeout=3)
 
-    assert result == EditorControlResult(os.getpid(), "0.3.0", "10.1.0")
+    assert result == EditorControlResult(os.getpid(), "0.3.0", "10.1.2")
     assert captured["project_hash"] == unity_project_hash_candidate(project)
     assert captured["project_root"] == str(project.resolve())
     assert captured["endpoint"] == "http://127.0.0.1:18080"
@@ -203,7 +203,7 @@ def test_connect_retries_after_companion_domain_reload(tmp_path: Path) -> None:
             "code": "ok",
             "message": "connected after reload",
             "companion_version": "0.3.0",
-            "upstream_version": "10.1.0",
+            "upstream_version": "10.1.2",
         }
         _atomic_write(
             settings.paths.editor_responses

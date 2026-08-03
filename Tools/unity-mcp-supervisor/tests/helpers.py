@@ -15,7 +15,7 @@ def free_port() -> int:
         return int(sock.getsockname()[1])
 
 
-def create_unity_project(root: Path, plugin_ref: str = "v10.1.0") -> Path:
+def create_unity_project(root: Path, plugin_ref: str = "v10.1.2") -> Path:
     (root / "Assets").mkdir(parents=True)
     (root / "ProjectSettings").mkdir()
     (root / "ProjectSettings" / "ProjectVersion.txt").write_text(
@@ -53,7 +53,7 @@ def fake_http_server(
     *,
     foreign: bool = False,
     drop_counter: list[int] | None = None,
-    health_version: str = "10.1.0",
+    health_version: str = "10.1.2",
 ) -> Iterator[str]:
     instance_values = instances or []
 

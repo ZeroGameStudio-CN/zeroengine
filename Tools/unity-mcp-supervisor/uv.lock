@@ -813,7 +813,7 @@ wheels = [
 
 [[package]]
 name = "mcpforunityserver"
-version = "10.1.0"
+version = "10.1.2"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "click" },
@@ -825,9 +825,9 @@ dependencies = [
     { name = "tomli" },
     { name = "uvicorn" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/16/db/88d481a5a9ef627b0476bf9d69b607c324d21b097648625dd7b72007bdf5/mcpforunityserver-10.1.0.tar.gz", hash = "sha256:28a7f4bbae524dfb72219861fb3ce8fad7dcbd09b709c01a52127dea4f50a2cd", size = 328326, upload-time = "2026-07-13T21:16:05.126Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/36/87/20210b51ef98a935fd7f6c0010502bf79ad3c4d7df4735b4ef0324ae6963/mcpforunityserver-10.1.2.tar.gz", hash = "sha256:fa7b02cc746e8fa8858722a487bd167b8236bbf252b62b7fc67a0691750db62b", size = 336710, upload-time = "2026-08-02T20:48:36.84Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/3e/f5/31b3ed6a114dac89f26ef0fa078e3fe0df1707febc23ba1920a726af767b/mcpforunityserver-10.1.0-py3-none-any.whl", hash = "sha256:3d64a8fd2542133b619bfa1edcf9ffa80796c0618a88814569429635d72459d7", size = 315993, upload-time = "2026-07-13T21:16:03.534Z" },
+    { url = "https://files.pythonhosted.org/packages/9e/17/e665ebc4e2673b8d4fe50fa30975a8a7ed586578a6047719f432c9464441/mcpforunityserver-10.1.2-py3-none-any.whl", hash = "sha256:ad14db098805c0dbd05d89688eb373024597960a9744bd83b3a4619d04508bf7", size = 317960, upload-time = "2026-08-02T20:48:35.354Z" },
 ]
 
 [[package]]
@@ -1741,7 +1741,7 @@ wheels = [
 
 [[package]]
 name = "unity-mcp-supervisor"
-version = "0.4.0"
+version = "0.4.1"
 source = { editable = "." }
 dependencies = [
     { name = "click" },
@@ -1768,7 +1768,7 @@ requires-dist = [
     { name = "filelock", specifier = ">=3.16,<4" },
     { name = "httpx", specifier = ">=0.27,<1" },
     { name = "mcp", specifier = "==1.25.0" },
-    { name = "mcpforunityserver", specifier = "==10.1.0" },
+    { name = "mcpforunityserver", specifier = "==10.1.2" },
     { name = "psutil", specifier = ">=6,<8" },
     { name = "tomli", marker = "python_full_version < '3.11'", specifier = ">=2,<3" },
 ]

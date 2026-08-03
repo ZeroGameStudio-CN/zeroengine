@@ -57,7 +57,7 @@ def test_healthy_ensure_fast_path_takes_no_lifecycle_lock_or_network_probe(
         server_pid=456,
         server_token="server",
         endpoint=settings.endpoint,
-        server_version="10.1.0",
+        server_version="10.1.2",
     )
     monkeypatch.setattr(manager.store, "read_service", lambda: state)
     monkeypatch.setattr(manager, "_daemon_active", lambda _state: True)
@@ -199,7 +199,7 @@ def test_previous_owned_orphan_is_adopted_without_restart(
         server_token=token,
         server_created_at=123.5,
         endpoint=owned.settings.endpoint,
-        server_version="10.1.0",
+        server_version="10.1.2",
     )
     owned.paths.server_pid.write_text("456\n", encoding="ascii")
 
@@ -261,7 +261,7 @@ def test_orphan_adoption_rejects_incomplete_ownership_proof(
         server_token="invalid" if broken_proof == "token" else token,
         server_created_at=100.0,
         endpoint=owned.settings.endpoint,
-        server_version="0.0.0" if broken_proof == "version" else "10.1.0",
+        server_version="0.0.0" if broken_proof == "version" else "10.1.2",
     )
     owned.paths.server_pid.write_text("456\n", encoding="ascii")
 

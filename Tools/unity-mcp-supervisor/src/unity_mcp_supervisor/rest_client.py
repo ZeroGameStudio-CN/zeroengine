@@ -10,7 +10,7 @@ import httpx
 
 from .errors import OutcomeUnknownError, ProjectError, ServiceError, UnityCommandError
 
-PINNED_SERVER_VERSION = "10.1.0"
+PINNED_SERVER_VERSION = "10.1.2"
 
 
 def _request(method: str, url: str, **kwargs: Any) -> httpx.Response:

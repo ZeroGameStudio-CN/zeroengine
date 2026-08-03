@@ -61,6 +61,21 @@ versions remain compatible. A CLI-only fix does not require project manifest
 or lock-file churn; update the project pin only when companion code or its
 compatibility contract changes.
 
+## Upstream version maintenance
+
+Track stable Unity MCP releases, but do not promote them automatically. For
+each candidate, pin the Unity package tag and `mcpforunityserver` to the same
+version, add only the reviewed tag and commit to the tested matrix, and bump the
+Supervisor patch version. Reject beta/prerelease and unknown refs by default.
+
+Before promotion, review the upstream compare, regenerate `uv.lock`, run the
+complete Supervisor pytest and Ruff gates, then run one real-project canary
+through `umcp`: doctor, connect, project-info probe, package refresh/compile,
+and final Console inspection. Keep the previous tested stable ref in the matrix
+and its install command available for one-release rollback. Update consumer
+`Packages/manifest.json` and `Packages/packages-lock.json` together only after
+the canary passes.
+
 Open the Unity project normally, let the package compile, then run:
 
 ```powershell

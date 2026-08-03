@@ -11,11 +11,15 @@ from .errors import IncompatibleError
 PACKAGE_ID = "com.coplaydev.unity-mcp"
 OFFICIAL_BASELINE_COMMIT = "c14de1e6dc01ab42d2bb358730cff954bce0ce6b"
 INTERNAL_REVIEWED_COMMIT = "c2120b651176cdddfe80b3e5853b9c3738c1720e"
+OFFICIAL_V1012_COMMIT = "4ce7dd3cc54e37e2ed6dc59cb5a047f3dccb3f50"
 SUPPORTED_REFS = {
     "10.1.0",
     "v10.1.0",
+    "10.1.2",
+    "v10.1.2",
     OFFICIAL_BASELINE_COMMIT,
     INTERNAL_REVIEWED_COMMIT,
+    OFFICIAL_V1012_COMMIT,
 }
 
 

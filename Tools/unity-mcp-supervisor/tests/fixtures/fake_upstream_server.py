@@ -40,7 +40,7 @@ def main() -> None:
                 if health_fail_file and Path(health_fail_file).exists():
                     self.send_json(503, {"status": "unhealthy"})
                 else:
-                    self.send_json(200, {"status": "healthy", "version": "10.1.0"})
+                    self.send_json(200, {"status": "healthy", "version": "10.1.2"})
             elif self.path == "/api/instances":
                 public = [
                     {key: value for key, value in item.items() if key != "project_root"}
