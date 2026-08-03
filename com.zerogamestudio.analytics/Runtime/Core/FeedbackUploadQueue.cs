@@ -23,6 +23,19 @@ namespace ZGS.Analytics
         private static List<PendingUpload> _pendingUploads;
         private static bool _isProcessing;
         private static bool _backgroundRunning;
+        private static int _queueMutationVersion;
+        private static Func<string, bool> _persistQueueOverride;
+        private static Action<string> _deleteFileOverride;
+        private static Func<PendingUpload, Action<bool>, IEnumerator> _tryUploadOverride;
+        private static string _queueKeyOverride;
+
+        private static string QueueStorageKey =>
+            string.IsNullOrEmpty(_queueKeyOverride) ? QueueKey : _queueKeyOverride;
+
+        /// <summary>
+        /// 队列项收到 HTTP 成功响应，并已从持久队列移除后触发。
+        /// </summary>
+        public static event Action<string> QueuedUploadSucceeded;
 
         /// <summary>
         /// 待上传项
@@ -67,6 +80,7 @@ namespace ZGS.Analytics
         {
             _isProcessing = false;
             _backgroundRunning = false;
+            _queueMutationVersion = 0;
             LoadQueue();
             CleanupExpired();
         }
@@ -84,22 +98,30 @@ namespace ZGS.Analytics
         }
 
         /// <summary>
-        /// 将失败的上传加入队列
+        /// 将上传可靠写入持久队列。
         /// </summary>
-        public static void Enqueue(string zipPath, string version, string userName)
+        public static bool TryEnqueue(string zipPath, string version, string userName)
         {
             if (_pendingUploads == null)
                 LoadQueue();
 
-            // 检查是否已存在
-            if (_pendingUploads.Exists(p => p.zipPath == zipPath))
-                return;
-
-            // 限制队列大小
-            while (_pendingUploads.Count >= MaxPendingCount)
+            if (string.IsNullOrWhiteSpace(zipPath) || !File.Exists(zipPath))
             {
-                var oldest = _pendingUploads[0];
-                RemoveAndDeleteFile(oldest);
+                AnalyticsLog.LogWarning($"[FeedbackQueue] 入队失败，文件不存在: {zipPath}");
+                return false;
+            }
+
+            if (_pendingUploads.Exists(p => p.zipPath == zipPath))
+                return true;
+
+            var candidate = new List<PendingUpload>(_pendingUploads);
+            var evicted = new List<PendingUpload>();
+
+            while (candidate.Count >= MaxPendingCount)
+            {
+                var oldest = candidate[0];
+                candidate.RemoveAt(0);
+                evicted.Add(oldest);
             }
 
             var pending = new PendingUpload
@@ -111,11 +133,30 @@ namespace ZGS.Analytics
                 retryCount = 0
             };
 
-            _pendingUploads.Add(pending);
-            SaveQueue();
+            candidate.Add(pending);
+            if (!TryPersistQueue(candidate))
+            {
+                AnalyticsLog.LogWarning($"[FeedbackQueue] 入队持久化失败: {Path.GetFileName(zipPath)}");
+                return false;
+            }
+
+            _pendingUploads = candidate;
+            _queueMutationVersion++;
+
+            foreach (var item in evicted)
+                DeleteFileBestEffort(item.zipPath);
 
             AnalyticsLog.Log($"[FeedbackQueue] 已加入队列: {Path.GetFileName(zipPath)}");
             StartBackgroundProcessing();
+            return true;
+        }
+
+        /// <summary>
+        /// 将失败的上传加入队列。保留旧 API 以兼容现有调用方。
+        /// </summary>
+        public static void Enqueue(string zipPath, string version, string userName)
+        {
+            TryEnqueue(zipPath, version, userName);
         }
 
         /// <summary>
@@ -128,39 +169,53 @@ namespace ZGS.Analytics
             if (_pendingUploads.Count == 0) yield break;
 
             _isProcessing = true;
-            AnalyticsLog.Log($"[FeedbackQueue] 开始处理 {_pendingUploads.Count} 个待上传文件");
 
-            // 复制列表，避免迭代时修改
-            var toProcess = new List<PendingUpload>(_pendingUploads);
-
-            foreach (var pending in toProcess)
+            try
             {
-                // 检查文件是否存在
-                if (!File.Exists(pending.zipPath))
-                {
-                    AnalyticsLog.LogWarning($"[FeedbackQueue] 文件不存在，移除: {pending.zipPath}");
-                    _pendingUploads.Remove(pending);
-                    continue;
-                }
+                AnalyticsLog.Log($"[FeedbackQueue] 开始处理 {_pendingUploads.Count} 个待上传文件");
+                var processedPaths = new HashSet<string>(StringComparer.Ordinal);
 
-                // 尝试上传
-                bool success = false;
-                yield return TryUpload(pending, result => success = result);
+                while (true)
+                {
+                    PendingUpload pending = _pendingUploads.Find(item => !processedPaths.Contains(item.zipPath));
+                    if (pending == null)
+                        break;
 
-                if (success)
-                {
-                    RemoveAndDeleteFile(pending);
-                    AnalyticsLog.Log($"[FeedbackQueue] 上传成功: {Path.GetFileName(pending.zipPath)}");
-                }
-                else
-                {
-                    pending.retryCount++;
-                    AnalyticsLog.LogWarning($"[FeedbackQueue] 上传失败，重试次数: {pending.retryCount}");
+                    processedPaths.Add(pending.zipPath);
+
+                    if (!File.Exists(pending.zipPath))
+                    {
+                        AnalyticsLog.LogWarning($"[FeedbackQueue] 文件不存在，移除: {pending.zipPath}");
+                        TryRemovePersisted(pending);
+                        continue;
+                    }
+
+                    bool success = false;
+                    yield return TryUpload(pending, result => success = result);
+
+                    if (success)
+                    {
+                        if (!TryRemovePersisted(pending))
+                        {
+                            AnalyticsLog.LogWarning($"[FeedbackQueue] 上传成功但队列移除持久化失败: {Path.GetFileName(pending.zipPath)}");
+                            continue;
+                        }
+
+                        DeleteFileBestEffort(pending.zipPath);
+                        AnalyticsLog.Log($"[FeedbackQueue] 上传成功: {Path.GetFileName(pending.zipPath)}");
+                        NotifyQueuedUploadSucceeded(pending.zipPath);
+                    }
+                    else
+                    {
+                        int retryCount = TryIncrementRetryCount(pending);
+                        AnalyticsLog.LogWarning($"[FeedbackQueue] 上传失败，重试次数: {retryCount}");
+                    }
                 }
             }
-
-            SaveQueue();
-            _isProcessing = false;
+            finally
+            {
+                _isProcessing = false;
+            }
         }
 
         /// <summary>
@@ -259,6 +314,12 @@ namespace ZGS.Analytics
         /// </summary>
         private static IEnumerator TryUpload(PendingUpload pending, Action<bool> onComplete)
         {
+            if (_tryUploadOverride != null)
+            {
+                yield return _tryUploadOverride(pending, onComplete);
+                yield break;
+            }
+
             yield return DoUpload(pending.zipPath, pending.version, onComplete);
         }
 
@@ -295,9 +356,10 @@ namespace ZGS.Analytics
 
                     float delay = GetBackgroundRetryDelaySeconds(retryDelayIndex);
                     retryDelayIndex = Math.Min(retryDelayIndex + 1, BackgroundRetryDelays.Length - 1);
+                    int observedMutationVersion = _queueMutationVersion;
 
                     AnalyticsLog.Log($"[FeedbackQueue] 后台补传仍有 {_pendingUploads.Count} 个待上传文件，{delay:0} 秒后重试");
-                    yield return new WaitForSecondsRealtime(delay);
+                    yield return WaitForRetryOrQueueMutation(delay, observedMutationVersion);
                 }
             }
             finally
@@ -312,6 +374,17 @@ namespace ZGS.Analytics
             return BackgroundRetryDelays[index];
         }
 
+        private static IEnumerator WaitForRetryOrQueueMutation(float delaySeconds, int observedMutationVersion)
+        {
+            float remaining = delaySeconds;
+            while (remaining > 0f && observedMutationVersion == _queueMutationVersion)
+            {
+                float slice = Math.Min(1f, remaining);
+                yield return new WaitForSecondsRealtime(slice);
+                remaining -= slice;
+            }
+        }
+
         /// <summary>
         /// 清理过期文件
         /// </summary>
@@ -323,31 +396,109 @@ namespace ZGS.Analytics
             long maxAge = MaxPendingAgeDays * 24 * 60 * 60;
 
             var expired = _pendingUploads.FindAll(p => now - p.createdAt > maxAge);
+            if (expired.Count == 0)
+                return;
+
+            var candidate = _pendingUploads.FindAll(p => !expired.Contains(p));
+            if (!TryPersistQueue(candidate))
+            {
+                AnalyticsLog.LogWarning("[FeedbackQueue] 过期队列持久化失败，保留原队列");
+                return;
+            }
+
+            _pendingUploads = candidate;
             foreach (var item in expired)
             {
                 AnalyticsLog.Log($"[FeedbackQueue] 清理过期文件: {Path.GetFileName(item.zipPath)}");
-                RemoveAndDeleteFile(item);
+                DeleteFileBestEffort(item.zipPath);
             }
-
-            if (expired.Count > 0)
-                SaveQueue();
         }
 
-        /// <summary>
-        /// 从队列移除并删除文件
-        /// </summary>
-        private static void RemoveAndDeleteFile(PendingUpload item)
+        private static bool TryRemovePersisted(PendingUpload item)
         {
-            _pendingUploads.Remove(item);
+            var candidate = new List<PendingUpload>(_pendingUploads);
+            int index = candidate.FindIndex(p => p.zipPath == item.zipPath);
+            if (index < 0)
+                return false;
 
+            candidate.RemoveAt(index);
+            if (!TryPersistQueue(candidate))
+                return false;
+
+            _pendingUploads = candidate;
+            return true;
+        }
+
+        private static int TryIncrementRetryCount(PendingUpload item)
+        {
+            var candidate = ClonePendingUploads(_pendingUploads);
+            PendingUpload candidateItem = candidate.Find(p => p.zipPath == item.zipPath);
+            if (candidateItem == null)
+                return item.retryCount;
+
+            candidateItem.retryCount++;
+            if (TryPersistQueue(candidate))
+            {
+                _pendingUploads = candidate;
+                return candidateItem.retryCount;
+            }
+
+            return item.retryCount;
+        }
+
+        private static List<PendingUpload> ClonePendingUploads(List<PendingUpload> source)
+        {
+            var clone = new List<PendingUpload>(source.Count);
+            foreach (var item in source)
+            {
+                clone.Add(new PendingUpload
+                {
+                    zipPath = item.zipPath,
+                    version = item.version,
+                    userName = item.userName,
+                    createdAt = item.createdAt,
+                    retryCount = item.retryCount
+                });
+            }
+
+            return clone;
+        }
+
+        private static void DeleteFileBestEffort(string zipPath)
+        {
             try
             {
-                if (File.Exists(item.zipPath))
-                    File.Delete(item.zipPath);
+                if (_deleteFileOverride != null)
+                {
+                    _deleteFileOverride(zipPath);
+                    return;
+                }
+
+                if (File.Exists(zipPath))
+                    File.Delete(zipPath);
             }
             catch (Exception e)
             {
                 AnalyticsLog.LogWarning($"[FeedbackQueue] 删除文件失败: {e.Message}");
+            }
+        }
+
+        private static void NotifyQueuedUploadSucceeded(string zipPath)
+        {
+            Action<string> handlers = QueuedUploadSucceeded;
+            if (handlers == null)
+                return;
+
+            foreach (Action<string> handler in handlers.GetInvocationList())
+            {
+                try
+                {
+                    handler(zipPath);
+                }
+                catch (Exception e)
+                {
+                    AnalyticsLog.LogWarning($"[FeedbackQueue] 上传成功回调失败: {e.Message}");
+                }
             }
         }
 
@@ -358,7 +509,7 @@ namespace ZGS.Analytics
         {
             _pendingUploads = new List<PendingUpload>();
 
-            string json = PlayerPrefs.GetString(QueueKey, "");
+            string json = PlayerPrefs.GetString(QueueStorageKey, "");
             if (string.IsNullOrEmpty(json)) return;
 
             try
@@ -377,12 +528,61 @@ namespace ZGS.Analytics
         /// <summary>
         /// 保存队列到 PlayerPrefs
         /// </summary>
-        private static void SaveQueue()
+        private static bool TryPersistQueue(List<PendingUpload> items)
         {
-            var wrapper = new QueueWrapper { items = _pendingUploads };
-            string json = JsonUtility.ToJson(wrapper);
-            PlayerPrefs.SetString(QueueKey, json);
-            PlayerPrefs.Save();
+            string json;
+            try
+            {
+                var wrapper = new QueueWrapper { items = items };
+                json = JsonUtility.ToJson(wrapper);
+            }
+            catch (Exception e)
+            {
+                AnalyticsLog.LogWarning($"[FeedbackQueue] 序列化队列失败: {e.Message}");
+                return false;
+            }
+
+            if (_persistQueueOverride != null)
+            {
+                try
+                {
+                    return _persistQueueOverride(json);
+                }
+                catch (Exception e)
+                {
+                    AnalyticsLog.LogWarning($"[FeedbackQueue] 保存队列失败: {e.Message}");
+                    return false;
+                }
+            }
+
+            string storageKey = QueueStorageKey;
+            bool hadOriginal = PlayerPrefs.HasKey(storageKey);
+            string originalJson = PlayerPrefs.GetString(storageKey, string.Empty);
+
+            try
+            {
+                PlayerPrefs.SetString(storageKey, json);
+                PlayerPrefs.Save();
+                return true;
+            }
+            catch (Exception e)
+            {
+                try
+                {
+                    if (hadOriginal)
+                        PlayerPrefs.SetString(storageKey, originalJson);
+                    else
+                        PlayerPrefs.DeleteKey(storageKey);
+                    PlayerPrefs.Save();
+                }
+                catch
+                {
+                    // Keep the original persistence error as the actionable diagnostic.
+                }
+
+                AnalyticsLog.LogWarning($"[FeedbackQueue] 保存队列失败: {e.Message}");
+                return false;
+            }
         }
 
         /// <summary>
@@ -415,8 +615,9 @@ namespace ZGS.Analytics
             }
 
             _pendingUploads.Clear();
-            PlayerPrefs.DeleteKey(QueueKey);
+            PlayerPrefs.DeleteKey(QueueStorageKey);
             PlayerPrefs.Save();
+            _queueMutationVersion++;
             AnalyticsLog.Log("[FeedbackQueue] 队列已清空");
         }
     }

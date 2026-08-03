@@ -2,7 +2,7 @@
 
 ZeroGameStudio 游戏分析 SDK，支持自建 ClickHouse 数据平台。
 
-**版本**: 1.6.0
+**版本**: 1.6.2
 **Unity**: 2021.3+
 
 ## 特性
@@ -123,6 +123,18 @@ yield return AnalyticsService.ReportBugWithAttachments(new AttachmentUploadReque
     FilesToInclude = new[] { screenshotPath },
     DirectoriesToInclude = new[] { Application.persistentDataPath }
 });
+
+// 自定义反馈 UI 可先可靠入队，再让玩家离开面板。
+if (FeedbackUploadQueue.TryEnqueue(zipPath, version, userName))
+{
+    // 这里只表示本地持久化成功，不表示服务器已经收到。
+}
+
+// 仅在队列项收到 HTTP 成功响应且持久化移除后触发。
+FeedbackUploadQueue.QueuedUploadSucceeded += uploadedZipPath =>
+{
+    // 可为本进程提交的反馈显示一次成功提示。
+};
 ```
 
 ## 编辑器工具
@@ -181,6 +193,10 @@ Streamlit Dashboard (可视化)
    - 格式：`- [模块] 修改内容描述`。
 
 ## 更新日志
+
+### v1.6.2
+- FeedbackUploadQueue: 新增可靠 `TryEnqueue`、队列成功事件和退避期间新反馈快速唤醒
+- FeedbackUploadQueue: 成功项先持久化移除再删除 ZIP，事件订阅异常不会中断队列
 
 ### v1.6.1
 - API: 新增 `AnalyticsService.Flush()` 与可选的 `IAnalyticsFlushProvider`，允许按需启动队列上传
