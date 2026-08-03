@@ -116,10 +116,11 @@ try {
 
 Acquire one lease before the first live Editor operation and keep it through
 refresh, compilation, Domain Reload, tests, Prefab/Scene changes, and final
-Console inspection. A second task queues in `lease acquire` for up to 600
-seconds by default. The 30-minute lease TTL is refreshed by the owner’s live
-commands and recovers abandoned leases; long idle tasks can use `lease renew`.
-Always release in cleanup.
+Console inspection. Additional tasks enter a per-project FIFO queue in
+`lease acquire` for up to 600 seconds by default; expired or terminated waiters
+are skipped automatically. The 30-minute lease TTL is refreshed by the owner’s
+live commands and recovers abandoned leases; long idle tasks can use
+`lease renew`. Always release in cleanup.
 
 An active lease makes unclaimed or incorrectly claimed `connect`, `call`, and
 `run` fail with `project_busy` before dispatch. With no active task lease,

@@ -46,8 +46,9 @@ Remove-Item Env:UMCP_PROJECT_LEASE_ID -ErrorAction SilentlyContinue
 
 Pass the acquired `lease_id` to each live `connect`, `call`, or `run` with
 `--lease-id` (or `UMCP_PROJECT_LEASE_ID`), then release it when the task ends.
-Lease acquisition queues per project; different project roots remain
-independent. See [docs/setup.md](docs/setup.md) for the complete workflow.
+Lease acquisition uses a FIFO queue per project, skips expired or terminated
+waiters, and keeps different project roots independent. See
+[docs/setup.md](docs/setup.md) for the complete workflow.
 
 See [docs/setup.md](docs/setup.md) for bootstrap safety and operational
 boundaries.

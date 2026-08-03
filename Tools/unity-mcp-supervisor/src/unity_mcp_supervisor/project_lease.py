@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import math
+import os
 import time
 import uuid
 from dataclasses import asdict, dataclass
@@ -11,10 +12,10 @@ from filelock import FileLock, Timeout
 
 from .errors import ProjectBusyError, UsageError
 from .locking import project_lock, project_lock_key
-from .service_state import StatePaths, _atomic_write, _unlink_with_retry
+from .service_state import StatePaths, _atomic_write, _unlink_with_retry, process_alive
 
 LEASE_SCHEMA_VERSION = 1
-POLL_INTERVAL_SECONDS = 0.1
+POLL_INTERVAL_SECONDS = 0.05
 
 
 @dataclass(frozen=True)
@@ -61,6 +62,39 @@ class ProjectLease:
         return {**self.public_payload(), "lease_id": self.lease_id}
 
 
+@dataclass(frozen=True)
+class ProjectLeaseWaiter:
+    project_root: str
+    waiter_id: str
+    owner: str
+    pid: int
+    queue_order: int
+    enqueued_at: float
+    expires_at: float
+
+    @classmethod
+    def from_dict(cls, value: dict) -> ProjectLeaseWaiter:
+        waiter = cls(
+            project_root=str(value["project_root"]),
+            waiter_id=str(value["waiter_id"]),
+            owner=str(value["owner"]),
+            pid=int(value["pid"]),
+            queue_order=int(value["queue_order"]),
+            enqueued_at=float(value["enqueued_at"]),
+            expires_at=float(value["expires_at"]),
+        )
+        if (
+            not waiter.project_root
+            or not waiter.waiter_id
+            or not waiter.owner
+            or waiter.pid <= 0
+            or waiter.queue_order <= 0
+            or waiter.expires_at <= waiter.enqueued_at
+        ):
+            raise ValueError("invalid project lease waiter record")
+        return waiter
+
+
 def _validate_duration(value: float, label: str, *, allow_zero: bool = False) -> None:
     minimum = 0 if allow_zero else 0.0
     if (
@@ -78,6 +112,72 @@ def _lease_files(paths: StatePaths, canonical_project_root: str) -> tuple[Path, 
         paths.project_leases / f"{key}.json",
         paths.project_leases / f"{key}.lock",
     )
+
+
+def _queue_dir(paths: StatePaths, canonical_project_root: str) -> Path:
+    key = project_lock_key(canonical_project_root)
+    return paths.project_leases / "queues" / key
+
+
+def _waiter_file(
+    paths: StatePaths,
+    canonical_project_root: str,
+    waiter: ProjectLeaseWaiter,
+) -> Path:
+    return _queue_dir(paths, canonical_project_root) / (
+        f"{waiter.queue_order:020d}-{waiter.waiter_id}.json"
+    )
+
+
+def _read_waiter_ticket(ticket_path: Path) -> ProjectLeaseWaiter | None:
+    deadline = time.monotonic() + 1.0
+    while True:
+        try:
+            return ProjectLeaseWaiter.from_dict(
+                json.loads(ticket_path.read_text(encoding="utf-8"))
+            )
+        except FileNotFoundError:
+            return None
+        except PermissionError:
+            if os.name != "nt" or time.monotonic() >= deadline:
+                raise
+            time.sleep(0.01)
+
+
+def _read_waiters(
+    paths: StatePaths,
+    canonical_project_root: str,
+    *,
+    now: float,
+) -> list[ProjectLeaseWaiter]:
+    active: list[ProjectLeaseWaiter] = []
+    for ticket_path in sorted(_queue_dir(paths, canonical_project_root).glob("*.json")):
+        try:
+            waiter = _read_waiter_ticket(ticket_path)
+            if waiter is None:
+                continue
+            if (
+                waiter.project_root != canonical_project_root
+                or ticket_path
+                != _waiter_file(paths, canonical_project_root, waiter)
+            ):
+                raise ValueError("project lease waiter mismatch")
+        except FileNotFoundError:
+            continue
+        except (KeyError, OSError, TypeError, ValueError) as exc:
+            raise ProjectBusyError(
+                "Project lease queue is invalid; refusing to bypass it.",
+                details={
+                    "project_root": canonical_project_root,
+                    "queue_record": str(ticket_path),
+                    "reason": "invalid-queue",
+                },
+            ) from exc
+        if waiter.expires_at <= now or not process_alive(waiter.pid):
+            _unlink_with_retry(ticket_path)
+            continue
+        active.append(waiter)
+    return active
 
 
 def _read_active_unlocked(
@@ -138,10 +238,42 @@ def inspect_project_lease(
         lock.release()
 
 
+def inspect_project_lease_queue(
+    paths: StatePaths, canonical_project_root: str
+) -> list[ProjectLeaseWaiter]:
+    paths.ensure()
+    _, lock_path = _lease_files(paths, canonical_project_root)
+    lock = _guard(lock_path)
+    try:
+        return _read_waiters(
+            paths, canonical_project_root, now=time.time()
+        )
+    finally:
+        lock.release()
+
+
 def _conflict(lease: ProjectLease) -> ProjectBusyError:
     return ProjectBusyError(
         "Project task lease is owned by another task.",
         details=lease.public_payload(),
+    )
+
+
+def _queue_conflict(
+    waiters: list[ProjectLeaseWaiter], waiter_id: str | None = None
+) -> ProjectBusyError:
+    details = {
+        "owner": waiters[0].owner,
+        "queue_depth": len(waiters),
+        "reason": "lease-queue",
+    }
+    if waiter_id is not None:
+        for index, waiter in enumerate(waiters):
+            if waiter.waiter_id == waiter_id:
+                details["queue_position"] = index + 1
+                break
+    return ProjectBusyError(
+        "Project task lease is queued behind another task.", details=details
     )
 
 
@@ -158,60 +290,112 @@ def acquire_project_lease(
     _validate_duration(ttl_seconds, "Lease TTL")
     _validate_duration(wait_seconds, "Lease wait", allow_zero=True)
     deadline = time.monotonic() + wait_seconds
+    waiter: ProjectLeaseWaiter | None = None
+    ticket_path: Path | None = None
+    if wait_seconds > 0:
+        now = time.time()
+        waiter = ProjectLeaseWaiter(
+            project_root=canonical_project_root,
+            waiter_id=uuid.uuid4().hex,
+            owner=owner,
+            pid=os.getpid(),
+            queue_order=time.monotonic_ns(),
+            enqueued_at=now,
+            expires_at=now + wait_seconds,
+        )
+        ticket_path = _waiter_file(paths, canonical_project_root, waiter)
+        _atomic_write(
+            ticket_path, json.dumps(asdict(waiter), sort_keys=True) + "\n"
+        )
+
     last_conflict: ProjectBusyError | None = None
-
-    while True:
-        current = inspect_project_lease(paths, canonical_project_root)
-        if current is not None:
-            last_conflict = _conflict(current)
-        else:
-            remaining = max(0.0, deadline - time.monotonic())
-            lock_timeout = min(0.2, remaining) if wait_seconds > 0 else 0
-            try:
-                with project_lock(
-                    paths,
-                    canonical_project_root,
-                    "lease-acquire",
-                    lock_timeout,
-                ):
-                    metadata_path, lock_path = _lease_files(
-                        paths, canonical_project_root
-                    )
-                    lock = _guard(lock_path)
-                    try:
-                        current = _read_active_unlocked(
-                            metadata_path,
-                            canonical_project_root,
-                            now=time.time(),
-                        )
-                        if current is None:
-                            now = time.time()
-                            lease = ProjectLease(
-                                schema_version=LEASE_SCHEMA_VERSION,
-                                project_root=canonical_project_root,
-                                lease_id=uuid.uuid4().hex,
-                                owner=owner,
-                                acquired_at=now,
-                                renewed_at=now,
-                                expires_at=now + ttl_seconds,
-                            )
-                            _atomic_write(
-                                metadata_path,
-                                json.dumps(asdict(lease), sort_keys=True) + "\n",
-                            )
-                            return lease
-                        last_conflict = _conflict(current)
-                    finally:
-                        lock.release()
-            except ProjectBusyError as exc:
-                last_conflict = exc
-
-        remaining = deadline - time.monotonic()
-        if remaining <= 0:
-            raise last_conflict or ProjectBusyError(
-                "Project task lease could not be acquired."
+    try:
+        while True:
+            current = inspect_project_lease(paths, canonical_project_root)
+            waiters = inspect_project_lease_queue(
+                paths, canonical_project_root
             )
-        time.sleep(min(POLL_INTERVAL_SECONDS, remaining))
+            if current is not None:
+                last_conflict = _conflict(current)
+            elif waiters and (
+                waiter is None or waiters[0].waiter_id != waiter.waiter_id
+            ):
+                last_conflict = _queue_conflict(
+                    waiters, waiter.waiter_id if waiter else None
+                )
+            else:
+                remaining = max(0.0, deadline - time.monotonic())
+                lock_timeout = min(0.2, remaining) if wait_seconds > 0 else 0
+                try:
+                    with project_lock(
+                        paths,
+                        canonical_project_root,
+                        "lease-acquire",
+                        lock_timeout,
+                    ):
+                        metadata_path, lock_path = _lease_files(
+                            paths, canonical_project_root
+                        )
+                        lock = _guard(lock_path)
+                        try:
+                            current = _read_active_unlocked(
+                                metadata_path,
+                                canonical_project_root,
+                                now=time.time(),
+                            )
+                            waiters = _read_waiters(
+                                paths,
+                                canonical_project_root,
+                                now=time.time(),
+                            )
+                            if current is not None:
+                                last_conflict = _conflict(current)
+                            elif waiters and (
+                                waiter is None
+                                or waiters[0].waiter_id != waiter.waiter_id
+                            ):
+                                last_conflict = _queue_conflict(
+                                    waiters,
+                                    waiter.waiter_id if waiter else None,
+                                )
+                            elif waiter is not None and not waiters:
+                                last_conflict = ProjectBusyError(
+                                    "Project lease queue entry expired before acquisition.",
+                                    details={"reason": "queue-entry-expired"},
+                                )
+                            else:
+                                now = time.time()
+                                lease = ProjectLease(
+                                    schema_version=LEASE_SCHEMA_VERSION,
+                                    project_root=canonical_project_root,
+                                    lease_id=uuid.uuid4().hex,
+                                    owner=owner,
+                                    acquired_at=now,
+                                    renewed_at=now,
+                                    expires_at=now + ttl_seconds,
+                                )
+                                _atomic_write(
+                                    metadata_path,
+                                    json.dumps(asdict(lease), sort_keys=True)
+                                    + "\n",
+                                )
+                                return lease
+                        finally:
+                            lock.release()
+                except ProjectBusyError as exc:
+                    last_conflict = exc
+            remaining = deadline - time.monotonic()
+            if wait_seconds == 0 or remaining <= 0:
+                raise last_conflict or ProjectBusyError(
+                    "Project task lease could not be acquired."
+                )
+            time.sleep(min(POLL_INTERVAL_SECONDS, remaining))
+    finally:
+        if ticket_path is not None:
+            try:
+                _unlink_with_retry(ticket_path)
+            except OSError:
+                pass
 
 
 def require_project_lease(

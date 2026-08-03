@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import multiprocessing
 import time
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
@@ -10,11 +11,36 @@ from unity_mcp_supervisor.errors import ProjectBusyError, ServiceError
 from unity_mcp_supervisor.project_lease import (
     acquire_project_lease,
     inspect_project_lease,
+    inspect_project_lease_queue,
     release_project_lease,
     require_project_lease,
 )
 from unity_mcp_supervisor.service_state import Settings, StatePaths
 from unity_mcp_supervisor.supervisor import ServiceManager
+
+
+def _wait_for_queue(
+    paths: StatePaths,
+    project_root: str,
+    expected_owners: list[str],
+    timeout: float = 10.0,
+) -> None:
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline:
+        owners = [
+            waiter.owner
+            for waiter in inspect_project_lease_queue(paths, project_root)
+        ]
+        if owners == expected_owners:
+            return
+        time.sleep(0.02)
+    raise AssertionError(f"Lease queue did not become {expected_owners!r}.")
+
+
+def _waiting_lease_process(state_dir: str, project_root: str, owner: str) -> None:
+    acquire_project_lease(
+        StatePaths(Path(state_dir)), project_root, owner, 60, 30
+    )
 
 
 def test_lease_lifecycle_and_owner_enforcement(tmp_path: Path) -> None:
@@ -86,6 +112,63 @@ def test_waiting_acquire_does_not_block_current_owner_release(tmp_path: Path) ->
 
         assert release_project_lease(paths, "project", first.lease_id) is True
         assert waiting.result(timeout=15).owner == "task-b"
+
+
+def test_waiters_acquire_in_fifo_order(tmp_path: Path) -> None:
+    paths = StatePaths(tmp_path)
+    first = acquire_project_lease(paths, "project", "task-a", 60, 0)
+
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        waiting_b = pool.submit(
+            acquire_project_lease, paths, "project", "task-b", 60, 10
+        )
+        _wait_for_queue(paths, "project", ["task-b"])
+        waiting_c = pool.submit(
+            acquire_project_lease, paths, "project", "task-c", 60, 10
+        )
+        _wait_for_queue(paths, "project", ["task-b", "task-c"])
+
+        assert release_project_lease(paths, "project", first.lease_id) is True
+        with pytest.raises(ProjectBusyError):
+            acquire_project_lease(paths, "project", "task-d", 60, 0)
+        second = waiting_b.result(timeout=15)
+        assert second.owner == "task-b"
+        assert not waiting_c.done()
+
+        assert release_project_lease(paths, "project", second.lease_id) is True
+        third = waiting_c.result(timeout=15)
+        assert third.owner == "task-c"
+        assert release_project_lease(paths, "project", third.lease_id) is True
+
+
+def test_abandoned_waiter_is_skipped(tmp_path: Path) -> None:
+    paths = StatePaths(tmp_path)
+    first = acquire_project_lease(paths, "project", "task-a", 60, 0)
+    context = multiprocessing.get_context("spawn")
+    abandoned = context.Process(
+        target=_waiting_lease_process,
+        args=(str(tmp_path), "project", "abandoned"),
+    )
+    abandoned.start()
+    try:
+        _wait_for_queue(paths, "project", ["abandoned"])
+        abandoned.terminate()
+        abandoned.join(timeout=10)
+        assert not abandoned.is_alive()
+
+        with ThreadPoolExecutor(max_workers=1) as pool:
+            waiting = pool.submit(
+                acquire_project_lease, paths, "project", "task-b", 60, 10
+            )
+            _wait_for_queue(paths, "project", ["task-b"])
+            assert release_project_lease(paths, "project", first.lease_id) is True
+            second = waiting.result(timeout=15)
+            assert second.owner == "task-b"
+            assert release_project_lease(paths, "project", second.lease_id) is True
+    finally:
+        if abandoned.is_alive():
+            abandoned.terminate()
+            abandoned.join(timeout=10)
 
 
 def test_different_project_leases_are_independent(tmp_path: Path) -> None:
