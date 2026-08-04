@@ -23,7 +23,9 @@ Add each required ZeroEngine package to `Packages/manifest.json`:
   "dependencies": {
     "com.zerogamestudio.zeroengine.core": "https://github.com/ZeroGameStudio-CN/zeroengine.git?path=com.zerogamestudio.zeroengine.core#<tested-commit>",
     "com.zerogamestudio.zeroengine.data": "https://github.com/ZeroGameStudio-CN/zeroengine.git?path=com.zerogamestudio.zeroengine.data#<tested-commit>",
-    "com.zerogamestudio.zeroengine.ui": "https://github.com/ZeroGameStudio-CN/zeroengine.git?path=com.zerogamestudio.zeroengine.ui#<tested-commit>"
+    "com.zerogamestudio.zeroengine.ui": "https://github.com/ZeroGameStudio-CN/zeroengine.git?path=com.zerogamestudio.zeroengine.ui#<tested-commit>",
+    "com.zerogamestudio.analytics": "https://github.com/ZeroGameStudio-CN/zeroengine.git?path=com.zerogamestudio.analytics#<tested-commit>",
+    "com.zerogamestudio.zeroengine.feedback": "https://github.com/ZeroGameStudio-CN/zeroengine.git?path=com.zerogamestudio.zeroengine.feedback#<tested-commit>"
   }
 }
 ```

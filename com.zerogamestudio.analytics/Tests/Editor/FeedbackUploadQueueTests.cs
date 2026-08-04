@@ -75,6 +75,58 @@ namespace ZGS.Analytics.Tests.Editor
         }
 
         [Test]
+        public void TryEnqueue_WithSubmissionId_RoundTripsAndPublishesTypedSuccess()
+        {
+            string zipPath = CreateZip("typed-success.zip");
+            const string submissionId = "0123456789abcdef0123456789abcdef";
+            Assert.IsTrue(FeedbackUploadQueue.TryEnqueue(
+                submissionId,
+                zipPath,
+                "POB_v1",
+                "Tester"));
+
+            SetStaticField("_pendingUploads", null);
+            StringAssert.Contains(submissionId, PlayerPrefs.GetString(_queueKey));
+
+            int typedCount = 0;
+            string observedId = null;
+            FeedbackUploadQueue.QueuedSubmissionSucceeded += completion =>
+            {
+                typedCount++;
+                observedId = completion.SubmissionId;
+            };
+            SetStaticField(
+                "_tryUploadOverride",
+                (Func<FeedbackUploadQueue.PendingUpload, Action<bool>, IEnumerator>)
+                ((_, callback) => CompleteUpload(callback, true)));
+
+            Exhaust(FeedbackUploadQueue.ProcessPendingUploads());
+
+            Assert.AreEqual(1, typedCount);
+            Assert.AreEqual(submissionId, observedId);
+        }
+
+        [Test]
+        public void LegacyQueueItem_DoesNotPublishTypedSuccess()
+        {
+            Assert.IsTrue(FeedbackUploadQueue.TryEnqueue(
+                CreateZip("legacy-success.zip"),
+                "POB_v1",
+                "Tester"));
+
+            int typedCount = 0;
+            FeedbackUploadQueue.QueuedSubmissionSucceeded += _ => typedCount++;
+            SetStaticField(
+                "_tryUploadOverride",
+                (Func<FeedbackUploadQueue.PendingUpload, Action<bool>, IEnumerator>)
+                ((_, callback) => CompleteUpload(callback, true)));
+
+            Exhaust(FeedbackUploadQueue.ProcessPendingUploads());
+
+            Assert.AreEqual(0, typedCount);
+        }
+
+        [Test]
         public void TryEnqueue_WithMissingZipOrPersistenceFailure_LeavesQueueUnchanged()
         {
             Assert.IsFalse(FeedbackUploadQueue.TryEnqueue(
@@ -275,6 +327,7 @@ namespace ZGS.Analytics.Tests.Editor
             SetStaticField("_deleteFileOverride", null);
             SetStaticField("_tryUploadOverride", null);
             SetStaticField("QueuedUploadSucceeded", null);
+            SetStaticField("QueuedSubmissionSucceeded", null);
             SetStaticField("_backgroundRunning", false);
             SetStaticField("_isProcessing", false);
             SetStaticField("_pendingUploads", null);

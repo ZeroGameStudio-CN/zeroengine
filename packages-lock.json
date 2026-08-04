@@ -560,6 +560,16 @@
         "com.zerogamestudio.zeroengine.persistence": "2.0.0"
       }
     },
+    "com.zerogamestudio.zeroengine.feedback": {
+      "version": "file:com.zerogamestudio.zeroengine.feedback",
+      "depth": 0,
+      "source": "embedded",
+      "dependencies": {
+        "com.zerogamestudio.analytics": "1.7.0",
+        "com.zerogamestudio.zeroengine.ui": "2.0.0",
+        "com.unity.textmeshpro": "3.0.6"
+      }
+    },
     "com.zerogamestudio.zeroengine.gameplay": {
       "version": "file:com.zerogamestudio.zeroengine.gameplay",
       "depth": 0,

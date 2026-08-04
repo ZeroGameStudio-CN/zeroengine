@@ -2,7 +2,7 @@
 
 ZeroGameStudio 游戏分析 SDK，支持自建 ClickHouse 数据平台。
 
-**版本**: 1.6.2
+**版本**: 1.7.0
 **Unity**: 2021.3+
 
 ## 特性
@@ -115,27 +115,32 @@ AnalyticsService.RestoreTimelineSnapshot(snapshot);
 // 简单 Bug 报告
 AnalyticsService.ReportBug("玩家反馈内容");
 
-// 带附件的 Bug 报告（截图、存档等）
-yield return AnalyticsService.ReportBugWithAttachments(new AttachmentUploadRequest
+// 推荐：ZIP 与队列记录持久化后立即返回，不等待网络。
+yield return AnalyticsService.SubmitFeedback(new FeedbackSubmissionRequest
 {
     UserMessage = "游戏卡住了",
     UserName = "PlayerName",
-    FilesToInclude = new[] { screenshotPath },
-    DirectoriesToInclude = new[] { Application.persistentDataPath }
+    Contact = "player@example.com",
+    FilesToInclude = new[] { screenshotPath }
+}, result =>
+{
+    // AcceptedLocally 只表示本地可靠接收，可以关闭反馈面板。
+    Debug.Log(result.AcceptedLocally ? "Uploading" : result.Failure.ToString());
 });
 
-// 自定义反馈 UI 可先可靠入队，再让玩家离开面板。
-if (FeedbackUploadQueue.TryEnqueue(zipPath, version, userName))
+// 只为本进程通过新接口提交的反馈发送；旧队列补传成功保持静默。
+FeedbackSubmissionService.UploadSucceeded += completion =>
 {
-    // 这里只表示本地持久化成功，不表示服务器已经收到。
-}
-
-// 仅在队列项收到 HTTP 成功响应且持久化移除后触发。
-FeedbackUploadQueue.QueuedUploadSucceeded += uploadedZipPath =>
-{
-    // 可为本进程提交的反馈显示一次成功提示。
+    Debug.Log($"Uploaded: {completion.SubmissionId}");
 };
 ```
+
+`ReportBugWithAttachments`、`AttachmentUploadRequest` 和原有队列 API 继续兼容，
+但默认 ZIP 上传器现在同样以“本地可靠接收”为完成点，不代表 HTTP 成功。
+旧 `TimelineJson` 最多保留 64 KiB，调用方仍须预先脱敏；新代码应传
+`TimelineEntries`，由 SDK 统一限制为最近 80 条、64 KiB，并过滤敏感键。
+`DirectoriesToInclude` 会递归读取目录，只为旧项目兼容保留；新代码应通过
+`IFeedbackPackageContributor` 明确添加允许上传的文件、文本和元数据。
 
 ## 编辑器工具
 

@@ -38,11 +38,17 @@ namespace ZGS.Analytics
         public static event Action<string> QueuedUploadSucceeded;
 
         /// <summary>
+        /// 带提交 ID 的队列项收到 HTTP 成功响应，并已从持久队列移除后触发。
+        /// </summary>
+        internal static event Action<FeedbackUploadCompletion> QueuedSubmissionSucceeded;
+
+        /// <summary>
         /// 待上传项
         /// </summary>
         [Serializable]
         public class PendingUpload
         {
+            public string submissionId;
             public string zipPath;
             public string version;
             public string userName;
@@ -102,12 +108,24 @@ namespace ZGS.Analytics
         /// </summary>
         public static bool TryEnqueue(string zipPath, string version, string userName)
         {
+            return TryEnqueue(string.Empty, zipPath, version, userName);
+        }
+
+        /// <summary>
+        /// 将带稳定提交 ID 的上传可靠写入持久队列。
+        /// </summary>
+        public static bool TryEnqueue(
+            string submissionId,
+            string zipPath,
+            string version,
+            string userName)
+        {
             if (_pendingUploads == null)
                 LoadQueue();
 
             if (string.IsNullOrWhiteSpace(zipPath) || !File.Exists(zipPath))
             {
-                AnalyticsLog.LogWarning($"[FeedbackQueue] 入队失败，文件不存在: {zipPath}");
+                AnalyticsLog.LogWarning("[FeedbackQueue] 入队失败，文件不存在");
                 return false;
             }
 
@@ -126,6 +144,7 @@ namespace ZGS.Analytics
 
             var pending = new PendingUpload
             {
+                submissionId = submissionId ?? string.Empty,
                 zipPath = zipPath,
                 version = version,
                 userName = userName,
@@ -185,7 +204,7 @@ namespace ZGS.Analytics
 
                     if (!File.Exists(pending.zipPath))
                     {
-                        AnalyticsLog.LogWarning($"[FeedbackQueue] 文件不存在，移除: {pending.zipPath}");
+                        AnalyticsLog.LogWarning("[FeedbackQueue] 文件不存在，移除队列项");
                         TryRemovePersisted(pending);
                         continue;
                     }
@@ -204,6 +223,7 @@ namespace ZGS.Analytics
                         DeleteFileBestEffort(pending.zipPath);
                         AnalyticsLog.Log($"[FeedbackQueue] 上传成功: {Path.GetFileName(pending.zipPath)}");
                         NotifyQueuedUploadSucceeded(pending.zipPath);
+                        NotifyQueuedSubmissionSucceeded(pending.submissionId);
                     }
                     else
                     {
@@ -273,7 +293,7 @@ namespace ZGS.Analytics
             }
             catch (Exception e)
             {
-                AnalyticsLog.LogWarning($"[FeedbackQueue] 读取文件失败: {e.Message}");
+                AnalyticsLog.LogWarning($"[FeedbackQueue] 读取文件失败: {e.GetType().Name}");
                 onComplete?.Invoke(false);
                 yield break;
             }
@@ -285,7 +305,7 @@ namespace ZGS.Analytics
             bool success = request.result == UnityWebRequest.Result.Success;
             if (!success)
             {
-                AnalyticsLog.LogWarning($"[FeedbackQueue] 上传失败: {request.error}");
+                AnalyticsLog.LogWarning($"[FeedbackQueue] 上传失败: {request.result}");
             }
 
             onComplete?.Invoke(success);
@@ -453,6 +473,7 @@ namespace ZGS.Analytics
             {
                 clone.Add(new PendingUpload
                 {
+                    submissionId = item.submissionId,
                     zipPath = item.zipPath,
                     version = item.version,
                     userName = item.userName,
@@ -479,7 +500,7 @@ namespace ZGS.Analytics
             }
             catch (Exception e)
             {
-                AnalyticsLog.LogWarning($"[FeedbackQueue] 删除文件失败: {e.Message}");
+                AnalyticsLog.LogWarning($"[FeedbackQueue] 删除文件失败: {e.GetType().Name}");
             }
         }
 
@@ -497,7 +518,30 @@ namespace ZGS.Analytics
                 }
                 catch (Exception e)
                 {
-                    AnalyticsLog.LogWarning($"[FeedbackQueue] 上传成功回调失败: {e.Message}");
+                    AnalyticsLog.LogWarning($"[FeedbackQueue] 上传成功回调失败: {e.GetType().Name}");
+                }
+            }
+        }
+
+        private static void NotifyQueuedSubmissionSucceeded(string submissionId)
+        {
+            if (string.IsNullOrEmpty(submissionId))
+                return;
+
+            Action<FeedbackUploadCompletion> handlers = QueuedSubmissionSucceeded;
+            if (handlers == null)
+                return;
+
+            var completion = new FeedbackUploadCompletion(submissionId);
+            foreach (Action<FeedbackUploadCompletion> handler in handlers.GetInvocationList())
+            {
+                try
+                {
+                    handler(completion);
+                }
+                catch (Exception e)
+                {
+                    AnalyticsLog.LogWarning($"[FeedbackQueue] 提交成功回调失败: {e.GetType().Name}");
                 }
             }
         }
@@ -520,7 +564,7 @@ namespace ZGS.Analytics
             }
             catch (Exception e)
             {
-                AnalyticsLog.LogWarning($"[FeedbackQueue] 加载队列失败: {e.Message}");
+                AnalyticsLog.LogWarning($"[FeedbackQueue] 加载队列失败: {e.GetType().Name}");
                 _pendingUploads = new List<PendingUpload>();
             }
         }
@@ -538,7 +582,7 @@ namespace ZGS.Analytics
             }
             catch (Exception e)
             {
-                AnalyticsLog.LogWarning($"[FeedbackQueue] 序列化队列失败: {e.Message}");
+                AnalyticsLog.LogWarning($"[FeedbackQueue] 序列化队列失败: {e.GetType().Name}");
                 return false;
             }
 
@@ -550,7 +594,7 @@ namespace ZGS.Analytics
                 }
                 catch (Exception e)
                 {
-                    AnalyticsLog.LogWarning($"[FeedbackQueue] 保存队列失败: {e.Message}");
+                    AnalyticsLog.LogWarning($"[FeedbackQueue] 保存队列失败: {e.GetType().Name}");
                     return false;
                 }
             }
@@ -580,7 +624,7 @@ namespace ZGS.Analytics
                     // Keep the original persistence error as the actionable diagnostic.
                 }
 
-                AnalyticsLog.LogWarning($"[FeedbackQueue] 保存队列失败: {e.Message}");
+                AnalyticsLog.LogWarning($"[FeedbackQueue] 保存队列失败: {e.GetType().Name}");
                 return false;
             }
         }

@@ -1,0 +1,22 @@
+{
+  "name": "ZeroEngine.Feedback.Tests.PlayMode",
+  "rootNamespace": "ZeroEngine.Feedback.Tests.PlayMode",
+  "references": [
+    "ZeroEngine.Feedback",
+    "UnityEngine.UI",
+    "UnityEngine.TestRunner"
+  ],
+  "includePlatforms": [],
+  "excludePlatforms": [],
+  "allowUnsafeCode": false,
+  "overrideReferences": true,
+  "precompiledReferences": [
+    "nunit.framework.dll"
+  ],
+  "autoReferenced": false,
+  "defineConstraints": [
+    "UNITY_INCLUDE_TESTS"
+  ],
+  "versionDefines": [],
+  "noEngineReferences": false
+}

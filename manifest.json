@@ -3,6 +3,7 @@
     "com.coplaydev.unity-mcp": "https://github.com/CoplayDev/unity-mcp.git?path=/MCPForUnity",
     "com.github.siccity.xnode": "https://github.com/siccity/xNode.git",
     "com.tuyoogame.yooasset": "2.3.18",
+    "com.zerogamestudio.zeroengine.feedback": "file:com.zerogamestudio.zeroengine.feedback",
     "com.unity.ai.assistant": "1.0.0-pre.12",
     "com.unity.ai.generators": "1.0.0-pre.20",
     "com.unity.ai.inference": "2.4.1",

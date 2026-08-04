@@ -1,0 +1,29 @@
+{
+  "name": "com.zerogamestudio.zeroengine.feedback",
+  "version": "1.0.0",
+  "displayName": "ZeroEngine Feedback",
+  "description": "Queue-first player feedback form and status presentation for ZeroEngine.",
+  "unity": "2022.3",
+  "unityRelease": "0f1",
+  "dependencies": {
+    "com.zerogamestudio.analytics": "1.7.0",
+    "com.zerogamestudio.zeroengine.ui": "2.0.0",
+    "com.unity.textmeshpro": "3.0.6"
+  },
+  "keywords": [
+    "zeroengine",
+    "feedback",
+    "bug-report",
+    "upload"
+  ],
+  "author": {
+    "name": "ZeroGameStudio",
+    "url": "https://github.com/ZeroGameStudio-CN"
+  },
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/ZeroGameStudio-CN/zeroengine.git",
+    "directory": "com.zerogamestudio.zeroengine.feedback"
+  }
+}

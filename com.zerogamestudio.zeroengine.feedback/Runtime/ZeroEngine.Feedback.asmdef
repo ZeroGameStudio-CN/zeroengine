@@ -1,0 +1,19 @@
+{
+  "name": "ZeroEngine.Feedback",
+  "rootNamespace": "ZeroEngine.Feedback",
+  "references": [
+    "ZGS.Analytics",
+    "ZeroEngine.UI",
+    "Unity.TextMeshPro",
+    "UnityEngine.UI"
+  ],
+  "includePlatforms": [],
+  "excludePlatforms": [],
+  "allowUnsafeCode": false,
+  "overrideReferences": false,
+  "precompiledReferences": [],
+  "autoReferenced": true,
+  "defineConstraints": [],
+  "versionDefines": [],
+  "noEngineReferences": false
+}

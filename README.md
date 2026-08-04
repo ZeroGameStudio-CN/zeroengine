@@ -34,6 +34,7 @@ mixing in game-specific content.
 | `com.zerogamestudio.zeroengine.persistence` | Save and persistence infrastructure. |
 | `com.zerogamestudio.zeroengine.ui` | Runtime UI framework and toast notification systems. |
 | `com.zerogamestudio.analytics` | Self-hostable analytics and bug feedback SDK. |
+| `com.zerogamestudio.zeroengine.feedback` | Queue-first player feedback form built on Analytics and UI Toast. |
 | `com.zerogamestudio.unity-mcp-control` | Editor-only control companion bundled with the Unity MCP Supervisor CLI. |
 
 There are also packages for AI, audio, combat, economy, input, localization,
