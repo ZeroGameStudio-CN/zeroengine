@@ -2,7 +2,7 @@
 
 - **状态：** Final
 - **最后更新：** 2026-08-04
-- **检查基线：** ZeroEngine 不可变提交 `7afa51fb151448cbfcf99c752d87170e127a73bc`；POB 工作区当前 `cs:16740`，远端分支头为 `cs:16742`
+- **检查基线：** ZeroEngine 不可变提交 `7afa51fb151448cbfcf99c752d87170e127a73bc`；POB Plastic 提交 `cs:16744`
 - **适用版本：** `com.zerogamestudio.analytics` 保持 Unity 2021.3+；可选玩家 UI 包要求 Unity 2022.3+
 - **授权边界：** 用户已于 2026-08-04 批准实现、验证、提交、推送和 POB checkin；合并、发布和部署仍不在本次范围
 
@@ -333,6 +333,6 @@ Controller 独占三种状态提示：本地接受显示 `Uploading`、本地失
 - 已在独立 ZeroEngine worktree 完成 Analytics `1.7.0`、Feedback `1.0.0`、默认 UI/Installer、兼容测试与文档；POB 已迁移为 Contributor、薄面板绑定和状态 Presenter。
 - POB `manifest.json` 与 `packages-lock.json` 已将 Analytics、Feedback、UI 同步固定到上述 Git 提交，未保留本机 `file:` 路径。
 - 固定 Git pin 后窄定向 EditMode `32/32`、PlayMode `1/1` 通过；Unity Console 清空后复读为 `0` 条；JSON、asmdef、`.meta` 配对、旧上传类型移除和路径一致性静态检查通过。
-- ZeroEngine 分支已提交并推送；POB checkin 尚未执行：工作区落后远端 `cs:16742` 且存在其他待提交改动，Plastic 保护脚本拒绝在未授权维护窗口下更新整工作区。
-- 尚未完成：无 POB 干净消费项目 smoke、正常网络/断网恢复/本地持久化失败 Player smoke。
+- ZeroEngine 分支已提交并推送；POB 已以 `cs:16744` 提交 24 个显式任务路径，其他待提交改动未混入。对应 ZGS Ops 事项仍因 `ContentBuilder Reconcile`/`Needs Build` 阻塞，尚未形成可运行 staging Player 包。
+- 尚未完成：无 POB 干净消费项目 smoke、正常网络/断网恢复/本地持久化失败 Player smoke，以及上述事项的人工验收。
 - 因上述项目仍开放，本规格保持 `Final`，不标记 `Implemented`；合并、发布和部署仍不在本次范围。
