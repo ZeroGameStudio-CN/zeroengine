@@ -12,13 +12,25 @@ namespace ZeroEngine.Formula
             out float value,
             out FormulaEvaluationReport report)
         {
-            return TryEvaluate(formula, context, registry, out value, out report, null);
+            return TryEvaluate(formula, context, registry, null, out value, out report);
+        }
+
+        public static bool TryEvaluate(
+            IFormulaDefinition formula,
+            IFormulaEvaluationContext context,
+            FormulaProviderRegistry registry,
+            IFormulaRandomSource randomSource,
+            out float value,
+            out FormulaEvaluationReport report)
+        {
+            return TryEvaluate(formula, context, registry, randomSource, out value, out report, null);
         }
 
         private static bool TryEvaluate(
             IFormulaDefinition formula,
             IFormulaEvaluationContext context,
             FormulaProviderRegistry registry,
+            IFormulaRandomSource randomSource,
             out float value,
             out FormulaEvaluationReport report,
             HashSet<IFormulaDefinition> visited)
@@ -64,7 +76,7 @@ namespace ZeroEngine.Formula
                     }
 
                     var before = current;
-                    if (!TryGetSourceValue(step.Source, context, registry, report, visited, out var stepValue, out var label))
+                    if (!TryGetSourceValue(step.Source, context, registry, randomSource, report, visited, out var stepValue, out var label))
                         success = false;
 
                     current = ApplyOperation(step.Operation, current, stepValue, report);
@@ -106,6 +118,7 @@ namespace ZeroEngine.Formula
             FormulaValueSource source,
             IFormulaEvaluationContext context,
             FormulaProviderRegistry registry,
+            IFormulaRandomSource randomSource,
             FormulaEvaluationReport report,
             HashSet<IFormulaDefinition> visited,
             out float value,
@@ -130,13 +143,71 @@ namespace ZeroEngine.Formula
                     return TryGetProviderValue(source, context, registry, report, out value);
                 case FormulaValueSourceType.NestedFormula:
                     label = source.NestedFormula ? source.NestedFormula.name : "<null nested formula>";
-                    return TryGetNestedFormulaValue(source, context, registry, report, visited, out value);
+                    return TryGetNestedFormulaValue(source, context, registry, randomSource, report, visited, out value);
+                case FormulaValueSourceType.RandomInteger:
+                    return TryGetRandomIntegerValue(source, randomSource, report, out value, out label);
                 default:
                     report.AddDiagnostic(
                         FormulaDiagnosticSeverity.Error,
                         FormulaDiagnosticCode.InvalidProvider,
                         $"Unsupported source type: {source.SourceType}");
                     return false;
+            }
+        }
+
+        private static bool TryGetRandomIntegerValue(
+            FormulaValueSource source,
+            IFormulaRandomSource randomSource,
+            FormulaEvaluationReport report,
+            out float value,
+            out string label)
+        {
+            value = 0f;
+            var minInclusive = source.RandomMinInclusive;
+            var maxInclusive = source.RandomMaxInclusive;
+            label = $"Random integer [{minInclusive}, {maxInclusive}]";
+
+            if (randomSource == null)
+            {
+                report.AddDiagnostic(
+                    FormulaDiagnosticSeverity.Error,
+                    FormulaDiagnosticCode.MissingRandomSource,
+                    $"Formula random source is required for integer range [{minInclusive}, {maxInclusive}].");
+                return false;
+            }
+
+            if (minInclusive > maxInclusive || maxInclusive == int.MaxValue)
+            {
+                report.AddDiagnostic(
+                    FormulaDiagnosticSeverity.Error,
+                    FormulaDiagnosticCode.InvalidRandomRange,
+                    $"Invalid integer random range [{minInclusive}, {maxInclusive}]. Maximum must be less than Int32.MaxValue.");
+                return false;
+            }
+
+            try
+            {
+                var sample = randomSource.NextIntInclusive(minInclusive, maxInclusive);
+                if (sample < minInclusive || sample > maxInclusive)
+                {
+                    report.AddDiagnostic(
+                        FormulaDiagnosticSeverity.Error,
+                        FormulaDiagnosticCode.RandomSourceException,
+                        $"Formula random source returned {sample} outside [{minInclusive}, {maxInclusive}].");
+                    return false;
+                }
+
+                value = sample;
+                label = $"Random integer [{minInclusive}, {maxInclusive}] => {sample}";
+                return true;
+            }
+            catch (System.Exception ex)
+            {
+                report.AddDiagnostic(
+                    FormulaDiagnosticSeverity.Error,
+                    FormulaDiagnosticCode.RandomSourceException,
+                    $"Formula random source failed for [{minInclusive}, {maxInclusive}]: {ex.Message}");
+                return false;
             }
         }
 
@@ -179,6 +250,7 @@ namespace ZeroEngine.Formula
             FormulaValueSource source,
             IFormulaEvaluationContext context,
             FormulaProviderRegistry registry,
+            IFormulaRandomSource randomSource,
             FormulaEvaluationReport report,
             HashSet<IFormulaDefinition> visited,
             out float value)
@@ -193,7 +265,7 @@ namespace ZeroEngine.Formula
                 return false;
             }
 
-            var success = TryEvaluate(nested, context, registry, out value, out var nestedReport, visited);
+            var success = TryEvaluate(nested, context, registry, randomSource, out value, out var nestedReport, visited);
             report.AddChildReport(nestedReport);
             foreach (var diagnostic in nestedReport.Diagnostics)
             {

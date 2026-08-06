@@ -18,6 +18,8 @@ namespace ZeroEngine.Formula.Editor
         private const string ProviderIdProperty = "<ProviderId>k__BackingField";
         private const string ParametersProperty = "<Parameters>k__BackingField";
         private const string NestedFormulaProperty = "<NestedFormula>k__BackingField";
+        private const string RandomMinInclusiveProperty = "<RandomMinInclusive>k__BackingField";
+        private const string RandomMaxInclusiveProperty = "<RandomMaxInclusive>k__BackingField";
         private const string NameProperty = "<Name>k__BackingField";
         private const string TypeProperty = "<Type>k__BackingField";
         private const string StringValueProperty = "<StringValue>k__BackingField";
@@ -140,6 +142,9 @@ namespace ZeroEngine.Formula.Editor
                     break;
                 case FormulaValueSourceType.NestedFormula:
                     DrawNestedFormula(source);
+                    break;
+                case FormulaValueSourceType.RandomInteger:
+                    DrawRandomIntegerSource(source);
                     break;
             }
         }
@@ -337,6 +342,16 @@ namespace ZeroEngine.Formula.Editor
                 nested.objectReferenceValue,
                 typeof(FormulaAsset),
                 false);
+        }
+
+        private static void DrawRandomIntegerSource(SerializedProperty source)
+        {
+            EditorGUILayout.PropertyField(
+                source.FindPropertyRelative(RandomMinInclusiveProperty),
+                new GUIContent(FormulaEditorLabels.RandomMinInclusive, "闭区间随机整数的最小值。"));
+            EditorGUILayout.PropertyField(
+                source.FindPropertyRelative(RandomMaxInclusiveProperty),
+                new GUIContent(FormulaEditorLabels.RandomMaxInclusive, "闭区间随机整数的最大值，必须小于 Int32.MaxValue。"));
         }
 
         private static int FindProviderIndex(FormulaEditorProfile profile, string providerId)

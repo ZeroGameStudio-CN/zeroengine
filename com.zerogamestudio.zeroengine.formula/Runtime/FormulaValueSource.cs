@@ -9,6 +9,7 @@ namespace ZeroEngine.Formula
         Constant = 0,
         Provider = 1,
         NestedFormula = 2,
+        RandomInteger = 3,
     }
 
     [Serializable]
@@ -19,6 +20,8 @@ namespace ZeroEngine.Formula
         [field: SerializeField] public string ProviderId { get; private set; }
         [field: SerializeField] public List<FormulaParameter> Parameters { get; private set; } = new();
         [field: SerializeField] public UnityEngine.Object NestedFormula { get; private set; }
+        [field: SerializeField] public int RandomMinInclusive { get; private set; }
+        [field: SerializeField] public int RandomMaxInclusive { get; private set; }
 
         public static FormulaValueSource Constant(float value)
         {
@@ -45,6 +48,16 @@ namespace ZeroEngine.Formula
             {
                 SourceType = FormulaValueSourceType.NestedFormula,
                 NestedFormula = nestedFormula,
+            };
+        }
+
+        public static FormulaValueSource RandomInteger(int minInclusive, int maxInclusive)
+        {
+            return new FormulaValueSource
+            {
+                SourceType = FormulaValueSourceType.RandomInteger,
+                RandomMinInclusive = minInclusive,
+                RandomMaxInclusive = maxInclusive,
             };
         }
     }

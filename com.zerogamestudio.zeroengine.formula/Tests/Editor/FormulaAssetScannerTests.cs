@@ -38,6 +38,31 @@ namespace ZeroEngine.Formula.Tests.Editor
         }
 
         [Test]
+        public void ScanFormula_WithInvalidRandomRange_ReportsError()
+        {
+            var formula = ScriptableObject.CreateInstance<FormulaAsset>();
+
+            try
+            {
+                SetFormulaAsset(formula, 1f, new[]
+                {
+                    FormulaStep.Create(FormulaOperationType.Add, FormulaValueSource.RandomInteger(2, 1)),
+                });
+
+                var report = FormulaAssetScanner.ScanAsset("Assets/Test/InvalidRandomFormula.asset", formula, null);
+
+                Assert.AreEqual(1, report.AssetCount);
+                Assert.AreEqual(1, report.ErrorCount);
+                StringAssert.Contains("Invalid integer random range", report.Issues.Single().Message);
+            }
+            finally
+            {
+                if (formula != null)
+                    UnityObject.DestroyImmediate(formula);
+            }
+        }
+
+        [Test]
         public void Scan_WithProfileProvider_UsesPreviewProvider()
         {
             var formula = ScriptableObject.CreateInstance<FormulaAsset>();

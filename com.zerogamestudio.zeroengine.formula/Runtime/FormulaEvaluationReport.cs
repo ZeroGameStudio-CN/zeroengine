@@ -22,6 +22,9 @@ namespace ZeroEngine.Formula
         NonFiniteResult = 7,
         ProviderException = 8,
         InvalidParameter = 9,
+        MissingRandomSource = 10,
+        InvalidRandomRange = 11,
+        RandomSourceException = 12,
     }
 
     [Serializable]

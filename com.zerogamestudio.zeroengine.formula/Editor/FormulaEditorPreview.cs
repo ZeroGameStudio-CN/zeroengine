@@ -59,6 +59,8 @@ namespace ZeroEngine.Formula.Editor
 
     public static class FormulaEditorPreview
     {
+        public const int RandomSeed = 0x5EED;
+
         public static bool TryEvaluate(
             FormulaAsset formula,
             FormulaEditorProfile profile,
@@ -70,8 +72,14 @@ namespace ZeroEngine.Formula.Editor
                 formula,
                 context ?? CreateContext(profile),
                 CreateRegistry(profile),
+                CreateRandomSource(),
                 out value,
                 out report);
+        }
+
+        public static IFormulaRandomSource CreateRandomSource()
+        {
+            return new SystemFormulaRandomSource(new Random(RandomSeed));
         }
 
         public static FormulaDictionaryEvaluationContext CreateContext(FormulaEditorProfile profile)

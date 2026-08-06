@@ -151,6 +151,7 @@ namespace ZeroEngine.Formula.Editor
                 formula,
                 context,
                 registry,
+                FormulaEditorPreview.CreateRandomSource(),
                 out var value,
                 out var evalReport);
 

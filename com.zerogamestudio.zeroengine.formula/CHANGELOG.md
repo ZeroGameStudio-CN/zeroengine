@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.3.0
+
+- Added injected integer random value sources with inclusive ranges.
+- Added deterministic random evaluation to Formula Editor previews and scans.
+- Added structured diagnostics for missing random sources and invalid ranges.
+
 ## 0.2.0
 
 - Added formula governance profile settings for catalog paths and reference roots.

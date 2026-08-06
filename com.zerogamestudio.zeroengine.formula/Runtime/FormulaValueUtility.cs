@@ -44,5 +44,27 @@ namespace ZeroEngine.Formula
                 ? ToInt(value, mode)
                 : fallback;
         }
+
+        public static int EvaluateToInt(
+            IFormulaDefinition formula,
+            IFormulaEvaluationContext context,
+            FormulaProviderRegistry registry,
+            IFormulaRandomSource randomSource,
+            FormulaRoundingMode mode,
+            int fallback,
+            out FormulaEvaluationReport report)
+        {
+            if (formula == null)
+            {
+                report = new FormulaEvaluationReport(null, "<null>");
+                report.AddDiagnostic(FormulaDiagnosticSeverity.Error, FormulaDiagnosticCode.NullFormula, "Formula is null.");
+                report.SetResult(fallback, false);
+                return fallback;
+            }
+
+            return FormulaEvaluator.TryEvaluate(formula, context, registry, randomSource, out var value, out report)
+                ? ToInt(value, mode)
+                : fallback;
+        }
     }
 }

@@ -155,6 +155,40 @@ namespace ZeroEngine.Formula.Tests.Editor
             Assert.AreEqual(1.5f, values.TryGetValue("ratio", out var ratio) ? ratio : -1f);
         }
 
+        [Test]
+        public void TryEvaluate_WithRandomInteger_IsDeterministicAcrossTopLevelPreviews()
+        {
+            var formula = ScriptableObject.CreateInstance<FormulaAsset>();
+
+            try
+            {
+                SetFormulaAsset(formula, 0f, new[]
+                {
+                    FormulaStep.Create(FormulaOperationType.Add, FormulaValueSource.RandomInteger(10, 20)),
+                });
+
+                Assert.IsTrue(FormulaEditorPreview.TryEvaluate(
+                    formula,
+                    null,
+                    FormulaDictionaryEvaluationContext.Empty,
+                    out var first,
+                    out var firstReport), string.Join("\n", firstReport.Diagnostics));
+                Assert.IsTrue(FormulaEditorPreview.TryEvaluate(
+                    formula,
+                    null,
+                    FormulaDictionaryEvaluationContext.Empty,
+                    out var second,
+                    out var secondReport), string.Join("\n", secondReport.Diagnostics));
+
+                Assert.AreEqual(first, second);
+            }
+            finally
+            {
+                if (formula != null)
+                    UnityObject.DestroyImmediate(formula);
+            }
+        }
+
         private static void SetFormulaAsset(FormulaAsset formula, float initialValue, FormulaStep[] steps)
         {
             const BindingFlags flags = BindingFlags.Instance | BindingFlags.NonPublic;

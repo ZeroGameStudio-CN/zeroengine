@@ -12,6 +12,8 @@ namespace ZeroEngine.Formula.Editor
         public const string ConstantValue = "常量值";
         public const string Provider = "上下文变量";
         public const string NestedFormula = "嵌套公式";
+        public const string RandomMinInclusive = "随机最小值（含）";
+        public const string RandomMaxInclusive = "随机最大值（含）";
         public const string Result = "结果";
         public const string PreviewResult = "预览结果";
         public const string Workbench = "公式工作台";
@@ -83,6 +85,8 @@ namespace ZeroEngine.Formula.Editor
                     return "上下文变量";
                 case FormulaValueSourceType.NestedFormula:
                     return "嵌套公式";
+                case FormulaValueSourceType.RandomInteger:
+                    return "随机整数";
                 default:
                     return sourceType.ToString();
             }

@@ -127,6 +127,134 @@ namespace ZeroEngine.Formula.Tests.Editor
             Assert.That(report.Diagnostics.Any(d => d.Code == FormulaDiagnosticCode.CircularReference), Is.True);
         }
 
+        [Test]
+        public void TryEvaluate_WithRandomIntegerAndNoSource_FailsWithDiagnostic()
+        {
+            var formula = CreateFormula(0f,
+                FormulaStep.Create(FormulaOperationType.Add, FormulaValueSource.RandomInteger(3, 7)));
+
+            var success = FormulaEvaluator.TryEvaluate(
+                formula,
+                FormulaDictionaryEvaluationContext.Empty,
+                FormulaProviderRegistry.Empty,
+                out var value,
+                out var report);
+
+            Assert.IsFalse(success);
+            Assert.AreEqual(0f, value);
+            Assert.That(report.Diagnostics.Any(d => d.Code == FormulaDiagnosticCode.MissingRandomSource), Is.True);
+        }
+
+        [Test]
+        public void TryEvaluate_WithFixedRandomRange_StillConsumesOneSample()
+        {
+            var formula = CreateFormula(1f,
+                FormulaStep.Create(FormulaOperationType.Multiply, FormulaValueSource.RandomInteger(7, 7)));
+            var random = new RecordingRandomSource(7);
+
+            var success = FormulaEvaluator.TryEvaluate(
+                formula,
+                FormulaDictionaryEvaluationContext.Empty,
+                FormulaProviderRegistry.Empty,
+                random,
+                out var value,
+                out var report);
+
+            Assert.IsTrue(success, string.Join("\n", report.Diagnostics));
+            Assert.AreEqual(7f, value);
+            Assert.AreEqual(1, random.CallCount);
+            Assert.AreEqual(7, random.MinValues[0]);
+            Assert.AreEqual(7, random.MaxValues[0]);
+            StringAssert.Contains("[7, 7] => 7", report.Steps[0].SourceLabel);
+        }
+
+        [Test]
+        public void TryEvaluate_WithInvalidRandomRange_FailsWithoutConsumingSample()
+        {
+            var formula = CreateFormula(0f,
+                FormulaStep.Create(FormulaOperationType.Add, FormulaValueSource.RandomInteger(8, 7)));
+            var random = new RecordingRandomSource(7);
+
+            var success = FormulaEvaluator.TryEvaluate(
+                formula,
+                FormulaDictionaryEvaluationContext.Empty,
+                FormulaProviderRegistry.Empty,
+                random,
+                out var value,
+                out var report);
+
+            Assert.IsFalse(success);
+            Assert.AreEqual(0f, value);
+            Assert.AreEqual(0, random.CallCount);
+            Assert.That(report.Diagnostics.Any(d => d.Code == FormulaDiagnosticCode.InvalidRandomRange), Is.True);
+        }
+
+        [Test]
+        public void TryEvaluate_WithIntMaxRandomBoundary_FailsWithoutConsumingSample()
+        {
+            var formula = CreateFormula(0f,
+                FormulaStep.Create(FormulaOperationType.Add, FormulaValueSource.RandomInteger(0, int.MaxValue)));
+            var random = new RecordingRandomSource(0);
+
+            var success = FormulaEvaluator.TryEvaluate(
+                formula,
+                FormulaDictionaryEvaluationContext.Empty,
+                FormulaProviderRegistry.Empty,
+                random,
+                out _,
+                out var report);
+
+            Assert.IsFalse(success);
+            Assert.AreEqual(0, random.CallCount);
+            Assert.That(report.Diagnostics.Any(d => d.Code == FormulaDiagnosticCode.InvalidRandomRange), Is.True);
+        }
+
+        [Test]
+        public void FormulaValueSourceType_AppendsRandomIntegerWithoutChangingExistingValues()
+        {
+            Assert.AreEqual(0, (int)FormulaValueSourceType.Constant);
+            Assert.AreEqual(1, (int)FormulaValueSourceType.Provider);
+            Assert.AreEqual(2, (int)FormulaValueSourceType.NestedFormula);
+            Assert.AreEqual(3, (int)FormulaValueSourceType.RandomInteger);
+        }
+
+        [Test]
+        public void TryEvaluate_WithNestedRandomSources_SharesSourceInEvaluationOrder()
+        {
+            var nested = CreateFormula(0f,
+                FormulaStep.Create(FormulaOperationType.Add, FormulaValueSource.RandomInteger(1, 10)));
+            var formula = CreateFormula(0f,
+                FormulaStep.Create(FormulaOperationType.Add, FormulaValueSource.Nested(nested)),
+                FormulaStep.Create(FormulaOperationType.Add, FormulaValueSource.RandomInteger(20, 30)));
+            var random = new RecordingRandomSource(4, 25);
+
+            var success = FormulaEvaluator.TryEvaluate(
+                formula,
+                FormulaDictionaryEvaluationContext.Empty,
+                FormulaProviderRegistry.Empty,
+                random,
+                out var value,
+                out var report);
+
+            Assert.IsTrue(success, string.Join("\n", report.Diagnostics));
+            Assert.AreEqual(29f, value);
+            CollectionAssert.AreEqual(new[] { 1, 20 }, random.MinValues);
+            CollectionAssert.AreEqual(new[] { 10, 30 }, random.MaxValues);
+        }
+
+        [Test]
+        public void SystemFormulaRandomSource_MatchesSystemRandomNextSequence()
+        {
+            var expectedRandom = new System.Random(12345);
+            var actualRandom = new System.Random(12345);
+            var source = new SystemFormulaRandomSource(actualRandom);
+
+            Assert.AreEqual(expectedRandom.Next(10, 21), source.NextIntInclusive(10, 20));
+            expectedRandom.Next(7, 8);
+            Assert.AreEqual(7, source.NextIntInclusive(7, 7));
+            Assert.AreEqual(expectedRandom.Next(), actualRandom.Next());
+        }
+
         [TestCase(1.2f, FormulaRoundingMode.Floor, 1)]
         [TestCase(-1.2f, FormulaRoundingMode.Floor, -2)]
         [TestCase(1.2f, FormulaRoundingMode.Ceil, 2)]
@@ -190,6 +318,28 @@ namespace ZeroEngine.Formula.Tests.Editor
 
                 step = steps[index];
                 return true;
+            }
+        }
+
+        private sealed class RecordingRandomSource : IFormulaRandomSource
+        {
+            private readonly Queue<int> values;
+
+            public RecordingRandomSource(params int[] values)
+            {
+                this.values = new Queue<int>(values);
+            }
+
+            public int CallCount { get; private set; }
+            public List<int> MinValues { get; } = new();
+            public List<int> MaxValues { get; } = new();
+
+            public int NextIntInclusive(int minInclusive, int maxInclusive)
+            {
+                CallCount++;
+                MinValues.Add(minInclusive);
+                MaxValues.Add(maxInclusive);
+                return values.Dequeue();
             }
         }
     }

@@ -97,6 +97,7 @@ namespace ZeroEngine.Formula.Tests.Editor
             Assert.AreEqual("加", FormulaEditorLabels.OperationName(FormulaOperationType.Add));
             Assert.AreEqual("乘以系数", FormulaEditorLabels.OperationName(FormulaOperationType.MultiplyFactor));
             Assert.AreEqual("上下文变量", FormulaEditorLabels.SourceTypeName(FormulaValueSourceType.Provider));
+            Assert.AreEqual("随机整数", FormulaEditorLabels.SourceTypeName(FormulaValueSourceType.RandomInteger));
         }
 
         [Test]

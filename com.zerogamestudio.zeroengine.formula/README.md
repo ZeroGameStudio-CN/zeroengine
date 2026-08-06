@@ -43,6 +43,37 @@ var success = FormulaEvaluator.TryEvaluate(
 
 `value` is the evaluated result. `report` contains step traces and diagnostics.
 
+## Injected Random Values
+
+Random formula steps are explicit and require an injected source:
+
+```csharp
+var formula = new FormulaRuntimeDefinition(
+    "random-reward",
+    1f,
+    new[]
+    {
+        FormulaStep.Create(
+            FormulaOperationType.Multiply,
+            FormulaValueSource.RandomInteger(10, 20)),
+    });
+
+var randomSource = new SystemFormulaRandomSource(new System.Random(1234));
+FormulaEvaluator.TryEvaluate(
+    formula,
+    FormulaDictionaryEvaluationContext.Empty,
+    FormulaProviderRegistry.Empty,
+    randomSource,
+    out var value,
+    out var report);
+```
+
+Integer ranges include both bounds. `SystemFormulaRandomSource` maps `[a, b]`
+to `System.Random.Next(a, b + 1)` and consumes one call when `a == b`.
+Random formulas fail with a diagnostic when no source is supplied; they never
+fall back to global Unity random state. Editor previews and scans use a fixed
+seed for repeatable results.
+
 ## Provider Example
 
 Projects own their provider ids and provider behavior:
