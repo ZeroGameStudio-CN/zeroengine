@@ -1,6 +1,6 @@
 # ZeroEngine Dashboard 适配器归位与视觉优化
 
-- 状态：Implemented
+- 状态：Archived
 - 最后更新：2026-08-10
 - 基线：ZeroEngine canonical `c0be719f9058717ae63891d618f0bdb1462a73ef`；POB 执行基线 `/main cs:16807`
 - 设计与执行授权：Authorized；来源为用户要求移除 POB Tab 并参考 POB Dashboard 美化
@@ -124,10 +124,14 @@ Data Toolkit 增加空描述符，使已安装模块成为可挂载的稳定宿�
 
 本次偏离来源是已完成的 POB 关键 PlayMode 路线。恢复门之后，本任务禁止重跑该路线或执行新的 POB Unity 操作；终端发布复用上述已完成测试证据，只执行 Git/Plastic 范围门与最终文件哈希。当前 before/after 哈希门不能证明运行中间态零写，因此不把它表述为零写检测器；它只负责发现净变化并按项目规则阻断。修复 PlayMode 测试基础设施的中间态隔离属于独立任务，不纳入本功能 changeset。
 
-## 终端发布待办
+## 发布归档
 
-- ZeroEngine PR、CI 与 canonical merge commit。
-- POB manifest/lock 统一 Git pin、精确 Plastic changeset 与最终 claims/task 释放。
+- ZeroEngine PR `#23` 已通过 10 条 GitHub checks 并正常合并；功能 canonical commit 为 `07f508a65f6d576d010e2b5576a97995764ac9d1`。
+- POB 的 18 个业务依赖 pin 已配对更新到该 commit；独立 Unity MCP 控制 pin 保持 `9bb7feed…`，无绝对 `file:` 业务 pin。
+- POB `/main cs:16808` 实际只含两个适配描述符与 `manifest.json`/`packages-lock.json` 四文件。
+- `EditorSettings.asset` SHA-256 保持恢复基线 `4dd4fa6db8124857132b771bf1cda0127b49c462dc3212342deee3cc4d44488a` 且不再 pending。
+- required 控制面最终为 `coordination_error=null`、`tasks=0`、`claims=0`、`unity=false`、`pending=390/protected=390`、`stale=false`。
+- 本变更为内部编辑器工具，自动门、窗口路线与精确 changeset 证据已充分，不另建人工验收卡。
 
 ## 验收标准
 

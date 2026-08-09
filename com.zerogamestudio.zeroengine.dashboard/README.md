@@ -66,6 +66,7 @@ Dashboard 入口：`ZeroEngine > Dashboard`。
 
 - 支持适配入口挂载到已安装宿主模块，避免消费项目专属 Tab。
 - 优化模块、工具卡片和状态页的 IMGUI 视觉层级。
+- 设计与发布证据见[归档记录](../docs/specs/2026-08-09-zeroengine-dashboard-adapter-polish.md)。
 
 ### 2.0.0
 
