@@ -430,6 +430,27 @@ class WorkspaceCoordinator:
                 """,
                 (self.canonical_project_root, now, now),
             )
+            connection.execute(
+                """
+                UPDATE vcs_dispositions
+                SET kind = 'protect', task_id = NULL,
+                    evidence = COALESCE(
+                        evidence,
+                        'adopting task was already terminal during startup repair'
+                    ),
+                    updated_at = ?
+                WHERE project_root = ? AND kind = 'adopt' AND task_id IN (
+                    SELECT task_id FROM tasks
+                    WHERE project_root = ?
+                        AND state IN ('completed', 'failed', 'expired')
+                )
+                """,
+                (
+                    now,
+                    self.canonical_project_root,
+                    self.canonical_project_root,
+                ),
+            )
             self._validate_records(connection)
         if os.name != "nt":
             self.paths.workspace_control.chmod(0o600)
