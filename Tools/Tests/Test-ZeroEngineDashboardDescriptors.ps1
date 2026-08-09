@@ -37,10 +37,19 @@ $descriptorPaths = @(Get-ChildItem -LiteralPath $RootPath -Recurse -File -Filter
 
 Assert-Condition ($descriptorPaths.Count -gt 0) 'No Dashboard descriptors were found.'
 
+$dataToolkitDescriptorPath = Join-Path $RootPath 'com.zerogamestudio.zeroengine.data-toolkit\Editor\ZeroEngineDashboardModule.json'
+Assert-Condition (Test-Path -LiteralPath $dataToolkitDescriptorPath) 'Data Toolkit Dashboard host descriptor is required.'
+$dataToolkitDescriptor = Get-Content -LiteralPath $dataToolkitDescriptorPath -Raw -Encoding UTF8 | ConvertFrom-Json
+Assert-Condition (@($dataToolkitDescriptor.entries).Count -eq 0) 'Data Toolkit Dashboard host descriptor must not invent generic entries.'
+
 $allowedCategories = @('authoring', 'diagnostics', 'setup', 'documentation')
 $allowedKinds = @('window', 'command')
 $allowedSafety = @('navigation', 'read-only', 'project-write', 'destructive')
 $allowedAvailability = @('always', 'edit-mode', 'play-mode')
+$stableModuleIdPattern = '^[a-z0-9]+(?:[.-][a-z0-9]+)*$'
+
+Assert-Condition ('project.target' -match $stableModuleIdPattern) 'Stable module ID validation rejected a valid fixture.'
+Assert-Condition ('Project Target' -notmatch $stableModuleIdPattern) 'Stable module ID validation accepted an invalid fixture.'
 
 foreach ($descriptorPath in $descriptorPaths) {
     Assert-Condition (Test-Path -LiteralPath ($descriptorPath + '.meta')) "Missing .meta for $descriptorPath"
@@ -50,6 +59,7 @@ foreach ($descriptorPath in $descriptorPaths) {
     $package = Get-Content -LiteralPath (Join-Path $packageRoot 'package.json') -Raw -Encoding UTF8 | ConvertFrom-Json
 
     Assert-Condition ($descriptor.schemaVersion -eq 1) "schemaVersion must be 1: $descriptorPath"
+    Assert-Condition ($descriptor.moduleId -match $stableModuleIdPattern) "Invalid moduleId '$($descriptor.moduleId)' in $descriptorPath"
     Assert-Condition ($descriptor.moduleId -eq $package.name) "moduleId must equal package name in $descriptorPath"
     Assert-Condition (-not [string]::IsNullOrWhiteSpace($descriptor.displayName)) "displayName is required: $descriptorPath"
     Assert-Condition ($null -ne $descriptor.entries) "entries is required: $descriptorPath"
@@ -64,6 +74,9 @@ foreach ($descriptorPath in $descriptorPaths) {
         Assert-Condition (-not $ids.ContainsKey($entry.id)) "Duplicate entry id '$($entry.id)' in $descriptorPath"
         $ids[$entry.id] = $true
         Assert-Condition ($allowedCategories -contains $entry.category) "Invalid category for '$($entry.id)' in $descriptorPath"
+        if (-not [string]::IsNullOrWhiteSpace($entry.mountModuleId)) {
+            Assert-Condition ($entry.mountModuleId -match $stableModuleIdPattern) "Invalid mountModuleId for '$($entry.id)' in $descriptorPath"
+        }
         Assert-Condition ($allowedKinds -contains $entry.kind) "Invalid kind for '$($entry.id)' in $descriptorPath"
         Assert-Condition ($allowedSafety -contains $entry.safety) "Invalid safety for '$($entry.id)' in $descriptorPath"
         Assert-Condition ($allowedAvailability -contains $entry.availability) "Invalid availability for '$($entry.id)' in $descriptorPath"
@@ -88,7 +101,7 @@ foreach ($descriptorPath in $descriptorPaths) {
 $dashboardRoot = Join-Path $RootPath 'com.zerogamestudio.zeroengine.dashboard'
 $dashboardPackage = Get-Content -LiteralPath (Join-Path $dashboardRoot 'package.json') -Raw -Encoding UTF8 | ConvertFrom-Json
 $dashboardAsmdef = Get-Content -LiteralPath (Join-Path $dashboardRoot 'Editor\ZeroEngine.Dashboard.Editor.asmdef') -Raw -Encoding UTF8 | ConvertFrom-Json
-Assert-Condition ($dashboardPackage.version -eq '2.0.0') 'Dashboard package version must be 2.0.0.'
+Assert-Condition ($dashboardPackage.version -eq '2.1.0') 'Dashboard package version must be 2.1.0.'
 Assert-Condition (@($dashboardPackage.dependencies.psobject.Properties).Count -eq 0) 'Dashboard package must have no package dependencies.'
 Assert-Condition (@($dashboardAsmdef.references).Count -eq 0) 'Dashboard production asmdef must have no optional module references.'
 Assert-Condition (@($dashboardAsmdef.includePlatforms).Count -eq 1 -and $dashboardAsmdef.includePlatforms[0] -eq 'Editor') 'Dashboard production asmdef must be Editor-only.'

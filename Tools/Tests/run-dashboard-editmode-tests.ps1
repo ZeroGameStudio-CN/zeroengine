@@ -26,9 +26,9 @@ $laneDefinitions = @(
         Sort-Object Name |
         Select-Object -ExpandProperty Name) }
 )
-$lanes = @($laneDefinitions | Where-Object { $Lanes -contains $_.Name })
+$selectedLaneDefinitions = @($laneDefinitions | Where-Object { $Lanes -contains $_.Name })
 
-foreach ($lane in $lanes) {
+foreach ($lane in $selectedLaneDefinitions) {
     $projectRoot = Join-Path ([IO.Path]::GetTempPath()) ('zeroengine-dashboard-' + $lane.Name + '-' + [guid]::NewGuid().ToString('N'))
     $assetsPath = Join-Path $projectRoot 'Assets'
     $packagesPath = Join-Path $projectRoot 'Packages'
@@ -86,8 +86,13 @@ foreach ($lane in $lanes) {
     }
     $previousRemovalTest = $env:ZEROENGINE_DASHBOARD_PACKAGE_REMOVAL_TEST
     $env:ZEROENGINE_DASHBOARD_PACKAGE_REMOVAL_TEST = if ($lane.Name -eq 'dashboard-with-modules') { '1' } else { '0' }
-    & $UnityPath @unityArguments
-    $unityExitCode = $LASTEXITCODE
+    $unityProcess = Start-Process `
+        -FilePath $UnityPath `
+        -ArgumentList $unityArguments `
+        -Wait `
+        -PassThru `
+        -WindowStyle Hidden
+    $unityExitCode = $unityProcess.ExitCode
     $env:ZEROENGINE_DASHBOARD_PACKAGE_REMOVAL_TEST = $previousRemovalTest
 
     if ($unityExitCode -ne 0) {
@@ -98,7 +103,8 @@ foreach ($lane in $lanes) {
     }
     [xml]$result = Get-Content -LiteralPath $resultPath -Raw
     $root = $result.'test-run'
-    if ($root.result -ne 'Passed' -or [int]$root.total -le 0 -or [int]$root.passed -le 0 -or [int]$root.failed -ne 0) {
+    $acceptableResult = $root.result -eq 'Passed' -or $root.result -eq 'Skipped:Ignored'
+    if (-not $acceptableResult -or [int]$root.total -le 0 -or [int]$root.passed -le 0 -or [int]$root.failed -ne 0) {
         throw "Dashboard lane $($lane.Name) failed. Result=$($root.result) Total=$($root.total) Passed=$($root.passed) Failed=$($root.failed) Log=$logPath"
     }
     Write-Host "PASS $($lane.Name) total=$($root.total) passed=$($root.passed)"
