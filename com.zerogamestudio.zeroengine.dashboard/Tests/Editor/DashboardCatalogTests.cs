@@ -180,6 +180,143 @@ namespace ZeroEngine.Dashboard.Tests.Editor
         }
 
         [Test]
+        public void Build_MountedEntryAppearsOnlyUnderTargetModule()
+        {
+            DashboardCatalog catalog = Build(
+                Source(Descriptor("project.target", "Target", string.Empty)),
+                Source(Descriptor(
+                    "project.adapter",
+                    "Adapter",
+                    Entry("open", "Profile Tool", "ZGS/Profile/Open", mountModuleId: "project.target"))));
+
+            CollectionAssert.AreEqual(
+                new[] { "project.target" },
+                catalog.VisibleModules.Select(module => module.ModuleId).ToArray());
+            DashboardModule target = catalog.Modules.Single(module => module.ModuleId == "project.target");
+            DashboardModule adapter = catalog.Modules.Single(module => module.ModuleId == "project.adapter");
+            Assert.AreEqual("project.adapter/open", target.VisibleEntries.Single().FullId);
+            Assert.AreEqual(0, adapter.VisibleEntries.Count);
+            Assert.AreEqual(1, adapter.OwnedVisibleEntries.Count);
+        }
+
+        [Test]
+        public void Build_MountPreservesOwnerIdentitySafetyAndSource()
+        {
+            DashboardCatalog catalog = Build(
+                Source(Descriptor("project.target", "Target", string.Empty)),
+                Source(
+                    Descriptor(
+                        "project.adapter",
+                        "Adapter",
+                        Entry(
+                            "apply",
+                            "Apply Profile",
+                            "ZGS/Profile/Apply",
+                            replaces: "project.target/legacy",
+                            kind: "command",
+                            safety: "project-write",
+                            confirmation: "Apply the profile?",
+                            mountModuleId: "project.target")),
+                    "adapter-profile.json"));
+
+            DashboardEntry entry = catalog.Modules
+                .Single(module => module.ModuleId == "project.target")
+                .VisibleEntries.Single();
+
+            Assert.AreEqual("project.adapter", entry.ModuleId);
+            Assert.AreEqual("project.adapter/apply", entry.FullId);
+            Assert.AreEqual("ZGS/Profile/Apply", entry.MenuPath);
+            Assert.AreEqual(DashboardEntrySafety.ProjectWrite, entry.Safety);
+            Assert.AreEqual("Apply the profile?", entry.Confirmation);
+            Assert.AreEqual("adapter-profile.json", entry.SourcePath);
+            CollectionAssert.AreEqual(new[] { "project.target/legacy" }, entry.Replaces);
+        }
+
+        [Test]
+        public void Build_MountTargetMissing_HidesEntryAndWarns()
+        {
+            DashboardCatalog catalog = Build(Source(Descriptor(
+                "project.adapter",
+                "Adapter",
+                Entry("open", "Profile Tool", "ZGS/Profile/Open", mountModuleId: "project.missing"))));
+
+            Assert.AreEqual(0, catalog.VisibleModules.Count);
+            Assert.That(catalog.Diagnostics.Any(item => item.Code == "mount-target-missing"));
+        }
+
+        [Test]
+        public void Build_MountTargetIsolated_HidesEntryAndWarns()
+        {
+            DashboardCatalog catalog = Build(
+                Source(Descriptor("project.target", "Target One", string.Empty), "one.json"),
+                Source(Descriptor("project.target", "Target Two", string.Empty), "two.json"),
+                Source(Descriptor(
+                    "project.adapter",
+                    "Adapter",
+                    Entry("open", "Profile Tool", "ZGS/Profile/Open", mountModuleId: "project.target"))));
+
+            Assert.AreEqual(0, catalog.VisibleModules.Count);
+            Assert.That(catalog.Diagnostics.Any(item => item.Code == "mount-target-missing"));
+        }
+
+        [Test]
+        public void Build_MountedReplacementUsesTargetModuleAndHidesGenericEntry()
+        {
+            DashboardCatalog catalog = Build(
+                Source(Descriptor(
+                    "project.target",
+                    "Target",
+                    Entry("open", "Generic", "ZGS/Generic/Open"))),
+                Source(Descriptor(
+                    "project.adapter",
+                    "Adapter",
+                    Entry(
+                        "open",
+                        "Profile Tool",
+                        "ZGS/Profile/Open",
+                        "project.target/open",
+                        mountModuleId: "project.target"))));
+
+            CollectionAssert.AreEqual(
+                new[] { "project.target" },
+                catalog.VisibleModules.Select(module => module.ModuleId).ToArray());
+            DashboardModule target = catalog.VisibleModules.Single();
+            Assert.AreEqual("project.adapter/open", target.VisibleEntries.Single().FullId);
+            Assert.IsTrue(target.Entries.Single().HiddenByReplacement);
+        }
+
+        [Test]
+        public void Build_MountedEntriesUseStableDisplayOrder()
+        {
+            DashboardCatalog catalog = Build(
+                Source(Descriptor("project.target", "Target", string.Empty)),
+                Source(Descriptor(
+                    "project.adapter-a",
+                    "Adapter A",
+                    Entry("later", "Later", "ZGS/Profile/Later", order: 200, mountModuleId: "project.target"))),
+                Source(Descriptor(
+                    "project.adapter-b",
+                    "Adapter B",
+                    Entry("earlier", "Earlier", "ZGS/Profile/Earlier", order: 100, mountModuleId: "project.target"))));
+
+            CollectionAssert.AreEqual(
+                new[] { "project.adapter-b/earlier", "project.adapter-a/later" },
+                catalog.VisibleModules.Single().VisibleEntries.Select(entry => entry.FullId).ToArray());
+        }
+
+        [Test]
+        public void Build_InvalidMountModuleId_RejectsDescriptor()
+        {
+            DashboardCatalog catalog = Build(Source(Descriptor(
+                "project.adapter",
+                "Adapter",
+                Entry("open", "Profile Tool", "ZGS/Profile/Open", mountModuleId: "Project Target"))));
+
+            Assert.AreEqual(0, catalog.Modules.Count);
+            StringAssert.Contains("mountModuleId", catalog.Diagnostics[0].Message);
+        }
+
+        [Test]
         public void Build_MissingTargetModule_IsSilentAndReplacerRemainsVisible()
         {
             DashboardCatalog catalog = Build(Source(Descriptor(
@@ -526,10 +663,14 @@ namespace ZeroEngine.Dashboard.Tests.Editor
             string kind = "window",
             string safety = "navigation",
             string availability = "always",
-            string confirmation = null)
+            string confirmation = null,
+            int order = 0,
+            string mountModuleId = null)
         {
             string replaceArray = string.IsNullOrEmpty(replaces) ? string.Empty : "\"" + replaces + "\"";
             string confirmationField = confirmation == null ? string.Empty : ",\"confirmation\":\"" + confirmation + "\"";
+            string mountField = string.IsNullOrEmpty(mountModuleId) ? string.Empty :
+                ",\"mountModuleId\":\"" + mountModuleId + "\"";
             return "{" +
                    "\"id\":\"" + id + "\"," +
                    "\"displayName\":\"" + displayName + "\"," +
@@ -537,10 +678,11 @@ namespace ZeroEngine.Dashboard.Tests.Editor
                    "\"category\":\"authoring\"," +
                    "\"kind\":\"" + kind + "\"," +
                    "\"menuPath\":\"" + menuPath + "\"," +
+                   "\"order\":" + order + "," +
                    "\"safety\":\"" + safety + "\"," +
                    "\"availability\":\"" + availability + "\"," +
                    "\"replaces\":[" + replaceArray + "]" +
-                   confirmationField + "}";
+                   confirmationField + mountField + "}";
         }
 
         private static DashboardEntry BuildEntry(
@@ -561,6 +703,7 @@ namespace ZeroEngine.Dashboard.Tests.Editor
                 confirmation,
                 availability,
                 Array.Empty<string>(),
+                string.Empty,
                 "test.json");
         }
 

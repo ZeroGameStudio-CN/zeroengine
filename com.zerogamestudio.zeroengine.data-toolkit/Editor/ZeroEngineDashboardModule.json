@@ -1,0 +1,9 @@
+{
+  "schemaVersion": 1,
+  "moduleId": "com.zerogamestudio.zeroengine.data-toolkit",
+  "displayName": "Data Toolkit",
+  "description": "Project data browsing, inspection, and validation tools.",
+  "order": 250,
+  "documentationPath": "README.md",
+  "entries": []
+}

@@ -1,6 +1,6 @@
 # ZeroEngine Dashboard
 
-ZeroEngine Dashboard 2.0 是一个可选、仅限 Unity Editor 的工具目录。它从已注册 UPM 包以及项目 `Assets/**/Editor/` 中读取 `ZeroEngineDashboardModule.json`，只展示所有者明确声明的窗口和命令。
+ZeroEngine Dashboard 2.1 是一个可选、仅限 Unity Editor 的工具目录。它从已注册 UPM 包以及项目 `Assets/**/Editor/` 中读取 `ZeroEngineDashboardModule.json`，只展示所有者明确声明的窗口和命令。
 
 ## 特性
 
@@ -9,6 +9,7 @@ ZeroEngine Dashboard 2.0 是一个可选、仅限 Unity Editor 的工具目录�
 - 通过模块已有 `MenuItem` 懒执行，不反射构造或嵌入窗口。
 - 对描述符错误、入口冲突、替代循环和失效菜单提供可见诊断。
 - `project-write` 与 `destructive` 命令执行前要求明确确认。
+- 项目适配入口可通过 `mountModuleId` 挂到已安装的通用模块，不产生独立项目 Tab。
 - 不安装包、不写 manifest、不清理 PlayerPrefs/存档、不写项目资源。
 
 ## 安装
@@ -42,6 +43,7 @@ ZeroEngine Dashboard 2.0 是一个可选、仅限 Unity Editor 的工具目录�
       "id": "open-window",
       "displayName": "Open Window",
       "description": "Open the existing module window.",
+      "mountModuleId": "com.zerogamestudio.zeroengine.example",
       "category": "authoring",
       "kind": "window",
       "menuPath": "ZeroEngine/Example/Open Window",
@@ -56,7 +58,14 @@ ZeroEngine Dashboard 2.0 是一个可选、仅限 Unity Editor 的工具目录�
 
 Dashboard 入口：`ZeroEngine > Dashboard`。
 
+`mountModuleId` 可省略；省略时入口显示在自己的模块下。指定后只改变展示归属，入口 ID、来源、替代关系和执行路径不变。目标模块缺失或冲突时入口会隐藏并进入 Diagnostics，不会回退成独立适配器 Tab。
+
 ## 版本历史
+
+### 2.1.0
+
+- 支持适配入口挂载到已安装宿主模块，避免消费项目专属 Tab。
+- 优化模块、工具卡片和状态页的 IMGUI 视觉层级。
 
 ### 2.0.0
 

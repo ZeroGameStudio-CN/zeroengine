@@ -59,6 +59,7 @@ namespace ZeroEngine.Editor.Dashboard
         public string id;
         public string displayName;
         public string description;
+        public string mountModuleId;
         public string category;
         public string kind;
         public string menuPath;
@@ -156,6 +157,7 @@ namespace ZeroEngine.Editor.Dashboard
             string confirmation,
             DashboardEntryAvailability availability,
             IReadOnlyList<string> replaces,
+            string mountModuleId,
             string sourcePath)
         {
             ModuleId = moduleId;
@@ -171,6 +173,7 @@ namespace ZeroEngine.Editor.Dashboard
             Confirmation = confirmation ?? string.Empty;
             Availability = availability;
             Replaces = replaces ?? Array.Empty<string>();
+            MountModuleId = mountModuleId ?? string.Empty;
             SourcePath = sourcePath;
         }
 
@@ -187,6 +190,8 @@ namespace ZeroEngine.Editor.Dashboard
         internal string Confirmation { get; }
         internal DashboardEntryAvailability Availability { get; }
         internal IReadOnlyList<string> Replaces { get; }
+        internal string MountModuleId { get; }
+        internal string DisplayModuleId => string.IsNullOrEmpty(MountModuleId) ? ModuleId : MountModuleId;
         internal string SourcePath { get; }
         internal bool Isolated { get; set; }
         internal bool HiddenByReplacement { get; set; }
@@ -202,7 +207,8 @@ namespace ZeroEngine.Editor.Dashboard
             string documentationPath,
             string documentationUrl,
             DashboardDescriptorSource source,
-            IReadOnlyList<DashboardEntry> entries)
+            IReadOnlyList<DashboardEntry> entries,
+            IReadOnlyList<DashboardEntry> visibleEntries = null)
         {
             ModuleId = moduleId;
             DisplayName = displayName;
@@ -212,6 +218,7 @@ namespace ZeroEngine.Editor.Dashboard
             DocumentationUrl = documentationUrl ?? string.Empty;
             Source = source;
             Entries = entries ?? Array.Empty<DashboardEntry>();
+            _visibleEntries = visibleEntries ?? Entries;
         }
 
         internal string ModuleId { get; }
@@ -222,7 +229,12 @@ namespace ZeroEngine.Editor.Dashboard
         internal string DocumentationUrl { get; }
         internal DashboardDescriptorSource Source { get; }
         internal IReadOnlyList<DashboardEntry> Entries { get; }
-        internal IReadOnlyList<DashboardEntry> VisibleEntries => Entries.Where(entry => !entry.Isolated && !entry.HiddenByReplacement).ToArray();
+        internal IReadOnlyList<DashboardEntry> OwnedVisibleEntries =>
+            Entries.Where(entry => !entry.Isolated && !entry.HiddenByReplacement).ToArray();
+        internal IReadOnlyList<DashboardEntry> VisibleEntries =>
+            _visibleEntries.Where(entry => !entry.Isolated && !entry.HiddenByReplacement).ToArray();
+
+        private readonly IReadOnlyList<DashboardEntry> _visibleEntries;
     }
 
     internal sealed class DashboardCatalog
@@ -319,7 +331,10 @@ namespace ZeroEngine.Editor.Dashboard
             List<DashboardEntry> entries = activeModules.SelectMany(module => module.Entries).ToList();
 
             IsolateEntryConflicts(entries, diagnostics);
+            ValidateMountTargets(activeModules, entries, diagnostics);
             ApplyReplacements(activeModules, entries, installedNames, diagnostics);
+
+            DashboardEntry[] displayEntries = entries.Where(entry => !entry.Isolated).ToArray();
 
             DashboardModule[] orderedModules = activeModules
                 .OrderBy(module => module.Order)
@@ -335,6 +350,12 @@ namespace ZeroEngine.Editor.Dashboard
                     module.Source,
                     module.Entries
                         .Where(entry => !entry.Isolated)
+                        .OrderBy(entry => entry.Order)
+                        .ThenBy(entry => entry.DisplayName, StringComparer.OrdinalIgnoreCase)
+                        .ThenBy(entry => entry.FullId, StringComparer.Ordinal)
+                        .ToArray(),
+                    displayEntries
+                        .Where(entry => string.Equals(entry.DisplayModuleId, module.ModuleId, StringComparison.Ordinal))
                         .OrderBy(entry => entry.Order)
                         .ThenBy(entry => entry.DisplayName, StringComparer.OrdinalIgnoreCase)
                         .ThenBy(entry => entry.FullId, StringComparer.Ordinal)
@@ -470,6 +491,7 @@ namespace ZeroEngine.Editor.Dashboard
             string category = Trim(data.category);
             string menuPath = Trim(data.menuPath);
             string confirmation = Trim(data.confirmation);
+            string mountModuleId = Trim(data.mountModuleId);
 
             if (!EntryIdPattern.IsMatch(id))
                 errors.Add(prefix + "id must be lowercase kebab-case.");
@@ -477,6 +499,8 @@ namespace ZeroEngine.Editor.Dashboard
                 errors.Add(prefix + "displayName is required.");
             if (ContainsMarkup(data.description))
                 errors.Add(prefix + "description must not contain markup.");
+            if (!string.IsNullOrEmpty(mountModuleId) && !ModuleIdPattern.IsMatch(mountModuleId))
+                errors.Add(prefix + "mountModuleId must be a lowercase ASCII stable ID.");
             if (!Categories.Contains(category))
                 errors.Add(prefix + "category is invalid.");
             if (!TryParseKind(data.kind, out DashboardEntryKind kind))
@@ -525,7 +549,34 @@ namespace ZeroEngine.Editor.Dashboard
                 confirmation,
                 availability,
                 replacements,
+                mountModuleId,
                 sourcePath);
+        }
+
+        private static void ValidateMountTargets(
+            IReadOnlyList<DashboardModule> modules,
+            IReadOnlyList<DashboardEntry> entries,
+            List<DashboardDiagnostic> diagnostics)
+        {
+            var activeModuleIds = new HashSet<string>(
+                modules.Select(module => module.ModuleId),
+                StringComparer.Ordinal);
+
+            foreach (DashboardEntry entry in entries.Where(entry =>
+                         !entry.Isolated &&
+                         !string.IsNullOrEmpty(entry.MountModuleId) &&
+                         !activeModuleIds.Contains(entry.MountModuleId)))
+            {
+                entry.Isolated = true;
+                diagnostics.Add(new DashboardDiagnostic(
+                    DashboardDiagnosticSeverity.Warning,
+                    "mount-target-missing",
+                    "Mount target module '" + entry.MountModuleId + "' is missing or isolated; the entry is hidden.",
+                    entry.SourcePath,
+                    entry.ModuleId,
+                    entry.Id,
+                    entry.MenuPath));
+            }
         }
 
         private static void IsolateEntryConflicts(
