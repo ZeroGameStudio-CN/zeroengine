@@ -1,0 +1,30 @@
+{
+  "name": "ZeroEngine.ModSystem.Steam.Tests.Editor",
+  "rootNamespace": "ZeroEngine.ModSystem.Steam.Tests.Editor",
+  "references": [
+    "ZeroEngine.ModSystem",
+    "ZeroEngine.ModSystem.Steam"
+  ],
+  "includePlatforms": [
+    "Editor"
+  ],
+  "excludePlatforms": [],
+  "allowUnsafeCode": false,
+  "overrideReferences": false,
+  "precompiledReferences": [],
+  "autoReferenced": true,
+  "defineConstraints": [
+    "STEAMWORKS_NET"
+  ],
+  "versionDefines": [
+    {
+      "name": "com.rlabrecque.steamworks.net",
+      "expression": "",
+      "define": "STEAMWORKS_NET"
+    }
+  ],
+  "noEngineReferences": false,
+  "optionalUnityReferences": [
+    "TestAssemblies"
+  ]
+}

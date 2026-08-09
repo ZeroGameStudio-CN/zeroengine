@@ -13,6 +13,27 @@ namespace ZeroEngine.Timing.Tests
         }
 
         [Test]
+        public void SetBaseScale_ChangesDomainScaleAndRaisesEvent()
+        {
+            var service = new TimeControlService();
+            var domain = TimeDomainIds.Project("pob", "enemy");
+            TimeDomainId receivedDomain = default;
+            float receivedScale = -1f;
+
+            service.DomainScaleChanged += (changedDomain, scale) =>
+            {
+                receivedDomain = changedDomain;
+                receivedScale = scale;
+            };
+
+            service.SetBaseScale(domain, 0.5f);
+
+            Assert.That(service.GetScale(domain), Is.EqualTo(0.5f).Within(0.0001f));
+            Assert.That(receivedDomain, Is.EqualTo(domain));
+            Assert.That(receivedScale, Is.EqualTo(0.5f).Within(0.0001f));
+        }
+
+        [Test]
         public void SetScaleModifier_MultipleTokens_UsesStrongestSlow()
         {
             var service = new TimeControlService();

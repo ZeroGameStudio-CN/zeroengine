@@ -1,0 +1,22 @@
+{
+  "schemaVersion": 1,
+  "moduleId": "com.zerogamestudio.zeroengine.config-pipeline",
+  "displayName": "Config Pipeline",
+  "description": "Schema-first configuration authoring, validation, and artifact generation.",
+  "order": 200,
+  "documentationPath": "README.md",
+  "entries": [
+    {
+      "id": "config-pipeline",
+      "displayName": "Config Pipeline",
+      "description": "Open the existing Config Pipeline project window.",
+      "category": "authoring",
+      "kind": "window",
+      "menuPath": "ZGS/Config Pipeline",
+      "order": 100,
+      "safety": "navigation",
+      "availability": "always",
+      "replaces": []
+    }
+  ]
+}

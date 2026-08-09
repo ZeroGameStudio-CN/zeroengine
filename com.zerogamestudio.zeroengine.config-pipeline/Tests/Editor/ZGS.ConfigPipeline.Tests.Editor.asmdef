@@ -1,0 +1,28 @@
+{
+  "name": "ZGS.ConfigPipeline.Tests.Editor",
+  "rootNamespace": "ZeroGameStudio.ConfigPipeline.Tests",
+  "references": [
+    "ZGS.ConfigPipeline.Runtime",
+    "ZGS.ConfigPipeline.Editor",
+    "UnityEngine.TestRunner",
+    "UnityEditor.TestRunner"
+  ],
+  "includePlatforms": [
+    "Editor"
+  ],
+  "excludePlatforms": [],
+  "allowUnsafeCode": false,
+  "overrideReferences": true,
+  "precompiledReferences": [
+    "nunit.framework.dll",
+    "DocumentFormat.OpenXml.dll",
+    "DocumentFormat.OpenXml.Framework.dll",
+    "System.IO.Packaging.dll"
+  ],
+  "autoReferenced": false,
+  "defineConstraints": [
+    "UNITY_INCLUDE_TESTS"
+  ],
+  "versionDefines": [],
+  "noEngineReferences": false
+}

@@ -19,6 +19,7 @@ namespace ZeroEngine.ModSystem
         public bool Enabled = true;
 
         [NonSerialized] public string RootPath;
+        [NonSerialized] public string SourceId;
         [NonSerialized] public int LoadOrder;
 
         public bool IsValid(out string error)

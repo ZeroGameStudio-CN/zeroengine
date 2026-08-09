@@ -185,10 +185,11 @@ namespace ZeroEngine.Pathfinding2D
                             continue;
                         }
 
-                        // ★ 终点也必须是边缘节点
+                        // ★ 常规跳跃终点必须是边缘节点。edge-step-up fallback 额外允许落到
+                        // 同一上层 surface 的安全内部点，避免把角色中心导向贴边假落点。
                         bool toIsEdge = toNode.NodeType == PlatformNodeType.LeftEdge ||
                                         toNode.NodeType == PlatformNodeType.RightEdge;
-                        if (!toIsEdge)
+                        if (!toIsEdge && !CanConsiderEdgeStepUpSurfaceTarget(fromNode, toNode, verticalDist))
                         {
                             jumpSkippedToNotEdge++;
                             continue;
@@ -368,6 +369,14 @@ namespace ZeroEngine.Pathfinding2D
                 return false;
             }
 
+            bool edgeStepUpCandidate = IsEdgeStepUpCandidate(from, to);
+            bool canCreateEdgeJumpLink = edgeStepUpCandidate && CanCreateEdgeJumpLink(from, to);
+            if (edgeStepUpCandidate && !canCreateEdgeJumpLink)
+            {
+                failReason = "unsafe-edge-step-up";
+                return false;
+            }
+
             // 验证轨迹无障碍（排除起点和终点平台）
             if (!JumpMovementHandler.ValidateTrajectory(
                 result.Trajectory,
@@ -375,6 +384,22 @@ namespace ZeroEngine.Pathfinding2D
                 config.TrajectoryCheckRadius,
                 from.PlatformCollider,
                 to.PlatformCollider))
+            {
+                // 边对边"上台阶"兜底：两段平台在同一 X 边界垂直相邻（floor 右缘紧贴上方平台左缘）时，
+                // 连接它们的台阶/墙面落在跳跃轨迹里，严格检测会误杀，但玩家完全可以贴着墙跳上这级台阶。
+                // 镜像下落的 CanCreateEdgeFallLink：仅当几何是干净的相邻边上跳（起点在本段边缘、目标是
+                // 出口正上方第一段平台、在跳跃高度内）才放行。修复 navtest 016：floor→出口平台 Δ7 的
+                // 合法上跳被丢，而反向下落链接却存在。
+                if (!canCreateEdgeJumpLink)
+                {
+                    failReason = "trajectory";
+                    return false;
+                }
+            }
+
+            if (edgeStepUpCandidate &&
+                !CanIgnoreLowStepUpBodyContact(from, to) &&
+                HasSameColliderStructuralTrajectoryBlocker(result.Trajectory, from, to))
             {
                 failReason = "trajectory";
                 return false;
@@ -392,6 +417,155 @@ namespace ZeroEngine.Pathfinding2D
 
             graphGenerator.Links.Add(link);
             return true;
+        }
+
+        private bool CanIgnoreLowStepUpBodyContact(PlatformNodeData from, PlatformNodeData to)
+        {
+            if (graphGenerator == null ||
+                to.NodeType != PlatformNodeType.Surface ||
+                from.SurfaceGroupId < 0 ||
+                to.SurfaceGroupId < 0 ||
+                from.SurfaceGroupId == to.SurfaceGroupId)
+            {
+                return false;
+            }
+
+            if (!graphGenerator.TryGetSurfaceSegment(from.SurfaceGroupId, out var fromSegment) ||
+                !graphGenerator.TryGetSurfaceSegment(to.SurfaceGroupId, out var toSegment))
+            {
+                return false;
+            }
+
+            float lowStepRise = Mathf.Max(
+                graphGenerator.Config.CharacterHeight + graphGenerator.Config.CharacterRadius * 3f,
+                graphGenerator.Config.CharacterHeight + config.TrajectoryCheckRadius * 3f);
+            return toSegment.Y - fromSegment.Y <= lowStepRise + 0.1f;
+        }
+
+        private bool HasSameColliderStructuralTrajectoryBlocker(
+            Vector2[] trajectory,
+            PlatformNodeData from,
+            PlatformNodeData to)
+        {
+            if (graphGenerator == null ||
+                trajectory == null ||
+                trajectory.Length < 2 ||
+                from.PlatformCollider == null ||
+                from.PlatformCollider != to.PlatformCollider ||
+                from.SurfaceGroupId < 0 ||
+                to.SurfaceGroupId < 0 ||
+                from.SurfaceGroupId == to.SurfaceGroupId)
+            {
+                return false;
+            }
+
+            var sharedCollider = from.PlatformCollider;
+            if (!graphGenerator.TryGetSurfaceSegment(from.SurfaceGroupId, out var fromSegment) ||
+                !graphGenerator.TryGetSurfaceSegment(to.SurfaceGroupId, out var toSegment))
+            {
+                return false;
+            }
+
+            LayerMask blockerMask = graphGenerator.Config.GroundLayer | graphGenerator.Config.ObstacleLayer;
+            float radius = Mathf.Max(0.01f, config.TrajectoryCheckRadius);
+            float endpointIgnoreDistance = radius + 0.05f;
+            Vector2 start = trajectory[0];
+            Vector2 end = trajectory[trajectory.Length - 1];
+
+            for (int i = 0; i < trajectory.Length - 1; i++)
+            {
+                Vector2 segmentStart = trajectory[i];
+                Vector2 segmentEnd = trajectory[i + 1];
+                float segmentDistance = Vector2.Distance(segmentStart, segmentEnd);
+                if (segmentDistance <= Mathf.Epsilon)
+                    continue;
+
+                Vector2 direction = (segmentEnd - segmentStart).normalized;
+                RaycastHit2D[] hits = Physics2D.CircleCastAll(
+                    segmentStart,
+                    radius,
+                    direction,
+                    segmentDistance,
+                    blockerMask);
+
+                for (int hitIndex = 0; hitIndex < hits.Length; hitIndex++)
+                {
+                    var hit = hits[hitIndex];
+                    if (hit.collider != sharedCollider)
+                        continue;
+
+                    if (IsEndpointTrajectoryContact(hit.point, hit.centroid, start, end, endpointIgnoreDistance))
+                        continue;
+
+                    if (IsExpectedSurfaceContact(hit.point, hit.centroid, fromSegment, toSegment, radius))
+                        continue;
+
+                    return true;
+                }
+
+                int steps = Mathf.Max(1, Mathf.CeilToInt(segmentDistance / Mathf.Max(0.1f, radius)));
+                for (int step = 0; step <= steps; step++)
+                {
+                    Vector2 sample = Vector2.Lerp(segmentStart, segmentEnd, (float)step / steps);
+                    Collider2D[] overlaps = Physics2D.OverlapCircleAll(sample, radius, blockerMask);
+                    for (int overlapIndex = 0; overlapIndex < overlaps.Length; overlapIndex++)
+                    {
+                        if (overlaps[overlapIndex] != sharedCollider)
+                            continue;
+
+                        Vector2 contactPoint = sharedCollider.ClosestPoint(sample);
+                        if (IsEndpointTrajectoryContact(contactPoint, sample, start, end, endpointIgnoreDistance))
+                            continue;
+
+                        if (IsExpectedSurfaceContact(contactPoint, sample, fromSegment, toSegment, radius))
+                            continue;
+
+                        return true;
+                    }
+                }
+            }
+
+            return false;
+        }
+
+        private static bool IsEndpointTrajectoryContact(
+            Vector2 hitPoint,
+            Vector2 centroid,
+            Vector2 start,
+            Vector2 end,
+            float endpointIgnoreDistance)
+        {
+            return Vector2.Distance(hitPoint, start) <= endpointIgnoreDistance ||
+                   Vector2.Distance(hitPoint, end) <= endpointIgnoreDistance ||
+                   Vector2.Distance(centroid, start) <= endpointIgnoreDistance ||
+                   Vector2.Distance(centroid, end) <= endpointIgnoreDistance;
+        }
+
+        private static bool IsExpectedSurfaceContact(
+            Vector2 hitPoint,
+            Vector2 centroid,
+            PlatformSurfaceSegment fromSegment,
+            PlatformSurfaceSegment toSegment,
+            float radius)
+        {
+            return IsNearSurfaceTop(hitPoint, fromSegment, radius) ||
+                   IsNearSurfaceTop(centroid, fromSegment, radius) ||
+                   IsNearSurfaceTop(hitPoint, toSegment, radius) ||
+                   IsNearSurfaceTop(centroid, toSegment, radius);
+        }
+
+        private static bool IsNearSurfaceTop(
+            Vector2 point,
+            PlatformSurfaceSegment segment,
+            float radius)
+        {
+            if (segment == null)
+                return false;
+
+            float tolerance = radius + 0.05f;
+            return segment.ContainsX(point.x, tolerance) &&
+                   point.y >= segment.Y - tolerance &&
+                   point.y <= segment.Y + tolerance;
         }
 
         private float GetEffectiveMaxJumpHeight()
@@ -573,6 +747,265 @@ namespace ZeroEngine.Pathfinding2D
             }
 
             return false;
+        }
+
+        // Upward mirror of CanCreateEdgeFallLink: allow a near-vertical "step-up" jump between two
+        // vertically-adjacent platform edges (from at its segment edge, target the first surface directly
+        // above the exit point, within the jump envelope) even when ValidateTrajectory rejects it because the
+        // connecting step/wall lies in the arc. A player can jump up beside that wall onto the ledge.
+        private bool CanCreateEdgeJumpLink(PlatformNodeData from, PlatformNodeData to)
+        {
+            if (graphGenerator == null ||
+                from.PlatformCollider == null ||
+                to.PlatformCollider == null ||
+                from.SurfaceGroupId < 0 ||
+                to.SurfaceGroupId < 0 ||
+                from.SurfaceGroupId == to.SurfaceGroupId)
+            {
+                return false;
+            }
+
+            float rise = to.Position.y - from.Position.y;
+            if (rise <= 0.5f || rise > GetEffectiveMaxJumpHeight())
+            {
+                return false;
+            }
+
+            if (!graphGenerator.TryGetSurfaceSegment(from.SurfaceGroupId, out var fromSegment) ||
+                !graphGenerator.TryGetSurfaceSegment(to.SurfaceGroupId, out var toSegment))
+            {
+                return false;
+            }
+
+            float edgeInset = Mathf.Max(0.05f, graphGenerator.Config.EdgeInset);
+            float edgeTolerance = edgeInset + 0.1f;
+            float exitOffset = Mathf.Max(0.05f, edgeInset * 0.5f);
+            float landingTolerance = Mathf.Max(edgeInset + 0.05f, 0.25f);
+
+            if (from.NodeType == PlatformNodeType.RightEdge)
+            {
+                if (Mathf.Abs(from.Position.x - fromSegment.MaxX) > edgeTolerance)
+                {
+                    return false;
+                }
+
+                float exitX = fromSegment.MaxX + exitOffset;
+                return toSegment.ContainsX(exitX, landingTolerance) &&
+                       to.Position.x >= from.Position.x - landingTolerance &&
+                       IsNearEdgeStepUpLanding(from, to, fromSegment) &&
+                       HasSafeLandingCenter(to.Position.x, toSegment) &&
+                       IsFirstSurfaceAboveEdge(fromSegment, toSegment, exitX, landingTolerance) &&
+                       HasLandingHeadClearance(to.Position.x, toSegment);
+            }
+
+            if (from.NodeType == PlatformNodeType.LeftEdge)
+            {
+                if (Mathf.Abs(from.Position.x - fromSegment.MinX) > edgeTolerance)
+                    return false;
+
+                float exitX = fromSegment.MinX - exitOffset;
+                return toSegment.ContainsX(exitX, landingTolerance) &&
+                       to.Position.x <= from.Position.x + landingTolerance &&
+                       IsNearEdgeStepUpLanding(from, to, fromSegment) &&
+                       HasSafeLandingCenter(to.Position.x, toSegment) &&
+                       IsFirstSurfaceAboveEdge(fromSegment, toSegment, exitX, landingTolerance) &&
+                       HasLandingHeadClearance(to.Position.x, toSegment);
+            }
+
+            return false;
+        }
+
+        private bool IsEdgeStepUpCandidate(PlatformNodeData from, PlatformNodeData to)
+        {
+            if (graphGenerator == null ||
+                from.SurfaceGroupId < 0 ||
+                to.SurfaceGroupId < 0 ||
+                from.SurfaceGroupId == to.SurfaceGroupId)
+            {
+                return false;
+            }
+
+            if (from.NodeType != PlatformNodeType.LeftEdge &&
+                from.NodeType != PlatformNodeType.RightEdge)
+            {
+                return false;
+            }
+
+            float rise = to.Position.y - from.Position.y;
+            if (rise <= 0.5f || rise > GetEffectiveMaxJumpHeight())
+                return false;
+
+            if (!graphGenerator.TryGetSurfaceSegment(from.SurfaceGroupId, out var fromSegment) ||
+                !graphGenerator.TryGetSurfaceSegment(to.SurfaceGroupId, out var toSegment))
+            {
+                return false;
+            }
+
+            float edgeInset = Mathf.Max(0.05f, graphGenerator.Config.EdgeInset);
+            float edgeTolerance = edgeInset + 0.1f;
+            float exitOffset = Mathf.Max(0.05f, edgeInset * 0.5f);
+            float landingTolerance = Mathf.Max(edgeInset + 0.05f, 0.25f);
+
+            if (from.NodeType == PlatformNodeType.RightEdge)
+            {
+                if (Mathf.Abs(from.Position.x - fromSegment.MaxX) > edgeTolerance)
+                    return false;
+
+                float exitX = fromSegment.MaxX + exitOffset;
+                return toSegment.ContainsX(exitX, landingTolerance) &&
+                       IsFirstSurfaceAboveEdge(fromSegment, toSegment, exitX, landingTolerance);
+            }
+
+            if (Mathf.Abs(from.Position.x - fromSegment.MinX) > edgeTolerance)
+                return false;
+
+            float leftExitX = fromSegment.MinX - exitOffset;
+            return toSegment.ContainsX(leftExitX, landingTolerance) &&
+                   IsFirstSurfaceAboveEdge(fromSegment, toSegment, leftExitX, landingTolerance);
+        }
+
+        private bool CanConsiderEdgeStepUpSurfaceTarget(
+            PlatformNodeData from,
+            PlatformNodeData to,
+            float verticalDist)
+        {
+            if (to.NodeType != PlatformNodeType.Surface || verticalDist <= 0.5f)
+                return false;
+
+            return CanCreateEdgeJumpLink(from, to);
+        }
+
+        private bool IsNearEdgeStepUpLanding(
+            PlatformNodeData from,
+            PlatformNodeData to,
+            PlatformSurfaceSegment fromSegment)
+        {
+            if (to.NodeType != PlatformNodeType.Surface)
+                return true;
+
+            var graphConfig = graphGenerator.Config;
+            float safeInset = Mathf.Max(
+                Mathf.Max(Mathf.Max(graphConfig.CharacterRadius, graphConfig.EdgeInset), config.TrajectoryCheckRadius) + 0.15f,
+                graphConfig.EdgeInset + 0.15f);
+            float surfaceSlack = 0.15f;
+            float firstInteriorNodeSlack = Mathf.Max(0f, graphConfig.ActualNodeSpacing);
+            float maxSurfaceOffset = safeInset + firstInteriorNodeSlack + surfaceSlack;
+
+            if (from.NodeType == PlatformNodeType.RightEdge)
+                return to.Position.x <= fromSegment.MaxX + maxSurfaceOffset;
+
+            if (from.NodeType == PlatformNodeType.LeftEdge)
+                return to.Position.x >= fromSegment.MinX - maxSurfaceOffset;
+
+            return false;
+        }
+
+        private bool HasSafeLandingCenter(float landingX, PlatformSurfaceSegment landingSegment)
+        {
+            if (graphGenerator == null || landingSegment == null)
+                return false;
+
+            float horizontalClearance = Mathf.Max(
+                graphGenerator.Config.CharacterRadius,
+                config.TrajectoryCheckRadius) + 0.05f;
+
+            return landingX >= landingSegment.MinX + horizontalClearance &&
+                   landingX <= landingSegment.MaxX - horizontalClearance;
+        }
+
+        private bool HasLandingHeadClearance(float landingX, PlatformSurfaceSegment landingSegment)
+        {
+            if (graphGenerator == null || landingSegment == null)
+                return true;
+
+            var graphConfig = graphGenerator.Config;
+            float characterHeight = Mathf.Max(0.05f, graphConfig.CharacterHeight);
+            float clearanceBottom = landingSegment.Y + 0.05f;
+            float clearanceTop = clearanceBottom + characterHeight;
+            float clearanceWidth = Mathf.Max(
+                graphConfig.CharacterRadius * 2f,
+                config.TrajectoryCheckRadius * 2f);
+            Vector2 center = new Vector2(landingX, clearanceBottom + characterHeight * 0.5f);
+            Vector2 size = new Vector2(clearanceWidth, characterHeight);
+            LayerMask blockerMask = graphConfig.GroundLayer | graphConfig.ObstacleLayer;
+
+            var blockers = Physics2D.OverlapBoxAll(center, size, 0f, blockerMask);
+            for (int i = 0; i < blockers.Length; i++)
+            {
+                var blocker = blockers[i];
+                if (blocker == null)
+                    continue;
+
+                if (blocker == landingSegment.Collider &&
+                    !HasSameColliderSurfaceInsideClearance(blocker, landingSegment, landingX, clearanceBottom, clearanceTop))
+                {
+                    continue;
+                }
+
+                return false;
+            }
+
+            return true;
+        }
+
+        private bool HasSameColliderSurfaceInsideClearance(
+            Collider2D collider,
+            PlatformSurfaceSegment landingSegment,
+            float landingX,
+            float clearanceBottom,
+            float clearanceTop)
+        {
+            if (graphGenerator?.SurfaceSegments == null)
+                return false;
+
+            float xTolerance = Mathf.Max(0.05f, graphGenerator.Config.CharacterRadius);
+            for (int i = 0; i < graphGenerator.SurfaceSegments.Count; i++)
+            {
+                var segment = graphGenerator.SurfaceSegments[i];
+                if (segment == null ||
+                    segment == landingSegment ||
+                    segment.Collider != collider ||
+                    !segment.ContainsX(landingX, xTolerance))
+                {
+                    continue;
+                }
+
+                if (segment.Y > clearanceBottom && segment.Y <= clearanceTop)
+                    return true;
+            }
+
+            return false;
+        }
+
+        // True when toSegment is the FIRST walkable surface directly above the exit point (no intermediate
+        // platform between from and to at exitX) — so the step-up jump lands on `to`, not something between.
+        private bool IsFirstSurfaceAboveEdge(
+            PlatformSurfaceSegment fromSegment,
+            PlatformSurfaceSegment toSegment,
+            float exitX,
+            float landingTolerance)
+        {
+            if (graphGenerator?.SurfaceSegments == null)
+                return true;
+
+            float verticalTolerance = Mathf.Max(0.05f, landingTolerance * 0.1f);
+            foreach (var segment in graphGenerator.SurfaceSegments)
+            {
+                if (segment == null ||
+                    segment.GroupId == fromSegment.GroupId ||
+                    segment.GroupId == toSegment.GroupId ||
+                    !segment.ContainsX(exitX, landingTolerance))
+                {
+                    continue;
+                }
+
+                bool aboveStart = segment.Y > fromSegment.Y + verticalTolerance;
+                bool belowTarget = segment.Y < toSegment.Y - verticalTolerance;
+                if (aboveStart && belowTarget)
+                    return false;
+            }
+
+            return true;
         }
 
         private bool IsFirstLandingBelowEdge(

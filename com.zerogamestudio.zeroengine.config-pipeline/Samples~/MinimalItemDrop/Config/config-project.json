@@ -1,0 +1,25 @@
+{
+  "formatVersion": 1,
+  "configSets": [
+    {
+      "configSetId": "sample.item-drop",
+      "authoringSource": "excel",
+      "schema": "Assets/Samples/ZeroEngine Config Pipeline/1.0.0/Minimal Item Drop/Config/item-drop.schema.json",
+      "workbooks": [
+        {"path": "Assets/Samples/ZeroEngine Config Pipeline/1.0.0/Minimal Item Drop/Config/items.xlsx", "tables": ["items"]},
+        {"path": "Assets/Samples/ZeroEngine Config Pipeline/1.0.0/Minimal Item Drop/Config/drops.xlsx", "tables": ["dropTables"]}
+      ],
+      "generatedNamespace": "ZeroGameStudio.ConfigPipeline.Sample.Generated",
+      "rootClassName": "ItemDropConfig",
+      "codePath": "Assets/Samples/ZeroEngine Config Pipeline/1.0.0/Minimal Item Drop/Generated/ItemDropConfig.g.cs",
+      "targets": [
+        {
+          "scope": "client",
+          "json": "Assets/Samples/ZeroEngine Config Pipeline/1.0.0/Minimal Item Drop/Generated/item-drop.json",
+          "manifest": "Assets/Samples/ZeroEngine Config Pipeline/1.0.0/Minimal Item Drop/Generated/item-drop.manifest.json",
+          "sourceMap": "Assets/Samples/ZeroEngine Config Pipeline/1.0.0/Minimal Item Drop/Generated/item-drop.sourcemap.json"
+        }
+      ]
+    }
+  ]
+}

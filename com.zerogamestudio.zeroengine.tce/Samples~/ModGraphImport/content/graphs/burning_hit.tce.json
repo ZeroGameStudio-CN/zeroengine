@@ -1,0 +1,21 @@
+{
+  "format": "zeroengine-tce-graph",
+  "schemaVersion": 1,
+  "graphId": "burning_hit",
+  "displayName": "Burning Hit",
+  "triggers": [
+    {
+      "componentId": "zeroengine.tce.trigger.on_install",
+      "fields": {}
+    }
+  ],
+  "conditions": [],
+  "effects": [
+    {
+      "componentId": "zeroengine.tce.effect.debug_log",
+      "fields": {
+        "Message": "Burning Hit accepted."
+      }
+    }
+  ]
+}

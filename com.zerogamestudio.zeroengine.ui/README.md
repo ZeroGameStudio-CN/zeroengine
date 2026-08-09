@@ -3,7 +3,7 @@
 工业级 UI 框架包。
 
 ## 版本
-- **当前版本**: 2.0.0
+- **当前版本**: 2.0.1
 - **依赖**: ZeroEngine.Core, TextMeshPro
 
 ## 包含模块
@@ -47,3 +47,7 @@ UIManager.Instance.OnViewOpened += name => Debug.Log(name);
 |----|------|
 | `ZEROENGINE_ADDRESSABLES` | Addressables 加载 |
 | `ODIN_INSPECTOR` | Odin 编辑器支持 |
+
+## ZeroEngine Dashboard
+
+可选 Dashboard 会把现有 `ZeroEngine/UI/Install Toast System` 注册为需确认的 `project-write` 命令；实际安装、Undo 和资源写入安全仍由本包负责，本包不依赖 Dashboard。

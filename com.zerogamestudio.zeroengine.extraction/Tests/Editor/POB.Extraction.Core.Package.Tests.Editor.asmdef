@@ -1,0 +1,21 @@
+{
+  "name": "POB.Extraction.Core.Package.Tests.Editor",
+  "rootNamespace": "POB.Extraction.Core.Package.Tests.Editor",
+  "references": [
+    "POB.Extraction.Core"
+  ],
+  "includePlatforms": [
+    "Editor"
+  ],
+  "excludePlatforms": [],
+  "allowUnsafeCode": false,
+  "overrideReferences": false,
+  "precompiledReferences": [],
+  "autoReferenced": true,
+  "defineConstraints": [],
+  "versionDefines": [],
+  "noEngineReferences": false,
+  "optionalUnityReferences": [
+    "TestAssemblies"
+  ]
+}

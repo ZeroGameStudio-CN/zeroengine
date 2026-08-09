@@ -1,29 +1,28 @@
 {
-  "name": "com.zerogamestudio.zeroengine.core",
-  "version": "2.0.0",
-  "displayName": "ZeroEngine.Core",
-  "description": "Core infrastructure for ZeroEngine framework. Includes Singleton patterns (Singleton, MonoSingleton, PersistentSingleton), EventManager, Object Pooling (PoolManager, IPoolable), Performance utilities (ZeroGC, ListPool, FormattedValueCache), and common utilities (ZeroLog, DateUtils).",
-  "unity": "2022.3",
-  "unityRelease": "0f1",
-  "dependencies": {},
-  "keywords": [
-    "zeroengine",
-    "core",
-    "singleton",
-    "event",
-    "pool",
-    "performance",
-    "gc",
-    "utility"
-  ],
-  "author": {
-    "name": "ZeroGameStudio",
-    "url": "https://github.com/zerogamestudio"
-  },
-  "repository": {
-    "type": "git",
-    "url": "https://github.com/ZeroGameStudio-CN/zeroengine.git",
-    "directory": "com.zerogamestudio.zeroengine.core"
-  },
-  "license": "MIT"
+    "name": "com.zerogamestudio.zeroengine.core",
+    "version": "2.0.0",
+    "displayName": "ZeroEngine.Core",
+    "description": "Core infrastructure for ZeroEngine framework. Includes Singleton patterns (Singleton, MonoSingleton, PersistentSingleton), EventManager, Object Pooling (PoolManager, IPoolable), Performance utilities (ZeroGC, ListPool, FormattedValueCache), and common utilities (ZeroLog, DateUtils).",
+    "unity": "2022.3",
+    "unityRelease": "0f1",
+    "dependencies": {},
+    "keywords": [
+        "zeroengine",
+        "core",
+        "singleton",
+        "event",
+        "pool",
+        "performance",
+        "gc",
+        "utility"
+    ],
+    "author": {
+        "name": "ZeroGameStudio",
+        "url": "https://github.com/zerogamestudio"
+    },
+    "repository": {
+        "type": "git",
+        "url": "https://github.com/zerogamestudio/zeroengine.git",
+        "directory": "Packages/com.zerogamestudio.zeroengine.core"
+    }
 }

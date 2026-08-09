@@ -1,0 +1,42 @@
+# Changelog
+
+## 0.3.0
+
+- Added injected integer random value sources with inclusive ranges.
+- Added deterministic random evaluation to Formula Editor previews and scans.
+- Added structured diagnostics for missing random sources and invalid ranges.
+
+## 0.2.0
+
+- Added formula governance profile settings for catalog paths and reference roots.
+- Added editor-only Formula Catalog metadata models and lookup helpers.
+- Added GUID reference indexing for project text assets.
+- Added scanner governance context for missing catalog entries, unreferenced
+  formulas, and expected result ranges.
+- Added JSON and Markdown scan report export helpers.
+- Added safe rename dry-run planning with Addressables blocking detection.
+- Added EditMode tests for governance metadata, reference indexing, scan report
+  export, and rename planning.
+- Added preview cases, runtime snapshots, batch preview reports, and JSON /
+  Markdown preview report export helpers for formula debugging workflows.
+- Added preview case ScriptableObject assets, Workbench batch preview export,
+  profile default preview cases, and curve preview data for formula debugging.
+- Added batchmode scanner CLI exit-code policy, report file output, and
+  deterministic formula migration dry-run/apply reports.
+- Added a shared Formula Catalog window that aggregates formulas, references,
+  scan issues, catalog metadata, Markdown reports, and draft missing-entry
+  generation for project profiles.
+- Added searchable enum parameter dropdowns for large enum catalogs while
+  preserving serialized numeric values.
+
+## 0.1.0
+
+- Added step-based formula runtime contracts and evaluator.
+- Added constant, provider, and nested formula value sources.
+- Added structured evaluation reports and diagnostics.
+- Added provider registry and provider request helpers.
+- Added integer rounding utilities.
+- Added `FormulaAsset` ScriptableObject support.
+- Added Editor formula asset scanner and formula workbench.
+- Added EditMode tests for evaluator, provider registry, scanner, and runtime
+  package boundaries.

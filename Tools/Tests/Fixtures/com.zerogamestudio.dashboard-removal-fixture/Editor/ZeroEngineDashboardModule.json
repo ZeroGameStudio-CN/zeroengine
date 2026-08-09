@@ -1,0 +1,21 @@
+{
+  "schemaVersion": 1,
+  "moduleId": "com.zerogamestudio.dashboard-removal-fixture",
+  "displayName": "Removal Fixture",
+  "description": "Synthetic package-removal event fixture.",
+  "order": 9999,
+  "entries": [
+    {
+      "id": "fixture-window",
+      "displayName": "Fixture Window",
+      "description": "Synthetic entry that must disappear when the package is removed.",
+      "category": "diagnostics",
+      "kind": "window",
+      "menuPath": "ZeroEngine Dashboard Tests/Removal Fixture",
+      "order": 100,
+      "safety": "navigation",
+      "availability": "always",
+      "replaces": []
+    }
+  ]
+}

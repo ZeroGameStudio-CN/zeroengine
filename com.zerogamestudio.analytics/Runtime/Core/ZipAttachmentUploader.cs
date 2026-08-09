@@ -36,13 +36,16 @@ namespace ZGS.Analytics
             Generic,
             Screenshot,
             CurrentPlayerLog,
-            PreviousPlayerLog
+            PreviousPlayerLog,
+            ProjectState
         }
 
         private sealed class AttachmentCandidate
         {
             public string SourcePath;
+            public string ManifestPath;
             public string EntryName;
+            public byte[] GeneratedBytes;
             public AttachmentKind Kind;
             public int Priority;
             public int Order;
@@ -55,6 +58,7 @@ namespace ZGS.Analytics
         private sealed class UploadManifest
         {
             public string clientPolicyVersion = ClientPolicyVersion;
+            public string submissionId = string.Empty;
             public bool partial;
             public bool truncated;
             public bool skipped;
@@ -67,6 +71,14 @@ namespace ZGS.Analytics
             public long omittedAttachmentIncludedBytes;
             public string manifestTruncationReason = string.Empty;
             public List<UploadManifestAttachment> attachments = new();
+            public List<UploadManifestMetadata> metadata = new();
+        }
+
+        [Serializable]
+        private sealed class UploadManifestMetadata
+        {
+            public string key;
+            public string value;
         }
 
         [Serializable]
@@ -82,57 +94,55 @@ namespace ZGS.Analytics
 
         public IEnumerator Upload(AttachmentUploadRequest request)
         {
-            if (!AnalyticsConfig.IsConfigured)
+            request = request ?? new AttachmentUploadRequest();
+            var submissionRequest = new FeedbackSubmissionRequest
             {
-                AnalyticsLog.LogWarning("[ZipAttachmentUploader] 未配置服务器 URL 或 Secret，跳过上传");
-                yield break;
-            }
+                UserMessage = request.UserMessage,
+                UserName = request.UserName,
+                FilesToInclude = request.FilesToInclude ?? Array.Empty<string>(),
+                ExtraData = request.ExtraData ?? new Dictionary<string, object>(),
+                LegacyTimelineJson = request.TimelineJson,
+                LegacyDirectoriesToInclude = request.DirectoriesToInclude ?? Array.Empty<string>()
+            };
 
-            string safeUserName = SanitizeFileName(request.UserName ?? "Unknown");
-            string version = BuildUploadVersion(AnalyticsConfig.AppId, Application.productName, Application.version);
+            yield return FeedbackSubmissionService.Submit(submissionRequest, null);
+        }
+
+        internal static bool TryCreateFeedbackZip(
+            FeedbackSubmissionRequest request,
+            FeedbackPackageCollector collector,
+            string submissionId,
+            string timelineJson,
+            out string zipPath,
+            out string version,
+            out string safeUserName)
+        {
+            safeUserName = SanitizeFileName(request.UserName ?? "Unknown");
+            version = BuildUploadVersion(AnalyticsConfig.AppId, Application.productName, Application.version);
             string timestamp = DateTime.Now.ToString("yyyyMMdd_HHmmss");
-            string zipEntryPrefix = BuildZipEntryPrefix(version, safeUserName, timestamp);
+            string prefixBase = BuildZipEntryPrefix(version, safeUserName, timestamp);
+            string zipEntryPrefix = prefixBase + "_" + SanitizeZipEntryPathSegment(submissionId);
             string prefixDir = zipEntryPrefix + "/";
-            string zipName = BuildZipFileName(zipEntryPrefix);
+            string feedbackDirectory = FeedbackUploadQueue.FeedbackDirectory;
+            zipPath = Path.Combine(feedbackDirectory, BuildZipFileName(zipEntryPrefix));
+            DeleteIfExists(zipPath);
 
-            // 使用持久化目录存储 ZIP（不会被系统清理）
-            string feedbackDir = FeedbackUploadQueue.FeedbackDirectory;
-            string zipPath = Path.Combine(feedbackDir, zipName);
-            if (File.Exists(zipPath)) File.Delete(zipPath);
-
-            // 临时目录用于处理截图等中间文件
-            string tmpDir = Application.temporaryCachePath;
-
-            if (!TryCreateZip(request, zipPath, zipEntryPrefix, prefixDir, tmpDir, feedbackDir))
-            {
-                AnalyticsLog.LogWarning("[ZipAttachmentUploader] 创建反馈 ZIP 失败，跳过上传");
-                yield break;
-            }
-
-            // 使用带重试的上传（失败后自动入队列）
-            bool uploadSuccess = false;
-            yield return FeedbackUploadQueue.UploadWithRetry(
+            string legacyTimeline = FeedbackTimelineSerializer.BoundLegacyText(request.LegacyTimelineJson);
+            string effectiveTimeline = string.IsNullOrEmpty(legacyTimeline) ? timelineJson : legacyTimeline;
+            return TryCreateZip(
+                request.UserName,
+                request.Contact,
+                request.UserMessage,
+                effectiveTimeline,
+                request.LegacyDirectoriesToInclude,
+                Array.Empty<string>(),
+                collector,
+                submissionId,
                 zipPath,
-                version,
-                safeUserName,
-                success =>
-                {
-                    uploadSuccess = success;
-                    if (success)
-                    {
-                        // 上传成功，删除 ZIP 文件
-                        try
-                        {
-                            if (File.Exists(zipPath))
-                                File.Delete(zipPath);
-                        }
-                        catch { }
-                    }
-                });
-
-            AnalyticsLog.Log(uploadSuccess
-                ? $"[ZipAttachmentUploader] 上传成功"
-                : $"[ZipAttachmentUploader] 上传失败，已加入离线队列");
+                zipEntryPrefix,
+                prefixDir,
+                Application.temporaryCachePath,
+                feedbackDirectory);
         }
 
         private static bool TryCreateZip(
@@ -168,14 +178,53 @@ namespace ZGS.Analytics
             string temporaryDirectory,
             string feedbackDirectory)
         {
+            return TryCreateZip(
+                userName,
+                string.Empty,
+                userMessage,
+                timelineJson,
+                directoriesToInclude,
+                filesToInclude,
+                null,
+                string.Empty,
+                zipPath,
+                prefix,
+                prefixDir,
+                temporaryDirectory,
+                feedbackDirectory);
+        }
+
+        private static bool TryCreateZip(
+            string userName,
+            string contact,
+            string userMessage,
+            string timelineJson,
+            IEnumerable<string> directoriesToInclude,
+            IEnumerable<string> filesToInclude,
+            FeedbackPackageCollector collector,
+            string submissionId,
+            string zipPath,
+            string prefix,
+            string prefixDir,
+            string temporaryDirectory,
+            string feedbackDirectory)
+        {
             try
             {
                 prefix = SanitizeZipEntryPathSegment(prefix);
                 prefixDir = NormalizeEntryDirectory(prefixDir);
 
-                string feedbackContent = $"User: {userName}\nMessage: {userMessage}\n\n---TIMELINE---\n{timelineJson}";
+                string feedbackContent = BuildFeedbackContent(
+                    userName,
+                    contact,
+                    userMessage,
+                    timelineJson);
                 byte[] feedbackBytes = Encoding.UTF8.GetBytes(feedbackContent);
-                var manifest = new UploadManifest();
+                if (feedbackBytes.Length > AttachmentBytesBudget)
+                    return false;
+
+                var manifest = new UploadManifest { submissionId = submissionId ?? string.Empty };
+                AddCollectorMetadata(manifest, collector);
                 int entryCount = 0;
                 long uncompressedBytes = 0;
 
@@ -200,7 +249,8 @@ namespace ZGS.Analytics
                         zipPath,
                         feedbackDirectory,
                         prefix,
-                        prefixDir);
+                        prefixDir,
+                        collector);
 
                     for (int i = 0; i < candidates.Count; i++)
                     {
@@ -224,9 +274,42 @@ namespace ZGS.Analytics
             }
             catch (Exception e)
             {
-                AnalyticsLog.LogWarning($"[ZipAttachmentUploader] 创建反馈 ZIP 失败: {e.Message}");
+                AnalyticsLog.LogWarning($"[ZipAttachmentUploader] 创建反馈 ZIP 失败: {e.GetType().Name}");
                 DeleteIfExists(zipPath);
                 return false;
+            }
+        }
+
+        private static string BuildFeedbackContent(
+            string userName,
+            string contact,
+            string userMessage,
+            string timelineJson)
+        {
+            var builder = new StringBuilder();
+            builder.Append("User: ").AppendLine(userName ?? string.Empty);
+            if (!string.IsNullOrWhiteSpace(contact))
+                builder.Append("Contact: ").AppendLine(contact);
+            builder.Append("Message: ").AppendLine(userMessage ?? string.Empty);
+            builder.AppendLine().AppendLine("---TIMELINE---");
+            builder.Append(timelineJson ?? string.Empty);
+            return builder.ToString();
+        }
+
+        private static void AddCollectorMetadata(
+            UploadManifest manifest,
+            FeedbackPackageCollector collector)
+        {
+            if (collector == null)
+                return;
+
+            foreach (FeedbackPackageCollector.MetadataItem item in collector.Metadata)
+            {
+                manifest.metadata.Add(new UploadManifestMetadata
+                {
+                    key = item.Key,
+                    value = item.Value
+                });
             }
         }
 
@@ -236,7 +319,8 @@ namespace ZGS.Analytics
             string zipPath,
             string feedbackDirectory,
             string prefix,
-            string prefixDir)
+            string prefixDir,
+            FeedbackPackageCollector collector = null)
         {
             var result = new List<AttachmentCandidate>();
             var usedSourcePaths = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
@@ -276,6 +360,7 @@ namespace ZGS.Analytics
                     result.Add(new AttachmentCandidate
                     {
                         SourcePath = path,
+                        ManifestPath = Path.GetFileName(path),
                         EntryName = MakeUniqueEntryName(entryName, usedEntryNames),
                         Kind = kind,
                         Priority = priority,
@@ -284,8 +369,62 @@ namespace ZGS.Analytics
                 }
             }
 
+            AddCollectorCandidates(
+                result,
+                usedSourcePaths,
+                usedEntryNames,
+                collector,
+                feedbackDirectory,
+                prefixDir,
+                ref order);
+
             result.Sort(CompareCandidatePriority);
             return result;
+        }
+
+        private static void AddCollectorCandidates(
+            List<AttachmentCandidate> result,
+            HashSet<string> usedSourcePaths,
+            HashSet<string> usedEntryNames,
+            FeedbackPackageCollector collector,
+            string feedbackDirectory,
+            string prefixDir,
+            ref int order)
+        {
+            if (collector == null)
+                return;
+
+            foreach (FeedbackPackageCollector.Item item in collector.Items)
+            {
+                bool generated = item.GeneratedBytes != null;
+                string normalizedSource = generated ? string.Empty : NormalizePath(item.SourcePath);
+                if (!generated && !usedSourcePaths.Add(normalizedSource))
+                    continue;
+
+                string relativePath = string.IsNullOrWhiteSpace(item.ArchiveRelativePath)
+                    ? Path.GetFileName(item.SourcePath)
+                    : item.ArchiveRelativePath;
+                if (item.Kind == FeedbackAttachmentKind.Screenshot)
+                    relativePath = Path.ChangeExtension(relativePath, ".jpg");
+
+                string skippedReason = string.Empty;
+                if (!generated && !File.Exists(item.SourcePath))
+                    skippedReason = "file_missing";
+                else if (!generated && IsPathInsideDirectory(item.SourcePath, feedbackDirectory))
+                    skippedReason = "feedback_queue_directory";
+
+                result.Add(new AttachmentCandidate
+                {
+                    SourcePath = item.SourcePath,
+                    ManifestPath = NormalizeEntryName(relativePath),
+                    EntryName = MakeUniqueEntryName(prefixDir + relativePath, usedEntryNames),
+                    GeneratedBytes = item.GeneratedBytes,
+                    Kind = ToAttachmentKind(item.Kind),
+                    Priority = (int)item.Priority,
+                    Order = order++,
+                    PreSkippedReason = skippedReason
+                });
+            }
         }
 
         private static void AddDirectoryCandidates(
@@ -319,6 +458,7 @@ namespace ZGS.Analytics
                     result.Add(new AttachmentCandidate
                     {
                         SourcePath = file,
+                        ManifestPath = rel,
                         EntryName = MakeUniqueEntryName(prefixDir + rel, usedEntryNames),
                         Kind = kind,
                         Priority = IsPlayerLog(kind) ? 10 : 40,
@@ -329,7 +469,7 @@ namespace ZGS.Analytics
             }
             catch (Exception e) when (e is IOException || e is UnauthorizedAccessException)
             {
-                AnalyticsLog.LogWarning($"[ZipAttachmentUploader] 扫描附件目录失败: {directory} - {e.Message}");
+                AnalyticsLog.LogWarning($"[ZipAttachmentUploader] 扫描附件目录失败: {e.GetType().Name}");
             }
         }
 
@@ -341,13 +481,18 @@ namespace ZGS.Analytics
             ref int entryCount,
             ref long uncompressedBytes)
         {
-            long originalBytes = GetFileLength(candidate.SourcePath);
+            long originalBytes = candidate.GeneratedBytes == null
+                ? GetFileLength(candidate.SourcePath)
+                : candidate.GeneratedBytes.LongLength;
+            string manifestPath = string.IsNullOrWhiteSpace(candidate.ManifestPath)
+                ? Path.GetFileName(candidate.SourcePath)
+                : candidate.ManifestPath;
 
             if (!string.IsNullOrEmpty(candidate.PreSkippedReason))
             {
                 AddManifestAttachment(
                     manifest,
-                    candidate.SourcePath,
+                    manifestPath,
                     candidate.EntryName,
                     originalBytes,
                     0,
@@ -360,7 +505,7 @@ namespace ZGS.Analytics
             {
                 AddManifestAttachment(
                     manifest,
-                    candidate.SourcePath,
+                    manifestPath,
                     candidate.EntryName,
                     originalBytes,
                     0,
@@ -375,7 +520,7 @@ namespace ZGS.Analytics
             {
                 AddManifestAttachment(
                     manifest,
-                    candidate.SourcePath,
+                    manifestPath,
                     candidate.EntryName,
                     originalBytes,
                     0,
@@ -386,16 +531,16 @@ namespace ZGS.Analytics
 
             if (!TryPrepareAttachmentBytes(candidate, temporaryDirectory, out byte[] bytes, out Exception lastException))
             {
-                string message = lastException == null ? "unknown" : lastException.Message;
+                string failureType = lastException == null ? "Unknown" : lastException.GetType().Name;
                 AddManifestAttachment(
                     manifest,
-                    candidate.SourcePath,
+                    manifestPath,
                     candidate.EntryName,
                     originalBytes,
                     0,
                     "skipped",
-                    $"read_failed: {message}");
-                AnalyticsLog.LogWarning($"[ZipAttachmentUploader] 跳过附件: {candidate.SourcePath} - {message}");
+                    $"read_failed: {failureType}");
+                AnalyticsLog.LogWarning($"[ZipAttachmentUploader] 跳过附件: {failureType}");
                 return;
             }
 
@@ -403,7 +548,7 @@ namespace ZGS.Analytics
             {
                 AddManifestAttachment(
                     manifest,
-                    candidate.SourcePath,
+                    manifestPath,
                     candidate.EntryName,
                     originalBytes,
                     0,
@@ -419,7 +564,7 @@ namespace ZGS.Analytics
             bool truncated = candidate.IsLog && originalBytes > bytes.Length;
             AddManifestAttachment(
                 manifest,
-                candidate.SourcePath,
+                manifestPath,
                 candidate.EntryName,
                 originalBytes,
                 bytes.Length,
@@ -433,6 +578,13 @@ namespace ZGS.Analytics
             out byte[] bytes,
             out Exception lastException)
         {
+            if (candidate.GeneratedBytes != null)
+            {
+                bytes = candidate.GeneratedBytes;
+                lastException = null;
+                return true;
+            }
+
             if (candidate.IsLog)
                 return TryReadTailFileBytes(candidate.SourcePath, MaxLogBytes, out bytes, out lastException);
 
@@ -473,10 +625,24 @@ namespace ZGS.Analytics
             manifest.manifestTruncated = true;
             manifest.manifestTruncationReason = "manifest_budget_exceeded";
 
-            while (bytes.Length > maxManifestBytes && TryOmitLastManifestAttachment(manifest))
+            while (bytes.Length > maxManifestBytes)
+            {
+                if (!TryOmitLastManifestAttachment(manifest) && !TryOmitLastManifestMetadata(manifest))
+                    break;
+
                 bytes = Encoding.UTF8.GetBytes(JsonUtility.ToJson(manifest, true));
+            }
 
             return bytes;
+        }
+
+        private static bool TryOmitLastManifestMetadata(UploadManifest manifest)
+        {
+            if (manifest.metadata.Count == 0)
+                return false;
+
+            manifest.metadata.RemoveAt(manifest.metadata.Count - 1);
+            return true;
         }
 
         private static bool TryOmitLastManifestAttachment(UploadManifest manifest)
@@ -632,6 +798,21 @@ namespace ZGS.Analytics
             return AttachmentKind.Generic;
         }
 
+        private static AttachmentKind ToAttachmentKind(FeedbackAttachmentKind kind)
+        {
+            switch (kind)
+            {
+                case FeedbackAttachmentKind.Log:
+                    return AttachmentKind.CurrentPlayerLog;
+                case FeedbackAttachmentKind.Screenshot:
+                    return AttachmentKind.Screenshot;
+                case FeedbackAttachmentKind.ProjectState:
+                    return AttachmentKind.ProjectState;
+                default:
+                    return AttachmentKind.Generic;
+            }
+        }
+
         private static bool IsPlayerLog(AttachmentKind kind)
         {
             return kind == AttachmentKind.CurrentPlayerLog || kind == AttachmentKind.PreviousPlayerLog;
@@ -716,7 +897,7 @@ namespace ZGS.Analytics
             }
             catch (Exception e) when (e is IOException || e is UnauthorizedAccessException || e is InvalidDataException)
             {
-                AnalyticsLog.LogWarning($"[ZipAttachmentUploader] 截图处理失败: {srcPath} - {e.Message}");
+                AnalyticsLog.LogWarning($"[ZipAttachmentUploader] 截图处理失败: {e.GetType().Name}");
                 return false;
             }
             finally

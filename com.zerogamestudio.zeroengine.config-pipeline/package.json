@@ -1,0 +1,34 @@
+{
+  "name": "com.zerogamestudio.zeroengine.config-pipeline",
+  "version": "1.0.1",
+  "displayName": "ZeroEngine Config Pipeline",
+  "description": "Schema-first deterministic configuration authoring, validation, generation, and runtime artifact loading for Unity projects.",
+  "unity": "2022.3",
+  "dependencies": {
+    "com.unity.nuget.newtonsoft-json": "3.2.1"
+  },
+  "keywords": [
+    "zeroengine",
+    "configuration",
+    "excel",
+    "schema",
+    "codegen"
+  ],
+  "author": {
+    "name": "ZeroGameStudio",
+    "url": "https://github.com/zerogamestudio"
+  },
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/liuzqk/zeroengine.git",
+    "directory": "com.zerogamestudio.zeroengine.config-pipeline"
+  },
+  "samples": [
+    {
+      "displayName": "Minimal Item Drop",
+      "description": "Schema, project profile, workbooks and generation setup for a generic item/drop configuration.",
+      "path": "Samples~/MinimalItemDrop"
+    }
+  ]
+}

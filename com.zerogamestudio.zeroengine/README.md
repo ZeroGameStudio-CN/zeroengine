@@ -237,3 +237,7 @@ Unity.exe -runTests -testPlatform EditMode -projectPath "<项目路径>" -testRe
 - **ScheduleAction**: 日程行动基类
 - **NPCScheduleController**: NPC 日程控制器
 - **NPCScheduleSO**: 日程 ScriptableObject
+
+## ZeroEngine Dashboard
+
+主包通过 `Editor/ZeroEngineDashboardModule.json` 声明现有历史编辑器窗口。Dashboard 2.0 只负责发现和导航，不改变这些公开菜单路径，也不承载窗口业务逻辑。

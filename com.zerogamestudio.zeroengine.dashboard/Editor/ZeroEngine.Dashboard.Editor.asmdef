@@ -1,11 +1,7 @@
 {
     "name": "ZeroEngine.Dashboard.Editor",
     "rootNamespace": "ZeroEngine.Editor",
-    "references": [
-        "ZeroEngine.Core",
-        "ZeroEngine.Economy",
-        "ZeroEngine.Persistence"
-    ],
+    "references": [],
     "includePlatforms": [
         "Editor"
     ],
@@ -15,32 +11,6 @@
     "precompiledReferences": [],
     "autoReferenced": true,
     "defineConstraints": [],
-    "versionDefines": [
-        {
-            "name": "com.zerogamestudio.zeroengine.persistence",
-            "expression": "",
-            "define": "ZEROENGINE_HAS_PERSISTENCE"
-        },
-        {
-            "name": "com.zerogamestudio.zeroengine.economy",
-            "expression": "",
-            "define": "ZEROENGINE_HAS_ECONOMY"
-        },
-        {
-            "name": "com.zerogamestudio.analytics",
-            "expression": "",
-            "define": "ZEROENGINE_HAS_ANALYTICS"
-        },
-        {
-            "name": "com.unity.netcode.gameobjects",
-            "expression": "",
-            "define": "ZEROENGINE_NETCODE"
-        },
-        {
-            "name": "com.esotericsoftware.spine.spine-unity",
-            "expression": "",
-            "define": "SPINE_UNITY"
-        }
-    ],
+    "versionDefines": [],
     "noEngineReferences": false
 }

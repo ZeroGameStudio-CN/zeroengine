@@ -195,13 +195,13 @@ namespace ZeroEngine.UI.Tests.Editor.Toast
             var presenter = new RecordingPresenter();
             manager.Configure(settings, null, presenter);
 
-            var startTime = Time.unscaledTime;
             var first = manager.Show(ToastRequest.Text("one"));
             manager.Show(ToastRequest.Text("two"));
             manager.Show(ToastRequest.Text("three"));
             manager.Show(ToastRequest.Text("four"));
             manager.Show(ToastRequest.Text("five"));
             manager.Show(ToastRequest.Text("six"));
+            var startTime = Time.unscaledTime;
 
             Tick(manager, startTime + 0.5f);
             Tick(manager, startTime + 1f);
@@ -217,7 +217,7 @@ namespace ZeroEngine.UI.Tests.Editor.Toast
             Assert.AreEqual(4, manager.ActiveCount);
             Assert.AreEqual(1, manager.QueuedCount);
 
-            Tick(manager, startTime + 2.5f);
+            Tick(manager, startTime + 2.51f);
             Assert.AreEqual(5, manager.ActiveCount);
             Assert.AreEqual(0, manager.QueuedCount);
             Assert.IsTrue(presenter.WasTextShown("six"));

@@ -1,32 +1,26 @@
 {
-  "name": "com.zerogamestudio.zeroengine.economy",
-  "version": "2.0.0",
-  "displayName": "ZeroEngine.Economy",
-  "description": "Economy and item systems for ZeroEngine. Includes Inventory (multi-container, stacking, filters), Loot Tables (weighted, pity, layered), Shop System, and Crafting System (recipes, skills).",
-  "unity": "2022.3",
-  "unityRelease": "0f1",
-  "dependencies": {
-    "com.zerogamestudio.zeroengine.core": "2.0.0",
-    "com.zerogamestudio.zeroengine.persistence": "2.0.0"
-  },
-  "keywords": [
-    "zeroengine",
-    "inventory",
-    "item",
-    "loot",
-    "drop",
-    "shop",
-    "crafting",
-    "recipe"
-  ],
-  "author": {
-    "name": "ZeroGameStudio",
-    "url": "https://github.com/zerogamestudio"
-  },
-  "license": "MIT",
-  "repository": {
-    "type": "git",
-    "url": "https://github.com/ZeroGameStudio-CN/zeroengine.git",
-    "directory": "com.zerogamestudio.zeroengine.economy"
-  }
+    "name": "com.zerogamestudio.zeroengine.economy",
+    "version": "2.0.0",
+    "displayName": "ZeroEngine.Economy",
+    "description": "Economy and item systems for ZeroEngine. Includes Inventory (multi-container, stacking, filters), Loot Tables (weighted, pity, layered), Shop System, and Crafting System (recipes, skills).",
+    "unity": "2022.3",
+    "unityRelease": "0f1",
+    "dependencies": {
+        "com.zerogamestudio.zeroengine.core": "2.0.0",
+        "com.zerogamestudio.zeroengine.persistence": "2.0.0"
+    },
+    "keywords": [
+        "zeroengine",
+        "inventory",
+        "item",
+        "loot",
+        "drop",
+        "shop",
+        "crafting",
+        "recipe"
+    ],
+    "author": {
+        "name": "ZeroGameStudio",
+        "url": "https://github.com/zerogamestudio"
+    }
 }

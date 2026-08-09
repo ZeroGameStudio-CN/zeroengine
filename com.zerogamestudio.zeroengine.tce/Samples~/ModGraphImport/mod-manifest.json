@@ -1,0 +1,9 @@
+{
+  "Id": "zeroengine.samples.effects_pack",
+  "Name": "ZeroEngine TCE Sample Effects Pack",
+  "Version": "1.0.0",
+  "ContentPaths": ["content"],
+  "TceGraphs": [
+    "content/graphs/burning_hit.tce.json"
+  ]
+}

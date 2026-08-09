@@ -1,54 +1,69 @@
 # ZeroEngine Dashboard
 
-ZeroEngine 编辑器控制中心，支持轻量项目使用。
+ZeroEngine Dashboard 2.0 是一个可选、仅限 Unity Editor 的工具目录。它从已注册 UPM 包以及项目 `Assets/**/Editor/` 中读取 `ZeroEngineDashboardModule.json`，只展示所有者明确声明的窗口和命令。
 
 ## 特性
 
-- **通用化设计**：通过条件编译自动适配已安装的包
-- **无硬依赖**：只依赖 `zeroengine.core`，轻量项目也能使用
-- **插件检测**：自动检测 Odin、DOTween、EasySave、YooAsset 等插件状态
-- **可选功能**：根据已安装的包显示/隐藏对应功能
+- 不依赖 Core 或任何可选 ZeroEngine 模块；模块也不需要引用 Dashboard。
+- 安装、移除或升级带描述符的包后自动刷新目录。
+- 通过模块已有 `MenuItem` 懒执行，不反射构造或嵌入窗口。
+- 对描述符错误、入口冲突、替代循环和失效菜单提供可见诊断。
+- `project-write` 与 `destructive` 命令执行前要求明确确认。
+- 不安装包、不写 manifest、不清理 PlayerPrefs/存档、不写项目资源。
 
 ## 安装
 
-### 方式 1：作为独立包（轻量项目）
-
-在 `Packages/manifest.json` 中通过 Git UPM 添加，并与其他 ZeroEngine 包使用同一个测试过的 commit：
+在消费项目的 `Packages/manifest.json` 中添加 Git UPM 依赖，并与其他 ZeroEngine 包固定到同一个测试提交：
 
 ```json
 {
   "dependencies": {
-    "com.zerogamestudio.zeroengine.core": "https://github.com/ZeroGameStudio-CN/zeroengine.git?path=com.zerogamestudio.zeroengine.core#<tested-commit>",
     "com.zerogamestudio.zeroengine.dashboard": "https://github.com/ZeroGameStudio-CN/zeroengine.git?path=com.zerogamestudio.zeroengine.dashboard#<tested-commit>"
   }
 }
 ```
 
-本地 `file:` 依赖只用于临时联调，不应提交到共享分支。
+本地 `file:` 依赖只用于临时联调，不应进入共享分支。
 
-### 方式 2：通过主包（完整项目）
+## 描述符
 
-主包 `com.zerogamestudio.zeroengine` 的 `package.json` 声明了对本包的依赖。通过 Git UPM 使用主包时，如果消费项目没有配置可解析 ZeroEngine 包的私有 registry，仍应在 `Packages/manifest.json` 中显式添加 dashboard 的 Git URL，并与主包使用同一个 commit。
+包描述符固定放在 `Editor/ZeroEngineDashboardModule.json`；项目描述符可放在任意 `Assets/**/Editor/ZeroEngineDashboardModule.json`。`moduleId`、入口 ID、菜单路径、安全等级及替代关系必须符合仓库设计规范。
 
-## 条件编译宏
+```json
+{
+  "schemaVersion": 1,
+  "moduleId": "com.zerogamestudio.zeroengine.example",
+  "displayName": "Example",
+  "description": "Example editor tools.",
+  "order": 100,
+  "documentationPath": "README.md",
+  "entries": [
+    {
+      "id": "open-window",
+      "displayName": "Open Window",
+      "description": "Open the existing module window.",
+      "category": "authoring",
+      "kind": "window",
+      "menuPath": "ZeroEngine/Example/Open Window",
+      "order": 100,
+      "safety": "navigation",
+      "availability": "always",
+      "replaces": []
+    }
+  ]
+}
+```
 
-本包根据已安装的其他包自动定义以下编译宏：
-
-| 包 | 编译宏 | 启用功能 |
-|----|--------|----------|
-| `zeroengine.persistence` | `ZEROENGINE_HAS_PERSISTENCE` | 清理存档按钮 |
-| `zeroengine.economy` | `ZEROENGINE_HAS_ECONOMY` | Inventory 调试工具 |
-| `analytics` | `ZEROENGINE_HAS_ANALYTICS` | Analytics Dashboard 入口 |
-| `netcode.gameobjects` | `ZEROENGINE_NETCODE` | 网络模块状态显示 |
-| `spine-unity` | `SPINE_UNITY` | Spine 模块状态显示 |
-
-## 使用
-
-菜单：`ZeroEngine > Dashboard`
+Dashboard 入口：`ZeroEngine > Dashboard`。
 
 ## 版本历史
 
+### 2.0.0
+
+- 使用声明式模块发现替代中央硬编码和条件编译。
+- 移除第三方插件探测、网络包安装、YooAsset 自动配置和数据清理入口。
+- 增加确定性冲突/替代处理、安全确认与诊断。
+
 ### 1.0.0
-- 从主包独立出来
-- 添加条件编译支持
-- 支持轻量项目使用
+
+- 从主包独立出来。

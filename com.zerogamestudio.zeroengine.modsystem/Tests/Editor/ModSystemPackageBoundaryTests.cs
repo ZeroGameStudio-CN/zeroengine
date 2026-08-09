@@ -1,15 +1,16 @@
 using System.IO;
 using System.Linq;
+using System.Text.RegularExpressions;
 using NUnit.Framework;
+using UnityEditor.PackageManager;
 using UnityEngine;
 
 namespace ZeroEngine.ModSystem.Tests.Editor
 {
     public sealed class ModSystemPackageBoundaryTests
     {
-        private static readonly string PackageRoot = Path.GetFullPath(Path.Combine(
-            Application.dataPath,
-            "../Packages/com.zerogamestudio.zeroengine.modsystem"));
+        private static readonly string PackageRoot = Path.GetFullPath(
+            PackageInfo.FindForAssembly(typeof(ModLoadReport).Assembly).resolvedPath);
 
         [Test]
         public void CoreAssembly_DoesNotReferenceGameplayOrProjectPackages()
@@ -22,6 +23,31 @@ namespace ZeroEngine.ModSystem.Tests.Editor
             Assert.That(coreAsmdef, Does.Not.Contain("ZeroEngine.TCE"));
             Assert.That(coreAsmdef, Does.Not.Contain("POB"));
             Assert.That(coreAsmdef, Does.Not.Contain("Steamworks"));
+        }
+
+        [Test]
+        public void CoreSources_DoNotReferenceProjectUiPersistenceOrSteamTypes()
+        {
+            string[] forbidden =
+            {
+                "POB.",
+                "P5.",
+                "TMPro",
+                "UnityEngine.UI",
+                "ES3",
+                "Steamworks"
+            };
+            string[] sources = Directory.GetFiles(
+                Path.Combine(PackageRoot, "Runtime/Core"),
+                "*.cs",
+                SearchOption.AllDirectories);
+
+            foreach (string source in sources)
+            {
+                string text = File.ReadAllText(source);
+                foreach (string token in forbidden)
+                    Assert.That(text, Does.Not.Contain(token), $"{source} contains forbidden token {token}");
+            }
         }
 
         [Test]
@@ -44,26 +70,24 @@ namespace ZeroEngine.ModSystem.Tests.Editor
         }
 
         [Test]
-        public void OldBasePackage_LegacySteamCopyUsesAndroidGuard()
+        public void OldBasePackage_DoesNotKeepDuplicateRuntimeAssemblies()
         {
             string oldRuntimeRoot = Path.GetFullPath(Path.Combine(
                 Application.dataPath,
                 "../Packages/com.zerogamestudio.zeroengine/Runtime/ModSystem"));
             if (!Directory.Exists(oldRuntimeRoot))
+                Assert.Pass("The legacy package is not installed, so duplicate runtime assemblies cannot be present.");
+
+            string[] remainingEntries = Directory.GetFileSystemEntries(oldRuntimeRoot);
+
+            Assert.That(File.Exists(Path.Combine(oldRuntimeRoot, "ZeroEngine.ModSystem.asmdef")), Is.False);
+            Assert.That(File.Exists(Path.Combine(oldRuntimeRoot, "ModLoader.cs")), Is.False);
+            Assert.That(File.Exists(Path.Combine(oldRuntimeRoot, "ModManifest.cs")), Is.False);
+            Assert.That(remainingEntries, Is.EquivalentTo(new[]
             {
-                oldRuntimeRoot = Path.GetFullPath(Path.Combine(
-                    Application.dataPath,
-                    "../../com.zerogamestudio.zeroengine/Runtime/ModSystem"));
-            }
-
-            string steamWorkshopManager = File.ReadAllText(Path.Combine(oldRuntimeRoot, "Steam/SteamWorkshopManager.cs"));
-
-            Assert.That(File.Exists(Path.Combine(oldRuntimeRoot, "ZeroEngine.ModSystem.asmdef")), Is.True);
-            Assert.That(File.Exists(Path.Combine(oldRuntimeRoot, "ModLoader.cs")), Is.True);
-            Assert.That(File.Exists(Path.Combine(oldRuntimeRoot, "ModManifest.cs")), Is.True);
-            Assert.That(steamWorkshopManager, Does.Contain("#if STEAMWORKS_NET && !UNITY_ANDROID"));
-            Assert.That(steamWorkshopManager, Does.Not.Contain("#if STEAMWORKS_NET\r"));
-            Assert.That(steamWorkshopManager, Does.Not.Contain("#if STEAMWORKS_NET\n"));
+                Path.Combine(oldRuntimeRoot, "README.md"),
+                Path.Combine(oldRuntimeRoot, "README.md.meta")
+            }));
         }
 
         [Test]
@@ -86,7 +110,8 @@ namespace ZeroEngine.ModSystem.Tests.Editor
         {
             string steamAsmdefPath = Path.Combine(PackageRoot, "Runtime/Steam/ZeroEngine.ModSystem.Steam.asmdef");
             string steamAsmdef = File.ReadAllText(steamAsmdefPath);
-            string steamWorkshopManager = File.ReadAllText(Path.Combine(PackageRoot, "Runtime/Steam/SteamWorkshopManager.cs"));
+            string steamworksApi = File.ReadAllText(Path.Combine(PackageRoot, "Runtime/Steam/SteamworksWorkshopApi.cs"));
+            string steamSource = File.ReadAllText(Path.Combine(PackageRoot, "Runtime/Steam/SteamWorkshopModSource.cs"));
 
             Assert.That(steamAsmdef, Does.Contain("ZeroEngine.ModSystem"));
             Assert.That(steamAsmdef, Does.Contain("com.rlabrecque.steamworks.net"));
@@ -97,9 +122,23 @@ namespace ZeroEngine.ModSystem.Tests.Editor
             Assert.That(steamAsmdef, Does.Contain("LinuxStandalone64"));
             Assert.That(steamAsmdef, Does.Contain("macOSStandalone"));
             Assert.That(steamAsmdef, Does.Not.Contain("Android"));
-            Assert.That(steamWorkshopManager, Does.Contain("#if STEAMWORKS_NET && !UNITY_ANDROID"));
-            Assert.That(steamWorkshopManager, Does.Not.Contain("#if STEAMWORKS_NET\r"));
-            Assert.That(steamWorkshopManager, Does.Not.Contain("#if STEAMWORKS_NET\n"));
+            Assert.That(steamworksApi, Does.Contain("#if STEAMWORKS_NET && !UNITY_ANDROID"));
+            Assert.That(steamworksApi, Does.Not.Contain("2372330"));
+            Assert.That(steamSource, Does.Not.Contain("RuntimeInitializeOnLoadMethod"));
+            Assert.That(steamSource, Does.Not.Contain("ModSourceRegistry.Register"));
+        }
+
+        [Test]
+        public void PackageManifest_DoesNotAddZeroEngineSiblingDependencies()
+        {
+            string manifest = File.ReadAllText(Path.Combine(PackageRoot, "package.json"));
+            Match dependencies = Regex.Match(
+                manifest,
+                "\\\"dependencies\\\"\\s*:\\s*\\{(?<body>[^}]*)\\}");
+
+            Assert.That(manifest, Does.Contain("\"version\": \"0.3.0\""));
+            Assert.That(dependencies.Success, Is.True);
+            Assert.That(dependencies.Groups["body"].Value, Does.Not.Contain("com.zerogamestudio."));
         }
 
         [Test]

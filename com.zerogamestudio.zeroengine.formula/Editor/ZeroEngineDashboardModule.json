@@ -1,0 +1,46 @@
+{
+  "schemaVersion": 1,
+  "moduleId": "com.zerogamestudio.zeroengine.formula",
+  "displayName": "Formula",
+  "description": "Formula catalog, authoring, and governance tools.",
+  "order": 300,
+  "documentationPath": "README.md",
+  "entries": [
+    {
+      "id": "formula-catalog",
+      "displayName": "Formula Catalog",
+      "description": "Browse the registered formula catalog.",
+      "category": "authoring",
+      "kind": "window",
+      "menuPath": "ZeroEngine/Formula/Formula Catalog",
+      "order": 100,
+      "safety": "navigation",
+      "availability": "always",
+      "replaces": []
+    },
+    {
+      "id": "formula-workbench",
+      "displayName": "Formula Workbench",
+      "description": "Open the general Formula workbench.",
+      "category": "authoring",
+      "kind": "window",
+      "menuPath": "ZeroEngine/Formula/Formula Workbench",
+      "order": 200,
+      "safety": "navigation",
+      "availability": "always",
+      "replaces": []
+    },
+    {
+      "id": "scan-formula-assets",
+      "displayName": "Scan Formula Assets",
+      "description": "Run the existing read-only formula asset scan.",
+      "category": "diagnostics",
+      "kind": "command",
+      "menuPath": "ZeroEngine/Formula/Scan Formula Assets",
+      "order": 300,
+      "safety": "read-only",
+      "availability": "edit-mode",
+      "replaces": []
+    }
+  ]
+}

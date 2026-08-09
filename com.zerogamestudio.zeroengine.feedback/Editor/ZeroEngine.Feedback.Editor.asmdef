@@ -1,0 +1,20 @@
+{
+  "name": "ZeroEngine.Feedback.Editor",
+  "rootNamespace": "ZeroEngine.Feedback.Editor",
+  "references": [
+    "ZeroEngine.Feedback",
+    "Unity.TextMeshPro",
+    "UnityEngine.UI"
+  ],
+  "includePlatforms": [
+    "Editor"
+  ],
+  "excludePlatforms": [],
+  "allowUnsafeCode": false,
+  "overrideReferences": false,
+  "precompiledReferences": [],
+  "autoReferenced": true,
+  "defineConstraints": [],
+  "versionDefines": [],
+  "noEngineReferences": false
+}

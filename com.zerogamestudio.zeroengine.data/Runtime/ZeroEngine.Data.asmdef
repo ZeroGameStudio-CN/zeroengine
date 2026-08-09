@@ -3,7 +3,8 @@
     "rootNamespace": "ZeroEngine",
     "references": [
         "ZeroEngine.Core",
-        "ZeroEngine.Persistence"
+        "ZeroEngine.Persistence",
+        "ZeroEngine.Formula"
     ],
     "includePlatforms": [],
     "excludePlatforms": [],

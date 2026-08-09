@@ -1015,6 +1015,11 @@ namespace ZeroEngine.Pathfinding2D
                     return !IsCurrentCommandTerminal() && verticalDelta > config.WalkCommandVerticalTolerance;
 
                 case MoveCommandType.Jump:
+                    if (!isGrounded) return false;
+                    if (currentPosition.y < command.Target.y - config.WalkCommandVerticalTolerance)
+                        return false;
+                    return Mathf.Abs(currentPosition.x - command.Target.x) < config.ArriveDistance * 2f;
+
                 case MoveCommandType.Fall:
                 case MoveCommandType.DropDown:
                     // 跳跃/下落：落地且接近目标位置
@@ -1114,6 +1119,7 @@ namespace ZeroEngine.Pathfinding2D
         {
             var nodes = graphGenerator.Nodes;
             var nodeCount = nodes.Count;
+            bool targetIsElevated = actualEnd.y > startNode.Position.y + config.WalkCommandVerticalTolerance;
 
             // 初始化寻路数据
             var gScore = new Dictionary<int, float>();
@@ -1150,7 +1156,12 @@ namespace ZeroEngine.Pathfinding2D
                 {
                     if (closedSet.Contains(link.ToNodeId)) continue;
 
-                    float tentativeG = gScore[current] + link.Cost;
+                    var toNode = graphGenerator.GetNode(link.ToNodeId);
+                    if (!toNode.HasValue)
+                        continue;
+
+                    float tentativeG = gScore[current] + link.Cost +
+                                       GetElevatedRouteLowNodePenalty(targetIsElevated, startNode.Position.y, toNode.Value);
 
                     if (!gScore.ContainsKey(link.ToNodeId) || tentativeG < gScore[link.ToNodeId])
                     {
@@ -1158,11 +1169,7 @@ namespace ZeroEngine.Pathfinding2D
                         cameFromLink[link.ToNodeId] = link;
                         gScore[link.ToNodeId] = tentativeG;
 
-                        var toNode = graphGenerator.GetNode(link.ToNodeId);
-                        if (toNode.HasValue)
-                        {
-                            fScore[link.ToNodeId] = tentativeG + Heuristic(toNode.Value.Position, endNode.Position);
-                        }
+                        fScore[link.ToNodeId] = tentativeG + Heuristic(toNode.Value.Position, endNode.Position);
 
                         if (!openSet.Contains(link.ToNodeId))
                         {
@@ -1174,6 +1181,16 @@ namespace ZeroEngine.Pathfinding2D
 
             // 找不到路径
             return Platform2DPath.NotFound(actualStart, actualEnd);
+        }
+
+        private float GetElevatedRouteLowNodePenalty(bool targetIsElevated, float startSurfaceY, PlatformNodeData toNode)
+        {
+            if (!targetIsElevated)
+                return 0f;
+
+            return toNode.Position.y < startSurfaceY - config.WalkCommandVerticalTolerance
+                ? 1000f
+                : 0f;
         }
 
         /// <summary>

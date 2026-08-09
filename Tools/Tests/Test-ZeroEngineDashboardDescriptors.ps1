@@ -1,0 +1,125 @@
+[CmdletBinding()]
+param(
+    [string]$RootPath = (Resolve-Path (Join-Path $PSScriptRoot '..\..')).Path,
+    [string]$ProjectManifest
+)
+
+$ErrorActionPreference = 'Stop'
+
+function Assert-Condition {
+    param([bool]$Condition, [string]$Message)
+    if (-not $Condition) {
+        throw $Message
+    }
+}
+
+function Find-PackageRoot {
+    param([string]$DescriptorPath)
+    $directory = Split-Path -Parent $DescriptorPath
+    while ($directory -and $directory.StartsWith($RootPath, [StringComparison]::OrdinalIgnoreCase)) {
+        if (Test-Path -LiteralPath (Join-Path $directory 'package.json')) {
+            return $directory
+        }
+        $parent = Split-Path -Parent $directory
+        if ($parent -eq $directory) {
+            break
+        }
+        $directory = $parent
+    }
+    return $null
+}
+
+$descriptorPaths = @(Get-ChildItem -LiteralPath $RootPath -Recurse -File -Filter 'ZeroEngineDashboardModule.json' |
+    Where-Object { $_.FullName -notmatch '[\\/](Library|Temp|Logs|TestProject)[\\/]' } |
+    Where-Object { $_.FullName -notmatch '[\\/]Tools[\\/]Tests[\\/]Fixtures[\\/]' } |
+    Sort-Object FullName |
+    Select-Object -ExpandProperty FullName)
+
+Assert-Condition ($descriptorPaths.Count -gt 0) 'No Dashboard descriptors were found.'
+
+$allowedCategories = @('authoring', 'diagnostics', 'setup', 'documentation')
+$allowedKinds = @('window', 'command')
+$allowedSafety = @('navigation', 'read-only', 'project-write', 'destructive')
+$allowedAvailability = @('always', 'edit-mode', 'play-mode')
+
+foreach ($descriptorPath in $descriptorPaths) {
+    Assert-Condition (Test-Path -LiteralPath ($descriptorPath + '.meta')) "Missing .meta for $descriptorPath"
+    $descriptor = Get-Content -LiteralPath $descriptorPath -Raw -Encoding UTF8 | ConvertFrom-Json
+    $packageRoot = Find-PackageRoot $descriptorPath
+    Assert-Condition ($null -ne $packageRoot) "Descriptor is not inside a package: $descriptorPath"
+    $package = Get-Content -LiteralPath (Join-Path $packageRoot 'package.json') -Raw -Encoding UTF8 | ConvertFrom-Json
+
+    Assert-Condition ($descriptor.schemaVersion -eq 1) "schemaVersion must be 1: $descriptorPath"
+    Assert-Condition ($descriptor.moduleId -eq $package.name) "moduleId must equal package name in $descriptorPath"
+    Assert-Condition (-not [string]::IsNullOrWhiteSpace($descriptor.displayName)) "displayName is required: $descriptorPath"
+    Assert-Condition ($null -ne $descriptor.entries) "entries is required: $descriptorPath"
+
+    $ids = @{}
+    $menuPaths = @{}
+    $sourceText = @(Get-ChildItem -LiteralPath $packageRoot -Recurse -File -Filter '*.cs' |
+        ForEach-Object { Get-Content -LiteralPath $_.FullName -Raw -Encoding UTF8 }) -join "`n"
+
+    foreach ($entry in @($descriptor.entries)) {
+        Assert-Condition ($entry.id -match '^[a-z0-9]+(?:-[a-z0-9]+)*$') "Invalid entry id '$($entry.id)' in $descriptorPath"
+        Assert-Condition (-not $ids.ContainsKey($entry.id)) "Duplicate entry id '$($entry.id)' in $descriptorPath"
+        $ids[$entry.id] = $true
+        Assert-Condition ($allowedCategories -contains $entry.category) "Invalid category for '$($entry.id)' in $descriptorPath"
+        Assert-Condition ($allowedKinds -contains $entry.kind) "Invalid kind for '$($entry.id)' in $descriptorPath"
+        Assert-Condition ($allowedSafety -contains $entry.safety) "Invalid safety for '$($entry.id)' in $descriptorPath"
+        Assert-Condition ($allowedAvailability -contains $entry.availability) "Invalid availability for '$($entry.id)' in $descriptorPath"
+        Assert-Condition ($entry.menuPath -notmatch '\s[%#&_]\S*$') "Shortcut suffix is forbidden in '$($entry.menuPath)'"
+        Assert-Condition (-not $menuPaths.ContainsKey($entry.menuPath)) "Duplicate menuPath '$($entry.menuPath)' in $descriptorPath"
+        $menuPaths[$entry.menuPath] = $true
+        Assert-Condition ($sourceText.Contains('[MenuItem("' + $entry.menuPath + '"')) "No matching MenuItem for '$($entry.menuPath)' in $($package.name)"
+        if ($entry.kind -eq 'window') {
+            Assert-Condition ($entry.safety -eq 'navigation') "Window '$($entry.id)' must use navigation safety"
+        }
+        if ($entry.safety -in @('project-write', 'destructive')) {
+            Assert-Condition (-not [string]::IsNullOrWhiteSpace($entry.confirmation)) "Write-capable entry '$($entry.id)' needs confirmation"
+        }
+    }
+
+    if ($package.name -notin @('com.zerogamestudio.zeroengine', 'com.zerogamestudio.zeroengine.dashboard')) {
+        $dependencyNames = @($package.dependencies.psobject.Properties.Name)
+        Assert-Condition ($dependencyNames -notcontains 'com.zerogamestudio.zeroengine.dashboard') "$($package.name) must not depend on Dashboard"
+    }
+}
+
+$dashboardRoot = Join-Path $RootPath 'com.zerogamestudio.zeroengine.dashboard'
+$dashboardPackage = Get-Content -LiteralPath (Join-Path $dashboardRoot 'package.json') -Raw -Encoding UTF8 | ConvertFrom-Json
+$dashboardAsmdef = Get-Content -LiteralPath (Join-Path $dashboardRoot 'Editor\ZeroEngine.Dashboard.Editor.asmdef') -Raw -Encoding UTF8 | ConvertFrom-Json
+Assert-Condition ($dashboardPackage.version -eq '2.0.0') 'Dashboard package version must be 2.0.0.'
+Assert-Condition (@($dashboardPackage.dependencies.psobject.Properties).Count -eq 0) 'Dashboard package must have no package dependencies.'
+Assert-Condition (@($dashboardAsmdef.references).Count -eq 0) 'Dashboard production asmdef must have no optional module references.'
+Assert-Condition (@($dashboardAsmdef.includePlatforms).Count -eq 1 -and $dashboardAsmdef.includePlatforms[0] -eq 'Editor') 'Dashboard production asmdef must be Editor-only.'
+
+$dashboardProductionText = @(Get-ChildItem -LiteralPath (Join-Path $dashboardRoot 'Editor') -Recurse -File -Filter '*.cs' |
+    ForEach-Object { Get-Content -LiteralPath $_.FullName -Raw -Encoding UTF8 }) -join "`n"
+$forbiddenDashboardTokens = @(
+    'UnityWebRequest',
+    'System.Net.Http',
+    'WebClient',
+    'PackageManager.Client.Add',
+    'PackageManager.Client.Remove',
+    'File.Write',
+    'File.Delete',
+    'Directory.Delete',
+    'PlayerPrefs.Delete',
+    'Packages/manifest.json'
+)
+foreach ($token in $forbiddenDashboardTokens) {
+    Assert-Condition (-not $dashboardProductionText.Contains($token)) "Dashboard production code contains forbidden side-effect token '$token'."
+}
+
+if (-not [string]::IsNullOrWhiteSpace($ProjectManifest)) {
+    $manifest = Get-Content -LiteralPath $ProjectManifest -Raw -Encoding UTF8 | ConvertFrom-Json
+    $dependencyNames = @($manifest.dependencies.psobject.Properties.Name)
+    $legacyInstalled = $dependencyNames -contains 'com.zerogamestudio.zeroengine'
+    $modularInstalled = @($dependencyNames | Where-Object {
+        $_ -like 'com.zerogamestudio.zeroengine.*' -and
+        $_ -ne 'com.zerogamestudio.zeroengine.dashboard'
+    })
+    Assert-Condition (-not ($legacyInstalled -and $modularInstalled.Count -gt 0)) 'Legacy and modular ZeroEngine packages are mutually exclusive.'
+}
+
+Write-Host "PASS Dashboard descriptors=$($descriptorPaths.Count)"

@@ -1,0 +1,7 @@
+{
+  "name": "com.zerogamestudio.dashboard-removal-fixture",
+  "version": "1.0.0",
+  "displayName": "Dashboard Removal Fixture",
+  "description": "Synthetic package used only by the Dashboard package-removal CI lane.",
+  "unity": "2022.3"
+}

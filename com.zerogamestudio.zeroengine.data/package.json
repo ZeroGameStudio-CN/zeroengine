@@ -6,7 +6,8 @@
   "unity": "2022.3",
   "unityRelease": "0f1",
   "dependencies": {
-    "com.zerogamestudio.zeroengine.core": "2.0.0"
+    "com.zerogamestudio.zeroengine.core": "2.0.0",
+    "com.zerogamestudio.zeroengine.formula": "0.1.0"
   },
   "keywords": [
     "zeroengine",
@@ -24,7 +25,7 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/ZeroGameStudio-CN/zeroengine.git",
+    "url": "https://github.com/liuzqk/zeroengine.git",
     "directory": "com.zerogamestudio.zeroengine.data"
   }
 }

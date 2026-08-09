@@ -1,0 +1,22 @@
+{
+  "schemaVersion": 1,
+  "moduleId": "com.zerogamestudio.analytics",
+  "displayName": "ZGS Analytics",
+  "description": "ZeroGameStudio analytics diagnostics and service tools.",
+  "order": 700,
+  "documentationPath": "README.md",
+  "entries": [
+    {
+      "id": "analytics-dashboard",
+      "displayName": "Analytics Dashboard",
+      "description": "Open the existing ZGS Analytics editor dashboard.",
+      "category": "diagnostics",
+      "kind": "window",
+      "menuPath": "ZGS/Analytics Dashboard",
+      "order": 100,
+      "safety": "navigation",
+      "availability": "always",
+      "replaces": []
+    }
+  ]
+}

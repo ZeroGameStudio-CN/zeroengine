@@ -1,7 +1,7 @@
 using System;
 using System.Collections.Generic;
 using UnityEngine;
-using ZeroEngine.StatSystem.Formula;
+using ZeroEngine.Formula;
 
 namespace ZeroEngine.StatSystem
 {
@@ -57,7 +57,7 @@ namespace ZeroEngine.StatSystem
         public object Source;
 
         [Tooltip("Optional Formula")]
-        public MathFormula Formula;
+        public FormulaAsset Formula;
 
         /// <summary>
         /// 创建属性修饰器
@@ -79,9 +79,21 @@ namespace ZeroEngine.StatSystem
         /// <summary>
         /// 获取修饰值（支持公式计算）
         /// </summary>
-        public float GetValue(MathContext ctx = null)
+        public float GetValue(
+            IFormulaEvaluationContext context = null,
+            FormulaProviderRegistry registry = null)
         {
-            if (Formula != null) return Formula.Evaluate(ctx);
+            if (Formula != null
+                && FormulaEvaluator.TryEvaluate(
+                    Formula,
+                    context ?? FormulaDictionaryEvaluationContext.Empty,
+                    registry ?? FormulaProviderRegistry.Empty,
+                    out var formulaValue,
+                    out _))
+            {
+                return formulaValue;
+            }
+
             return Value;
         }
     }

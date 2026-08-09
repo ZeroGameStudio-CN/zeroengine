@@ -1,0 +1,52 @@
+{
+  "$id": "urn:zgs:sample:item-drop",
+  "x-zgs-schema-version": 1,
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["items", "dropTables"],
+  "properties": {
+    "items": {
+      "type": "array",
+      "x-zgs-sheet": "Items",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "nameKey", "weight"],
+        "properties": {
+          "id": {"type": "string", "title": "物品 ID", "x-zgs-primary-key": true},
+          "nameKey": {"type": "string", "title": "名称 Key"},
+          "weight": {"type": "number", "title": "重量", "x-zgs-number-type": "float32", "minimum": 0}
+        }
+      }
+    },
+    "dropTables": {
+      "type": "array",
+      "x-zgs-sheet": "DropTables",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "entries"],
+        "properties": {
+          "id": {"type": "string", "title": "掉落表 ID", "x-zgs-primary-key": true},
+          "entries": {
+            "type": "array",
+            "x-zgs-sheet": "DropEntries",
+            "x-zgs-parent-key": "dropTableId",
+            "x-zgs-order-field": "order",
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["id", "order", "itemId", "chance"],
+              "properties": {
+                "id": {"type": "string", "title": "条目 ID", "x-zgs-primary-key": true},
+                "order": {"type": "integer", "title": "顺序", "x-zgs-number-type": "int32", "minimum": 0},
+                "itemId": {"type": "string", "title": "物品 ID", "x-zgs-ref": "#/properties/items/items/properties/id"},
+                "chance": {"type": "number", "title": "概率", "x-zgs-number-type": "float32", "minimum": 0, "maximum": 1}
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}
