@@ -3,6 +3,7 @@ from __future__ import annotations
 import getpass
 import hashlib
 import json
+import locale
 import math
 import os
 import re
@@ -40,6 +41,22 @@ CLAIM_OPEN_STATES = ("queued", "granted")
 DISPOSITIONS = frozenset(
     {"adopt", "protect", "resolved-clean", "submitted", "legacy-unowned"}
 )
+
+
+def _decode_plastic_output(value: bytes | str | None, stream: str) -> str:
+    if value is None:
+        return ""
+    if isinstance(value, str):
+        return value
+    encodings = list(dict.fromkeys(("utf-8", locale.getpreferredencoding(False))))
+    for encoding in encodings:
+        try:
+            return value.decode(encoding, errors="strict")
+        except UnicodeDecodeError:
+            continue
+    raise UsageError(
+        f"Cannot decode Plastic {stream} output as {', '.join(encodings)}."
+    )
 
 
 @dataclass(frozen=True)
@@ -1677,22 +1694,21 @@ class WorkspaceCoordinator:
             completed = subprocess.run(
                 command,
                 cwd=self.project_root,
-                text=True,
-                encoding="utf-8",
-                errors="strict",
                 capture_output=True,
                 check=False,
                 timeout=60,
             )
-        except (OSError, UnicodeError, subprocess.TimeoutExpired) as exc:
+        except (OSError, subprocess.TimeoutExpired) as exc:
             raise UsageError(f"Cannot inspect Plastic pending changes: {exc}") from exc
+        stdout = _decode_plastic_output(completed.stdout, "stdout")
+        stderr = _decode_plastic_output(completed.stderr, "stderr")
         if completed.returncode != 0:
             raise UsageError(
                 "Plastic pending inspection failed.",
-                details={"stderr": completed.stderr.strip()},
+                details={"stderr": stderr.strip()},
             )
         pending: dict[str, str] = {}
-        for line in completed.stdout.splitlines():
+        for line in stdout.splitlines():
             for status, path in self._parse_plastic_status_line(line):
                 pending[_normalize_scope(self.project_root, path)] = status
         observation_id = _public_id("vcs")

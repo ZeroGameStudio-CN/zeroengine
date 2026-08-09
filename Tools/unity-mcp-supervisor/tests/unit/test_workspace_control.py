@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import os
 import sqlite3
 import subprocess
 import time
@@ -264,6 +265,53 @@ def test_plastic_machine_lines_preserve_both_moved_paths() -> None:
         ("CO+MV-source", r"D:\Project\Old.asset"),
         ("CO+MV-destination", r"D:\Project\New.asset"),
     ]
+
+
+def test_reconcile_plastic_decodes_local_code_page(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    project = _project(tmp_path)
+    (project / ".plastic").mkdir()
+    pending_path = project / "Assets" / "测试.asset"
+
+    monkeypatch.setattr(
+        "unity_mcp_supervisor.workspace_control.locale.getpreferredencoding",
+        lambda _do_setlocale=False: "cp936",
+    )
+    monkeypatch.setattr(
+        "unity_mcp_supervisor.workspace_control.subprocess.run",
+        lambda *_args, **_kwargs: subprocess.CompletedProcess(
+            [], 0, f"CH|{pending_path}|False\n".encode("cp936"), b""
+        ),
+    )
+
+    coordinator = _coordinator(tmp_path, project)
+    observation = coordinator.reconcile_plastic()
+
+    assert observation["pending_count"] == 1
+    assert coordinator.status()["vcs"]["pending"][0]["path"] == (
+        "assets/测试.asset" if os.name == "nt" else "Assets/测试.asset"
+    )
+
+
+def test_reconcile_plastic_rejects_unknown_encoding(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    project = _project(tmp_path)
+    (project / ".plastic").mkdir()
+
+    monkeypatch.setattr(
+        "unity_mcp_supervisor.workspace_control.locale.getpreferredencoding",
+        lambda _do_setlocale=False: "ascii",
+    )
+    monkeypatch.setattr(
+        "unity_mcp_supervisor.workspace_control.subprocess.run",
+        lambda *_args, **_kwargs: subprocess.CompletedProcess([], 0, b"\xff", b""),
+    )
+
+    coordinator = _coordinator(tmp_path, project)
+    with pytest.raises(UsageError, match="Cannot decode Plastic stdout"):
+        coordinator.reconcile_plastic()
 
 
 def test_legacy_pending_blocks_overlap_until_disposition(
