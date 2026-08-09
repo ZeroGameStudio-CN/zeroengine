@@ -1643,8 +1643,21 @@ class WorkspaceCoordinator:
                     UPDATE claims SET state = 'released', released_at = ?,
                         legacy_lease_id = NULL
                     WHERE task_id = ? AND state = 'granted'
-                    """,
+                """,
                 (now, task_id),
+            )
+            connection.execute(
+                """
+                UPDATE vcs_dispositions
+                SET kind = 'protect', task_id = NULL,
+                    evidence = COALESCE(
+                        evidence,
+                        'adopting task recovered from unknown outcome'
+                    ),
+                    updated_at = ?
+                WHERE project_root = ? AND kind = 'adopt' AND task_id = ?
+                """,
+                (now, self.canonical_project_root, task_id),
             )
             connection.execute(
                 """

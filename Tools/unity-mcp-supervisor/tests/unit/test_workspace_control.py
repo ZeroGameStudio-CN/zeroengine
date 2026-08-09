@@ -459,6 +459,54 @@ def test_adopted_pending_is_owned_and_becomes_protected_on_release(
     assert pending[0]["task_id"] is None
 
 
+def test_adopted_pending_becomes_protected_on_unknown_recovery(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    project = _project(tmp_path)
+    (project / ".plastic").mkdir()
+    pending_path = project / "Assets" / "Recovered.asset"
+
+    monkeypatch.setattr(
+        "unity_mcp_supervisor.workspace_control.subprocess.run",
+        lambda *_args, **_kwargs: subprocess.CompletedProcess(
+            [], 0, f"CH|{pending_path}|False\n", ""
+        ),
+    )
+    coordinator = _coordinator(tmp_path, project)
+    owner = _task(coordinator, "owner")
+    coordinator.set_disposition(
+        owner["task_token"],
+        kind="adopt",
+        writes=("Assets/Recovered.asset",),
+        evidence="owner confirmed",
+    )
+    coordinator.acquire_claim(owner["task_token"], writes=("Assets/Recovered.asset",))
+    coordinator.heartbeat(
+        owner["task_token"],
+        phase="outcome_unknown",
+        note="response lost",
+        ttl_seconds=30,
+    )
+
+    coordinator.resolve_unknown(
+        task_id=owner["task_id"],
+        disposition="contained",
+        evidence="process exited; no persistent side effects",
+    )
+
+    pending = coordinator.status()["vcs"]["pending"]
+    assert pending[0]["disposition"] == "protect"
+    assert pending[0]["task_id"] is None
+    successor = _task(coordinator, "successor")
+    adopted = coordinator.set_disposition(
+        successor["task_token"],
+        kind="adopt",
+        writes=("Assets/Recovered.asset",),
+        evidence="successor confirmed",
+    )
+    assert adopted["task_id"] == successor["task_id"]
+
+
 def test_disposition_requires_owner_token_and_current_pending(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
