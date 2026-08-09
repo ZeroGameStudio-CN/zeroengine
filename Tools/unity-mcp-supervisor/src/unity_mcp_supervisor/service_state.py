@@ -163,6 +163,10 @@ class StatePaths:
         return self.root / "project-leases"
 
     @property
+    def workspace_control(self) -> Path:
+        return self.root / "workspace-control.sqlite3"
+
+    @property
     def logs(self) -> Path:
         return self.root / "logs"
 

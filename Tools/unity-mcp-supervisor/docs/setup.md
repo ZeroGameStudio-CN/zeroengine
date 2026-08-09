@@ -117,40 +117,56 @@ Agents use only `umcp`; remove their direct Unity MCP `/mcp` client entries
 after the two-Editor acceptance run passes.
 
 ```powershell
-$lease = umcp lease acquire --project D:\unity\projects\POB --owner task-label | ConvertFrom-Json
-$env:UMCP_PROJECT_LEASE_ID = $lease.result.lease_id
+$task = umcp workspace task start --project D:\unity\projects\POB --owner task-label --summary "Targeted Unity work" | ConvertFrom-Json
+$env:UMCP_WORKSPACE_TASK_TOKEN = $task.result.task_token
 try {
+    umcp workspace claim acquire --project D:\unity\projects\POB --write Assets/Assets/_Scripts/_POB/MyScope
+    umcp workspace claim acquire --project D:\unity\projects\POB --resource unity-live
     umcp connect --project D:\unity\projects\POB
     umcp call get_project_info --project D:\unity\projects\POB --params '{}'
     umcp run --project D:\unity\projects\POB -- status
 } finally {
-    umcp lease release --project D:\unity\projects\POB
-    Remove-Item Env:UMCP_PROJECT_LEASE_ID -ErrorAction SilentlyContinue
+    umcp workspace task release --project D:\unity\projects\POB --result completed
+    Remove-Item Env:UMCP_WORKSPACE_TASK_TOKEN -ErrorAction SilentlyContinue
 }
 ```
 
-Acquire one lease before the first live Editor operation and keep it through
-refresh, compilation, Domain Reload, tests, Prefab/Scene changes, and final
-Console inspection. Additional tasks enter a per-project FIFO queue in
-`lease acquire` for up to 600 seconds by default; expired or terminated waiters
-are skipped automatically. The 30-minute lease TTL is refreshed by the owner’s
-live commands and recovers abandoned leases; long idle tasks can use
-`lease renew`. Always release in cleanup.
+The project policy at `Tools/Coordination/workspace-control.json` selects
+`audit` or `required`. A task token is returned only at task creation; pass it
+through `UMCP_WORKSPACE_TASK_TOKEN`, an owner-only token file, or stdin. Never
+put it in argv or logs. Path claims include Unity `.meta` pairs. Overlapping
+claims queue FIFO while unrelated paths remain parallel. A queued
+`workspace-freeze` blocks later scope expansion and is granted only after older
+writers drain. Acquire in this order: path, freeze when needed,
+`vcs-maintenance`, then `unity-live`.
 
-An active lease makes unclaimed or incorrectly claimed `connect`, `call`, and
-`run` fail with `project_busy` before dispatch. With no active task lease,
-pre-v0.4 commands remain compatible and retain their per-command serialization.
-Use `umcp lease status` or `umcp doctor` to see the owner and expiry without
-exposing its lease ID. Manual service stop/restart is refused while a lease is
-active.
+Classifying a pre-existing Plastic path with `workspace baseline disposition`
+also requires the task token. `adopt` is bound to that task, blocks every other
+task, and automatically becomes `protect` if its owner expires or releases
+without submitting or resolving the path.
+
+In `required`, `connect`, `call`, `run`, and legacy lease commands fail before
+dispatch unless the token owns `unity-live`. The claim creates the existing
+project lease internally; the lease ID is never public. Projects without a
+workspace policy retain the pre-v0.5 lease workflow. `audit` records and shows
+coordination state without making old entrypoints fail closed.
+
+Use `umcp workspace status --project <root> --refresh-vcs` for a current
+snapshot or `umcp workspace watch` for the live queue. Status includes task
+links, phases, heartbeats, claims, freeze, Unity lease/queue, Plastic observation
+age, unowned/protected pending, blockers, and next conditions without tokens or
+private lease IDs. Heartbeat long tasks and always release them in cleanup.
 
 Different project paths may hold leases and run concurrently. Two Editors
 cannot share the same absolute project path; use a separate workspace/worktree
 for true Editor parallelism.
 
 If a business request loses its response after dispatch, `umcp` exits with code
-7 and `outcome_unknown=true`. Do not replay a write unless its effect has been
-checked or the operation is known to be idempotent.
+7 and `outcome_unknown=true`; required-mode Unity commands also fence the task
+as `outcome_unknown`. Keep heartbeating while checking the effect. Expiry turns
+it into `orphaned_unknown`, which remains blocking until an owner records an
+evidence-backed `workspace recovery resolve-unknown` disposition. Never replay
+a non-idempotent write merely because the response was lost.
 
 ## Diagnosis and rollback
 
