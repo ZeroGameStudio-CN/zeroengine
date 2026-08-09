@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import os
 import time
 import uuid
 from collections.abc import Callable
@@ -13,11 +14,20 @@ import click
 from .compatibility import check_compatibility, require_compatible
 from .editor_bootstrap import bootstrap_diagnostics, ensure_project_connection
 from .editor_control import companion_package_path
-from .errors import ProjectError, ServiceError, UmcpError, UsageError
+from .errors import (
+    IncompatibleError,
+    OutcomeUnknownError,
+    ProjectBusyError,
+    ProjectError,
+    ServiceError,
+    UmcpError,
+    UsageError,
+)
 from .locking import project_lock
 from .project_lease import (
     acquire_project_lease,
     inspect_project_lease,
+    inspect_project_lease_queue,
     release_project_lease,
     require_project_lease,
 )
@@ -31,6 +41,11 @@ from .service_state import Settings
 from .startup import disable_startup, enable_startup
 from .supervisor import ServiceManager, run_daemon
 from .upstream_cli import run_upstream_cli
+from .workspace_control import (
+    TOKEN_ENVIRONMENT_VARIABLE,
+    WorkspaceCoordinator,
+    load_workspace_policy,
+)
 
 
 @dataclass(frozen=True)
@@ -304,7 +319,614 @@ def _resolved_payload(resolved: Any) -> dict[str, Any]:
 
 def _lease_status_payload(settings: Settings, canonical: str) -> dict[str, Any]:
     lease = inspect_project_lease(settings.paths, canonical)
-    return lease.public_payload() if lease is not None else {"active": False}
+    queue = inspect_project_lease_queue(settings.paths, canonical)
+    active = lease.public_payload() if lease is not None else {"active": False}
+    active["queue"] = [
+        {
+            "owner": waiter.owner,
+            "queue_order": waiter.queue_order,
+            "enqueued_at": waiter.enqueued_at,
+            "expires_at": waiter.expires_at,
+        }
+        for waiter in queue
+    ]
+    return active
+
+
+def _workspace_coordinator(
+    settings: Settings, root: Path, canonical: str
+) -> WorkspaceCoordinator:
+    return WorkspaceCoordinator(
+        settings.paths,
+        root,
+        canonical,
+        lease_ttl_seconds=settings.project_lease_ttl_seconds,
+    )
+
+
+def _read_workspace_token(
+    token_file: Path | None = None, *, token_stdin: bool = False
+) -> str | None:
+    if token_file is not None and token_stdin:
+        raise UsageError("Use either --token-file or --token-stdin, not both.")
+    if token_file is not None:
+        try:
+            return token_file.expanduser().read_text(encoding="utf-8").strip()
+        except OSError as exc:
+            raise UsageError(f"Cannot read workspace token file: {exc}") from exc
+    if token_stdin:
+        return click.get_text_stream("stdin").read().strip()
+    return os.environ.get(TOKEN_ENVIRONMENT_VARIABLE)
+
+
+def _required_workspace_lease_id(
+    settings: Settings,
+    root: Path,
+    canonical: str,
+) -> str | None:
+    policy = load_workspace_policy(root)
+    token = _read_workspace_token()
+    if policy.enforcement not in {"audit", "required"}:
+        return None
+    if policy.enforcement == "audit" and (not policy.valid or not token):
+        return None
+    if policy.enforcement == "audit":
+        try:
+            coordinator = _workspace_coordinator(settings, root, canonical)
+            assertion = coordinator.assert_claims(token, resources=("unity-live",))
+        except (IncompatibleError, ProjectBusyError, UsageError):
+            return None
+    else:
+        coordinator = _workspace_coordinator(settings, root, canonical)
+        assertion = coordinator.assert_claims(token, resources=("unity-live",))
+    lease_id = assertion.get("legacy_lease_id")
+    if not lease_id:
+        raise ProjectBusyError(
+            "The unity-live claim is not bound to a Unity task lease.",
+            details={"reason": "unity-lease-binding-missing"},
+        )
+    return str(lease_id)
+
+
+def _require_effective_project_lease(
+    settings: Settings,
+    canonical: str,
+    lease_id: str | None,
+    *,
+    workspace_bound: bool,
+    renew: bool = True,
+) -> None:
+    lease = require_project_lease(
+        settings.paths,
+        canonical,
+        lease_id,
+        settings.project_lease_ttl_seconds,
+        renew=renew,
+    )
+    if workspace_bound and lease is None:
+        raise ProjectBusyError(
+            "The workspace unity-live claim lost its Unity lease binding.",
+            details={"reason": "unity-lease-binding-expired"},
+        )
+
+
+@cli.group("workspace")
+def workspace_group() -> None:
+    """Coordinate project tasks, write scopes, freezes, and shared resources."""
+
+
+@workspace_group.group("task")
+def workspace_task_group() -> None:
+    """Create, renew, and finish workspace tasks."""
+
+
+@workspace_task_group.command("start")
+@click.option("--project", type=click.Path(path_type=Path), default=Path.cwd)
+@click.option("--owner", required=True)
+@click.option("--summary", required=True)
+@click.option("--task-uri", default=None)
+@click.option("--ttl", type=float, default=None)
+@click.pass_obj
+def workspace_task_start(
+    app: AppContext,
+    project: Path,
+    owner: str,
+    summary: str,
+    task_uri: str | None,
+    ttl: float | None,
+) -> None:
+    def action() -> ActionResult:
+        settings = app.settings()
+        root = _project_root(project)
+        canonical = canonical_project_root(root)
+        coordinator = _workspace_coordinator(settings, root, canonical)
+        result = coordinator.start_task(
+            owner=owner,
+            summary=summary,
+            task_uri=task_uri,
+            ttl_seconds=ttl if ttl is not None else settings.project_lease_ttl_seconds,
+        )
+        return ActionResult("Workspace task started.", result)
+
+    _execute(app, action)
+
+
+@workspace_task_group.command("heartbeat")
+@click.option("--project", type=click.Path(path_type=Path), default=Path.cwd)
+@click.option("--phase", required=True)
+@click.option("--note", default=None)
+@click.option("--ttl", type=float, default=None)
+@click.option("--token-file", type=click.Path(path_type=Path), default=None)
+@click.option("--token-stdin", is_flag=True)
+@click.pass_obj
+def workspace_task_heartbeat(
+    app: AppContext,
+    project: Path,
+    phase: str,
+    note: str | None,
+    ttl: float | None,
+    token_file: Path | None,
+    token_stdin: bool,
+) -> None:
+    def action() -> ActionResult:
+        settings = app.settings()
+        root = _project_root(project)
+        canonical = canonical_project_root(root)
+        result = _workspace_coordinator(settings, root, canonical).heartbeat(
+            _read_workspace_token(token_file, token_stdin=token_stdin),
+            phase=phase,
+            note=note,
+            ttl_seconds=ttl if ttl is not None else settings.project_lease_ttl_seconds,
+        )
+        return ActionResult("Workspace task heartbeat renewed.", result)
+
+    _execute(app, action)
+
+
+@workspace_task_group.command("release")
+@click.option("--project", type=click.Path(path_type=Path), default=Path.cwd)
+@click.option("--result", type=click.Choice(["completed", "failed"]), required=True)
+@click.option("--token-file", type=click.Path(path_type=Path), default=None)
+@click.option("--token-stdin", is_flag=True)
+@click.pass_obj
+def workspace_task_release(
+    app: AppContext,
+    project: Path,
+    result: str,
+    token_file: Path | None,
+    token_stdin: bool,
+) -> None:
+    def action() -> ActionResult:
+        settings = app.settings()
+        root = _project_root(project)
+        canonical = canonical_project_root(root)
+        value = _workspace_coordinator(settings, root, canonical).release_task(
+            _read_workspace_token(token_file, token_stdin=token_stdin), result=result
+        )
+        return ActionResult("Workspace task released.", value)
+
+    _execute(app, action)
+
+
+@workspace_group.group("claim")
+def workspace_claim_group() -> None:
+    """Acquire, inspect, and release workspace claims."""
+
+
+@workspace_claim_group.command("acquire")
+@click.option("--project", type=click.Path(path_type=Path), default=Path.cwd)
+@click.option("--write", multiple=True)
+@click.option(
+    "--resource",
+    multiple=True,
+    type=click.Choice(["unity-live", "vcs-maintenance"]),
+)
+@click.option("--wait", type=float, default=0.0)
+@click.option("--keep-queued", is_flag=True)
+@click.option("--token-file", type=click.Path(path_type=Path), default=None)
+@click.option("--token-stdin", is_flag=True)
+@click.pass_obj
+def workspace_claim_acquire(
+    app: AppContext,
+    project: Path,
+    write: tuple[str, ...],
+    resource: tuple[str, ...],
+    wait: float,
+    keep_queued: bool,
+    token_file: Path | None,
+    token_stdin: bool,
+) -> None:
+    def action() -> ActionResult:
+        settings = app.settings()
+        root = _project_root(project)
+        canonical = canonical_project_root(root)
+        value = _workspace_coordinator(settings, root, canonical).acquire_claim(
+            _read_workspace_token(token_file, token_stdin=token_stdin),
+            writes=write,
+            resources=resource,
+            wait_seconds=wait,
+            keep_queued=keep_queued,
+        )
+        return ActionResult("Workspace claim evaluated.", value)
+
+    _execute(app, action)
+
+
+@workspace_claim_group.command("release")
+@click.option("--project", type=click.Path(path_type=Path), default=Path.cwd)
+@click.option("--claim-id", required=True)
+@click.option("--token-file", type=click.Path(path_type=Path), default=None)
+@click.option("--token-stdin", is_flag=True)
+@click.pass_obj
+def workspace_claim_release(
+    app: AppContext,
+    project: Path,
+    claim_id: str,
+    token_file: Path | None,
+    token_stdin: bool,
+) -> None:
+    def action() -> ActionResult:
+        settings = app.settings()
+        root = _project_root(project)
+        canonical = canonical_project_root(root)
+        value = _workspace_coordinator(settings, root, canonical).release_claim(
+            _read_workspace_token(token_file, token_stdin=token_stdin), claim_id
+        )
+        return ActionResult("Workspace claim released.", value)
+
+    _execute(app, action)
+
+
+@workspace_claim_group.command("dry-run")
+@click.option("--project", type=click.Path(path_type=Path), default=Path.cwd)
+@click.option("--write", multiple=True)
+@click.option(
+    "--resource",
+    multiple=True,
+    type=click.Choice(["unity-live", "vcs-maintenance"]),
+)
+@click.option("--freeze", is_flag=True)
+@click.option("--token-file", type=click.Path(path_type=Path), default=None)
+@click.option("--token-stdin", is_flag=True)
+@click.pass_obj
+def workspace_claim_dry_run(
+    app: AppContext,
+    project: Path,
+    write: tuple[str, ...],
+    resource: tuple[str, ...],
+    freeze: bool,
+    token_file: Path | None,
+    token_stdin: bool,
+) -> None:
+    def action() -> ActionResult:
+        settings = app.settings()
+        root = _project_root(project)
+        canonical = canonical_project_root(root)
+        value = _workspace_coordinator(settings, root, canonical).dry_run(
+            _read_workspace_token(token_file, token_stdin=token_stdin),
+            writes=write,
+            resources=resource,
+            freeze=freeze,
+        )
+        return ActionResult("Workspace claim dry-run completed.", value)
+
+    _execute(app, action)
+
+
+@workspace_group.group("queue")
+def workspace_queue_group() -> None:
+    """Manage persistent queued claims."""
+
+
+@workspace_queue_group.command("cancel")
+@click.option("--project", type=click.Path(path_type=Path), default=Path.cwd)
+@click.option("--claim-id", required=True)
+@click.option("--token-file", type=click.Path(path_type=Path), default=None)
+@click.option("--token-stdin", is_flag=True)
+@click.pass_obj
+def workspace_queue_cancel(
+    app: AppContext,
+    project: Path,
+    claim_id: str,
+    token_file: Path | None,
+    token_stdin: bool,
+) -> None:
+    def action() -> ActionResult:
+        settings = app.settings()
+        root = _project_root(project)
+        canonical = canonical_project_root(root)
+        value = _workspace_coordinator(settings, root, canonical).cancel_claim(
+            _read_workspace_token(token_file, token_stdin=token_stdin), claim_id
+        )
+        return ActionResult("Queued workspace claim cancelled.", value)
+
+    _execute(app, action)
+
+
+@workspace_group.group("freeze")
+def workspace_freeze_group() -> None:
+    """Acquire a fair whole-workspace mutation barrier."""
+
+
+@workspace_freeze_group.command("acquire")
+@click.option("--project", type=click.Path(path_type=Path), default=Path.cwd)
+@click.option("--wait", type=float, default=0.0)
+@click.option("--keep-queued", is_flag=True)
+@click.option("--token-file", type=click.Path(path_type=Path), default=None)
+@click.option("--token-stdin", is_flag=True)
+@click.pass_obj
+def workspace_freeze_acquire(
+    app: AppContext,
+    project: Path,
+    wait: float,
+    keep_queued: bool,
+    token_file: Path | None,
+    token_stdin: bool,
+) -> None:
+    def action() -> ActionResult:
+        settings = app.settings()
+        root = _project_root(project)
+        canonical = canonical_project_root(root)
+        value = _workspace_coordinator(settings, root, canonical).acquire_claim(
+            _read_workspace_token(token_file, token_stdin=token_stdin),
+            freeze=True,
+            wait_seconds=wait,
+            keep_queued=keep_queued,
+        )
+        return ActionResult("Workspace freeze evaluated.", value)
+
+    _execute(app, action)
+
+
+@workspace_group.command("assert")
+@click.option("--project", type=click.Path(path_type=Path), default=Path.cwd)
+@click.option("--write", multiple=True)
+@click.option(
+    "--resource",
+    multiple=True,
+    type=click.Choice(["unity-live", "vcs-maintenance"]),
+)
+@click.option("--freeze", is_flag=True)
+@click.option("--token-file", type=click.Path(path_type=Path), default=None)
+@click.option("--token-stdin", is_flag=True)
+@click.pass_obj
+def workspace_assert(
+    app: AppContext,
+    project: Path,
+    write: tuple[str, ...],
+    resource: tuple[str, ...],
+    freeze: bool,
+    token_file: Path | None,
+    token_stdin: bool,
+) -> None:
+    def action() -> ActionResult:
+        settings = app.settings()
+        root = _project_root(project)
+        canonical = canonical_project_root(root)
+        value = _workspace_coordinator(settings, root, canonical).assert_claims(
+            _read_workspace_token(token_file, token_stdin=token_stdin),
+            writes=write,
+            resources=resource,
+            freeze=freeze,
+        )
+        value.pop("legacy_lease_id", None)
+        return ActionResult("Workspace claim assertion passed.", value)
+
+    _execute(app, action)
+
+
+def _workspace_status_value(
+    settings: Settings, root: Path, *, refresh_vcs: bool
+) -> dict[str, Any]:
+    canonical = canonical_project_root(root)
+    try:
+        coordinator = _workspace_coordinator(settings, root, canonical)
+    except IncompatibleError as exc:
+        return {
+            "schema_version": None,
+            "project_root": str(root),
+            "policy": load_workspace_policy(root).public_payload(),
+            "workspace_epoch": None,
+            "tasks": [],
+            "claims": [],
+            "freeze": None,
+            "vcs": {
+                "observation_id": None,
+                "observed_at": None,
+                "pending_count": None,
+                "stale": True,
+                "pending": [],
+            },
+            "coordination_error": {"message": exc.message, **exc.details},
+            "unity_lease": _lease_status_payload(settings, canonical),
+        }
+    refresh_error = None
+    if refresh_vcs:
+        try:
+            coordinator.reconcile_plastic()
+        except UmcpError as exc:
+            refresh_error = {"message": exc.message, **exc.details}
+    value = coordinator.status()
+    if refresh_error is not None:
+        value["coordination_error"] = {
+            "reason": "vcs-refresh-failed",
+            **refresh_error,
+        }
+    value["unity_lease"] = _lease_status_payload(settings, canonical)
+    return value
+
+
+@workspace_group.command("status")
+@click.option("--project", type=click.Path(path_type=Path), default=Path.cwd)
+@click.option("--human", "local_human", is_flag=True)
+@click.option("--refresh-vcs", is_flag=True)
+@click.pass_obj
+def workspace_status(
+    app: AppContext,
+    project: Path,
+    local_human: bool,
+    refresh_vcs: bool,
+) -> None:
+    if local_human and not app.human:
+        app = AppContext(app.state_dir, app.endpoint, True)
+
+    def action() -> ActionResult:
+        settings = app.settings()
+        root = _project_root(project)
+        return ActionResult(
+            "Workspace coordination status inspected.",
+            _workspace_status_value(settings, root, refresh_vcs=refresh_vcs),
+        )
+
+    _execute(app, action)
+
+
+@workspace_group.command("watch")
+@click.option("--project", type=click.Path(path_type=Path), default=Path.cwd)
+@click.option("--human", "local_human", is_flag=True)
+@click.option("--interval", type=float, default=2.0)
+@click.option("--vcs-refresh-interval", type=float, default=30.0)
+@click.pass_obj
+def workspace_watch(
+    app: AppContext,
+    project: Path,
+    local_human: bool,
+    interval: float,
+    vcs_refresh_interval: float,
+) -> None:
+    if interval <= 0 or vcs_refresh_interval <= 0:
+        raise click.UsageError("Watch intervals must be greater than zero.")
+    if local_human and not app.human:
+        app = AppContext(app.state_dir, app.endpoint, True)
+    settings = app.settings()
+    root = _project_root(project)
+    last_vcs_refresh = 0.0
+    try:
+        while True:
+            refresh_vcs = time.monotonic() - last_vcs_refresh >= vcs_refresh_interval
+            if refresh_vcs:
+                last_vcs_refresh = time.monotonic()
+            value = _workspace_status_value(settings, root, refresh_vcs=refresh_vcs)
+            envelope = {
+                "ok": True,
+                "code": "ok",
+                "message": "Workspace coordination status inspected.",
+                "project_hash": None,
+                "endpoint": settings.endpoint,
+                "duration_ms": 0,
+                "result": value,
+            }
+            _emit(app, envelope)
+            time.sleep(interval)
+    except KeyboardInterrupt:
+        return
+
+
+@workspace_group.group("baseline")
+def workspace_baseline_group() -> None:
+    """Import and classify pre-existing Plastic pending paths."""
+
+
+@workspace_baseline_group.command("import-plastic")
+@click.option("--project", type=click.Path(path_type=Path), default=Path.cwd)
+@click.pass_obj
+def workspace_baseline_import(app: AppContext, project: Path) -> None:
+    def action() -> ActionResult:
+        settings = app.settings()
+        root = _project_root(project)
+        canonical = canonical_project_root(root)
+        value = _workspace_coordinator(
+            settings, root, canonical
+        ).import_plastic_baseline()
+        return ActionResult("Plastic pending baseline imported.", value)
+
+    _execute(app, action)
+
+
+@workspace_baseline_group.command("disposition")
+@click.option("--project", type=click.Path(path_type=Path), default=Path.cwd)
+@click.option(
+    "--kind",
+    type=click.Choice(["adopt", "protect", "resolved-clean", "submitted"]),
+    required=True,
+)
+@click.option("--write", multiple=True, required=True)
+@click.option("--evidence", default=None)
+@click.option("--token-file", type=click.Path(path_type=Path), default=None)
+@click.option("--token-stdin", is_flag=True)
+@click.pass_obj
+def workspace_baseline_disposition(
+    app: AppContext,
+    project: Path,
+    kind: str,
+    write: tuple[str, ...],
+    evidence: str | None,
+    token_file: Path | None,
+    token_stdin: bool,
+) -> None:
+    def action() -> ActionResult:
+        settings = app.settings()
+        root = _project_root(project)
+        canonical = canonical_project_root(root)
+        value = _workspace_coordinator(settings, root, canonical).set_disposition(
+            _read_workspace_token(token_file, token_stdin=token_stdin),
+            kind=kind,
+            writes=write,
+            evidence=evidence,
+        )
+        return ActionResult("Plastic baseline disposition recorded.", value)
+
+    _execute(app, action)
+
+
+@workspace_group.command("reconcile-plastic")
+@click.option("--project", type=click.Path(path_type=Path), default=Path.cwd)
+@click.pass_obj
+def workspace_reconcile_plastic(app: AppContext, project: Path) -> None:
+    def action() -> ActionResult:
+        settings = app.settings()
+        root = _project_root(project)
+        canonical = canonical_project_root(root)
+        value = _workspace_coordinator(settings, root, canonical).reconcile_plastic()
+        return ActionResult("Plastic pending state reconciled.", value)
+
+    _execute(app, action)
+
+
+@workspace_group.group("recovery")
+def workspace_recovery_group() -> None:
+    """Resolve fenced unknown outcomes with explicit evidence."""
+
+
+@workspace_recovery_group.command("resolve-unknown")
+@click.option("--project", type=click.Path(path_type=Path), default=Path.cwd)
+@click.option("--task-id", required=True)
+@click.option(
+    "--disposition",
+    type=click.Choice(["applied", "not-applied", "contained"]),
+    required=True,
+)
+@click.option("--evidence", required=True)
+@click.pass_obj
+def workspace_recovery_resolve_unknown(
+    app: AppContext,
+    project: Path,
+    task_id: str,
+    disposition: str,
+    evidence: str,
+) -> None:
+    def action() -> ActionResult:
+        settings = app.settings()
+        root = _project_root(project)
+        canonical = canonical_project_root(root)
+        value = _workspace_coordinator(settings, root, canonical).resolve_unknown(
+            task_id=task_id,
+            disposition=disposition,
+            evidence=evidence,
+        )
+        return ActionResult("Unknown workspace outcome resolved.", value)
+
+    _execute(app, action)
 
 
 @cli.group("lease")
@@ -331,6 +953,20 @@ def lease_acquire(
         settings = app.settings()
         root = _project_root(project)
         canonical = canonical_project_root(root)
+        policy = load_workspace_policy(root)
+        if policy.enforcement == "required":
+            claim = _workspace_coordinator(settings, root, canonical).acquire_claim(
+                _read_workspace_token(),
+                resources=("unity-live",),
+                wait_seconds=wait
+                if wait is not None
+                else settings.project_lock_timeout_seconds,
+            )
+            if claim["state"] != "granted":
+                raise ProjectBusyError(
+                    "Unity live workspace claim was not granted.", details=claim
+                )
+            return ActionResult("Unity live workspace claim acquired.", claim)
         lease = acquire_project_lease(
             settings.paths,
             canonical,
@@ -362,26 +998,35 @@ def lease_status(app: AppContext, project: Path) -> None:
 @lease_group.command("renew")
 @click.option("--project", type=click.Path(path_type=Path), default=Path.cwd)
 @click.option(
-    "--lease-id", envvar="UMCP_PROJECT_LEASE_ID", required=True, hide_input=True
+    "--lease-id", envvar="UMCP_PROJECT_LEASE_ID", default=None, hide_input=True
 )
 @click.option("--ttl", type=float, default=None, help="Lease lifetime in seconds.")
 @click.pass_obj
 def lease_renew(
-    app: AppContext, project: Path, lease_id: str, ttl: float | None
+    app: AppContext, project: Path, lease_id: str | None, ttl: float | None
 ) -> None:
     def action() -> ActionResult:
         settings = app.settings()
         root = _project_root(project)
         canonical = canonical_project_root(root)
+        workspace_lease_id = _required_workspace_lease_id(settings, root, canonical)
+        effective_lease_id = workspace_lease_id or lease_id
+        if not effective_lease_id:
+            raise UsageError("Project lease ID must not be empty.")
         lease = require_project_lease(
             settings.paths,
             canonical,
-            lease_id,
+            effective_lease_id,
             ttl if ttl is not None else settings.project_lease_ttl_seconds,
         )
         if lease is None:
             raise UsageError("No active project task lease exists to renew.")
-        return ActionResult("Project task lease renewed.", lease.private_payload())
+        result = (
+            lease.public_payload()
+            if workspace_lease_id is not None
+            else lease.private_payload()
+        )
+        return ActionResult("Project task lease renewed.", result)
 
     _execute(app, action)
 
@@ -389,14 +1034,25 @@ def lease_renew(
 @lease_group.command("release")
 @click.option("--project", type=click.Path(path_type=Path), default=Path.cwd)
 @click.option(
-    "--lease-id", envvar="UMCP_PROJECT_LEASE_ID", required=True, hide_input=True
+    "--lease-id", envvar="UMCP_PROJECT_LEASE_ID", default=None, hide_input=True
 )
 @click.pass_obj
-def lease_release(app: AppContext, project: Path, lease_id: str) -> None:
+def lease_release(app: AppContext, project: Path, lease_id: str | None) -> None:
     def action() -> ActionResult:
         settings = app.settings()
         root = _project_root(project)
         canonical = canonical_project_root(root)
+        workspace_lease_id = _required_workspace_lease_id(settings, root, canonical)
+        if workspace_lease_id is not None:
+            coordinator = _workspace_coordinator(settings, root, canonical)
+            assertion = coordinator.assert_claims(
+                _read_workspace_token(), resources=("unity-live",)
+            )
+            claim_id = assertion["resource_claim_ids"]["unity-live"]
+            value = coordinator.release_claim(_read_workspace_token(), claim_id)
+            return ActionResult("Unity live workspace claim released.", value)
+        if not lease_id:
+            raise UsageError("Project lease ID must not be empty.")
         released = release_project_lease(settings.paths, canonical, lease_id)
         return ActionResult(
             "Project task lease released." if released else "No active lease remained.",
@@ -432,11 +1088,13 @@ def connect_command(
         root = _project_root(project)
         compatibility = require_compatible(root, settings.approved_plugin_refs)
         canonical = canonical_project_root(root)
-        require_project_lease(
-            settings.paths,
+        workspace_lease_id = _required_workspace_lease_id(settings, root, canonical)
+        effective_lease_id = workspace_lease_id or lease_id
+        _require_effective_project_lease(
+            settings,
             canonical,
-            lease_id,
-            settings.project_lease_ttl_seconds,
+            effective_lease_id,
+            workspace_bound=workspace_lease_id is not None,
             renew=False,
         )
         ServiceManager(settings).ensure()
@@ -450,11 +1108,11 @@ def connect_command(
             "connect",
             min(settings.project_lock_timeout_seconds, budget),
         ):
-            require_project_lease(
-                settings.paths,
+            _require_effective_project_lease(
+                settings,
                 canonical,
-                lease_id,
-                settings.project_lease_ttl_seconds,
+                effective_lease_id,
+                workspace_bound=workspace_lease_id is not None,
             )
             remaining = budget - (time.monotonic() - started)
             if remaining <= 0:
@@ -468,6 +1126,7 @@ def connect_command(
                 remaining,
                 allow_editor_restart=restart_editor,
             )
+            _required_workspace_lease_id(settings, root, canonical)
         result = _resolved_payload(resolved)
         result["compatibility"] = compatibility.status
         result["bootstrap"] = bootstrap.to_dict()
@@ -493,9 +1152,7 @@ def status_command(app: AppContext, project: Path) -> None:
             "service": service_value,
             "compatibility": compatibility.__dict__,
             "project": None,
-            "task_lease": _lease_status_payload(
-                settings, canonical_project_root(root)
-            ),
+            "task_lease": _lease_status_payload(settings, canonical_project_root(root)),
         }
         project_hash = None
         if service_value["healthy"]:
@@ -557,36 +1214,49 @@ def call_command(
         root = _project_root(project)
         require_compatible(root, settings.approved_plugin_refs)
         canonical = canonical_project_root(root)
-        require_project_lease(
-            settings.paths,
+        workspace_lease_id = _required_workspace_lease_id(settings, root, canonical)
+        effective_lease_id = workspace_lease_id or lease_id
+        _require_effective_project_lease(
+            settings,
             canonical,
-            lease_id,
-            settings.project_lease_ttl_seconds,
+            effective_lease_id,
+            workspace_bound=workspace_lease_id is not None,
             renew=False,
         )
         ServiceManager(settings).ensure()
-        with project_lock(
-            settings.paths,
-            canonical,
-            command_type,
-            settings.project_lock_timeout_seconds,
-        ):
-            require_project_lease(
+        try:
+            with project_lock(
                 settings.paths,
                 canonical,
-                lease_id,
-                settings.project_lease_ttl_seconds,
-            )
-            client = RestClient(settings.endpoint, settings.command_timeout_seconds)
-            resolved, _ = ensure_project_connection(
-                root, settings, client, settings.bootstrap_timeout_seconds
-            )
-            result = client.command(
                 command_type,
-                parsed_params,
-                resolved.project_hash,
-                timeout_seconds=timeout,
-            )
+                settings.project_lock_timeout_seconds,
+            ):
+                _require_effective_project_lease(
+                    settings,
+                    canonical,
+                    effective_lease_id,
+                    workspace_bound=workspace_lease_id is not None,
+                )
+                client = RestClient(settings.endpoint, settings.command_timeout_seconds)
+                resolved, _ = ensure_project_connection(
+                    root, settings, client, settings.bootstrap_timeout_seconds
+                )
+                result = client.command(
+                    command_type,
+                    parsed_params,
+                    resolved.project_hash,
+                    timeout_seconds=timeout,
+                )
+                _required_workspace_lease_id(settings, root, canonical)
+        except OutcomeUnknownError:
+            if workspace_lease_id is not None:
+                _workspace_coordinator(settings, root, canonical).heartbeat(
+                    _read_workspace_token(),
+                    phase="outcome_unknown",
+                    note=f"Unity command outcome unknown: {command_type}",
+                    ttl_seconds=settings.project_lease_ttl_seconds,
+                )
+            raise
         return ActionResult("Unity command completed.", result, resolved.project_hash)
 
     _execute(app, action)
@@ -615,31 +1285,46 @@ def run_command(
         root = _project_root(project)
         require_compatible(root, settings.approved_plugin_refs)
         canonical = canonical_project_root(root)
-        require_project_lease(
-            settings.paths,
+        workspace_lease_id = _required_workspace_lease_id(settings, root, canonical)
+        effective_lease_id = workspace_lease_id or lease_id
+        _require_effective_project_lease(
+            settings,
             canonical,
-            lease_id,
-            settings.project_lease_ttl_seconds,
+            effective_lease_id,
+            workspace_bound=workspace_lease_id is not None,
             renew=False,
         )
         ServiceManager(settings).ensure()
-        with project_lock(
-            settings.paths,
-            canonical,
-            "upstream-cli",
-            settings.project_lock_timeout_seconds,
-        ):
-            require_project_lease(
+        try:
+            with project_lock(
                 settings.paths,
                 canonical,
-                lease_id,
-                settings.project_lease_ttl_seconds,
-            )
-            client = RestClient(settings.endpoint, settings.command_timeout_seconds)
-            resolved, _ = ensure_project_connection(
-                root, settings, client, settings.bootstrap_timeout_seconds
-            )
-            result = run_upstream_cli(settings, resolved.project_hash, upstream_args)
+                "upstream-cli",
+                settings.project_lock_timeout_seconds,
+            ):
+                _require_effective_project_lease(
+                    settings,
+                    canonical,
+                    effective_lease_id,
+                    workspace_bound=workspace_lease_id is not None,
+                )
+                client = RestClient(settings.endpoint, settings.command_timeout_seconds)
+                resolved, _ = ensure_project_connection(
+                    root, settings, client, settings.bootstrap_timeout_seconds
+                )
+                result = run_upstream_cli(
+                    settings, resolved.project_hash, upstream_args
+                )
+                _required_workspace_lease_id(settings, root, canonical)
+        except OutcomeUnknownError:
+            if workspace_lease_id is not None:
+                _workspace_coordinator(settings, root, canonical).heartbeat(
+                    _read_workspace_token(),
+                    phase="outcome_unknown",
+                    note="Upstream Unity CLI outcome unknown",
+                    ttl_seconds=settings.project_lease_ttl_seconds,
+                )
+            raise
         return ActionResult(
             "Upstream Unity MCP CLI command completed.", result, resolved.project_hash
         )
@@ -663,9 +1348,7 @@ def doctor_command(app: AppContext, project: Path) -> None:
                 root, settings.endpoint, settings.state_dir
             ),
             "project": None,
-            "task_lease": _lease_status_payload(
-                settings, canonical_project_root(root)
-            ),
+            "task_lease": _lease_status_payload(settings, canonical_project_root(root)),
             "diagnosis": service_value["status"],
         }
         project_hash = None

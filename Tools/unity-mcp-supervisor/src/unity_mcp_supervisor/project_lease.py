@@ -97,11 +97,7 @@ class ProjectLeaseWaiter:
 
 def _validate_duration(value: float, label: str, *, allow_zero: bool = False) -> None:
     minimum = 0 if allow_zero else 0.0
-    if (
-        not math.isfinite(value)
-        or value < minimum
-        or (not allow_zero and value == 0)
-    ):
+    if not math.isfinite(value) or value < minimum or (not allow_zero and value == 0):
         qualifier = "zero or greater" if allow_zero else "greater than zero"
         raise UsageError(f"{label} must be {qualifier}.")
 
@@ -158,8 +154,7 @@ def _read_waiters(
                 continue
             if (
                 waiter.project_root != canonical_project_root
-                or ticket_path
-                != _waiter_file(paths, canonical_project_root, waiter)
+                or ticket_path != _waiter_file(paths, canonical_project_root, waiter)
             ):
                 raise ValueError("project lease waiter mismatch")
         except FileNotFoundError:
@@ -245,9 +240,7 @@ def inspect_project_lease_queue(
     _, lock_path = _lease_files(paths, canonical_project_root)
     lock = _guard(lock_path)
     try:
-        return _read_waiters(
-            paths, canonical_project_root, now=time.time()
-        )
+        return _read_waiters(paths, canonical_project_root, now=time.time())
     finally:
         lock.release()
 
@@ -277,6 +270,70 @@ def _queue_conflict(
     )
 
 
+def create_project_lease_unlocked(
+    paths: StatePaths,
+    canonical_project_root: str,
+    owner: str,
+    ttl_seconds: float,
+) -> ProjectLease:
+    """Create a lease while the caller holds the canonical project lock."""
+    owner = owner.strip()
+    if not owner:
+        raise UsageError("Lease owner must not be empty.")
+    _validate_duration(ttl_seconds, "Lease TTL")
+    paths.ensure()
+    metadata_path, lock_path = _lease_files(paths, canonical_project_root)
+    lock = _guard(lock_path)
+    try:
+        now = time.time()
+        current = _read_active_unlocked(metadata_path, canonical_project_root, now=now)
+        if current is not None:
+            raise _conflict(current)
+        waiters = _read_waiters(paths, canonical_project_root, now=now)
+        if waiters:
+            raise _queue_conflict(waiters)
+        lease = ProjectLease(
+            schema_version=LEASE_SCHEMA_VERSION,
+            project_root=canonical_project_root,
+            lease_id=uuid.uuid4().hex,
+            owner=owner,
+            acquired_at=now,
+            renewed_at=now,
+            expires_at=now + ttl_seconds,
+        )
+        _atomic_write(
+            metadata_path,
+            json.dumps(asdict(lease), sort_keys=True) + "\n",
+        )
+        return lease
+    finally:
+        lock.release()
+
+
+def release_project_lease_unlocked(
+    paths: StatePaths,
+    canonical_project_root: str,
+    lease_id: str,
+) -> bool:
+    """Release a lease while the caller holds the canonical project lock."""
+    if not lease_id:
+        raise UsageError("Lease ID must not be empty.")
+    metadata_path, lock_path = _lease_files(paths, canonical_project_root)
+    lock = _guard(lock_path)
+    try:
+        lease = _read_active_unlocked(
+            metadata_path, canonical_project_root, now=time.time()
+        )
+        if lease is None:
+            return False
+        if lease_id != lease.lease_id:
+            raise _conflict(lease)
+        _unlink_with_retry(metadata_path)
+        return True
+    finally:
+        lock.release()
+
+
 def acquire_project_lease(
     paths: StatePaths,
     canonical_project_root: str,
@@ -304,17 +361,13 @@ def acquire_project_lease(
             expires_at=now + wait_seconds,
         )
         ticket_path = _waiter_file(paths, canonical_project_root, waiter)
-        _atomic_write(
-            ticket_path, json.dumps(asdict(waiter), sort_keys=True) + "\n"
-        )
+        _atomic_write(ticket_path, json.dumps(asdict(waiter), sort_keys=True) + "\n")
 
     last_conflict: ProjectBusyError | None = None
     try:
         while True:
             current = inspect_project_lease(paths, canonical_project_root)
-            waiters = inspect_project_lease_queue(
-                paths, canonical_project_root
-            )
+            waiters = inspect_project_lease_queue(paths, canonical_project_root)
             if current is not None:
                 last_conflict = _conflict(current)
             elif waiters and (
@@ -376,8 +429,7 @@ def acquire_project_lease(
                                 )
                                 _atomic_write(
                                     metadata_path,
-                                    json.dumps(asdict(lease), sort_keys=True)
-                                    + "\n",
+                                    json.dumps(asdict(lease), sort_keys=True) + "\n",
                                 )
                                 return lease
                         finally:
@@ -430,9 +482,7 @@ def require_project_lease(
             renewed_at=now,
             expires_at=now + ttl_seconds,
         )
-        _atomic_write(
-            metadata_path, json.dumps(asdict(renewed), sort_keys=True) + "\n"
-        )
+        _atomic_write(metadata_path, json.dumps(asdict(renewed), sort_keys=True) + "\n")
         return renewed
     finally:
         lock.release()
@@ -444,20 +494,7 @@ def release_project_lease(
     if not lease_id:
         raise UsageError("Lease ID must not be empty.")
     with project_lock(paths, canonical_project_root, "lease-release", 30):
-        metadata_path, lock_path = _lease_files(paths, canonical_project_root)
-        lock = _guard(lock_path)
-        try:
-            lease = _read_active_unlocked(
-                metadata_path, canonical_project_root, now=time.time()
-            )
-            if lease is None:
-                return False
-            if lease_id != lease.lease_id:
-                raise _conflict(lease)
-            _unlink_with_retry(metadata_path)
-            return True
-        finally:
-            lock.release()
+        return release_project_lease_unlocked(paths, canonical_project_root, lease_id)
 
 
 def live_project_lease_owners(paths: StatePaths) -> list[dict]:

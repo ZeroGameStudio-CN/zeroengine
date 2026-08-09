@@ -5,9 +5,10 @@ Unity Editors through one loopback Unity MCP HTTP server.
 
 The tool does not patch Unity MCP. It supervises the pinned upstream server,
 routes every call by verified project path/hash, serializes live operations per
-project, holds an optional task lease across related calls, and uses an
-independent Editor-only companion package to connect an open but unconnected
-Editor without plugin UI, restart, or a visible terminal.
+project, coordinates task/path/resource claims and fair workspace freezes,
+binds Unity live access to the same task identity, and uses an independent
+Editor-only companion package to connect an open but unconnected Editor without
+plugin UI, restart, or a visible terminal.
 
 On Windows, daemon, Server, Editor relaunch, passthrough, and test children are
 created without console windows. A replacement supervisor can adopt only a
@@ -25,30 +26,33 @@ fixes that do not change that compatibility contract.
 uv sync --locked
 uv run umcp service ensure
 uv run umcp control package-path
-$lease = uv run umcp lease acquire --project D:\unity\projects\POB --owner task-label | ConvertFrom-Json
-$env:UMCP_PROJECT_LEASE_ID = $lease.result.lease_id
+$task = uv run umcp workspace task start --project D:\unity\projects\POB --owner task-label --summary "Unity inspection" | ConvertFrom-Json
+$env:UMCP_WORKSPACE_TASK_TOKEN = $task.result.task_token
+uv run umcp workspace claim acquire --project D:\unity\projects\POB --resource unity-live
 uv run umcp connect --project D:\unity\projects\POB
 uv run umcp call get_project_info --project D:\unity\projects\POB --params '{}'
-uv run umcp lease release --project D:\unity\projects\POB
-Remove-Item Env:UMCP_PROJECT_LEASE_ID -ErrorAction SilentlyContinue
+uv run umcp workspace task release --project D:\unity\projects\POB --result completed
+Remove-Item Env:UMCP_WORKSPACE_TASK_TOKEN -ErrorAction SilentlyContinue
 ```
 
 ```powershell
 # Installed tool (replace <tested-commit>)
 uv tool install "unity-mcp-supervisor @ git+https://github.com/ZeroGameStudio-CN/zeroengine.git@<tested-commit>#subdirectory=Tools/unity-mcp-supervisor"
 umcp service ensure
-$lease = umcp lease acquire --project D:\unity\projects\POB --owner task-label | ConvertFrom-Json
-$env:UMCP_PROJECT_LEASE_ID = $lease.result.lease_id
+$task = umcp workspace task start --project D:\unity\projects\POB --owner task-label --summary "Unity inspection" | ConvertFrom-Json
+$env:UMCP_WORKSPACE_TASK_TOKEN = $task.result.task_token
+umcp workspace claim acquire --project D:\unity\projects\POB --resource unity-live
 umcp connect --project D:\unity\projects\POB
-umcp lease release --project D:\unity\projects\POB
-Remove-Item Env:UMCP_PROJECT_LEASE_ID -ErrorAction SilentlyContinue
+umcp workspace task release --project D:\unity\projects\POB --result completed
+Remove-Item Env:UMCP_WORKSPACE_TASK_TOKEN -ErrorAction SilentlyContinue
 ```
 
-Pass the acquired `lease_id` to each live `connect`, `call`, or `run` with
-`--lease-id` (or `UMCP_PROJECT_LEASE_ID`), then release it when the task ends.
-Lease acquisition uses a FIFO queue per project, skips expired or terminated
-waiters, and keeps different project roots independent. See
-[docs/setup.md](docs/setup.md) for the complete workflow.
+Projects without a workspace policy retain the legacy `umcp lease` contract.
+An `audit` or `required` policy enables `umcp workspace status/watch`, persistent
+path/resource queues, Plastic observations, and whole-workspace freezes. In
+`required`, `connect`, `call`, `run`, and legacy lease commands require the task
+token and an active `unity-live` claim; the private lease ID never leaves local
+state. See [docs/setup.md](docs/setup.md) for the complete workflow.
 
 See [docs/setup.md](docs/setup.md) for bootstrap safety and operational
 boundaries.

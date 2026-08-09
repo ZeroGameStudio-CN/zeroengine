@@ -28,8 +28,7 @@ def _wait_for_queue(
     deadline = time.monotonic() + timeout
     while time.monotonic() < deadline:
         owners = [
-            waiter.owner
-            for waiter in inspect_project_lease_queue(paths, project_root)
+            waiter.owner for waiter in inspect_project_lease_queue(paths, project_root)
         ]
         if owners == expected_owners:
             return
@@ -38,9 +37,7 @@ def _wait_for_queue(
 
 
 def _waiting_lease_process(state_dir: str, project_root: str, owner: str) -> None:
-    acquire_project_lease(
-        StatePaths(Path(state_dir)), project_root, owner, 60, 30
-    )
+    acquire_project_lease(StatePaths(Path(state_dir)), project_root, owner, 60, 30)
 
 
 def test_lease_lifecycle_and_owner_enforcement(tmp_path: Path) -> None:
@@ -104,9 +101,7 @@ def test_waiting_acquire_does_not_block_current_owner_release(tmp_path: Path) ->
     paths = StatePaths(tmp_path)
     first = acquire_project_lease(paths, "project", "task-a", 60, 0)
     with ThreadPoolExecutor(max_workers=1) as pool:
-        waiting = pool.submit(
-            acquire_project_lease, paths, "project", "task-b", 60, 10
-        )
+        waiting = pool.submit(acquire_project_lease, paths, "project", "task-b", 60, 10)
         time.sleep(0.2)
         assert not waiting.done()
 
