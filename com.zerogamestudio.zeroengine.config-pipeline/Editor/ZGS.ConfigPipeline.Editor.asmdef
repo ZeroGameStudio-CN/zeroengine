@@ -1,0 +1,22 @@
+{
+  "name": "ZGS.ConfigPipeline.Editor",
+  "rootNamespace": "ZeroGameStudio.ConfigPipeline.Editor",
+  "references": [
+    "ZGS.ConfigPipeline.Runtime"
+  ],
+  "includePlatforms": [
+    "Editor"
+  ],
+  "excludePlatforms": [],
+  "allowUnsafeCode": false,
+  "overrideReferences": true,
+  "precompiledReferences": [
+    "DocumentFormat.OpenXml.dll",
+    "DocumentFormat.OpenXml.Framework.dll",
+    "System.IO.Packaging.dll"
+  ],
+  "autoReferenced": false,
+  "defineConstraints": [],
+  "versionDefines": [],
+  "noEngineReferences": false
+}
