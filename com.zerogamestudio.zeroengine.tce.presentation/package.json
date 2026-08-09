@@ -1,0 +1,38 @@
+{
+  "name": "com.zerogamestudio.zeroengine.tce.presentation",
+  "version": "0.2.0",
+  "displayName": "ZeroEngine TCE Presentation",
+  "description": "Presentation-only visual snapshot, afterimage, and soul ghost effects for ZeroEngine TCE.",
+  "unity": "2022.3",
+  "dependencies": {
+    "com.zerogamestudio.zeroengine.tce": "0.1.0"
+  },
+  "keywords": [
+    "zeroengine",
+    "tce",
+    "presentation",
+    "afterimage"
+  ],
+  "samples": [
+    {
+      "displayName": "Minimal AfterImage",
+      "description": "A small TCE graph setup that captures and plays one target snapshot.",
+      "path": "Samples~/MinimalAfterImage"
+    },
+    {
+      "displayName": "Soul Ghost",
+      "description": "A stylized mesh/sprite ghost presentation sample.",
+      "path": "Samples~/SoulGhost"
+    },
+    {
+      "displayName": "Adapter Template",
+      "description": "A minimal project adapter guide for exposing ITcePresentationSource.",
+      "path": "Samples~/AdapterTemplate"
+    }
+  ],
+  "author": {
+    "name": "ZeroGameStudio",
+    "url": "https://github.com/zerogamestudio"
+  },
+  "license": "MIT"
+}

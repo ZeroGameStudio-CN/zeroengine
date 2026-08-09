@@ -252,6 +252,17 @@ namespace ZGS.Analytics
             return CrashReporter.ReportBugWithAttachments(request);
         }
 
+        /// <summary>
+        /// Creates a feedback package and accepts it into the durable local upload queue.
+        /// Completion does not mean that the server has received the upload.
+        /// </summary>
+        public static System.Collections.IEnumerator SubmitFeedback(
+            FeedbackSubmissionRequest request,
+            System.Action<FeedbackSubmissionResult> completed)
+        {
+            return FeedbackSubmissionService.Submit(request, completed);
+        }
+
         #endregion
 
         internal static void ResetForTests()

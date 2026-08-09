@@ -1,3 +1,5 @@
+using UnityEngine;
+
 namespace ZeroEngine.Timing
 {
     public static class TimeControlLocator
@@ -11,6 +13,17 @@ namespace ZeroEngine.Timing
         }
 
         public static void ResetForTests()
+        {
+            ResetService();
+        }
+
+        [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
+        private static void ResetForSubsystemRegistration()
+        {
+            ResetService();
+        }
+
+        private static void ResetService()
         {
             _service = new TimeControlService();
         }

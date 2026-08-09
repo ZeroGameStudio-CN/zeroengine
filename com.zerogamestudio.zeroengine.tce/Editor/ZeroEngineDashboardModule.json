@@ -1,0 +1,35 @@
+{
+  "schemaVersion": 1,
+  "moduleId": "com.zerogamestudio.zeroengine.tce",
+  "displayName": "TCE",
+  "description": "Trigger, Condition, and Effect graph authoring and catalog tools.",
+  "order": 400,
+  "documentationPath": "README.md",
+  "entries": [
+    {
+      "id": "graph-editor",
+      "displayName": "TCE Graph Editor",
+      "description": "Open the existing TCE graph editor.",
+      "category": "authoring",
+      "kind": "window",
+      "menuPath": "ZGS/ZeroEngine/TCE/Graph Editor",
+      "order": 100,
+      "safety": "navigation",
+      "availability": "always",
+      "replaces": []
+    },
+    {
+      "id": "regenerate-component-catalog",
+      "displayName": "Regenerate Component Catalog",
+      "description": "Regenerate the TCE component documentation catalog.",
+      "category": "documentation",
+      "kind": "command",
+      "menuPath": "ZGS/ZeroEngine/TCE/Regenerate Component Catalog",
+      "order": 200,
+      "safety": "project-write",
+      "confirmation": "Regenerate the TCE component catalog in the current project? Review resulting file changes before submission.",
+      "availability": "edit-mode",
+      "replaces": []
+    }
+  ]
+}

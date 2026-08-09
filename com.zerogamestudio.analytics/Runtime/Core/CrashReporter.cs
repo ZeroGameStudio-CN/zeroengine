@@ -91,16 +91,25 @@ namespace ZGS.Analytics
         /// <returns>协程（需要 MonoBehaviour 启动）</returns>
         public static System.Collections.IEnumerator ReportBugWithAttachments(AttachmentUploadRequest request)
         {
-            // 先发送结构化数据
+            request = request ?? new AttachmentUploadRequest();
+
+            if (_attachmentUploader is ZipAttachmentUploader)
+            {
+                yield return _attachmentUploader.Upload(request);
+                yield break;
+            }
+
+            // 自定义旧上传器保持原事件路径，但不再覆盖调用方提供的时间线。
             var props = BuildReportProps("bug", "UserReport", request.UserMessage, null, request.ExtraData);
             AnalyticsService.LogEvent("bug_report", props);
 
-            // 如果有注册上传器，则上传附件
-            if (_attachmentUploader != null)
-            {
+            if (_attachmentUploader == null)
+                yield break;
+
+            if (string.IsNullOrEmpty(request.TimelineJson))
                 request.TimelineJson = TimelineLogger.ToJson();
-                yield return _attachmentUploader.Upload(request);
-            }
+
+            yield return _attachmentUploader.Upload(request);
         }
 
         /// <summary>

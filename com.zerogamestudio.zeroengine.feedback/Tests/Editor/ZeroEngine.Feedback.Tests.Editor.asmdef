@@ -1,0 +1,25 @@
+{
+  "name": "ZeroEngine.Feedback.Tests.Editor",
+  "rootNamespace": "ZeroEngine.Feedback.Tests.Editor",
+  "references": [
+    "ZeroEngine.Feedback",
+    "ZGS.Analytics",
+    "UnityEngine.TestRunner",
+    "UnityEditor.TestRunner"
+  ],
+  "includePlatforms": [
+    "Editor"
+  ],
+  "excludePlatforms": [],
+  "allowUnsafeCode": false,
+  "overrideReferences": true,
+  "precompiledReferences": [
+    "nunit.framework.dll"
+  ],
+  "autoReferenced": false,
+  "defineConstraints": [
+    "UNITY_INCLUDE_TESTS"
+  ],
+  "versionDefines": [],
+  "noEngineReferences": false
+}

@@ -554,6 +554,8 @@ namespace ZeroEngine.Pathfinding2D
                         }
                     }
 
+                    AddSafeStepUpLandingSurfaceAnchor(lower.left, isLowerLeftEdge: true, upper);
+
                     // 下层右边缘在上层范围内 → 在上层的 lower.right 位置生成落地点
                     if (lower.right > upper.left + inset && lower.right < upper.right - inset)
                     {
@@ -563,8 +565,46 @@ namespace ZeroEngine.Pathfinding2D
                             AddNode(PlatformNodeData.CreateEdge(nextNodeId++, pos, upper.collider, false, upper.isOneWay, upper.surfaceGroupId, isTransitionAnchor: true));
                         }
                     }
+
+                    AddSafeStepUpLandingSurfaceAnchor(lower.right, isLowerLeftEdge: false, upper);
                 }
             }
+        }
+
+        private void AddSafeStepUpLandingSurfaceAnchor(
+            float lowerEdgeX,
+            bool isLowerLeftEdge,
+            (float left, float right, float y, Collider2D collider, bool isOneWay, int surfaceGroupId) upper)
+        {
+            float safeInset = Mathf.Max(config.CharacterRadius, config.EdgeInset) + 0.15f;
+            if (upper.right - upper.left <= safeInset * 2f)
+                return;
+
+            const float contactTolerance = 0.1f;
+            bool canLandFromLeftEdge = isLowerLeftEdge &&
+                                      lowerEdgeX <= upper.right + contactTolerance &&
+                                      lowerEdgeX > upper.left + contactTolerance;
+            bool canLandFromRightEdge = !isLowerLeftEdge &&
+                                       lowerEdgeX >= upper.left - contactTolerance &&
+                                       lowerEdgeX < upper.right - contactTolerance;
+            if (!canLandFromLeftEdge && !canLandFromRightEdge)
+                return;
+
+            float desiredX = isLowerLeftEdge
+                ? lowerEdgeX - safeInset
+                : lowerEdgeX + safeInset;
+            float landingX = Mathf.Clamp(desiredX, upper.left + safeInset, upper.right - safeInset);
+            Vector3 landingPos = new Vector3(landingX, upper.y, 0f);
+
+            if (HasNodeNearPosition(landingPos, 0.1f))
+                return;
+
+            AddNode(PlatformNodeData.CreateSurface(
+                nextNodeId++,
+                landingPos,
+                upper.collider,
+                upper.isOneWay,
+                upper.surfaceGroupId));
         }
 
         /// <summary>

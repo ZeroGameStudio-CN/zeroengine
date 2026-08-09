@@ -1,6 +1,6 @@
 {
   "name": "com.zerogamestudio.zeroengine.tce",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "displayName": "ZeroEngine TCE",
   "description": "Generic Trigger-Condition-Effect runtime contracts and reusable components.",
   "unity": "2022.3",
@@ -11,8 +11,36 @@
     "ability",
     "gameplay"
   ],
+  "samples": [
+    {
+      "displayName": "Minimal Graph",
+      "description": "A minimal project-agnostic Trigger-Condition-Effect graph using only generic TCE components.",
+      "path": "Samples~/MinimalGraph"
+    },
+    {
+      "displayName": "Authoring MVP",
+      "description": "A package-manager sample guide for creating, validating, and previewing a generic TCE graph asset.",
+      "path": "Samples~/AuthoringMvp"
+    },
+    {
+      "displayName": "Mod Graph Import",
+      "description": "A safe external graph import sample using stable component IDs and the TCE graph registry.",
+      "path": "Samples~/ModGraphImport"
+    },
+    {
+      "displayName": "Adapter Template",
+      "description": "A thin project adapter guide for actor, clock, event bridge, and contract-test integration.",
+      "path": "Samples~/AdapterTemplate"
+    }
+  ],
   "author": {
     "name": "ZeroGameStudio",
     "url": "https://github.com/zerogamestudio"
-  }
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/liuzqk/zeroengine.git",
+    "directory": "com.zerogamestudio.zeroengine.tce"
+  },
+  "license": "MIT"
 }

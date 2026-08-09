@@ -1,0 +1,23 @@
+{
+  "schemaVersion": 1,
+  "moduleId": "com.zerogamestudio.zeroengine.feedback",
+  "displayName": "Feedback",
+  "description": "Player feedback UI setup and diagnostics.",
+  "order": 500,
+  "documentationPath": "README.md",
+  "entries": [
+    {
+      "id": "install-default-ui",
+      "displayName": "Install Default Feedback UI",
+      "description": "Forward to the package-owned installer after confirmation.",
+      "category": "setup",
+      "kind": "command",
+      "menuPath": "ZeroEngine/Feedback/Install Default UI",
+      "order": 100,
+      "safety": "project-write",
+      "confirmation": "Install editable Feedback assets under Assets/ZeroEngineGenerated/Feedback? The package installer retains ownership of write safety.",
+      "availability": "edit-mode",
+      "replaces": []
+    }
+  ]
+}

@@ -4,7 +4,8 @@ using System.Collections.Generic;
 namespace ZeroEngine.Core
 {
     /// <summary>
-    /// Simple Event System - Decouples communication between modules.
+    /// Legacy string event system retained for compatibility.
+    /// New framework and project code should prefer ZeroEngine.Events.IEventBus with typed IGameEvent payloads.
     /// </summary>
     public static class EventManager
     {

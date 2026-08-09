@@ -1,0 +1,103 @@
+using System;
+using System.Collections.Generic;
+using System.IO;
+using System.Linq;
+using System.Text;
+using UnityEditor;
+using PackageManagerPackageInfo = UnityEditor.PackageManager.PackageInfo;
+
+namespace ZeroEngine.Editor.Dashboard
+{
+    internal static class DashboardCatalogDiscovery
+    {
+        internal const string DescriptorFileName = "ZeroEngineDashboardModule.json";
+
+        internal static DashboardCatalog Discover()
+        {
+            PackageManagerPackageInfo[] registeredPackages =
+                PackageManagerPackageInfo.GetAllRegisteredPackages() ?? Array.Empty<PackageManagerPackageInfo>();
+            var installedPackages = registeredPackages
+                .Where(package => package != null && !string.IsNullOrEmpty(package.name))
+                .Select(package => new DashboardInstalledPackage(package.name, package.version, package.resolvedPath))
+                .ToArray();
+            var sources = new List<DashboardDescriptorSource>();
+
+            foreach (PackageManagerPackageInfo package in registeredPackages
+                         .Where(package => package != null && !string.IsNullOrEmpty(package.name))
+                         .OrderBy(package => package.name, StringComparer.Ordinal))
+            {
+                string descriptorPath = Path.Combine(package.resolvedPath, "Editor", DescriptorFileName);
+                if (!File.Exists(descriptorPath))
+                    continue;
+                sources.Add(ReadSource(
+                    DashboardSourceKind.Package,
+                    descriptorPath,
+                    package.resolvedPath,
+                    package.name,
+                    package.version));
+            }
+
+            foreach (string assetPath in FindProjectDescriptorPaths())
+            {
+                string absolutePath = Path.GetFullPath(assetPath);
+                sources.Add(ReadSource(
+                    DashboardSourceKind.Project,
+                    absolutePath,
+                    Path.GetDirectoryName(absolutePath),
+                    string.Empty,
+                    string.Empty));
+            }
+
+            return DashboardCatalogBuilder.Build(sources, installedPackages);
+        }
+
+        private static DashboardDescriptorSource ReadSource(
+            DashboardSourceKind kind,
+            string path,
+            string rootPath,
+            string packageName,
+            string packageVersion)
+        {
+            try
+            {
+                return new DashboardDescriptorSource(
+                    kind,
+                    path,
+                    rootPath,
+                    packageName,
+                    packageVersion,
+                    File.ReadAllText(path, Encoding.UTF8));
+            }
+            catch (Exception exception)
+            {
+                return new DashboardDescriptorSource(
+                    kind,
+                    path,
+                    rootPath,
+                    packageName,
+                    packageVersion,
+                    null,
+                    exception.Message);
+            }
+        }
+
+        private static IReadOnlyList<string> FindProjectDescriptorPaths()
+        {
+            var paths = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            foreach (string guid in AssetDatabase.FindAssets(Path.GetFileNameWithoutExtension(DescriptorFileName)))
+            {
+                string path = AssetDatabase.GUIDToAssetPath(guid);
+                if (string.IsNullOrEmpty(path) ||
+                    !path.StartsWith("Assets/", StringComparison.Ordinal) ||
+                    path.IndexOf("/Editor/", StringComparison.OrdinalIgnoreCase) < 0 ||
+                    !string.Equals(Path.GetFileName(path), DescriptorFileName, StringComparison.Ordinal))
+                {
+                    continue;
+                }
+                paths.Add(path);
+            }
+
+            return paths.OrderBy(path => path, StringComparer.Ordinal).ToArray();
+        }
+    }
+}
