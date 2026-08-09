@@ -163,12 +163,18 @@ def test_unknown_outcome_expires_to_hard_block_until_evidence_recovery(
         uncertain["task_token"],
         phase="outcome_unknown",
         note="write response lost",
-        ttl_seconds=0.05,
+        ttl_seconds=5,
     )
     with pytest.raises(ProjectBusyError, match="evidence-backed"):
         coordinator.release_claim(uncertain["task_token"], held["claim_id"])
     with pytest.raises(ProjectBusyError, match="evidence-backed"):
         coordinator.release_task(uncertain["task_token"], result="failed")
+    coordinator.heartbeat(
+        uncertain["task_token"],
+        phase="outcome_unknown",
+        note="write response lost",
+        ttl_seconds=0.05,
+    )
     time.sleep(0.06)
 
     status = coordinator.status()
