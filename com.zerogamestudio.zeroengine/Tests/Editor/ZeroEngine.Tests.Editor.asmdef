@@ -5,6 +5,7 @@
         "ZeroEngine",
         "ZeroEngine.Core",
         "ZeroEngine.Data",
+        "ZeroEngine.Formula",
         "ZeroEngine.Combat",
         "ZeroEngine.Narrative",
         "ZeroEngine.Editor",
