@@ -62,8 +62,9 @@ jobs:
             local package_name="$1"
             case "${{ matrix.lane }}" in
               legacy)
-                [[ "$package_name" == com.zerogamestudio.zeroengine* &&
-                   "$package_name" != "com.zerogamestudio.zeroengine.modsystem" ]]
+                [[ "$package_name" == "com.zerogamestudio.analytics" ||
+                   ( "$package_name" == com.zerogamestudio.zeroengine* &&
+                     "$package_name" != "com.zerogamestudio.zeroengine.modsystem" ) ]]
                 ;;
               modular)
                 [[ "$package_name" == "com.zerogamestudio.analytics" || ( "$package_name" == com.zerogamestudio.zeroengine.* ) ]]
