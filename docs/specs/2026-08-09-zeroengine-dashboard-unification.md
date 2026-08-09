@@ -1,13 +1,14 @@
 # ZeroEngine 编辑器工具中心与模块自动发现
 
-- 状态：Final
+- 状态：Closed
 - 更新日期：2026-08-09
 - ZeroEngine 源码基线：`9bb7feedd010287ec35e35e6ce7f40f8563d4458`
-- POB 消费快照：`D:/unity/projects/POB/Packages/manifest.json`，检查日期 2026-08-09
+- ZeroEngine 实现发布：PR `#17`，merge commit `57dd8473d926d7a3ff05b5ed4c81439f8b815137`
+- POB 消费快照：`/main cs:16804`，`Packages/manifest.json` 与 `Packages/packages-lock.json` 同 changeset
 - 设计批准：2026-08-09，用户以“干吧”批准本规范
 - 执行授权：Authorized，范围为本规范内的本地实现与验证，来源为用户“干吧”
 - 终端操作授权：Authorized；范围包括 ZeroEngine commit/push/merge/release、POB Plastic checkin 与任务分支/工作树清理，来源为用户 2026-08-09“收尾”
-- 本地实施状态：Dashboard v2、初始模块描述符、CI/静态门和 POB 适配描述符已完成；canonical 提交/发布与后续 POB pin/lock 升级、发布后验收正在按收尾顺序执行
+- 实施状态：Dashboard v2、模块描述符、五路 CI、canonical 发布、POB pin/lock 升级、实机验收和 Plastic 提交均已完成
 
 ## 结论
 
@@ -553,14 +554,17 @@ EditMode 自动测试覆盖：
 - 静态描述符门：`PASS Dashboard descriptors=7`，验证所有者源码中的精确菜单声明；Unity 测试另以已加载程序集的 `CustomAttributeData` 验证真实 `MenuItem` attribute。工作流 YAML 可解析；测试脚本 PowerShell AST 可解析；双审发现并修复矩阵脚本读取陈旧 `$LASTEXITCODE` 以及漏判 Unity 非零退出码的控制流问题。
 - 独立双审终局复核均为 `PASS`：实现审查确认确认框关闭/Esc 不再执行、窗口订阅真实刷新已覆盖、Unity 非零退出码阻断 PASS；规范审查确认授权、静态/已加载菜单证据边界和稳定验证产物记录一致，无残留 Critical/Important。
 - `git diff --check` 通过；新增与删除 Unity 资产配对检查为 `new=360, deleted=6`，无缺失 `.meta`。数量包含为统一同一提交基线而整合的 POB 当前消费快照。
-- POB 两个描述符由 PowerShell `ConvertFrom-Json` 解析通过；五个 `menuPath` 以精确 `[MenuItem("<path>"` 字符串逐项匹配所有者源码，两个新 GUID 以 `rg --glob '*.meta' '^guid: (...)$'` 验证各唯一命中一次。四个任务文件均保持 Plastic `private`，对 manifest/lock 分别执行 scoped `cm status --short --noheaders --machinereadable` 均为空；`umcp workspace status` 为 `claims=[]`、`tasks=[]`，本任务 claim/task 已释放。
+- GitHub Actions `Unity Tests` run `31311732684` 在同一提交 `6863b8ae7823f4cecfbcb648574ff5a8f0552a5c` 上全部通过：modules-only job `93240459084`、modular job `93240459097`、dashboard-only job `93240459119`、dashboard-with-modules job `93240459129`、legacy job `93240459130`；实现由 PR `#17` 合并为 `57dd8473d926d7a3ff05b5ed4c81439f8b815137`。
+- POB 两个描述符由 PowerShell `ConvertFrom-Json` 解析通过；五个 `menuPath` 以精确 `[MenuItem("<path>"` 字符串逐项匹配所有者源码，两个新 GUID 以 `rg --glob '*.meta' '^guid: (...)$'` 验证各唯一命中一次。`ZeroEngine/Dashboard` 与五个 POB adapter 菜单均在 Unity 2022.3.62f3 的项目租约内真实执行成功；最终 Console 为 `0 error`。
+- POB manifest 与 lock 中 17 个 `com.zerogamestudio.zeroengine.*` 包及 Analytics 共 18 个直接 Git 依赖均指向 canonical URL 和 `57dd8473d926d7a3ff05b5ed4c81439f8b815137`；`com.zerogamestudio.unity-mcp-control` 按独立 pin 保持不变，POB 自有相对 `file:` 包保持不变。生产配置 `Assets/Assets/_Data` 与 `ProjectSettings` 共 19,758 个文件的前后哈希清单一致，清单 SHA-256 均为 `82b2914dddef94fa10887fbf7886cfa9d90650864f81ab82aed72422c8bfd1cf`；回滚与哈希证据保存在 `D:/unity/artifacts/zeroengine-dashboard-unification/pob-upgrade-57dd847/`。
 - 隔离 Unity 项目、测试结果目录、整合 patch 与快照等任务临时物已移出系统临时目录并送入回收站；未删除或覆盖工作区文件。
 
-### 尚未完成的验收与发布状态
+### 发布收口
 
-- 规范状态保持 `Final`，不标记 `Implemented`：验收 20–21 的远端 workflow run ID 及五个 job/lane 结果尚不存在，modules-only/legacy/modular 未在本工作树完成最终发布候选运行。
-- 验收 22–24 正在等待本次已授权收尾生成 canonical 上游提交并发布；哈希产生后同改 POB manifest/lock、解析并完成 POB 实机验收与回滚证据。
-- 上游工作树、POB 四个描述符和本规范在收尾开始时均保持 pending；收尾必须先发布同一上游快照，再升级并精确 checkin POB，最后回写本规范的终局状态。
+- POB Plastic `cs:16804` 的 changeset XML 复核实际只含 manifest、lock、两个 adapter JSON 与两个 `.meta`；提交后六个目标路径全部 CLEAN，其他 pending 未纳入。
+- Plastic 提交前 helper dry-run 为 `Selected file count: 6`、`Ignored path count: 0`；提交后的 workspace coordination 为 `claims=0`、`tasks=0`、`unity-active=false`。
+- 本功能是内部 Editor/CI 工具，自动化矩阵、双审与 POB 实机菜单路线已完整覆盖，不需要主观人工验收卡；按 acceptance ledger 规则跳过建卡。
+- 验收标准 1–28 已满足，规范关闭；后续菜单路径迁移、新模块描述符或 Dashboard 协议升级作为独立工作项处理。
 
 ## 停止条件与剩余风险
 
