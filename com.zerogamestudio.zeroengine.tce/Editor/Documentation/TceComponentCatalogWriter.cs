@@ -48,7 +48,7 @@ namespace ZeroEngine.TCE.Editor
                 }
             }
 
-            return builder.ToString().Replace("\r\n", "\n");
+            return builder.ToString().TrimEnd('\r', '\n').Replace("\r\n", "\n") + "\n";
         }
 
         public static string WriteGraphJsonSchema(IReadOnlyList<TceComponentCatalogEntry> entries)

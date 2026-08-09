@@ -112,6 +112,11 @@ jobs:
           for package_path in TestProject/Packages/com.zerogamestudio.*; do
             [[ -d "$package_path" ]] || continue
             package_name=$(basename "$package_path")
+            if [[ "${{ matrix.lane }}" == "legacy" &&
+                  "$package_name" != "com.zerogamestudio.zeroengine" &&
+                  "$package_name" != "com.zerogamestudio.zeroengine.dashboard" ]]; then
+              continue
+            fi
             deps="$deps, \"$package_name\": \"file:$package_name\""
             if [[ -n "$testables" ]]; then
               testables="$testables, "

@@ -33,6 +33,9 @@ namespace ZeroEngine.TCE.Tests.Editor
         [Test]
         public void PackageManifests_PinReleaseVersionsAndBridgeDependencies()
         {
+            if (!Directory.Exists(BridgePackagePath))
+                Assert.Ignore("Optional TCE ModSystem bridge package is not installed.");
+
             string tcePackage = File.ReadAllText($"{TcePackagePath}/package.json");
             string bridgePackage = File.ReadAllText($"{BridgePackagePath}/package.json");
 
@@ -50,6 +53,9 @@ namespace ZeroEngine.TCE.Tests.Editor
         [Test]
         public void AsmdefReleaseBoundary_KeepsCoreBridgeAndContractsSeparated()
         {
+            if (!Directory.Exists(BridgePackagePath))
+                Assert.Ignore("Optional TCE ModSystem bridge package is not installed.");
+
             string runtimeAsmdef = File.ReadAllText($"{TcePackagePath}/Runtime/ZeroEngine.TCE.asmdef");
             string editorAsmdef = File.ReadAllText($"{TcePackagePath}/Editor/ZeroEngine.TCE.Editor.asmdef");
             string bridgeAsmdef = File.ReadAllText($"{BridgePackagePath}/Runtime/ZeroEngine.TCE.ModSystem.asmdef");
