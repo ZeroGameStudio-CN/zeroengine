@@ -507,6 +507,50 @@ def test_adopted_pending_becomes_protected_on_unknown_recovery(
     assert adopted["task_id"] == successor["task_id"]
 
 
+def test_initialization_repairs_stale_adoption_from_terminal_task(
+    tmp_path: Path,
+) -> None:
+    project = _project(tmp_path)
+    coordinator = _coordinator(tmp_path, project)
+    owner = _task(coordinator, "owner")
+    project_root = coordinator.canonical_project_root
+    pending_path = "assets/recovered.asset"
+
+    with sqlite3.connect(coordinator.paths.workspace_control) as connection:
+        connection.execute(
+            """
+            INSERT INTO vcs_pending(project_root, path, status, observation_id)
+            VALUES(?, ?, 'CH', 'vcs-old')
+            """,
+            (project_root, pending_path),
+        )
+        connection.execute(
+            """
+            INSERT INTO vcs_dispositions(
+                project_root, path, kind, task_id, evidence, updated_at
+            ) VALUES(?, ?, 'adopt', ?, 'owner confirmed', ?)
+            """,
+            (project_root, pending_path, owner["task_id"], time.time()),
+        )
+        connection.execute(
+            "UPDATE tasks SET state = 'failed', ended_at = ? WHERE task_id = ?",
+            (time.time(), owner["task_id"]),
+        )
+
+    repaired = _coordinator(tmp_path, project)
+    pending = repaired.status()["vcs"]["pending"]
+    assert pending[0]["disposition"] == "protect"
+    assert pending[0]["task_id"] is None
+    successor = _task(repaired, "successor")
+    adopted = repaired.set_disposition(
+        successor["task_token"],
+        kind="adopt",
+        writes=("Assets/Recovered.asset",),
+        evidence="successor confirmed",
+    )
+    assert adopted["task_id"] == successor["task_id"]
+
+
 def test_disposition_requires_owner_token_and_current_pending(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
