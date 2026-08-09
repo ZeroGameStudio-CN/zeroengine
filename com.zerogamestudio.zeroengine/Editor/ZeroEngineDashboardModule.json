@@ -55,18 +55,6 @@
       "replaces": []
     },
     {
-      "id": "buff-editor",
-      "displayName": "Buff Editor",
-      "description": "Open the legacy Buff editor.",
-      "category": "authoring",
-      "kind": "window",
-      "menuPath": "ZeroEngine/Buff Editor",
-      "order": 140,
-      "safety": "navigation",
-      "availability": "always",
-      "replaces": []
-    },
-    {
       "id": "calendar-editor",
       "displayName": "Calendar Editor",
       "description": "Open the legacy Calendar editor.",

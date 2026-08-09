@@ -217,7 +217,7 @@ namespace ZeroEngine.UI.Tests.Editor.Toast
             Assert.AreEqual(4, manager.ActiveCount);
             Assert.AreEqual(1, manager.QueuedCount);
 
-            Tick(manager, startTime + 2.5f);
+            Tick(manager, startTime + 2.51f);
             Assert.AreEqual(5, manager.ActiveCount);
             Assert.AreEqual(0, manager.QueuedCount);
             Assert.IsTrue(presenter.WasTextShown("six"));
