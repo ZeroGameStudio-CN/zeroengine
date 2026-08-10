@@ -1,6 +1,6 @@
 [project]
 name = "unity-mcp-supervisor"
-version = "0.6.0"
+version = "0.7.0"
 description = "Project-safe supervisor and CLI for Unity MCP"
 readme = "README.md"
 requires-python = ">=3.10"
@@ -10,7 +10,7 @@ dependencies = [
   "filelock>=3.16,<4",
   "httpx>=0.27,<1",
   "mcp==1.25.0",
-  "mcpforunityserver==10.1.2",
+  "mcpforunityserver @ git+https://github.com/liuzqk/unity-mcp.git@a67a2f3ab447a769d08c7e5498e905dc1c347fb2#subdirectory=Server",
   "psutil>=6,<8",
   "tomli>=2,<3; python_version < '3.11'",
 ]

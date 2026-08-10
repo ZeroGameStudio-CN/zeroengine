@@ -7,6 +7,7 @@ from collections.abc import Iterator
 from contextlib import contextmanager
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
+from urllib.parse import urlsplit
 
 
 def free_port() -> int:
@@ -56,6 +57,7 @@ def fake_http_server(
     health_version: str = "10.1.2",
 ) -> Iterator[str]:
     instance_values = instances or []
+    receipts: dict[str, dict] = {}
 
     class Handler(BaseHTTPRequestHandler):
         def log_message(self, *_args) -> None:
@@ -70,13 +72,14 @@ def fake_http_server(
             self.wfile.write(body)
 
         def do_GET(self) -> None:
+            parsed_path = urlsplit(self.path)
             if foreign:
                 self._json(200, {"status": "something-else"})
                 return
-            if self.path == "/health":
+            if parsed_path.path == "/health":
                 self._json(200, {"status": "healthy", "version": health_version})
                 return
-            if self.path == "/api/instances":
+            if parsed_path.path == "/api/instances":
                 public = [
                     {
                         key: value
@@ -87,11 +90,34 @@ def fake_http_server(
                 ]
                 self._json(200, {"success": True, "instances": public})
                 return
+            prefix = "/api/command-receipts/"
+            if parsed_path.path.startswith(prefix):
+                command_id = parsed_path.path.removeprefix(prefix)
+                receipt = receipts.get(command_id)
+                if receipt is None:
+                    self._json(
+                        200,
+                        {"success": True, "state": "missing", "command_id": command_id},
+                    )
+                else:
+                    self._json(200, {"success": True, **receipt})
+                return
             self._json(404, {"success": False})
 
         def do_POST(self) -> None:
             length = int(self.headers.get("Content-Length", "0"))
             payload = json.loads(self.rfile.read(length) or b"{}")
+            parsed_path = urlsplit(self.path)
+            receipt_prefix = "/api/command-receipts/"
+            if parsed_path.path.startswith(
+                receipt_prefix
+            ) and parsed_path.path.endswith("/ack"):
+                command_id = parsed_path.path.removeprefix(receipt_prefix).removesuffix(
+                    "/ack"
+                )
+                receipts.pop(command_id, None)
+                self._json(200, {"success": True, "command_id": command_id})
+                return
             project_hash = payload.get("unity_instance")
             instance = next(
                 (item for item in instance_values if item.get("hash") == project_hash),
@@ -103,11 +129,42 @@ def fake_http_server(
             if payload.get("type") == "drop_response":
                 if drop_counter is not None:
                     drop_counter[0] += 1
+                if payload.get("command_id"):
+                    receipts[payload["command_id"]] = {
+                        "state": "completed",
+                        "command_id": payload["command_id"],
+                        "result": {"success": True, "data": {"recovered": True}},
+                    }
                 try:
                     self.connection.shutdown(socket.SHUT_RDWR)
                 except OSError:
                     pass
                 self.connection.close()
+                return
+            if payload.get("type") == "ambiguous_response":
+                if drop_counter is not None:
+                    drop_counter[0] += 1
+                if payload.get("command_id"):
+                    receipts[payload["command_id"]] = {
+                        "state": "ambiguous",
+                        "command_id": payload["command_id"],
+                    }
+                try:
+                    self.connection.shutdown(socket.SHUT_RDWR)
+                except OSError:
+                    pass
+                self.connection.close()
+                return
+            if payload.get("type") == "server_error_after_receipt":
+                if drop_counter is not None:
+                    drop_counter[0] += 1
+                if payload.get("command_id"):
+                    receipts[payload["command_id"]] = {
+                        "state": "completed",
+                        "command_id": payload["command_id"],
+                        "result": {"success": True, "data": {"recovered": True}},
+                    }
+                self._json(500, {"success": False, "error": "lost response"})
                 return
             if payload.get("type") == "get_project_info":
                 if instance.get("probe_error"):

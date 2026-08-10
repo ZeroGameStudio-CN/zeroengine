@@ -64,9 +64,11 @@ compatibility contract changes.
 ## Upstream version maintenance
 
 Track stable Unity MCP releases, but do not promote them automatically. For
-each candidate, pin the Unity package tag and `mcpforunityserver` to the same
-version, add only the reviewed tag and commit to the tested matrix, and bump the
-Supervisor patch version. Reject beta/prerelease and unknown refs by default.
+each candidate, pin the Unity package and `mcpforunityserver` to the same
+reviewed commit, add only that commit to the tested matrix, and bump the
+Supervisor version. Reject beta/prerelease and unknown refs by default. The
+durable-receipt build pins both halves to fork commit
+`a67a2f3ab447a769d08c7e5498e905dc1c347fb2`.
 
 Before promotion, review the upstream compare, regenerate `uv.lock`, run the
 complete Supervisor pytest and Ruff gates, then run one real-project canary
@@ -162,25 +164,28 @@ its exact former absolute root to unregister. Never edit or delete files under
 `workspace-registrations/` directly.
 
 ```powershell
-$task = umcp workspace task start --project D:\unity\projects\POB --owner task-label --summary "Targeted Unity work" | ConvertFrom-Json
-$env:UMCP_WORKSPACE_TASK_TOKEN = $task.result.task_token
+$tokenFile = Join-Path $env:TEMP "umcp-targeted-unity-$PID.token"
+umcp workspace task start --project D:\unity\projects\POB --owner task-label --summary "Targeted Unity work" --token-file $tokenFile
 try {
-    umcp workspace claim acquire --project D:\unity\projects\POB --write Assets/Assets/_Scripts/_POB/MyScope
-    umcp workspace claim acquire --project D:\unity\projects\POB --resource unity-live
-    umcp connect --project D:\unity\projects\POB
-    umcp call get_project_info --project D:\unity\projects\POB --params '{}'
-    umcp run --project D:\unity\projects\POB -- status
+    umcp workspace claim acquire --project D:\unity\projects\POB --write Assets/Assets/_Scripts/_POB/MyScope --token-file $tokenFile
+    umcp workspace claim acquire --project D:\unity\projects\POB --resource unity-live --token-file $tokenFile
+    umcp connect --project D:\unity\projects\POB --token-file $tokenFile
+    umcp call get_project_info --project D:\unity\projects\POB --params '{}' --token-file $tokenFile
+    umcp run --project D:\unity\projects\POB --token-file $tokenFile -- status
 } finally {
-    umcp workspace task release --project D:\unity\projects\POB --result completed
-    Remove-Item Env:UMCP_WORKSPACE_TASK_TOKEN -ErrorAction SilentlyContinue
+    umcp workspace task release --project D:\unity\projects\POB --result completed --token-file $tokenFile
 }
 ```
 
 The user registration selects `required`; the compatible project policy at
 `Tools/Coordination/workspace-control.json` may instead select `audit` or
-`required` and takes precedence. A task token is returned only at task creation; pass it
-through `UMCP_WORKSPACE_TASK_TOKEN`, an owner-only token file, or stdin. Never
-put it in argv or logs. Path claims include Unity `.meta` pairs. Overlapping
+`required` and takes precedence. Use `task start --token-file` so the token is
+created owner-only before the task and never appears in stdout; the matching
+file is removed by `task release --token-file`. Environment/stdin remain legacy
+inputs. Never put the token in argv or logs. If a token file is lost before any
+claim, adopted pending path, test job, freeze, or unknown outcome exists,
+`workspace task cleanup-idle --task-id <id>` may close only that zero-resource
+task. Path claims include Unity `.meta` pairs. Overlapping
 claims queue FIFO while unrelated paths remain parallel. A queued
 `workspace-freeze` blocks later scope expansion and is granted only after older
 writers drain. Acquire in this order: path, freeze when needed,

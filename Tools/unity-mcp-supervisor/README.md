@@ -27,13 +27,12 @@ uv sync --locked
 uv run umcp service ensure
 uv run umcp control package-path
 uv run umcp workspace bootstrap --project D:\unity\projects\POB
-$task = uv run umcp workspace task start --project D:\unity\projects\POB --owner task-label --summary "Unity inspection" | ConvertFrom-Json
-$env:UMCP_WORKSPACE_TASK_TOKEN = $task.result.task_token
-uv run umcp workspace claim acquire --project D:\unity\projects\POB --resource unity-live
-uv run umcp connect --project D:\unity\projects\POB
-uv run umcp call get_project_info --project D:\unity\projects\POB --params '{}'
-uv run umcp workspace task release --project D:\unity\projects\POB --result completed
-Remove-Item Env:UMCP_WORKSPACE_TASK_TOKEN -ErrorAction SilentlyContinue
+$tokenFile = Join-Path $env:TEMP "umcp-unity-inspection-$PID.token"
+uv run umcp workspace task start --project D:\unity\projects\POB --owner task-label --summary "Unity inspection" --token-file $tokenFile
+uv run umcp workspace claim acquire --project D:\unity\projects\POB --resource unity-live --token-file $tokenFile
+uv run umcp connect --project D:\unity\projects\POB --token-file $tokenFile
+uv run umcp call get_project_info --project D:\unity\projects\POB --params '{}' --token-file $tokenFile
+uv run umcp workspace task release --project D:\unity\projects\POB --result completed --token-file $tokenFile
 ```
 
 ```powershell
@@ -41,12 +40,11 @@ Remove-Item Env:UMCP_WORKSPACE_TASK_TOKEN -ErrorAction SilentlyContinue
 uv tool install "unity-mcp-supervisor @ git+https://github.com/ZeroGameStudio-CN/zeroengine.git@<tested-commit>#subdirectory=Tools/unity-mcp-supervisor"
 umcp service ensure
 umcp workspace bootstrap --project D:\unity\projects\POB
-$task = umcp workspace task start --project D:\unity\projects\POB --owner task-label --summary "Unity inspection" | ConvertFrom-Json
-$env:UMCP_WORKSPACE_TASK_TOKEN = $task.result.task_token
-umcp workspace claim acquire --project D:\unity\projects\POB --resource unity-live
-umcp connect --project D:\unity\projects\POB
-umcp workspace task release --project D:\unity\projects\POB --result completed
-Remove-Item Env:UMCP_WORKSPACE_TASK_TOKEN -ErrorAction SilentlyContinue
+$tokenFile = Join-Path $env:TEMP "umcp-unity-inspection-$PID.token"
+umcp workspace task start --project D:\unity\projects\POB --owner task-label --summary "Unity inspection" --token-file $tokenFile
+umcp workspace claim acquire --project D:\unity\projects\POB --resource unity-live --token-file $tokenFile
+umcp connect --project D:\unity\projects\POB --token-file $tokenFile
+umcp workspace task release --project D:\unity\projects\POB --result completed --token-file $tokenFile
 ```
 
 `workspace bootstrap` creates an idempotent user-level `required` registration
