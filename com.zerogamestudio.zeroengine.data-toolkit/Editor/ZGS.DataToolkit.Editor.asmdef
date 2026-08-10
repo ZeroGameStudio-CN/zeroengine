@@ -1,7 +1,9 @@
 {
   "name": "ZGS.DataToolkit.Editor",
   "rootNamespace": "ZGS.DataToolkit.Editor",
-  "references": [],
+  "references": [
+    "ZeroEngine.EditorUI.Editor"
+  ],
   "includePlatforms": [
     "Editor"
   ],

@@ -12,6 +12,7 @@ using Sirenix.Utilities.Editor;
 namespace ZeroEngine.Editor.Quest
 {
 #if ODIN_INSPECTOR
+    [ZeroEngine.EditorUI.EditorUiSurface]
     public class QuestEditorWindow : OdinMenuEditorWindow
     {
         [MenuItem("ZeroEngine/Tools/Quest Editor")]
@@ -41,6 +42,7 @@ namespace ZeroEngine.Editor.Quest
 
         protected override void OnBeginDrawEditors()
         {
+            ZeroEngine.EditorUI.EditorUiGUILayout.SectionHeader("Quest Editor");
             var selected = this.MenuTree.Selection.FirstOrDefault();
             var toolbarHeight = this.MenuTree.Config.SearchToolbarHeight;
 
@@ -88,6 +90,7 @@ namespace ZeroEngine.Editor.Quest
         }
     }
 #else
+    [ZeroEngine.EditorUI.EditorUiSurface]
     public class QuestEditorWindow : EditorWindow
     {
         [MenuItem("ZeroEngine/Tools/Quest Editor")]
@@ -95,6 +98,7 @@ namespace ZeroEngine.Editor.Quest
 
         private void OnGUI()
         {
+            ZeroEngine.EditorUI.EditorUiGUILayout.Header("Quest Editor", "Odin Inspector is required for advanced authoring");
             EditorGUILayout.HelpBox("Requires 'Odin Inspector'.", MessageType.Warning);
         }
     }

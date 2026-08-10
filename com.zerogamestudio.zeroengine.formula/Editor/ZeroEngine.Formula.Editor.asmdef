@@ -2,7 +2,8 @@
   "name": "ZeroEngine.Formula.Editor",
   "rootNamespace": "ZeroEngine.Formula.Editor",
   "references": [
-    "ZeroEngine.Formula"
+    "ZeroEngine.Formula",
+    "ZeroEngine.EditorUI.Editor"
   ],
   "includePlatforms": [
     "Editor"

@@ -11,6 +11,7 @@ namespace ZeroEngine.ModSystem.Editor
     /// <summary>
     /// Mod验证工具窗口
     /// </summary>
+    [ZeroEngine.EditorUI.EditorUiSurface]
     public class ModValidatorWindow : EditorWindow
     {
         private string _modsFolder = "";
@@ -34,9 +35,7 @@ namespace ZeroEngine.ModSystem.Editor
         
         private void OnGUI()
         {
-            EditorGUILayout.LabelField("Mod Validator", EditorStyles.boldLabel);
-            EditorGUILayout.Space(10);
-            
+            ZeroEngine.EditorUI.EditorUiGUILayout.Header("Mod Validator", "Validate installed mod structure and metadata");
             // Mods文件夹选择
             EditorGUILayout.BeginHorizontal();
             _modsFolder = EditorGUILayout.TextField("Mods Folder", _modsFolder);

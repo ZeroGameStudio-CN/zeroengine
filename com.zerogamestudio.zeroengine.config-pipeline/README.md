@@ -4,6 +4,8 @@ Schema-first configuration pipeline for Unity 2022.3 projects. It keeps one
 authoring source, validates through a typed intermediate document, emits
 deterministic artifacts, and loads immutable runtime snapshots.
 
+Version 2.0.0 uses `com.zerogamestudio.zeroengine.editor-ui@1.0.0` for its Editor window. Git URL consumers must directly pin both packages to the same ZeroEngine commit because Unity 2022.3 does not resolve same-repository sibling dependencies transitively.
+
 Start with `Documentation~/PROJECT_INTEGRATION.md`. The 1.0 contract, Excel
 authoring rules, CI commands, recovery behavior and AI maintenance workflow are
 all documented under `Documentation~/`. Import `Minimal Item Drop` from Package

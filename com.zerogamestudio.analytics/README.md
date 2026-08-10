@@ -2,8 +2,10 @@
 
 ZeroGameStudio 游戏分析 SDK，支持自建 ClickHouse 数据平台。
 
-**版本**: 1.7.1
+**版本**: 2.0.0
 **Unity**: 2021.3+
+
+2.0.0 起 Editor 面板使用 `com.zerogamestudio.zeroengine.editor-ui@1.0.0`。通过 Git URL 安装时，消费工程必须把 Analytics 与 editor-ui 直接 pin 到同一 ZeroEngine commit；Unity 2022.3 不会自动解析同仓 sibling package。
 
 ## 特性
 

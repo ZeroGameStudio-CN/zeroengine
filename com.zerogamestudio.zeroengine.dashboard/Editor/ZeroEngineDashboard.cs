@@ -6,9 +6,11 @@ using UnityEditor;
 using UnityEditor.PackageManager;
 using UnityEngine;
 using ZeroEngine.Editor.Dashboard;
+using ZeroEngine.EditorUI;
 
 namespace ZeroEngine.Editor
 {
+    [EditorUiSurface]
     public sealed class ZeroEngineDashboard : EditorWindow
     {
         private static readonly string[] PageNames = { "Tools", "Installed", "Diagnostics" };
@@ -24,11 +26,6 @@ namespace ZeroEngine.Editor
         private Vector2 _contentScroll;
         private Vector2 _installedScroll;
         private Vector2 _diagnosticScroll;
-        private GUIStyle _heroTitleStyle;
-        private GUIStyle _heroSubtitleStyle;
-        private GUIStyle _sectionTitleStyle;
-        private GUIStyle _cardStyle;
-        private GUIStyle _metricStyle;
 
         [MenuItem("ZeroEngine/Dashboard")]
         public static void ShowWindow()
@@ -100,7 +97,7 @@ namespace ZeroEngine.Editor
 
         private void OnGUI()
         {
-            EnsureStyles();
+            EditorUiStyles.EnsureCurrent();
             DrawHeader();
             DrawNavigation();
             switch (_page)
@@ -117,53 +114,19 @@ namespace ZeroEngine.Editor
             }
         }
 
-        private void EnsureStyles()
-        {
-            if (_heroTitleStyle != null)
-                return;
-
-            _heroTitleStyle = new GUIStyle(EditorStyles.boldLabel)
-            {
-                fontSize = 20,
-                fixedHeight = 25f
-            };
-            _heroSubtitleStyle = new GUIStyle(EditorStyles.wordWrappedMiniLabel)
-            {
-                fontSize = 11
-            };
-            _heroSubtitleStyle.normal.textColor = EditorGUIUtility.isProSkin
-                ? new Color(0.72f, 0.76f, 0.82f)
-                : new Color(0.30f, 0.34f, 0.40f);
-            _sectionTitleStyle = new GUIStyle(EditorStyles.boldLabel)
-            {
-                fontSize = 14,
-                fixedHeight = 20f
-            };
-            _cardStyle = new GUIStyle(EditorStyles.helpBox)
-            {
-                padding = new RectOffset(12, 12, 10, 10),
-                margin = new RectOffset(0, 0, 4, 6)
-            };
-            _metricStyle = new GUIStyle(EditorStyles.helpBox)
-            {
-                padding = new RectOffset(8, 8, 4, 4),
-                alignment = TextAnchor.MiddleLeft
-            };
-        }
-
         private void DrawHeader()
         {
-            DrawAccentLine(AccentColor, 3f);
-            using (new EditorGUILayout.VerticalScope(_cardStyle))
+            EditorUiGUILayout.AccentLine(AccentColor, 3f);
+            using (new EditorGUILayout.VerticalScope(EditorUiStyles.Card))
             {
                 using (new EditorGUILayout.HorizontalScope())
                 {
                     using (new EditorGUILayout.VerticalScope())
                     {
-                        GUILayout.Label("ZeroEngine Dashboard", _heroTitleStyle);
+                        GUILayout.Label("ZeroEngine Dashboard", EditorUiStyles.HeaderTitle);
                         GUILayout.Label(
                             "Installed modules, project adapters, and diagnostics in one safe Editor workspace.",
-                            _heroSubtitleStyle);
+                            EditorUiStyles.HeaderSubtitle);
                     }
 
                     GUILayout.FlexibleSpace();
@@ -231,11 +194,11 @@ namespace ZeroEngine.Editor
 
         private void DrawModuleList(IReadOnlyList<DashboardModule> modules)
         {
-            using (new EditorGUILayout.VerticalScope(_cardStyle, GUILayout.Width(224f)))
+            using (new EditorGUILayout.VerticalScope(EditorUiStyles.Card, GUILayout.Width(224f)))
             {
                 GUILayout.Label("MODULES", EditorStyles.miniBoldLabel);
                 GUILayout.Label("Installed hosts", EditorStyles.miniLabel);
-                DrawAccentLine(AccentColor, 2f);
+                EditorUiGUILayout.AccentLine(AccentColor);
                 EditorGUILayout.Space(4f);
                 _moduleScroll = EditorGUILayout.BeginScrollView(_moduleScroll);
                 int allToolCount = modules.Sum(module => module.VisibleEntries.Count);
@@ -260,16 +223,11 @@ namespace ZeroEngine.Editor
 
         private static bool DrawSelectionButton(string label, int toolCount, bool selected)
         {
-            Color previous = GUI.backgroundColor;
-            if (selected)
-                GUI.backgroundColor = AccentColor;
-            bool clicked = GUILayout.Button(
+            return EditorUiGUILayout.SelectionButton(
                 label + "  ·  " + toolCount,
-                selected ? EditorStyles.miniButtonMid : EditorStyles.miniButton,
+                selected,
                 GUILayout.ExpandWidth(true),
                 GUILayout.Height(30f));
-            GUI.backgroundColor = previous;
-            return clicked;
         }
 
         private void DrawToolContent(IReadOnlyList<DashboardModule> modules)
@@ -302,12 +260,12 @@ namespace ZeroEngine.Editor
 
         private void DrawModuleHeader(DashboardModule module)
         {
-            DrawAccentLine(AccentColor, 2f);
-            using (new EditorGUILayout.VerticalScope(_cardStyle))
+            EditorUiGUILayout.AccentLine(AccentColor);
+            using (new EditorGUILayout.VerticalScope(EditorUiStyles.Card))
             {
                 using (new EditorGUILayout.HorizontalScope())
                 {
-                    EditorGUILayout.LabelField(module.DisplayName, _sectionTitleStyle);
+                    EditorGUILayout.LabelField(module.DisplayName, EditorUiStyles.SectionTitle);
                     GUILayout.FlexibleSpace();
                     GUILayout.Label(module.VisibleEntries.Count + " tools", EditorStyles.miniBoldLabel);
                     if (!string.IsNullOrEmpty(module.DocumentationPath) && GUILayout.Button("Docs", GUILayout.Width(48f)))
@@ -325,7 +283,7 @@ namespace ZeroEngine.Editor
         {
             bool available = IsAvailable(entry);
             bool failed = _runtimeDiagnostics.ContainsKey(entry.FullId);
-            using (new EditorGUILayout.VerticalScope(_cardStyle))
+            using (new EditorGUILayout.VerticalScope(EditorUiStyles.Card))
             {
                 using (new EditorGUILayout.HorizontalScope())
                 {
@@ -345,11 +303,8 @@ namespace ZeroEngine.Editor
                     using (new EditorGUI.DisabledScope(!available || failed))
                     {
                         string actionLabel = entry.Kind == DashboardEntryKind.Window ? "Open" : "Run";
-                        Color previous = GUI.backgroundColor;
-                        GUI.backgroundColor = AccentColor;
-                        if (GUILayout.Button(actionLabel, GUILayout.Width(92f), GUILayout.Height(36f)))
+                        if (EditorUiGUILayout.PrimaryButton(actionLabel, GUILayout.Width(92f)))
                             ExecuteEntry(entry);
-                        GUI.backgroundColor = previous;
                     }
                 }
 
@@ -414,7 +369,7 @@ namespace ZeroEngine.Editor
                     string.Equals(item.Source.PackageName, package.Name, StringComparison.Ordinal));
                 bool hasDescriptorError = _catalog.Diagnostics.Any(item => IsBelow(item.SourcePath, package.ResolvedPath));
 
-                using (new EditorGUILayout.VerticalScope(_cardStyle))
+                using (new EditorGUILayout.VerticalScope(EditorUiStyles.Card))
                 {
                     using (new EditorGUILayout.HorizontalScope())
                     {
@@ -450,7 +405,7 @@ namespace ZeroEngine.Editor
                 DrawPageTitle("Project adapters", "Project-owned profiles mounted into installed modules.");
                 foreach (DashboardModule module in projectModules)
                 {
-                    using (new EditorGUILayout.VerticalScope(_cardStyle))
+                    using (new EditorGUILayout.VerticalScope(EditorUiStyles.Card))
                     {
                         EditorGUILayout.LabelField(module.DisplayName, EditorStyles.boldLabel);
                         EditorGUILayout.LabelField(
@@ -494,8 +449,8 @@ namespace ZeroEngine.Editor
             DrawPageTitle("Diagnostics", "Descriptor, mount, replacement, and execution health.");
             if (diagnostics.Length == 0)
             {
-                DrawAccentLine(SuccessColor, 2f);
-                using (new EditorGUILayout.VerticalScope(_cardStyle))
+                EditorUiGUILayout.AccentLine(SuccessColor);
+                using (new EditorGUILayout.VerticalScope(EditorUiStyles.Card))
                 {
                     DrawStatusLabel("Healthy · no diagnostics", SuccessColor);
                     GUILayout.Label("All discovered Dashboard descriptors are valid.", EditorStyles.wordWrappedMiniLabel);
@@ -550,7 +505,7 @@ namespace ZeroEngine.Editor
 
         private void DrawMetric(string label, int value, Color color)
         {
-            using (new EditorGUILayout.HorizontalScope(_metricStyle, GUILayout.Width(126f), GUILayout.Height(26f)))
+            using (new EditorGUILayout.HorizontalScope(EditorUiStyles.Metric, GUILayout.Width(126f), GUILayout.Height(26f)))
             {
                 DrawStatusLabel("●", color, GUILayout.Width(12f));
                 GUILayout.Label(value + " " + label, EditorStyles.miniBoldLabel);
@@ -559,16 +514,10 @@ namespace ZeroEngine.Editor
 
         private void DrawPageTitle(string title, string subtitle)
         {
-            DrawAccentLine(AccentColor, 2f);
-            GUILayout.Label(title, _sectionTitleStyle);
-            GUILayout.Label(subtitle, _heroSubtitleStyle);
+            EditorUiGUILayout.AccentLine(AccentColor);
+            GUILayout.Label(title, EditorUiStyles.SectionTitle);
+            GUILayout.Label(subtitle, EditorUiStyles.HeaderSubtitle);
             EditorGUILayout.Space(5f);
-        }
-
-        private static void DrawAccentLine(Color color, float height)
-        {
-            Rect rect = GUILayoutUtility.GetRect(1f, height, GUILayout.ExpandWidth(true));
-            EditorGUI.DrawRect(rect, color);
         }
 
         private static void DrawStatusLabel(string text, Color color, params GUILayoutOption[] options)
@@ -613,25 +562,11 @@ namespace ZeroEngine.Editor
             }
         }
 
-        private static Color AccentColor => EditorGUIUtility.isProSkin
-            ? new Color(0.36f, 0.67f, 1f)
-            : new Color(0.12f, 0.42f, 0.74f);
-
-        private static Color SuccessColor => EditorGUIUtility.isProSkin
-            ? new Color(0.48f, 0.86f, 0.56f)
-            : new Color(0.12f, 0.55f, 0.24f);
-
-        private static Color WarningColor => EditorGUIUtility.isProSkin
-            ? new Color(1f, 0.72f, 0.30f)
-            : new Color(0.72f, 0.40f, 0.04f);
-
-        private static Color ErrorColor => EditorGUIUtility.isProSkin
-            ? new Color(1f, 0.48f, 0.45f)
-            : new Color(0.72f, 0.16f, 0.12f);
-
-        private static Color MutedColor => EditorGUIUtility.isProSkin
-            ? new Color(0.68f, 0.71f, 0.76f)
-            : new Color(0.36f, 0.39f, 0.44f);
+        private static Color AccentColor => EditorUiPalette.Current.Accent;
+        private static Color SuccessColor => EditorUiPalette.Current.Success;
+        private static Color WarningColor => EditorUiPalette.Current.Warning;
+        private static Color ErrorColor => EditorUiPalette.Current.Error;
+        private static Color MutedColor => EditorUiPalette.Current.MutedText;
 
         private static bool IsBelow(string candidate, string root)
         {

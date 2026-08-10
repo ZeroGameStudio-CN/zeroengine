@@ -1,7 +1,9 @@
 {
     "name": "ZeroEngine.Dashboard.Editor",
     "rootNamespace": "ZeroEngine.Editor",
-    "references": [],
+    "references": [
+        "ZeroEngine.EditorUI.Editor"
+    ],
     "includePlatforms": [
         "Editor"
     ],

@@ -7,6 +7,7 @@ using UnityEngine;
 
 namespace ZGS.DataToolkit.Editor
 {
+    [ZeroEngine.EditorUI.EditorUiSurface]
     public sealed class DataToolkitWindow : EditorWindow
     {
         private const float DefaultTypeColumnWidth = 190f;
@@ -178,11 +179,16 @@ namespace ZGS.DataToolkit.Editor
         private void OnGUI()
         {
             EnsureContext();
+            ZeroEngine.EditorUI.EditorUiGUILayout.Header(
+                "Data Toolkit",
+                "Browse project data types, assets, and inspectors");
+            var sharedHeaderAnchor = GUILayoutUtility.GetRect(0f, 0f, GUILayout.ExpandWidth(true));
             var visibleToolbarProviders = GetVisibleToolbarProviders();
             var visibleHeaderActionProviders = GetVisibleHeaderActionProviders();
             var headerHeight = CalculateHeaderHeight(visibleToolbarProviders.Count);
             var contentWidth = Mathf.Max(0f, position.width - WindowPadding * 2f);
-            var headerRect = new Rect(WindowPadding, WindowPadding, contentWidth, headerHeight);
+            var sharedHeaderBottom = sharedHeaderAnchor.yMax + HeaderBodySpacing;
+            var headerRect = new Rect(WindowPadding, sharedHeaderBottom, contentWidth, headerHeight);
             var bodyRect = new Rect(
                 WindowPadding,
                 headerRect.yMax + HeaderBodySpacing,

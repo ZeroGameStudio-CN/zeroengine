@@ -1,5 +1,10 @@
 # Changelog
 
+## 2.0.0 - 2026-08-10
+
+- Unified the Data Toolkit window on `com.zerogamestudio.zeroengine.editor-ui@1.0.0`.
+- Git URL consumers must directly pin editor-ui to the same ZeroEngine commit.
+
 ## Unreleased
 
 - Changed full inspector fallback to prefer Unity native editors before Odin reflection, so project `[CustomEditor]` implementations are respected inside Data Toolkit.

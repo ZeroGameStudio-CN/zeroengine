@@ -5,6 +5,7 @@ using ZeroEngine.Tutorial;
 
 namespace ZeroEngine.Editor.Tutorial
 {
+    [ZeroEngine.EditorUI.EditorUiSurface]
     public class TutorialEditorWindow : EditorWindow
     {
         private Vector2 _scrollPosition;
@@ -30,6 +31,7 @@ namespace ZeroEngine.Editor.Tutorial
 
         private void OnGUI()
         {
+            ZeroEngine.EditorUI.EditorUiGUILayout.Header("Tutorial Editor", "Manage tutorial sequences, steps, and statistics");
             DrawToolbar();
 
             _selectedTab = GUILayout.Toolbar(_selectedTab, _tabNames);

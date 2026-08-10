@@ -8,6 +8,7 @@ namespace ZeroEngine.Editor.Equipment
     /// <summary>
     /// 装备配置编辑器窗口
     /// </summary>
+    [ZeroEngine.EditorUI.EditorUiSurface]
     public class EquipmentEditorWindow : EditorWindow
     {
         private Vector2 _scrollPosition;
@@ -86,6 +87,7 @@ namespace ZeroEngine.Editor.Equipment
 
         private void OnGUI()
         {
+            ZeroEngine.EditorUI.EditorUiGUILayout.Header("Equipment Editor", "Manage equipment, slots, and sets");
             // 标签页
             _selectedTab = GUILayout.Toolbar(_selectedTab, _tabNames);
             EditorGUILayout.Space();

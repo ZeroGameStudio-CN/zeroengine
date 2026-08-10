@@ -1,10 +1,10 @@
 # ZeroEngine Dashboard
 
-ZeroEngine Dashboard 2.1 是一个可选、仅限 Unity Editor 的工具目录。它从已注册 UPM 包以及项目 `Assets/**/Editor/` 中读取 `ZeroEngineDashboardModule.json`，只展示所有者明确声明的窗口和命令。
+ZeroEngine Dashboard 3.0 是一个可选、仅限 Unity Editor 的工具目录。它从已注册 UPM 包以及项目 `Assets/**/Editor/` 中读取 `ZeroEngineDashboardModule.json`，只展示所有者明确声明的窗口和命令。
 
 ## 特性
 
-- 不依赖 Core 或任何可选 ZeroEngine 模块；模块也不需要引用 Dashboard。
+- 不依赖 Core 或任何可选 ZeroEngine 业务模块；只依赖 Editor-only 的公共 editor-ui，模块也不需要引用 Dashboard。
 - 安装、移除或升级带描述符的包后自动刷新目录。
 - 通过模块已有 `MenuItem` 懒执行，不反射构造或嵌入窗口。
 - 对描述符错误、入口冲突、替代循环和失效菜单提供可见诊断。
@@ -19,10 +19,13 @@ ZeroEngine Dashboard 2.1 是一个可选、仅限 Unity Editor 的工具目录�
 ```json
 {
   "dependencies": {
-    "com.zerogamestudio.zeroengine.dashboard": "https://github.com/ZeroGameStudio-CN/zeroengine.git?path=com.zerogamestudio.zeroengine.dashboard#<tested-commit>"
+    "com.zerogamestudio.zeroengine.dashboard": "https://github.com/ZeroGameStudio-CN/zeroengine.git?path=com.zerogamestudio.zeroengine.dashboard#<tested-commit>",
+    "com.zerogamestudio.zeroengine.editor-ui": "https://github.com/ZeroGameStudio-CN/zeroengine.git?path=com.zerogamestudio.zeroengine.editor-ui#<tested-commit>"
   }
 }
 ```
+
+Unity 2022.3 不会为 Git URL 包自动解析同仓 editor-ui；两项必须直接 pin 到同一提交。3.0.0 因此是显式升级边界。
 
 本地 `file:` 依赖只用于临时联调，不应进入共享分支。
 
@@ -61,6 +64,11 @@ Dashboard 入口：`ZeroEngine > Dashboard`。
 `mountModuleId` 可省略；省略时入口显示在自己的模块下。指定后只改变展示归属，入口 ID、来源、替代关系和执行路径不变。目标模块缺失或冲突时入口会隐藏并进入 Diagnostics，不会回退成独立适配器 Tab。
 
 ## 版本历史
+
+### 3.0.0
+
+- 使用公共 Editor UI 视觉合同，并要求消费工程直接 pin editor-ui 1.0.0。
+- 保持描述符发现、挂载、执行、安全和诊断语义不变。
 
 ### 2.1.0
 

@@ -11,6 +11,7 @@ namespace ZeroEngine.Editor.Tutorial
     /// Tutorial GraphView Editor Window (v1.14.0+)
     /// Visual editor for creating and editing tutorial sequences
     /// </summary>
+    [ZeroEngine.EditorUI.EditorUiSurface]
     public class TutorialGraphEditorWindow : EditorWindow
     {
         private TutorialGraphView _graphView;
@@ -85,9 +86,14 @@ namespace ZeroEngine.Editor.Tutorial
         private void BuildUI()
         {
             rootVisualElement.Clear();
+            ZeroEngine.EditorUI.EditorUiElements.ApplyWindowRoot(rootVisualElement);
+            rootVisualElement.Add(ZeroEngine.EditorUI.EditorUiElements.CreateHeader(
+                "Tutorial Graph",
+                "Build and inspect tutorial sequences"));
 
             // Main container with split view
             var splitView = new TwoPaneSplitView(0, 250, TwoPaneSplitViewOrientation.Horizontal);
+            splitView.style.flexGrow = 1;
             rootVisualElement.Add(splitView);
 
             // Left pane - Graph View
@@ -155,7 +161,7 @@ namespace ZeroEngine.Editor.Tutorial
             // Right pane - Inspector
             var rightPane = new VisualElement();
             rightPane.style.minWidth = 250;
-            rightPane.style.backgroundColor = new Color(0.2f, 0.2f, 0.2f);
+            rightPane.style.backgroundColor = ZeroEngine.EditorUI.EditorUiPalette.Current.Surface;
             splitView.Add(rightPane);
 
             // Inspector header
@@ -165,7 +171,7 @@ namespace ZeroEngine.Editor.Tutorial
             inspectorHeader.style.paddingLeft = 10;
             inspectorHeader.style.paddingTop = 10;
             inspectorHeader.style.paddingBottom = 10;
-            inspectorHeader.style.backgroundColor = new Color(0.15f, 0.15f, 0.15f);
+            inspectorHeader.style.backgroundColor = ZeroEngine.EditorUI.EditorUiPalette.Current.RaisedSurface;
             rightPane.Add(inspectorHeader);
 
             // Inspector container

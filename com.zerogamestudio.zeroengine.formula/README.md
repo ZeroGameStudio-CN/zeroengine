@@ -15,7 +15,7 @@ Install from the ZeroEngine repository with Unity Package Manager:
 "com.zerogamestudio.zeroengine.formula": "https://github.com/liuzqk/zeroengine.git?path=com.zerogamestudio.zeroengine.formula#<commit>"
 ```
 
-Use a pinned commit for production projects.
+Version 0.4.0 also requires a direct pin for `com.zerogamestudio.zeroengine.editor-ui@1.0.0` at the same commit. Unity 2022.3 does not resolve same-repository sibling packages transitively. Use a pinned commit for production projects.
 
 ## Runtime Formula
 

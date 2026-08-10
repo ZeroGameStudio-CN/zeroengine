@@ -10,6 +10,7 @@ namespace ZeroEngine.Editor.Dialog
     /// <summary>
     /// Main editor window for DialogGraphSO visual editing.
     /// </summary>
+    [ZeroEngine.EditorUI.EditorUiSurface]
     public class DialogGraphEditorWindow : EditorWindow
     {
         private DialogGraphView _graphView;
@@ -82,6 +83,10 @@ namespace ZeroEngine.Editor.Dialog
         private void BuildUI()
         {
             rootVisualElement.Clear();
+            ZeroEngine.EditorUI.EditorUiElements.ApplyWindowRoot(rootVisualElement);
+            rootVisualElement.Add(ZeroEngine.EditorUI.EditorUiElements.CreateHeader(
+                "Dialog Graph",
+                "Compose, validate, and save branching dialog"));
 
             // Toolbar
             var toolbar = new Toolbar();
@@ -118,7 +123,7 @@ namespace ZeroEngine.Editor.Dialog
             // Graph view
             _graphView = new DialogGraphView(this);
             _graphView.StretchToParentSize();
-            _graphView.style.top = 22; // Below toolbar
+            _graphView.style.top = 84; // Below shared header and toolbar
             rootVisualElement.Add(_graphView);
 
             // Object field for graph selection
@@ -129,7 +134,7 @@ namespace ZeroEngine.Editor.Dialog
             };
             graphField.style.position = Position.Absolute;
             graphField.style.right = 10;
-            graphField.style.top = 26;
+            graphField.style.top = 88;
             graphField.style.width = 250;
             graphField.RegisterValueChangedCallback(evt =>
             {

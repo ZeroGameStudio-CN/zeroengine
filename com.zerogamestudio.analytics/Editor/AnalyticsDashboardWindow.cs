@@ -7,6 +7,7 @@ namespace ZGS.Analytics.Editor
     /// <summary>
     /// ZGS Analytics Dashboard - 编辑器内查看 SDK 状态
     /// </summary>
+    [ZeroEngine.EditorUI.EditorUiSurface]
     public class AnalyticsDashboardWindow : EditorWindow
     {
         private Vector2 _scrollPos;
@@ -25,11 +26,7 @@ namespace ZGS.Analytics.Editor
         {
             if (_stylesInitialized) return;
 
-            _headerStyle = new GUIStyle(EditorStyles.boldLabel)
-            {
-                fontSize = 12,
-                normal = { textColor = new Color(0.3f, 0.7f, 1f) }
-            };
+            _headerStyle = ZeroEngine.EditorUI.EditorUiStyles.SectionTitle;
 
             _valueStyle = new GUIStyle(EditorStyles.label)
             {
@@ -45,6 +42,9 @@ namespace ZGS.Analytics.Editor
 
             _scrollPos = EditorGUILayout.BeginScrollView(_scrollPos);
 
+            ZeroEngine.EditorUI.EditorUiGUILayout.Header(
+                "ZGS Analytics",
+                "Analytics SDK configuration and runtime health");
             DrawHeader();
             EditorGUILayout.Space(10);
 
@@ -68,7 +68,7 @@ namespace ZGS.Analytics.Editor
         private void DrawHeader()
         {
             EditorGUILayout.BeginHorizontal();
-            GUILayout.Label("📊 ZGS Analytics", _headerStyle);
+            GUILayout.Label("Status", _headerStyle);
             GUILayout.FlexibleSpace();
             if (GUILayout.Button("🔄", GUILayout.Width(30)))
             {

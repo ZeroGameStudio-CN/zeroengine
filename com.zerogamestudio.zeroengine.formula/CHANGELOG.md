@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.4.0
+
+- Unified Formula Catalog and Workbench on `com.zerogamestudio.zeroengine.editor-ui@1.0.0`.
+- Git URL consumers must directly pin editor-ui to the same ZeroEngine commit.
+
 ## 0.3.0
 
 - Added injected integer random value sources with inclusive ranges.

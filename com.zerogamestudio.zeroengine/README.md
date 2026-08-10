@@ -103,6 +103,7 @@ ZeroEngine 是一个模块化的 Unity 游戏开发框架，提供常用游戏�
 
 ## 使用方式
 1. 在消费项目的 `Packages/manifest.json` 中通过 Git UPM URL 引用需要的 ZeroEngine 包，并 pin 到测试过的 commit。
+   2.0.0 的 Editor 面板还要求直接 pin `com.zerogamestudio.zeroengine.editor-ui@1.0.0` 到同一 commit；Git UPM 不会传递解析同仓 sibling package。
 2. 若需要控制面板，添加 `com.zerogamestudio.zeroengine.dashboard` 后通过菜单 **ZeroEngine -> Dashboard** 打开。
 3. 各模块单例在需要时自动初始化。
 

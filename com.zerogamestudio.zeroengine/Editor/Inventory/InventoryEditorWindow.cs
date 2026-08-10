@@ -12,6 +12,7 @@ using Sirenix.Utilities.Editor;
 namespace ZeroEngine.Editor.Inventory
 {
 #if ODIN_INSPECTOR
+    [ZeroEngine.EditorUI.EditorUiSurface]
     public class InventoryEditorWindow : OdinMenuEditorWindow
     {
         [MenuItem("ZeroEngine/Tools/Inventory Editor")]
@@ -44,6 +45,7 @@ namespace ZeroEngine.Editor.Inventory
 
         protected override void OnBeginDrawEditors()
         {
+            ZeroEngine.EditorUI.EditorUiGUILayout.SectionHeader("Inventory Editor");
             var selected = this.MenuTree.Selection.FirstOrDefault();
             var toolbarHeight = this.MenuTree.Config.SearchToolbarHeight;
 
@@ -95,6 +97,7 @@ namespace ZeroEngine.Editor.Inventory
     }
 #else
     // Fallback for when Odin is not present
+    [ZeroEngine.EditorUI.EditorUiSurface]
     public class InventoryEditorWindow : EditorWindow
     {
         [MenuItem("ZeroEngine/Tools/Inventory Editor")]
@@ -105,6 +108,7 @@ namespace ZeroEngine.Editor.Inventory
 
         private void OnGUI()
         {
+            ZeroEngine.EditorUI.EditorUiGUILayout.Header("Inventory Editor", "Odin Inspector is required for advanced authoring");
             EditorGUILayout.HelpBox("This Advanced Inventory Editor requires 'Odin Inspector' to be installed.", MessageType.Warning);
             if (GUILayout.Button("Check Plugins"))
             {

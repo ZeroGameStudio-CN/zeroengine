@@ -1,0 +1,23 @@
+{
+  "name": "com.zerogamestudio.zeroengine.editor-ui",
+  "version": "1.0.0",
+  "displayName": "ZeroEngine Editor UI",
+  "description": "Shared Editor-only visual language for ZeroEngine tools.",
+  "unity": "2022.3",
+  "dependencies": {},
+  "keywords": [
+    "editor",
+    "ui",
+    "tools"
+  ],
+  "author": {
+    "name": "ZeroGameStudio",
+    "url": "https://github.com/zerogamestudio"
+  },
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/ZeroGameStudio-CN/zeroengine.git",
+    "directory": "com.zerogamestudio.zeroengine.editor-ui"
+  }
+}

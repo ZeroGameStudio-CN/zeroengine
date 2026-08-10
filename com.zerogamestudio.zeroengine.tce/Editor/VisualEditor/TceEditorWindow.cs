@@ -5,6 +5,7 @@ using UnityEngine;
 
 namespace ZeroEngine.TCE.Editor
 {
+    [ZeroEngine.EditorUI.EditorUiSurface]
     public sealed class TceEditorWindow : EditorWindow
     {
         private TceGraphAsset asset;
@@ -39,6 +40,9 @@ namespace ZeroEngine.TCE.Editor
 
         private void OnGUI()
         {
+            ZeroEngine.EditorUI.EditorUiGUILayout.Header(
+                "TCE Graph",
+                "Compose triggers, conditions, effects, and preview execution");
             if (asset == null)
             {
                 EditorGUILayout.HelpBox("Select a TceGraphAsset and reopen this window.", MessageType.Info);

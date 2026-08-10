@@ -8,6 +8,7 @@ namespace ZeroEngine.Editor.Crafting
     /// <summary>
     /// 合成配方编辑器窗口
     /// </summary>
+    [ZeroEngine.EditorUI.EditorUiSurface]
     public class CraftingEditorWindow : EditorWindow
     {
         private Vector2 _scrollPosition;
@@ -80,6 +81,7 @@ namespace ZeroEngine.Editor.Crafting
 
         private void OnGUI()
         {
+            ZeroEngine.EditorUI.EditorUiGUILayout.Header("Recipe Editor", "Manage crafting recipes and books");
             // 标签页
             _tabIndex = GUILayout.Toolbar(_tabIndex, _tabNames, GUILayout.Height(30));
             EditorGUILayout.Space(5);

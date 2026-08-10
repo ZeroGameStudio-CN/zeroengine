@@ -4,7 +4,8 @@ param(
     [string]$ResultsDir = (Join-Path ([IO.Path]::GetTempPath()) ('zeroengine-dashboard-results-' + [guid]::NewGuid().ToString('N'))),
     [ValidateSet('dashboard-only', 'dashboard-with-modules', 'modules-only')]
     [string[]]$Lanes = @('dashboard-only', 'dashboard-with-modules', 'modules-only'),
-    [string]$TestFilter
+    [string]$TestFilter,
+    [switch]$PrepareOnly
 )
 
 $ErrorActionPreference = 'Stop'
@@ -16,8 +17,8 @@ if (-not (Test-Path -LiteralPath $UnityPath)) {
 
 New-Item -ItemType Directory -Path $ResultsDir -Force | Out-Null
 $laneDefinitions = @(
-    @{ Name = 'dashboard-only'; Packages = @('com.zerogamestudio.zeroengine.dashboard') },
-    @{ Name = 'dashboard-with-modules'; Packages = @('com.zerogamestudio.zeroengine.dashboard', 'com.zerogamestudio.zeroengine.core', 'com.zerogamestudio.zeroengine.ui', 'com.zerogamestudio.analytics') },
+    @{ Name = 'dashboard-only'; Packages = @('com.zerogamestudio.zeroengine.editor-ui', 'com.zerogamestudio.zeroengine.dashboard') },
+    @{ Name = 'dashboard-with-modules'; Packages = @('com.zerogamestudio.zeroengine.editor-ui', 'com.zerogamestudio.zeroengine.dashboard', 'com.zerogamestudio.zeroengine.core', 'com.zerogamestudio.zeroengine.ui', 'com.zerogamestudio.analytics') },
     @{ Name = 'modules-only'; Packages = @(Get-ChildItem -LiteralPath $repositoryRoot -Directory |
         Where-Object {
             ($_.Name -like 'com.zerogamestudio.zeroengine.*' -and $_.Name -ne 'com.zerogamestudio.zeroengine.dashboard') -or
@@ -70,6 +71,11 @@ foreach ($lane in $selectedLaneDefinitions) {
 
     & (Join-Path $PSScriptRoot 'Test-ZeroEngineDashboardDescriptors.ps1') -RootPath $repositoryRoot -ProjectManifest (Join-Path $packagesPath 'manifest.json')
 
+    if ($PrepareOnly) {
+        Write-Output $projectRoot
+        continue
+    }
+
     $resultPath = Join-Path $ResultsDir ($lane.Name + '.xml')
     $logPath = Join-Path $ResultsDir ($lane.Name + '.log')
     $unityArguments = @(
@@ -117,4 +123,6 @@ foreach ($lane in $selectedLaneDefinitions) {
     }
 }
 
-Write-Host "PASS Dashboard EditMode matrix. Results: $ResultsDir"
+if (-not $PrepareOnly) {
+    Write-Host "PASS Dashboard EditMode matrix. Results: $ResultsDir"
+}

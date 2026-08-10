@@ -6,7 +6,8 @@
         "ZeroEngine.ModSystem",
         "ZeroEngine.Combat",
         "ZeroEngine.Data",
-        "ZeroEngine.Economy"
+        "ZeroEngine.Economy",
+        "ZeroEngine.EditorUI.Editor"
     ],
     "includePlatforms": [
         "Editor"

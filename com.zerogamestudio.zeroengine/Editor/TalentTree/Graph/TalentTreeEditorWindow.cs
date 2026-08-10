@@ -10,6 +10,7 @@ namespace ZeroEngine.Editor.TalentTree
     /// <summary>
     /// 天赋树可视化编辑器窗口
     /// </summary>
+    [ZeroEngine.EditorUI.EditorUiSurface]
     public class TalentTreeEditorWindow : EditorWindow
     {
         private TalentTreeGraphView _graphView;
@@ -74,6 +75,10 @@ namespace ZeroEngine.Editor.TalentTree
         private void BuildUI()
         {
             rootVisualElement.Clear();
+            ZeroEngine.EditorUI.EditorUiElements.ApplyWindowRoot(rootVisualElement);
+            rootVisualElement.Add(ZeroEngine.EditorUI.EditorUiElements.CreateHeader(
+                "Talent Tree",
+                "Design nodes, connections, and progression rules"));
 
             // 加载样式
             var styleSheet = AssetDatabase.LoadAssetAtPath<StyleSheet>(
@@ -126,7 +131,7 @@ namespace ZeroEngine.Editor.TalentTree
             _inspector = new TalentNodeInspector();
             _inspector.style.width = 300;
             _inspector.style.borderLeftWidth = 1;
-            _inspector.style.borderLeftColor = new Color(0.2f, 0.2f, 0.2f);
+            _inspector.style.borderLeftColor = ZeroEngine.EditorUI.EditorUiPalette.Current.Border;
             mainContainer.Add(_inspector);
 
             rootVisualElement.Add(mainContainer);
