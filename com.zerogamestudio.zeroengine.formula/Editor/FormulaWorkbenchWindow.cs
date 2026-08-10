@@ -3,17 +3,30 @@ using UnityEngine;
 
 namespace ZeroEngine.Formula.Editor
 {
+    internal enum FormulaStudioPage
+    {
+        Workbench,
+        Catalog
+    }
+
     [ZeroEngine.EditorUI.EditorUiSurface]
     public sealed class FormulaWorkbenchWindow : EditorWindow
     {
+        private static readonly string[] PageNames = { FormulaEditorLabels.Workbench, "公式目录" };
+
+        [SerializeField]
         private FormulaAsset formula;
+        [SerializeField]
+        private FormulaStudioPage activePage = FormulaStudioPage.Workbench;
         [System.NonSerialized]
         private FormulaEvaluationReport lastReport;
         [System.NonSerialized]
         private FormulaPreviewBatchReport lastBatchReport;
         [System.NonSerialized]
         private FormulaCurvePreviewReport lastCurveReport;
+        [System.NonSerialized]
         private string lastBatchJson = string.Empty;
+        [System.NonSerialized]
         private string lastBatchMarkdown = string.Empty;
         private int curveInputIndex;
         private float curveMin;
@@ -22,6 +35,8 @@ namespace ZeroEngine.Formula.Editor
         private Vector2 scrollPosition;
         private readonly FormulaEditorPreviewState previewState = new();
         private readonly FormulaWorkbenchSession session = new();
+        [System.NonSerialized]
+        private FormulaCatalogPane catalogPane;
 
         [MenuItem("ZeroEngine/Formula/Formula Workbench", priority = 131)]
         private static void Open()
@@ -31,15 +46,23 @@ namespace ZeroEngine.Formula.Editor
 
         public static void OpenWithProfile(FormulaEditorProfile profile)
         {
-            Open(profile, null);
+            Open(profile, null, FormulaStudioPage.Workbench);
         }
 
         public static void OpenWithFormula(FormulaEditorProfile profile, FormulaAsset selectedFormula)
         {
-            Open(profile, selectedFormula);
+            Open(profile, selectedFormula, FormulaStudioPage.Workbench);
         }
 
-        private static void Open(FormulaEditorProfile profile, FormulaAsset selectedFormula)
+        public static void OpenCatalogWithProfile(FormulaEditorProfile profile)
+        {
+            Open(profile, null, FormulaStudioPage.Catalog);
+        }
+
+        private static void Open(
+            FormulaEditorProfile profile,
+            FormulaAsset selectedFormula,
+            FormulaStudioPage page)
         {
             if (profile != null)
             {
@@ -59,26 +82,56 @@ namespace ZeroEngine.Formula.Editor
                 FormulaEditorProfileRegistry.SetActiveProfile(profile.ProfileId);
             }
 
-            var activeProfile = FormulaEditorProfileRegistry.ActiveProfile;
-            var title = string.IsNullOrEmpty(activeProfile.WorkbenchTitle)
-                ? activeProfile.DisplayName
-                : activeProfile.WorkbenchTitle;
-            var window = GetWindow<FormulaWorkbenchWindow>(title);
+            var window = GetWindow<FormulaWorkbenchWindow>("Formula Studio");
+            window.titleContent = new GUIContent("Formula Studio");
             if (selectedFormula != null)
                 window.formula = selectedFormula;
+            window.activePage = page;
+            if (page == FormulaStudioPage.Catalog)
+                window.EnsureCatalogPane(true);
+            window.Repaint();
             window.Show();
+        }
+
+        private void OnEnable()
+        {
+            lastReport = null;
+            lastBatchReport = null;
+            lastCurveReport = null;
+            lastBatchJson = string.Empty;
+            lastBatchMarkdown = string.Empty;
+            titleContent = new GUIContent("Formula Studio");
+            if (activePage == FormulaStudioPage.Catalog)
+                EnsureCatalogPane(true);
         }
 
         private void OnGUI()
         {
             var profile = FormulaEditorProfileRegistry.ActiveProfile;
-            scrollPosition = EditorGUILayout.BeginScrollView(scrollPosition);
-
             ZeroEngine.EditorUI.EditorUiGUILayout.Header(
-                string.IsNullOrEmpty(profile.WorkbenchTitle) ? FormulaEditorLabels.Workbench : profile.WorkbenchTitle,
+                "Formula Studio",
                 string.IsNullOrEmpty(profile.DefaultSearchRoot)
                     ? $"{profile.DisplayName} ({profile.ProfileId})"
                     : $"{profile.DisplayName} ({profile.ProfileId}) · {FormulaEditorLabels.FormulaRoot}: {profile.DefaultSearchRoot}");
+
+            FormulaStudioPage previous = activePage;
+            activePage = (FormulaStudioPage)GUILayout.Toolbar(
+                (int)activePage,
+                PageNames,
+                GUILayout.Height(24f));
+            if (activePage == FormulaStudioPage.Catalog)
+            {
+                EnsureCatalogPane(previous != FormulaStudioPage.Catalog);
+                catalogPane.Draw(profile, SelectFormulaFromCatalog);
+                return;
+            }
+
+            DrawWorkbench(profile);
+        }
+
+        private void DrawWorkbench(FormulaEditorProfile profile)
+        {
+            scrollPosition = EditorGUILayout.BeginScrollView(scrollPosition);
 
             FormulaEditorGUILayout.DrawSectionHeader(FormulaEditorLabels.Formula);
             EditorGUILayout.BeginVertical(EditorStyles.helpBox);
@@ -102,6 +155,22 @@ namespace ZeroEngine.Formula.Editor
             DrawBatchPreview(profile);
             DrawCurvePreview(profile);
             EditorGUILayout.EndScrollView();
+        }
+
+        private void EnsureCatalogPane(bool refresh)
+        {
+            if (catalogPane == null)
+                catalogPane = new FormulaCatalogPane();
+            if (refresh)
+                catalogPane.RefreshRows();
+        }
+
+        private void SelectFormulaFromCatalog(FormulaAsset selectedFormula)
+        {
+            formula = selectedFormula;
+            activePage = FormulaStudioPage.Workbench;
+            scrollPosition = Vector2.zero;
+            Repaint();
         }
 
         private void Evaluate(FormulaEditorProfile profile)

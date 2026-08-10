@@ -12,6 +12,9 @@ namespace ZeroEngine.EditorUI
         public const float ToolbarHeight = 24f;
         public const float PrimaryButtonHeight = 28f;
         public const float AccentLineHeight = 2f;
+        public const float DashboardSidebarWidth = 196f;
+        public const float CompactBreakpoint = 900f;
+        public const float FormContentMaxWidth = 860f;
         public const int HeaderTitleSize = 18;
         public const int SectionTitleSize = 13;
     }

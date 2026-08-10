@@ -106,18 +106,18 @@ function Get-CSharpMethodBodies([string]$Source, [string]$MethodName) {
 
 $expectedPackages = [ordered]@{
     'com.zerogamestudio.analytics' = '2.0.0'
-    'com.zerogamestudio.zeroengine' = '2.0.0'
+    'com.zerogamestudio.zeroengine' = '2.1.0'
     'com.zerogamestudio.zeroengine.config-pipeline' = '2.0.0'
-    'com.zerogamestudio.zeroengine.dashboard' = '3.0.0'
+    'com.zerogamestudio.zeroengine.dashboard' = '3.1.0'
     'com.zerogamestudio.zeroengine.data-toolkit' = '2.0.0'
-    'com.zerogamestudio.zeroengine.formula' = '0.4.0'
+    'com.zerogamestudio.zeroengine.formula' = '0.5.0'
     'com.zerogamestudio.zeroengine.tce' = '0.2.0'
 }
 
 $editorUiRoot = Join-Path $RepoRoot 'com.zerogamestudio.zeroengine.editor-ui'
 $editorUiPackage = Read-Json (Join-Path $editorUiRoot 'package.json')
 Assert-Contract ($editorUiPackage.name -eq 'com.zerogamestudio.zeroengine.editor-ui') 'Unexpected editor-ui package name.'
-Assert-Contract ($editorUiPackage.version -eq '1.0.0') 'editor-ui must be version 1.0.0.'
+Assert-Contract ($editorUiPackage.version -eq '1.1.0') 'editor-ui must be version 1.1.0.'
 Assert-Contract ($editorUiPackage.unity -eq '2022.3') 'editor-ui must target Unity 2022.3.'
 Assert-Contract ($null -eq $editorUiPackage.dependencies -or @($editorUiPackage.dependencies.psobject.Properties).Count -eq 0) 'editor-ui production package must not declare dependencies.'
 
@@ -148,23 +148,37 @@ $asmdefs = [ordered]@{
     'com.zerogamestudio.zeroengine.tce' = 'Editor/ZeroEngine.TCE.Editor.asmdef'
 }
 
+$expectedEditorUiDependencies = @{
+    'com.zerogamestudio.zeroengine' = '1.1.0'
+    'com.zerogamestudio.zeroengine.dashboard' = '1.1.0'
+    'com.zerogamestudio.zeroengine.formula' = '1.1.0'
+}
+
 foreach ($packageName in $expectedPackages.Keys) {
     $packageRoot = Join-Path $RepoRoot $packageName
     $package = Read-Json (Join-Path $packageRoot 'package.json')
     Assert-Contract ($package.version -eq $expectedPackages[$packageName]) "$packageName version must be $($expectedPackages[$packageName])."
-    Assert-Contract ($package.dependencies.'com.zerogamestudio.zeroengine.editor-ui' -eq '1.0.0') "$packageName must directly depend on editor-ui 1.0.0."
+    $expectedEditorUiDependency = if ($expectedEditorUiDependencies.ContainsKey($packageName)) {
+        $expectedEditorUiDependencies[$packageName]
+    } else {
+        '1.0.0'
+    }
+    Assert-Contract ($package.dependencies.'com.zerogamestudio.zeroengine.editor-ui' -eq $expectedEditorUiDependency) "$packageName must directly depend on editor-ui $expectedEditorUiDependency."
 
     $asmdef = Read-Json (Join-Path $packageRoot $asmdefs[$packageName])
     Assert-Contract ($asmdef.references -contains 'ZeroEngine.EditorUI.Editor') "$packageName Editor asmdef must explicitly reference editor-ui."
 }
 
+$legacyPackage = Read-Json (Join-Path $RepoRoot 'com.zerogamestudio.zeroengine/package.json')
+Assert-Contract ($legacyPackage.dependencies.'com.zerogamestudio.zeroengine.dashboard' -eq '3.1.0') 'Legacy ZeroEngine 2.1.0 must directly depend on Dashboard 3.1.0.'
+
 $coveragePath = Join-Path $editorUiRoot 'Tests/Editor/Fixtures/EditorUiWindowCoverage.json'
 $coverage = Read-Json $coveragePath
 Assert-Contract ($coverage.schemaVersion -eq 1) 'Coverage schemaVersion must be 1.'
 Assert-Contract ($coverage.records.Count -eq 30) 'Coverage must contain 30 records.'
-Assert-Contract (($coverage.records | Where-Object countsTowardModuleTotal).Count -eq 29) 'Coverage must count exactly 29 upstream module types.'
+Assert-Contract (($coverage.records | Where-Object countsTowardModuleTotal).Count -eq 28) 'Coverage must count exactly 28 normal module types.'
 Assert-Contract (($coverage.records.targetId | Sort-Object -Unique).Count -eq 30) 'Coverage targetId values must be unique.'
-Assert-Contract (($coverage.records.typeName | Sort-Object -Unique).Count -eq 30) 'Coverage typeName values must be unique.'
+Assert-Contract (($coverage.records.typeName | Sort-Object -Unique).Count -eq 29) 'Coverage must contain 29 unique types including the Dashboard shell.'
 
 $descriptorIds = @()
 foreach ($packageDirectory in Get-ChildItem -LiteralPath $RepoRoot -Directory -Filter 'com.zerogamestudio.*') {
@@ -217,4 +231,4 @@ foreach ($record in $coverage.records) {
 $globalSearch = Get-Content -Raw -LiteralPath (Join-Path $RepoRoot 'com.zerogamestudio.zeroengine/Editor/GlobalSearchWindow.cs')
 Assert-Contract (-not [regex]::IsMatch($globalSearch, 'ODIN_INSPECTOR|Sirenix|OdinEditorWindow')) 'GlobalSearchWindow must have one built-in implementation.'
 
-Write-Host "ZeroEngine Editor UI contract passed: descriptors=28 coverage=30 modules=29"
+Write-Host "ZeroEngine Editor UI contract passed: descriptors=28 coverage=30 modules=28"

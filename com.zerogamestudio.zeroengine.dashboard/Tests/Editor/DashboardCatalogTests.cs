@@ -140,6 +140,64 @@ namespace ZeroEngine.Dashboard.Tests.Editor
         }
 
         [Test]
+        public void Build_CompatibleSurfaceEntries_AppearAsOneSurface()
+        {
+            DashboardCatalog catalog = Build(Source(Descriptor(
+                "project.formula",
+                "Formula",
+                Entry(
+                    "catalog",
+                    "Catalog",
+                    "ZGS/Formula/Catalog",
+                    section: "Authoring",
+                    surfaceId: "formula-studio",
+                    surfaceDisplayName: "Formula Studio",
+                    surfaceActionLabel: "Catalog",
+                    surfaceDefault: true) + "," +
+                Entry(
+                    "workbench",
+                    "Workbench",
+                    "ZGS/Formula/Workbench",
+                    section: "Authoring",
+                    surfaceId: "formula-studio",
+                    surfaceDisplayName: "Formula Studio",
+                    surfaceActionLabel: "Workbench"))));
+
+            DashboardSurface surface = catalog.VisibleModules.Single().VisibleSurfaces.Single();
+            Assert.AreEqual("formula-studio", surface.SurfaceId);
+            Assert.AreEqual("Formula Studio", surface.DisplayName);
+            Assert.AreEqual("catalog", surface.DefaultEntry.Id);
+            CollectionAssert.AreEqual(
+                new[] { "Catalog", "Workbench" },
+                surface.Entries.Select(entry => entry.SurfaceActionLabel).ToArray());
+        }
+
+        [Test]
+        public void Build_IncompatibleSurfaceEntries_FallBackToSeparateSurfaces()
+        {
+            DashboardCatalog catalog = Build(Source(Descriptor(
+                "project.formula",
+                "Formula",
+                Entry(
+                    "catalog",
+                    "Catalog",
+                    "ZGS/Formula/Catalog",
+                    section: "Authoring",
+                    surfaceId: "formula-studio",
+                    surfaceDisplayName: "Formula Studio") + "," +
+                Entry(
+                    "workbench",
+                    "Workbench",
+                    "ZGS/Formula/Workbench",
+                    section: "Diagnostics",
+                    surfaceId: "formula-studio",
+                    surfaceDisplayName: "Formula Studio"))));
+
+            Assert.AreEqual(2, catalog.VisibleModules.Single().VisibleSurfaces.Count);
+            Assert.AreEqual(2, catalog.Diagnostics.Count(item => item.Code == "surface-contract-conflict"));
+        }
+
+        [Test]
         public void Build_ReplacementChain_HidesTransitiveTargets()
         {
             DashboardCatalog catalog = Build(
@@ -665,12 +723,24 @@ namespace ZeroEngine.Dashboard.Tests.Editor
             string availability = "always",
             string confirmation = null,
             int order = 0,
-            string mountModuleId = null)
+            string mountModuleId = null,
+            string section = null,
+            string surfaceId = null,
+            string surfaceDisplayName = null,
+            string surfaceActionLabel = null,
+            bool surfaceDefault = false)
         {
             string replaceArray = string.IsNullOrEmpty(replaces) ? string.Empty : "\"" + replaces + "\"";
             string confirmationField = confirmation == null ? string.Empty : ",\"confirmation\":\"" + confirmation + "\"";
             string mountField = string.IsNullOrEmpty(mountModuleId) ? string.Empty :
                 ",\"mountModuleId\":\"" + mountModuleId + "\"";
+            string sectionField = string.IsNullOrEmpty(section) ? string.Empty : ",\"section\":\"" + section + "\"";
+            string surfaceIdField = string.IsNullOrEmpty(surfaceId) ? string.Empty : ",\"surfaceId\":\"" + surfaceId + "\"";
+            string surfaceDisplayNameField = string.IsNullOrEmpty(surfaceDisplayName) ? string.Empty :
+                ",\"surfaceDisplayName\":\"" + surfaceDisplayName + "\"";
+            string surfaceActionLabelField = string.IsNullOrEmpty(surfaceActionLabel) ? string.Empty :
+                ",\"surfaceActionLabel\":\"" + surfaceActionLabel + "\"";
+            string surfaceDefaultField = surfaceDefault ? ",\"surfaceDefault\":true" : string.Empty;
             return "{" +
                    "\"id\":\"" + id + "\"," +
                    "\"displayName\":\"" + displayName + "\"," +
@@ -682,7 +752,8 @@ namespace ZeroEngine.Dashboard.Tests.Editor
                    "\"safety\":\"" + safety + "\"," +
                    "\"availability\":\"" + availability + "\"," +
                    "\"replaces\":[" + replaceArray + "]" +
-                   confirmationField + mountField + "}";
+                   confirmationField + mountField + sectionField + surfaceIdField +
+                   surfaceDisplayNameField + surfaceActionLabelField + surfaceDefaultField + "}";
         }
 
         private static DashboardEntry BuildEntry(
@@ -704,7 +775,12 @@ namespace ZeroEngine.Dashboard.Tests.Editor
                 availability,
                 Array.Empty<string>(),
                 string.Empty,
-                "test.json");
+                "test.json",
+                string.Empty,
+                string.Empty,
+                string.Empty,
+                string.Empty,
+                false);
         }
 
         private sealed class FakeExecutionHost : IDashboardExecutionHost

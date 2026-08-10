@@ -6,6 +6,7 @@ namespace ZeroEngine.EditorUI.Tests.Editor
     internal sealed class EditorUiGalleryWindow : EditorWindow
     {
         private Vector2 _scroll;
+        private bool _details;
 
         [MenuItem("ZeroEngine Tests/Editor UI Gallery")]
         private static void Open()
@@ -18,10 +19,27 @@ namespace ZeroEngine.EditorUI.Tests.Editor
         private void OnGUI()
         {
             _scroll = EditorGUILayout.BeginScrollView(_scroll);
-            EditorUiGUILayout.Header(
+            EditorUiGUILayout.CompactHeader(
                 "ZeroEngine Editor UI",
                 "Shared hierarchy, semantic status, spacing, and theme palettes.",
-                "Test assembly only");
+                "Test assembly only",
+                () => EditorUiGUILayout.Chip(EditorUiGUILayout.ResponsiveMode(position.width).ToString()));
+
+            using (EditorUiGUILayout.Section("Compact rows", "Dashboard-style hierarchy and progressive disclosure"))
+            {
+                EditorUiGUILayout.ActionRow(
+                    "Formula Studio",
+                    "Catalog and Workbench share one normal window host.",
+                    () =>
+                    {
+                        EditorUiGUILayout.PrimaryButton("Catalog");
+                        GUILayout.Button("Workbench");
+                    });
+                EditorUiGUILayout.Chip("POB");
+                _details = EditorUiGUILayout.Disclosure(_details, "Details");
+                if (_details)
+                    EditorGUILayout.SelectableLabel("module/entry · ZeroEngine/Menu/Path", EditorStyles.miniLabel);
+            }
 
             using (EditorUiGUILayout.Section("Actions", "Primary, secondary, destructive, and validation states"))
             {
