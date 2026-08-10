@@ -70,10 +70,12 @@ jobs:
                 [[ "$package_name" == "com.zerogamestudio.analytics" || ( "$package_name" == com.zerogamestudio.zeroengine.* ) ]]
                 ;;
               dashboard-only)
-                [[ "$package_name" == "com.zerogamestudio.zeroengine.dashboard" ]]
+                [[ "$package_name" == "com.zerogamestudio.zeroengine.dashboard" ||
+                   "$package_name" == "com.zerogamestudio.zeroengine.editor-ui" ]]
                 ;;
               dashboard-with-modules)
                 [[ "$package_name" == "com.zerogamestudio.zeroengine.dashboard" ||
+                   "$package_name" == "com.zerogamestudio.zeroengine.editor-ui" ||
                    "$package_name" == "com.zerogamestudio.zeroengine.core" ||
                    "$package_name" == "com.zerogamestudio.zeroengine.ui" ||
                    "$package_name" == "com.zerogamestudio.analytics" ]]

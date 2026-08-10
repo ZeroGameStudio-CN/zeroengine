@@ -2,7 +2,8 @@
   "name": "ZGS.ConfigPipeline.Editor",
   "rootNamespace": "ZeroGameStudio.ConfigPipeline.Editor",
   "references": [
-    "ZGS.ConfigPipeline.Runtime"
+    "ZGS.ConfigPipeline.Runtime",
+    "ZeroEngine.EditorUI.Editor"
   ],
   "includePlatforms": [
     "Editor"

@@ -10,6 +10,7 @@ namespace ZeroEngine.Editor.BehaviorTree
     /// Runtime BehaviorTree viewer window.
     /// Displays tree structure and execution state in real-time.
     /// </summary>
+    [ZeroEngine.EditorUI.EditorUiSurface]
     public class BehaviorTreeViewerWindow : EditorWindow
     {
         [MenuItem("ZeroEngine/BehaviorTree Viewer")]
@@ -87,6 +88,7 @@ namespace ZeroEngine.Editor.BehaviorTree
 
         private void OnGUI()
         {
+            ZeroEngine.EditorUI.EditorUiGUILayout.Header("Behavior Tree Viewer", "Inspect live tree execution state");
             DrawToolbar();
             EditorGUILayout.Space(4);
 

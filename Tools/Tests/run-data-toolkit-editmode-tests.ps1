@@ -2,13 +2,16 @@ param(
     [string]$UnityPath = "D:/unity/editors/Unity 2022.3.62f3/Editor/Unity.exe",
     [string]$ResultsPath = "$env:TEMP/ZeroEngine-DataToolkit-EditMode.xml",
     [string]$LogPath = "$env:TEMP/ZeroEngine-DataToolkit-EditMode.log",
-    [string]$ProjectPath = "$env:TEMP/ZeroEngine-DataToolkitTestProject"
+    [string]$ProjectPath = "$env:TEMP/ZeroEngine-DataToolkitTestProject",
+    [switch]$PrepareOnly
 )
 
 $ErrorActionPreference = "Stop"
 $repoRoot = (Resolve-Path (Join-Path $PSScriptRoot "../..")).Path
 $packageName = "com.zerogamestudio.zeroengine.data-toolkit"
+$editorUiPackageName = "com.zerogamestudio.zeroengine.editor-ui"
 $sourcePackagePath = Join-Path $repoRoot $packageName
+$editorUiSourcePackagePath = Join-Path $repoRoot $editorUiPackageName
 $projectPath = [System.IO.Path]::GetFullPath($ProjectPath)
 $projectPackagesPath = Join-Path $projectPath "Packages"
 $projectSettingsPath = Join-Path $projectPath "ProjectSettings"
@@ -42,6 +45,10 @@ if (-not (Test-Path -LiteralPath $sourcePackagePath)) {
     throw "Data Toolkit package was not found: $sourcePackagePath"
 }
 
+if (-not (Test-Path -LiteralPath $editorUiSourcePackagePath)) {
+    throw "Editor UI package was not found: $editorUiSourcePackagePath"
+}
+
 if (-not $projectPath.StartsWith($resolvedTempPath, [System.StringComparison]::OrdinalIgnoreCase)) {
     throw "Refusing to recreate test project outside TEMP: $projectPath"
 }
@@ -54,6 +61,7 @@ New-Item -ItemType Directory -Force -Path (Join-Path $projectPath "Assets") | Ou
 New-Item -ItemType Directory -Force -Path $projectPackagesPath | Out-Null
 New-Item -ItemType Directory -Force -Path $projectSettingsPath | Out-Null
 Copy-Item -LiteralPath $sourcePackagePath -Destination $projectPackagePath -Recurse
+Copy-Item -LiteralPath $editorUiSourcePackagePath -Destination (Join-Path $projectPackagesPath $editorUiPackageName) -Recurse
 
 @"
 {
@@ -61,6 +69,7 @@ Copy-Item -LiteralPath $sourcePackagePath -Destination $projectPackagePath -Recu
     "com.unity.test-framework": "1.3.9",
     "com.unity.modules.imgui": "1.0.0",
     "com.unity.modules.ui": "1.0.0",
+    "$editorUiPackageName": "file:$editorUiPackageName",
     "$packageName": "file:$packageName"
   },
   "testables": [
@@ -72,6 +81,11 @@ Copy-Item -LiteralPath $sourcePackagePath -Destination $projectPackagePath -Recu
 @"
 m_EditorVersion: 2022.3.62f3
 "@ | Set-Content -LiteralPath (Join-Path $projectSettingsPath "ProjectVersion.txt") -Encoding UTF8
+
+if ($PrepareOnly) {
+    Write-Output $projectPath
+    exit 0
+}
 
 $importLogPath = [System.IO.Path]::ChangeExtension($LogPath, ".import.log")
 

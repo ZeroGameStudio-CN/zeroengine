@@ -1,5 +1,10 @@
 # Changelog
 
+## 2.0.0
+
+- Unified the Config Pipeline window on `com.zerogamestudio.zeroengine.editor-ui@1.0.0`.
+- Git URL consumers must directly pin editor-ui to the same ZeroEngine commit.
+
 - Batch ExportCandidate no longer requires the unused package-identity argument;
   all Plan-producing or current-base-validated modes retain the requirement.
 - Generated Manifests persist the package identity as `toolVersion`, so Check

@@ -2,7 +2,8 @@
   "name": "ZeroEngine.TCE.Editor",
   "rootNamespace": "ZeroEngine.TCE.Editor",
   "references": [
-    "ZeroEngine.TCE"
+    "ZeroEngine.TCE",
+    "ZeroEngine.EditorUI.Editor"
   ],
   "includePlatforms": [
     "Editor"

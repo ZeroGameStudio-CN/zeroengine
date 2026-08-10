@@ -5,6 +5,11 @@ All notable changes to this package will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.0.0] - 2026-08-10
+
+- Unified all Dashboard-exposed Editor windows on `com.zerogamestudio.zeroengine.editor-ui@1.0.0`.
+- Git URL consumers must directly pin editor-ui to the same ZeroEngine commit.
+
 ## [2.7.0] - 2026-01-07
 
 ### Added

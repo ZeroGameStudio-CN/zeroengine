@@ -4,6 +4,7 @@ using ZeroEngine.Notification;
 
 namespace ZeroEngine.Editor.Notification
 {
+    [ZeroEngine.EditorUI.EditorUiSurface]
     public class NotificationEditorWindow : EditorWindow
     {
         private Vector2 _scrollPosition;
@@ -34,6 +35,7 @@ namespace ZeroEngine.Editor.Notification
 
         private void OnGUI()
         {
+            ZeroEngine.EditorUI.EditorUiGUILayout.Header("Notification Editor", "Send, configure, and preview notifications");
             _selectedTab = GUILayout.Toolbar(_selectedTab, _tabNames);
             EditorGUILayout.Space(10);
 

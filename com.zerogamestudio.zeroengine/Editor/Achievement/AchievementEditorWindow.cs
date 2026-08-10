@@ -8,6 +8,7 @@ namespace ZeroEngine.Editor.Achievement
     /// <summary>
     /// 成就编辑器窗口
     /// </summary>
+    [ZeroEngine.EditorUI.EditorUiSurface]
     public class AchievementEditorWindow : EditorWindow
     {
         private Vector2 _scrollPosition;
@@ -80,6 +81,7 @@ namespace ZeroEngine.Editor.Achievement
 
         private void OnGUI()
         {
+            ZeroEngine.EditorUI.EditorUiGUILayout.Header("Achievement Editor", "Manage achievements and groups");
             // 标签页
             _tabIndex = GUILayout.Toolbar(_tabIndex, _tabNames, GUILayout.Height(30));
             EditorGUILayout.Space(5);

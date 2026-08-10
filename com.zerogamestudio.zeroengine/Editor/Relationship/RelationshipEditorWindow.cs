@@ -8,6 +8,7 @@ namespace ZeroEngine.Editor.Relationship
     /// <summary>
     /// 好感度编辑器窗口
     /// </summary>
+    [ZeroEngine.EditorUI.EditorUiSurface]
     public class RelationshipEditorWindow : EditorWindow
     {
         private Vector2 _scrollPosition;
@@ -80,6 +81,7 @@ namespace ZeroEngine.Editor.Relationship
 
         private void OnGUI()
         {
+            ZeroEngine.EditorUI.EditorUiGUILayout.Header("Relationship Editor", "Manage NPC relationships and groups");
             // 标签页
             _tabIndex = GUILayout.Toolbar(_tabIndex, _tabNames, GUILayout.Height(30));
             EditorGUILayout.Space(5);

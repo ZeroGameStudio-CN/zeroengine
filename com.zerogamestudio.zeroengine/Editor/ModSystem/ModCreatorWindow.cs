@@ -9,6 +9,7 @@ namespace ZeroEngine.ModSystem.Editor
     /// <summary>
     /// Mod创建向导窗口
     /// </summary>
+    [ZeroEngine.EditorUI.EditorUiSurface]
     public class ModCreatorWindow : EditorWindow
     {
         private string _modId = "mycompany.mymod";
@@ -40,10 +41,8 @@ namespace ZeroEngine.ModSystem.Editor
         
         private void OnGUI()
         {
+            ZeroEngine.EditorUI.EditorUiGUILayout.Header("Create New Mod", "Scaffold a ZeroEngine mod package");
             _scrollPos = EditorGUILayout.BeginScrollView(_scrollPos);
-            
-            EditorGUILayout.LabelField("Create New Mod", EditorStyles.boldLabel);
-            EditorGUILayout.Space(10);
             
             // 基本信息
             EditorGUILayout.LabelField("Basic Information", EditorStyles.boldLabel);

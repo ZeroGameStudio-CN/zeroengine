@@ -5,6 +5,7 @@ using ZeroEngine.Settings;
 
 namespace ZeroEngine.Editor.Settings
 {
+    [ZeroEngine.EditorUI.EditorUiSurface]
     public class SettingsEditorWindow : EditorWindow
     {
         private Vector2 _scrollPosition;
@@ -36,6 +37,7 @@ namespace ZeroEngine.Editor.Settings
 
         private void OnGUI()
         {
+            ZeroEngine.EditorUI.EditorUiGUILayout.Header("Settings Editor", "Manage settings, input bindings, and presets");
             DrawToolbar();
 
             _selectedTab = GUILayout.Toolbar(_selectedTab, _tabNames);

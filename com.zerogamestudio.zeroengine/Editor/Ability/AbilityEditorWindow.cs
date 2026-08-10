@@ -13,6 +13,7 @@ using Sirenix.Utilities.Editor;
 namespace ZeroEngine.Editor.AbilitySystem
 {
 #if ODIN_INSPECTOR
+    [ZeroEngine.EditorUI.EditorUiSurface]
     public class AbilityEditorWindow : OdinMenuEditorWindow
     {
         [MenuItem("ZeroEngine/Tools/Ability Editor")]
@@ -75,6 +76,7 @@ namespace ZeroEngine.Editor.AbilitySystem
 
         protected override void OnBeginDrawEditors()
         {
+            ZeroEngine.EditorUI.EditorUiGUILayout.SectionHeader("Ability Editor");
             var selected = this.MenuTree.Selection.FirstOrDefault();
             var toolbarHeight = this.MenuTree.Config.SearchToolbarHeight;
 
@@ -121,6 +123,7 @@ namespace ZeroEngine.Editor.AbilitySystem
         }
     }
 #else
+    [ZeroEngine.EditorUI.EditorUiSurface]
     public class AbilityEditorWindow : EditorWindow
     {
         [MenuItem("ZeroEngine/Tools/Ability Editor")]
@@ -128,6 +131,7 @@ namespace ZeroEngine.Editor.AbilitySystem
 
         private void OnGUI()
         {
+            ZeroEngine.EditorUI.EditorUiGUILayout.Header("Ability Editor", "Odin Inspector is required for advanced authoring");
             EditorGUILayout.HelpBox("Requires 'Odin Inspector'.", MessageType.Warning);
         }
     }

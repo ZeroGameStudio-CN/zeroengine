@@ -7,6 +7,7 @@ using UnityEngine;
 
 namespace ZeroEngine.Formula.Editor
 {
+    [ZeroEngine.EditorUI.EditorUiSurface]
     public sealed class FormulaCatalogWindow : EditorWindow
     {
         private readonly List<FormulaCatalogWindowRow> rows = new();
@@ -49,10 +50,9 @@ namespace ZeroEngine.Formula.Editor
             var catalogPath = string.IsNullOrEmpty(profile.CatalogAssetPath)
                 ? FormulaEditorLabels.NoCatalogPath
                 : profile.CatalogAssetPath;
-            FormulaEditorGUILayout.DrawHeader(
+            ZeroEngine.EditorUI.EditorUiGUILayout.Header(
                 "公式目录",
-                $"{profile.DisplayName} ({profile.ProfileId})",
-                $"{FormulaEditorLabels.FormulaRoot}: {root}    {FormulaEditorLabels.Catalog}: {catalogPath}");
+                $"{profile.DisplayName} ({profile.ProfileId}) · {FormulaEditorLabels.FormulaRoot}: {root} · {FormulaEditorLabels.Catalog}: {catalogPath}");
 
             EditorGUILayout.BeginHorizontal();
             if (GUILayout.Button(FormulaEditorLabels.Refresh))

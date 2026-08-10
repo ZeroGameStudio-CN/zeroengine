@@ -10,6 +10,7 @@ namespace ZeroEngine.Editor.BehaviorTree
     /// <summary>
     /// Main editor window for BTTreeAsset visual editing.
     /// </summary>
+    [ZeroEngine.EditorUI.EditorUiSurface]
     public class BTGraphEditorWindow : EditorWindow
     {
         private BTGraphView _graphView;
@@ -82,6 +83,10 @@ namespace ZeroEngine.Editor.BehaviorTree
         private void BuildUI()
         {
             rootVisualElement.Clear();
+            ZeroEngine.EditorUI.EditorUiElements.ApplyWindowRoot(rootVisualElement);
+            rootVisualElement.Add(ZeroEngine.EditorUI.EditorUiElements.CreateHeader(
+                "Behavior Tree Graph",
+                "Author, validate, and save behavior trees"));
 
             // Toolbar
             var toolbar = new Toolbar();
@@ -118,7 +123,7 @@ namespace ZeroEngine.Editor.BehaviorTree
             // Graph view
             _graphView = new BTGraphView(this);
             _graphView.StretchToParentSize();
-            _graphView.style.top = 22;
+            _graphView.style.top = 84;
             rootVisualElement.Add(_graphView);
 
             // Object field for tree selection
@@ -129,7 +134,7 @@ namespace ZeroEngine.Editor.BehaviorTree
             };
             treeField.style.position = Position.Absolute;
             treeField.style.right = 10;
-            treeField.style.top = 26;
+            treeField.style.top = 88;
             treeField.style.width = 250;
             treeField.RegisterValueChangedCallback(evt =>
             {

@@ -2,7 +2,8 @@
     "name": "ZGS.Analytics.Editor",
     "rootNamespace": "ZGS.Analytics.Editor",
     "references": [
-        "ZGS.Analytics"
+        "ZGS.Analytics",
+        "ZeroEngine.EditorUI.Editor"
     ],
     "includePlatforms": [
         "Editor"

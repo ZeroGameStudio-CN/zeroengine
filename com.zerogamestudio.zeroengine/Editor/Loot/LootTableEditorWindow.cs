@@ -8,6 +8,7 @@ namespace ZeroEngine.Editor.Loot
     /// <summary>
     /// 掉落表编辑器窗口
     /// </summary>
+    [ZeroEngine.EditorUI.EditorUiSurface]
     public class LootTableEditorWindow : EditorWindow
     {
         private Vector2 _scrollPosition;
@@ -57,6 +58,7 @@ namespace ZeroEngine.Editor.Loot
 
         private void OnGUI()
         {
+            ZeroEngine.EditorUI.EditorUiGUILayout.Header("Loot Table Editor", "Build and inspect weighted loot tables");
             EditorGUILayout.BeginHorizontal();
 
             // 左侧列表

@@ -5,6 +5,7 @@ using ZeroEngine.Calendar;
 
 namespace ZeroEngine.Editor.Calendar
 {
+    [ZeroEngine.EditorUI.EditorUiSurface]
     public class CalendarEditorWindow : EditorWindow
     {
         private Vector2 _scrollPosition;
@@ -33,6 +34,7 @@ namespace ZeroEngine.Editor.Calendar
 
         private void OnGUI()
         {
+            ZeroEngine.EditorUI.EditorUiGUILayout.Header("Calendar Editor", "Configure events, seasons, and calendar previews");
             DrawToolbar();
 
             _selectedTab = GUILayout.Toolbar(_selectedTab, _tabNames);

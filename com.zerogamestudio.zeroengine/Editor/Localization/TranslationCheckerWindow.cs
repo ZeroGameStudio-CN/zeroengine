@@ -16,6 +16,7 @@ namespace ZeroEngine.Editor.Localization
     /// 翻译完整性检查工具
     /// 扫描所有 String Table，显示各语言覆盖率
     /// </summary>
+    [ZeroEngine.EditorUI.EditorUiSurface]
     public class TranslationCheckerWindow : EditorWindow
     {
         [MenuItem("ZeroEngine/Localization/Translation Checker")]
@@ -52,7 +53,7 @@ namespace ZeroEngine.Editor.Localization
 
         private void OnGUI()
         {
-            DrawHeader();
+            ZeroEngine.EditorUI.EditorUiGUILayout.Header("Translation Checker", "Review localization coverage and missing entries");
             DrawToolbar();
 
             if (_reports.Count == 0)
@@ -64,14 +65,6 @@ namespace ZeroEngine.Editor.Localization
             _scrollPos = EditorGUILayout.BeginScrollView(_scrollPos);
             DrawReports();
             EditorGUILayout.EndScrollView();
-        }
-
-        private void DrawHeader()
-        {
-            EditorGUILayout.Space(5);
-            EditorGUILayout.LabelField("Translation Checker", EditorStyles.boldLabel);
-            EditorGUILayout.LabelField("Scan String Tables to check translation completeness.", EditorStyles.miniLabel);
-            EditorGUILayout.Space(5);
         }
 
         private void DrawToolbar()
@@ -318,6 +311,7 @@ namespace ZeroEngine.Editor.Localization
 #else
         private void OnGUI()
         {
+            ZeroEngine.EditorUI.EditorUiGUILayout.Header("Translation Checker", "Unity Localization is required for coverage checks");
             EditorGUILayout.Space(20);
             EditorGUILayout.HelpBox(
                 "Unity Localization package is not installed.\n\n" +

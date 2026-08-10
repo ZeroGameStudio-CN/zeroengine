@@ -5,6 +5,7 @@ using UnityEngine;
 
 namespace ZeroGameStudio.ConfigPipeline.Editor
 {
+    [ZeroEngine.EditorUI.EditorUiSurface]
     public sealed class ConfigPipelineWindow : EditorWindow
     {
         private string profilePath = "Config/config-project.json";
@@ -21,6 +22,9 @@ namespace ZeroGameStudio.ConfigPipeline.Editor
 
         private void OnGUI()
         {
+            ZeroEngine.EditorUI.EditorUiGUILayout.Header(
+                "Config Pipeline",
+                "Plan, validate, apply, and export project configuration");
             profilePath = EditorGUILayout.TextField("Profile", profilePath);
             configSetId = EditorGUILayout.TextField("Config Set", configSetId);
             packageIdentity = EditorGUILayout.TextField("Package Identity", packageIdentity);

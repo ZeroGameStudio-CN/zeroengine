@@ -6,18 +6,14 @@ using UnityEngine;
 using ZeroEngine.AbilitySystem;
 using ZeroEngine.Inventory; // Future proofing
 
-#if ODIN_INSPECTOR
-using Sirenix.OdinInspector;
-using Sirenix.OdinInspector.Editor;
-using Sirenix.Utilities;
-using Sirenix.Utilities.Editor;
-#endif
-
 namespace ZeroEngine.Editor
 {
-#if ODIN_INSPECTOR
-    public class GlobalSearchWindow : OdinEditorWindow
+    [ZeroEngine.EditorUI.EditorUiSurface]
+    public class GlobalSearchWindow : EditorWindow
     {
+        private Vector2 resultsScroll;
+        private string[] componentTypes = Array.Empty<string>();
+
         [MenuItem("ZeroEngine/Tools/Global Search")]
         private static void OpenWindow()
         {
@@ -26,23 +22,9 @@ namespace ZeroEngine.Editor
             window.Show();
         }
 
-        [EnumToggleButtons]
-        [BoxGroup("Search Filter", CenterLabel = true)]
         public SearchMode Mode = SearchMode.AbilityByComponent;
-
-        [BoxGroup("Search Filter")]
-        [ValueDropdown(nameof(GetAllComponentTypes))]
-        [ShowIf(nameof(Mode), SearchMode.AbilityByComponent)]
-        [LabelText("Component Type")]
         public string ComponentTypeSearch;
-
-        [BoxGroup("Search Filter")]
-        [HideIf(nameof(Mode), SearchMode.AbilityByComponent)]
-        [LabelText("Search Name")]
         public string NameSearchTerm;
-
-        [BoxGroup("Results")]
-        [ListDrawerSettings(IsReadOnly = true, ShowFoldout = true)]
         public List<UnityEngine.Object> SearchResults = new List<UnityEngine.Object>();
 
         public enum SearchMode
@@ -52,7 +34,53 @@ namespace ZeroEngine.Editor
             QuestByName
         }
 
-        private IEnumerable<string> GetAllComponentTypes()
+        private void OnEnable()
+        {
+            componentTypes = GetAllComponentTypes().ToArray();
+            if (string.IsNullOrEmpty(ComponentTypeSearch) && componentTypes.Length > 0)
+                ComponentTypeSearch = componentTypes[0];
+        }
+
+        private void OnGUI()
+        {
+            ZeroEngine.EditorUI.EditorUiGUILayout.Header(
+                "Global Search",
+                "Find abilities, inventory items, and quests across the project");
+
+            ZeroEngine.EditorUI.EditorUiGUILayout.SectionHeader("Search Filter");
+            Mode = (SearchMode)GUILayout.Toolbar((int)Mode, new[] { "Ability Component", "Item Name", "Quest Name" });
+
+            if (Mode == SearchMode.AbilityByComponent)
+            {
+                if (componentTypes.Length == 0)
+                    componentTypes = GetAllComponentTypes().ToArray();
+
+                var selectedIndex = Math.Max(0, Array.IndexOf(componentTypes, ComponentTypeSearch));
+                selectedIndex = EditorGUILayout.Popup("Component Type", selectedIndex, componentTypes);
+                ComponentTypeSearch = componentTypes.Length == 0 ? string.Empty : componentTypes[selectedIndex];
+            }
+            else
+            {
+                NameSearchTerm = EditorGUILayout.TextField("Search Name", NameSearchTerm);
+            }
+
+            if (ZeroEngine.EditorUI.EditorUiGUILayout.PrimaryButton("Search"))
+                PerformSearch();
+
+            ZeroEngine.EditorUI.EditorUiGUILayout.SectionHeader($"Results ({SearchResults.Count})");
+            if (SearchResults.Count == 0)
+            {
+                ZeroEngine.EditorUI.EditorUiGUILayout.EmptyState("No matching assets.");
+                return;
+            }
+
+            resultsScroll = EditorGUILayout.BeginScrollView(resultsScroll);
+            foreach (var result in SearchResults)
+                EditorGUILayout.ObjectField(result, typeof(UnityEngine.Object), false);
+            EditorGUILayout.EndScrollView();
+        }
+
+        private static IEnumerable<string> GetAllComponentTypes()
         {
             var baseType = typeof(ComponentData);
             return AppDomain.CurrentDomain.GetAssemblies()
@@ -62,7 +90,6 @@ namespace ZeroEngine.Editor
                 .OrderBy(n => n);
         }
 
-        [Button(ButtonSizes.Large), BoxGroup("Search Filter")]
         public void PerformSearch()
         {
             SearchResults.Clear();
@@ -133,16 +160,4 @@ namespace ZeroEngine.Editor
             return false;
         }
     }
-#else
-    public class GlobalSearchWindow : EditorWindow
-    {
-        [MenuItem("ZeroEngine/Tools/Global Search")]
-        private static void OpenWindow() => GetWindow<GlobalSearchWindow>("Global Search");
-
-        private void OnGUI()
-        {
-            EditorGUILayout.HelpBox("Global Search requires Odin Inspector for Advanced Filtering.", MessageType.Warning);
-        }
-    }
-#endif
 }

@@ -101,9 +101,12 @@ foreach ($descriptorPath in $descriptorPaths) {
 $dashboardRoot = Join-Path $RootPath 'com.zerogamestudio.zeroengine.dashboard'
 $dashboardPackage = Get-Content -LiteralPath (Join-Path $dashboardRoot 'package.json') -Raw -Encoding UTF8 | ConvertFrom-Json
 $dashboardAsmdef = Get-Content -LiteralPath (Join-Path $dashboardRoot 'Editor\ZeroEngine.Dashboard.Editor.asmdef') -Raw -Encoding UTF8 | ConvertFrom-Json
-Assert-Condition ($dashboardPackage.version -eq '2.1.0') 'Dashboard package version must be 2.1.0.'
-Assert-Condition (@($dashboardPackage.dependencies.psobject.Properties).Count -eq 0) 'Dashboard package must have no package dependencies.'
-Assert-Condition (@($dashboardAsmdef.references).Count -eq 0) 'Dashboard production asmdef must have no optional module references.'
+Assert-Condition ($dashboardPackage.version -eq '3.0.0') 'Dashboard package version must be 3.0.0.'
+$dashboardDependencies = @($dashboardPackage.dependencies.psobject.Properties)
+Assert-Condition ($dashboardDependencies.Count -eq 1) 'Dashboard package must depend only on editor-ui.'
+Assert-Condition ($dashboardDependencies[0].Name -eq 'com.zerogamestudio.zeroengine.editor-ui' -and $dashboardDependencies[0].Value -eq '1.0.0') 'Dashboard editor-ui dependency must be exactly 1.0.0.'
+$dashboardReferences = @($dashboardAsmdef.references)
+Assert-Condition ($dashboardReferences.Count -eq 1 -and $dashboardReferences[0] -eq 'ZeroEngine.EditorUI.Editor') 'Dashboard production asmdef must reference only editor-ui.'
 Assert-Condition (@($dashboardAsmdef.includePlatforms).Count -eq 1 -and $dashboardAsmdef.includePlatforms[0] -eq 'Editor') 'Dashboard production asmdef must be Editor-only.'
 
 $dashboardProductionText = @(Get-ChildItem -LiteralPath (Join-Path $dashboardRoot 'Editor') -Recurse -File -Filter '*.cs' |
@@ -130,7 +133,7 @@ if (-not [string]::IsNullOrWhiteSpace($ProjectManifest)) {
     $legacyInstalled = $dependencyNames -contains 'com.zerogamestudio.zeroengine'
     $modularInstalled = @($dependencyNames | Where-Object {
         $_ -like 'com.zerogamestudio.zeroengine.*' -and
-        $_ -ne 'com.zerogamestudio.zeroengine.dashboard'
+        $_ -notin @('com.zerogamestudio.zeroengine.dashboard', 'com.zerogamestudio.zeroengine.editor-ui')
     })
     Assert-Condition (-not ($legacyInstalled -and $modularInstalled.Count -gt 0)) 'Legacy and modular ZeroEngine packages are mutually exclusive.'
 }

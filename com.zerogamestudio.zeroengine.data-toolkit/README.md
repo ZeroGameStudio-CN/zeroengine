@@ -6,6 +6,8 @@ ZeroEngine Data Toolkit is a reusable Unity package for marking, browsing, searc
 
 Add the package through Unity Package Manager using the Git URL for this repository and the `com.zerogamestudio.zeroengine.data-toolkit` path. Production projects should pin a release tag or reviewed commit.
 
+Version 2.0.0 also requires a direct Git pin for `com.zerogamestudio.zeroengine.editor-ui@1.0.0` at the same commit. Unity 2022.3 does not resolve same-repository sibling packages transitively.
+
 ## Project Profile
 
 Projects register a profile at editor load time:

@@ -3,6 +3,7 @@ using UnityEngine;
 
 namespace ZeroEngine.Formula.Editor
 {
+    [ZeroEngine.EditorUI.EditorUiSurface]
     public sealed class FormulaWorkbenchWindow : EditorWindow
     {
         private FormulaAsset formula;
@@ -70,10 +71,11 @@ namespace ZeroEngine.Formula.Editor
             var profile = FormulaEditorProfileRegistry.ActiveProfile;
             scrollPosition = EditorGUILayout.BeginScrollView(scrollPosition);
 
-            FormulaEditorGUILayout.DrawHeader(
+            ZeroEngine.EditorUI.EditorUiGUILayout.Header(
                 string.IsNullOrEmpty(profile.WorkbenchTitle) ? FormulaEditorLabels.Workbench : profile.WorkbenchTitle,
-                $"{profile.DisplayName} ({profile.ProfileId})",
-                string.IsNullOrEmpty(profile.DefaultSearchRoot) ? string.Empty : $"{FormulaEditorLabels.FormulaRoot}: {profile.DefaultSearchRoot}");
+                string.IsNullOrEmpty(profile.DefaultSearchRoot)
+                    ? $"{profile.DisplayName} ({profile.ProfileId})"
+                    : $"{profile.DisplayName} ({profile.ProfileId}) · {FormulaEditorLabels.FormulaRoot}: {profile.DefaultSearchRoot}");
 
             FormulaEditorGUILayout.DrawSectionHeader(FormulaEditorLabels.Formula);
             EditorGUILayout.BeginVertical(EditorStyles.helpBox);

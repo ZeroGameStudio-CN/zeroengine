@@ -9,6 +9,7 @@ namespace ZeroEngine.Editor.Dialog
     /// <summary>
     /// Inspector panel for editing selected dialog node properties.
     /// </summary>
+    [ZeroEngine.EditorUI.EditorUiSurface]
     public class DialogNodeInspector : EditorWindow
     {
         private DialogNode _currentNode;
@@ -38,6 +39,10 @@ namespace ZeroEngine.Editor.Dialog
         private void BuildUI()
         {
             rootVisualElement.Clear();
+            ZeroEngine.EditorUI.EditorUiElements.ApplyWindowRoot(rootVisualElement);
+            rootVisualElement.Add(ZeroEngine.EditorUI.EditorUiElements.CreateHeader(
+                "Dialog Node Inspector",
+                "Edit the selected node without leaving the graph"));
 
             _scrollView = new ScrollView(ScrollViewMode.Vertical);
             _scrollView.style.flexGrow = 1;

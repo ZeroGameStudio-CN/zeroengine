@@ -8,6 +8,7 @@ namespace ZeroEngine.Editor.Shop
     /// <summary>
     /// 商店系统编辑器窗口
     /// </summary>
+    [ZeroEngine.EditorUI.EditorUiSurface]
     public class ShopEditorWindow : EditorWindow
     {
         private Vector2 _scrollPosition;
@@ -34,6 +35,7 @@ namespace ZeroEngine.Editor.Shop
 
         private void OnGUI()
         {
+            ZeroEngine.EditorUI.EditorUiGUILayout.Header("Shop Editor", "Manage shops, products, and statistics");
             DrawToolbar();
 
             _selectedTab = GUILayout.Toolbar(_selectedTab, _tabNames);
