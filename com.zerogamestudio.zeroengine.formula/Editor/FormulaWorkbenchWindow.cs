@@ -7,8 +7,11 @@ namespace ZeroEngine.Formula.Editor
     public sealed class FormulaWorkbenchWindow : EditorWindow
     {
         private FormulaAsset formula;
+        [System.NonSerialized]
         private FormulaEvaluationReport lastReport;
+        [System.NonSerialized]
         private FormulaPreviewBatchReport lastBatchReport;
+        [System.NonSerialized]
         private FormulaCurvePreviewReport lastCurveReport;
         private string lastBatchJson = string.Empty;
         private string lastBatchMarkdown = string.Empty;
