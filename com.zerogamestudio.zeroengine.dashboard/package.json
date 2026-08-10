@@ -1,11 +1,11 @@
 {
   "name": "com.zerogamestudio.zeroengine.dashboard",
-  "version": "3.0.0",
+  "version": "3.1.0",
   "displayName": "ZeroEngine Dashboard",
   "description": "ZeroEngine 可选编辑器工具中心，通过声明式描述符自动发现已安装模块。",
   "unity": "2022.3",
   "dependencies": {
-    "com.zerogamestudio.zeroengine.editor-ui": "1.0.0"
+    "com.zerogamestudio.zeroengine.editor-ui": "1.1.0"
   },
   "keywords": [
     "editor",

@@ -45,6 +45,21 @@ namespace ZeroEngine.Formula.Tests.Editor
             StringAssert.DoesNotContain("GUILayout.Button(\"Evaluate\"", combinedSource);
         }
 
+        [Test]
+        public void FormulaStudio_PreservesRoutesButUsesOneNormalWindowHost()
+        {
+            var workbenchSource = File.ReadAllText(Path.Combine(GetPackageRoot(), "Editor", "FormulaWorkbenchWindow.cs"));
+            var catalogSource = File.ReadAllText(Path.Combine(GetPackageRoot(), "Editor", "FormulaCatalogWindow.cs"));
+
+            StringAssert.Contains("FormulaStudioPage.Workbench", workbenchSource);
+            StringAssert.Contains("FormulaStudioPage.Catalog", workbenchSource);
+            StringAssert.Contains("FormulaCatalogPane", workbenchSource);
+            StringAssert.Contains("FormulaWorkbenchWindow.OpenCatalogWithProfile(profile);", catalogSource);
+            StringAssert.DoesNotContain("GetWindow<FormulaCatalogWindow>", catalogSource);
+            StringAssert.Contains("ZeroEngine/Formula/Formula Catalog", catalogSource);
+            StringAssert.Contains("ZeroEngine/Formula/Formula Workbench", workbenchSource);
+        }
+
         private static string GetPackageRoot()
         {
             var packageDirectory = Path.Combine("Packages", PackageName);

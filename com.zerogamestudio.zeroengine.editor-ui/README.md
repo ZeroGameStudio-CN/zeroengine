@@ -5,3 +5,5 @@ Editor-only visual primitives shared by ZeroEngine authoring tools. The package 
 Git URL consumers must add this package directly to `Packages/manifest.json` at the same ZeroEngine canonical revision as every consuming package. Unity 2022.3 does not resolve this sibling Git package transitively.
 
 Production windows use `EditorUiPalette.Current`, `EditorUiGUILayout`, and `EditorUiElements`. Tests may preview both palette variants through the package test assembly; preview code is not part of the production menu surface.
+
+Version 1.1.0 adds compact headers, action rows, chips, disclosure rows, constrained content, and a deterministic compact/standard breakpoint for Editor dashboards.

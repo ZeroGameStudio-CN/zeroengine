@@ -68,6 +68,11 @@ namespace ZeroEngine.Editor.Dashboard
         public string confirmation;
         public string availability;
         public string[] replaces;
+        public string section;
+        public string surfaceId;
+        public string surfaceDisplayName;
+        public string surfaceActionLabel;
+        public bool surfaceDefault;
     }
 
     internal sealed class DashboardDescriptorSource
@@ -158,7 +163,12 @@ namespace ZeroEngine.Editor.Dashboard
             DashboardEntryAvailability availability,
             IReadOnlyList<string> replaces,
             string mountModuleId,
-            string sourcePath)
+            string sourcePath,
+            string section,
+            string surfaceId,
+            string surfaceDisplayName,
+            string surfaceActionLabel,
+            bool surfaceDefault)
         {
             ModuleId = moduleId;
             Id = id;
@@ -175,6 +185,11 @@ namespace ZeroEngine.Editor.Dashboard
             Replaces = replaces ?? Array.Empty<string>();
             MountModuleId = mountModuleId ?? string.Empty;
             SourcePath = sourcePath;
+            Section = string.IsNullOrEmpty(section) ? "General" : section;
+            SurfaceId = surfaceId ?? string.Empty;
+            SurfaceDisplayName = surfaceDisplayName ?? string.Empty;
+            SurfaceActionLabel = surfaceActionLabel ?? string.Empty;
+            SurfaceDefault = surfaceDefault;
         }
 
         internal string ModuleId { get; }
@@ -193,8 +208,44 @@ namespace ZeroEngine.Editor.Dashboard
         internal string MountModuleId { get; }
         internal string DisplayModuleId => string.IsNullOrEmpty(MountModuleId) ? ModuleId : MountModuleId;
         internal string SourcePath { get; }
+        internal string Section { get; }
+        internal string SurfaceId { get; }
+        internal string SurfaceDisplayName { get; }
+        internal string SurfaceActionLabel { get; }
+        internal bool SurfaceDefault { get; }
         internal bool Isolated { get; set; }
         internal bool HiddenByReplacement { get; set; }
+        internal bool SurfaceGroupingRejected { get; set; }
+        internal string EffectiveSurfaceId => string.IsNullOrEmpty(SurfaceId) ? FullId : SurfaceId;
+    }
+
+    internal sealed class DashboardSurface
+    {
+        internal DashboardSurface(IReadOnlyList<DashboardEntry> entries)
+        {
+            Entries = entries
+                .OrderBy(entry => entry.Order)
+                .ThenBy(entry => entry.DisplayName, StringComparer.OrdinalIgnoreCase)
+                .ThenBy(entry => entry.FullId, StringComparer.Ordinal)
+                .ToArray();
+            DashboardEntry primary = Entries.FirstOrDefault(entry => entry.SurfaceDefault) ?? Entries[0];
+            DefaultEntry = primary;
+            SurfaceId = primary.EffectiveSurfaceId;
+            Section = primary.Section;
+            DisplayName = Entries.Select(entry => entry.SurfaceDisplayName)
+                              .FirstOrDefault(value => !string.IsNullOrEmpty(value)) ??
+                          primary.DisplayName;
+            Description = primary.Description;
+            Order = Entries.Min(entry => entry.Order);
+        }
+
+        internal string SurfaceId { get; }
+        internal string Section { get; }
+        internal string DisplayName { get; }
+        internal string Description { get; }
+        internal int Order { get; }
+        internal DashboardEntry DefaultEntry { get; }
+        internal IReadOnlyList<DashboardEntry> Entries { get; }
     }
 
     internal sealed class DashboardModule
@@ -233,6 +284,13 @@ namespace ZeroEngine.Editor.Dashboard
             Entries.Where(entry => !entry.Isolated && !entry.HiddenByReplacement).ToArray();
         internal IReadOnlyList<DashboardEntry> VisibleEntries =>
             _visibleEntries.Where(entry => !entry.Isolated && !entry.HiddenByReplacement).ToArray();
+        internal IReadOnlyList<DashboardSurface> VisibleSurfaces => VisibleEntries
+            .GroupBy(entry => entry.SurfaceGroupingRejected ? entry.FullId : entry.EffectiveSurfaceId, StringComparer.Ordinal)
+            .Select(group => new DashboardSurface(group.ToArray()))
+            .OrderBy(surface => surface.Order)
+            .ThenBy(surface => surface.DisplayName, StringComparer.OrdinalIgnoreCase)
+            .ThenBy(surface => surface.SurfaceId, StringComparer.Ordinal)
+            .ToArray();
 
         private readonly IReadOnlyList<DashboardEntry> _visibleEntries;
     }
@@ -333,6 +391,7 @@ namespace ZeroEngine.Editor.Dashboard
             IsolateEntryConflicts(entries, diagnostics);
             ValidateMountTargets(activeModules, entries, diagnostics);
             ApplyReplacements(activeModules, entries, installedNames, diagnostics);
+            ValidateSurfaceGroups(entries, diagnostics);
 
             DashboardEntry[] displayEntries = entries.Where(entry => !entry.Isolated).ToArray();
 
@@ -492,6 +551,10 @@ namespace ZeroEngine.Editor.Dashboard
             string menuPath = Trim(data.menuPath);
             string confirmation = Trim(data.confirmation);
             string mountModuleId = Trim(data.mountModuleId);
+            string section = Trim(data.section);
+            string surfaceId = Trim(data.surfaceId);
+            string surfaceDisplayName = Trim(data.surfaceDisplayName);
+            string surfaceActionLabel = Trim(data.surfaceActionLabel);
 
             if (!EntryIdPattern.IsMatch(id))
                 errors.Add(prefix + "id must be lowercase kebab-case.");
@@ -501,6 +564,14 @@ namespace ZeroEngine.Editor.Dashboard
                 errors.Add(prefix + "description must not contain markup.");
             if (!string.IsNullOrEmpty(mountModuleId) && !ModuleIdPattern.IsMatch(mountModuleId))
                 errors.Add(prefix + "mountModuleId must be a lowercase ASCII stable ID.");
+            if (!string.IsNullOrEmpty(surfaceId) && !EntryIdPattern.IsMatch(surfaceId))
+                errors.Add(prefix + "surfaceId must be lowercase kebab-case.");
+            if (ContainsMarkup(section))
+                errors.Add(prefix + "section must not contain markup.");
+            if (ContainsMarkup(surfaceDisplayName))
+                errors.Add(prefix + "surfaceDisplayName must not contain markup.");
+            if (ContainsMarkup(surfaceActionLabel))
+                errors.Add(prefix + "surfaceActionLabel must not contain markup.");
             if (!Categories.Contains(category))
                 errors.Add(prefix + "category is invalid.");
             if (!TryParseKind(data.kind, out DashboardEntryKind kind))
@@ -550,7 +621,49 @@ namespace ZeroEngine.Editor.Dashboard
                 availability,
                 replacements,
                 mountModuleId,
-                sourcePath);
+                sourcePath,
+                section,
+                surfaceId,
+                surfaceDisplayName,
+                surfaceActionLabel,
+                data.surfaceDefault);
+        }
+
+        private static void ValidateSurfaceGroups(
+            IReadOnlyList<DashboardEntry> entries,
+            List<DashboardDiagnostic> diagnostics)
+        {
+            foreach (IGrouping<string, DashboardEntry> group in entries
+                         .Where(entry => !entry.Isolated && !entry.HiddenByReplacement && !string.IsNullOrEmpty(entry.SurfaceId))
+                         .GroupBy(entry => entry.DisplayModuleId + "/" + entry.SurfaceId, StringComparer.Ordinal))
+            {
+                DashboardEntry[] members = group.ToArray();
+                if (members.Length < 2)
+                    continue;
+
+                DashboardEntry first = members[0];
+                string[] names = members.Select(entry => entry.SurfaceDisplayName)
+                    .Where(value => !string.IsNullOrEmpty(value))
+                    .Distinct(StringComparer.Ordinal)
+                    .ToArray();
+                bool valid = members.All(entry => entry.Kind == first.Kind) &&
+                             members.All(entry => entry.Availability == first.Availability) &&
+                             members.All(entry => entry.Safety == first.Safety) &&
+                             members.All(entry => string.Equals(entry.Section, first.Section, StringComparison.Ordinal)) &&
+                             names.Length <= 1 &&
+                             members.Count(entry => entry.SurfaceDefault) <= 1;
+                if (valid)
+                    continue;
+
+                foreach (DashboardEntry entry in members)
+                {
+                    entry.SurfaceGroupingRejected = true;
+                    diagnostics.Add(EntryError(
+                        "surface-contract-conflict",
+                        "Surface '" + group.Key + "' has incompatible kind, availability, safety, section, display name, or defaults; entries are shown separately.",
+                        entry));
+                }
+            }
         }
 
         private static void ValidateMountTargets(

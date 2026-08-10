@@ -29,6 +29,14 @@ namespace ZeroEngine.EditorUI.Tests.Editor
             Assert.That(EditorUiStyles.RequiresRebuild(true, true, false), Is.True);
         }
 
+        [TestCase(899f, EditorUiResponsiveMode.Compact)]
+        [TestCase(900f, EditorUiResponsiveMode.Standard)]
+        [TestCase(1200f, EditorUiResponsiveMode.Standard)]
+        public void ResponsiveMode_UsesStableDashboardBreakpoint(float width, EditorUiResponsiveMode expected)
+        {
+            Assert.That(EditorUiGUILayout.ResponsiveMode(width), Is.EqualTo(expected));
+        }
+
         private static void AssertContrast(Color foreground, Color background, float minimum, string label)
         {
             float foregroundLuminance = RelativeLuminance(foreground);

@@ -15,6 +15,9 @@ namespace ZeroEngine.EditorUI
         public static GUIStyle Metric { get; private set; }
         public static GUIStyle PrimaryButton { get; private set; }
         public static GUIStyle DestructiveButton { get; private set; }
+        public static GUIStyle CompactHeader { get; private set; }
+        public static GUIStyle ActionRow { get; private set; }
+        public static GUIStyle Chip { get; private set; }
 
         public static void EnsureCurrent()
         {
@@ -68,6 +71,28 @@ namespace ZeroEngine.EditorUI
 
             DestructiveButton = new GUIStyle(PrimaryButton);
             DestructiveButton.normal.textColor = palette.Error;
+
+            CompactHeader = new GUIStyle(EditorStyles.toolbar)
+            {
+                padding = new RectOffset(10, 8, 6, 6),
+                margin = new RectOffset(0, 0, 0, 4),
+                fixedHeight = 0f,
+                stretchHeight = false
+            };
+
+            ActionRow = new GUIStyle(GUIStyle.none)
+            {
+                padding = new RectOffset(8, 8, 7, 7),
+                margin = new RectOffset(0, 0, 0, 0)
+            };
+
+            Chip = new GUIStyle(EditorStyles.miniButton)
+            {
+                alignment = TextAnchor.MiddleCenter,
+                fontSize = 9,
+                padding = new RectOffset(6, 6, 1, 1),
+                fixedHeight = 18f
+            };
         }
 
         internal static bool RequiresRebuild(bool initialized, bool cachedProSkin, bool currentProSkin)

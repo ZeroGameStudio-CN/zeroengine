@@ -26,9 +26,9 @@
     {
       "targetId": "com.zerogamestudio.zeroengine.formula/formula-catalog",
       "descriptorFullId": "com.zerogamestudio.zeroengine.formula/formula-catalog",
-      "countsTowardModuleTotal": true,
-      "sourcePath": "com.zerogamestudio.zeroengine.formula/Editor/FormulaCatalogWindow.cs",
-      "typeName": "ZeroEngine.Formula.Editor.FormulaCatalogWindow",
+      "countsTowardModuleTotal": false,
+      "sourcePath": "com.zerogamestudio.zeroengine.formula/Editor/FormulaWorkbenchWindow.cs",
+      "typeName": "ZeroEngine.Formula.Editor.FormulaWorkbenchWindow",
       "technology": "imgui",
       "migrationStatus": "migrated",
       "integrationMethod": "OnGUI",

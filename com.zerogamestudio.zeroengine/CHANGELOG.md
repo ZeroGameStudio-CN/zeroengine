@@ -5,6 +5,11 @@ All notable changes to this package will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.1.0] - 2026-08-10
+
+- Reorganized the legacy Dashboard module as Core Tools with Content, Logic & Flow, World & Meta, and Diagnostics & Modding sections.
+- Updated Dashboard/editor-ui dependencies to 3.1.0/1.1.0 without changing window menu paths.
+
 ## [2.0.0] - 2026-08-10
 
 - Unified all Dashboard-exposed Editor windows on `com.zerogamestudio.zeroengine.editor-ui@1.0.0`.

@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.5.0
+
+- Merged Formula Catalog and Workbench into one Formula Studio window with two pages.
+- Preserved the existing menu paths and public open APIs through a compatibility facade.
+- Added Dashboard surface metadata so both routes render as one multi-action row.
+- Updated the Editor UI dependency to 1.1.0.
+
 ## 0.4.0
 
 - Unified Formula Catalog and Workbench on `com.zerogamestudio.zeroengine.editor-ui@1.0.0`.

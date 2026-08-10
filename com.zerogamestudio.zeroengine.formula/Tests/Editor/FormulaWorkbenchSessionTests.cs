@@ -16,7 +16,15 @@ namespace ZeroEngine.Formula.Tests.Editor
         public void Workbench_TransientReportsAreExcludedFromHotReloadSerialization()
         {
             const BindingFlags flags = BindingFlags.Instance | BindingFlags.NonPublic;
-            foreach (var fieldName in new[] { "lastReport", "lastBatchReport", "lastCurveReport" })
+            foreach (var fieldName in new[]
+                     {
+                         "lastReport",
+                         "lastBatchReport",
+                         "lastCurveReport",
+                         "lastBatchJson",
+                         "lastBatchMarkdown",
+                         "catalogPane"
+                     })
             {
                 var field = typeof(FormulaWorkbenchWindow).GetField(fieldName, flags);
                 Assert.That(field, Is.Not.Null, fieldName);

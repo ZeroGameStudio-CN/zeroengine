@@ -4,6 +4,12 @@ using UnityEngine;
 
 namespace ZeroEngine.EditorUI
 {
+    public enum EditorUiResponsiveMode
+    {
+        Compact,
+        Standard
+    }
+
     public enum EditorUiStatus
     {
         Neutral,
@@ -17,15 +23,28 @@ namespace ZeroEngine.EditorUI
     {
         public static void Header(string title, string subtitle, string context = null)
         {
+            CompactHeader(title, subtitle, context);
+        }
+
+        public static void CompactHeader(string title, string subtitle, string context = null, Action drawTrailing = null)
+        {
             EditorUiStyles.EnsureCurrent();
-            AccentLine(EditorUiPalette.Current.Accent, 3f);
-            using (new EditorGUILayout.VerticalScope(EditorUiStyles.Card))
+            using (new EditorGUILayout.HorizontalScope(EditorUiStyles.CompactHeader))
             {
-                GUILayout.Label(title, EditorUiStyles.HeaderTitle);
-                if (!string.IsNullOrWhiteSpace(subtitle))
-                    GUILayout.Label(subtitle, EditorUiStyles.HeaderSubtitle);
-                if (!string.IsNullOrWhiteSpace(context))
-                    GUILayout.Label(context, EditorStyles.miniLabel);
+                using (new EditorGUILayout.VerticalScope())
+                {
+                    GUILayout.Label(title, EditorUiStyles.HeaderTitle);
+                    if (!string.IsNullOrWhiteSpace(subtitle))
+                        GUILayout.Label(subtitle, EditorUiStyles.HeaderSubtitle);
+                    if (!string.IsNullOrWhiteSpace(context))
+                        GUILayout.Label(context, EditorStyles.miniLabel);
+                }
+
+                if (drawTrailing != null)
+                {
+                    GUILayout.FlexibleSpace();
+                    drawTrailing();
+                }
             }
         }
 
@@ -98,6 +117,51 @@ namespace ZeroEngine.EditorUI
             return GUILayout.Button(label, EditorUiStyles.DestructiveButton, options);
         }
 
+        public static void ActionRow(string title, string description, Action drawTrailing = null)
+        {
+            EditorUiStyles.EnsureCurrent();
+            using (new EditorGUILayout.HorizontalScope(EditorUiStyles.ActionRow))
+            {
+                using (new EditorGUILayout.VerticalScope())
+                {
+                    GUILayout.Label(title, EditorStyles.boldLabel);
+                    if (!string.IsNullOrWhiteSpace(description))
+                        GUILayout.Label(description, EditorStyles.wordWrappedMiniLabel);
+                }
+
+                if (drawTrailing != null)
+                {
+                    GUILayout.Space(EditorUiTokens.SpaceMd);
+                    drawTrailing();
+                }
+            }
+        }
+
+        public static void Chip(string text, params GUILayoutOption[] options)
+        {
+            if (string.IsNullOrWhiteSpace(text))
+                return;
+            EditorUiStyles.EnsureCurrent();
+            GUILayout.Label(text, EditorUiStyles.Chip, options);
+        }
+
+        public static bool Disclosure(bool expanded, string label)
+        {
+            return EditorGUILayout.Foldout(expanded, label, true);
+        }
+
+        public static EditorUiResponsiveMode ResponsiveMode(float width)
+        {
+            return width < EditorUiTokens.CompactBreakpoint
+                ? EditorUiResponsiveMode.Compact
+                : EditorUiResponsiveMode.Standard;
+        }
+
+        public static IDisposable ConstrainedContent(float maxWidth = EditorUiTokens.FormContentMaxWidth)
+        {
+            return new ConstrainedContentScope(maxWidth);
+        }
+
         public static Color StatusColor(EditorUiStatus status)
         {
             EditorUiPalette palette = EditorUiPalette.Current;
@@ -130,6 +194,23 @@ namespace ZeroEngine.EditorUI
             public void Dispose()
             {
                 EditorGUILayout.EndVertical();
+            }
+        }
+
+        private sealed class ConstrainedContentScope : IDisposable
+        {
+            public ConstrainedContentScope(float maxWidth)
+            {
+                EditorGUILayout.BeginHorizontal();
+                GUILayout.FlexibleSpace();
+                EditorGUILayout.BeginVertical(GUILayout.MaxWidth(maxWidth), GUILayout.ExpandWidth(true));
+            }
+
+            public void Dispose()
+            {
+                EditorGUILayout.EndVertical();
+                GUILayout.FlexibleSpace();
+                EditorGUILayout.EndHorizontal();
             }
         }
     }

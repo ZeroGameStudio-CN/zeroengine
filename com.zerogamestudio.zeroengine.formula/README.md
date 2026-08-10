@@ -15,7 +15,9 @@ Install from the ZeroEngine repository with Unity Package Manager:
 "com.zerogamestudio.zeroengine.formula": "https://github.com/liuzqk/zeroengine.git?path=com.zerogamestudio.zeroengine.formula#<commit>"
 ```
 
-Version 0.4.0 also requires a direct pin for `com.zerogamestudio.zeroengine.editor-ui@1.0.0` at the same commit. Unity 2022.3 does not resolve same-repository sibling packages transitively. Use a pinned commit for production projects.
+Version 0.5.0 requires a direct pin for `com.zerogamestudio.zeroengine.editor-ui@1.1.0` at the same commit. Unity 2022.3 does not resolve same-repository sibling packages transitively. Use a pinned commit for production projects.
+
+Formula Catalog and Formula Workbench now share one `Formula Studio` window with `Workbench` and `公式目录` pages. The original menu paths and public open methods remain compatible.
 
 ## Runtime Formula
 
@@ -152,7 +154,9 @@ The editor package includes reusable governance primitives:
 - `FormulaReferenceIndexer` for deterministic GUID reference matches
 - `FormulaAssetScanReportExporter` for JSON and Markdown reports
 - `FormulaRenamePlanner` for safe rename dry-runs before touching assets
-- `FormulaCatalogWindow` for project profile-driven formula catalog review
+- `FormulaWorkbenchWindow` / Formula Studio for profile-driven catalog review and formula previews
+
+`FormulaCatalogWindow` remains only as a deprecated compatibility facade; supported callers should use `FormulaWorkbenchWindow.OpenCatalogWithProfile`.
 
 These APIs are editor-only and do not change runtime formula evaluation.
 

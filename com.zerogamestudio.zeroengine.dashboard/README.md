@@ -1,6 +1,6 @@
 # ZeroEngine Dashboard
 
-ZeroEngine Dashboard 3.0 是一个可选、仅限 Unity Editor 的工具目录。它从已注册 UPM 包以及项目 `Assets/**/Editor/` 中读取 `ZeroEngineDashboardModule.json`，只展示所有者明确声明的窗口和命令。
+ZeroEngine Dashboard 3.1 是一个可选、仅限 Unity Editor 的工具目录。它从已注册 UPM 包以及项目 `Assets/**/Editor/` 中读取 `ZeroEngineDashboardModule.json`，只展示所有者明确声明的窗口和命令。
 
 ## 特性
 
@@ -10,6 +10,8 @@ ZeroEngine Dashboard 3.0 是一个可选、仅限 Unity Editor 的工具目录�
 - 对描述符错误、入口冲突、替代循环和失效菜单提供可见诊断。
 - `project-write` 与 `destructive` 命令执行前要求明确确认。
 - 项目适配入口可通过 `mountModuleId` 挂到已安装的通用模块，不产生独立项目 Tab。
+- 可选 `section` 将大型模块拆成可读分区；共享 `surfaceId` 可把同一宿主窗口的兼容入口合并为一行多动作。
+- Tools/System 两页自适应窄宽布局，技术 ID 与菜单路径默认折叠到 Details。
 - 不安装包、不写 manifest、不清理 PlayerPrefs/存档、不写项目资源。
 
 ## 安装
@@ -25,7 +27,7 @@ ZeroEngine Dashboard 3.0 是一个可选、仅限 Unity Editor 的工具目录�
 }
 ```
 
-Unity 2022.3 不会为 Git URL 包自动解析同仓 editor-ui；两项必须直接 pin 到同一提交。3.0.0 因此是显式升级边界。
+Unity 2022.3 不会为 Git URL 包自动解析同仓 editor-ui；两项必须直接 pin 到同一提交。3.1.0 要求 editor-ui 1.1.0。
 
 本地 `file:` 依赖只用于临时联调，不应进入共享分支。
 
@@ -47,6 +49,11 @@ Unity 2022.3 不会为 Git URL 包自动解析同仓 editor-ui；两项必须直
       "displayName": "Open Window",
       "description": "Open the existing module window.",
       "mountModuleId": "com.zerogamestudio.zeroengine.example",
+      "section": "Authoring",
+      "surfaceId": "example-studio",
+      "surfaceDisplayName": "Example Studio",
+      "surfaceActionLabel": "Open",
+      "surfaceDefault": true,
       "category": "authoring",
       "kind": "window",
       "menuPath": "ZeroEngine/Example/Open Window",
@@ -63,7 +70,15 @@ Dashboard 入口：`ZeroEngine > Dashboard`。
 
 `mountModuleId` 可省略；省略时入口显示在自己的模块下。指定后只改变展示归属，入口 ID、来源、替代关系和执行路径不变。目标模块缺失或冲突时入口会隐藏并进入 Diagnostics，不会回退成独立适配器 Tab。
 
+`section` 与全部 `surface*` 字段均可省略，旧描述符保持一入口一行。只有同一展示宿主内共享 `surfaceId` 且 kind、availability、safety、section、显示名和默认动作兼容的入口才会合并；冲突会显示诊断并安全回退为独立行。
+
 ## 版本历史
+
+### 3.1.0
+
+- Tools 与 System 两页替代分散的 Installed/Diagnostics Tab，并在窄窗口切换为紧凑模块选择器。
+- 增加 section/surface 描述符元数据、冲突诊断、渐进式 Details 和紧凑 action row。
+- Formula Catalog/Workbench 在 Dashboard 中显示为一个 Formula Studio surface。
 
 ### 3.0.0
 
