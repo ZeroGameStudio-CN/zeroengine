@@ -207,6 +207,52 @@ Different project paths may hold leases and run concurrently. Two Editors
 cannot share the same absolute project path; use a separate workspace/worktree
 for true Editor parallelism.
 
+### Isolated test farm
+
+Configure an explicit local capacity after checking Unity licensing and memory:
+
+```powershell
+umcp test farm provision --workers 2
+umcp test farm status
+```
+
+The default slot and artifact roots are private Supervisor state. A custom
+`--slot-root` is machine-local and must have enough space for one project and
+Library per worker. No Unity project files are changed by provision.
+
+From an active required workspace task, submit a precise scope:
+
+```powershell
+umcp test submit --project <root> --platform EditMode `
+  --test-filter Namespace.Fixture.Test `
+  --overlay-path Assets/Feature/File.cs `
+  --external-state-safe
+umcp test status --job <job-id>
+umcp test wait --job <job-id>
+umcp test cancel --job <job-id> --token-file <owner-token-file>
+```
+
+Use `--baseline-only` for a clean revision. Overlay mode requires each exact
+pending path, including both move ends and required `.meta` pairs; all must be
+covered by granted task write claims. Other pending paths are excluded. Git or
+Plastic conflicts, Incoming Changes, mutable `file:` packages, changing source
+fingerprints, unsupported SCM, or missing exact Unity versions fail closed to
+the serial router.
+
+`--external-state-safe` is an evidence statement, not a convenience switch.
+Unity's Editor persistent data is normally keyed by OS user and Company/Product,
+not project root, so do not parallelize scopes that access PlayerPrefs,
+`Application.persistentDataPath`, fixed ports, devices, or other shared writable
+state. Separate OS-account sandboxing is outside the first release.
+
+Each distinct baseline, critical-input, and overlay fingerprint starts cold on
+every slot. The farm reruns that first scope warm and compares exact test
+names/outcomes and infrastructure status. A mismatch disables that cache and
+quarantines the slot. Project/VCS mutation, timeout, or an unproved worker exit
+also quarantines only that slot; it never freezes or cleans the main project.
+After inspecting the artifacts, rerun `farm provision` to rebuild quarantined
+slot directories; provision refuses to repair outside the configured root.
+
 If a business request loses its response after dispatch, `umcp` exits with code
 7 and `outcome_unknown=true`; required-mode Unity commands also fence the task
 as `outcome_unknown`. Keep heartbeating while checking the effect. Expiry turns

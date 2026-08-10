@@ -35,6 +35,7 @@ from .service_state import (
     _unlink_with_retry,
     ensure_private_directory,
 )
+from .test_farm import open_test_jobs
 
 WORKSPACE_SCHEMA_VERSION = 2
 POLICY_SCHEMA_MIN = 1
@@ -289,7 +290,14 @@ def unregister_workspace_policy(
                 )
                 lease = inspect_project_lease(paths, canonical)
                 lease_queue = inspect_project_lease_queue(paths, canonical)
-                if task_count or claim_count or lease is not None or lease_queue:
+                test_jobs = open_test_jobs(paths, canonical)
+                if (
+                    task_count
+                    or claim_count
+                    or lease is not None
+                    or lease_queue
+                    or test_jobs
+                ):
                     raise ProjectBusyError(
                         "Cannot unregister while workspace coordination is active.",
                         details={
@@ -298,6 +306,8 @@ def unregister_workspace_policy(
                             "claim_count": claim_count,
                             "unity_lease_active": lease is not None,
                             "unity_lease_queue_count": len(lease_queue),
+                            "test_job_count": len(test_jobs),
+                            "test_jobs": test_jobs,
                         },
                     )
                 _unlink_with_retry(registration_path)
@@ -1644,6 +1654,31 @@ class WorkspaceCoordinator:
                 "freeze": freeze,
                 "resource_claim_ids": resource_claim_ids,
                 "legacy_lease_id": legacy_lease_id,
+            }
+
+    def authenticate_task_token(
+        self, token: str | None, *, expected_task_id: str
+    ) -> dict[str, Any]:
+        if not token:
+            raise UsageError(
+                f"Workspace task token is required via {TOKEN_ENVIRONMENT_VARIABLE}, "
+                "token file, or stdin."
+            )
+        with self._transaction() as connection:
+            task = connection.execute(
+                """
+                SELECT task_id, state, epoch FROM tasks
+                WHERE project_root = ? AND token_hash = ?
+                """,
+                (self.canonical_project_root, _token_hash(token)),
+            ).fetchone()
+            if task is None or str(task["task_id"]) != expected_task_id:
+                raise UsageError("Workspace task token does not own this test job.")
+            return {
+                "valid": True,
+                "task_id": str(task["task_id"]),
+                "state": str(task["state"]),
+                "epoch": int(task["epoch"]),
             }
 
     def _owned_claim(
