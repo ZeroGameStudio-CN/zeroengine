@@ -13,6 +13,18 @@ namespace ZeroEngine.Formula.Tests.Editor
     public sealed class FormulaWorkbenchSessionTests
     {
         [Test]
+        public void Workbench_TransientReportsAreExcludedFromHotReloadSerialization()
+        {
+            const BindingFlags flags = BindingFlags.Instance | BindingFlags.NonPublic;
+            foreach (var fieldName in new[] { "lastReport", "lastBatchReport", "lastCurveReport" })
+            {
+                var field = typeof(FormulaWorkbenchWindow).GetField(fieldName, flags);
+                Assert.That(field, Is.Not.Null, fieldName);
+                Assert.That(field.IsNotSerialized, Is.True, fieldName);
+            }
+        }
+
+        [Test]
         public void EvaluateBatch_IncludesCurrentInputAndPreviewCaseAssets()
         {
             var formula = CreateCoinFormula();
