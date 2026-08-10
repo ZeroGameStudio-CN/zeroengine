@@ -44,7 +44,10 @@ namespace ZeroEngine.Formula.Editor
                     selectedIndex = index;
             }
 
-            var nextIndex = EditorGUILayout.Popup(FormulaEditorLabels.Filter, selectedIndex, labels);
+            var nextIndex = EditorGUILayout.Popup(
+                new GUIContent(FormulaEditorLabels.Filter, FormulaEditorLabels.FilterTooltip),
+                selectedIndex,
+                labels);
             return values[nextIndex];
         }
 
@@ -90,7 +93,11 @@ namespace ZeroEngine.Formula.Editor
 
             EditorGUILayout.BeginHorizontal();
             GUILayout.FlexibleSpace();
-            if (GUILayout.Button(FormulaEditorLabels.ResetPreviewInputs, GUILayout.Width(120f)))
+            if (GUILayout.Button(
+                    new GUIContent(
+                        FormulaEditorLabels.ResetPreviewInputs,
+                        FormulaEditorLabels.ResetPreviewInputsTooltip),
+                    GUILayout.Width(120f)))
                 state.ResetToDefaults(profile);
             EditorGUILayout.EndHorizontal();
             EditorGUILayout.EndVertical();

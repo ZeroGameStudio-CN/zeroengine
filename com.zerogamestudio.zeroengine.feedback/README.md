@@ -2,6 +2,8 @@
 
 Minimal player feedback UI on top of the queue-first ZGS Analytics submission service.
 
+Version 1.0.2 localizes the Dashboard setup label, tooltip, and write confirmation to Simplified Chinese without changing the installer route.
+
 ## Install
 
 Pin this package, `com.zerogamestudio.analytics`, and `com.zerogamestudio.zeroengine.ui`

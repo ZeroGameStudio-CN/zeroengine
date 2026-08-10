@@ -1,15 +1,15 @@
 {
   "schemaVersion": 1,
   "moduleId": "com.zerogamestudio.zeroengine.config-pipeline",
-  "displayName": "Config Pipeline",
-  "description": "Schema-first configuration authoring, validation, and artifact generation.",
+  "displayName": "配置管线",
+  "description": "基于 Schema 的配置编写、校验与产物生成工具。",
   "order": 200,
   "documentationPath": "README.md",
   "entries": [
     {
       "id": "config-pipeline",
-      "displayName": "Config Pipeline",
-      "description": "Open the existing Config Pipeline project window.",
+      "displayName": "配置管线",
+      "description": "打开现有的配置管线项目窗口。",
       "category": "authoring",
       "kind": "window",
       "menuPath": "ZGS/Config Pipeline",

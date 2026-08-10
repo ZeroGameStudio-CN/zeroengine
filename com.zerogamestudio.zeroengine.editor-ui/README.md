@@ -7,3 +7,5 @@ Git URL consumers must add this package directly to `Packages/manifest.json` at 
 Production windows use `EditorUiPalette.Current`, `EditorUiGUILayout`, and `EditorUiElements`. Tests may preview both palette variants through the package test assembly; preview code is not part of the production menu surface.
 
 Version 1.1.0 adds compact headers, action rows, chips, disclosure rows, constrained content, and a deterministic compact/standard breakpoint for Editor dashboards.
+
+Version 1.1.1 adds `GUIContent` overloads for buttons, action rows, chips, selections, and disclosures so package-owned labels can provide localized tooltips.

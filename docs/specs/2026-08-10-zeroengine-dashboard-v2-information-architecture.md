@@ -2,10 +2,10 @@
 
 - 状态：Final
 - 最后更新：2026-08-10
-- 设计基线：ZeroEngine canonical `3b63c7dbe2c68298d862c1e0ac243c5ea6afc227`；POB `/main cs:16809`
+- 设计基线：ZeroEngine canonical `d2648688871fcc1bf6f702d31227172c16c75a29`；POB `/main cs:16809`
 - 设计批准：Approved；用户于 2026-08-10 明确将本轮审查合同改为当前会话单审
-- 执行授权：Authorized；仅限本 spec 的实现、发布与 POB 消费工程 rollout
-- 终端操作授权：Authorized；用户于 2026-08-10 回复“继续”授权既定 PR/merge、canonical pin 与精确 Plastic checkin
+- 执行授权：Authorized；覆盖本 spec、简体中文 label/tooltip 增量及 POB 消费工程 rollout
+- 终端操作授权：Authorized；用户于 2026-08-10 回复“继续”授权中文化增量 PR/merge、最终 canonical pin 与精确 Plastic checkin
 
 ## 结论
 
@@ -33,7 +33,7 @@
 - 不改业务数据、序列化、Profile 内容、扫描/写入时机、Undo、dirty、确认或 EditorPrefs 语义。
 - 不把 Data Manager 与 Configurator 合成窗口，不把不同安全等级的操作放进同一主操作区。
 - 不在本轮合并 Behavior Tree Editor/Viewer、Tutorial Editor/Graph、Dialog Graph/Node Inspector、Mod Creator/Validator；只记录候选，不产生兼容性承诺。
-- 不统一全部业务文案语言；只统一 Dashboard shell 的用户可见词汇和信息层级。
+- 不翻译 29 个被启动业务编辑器各自的内部领域 UI；本轮语言范围是 Dashboard shell、正式模块描述符和唯一合并工作面 Formula Studio。
 
 ## 已确认问题
 
@@ -88,6 +88,15 @@ Dashboard 只保留两个一级页：
 Catalog 不改 `FullId`、mount、replacement 或执行对象，只构造只读 `DashboardSurface` 投影供 UI 使用。surface 成员必须属于同一显示宿主、同一 `kind`、同一 availability 和同一 safety；冲突产生明确 diagnostic，并回退为独立行，不能静默丢入口。
 
 Formula 上游和 POB adapter 的 Catalog/Workbench 两条 entry 保留原 `FullId` 与 `replaces`，但共享 `surfaceId=formula-studio`；Dashboard 因此显示一行 `Formula Studio`，提供 `Catalog` 与 `Workbench` 两个次级动作。POB descriptor 的主显示名去掉重复 `POB` 前缀，context chip 仍明确当前适配器。
+
+### 简体中文 label 与 tooltip
+
+- Dashboard 固定为简体中文编辑器界面；不增加语言选择器、运行时 Localization 包或 EditorPrefs 状态。`ZeroEngine`、`ZGS`、`TCE`、`UI`、`POB` 等品牌/约定缩写可保留。
+- 8 份正式上游描述符和 2 份 POB adapter 描述符的模块名、入口名、说明、section、surface 名、动作名及确认文案使用简体中文。第三方或未来项目描述符仍按其原文显示，不由 Dashboard 猜测翻译。
+- 模块 ID、entry ID、`surfaceId`、category/safety 枚举、菜单路径、包名、诊断码和来源路径保持原值；搜索继续匹配中文展示文案以及这些技术字段。
+- 所有 Dashboard 可操作控件提供简体中文 tooltip：一级页签、刷新、搜索/清空、模块选择、文档/网页、详情 disclosure、surface 动作以及 System 折叠项。surface 动作 tooltip 直接使用对应 entry 的描述，避免维护第二份含义不同的说明。
+- Formula Studio 的窗口标题、页签、固定 label、按钮及其 tooltip 使用简体中文；Profile 名、资产名、路径、JSON/Markdown 和公式业务数据保持原值。
+- tooltip 通过 `GUIContent` 和公共 Editor UI 控件传递，不以仅在代码注释中存在的文本充数；危险/写入动作的中文确认与安全 chip 不得因翻译弱化。
 
 ## Formula Studio 合并
 
@@ -145,7 +154,7 @@ Ability、Achievement、Inventory、Quest、Shop、Settings 等独立领域编�
 - legacy `com.zerogamestudio.zeroengine/Editor/ZeroEngineDashboardModule.json`
 - 既有 Dashboard/editor-ui test wrappers；不新增全项目 Run All
 
-本轮包版本采用兼容性可见的 minor 更新：Dashboard `3.1.0`、editor-ui `1.1.0`、legacy `2.1.0`；0.x Formula 以 `0.5.0` 标记窗口与 descriptor 行为变化。对应 package.json、README、CHANGELOG 和静态版本门必须同批更新；不改变既有 editor-ui 直接 pin 合同。
+V2 主变更版本为 Dashboard `3.1.0`、editor-ui `1.1.0`、legacy `2.1.0`、Formula `0.5.0`。简体中文增量对实际改动包执行 patch bump：Dashboard `3.1.1`、editor-ui `1.1.1`、Formula `0.5.1`、legacy `2.1.1`，以及 analytics/config-pipeline/data-toolkit/feedback/TCE/UI 各自当前版本的 patch；对应 package.json、README/CHANGELOG 与静态版本门同批更新，不改变既有 editor-ui 直接 pin 合同。
 
 ### POB
 
@@ -174,16 +183,17 @@ POB Data Manager、Configurator、Formula Profile 和生产配置逻辑不改；
 3. 重写 Dashboard shell 为 Tools/System、响应式模块选择和行式内容；更新 legacy 分组及 POB 通用显示名。
 4. 将 Formula Catalog 内容拆为 pane/controller，由 Workbench host 提供 Catalog/Workbench 页签；保留所有兼容入口。
 5. 更新唯一 editor-ui coverage：28 条 descriptor 记录仍逐 FullId 保留，Formula 两条都绑定 `FormulaWorkbenchWindow` 和 `formula-studio`；Data Toolkit 与 Dashboard shell 记录仍单列。28 条上游 descriptor route 合并为 27 个唯一窗口类型；coverage 中的 POB Data Toolkit 宿主使正常类型为 28 个，POB Configurator 补齐后合并验收为 29 个，Dashboard shell 单列。`FormulaCatalogWindow` 只做 compatibility API 测试，不计入视觉 surface 总数。
-6. 跑静态门、Dashboard/Formula/editor-ui 最窄测试和全模块编译；再在安全 live Editor 路线验证 Dashboard、Formula 两个旧菜单与 POB 两个旧菜单只产生一个 Formula 窗口、最终 Console 0。
-7. 视觉人工门核对 760/960/1440、真实当前 Unity 主题、长路径/长文案、零诊断/有诊断和 POB adapter 状态。
-8. 终端提交、PR、canonical pin 和 Plastic checkin 在用户明确授权后执行；本轮授权已取得。
+6. 将 Dashboard shell、正式描述符、POB adapter 与 Formula Studio 固定文案翻译为简体中文，并通过共享 `GUIContent` 控件补齐动作 tooltip。
+7. 跑静态门、Dashboard/Formula/editor-ui 最窄测试和全模块编译；再在安全 live Editor 路线验证 Dashboard、Formula 两个旧菜单与 POB 两个旧菜单只产生一个 Formula 窗口、最终 Console 0。
+8. 视觉人工门核对 760/960/1440、真实当前 Unity 主题、长路径/长文案、零诊断/有诊断和 POB adapter 状态。
+9. 终端提交、PR、canonical pin 和 Plastic checkin 在用户明确授权后执行；本轮授权已取得。
 
 ## 验证与验收标准
 
-1. Dashboard 只有 `Tools`、`System` 两个一级页；System 同时包含 diagnostics、installed packages 和 project adapters，当前页搜索对所有可见集合生效。
+1. Dashboard 只有“工具”“系统”两个一级页；系统页同时包含诊断、已安装包和项目适配器，当前页搜索对所有可见集合生效。
 2. 760、960、1440 point 下无重叠、横向截断、无滚动截断或不可达主操作；小于 900 point 使用 module popup，大于等于 900 使用 196-point sidebar。
 3. Header 不再使用完整 help-box hero；module ID、source path、menu path 默认不可见但可在 Details 中复制。
-4. legacy 23 条入口按四个 section 呈现，用户可见模块名为 `Core Tools`，内部 module ID、FullId 和顺序不变。
+4. legacy 23 条入口按四个 section 呈现，用户可见模块名为“核心工具”，内部 module ID、FullId 和顺序不变。
 5. 旧 schema v1 描述符不加新字段仍可加载；非法 surface 组合产生 diagnostic 并逐 entry 回退，任何入口、确认和错误证据都不丢失。
 6. Formula 上游和 POB 的两个原 FullId 在 Dashboard 各折叠为一个 Formula Studio surface；Catalog/Workbench 次级动作仍分别执行原 menu path。
 7. 四个原 Formula 菜单与三个公开 Open API 均打开同一个正常 FormulaWorkbenchWindow 实例并选择正确页签；Catalog→Workbench 传递公式且不新建第二个 tab。
@@ -191,10 +201,13 @@ POB Data Manager、Configurator、Formula Profile 和生产配置逻辑不改；
 9. POB adapter 不在 module sidebar 形成独立项，入口主标题无重复 `POB` 前缀，但当前 Profile/adapter 仍以文字 context chip 可见。
 10. Data Manager 与 Configurator 保持不同宿主和两个独立窗口；Apply/project-write 标签和原确认/执行路径不弱化。
 11. coverage 仍逐项覆盖 28 条上游 descriptor FullId，Formula 两条 route 共同指向一个 host；上游 descriptor route 为 27 个唯一窗口类型，加入 POB Data Toolkit 宿主为 28 个，再加入 Configurator 后为 29 个，Dashboard shell 单列，compatibility-only Catalog facade 不混入视觉计数。
-12. Dashboard/editor-ui/Formula/legacy 的版本分别为 `3.1.0/1.1.0/0.5.0/2.1.0`，package、README、CHANGELOG 与静态门一致。
+12. Dashboard/editor-ui/Formula/legacy 的中文增量版本分别为 `3.1.1/1.1.1/0.5.1/2.1.1`，package、README、CHANGELOG 与静态门一致。
 13. editor-ui、Dashboard、Formula、legacy descriptor 静态门与各自具名 EditMode lane 通过；不运行 Unity Test Runner Run All。
 14. live Editor 从 Dashboard、两个上游 Formula 旧菜单和两个 POB Formula 旧菜单验证窗口可见、页签正确、只有一个 Formula host，最终 Console 0 error；验证前后 POB 生产配置哈希和任务外 Plastic pending 不变。
 15. 按用户最新授权采用当前会话单审；最终 spec/diff 的 Critical、Important 均为 0。任何材料设计变更都会使本轮审查证据失效并要求重新自审。
+16. Dashboard shell、8 份正式上游描述符、2 份 POB adapter 描述符和 Formula Studio 的固定用户文案均为简体中文；品牌缩写与技术字段除外，菜单/API/ID 不变。
+17. Dashboard 页签、刷新、搜索/清空、模块选择、文档/网页、详情、surface 动作、System 折叠项及 Formula Studio 的页签和按钮均有非空简体中文 tooltip；写入动作同时保留中文安全提示与确认。
+18. 自动化测试验证中文展示、tooltip 传递、中文搜索及旧英文菜单/API 兼容；live Editor 最终可见 Dashboard/Formula Studio 且 Console 0 error。
 
 ## 回滚
 
@@ -215,8 +228,8 @@ POB Data Manager、Configurator、Formula Profile 和生产配置逻辑不改；
 
 ## 实施进度（2026-08-10）
 
-- ZeroEngine 工作树已完成 Tools/System、响应式布局、section/surface 投影、Formula Studio 单宿主、公共 UI primitives、版本与文档更新。
-- POB 的两份 adapter descriptor 与两份 coverage 文件已完成本地更新；required 控制面最终为 tasks=0、claims=0、unity=false，4 路 pending 均为 protect。manifest/lock 未改。
-- 已通过两条 descriptor/coverage 静态门；Dashboard dashboard-only 为 50/51、with-modules 为 148/148，后续 Catalog 定向复跑为 43/44（均只有既有 ignored）；editor-ui 的 Formula/legacy-all lane 通过；Formula 专项 EditMode 96/96。
-- `ProjectSettings/EditorSettings.asset` SHA-256 仍为基线 `4dd4fa6db8124857132b771bf1cda0127b49c462dc3212342deee3cc4d44488a`，且不 pending；POB manifest/lock 不 pending。
-- 进行中：发布 canonical、POB manifest/lock pin、POB live Editor 760/960/1440 视觉门、菜单单宿主检查与最终 Console；完成后以本节追加的 rollout 证据收口。
+- ZeroEngine Dashboard V2 已通过 PR #30 合并为 canonical `d2648688871fcc1bf6f702d31227172c16c75a29`；简体中文 label/tooltip 增量正在独立分支实现。
+- POB 的两份 adapter descriptor、两份 coverage 文件及 manifest/lock 已形成 6 路本地 pending；菜单导航 unknown 已以 `contained` 恢复为 epoch 5，当前 tasks=0、claims=0、unity=false，后续必须重新领养六路径。
+- 中文化增量本地实现与自审已完成：两条 descriptor/coverage 静态门通过，46 份 package/descriptor JSON 可解析，`git diff --check` 通过；Dashboard dashboard-only 为 52/53（仅 1 个既有 ignored）、with-modules 为 150/150；editor-ui 的 editor-ui/Formula/legacy-all lane 通过；Formula 专项 EditMode 96/96。
+- `ProjectSettings/EditorSettings.asset` SHA-256 基线为 `4dd4fa6db8124857132b771bf1cda0127b49c462dc3212342deee3cc4d44488a` 且不 pending；POB 六路 Dashboard 目标 pending 保留，进入 POB 阶段前必须按 required 合同精确重新领养。
+- 进行中：中文化增量 PR、新 canonical pin、POB live Editor 可见窗口门、菜单单宿主检查与最终 Console；完成后以本节追加 rollout 证据收口。

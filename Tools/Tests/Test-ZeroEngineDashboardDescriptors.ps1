@@ -47,6 +47,7 @@ $allowedKinds = @('window', 'command')
 $allowedSafety = @('navigation', 'read-only', 'project-write', 'destructive')
 $allowedAvailability = @('always', 'edit-mode', 'play-mode')
 $stableModuleIdPattern = '^[a-z0-9]+(?:[.-][a-z0-9]+)*$'
+$hanPattern = '[\u3400-\u9fff]'
 
 Assert-Condition ('project.target' -match $stableModuleIdPattern) 'Stable module ID validation rejected a valid fixture.'
 Assert-Condition ('Project Target' -notmatch $stableModuleIdPattern) 'Stable module ID validation accepted an invalid fixture.'
@@ -62,6 +63,7 @@ foreach ($descriptorPath in $descriptorPaths) {
     Assert-Condition ($descriptor.moduleId -match $stableModuleIdPattern) "Invalid moduleId '$($descriptor.moduleId)' in $descriptorPath"
     Assert-Condition ($descriptor.moduleId -eq $package.name) "moduleId must equal package name in $descriptorPath"
     Assert-Condition (-not [string]::IsNullOrWhiteSpace($descriptor.displayName)) "displayName is required: $descriptorPath"
+    Assert-Condition ($descriptor.description -match $hanPattern) "Chinese module description is required: $descriptorPath"
     Assert-Condition ($null -ne $descriptor.entries) "entries is required: $descriptorPath"
 
     $ids = @{}
@@ -73,6 +75,17 @@ foreach ($descriptorPath in $descriptorPaths) {
         Assert-Condition ($entry.id -match '^[a-z0-9]+(?:-[a-z0-9]+)*$') "Invalid entry id '$($entry.id)' in $descriptorPath"
         Assert-Condition (-not $ids.ContainsKey($entry.id)) "Duplicate entry id '$($entry.id)' in $descriptorPath"
         $ids[$entry.id] = $true
+        Assert-Condition ($entry.displayName -match $hanPattern) "Chinese entry displayName is required for '$($entry.id)' in $descriptorPath"
+        Assert-Condition ($entry.description -match $hanPattern) "Chinese entry description/tooltip is required for '$($entry.id)' in $descriptorPath"
+        if (-not [string]::IsNullOrWhiteSpace($entry.section)) {
+            Assert-Condition ($entry.section -match $hanPattern) "Chinese section is required for '$($entry.id)' in $descriptorPath"
+        }
+        if (-not [string]::IsNullOrWhiteSpace($entry.surfaceDisplayName)) {
+            Assert-Condition ($entry.surfaceDisplayName -match $hanPattern) "Chinese surfaceDisplayName is required for '$($entry.id)' in $descriptorPath"
+        }
+        if (-not [string]::IsNullOrWhiteSpace($entry.surfaceActionLabel)) {
+            Assert-Condition ($entry.surfaceActionLabel -match $hanPattern) "Chinese surfaceActionLabel is required for '$($entry.id)' in $descriptorPath"
+        }
         Assert-Condition ($allowedCategories -contains $entry.category) "Invalid category for '$($entry.id)' in $descriptorPath"
         if (-not [string]::IsNullOrWhiteSpace($entry.mountModuleId)) {
             Assert-Condition ($entry.mountModuleId -match $stableModuleIdPattern) "Invalid mountModuleId for '$($entry.id)' in $descriptorPath"
@@ -89,6 +102,7 @@ foreach ($descriptorPath in $descriptorPaths) {
         }
         if ($entry.safety -in @('project-write', 'destructive')) {
             Assert-Condition (-not [string]::IsNullOrWhiteSpace($entry.confirmation)) "Write-capable entry '$($entry.id)' needs confirmation"
+            Assert-Condition ($entry.confirmation -match $hanPattern) "Write-capable entry '$($entry.id)' needs a Chinese confirmation"
         }
     }
 
@@ -101,10 +115,10 @@ foreach ($descriptorPath in $descriptorPaths) {
 $dashboardRoot = Join-Path $RootPath 'com.zerogamestudio.zeroengine.dashboard'
 $dashboardPackage = Get-Content -LiteralPath (Join-Path $dashboardRoot 'package.json') -Raw -Encoding UTF8 | ConvertFrom-Json
 $dashboardAsmdef = Get-Content -LiteralPath (Join-Path $dashboardRoot 'Editor\ZeroEngine.Dashboard.Editor.asmdef') -Raw -Encoding UTF8 | ConvertFrom-Json
-Assert-Condition ($dashboardPackage.version -eq '3.1.0') 'Dashboard package version must be 3.1.0.'
+Assert-Condition ($dashboardPackage.version -eq '3.1.1') 'Dashboard package version must be 3.1.1.'
 $dashboardDependencies = @($dashboardPackage.dependencies.psobject.Properties)
 Assert-Condition ($dashboardDependencies.Count -eq 1) 'Dashboard package must depend only on editor-ui.'
-Assert-Condition ($dashboardDependencies[0].Name -eq 'com.zerogamestudio.zeroengine.editor-ui' -and $dashboardDependencies[0].Value -eq '1.1.0') 'Dashboard editor-ui dependency must be exactly 1.1.0.'
+Assert-Condition ($dashboardDependencies[0].Name -eq 'com.zerogamestudio.zeroengine.editor-ui' -and $dashboardDependencies[0].Value -eq '1.1.1') 'Dashboard editor-ui dependency must be exactly 1.1.1.'
 $dashboardReferences = @($dashboardAsmdef.references)
 Assert-Condition ($dashboardReferences.Count -eq 1 -and $dashboardReferences[0] -eq 'ZeroEngine.EditorUI.Editor') 'Dashboard production asmdef must reference only editor-ui.'
 Assert-Condition (@($dashboardAsmdef.includePlatforms).Count -eq 1 -and $dashboardAsmdef.includePlatforms[0] -eq 'Editor') 'Dashboard production asmdef must be Editor-only.'

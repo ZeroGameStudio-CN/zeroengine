@@ -12,7 +12,11 @@ namespace ZeroEngine.Formula.Editor
     [ZeroEngine.EditorUI.EditorUiSurface]
     public sealed class FormulaWorkbenchWindow : EditorWindow
     {
-        private static readonly string[] PageNames = { FormulaEditorLabels.Workbench, "公式目录" };
+        private static readonly GUIContent[] PageNames =
+        {
+            new GUIContent(FormulaEditorLabels.Workbench, FormulaEditorLabels.WorkbenchTooltip),
+            new GUIContent(FormulaEditorLabels.CatalogPage, FormulaEditorLabels.CatalogPageTooltip)
+        };
 
         [SerializeField]
         private FormulaAsset formula;
@@ -82,8 +86,8 @@ namespace ZeroEngine.Formula.Editor
                 FormulaEditorProfileRegistry.SetActiveProfile(profile.ProfileId);
             }
 
-            var window = GetWindow<FormulaWorkbenchWindow>("Formula Studio");
-            window.titleContent = new GUIContent("Formula Studio");
+            var window = GetWindow<FormulaWorkbenchWindow>(FormulaEditorLabels.Studio);
+            window.titleContent = new GUIContent(FormulaEditorLabels.Studio, FormulaEditorLabels.StudioTooltip);
             if (selectedFormula != null)
                 window.formula = selectedFormula;
             window.activePage = page;
@@ -100,7 +104,7 @@ namespace ZeroEngine.Formula.Editor
             lastCurveReport = null;
             lastBatchJson = string.Empty;
             lastBatchMarkdown = string.Empty;
-            titleContent = new GUIContent("Formula Studio");
+            titleContent = new GUIContent(FormulaEditorLabels.Studio, FormulaEditorLabels.StudioTooltip);
             if (activePage == FormulaStudioPage.Catalog)
                 EnsureCatalogPane(true);
         }
@@ -109,7 +113,7 @@ namespace ZeroEngine.Formula.Editor
         {
             var profile = FormulaEditorProfileRegistry.ActiveProfile;
             ZeroEngine.EditorUI.EditorUiGUILayout.Header(
-                "Formula Studio",
+                FormulaEditorLabels.Studio,
                 string.IsNullOrEmpty(profile.DefaultSearchRoot)
                     ? $"{profile.DisplayName} ({profile.ProfileId})"
                     : $"{profile.DisplayName} ({profile.ProfileId}) · {FormulaEditorLabels.FormulaRoot}: {profile.DefaultSearchRoot}");
@@ -135,11 +139,15 @@ namespace ZeroEngine.Formula.Editor
 
             FormulaEditorGUILayout.DrawSectionHeader(FormulaEditorLabels.Formula);
             EditorGUILayout.BeginVertical(EditorStyles.helpBox);
-            formula = (FormulaAsset)EditorGUILayout.ObjectField(FormulaEditorLabels.Formula, formula, typeof(FormulaAsset), false);
+            formula = (FormulaAsset)EditorGUILayout.ObjectField(
+                new GUIContent(FormulaEditorLabels.Formula, FormulaEditorLabels.FormulaTooltip),
+                formula,
+                typeof(FormulaAsset),
+                false);
             EditorGUILayout.EndVertical();
 
             FormulaEditorGUILayout.DrawPreviewInputs(profile, previewState);
-            if (GUILayout.Button(FormulaEditorLabels.Evaluate))
+            if (GUILayout.Button(new GUIContent(FormulaEditorLabels.Evaluate, FormulaEditorLabels.EvaluateTooltip)))
                 Evaluate(profile);
 
             if (lastReport == null)
@@ -201,11 +209,14 @@ namespace ZeroEngine.Formula.Editor
             {
                 EditorGUILayout.BeginHorizontal();
                 var asset = (FormulaPreviewCaseAsset)EditorGUILayout.ObjectField(
+                    new GUIContent("样例 " + (index + 1), FormulaEditorLabels.PreviewCaseTooltip),
                     session.PreviewCaseAssets[index],
                     typeof(FormulaPreviewCaseAsset),
                     false);
                 session.SetPreviewCaseAssetAt(index, asset);
-                if (GUILayout.Button("-", GUILayout.Width(24f)))
+                if (GUILayout.Button(
+                        new GUIContent("−", FormulaEditorLabels.RemovePreviewCaseTooltip),
+                        GUILayout.Width(24f)))
                 {
                     session.RemovePreviewCaseAssetAt(index);
                     EditorGUILayout.EndHorizontal();
@@ -215,10 +226,14 @@ namespace ZeroEngine.Formula.Editor
                 EditorGUILayout.EndHorizontal();
             }
 
-            if (GUILayout.Button(FormulaEditorLabels.AddPreviewCase))
+            if (GUILayout.Button(new GUIContent(
+                    FormulaEditorLabels.AddPreviewCase,
+                    FormulaEditorLabels.AddPreviewCaseTooltip)))
                 session.AddPreviewCaseAssetSlot();
 
-            if (GUILayout.Button(FormulaEditorLabels.EvaluatePreviewCases))
+            if (GUILayout.Button(new GUIContent(
+                    FormulaEditorLabels.EvaluatePreviewCases,
+                    FormulaEditorLabels.EvaluatePreviewCasesTooltip)))
             {
                 lastBatchReport = session.EvaluateBatch(formula, profile, previewState.ToValueSet(profile));
                 lastBatchJson = session.ExportBatchJson(lastBatchReport);
@@ -246,12 +261,28 @@ namespace ZeroEngine.Formula.Editor
             for (var index = 0; index < profile.PreviewInputs.Count; index++)
                 inputNames[index] = profile.PreviewInputs[index].DisplayName;
 
-            curveInputIndex = EditorGUILayout.Popup(FormulaEditorLabels.CurveInput, curveInputIndex, inputNames);
-            EditorGUILayout.MinMaxSlider(FormulaEditorLabels.CurveRange, ref curveMin, ref curveMax, -1000f, 1000f);
-            EditorGUILayout.LabelField(FormulaEditorLabels.CurveRange, $"{curveMin:0.###} - {curveMax:0.###}");
-            curveSamples = EditorGUILayout.IntSlider(FormulaEditorLabels.CurveSamples, curveSamples, 2, 64);
+            curveInputIndex = EditorGUILayout.Popup(
+                new GUIContent(FormulaEditorLabels.CurveInput, FormulaEditorLabels.CurveInputTooltip),
+                curveInputIndex,
+                inputNames);
+            EditorGUILayout.MinMaxSlider(
+                new GUIContent(FormulaEditorLabels.CurveRange, FormulaEditorLabels.CurveRangeTooltip),
+                ref curveMin,
+                ref curveMax,
+                -1000f,
+                1000f);
+            EditorGUILayout.LabelField(
+                new GUIContent(FormulaEditorLabels.CurveRange, FormulaEditorLabels.CurveRangeTooltip),
+                new GUIContent($"{curveMin:0.###} - {curveMax:0.###}"));
+            curveSamples = EditorGUILayout.IntSlider(
+                new GUIContent(FormulaEditorLabels.CurveSamples, FormulaEditorLabels.CurveSamplesTooltip),
+                curveSamples,
+                2,
+                64);
 
-            if (GUILayout.Button(FormulaEditorLabels.BuildCurve))
+            if (GUILayout.Button(new GUIContent(
+                    FormulaEditorLabels.BuildCurve,
+                    FormulaEditorLabels.BuildCurveTooltip)))
             {
                 session.SetCurve(profile.PreviewInputs[curveInputIndex].Key, curveMin, curveMax, curveSamples);
                 lastCurveReport = session.BuildCurve(formula, profile, previewState.ToValueSet(profile));
@@ -267,7 +298,9 @@ namespace ZeroEngine.Formula.Editor
                 keys[index] = new Keyframe(point.Input, point.Result);
             }
 
-            EditorGUILayout.CurveField(FormulaEditorLabels.CurvePreview, new AnimationCurve(keys));
+            EditorGUILayout.CurveField(
+                new GUIContent(FormulaEditorLabels.CurvePreview, FormulaEditorLabels.BuildCurveTooltip),
+                new AnimationCurve(keys));
         }
     }
 }

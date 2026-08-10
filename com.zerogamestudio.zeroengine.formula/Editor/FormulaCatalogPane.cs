@@ -20,17 +20,25 @@ namespace ZeroEngine.Formula.Editor
         {
             using (new EditorGUILayout.HorizontalScope())
             {
-                if (GUILayout.Button(FormulaEditorLabels.Refresh))
+                if (GUILayout.Button(new GUIContent(
+                        FormulaEditorLabels.Refresh,
+                        FormulaEditorLabels.RefreshTooltip)))
                     RefreshRows();
-                if (GUILayout.Button(FormulaEditorLabels.Scan))
+                if (GUILayout.Button(new GUIContent(
+                        FormulaEditorLabels.Scan,
+                        FormulaEditorLabels.ScanTooltip)))
                     RefreshRows();
-                if (GUILayout.Button(FormulaEditorLabels.GenerateMissingCatalogEntries))
+                if (GUILayout.Button(new GUIContent(
+                        FormulaEditorLabels.GenerateMissingCatalogEntries,
+                        FormulaEditorLabels.GenerateMissingCatalogEntriesTooltip)))
                     GenerateMissingCatalogEntries(profile);
             }
 
             using (new EditorGUILayout.VerticalScope(EditorStyles.helpBox))
             {
-                searchText = EditorGUILayout.TextField(FormulaEditorLabels.Search, searchText);
+                searchText = EditorGUILayout.TextField(
+                    new GUIContent(FormulaEditorLabels.Search, FormulaEditorLabels.SearchTooltip),
+                    searchText);
                 filter = FormulaEditorGUILayout.DrawCatalogFilter(filter);
             }
 
@@ -89,9 +97,15 @@ namespace ZeroEngine.Formula.Editor
                         EditorGUILayout.LabelField(
                             row.HasCatalogEntry ? FormulaEditorLabels.CatalogStatusName(row.Status) : FormulaEditorLabels.MissingCatalog,
                             GUILayout.Width(64f));
-                        if (GUILayout.Button(FormulaEditorLabels.Ping, GUILayout.Width(48f)))
+                        if (GUILayout.Button(
+                                new GUIContent(FormulaEditorLabels.Ping, FormulaEditorLabels.PingTooltip),
+                                GUILayout.Width(48f)))
                             Ping(row);
-                        if (GUILayout.Button(FormulaEditorLabels.OpenWorkbench, GUILayout.Width(64f)))
+                        if (GUILayout.Button(
+                                new GUIContent(
+                                    FormulaEditorLabels.OpenWorkbench,
+                                    FormulaEditorLabels.OpenWorkbenchTooltip),
+                                GUILayout.Width(64f)))
                             openWorkbench?.Invoke(row.Formula);
                     }
 

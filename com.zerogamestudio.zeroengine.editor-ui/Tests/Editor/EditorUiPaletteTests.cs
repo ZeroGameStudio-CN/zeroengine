@@ -1,4 +1,5 @@
 using NUnit.Framework;
+using System;
 using UnityEngine;
 
 namespace ZeroEngine.EditorUI.Tests.Editor
@@ -35,6 +36,24 @@ namespace ZeroEngine.EditorUI.Tests.Editor
         public void ResponsiveMode_UsesStableDashboardBreakpoint(float width, EditorUiResponsiveMode expected)
         {
             Assert.That(EditorUiGUILayout.ResponsiveMode(width), Is.EqualTo(expected));
+        }
+
+        [Test]
+        public void ImguiPrimitives_ExposeGuiContentTooltipOverloads()
+        {
+            Assert.That(HasGuiContentOverload(nameof(EditorUiGUILayout.PrimaryButton)), Is.True);
+            Assert.That(HasGuiContentOverload(nameof(EditorUiGUILayout.SelectionButton)), Is.True);
+            Assert.That(HasGuiContentOverload(nameof(EditorUiGUILayout.ActionRow)), Is.True);
+            Assert.That(HasGuiContentOverload(nameof(EditorUiGUILayout.Chip)), Is.True);
+            Assert.That(HasGuiContentOverload(nameof(EditorUiGUILayout.Disclosure)), Is.True);
+        }
+
+        private static bool HasGuiContentOverload(string name)
+        {
+            return Array.Exists(
+                typeof(EditorUiGUILayout).GetMethods(),
+                method => method.Name == name &&
+                          Array.Exists(method.GetParameters(), parameter => parameter.ParameterType == typeof(GUIContent)));
         }
 
         private static void AssertContrast(Color foreground, Color background, float minimum, string label)

@@ -1,6 +1,6 @@
 {
   "name": "com.zerogamestudio.zeroengine",
-  "version": "2.1.0",
+  "version": "2.1.1",
   "displayName": "ZeroEngine",
   "description": "Modular Unity game development framework with AI System (UtilityAI/GOAP/NPCSchedule), Combat System, Projectile, Spawner, StatSystem, BuffSystem, AbilitySystem, UI Framework, ModSystem, Achievement, Crafting, Relationship, Loot Tables, Calendar, Notification, Settings, Environment (Weather/DayNight), Minimap, Interaction System, Tutorial System, and more.",
   "unity": "2022.3",
@@ -10,8 +10,8 @@
     "com.unity.localization": "1.4.0",
     "com.unity.addressables": "1.21.0",
     "com.unity.textmeshpro": "3.0.6",
-    "com.zerogamestudio.zeroengine.dashboard": "3.1.0",
-    "com.zerogamestudio.zeroengine.editor-ui": "1.1.0"
+    "com.zerogamestudio.zeroengine.dashboard": "3.1.1",
+    "com.zerogamestudio.zeroengine.editor-ui": "1.1.1"
   },
   "keywords": [
     "game",

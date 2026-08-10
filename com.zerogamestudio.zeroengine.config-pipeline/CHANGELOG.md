@@ -1,5 +1,9 @@
 # Changelog
 
+## 2.0.1
+
+- Localized the Dashboard module label, description, and tooltip to Simplified Chinese without changing the menu route.
+
 ## 2.0.0
 
 - Unified the Config Pipeline window on `com.zerogamestudio.zeroengine.editor-ui@1.0.0`.

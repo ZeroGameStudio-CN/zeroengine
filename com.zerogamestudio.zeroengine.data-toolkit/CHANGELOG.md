@@ -1,5 +1,9 @@
 # Changelog
 
+## 2.0.1 - 2026-08-10
+
+- Localized the Dashboard host label and description to Simplified Chinese.
+
 ## 2.0.0 - 2026-08-10
 
 - Unified the Data Toolkit window on `com.zerogamestudio.zeroengine.editor-ui@1.0.0`.

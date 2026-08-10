@@ -1,6 +1,6 @@
 {
   "name": "com.zerogamestudio.zeroengine.data-toolkit",
-  "version": "2.0.0",
+  "version": "2.0.1",
   "displayName": "ZeroEngine.DataToolkit",
   "description": "Reusable ZeroEngine tooling for marking, discovering, browsing, editing, and validating project data assets.",
   "unity": "2022.3",

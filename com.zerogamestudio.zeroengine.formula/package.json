@@ -1,12 +1,12 @@
 {
   "name": "com.zerogamestudio.zeroengine.formula",
-  "version": "0.5.0",
+  "version": "0.5.1",
   "displayName": "ZeroEngine Formula",
   "description": "Reusable step-based formula evaluation, injected random values, diagnostics, scanner, and workbench tools.",
   "unity": "2022.3",
   "unityRelease": "0f1",
   "dependencies": {
-    "com.zerogamestudio.zeroengine.editor-ui": "1.1.0"
+    "com.zerogamestudio.zeroengine.editor-ui": "1.1.1"
   },
   "keywords": [
     "zeroengine",
