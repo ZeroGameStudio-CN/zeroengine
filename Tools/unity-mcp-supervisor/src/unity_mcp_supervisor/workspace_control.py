@@ -23,10 +23,18 @@ from .errors import IncompatibleError, ProjectBusyError, UsageError
 from .locking import project_lock
 from .project_lease import (
     create_project_lease_unlocked,
+    inspect_project_lease,
+    inspect_project_lease_queue,
     release_project_lease_unlocked,
     require_project_lease,
 )
-from .service_state import StatePaths, ensure_private_directory
+from .project_resolver import canonical_project_root
+from .service_state import (
+    StatePaths,
+    _atomic_write,
+    _unlink_with_retry,
+    ensure_private_directory,
+)
 
 WORKSPACE_SCHEMA_VERSION = 2
 POLICY_SCHEMA_MIN = 1
@@ -65,6 +73,7 @@ class WorkspacePolicy:
     schema_version: int | None
     valid: bool
     path: str
+    source: str
     error: str | None = None
     unity_meta_pairing: bool = True
 
@@ -78,6 +87,7 @@ class WorkspacePolicy:
             "schema_version": self.schema_version,
             "valid": self.valid,
             "path": self.path,
+            "source": self.source,
             "error": self.error,
             "supported_schema": {
                 "minimum": POLICY_SCHEMA_MIN,
@@ -87,20 +97,28 @@ class WorkspacePolicy:
         }
 
 
-def load_workspace_policy(project_root: Path) -> WorkspacePolicy:
-    policy_path = project_root / POLICY_RELATIVE_PATH
-    if not policy_path.is_file():
-        return WorkspacePolicy(
-            enforcement="disabled",
-            schema_version=None,
-            valid=True,
-            path=str(policy_path),
-            unity_meta_pairing=False,
-        )
+def workspace_registration_path(paths: StatePaths, project_root: Path) -> Path:
+    canonical = canonical_project_root(project_root)
+    key = hashlib.sha256(canonical.encode("utf-8")).hexdigest()
+    return paths.workspace_registrations / f"{key}.json"
+
+
+def _load_policy_file(
+    policy_path: Path,
+    *,
+    source: str,
+    expected_project_root: str | None = None,
+) -> WorkspacePolicy:
     try:
         value = json.loads(policy_path.read_text(encoding="utf-8"))
         if not isinstance(value, dict):
             raise TypeError("policy root must be an object")
+        if expected_project_root is not None:
+            registered_root = value["projectRoot"]
+            if not isinstance(registered_root, str):
+                raise TypeError("projectRoot must be a string")
+            if canonical_project_root(registered_root) != expected_project_root:
+                raise ValueError("projectRoot does not match the requested project")
         schema_version = value["schemaVersion"]
         enforcement = value["enforcement"]
         unity_meta_pairing = value.get("unityMetaPairing", True)
@@ -112,10 +130,11 @@ def load_workspace_policy(project_root: Path) -> WorkspacePolicy:
             raise TypeError("unityMetaPairing must be a boolean")
     except (KeyError, OSError, TypeError, ValueError) as exc:
         return WorkspacePolicy(
-            enforcement="invalid",
+            enforcement="required" if source == "registration" else "invalid",
             schema_version=None,
             valid=False,
             path=str(policy_path),
+            source=source,
             error=f"Invalid workspace policy: {exc}",
         )
     if enforcement not in {"audit", "required"}:
@@ -124,6 +143,7 @@ def load_workspace_policy(project_root: Path) -> WorkspacePolicy:
             schema_version=schema_version,
             valid=False,
             path=str(policy_path),
+            source=source,
             error="enforcement must be audit or required",
             unity_meta_pairing=unity_meta_pairing,
         )
@@ -133,6 +153,7 @@ def load_workspace_policy(project_root: Path) -> WorkspacePolicy:
             schema_version=schema_version,
             valid=False,
             path=str(policy_path),
+            source=source,
             error="workspace policy schema is not supported by this tool",
             unity_meta_pairing=unity_meta_pairing,
         )
@@ -141,8 +162,155 @@ def load_workspace_policy(project_root: Path) -> WorkspacePolicy:
         schema_version=schema_version,
         valid=True,
         path=str(policy_path),
+        source=source,
         unity_meta_pairing=unity_meta_pairing,
     )
+
+
+def load_workspace_policy(
+    project_root: Path, paths: StatePaths | None = None
+) -> WorkspacePolicy:
+    project_root = project_root.resolve()
+    policy_path = project_root / POLICY_RELATIVE_PATH
+    if policy_path.is_file():
+        return _load_policy_file(policy_path, source="project")
+    if paths is not None:
+        registration_path = workspace_registration_path(paths, project_root)
+        if registration_path.is_file():
+            return _load_policy_file(
+                registration_path,
+                source="registration",
+                expected_project_root=canonical_project_root(project_root),
+            )
+    return WorkspacePolicy(
+        enforcement="disabled",
+        schema_version=None,
+        valid=True,
+        path=str(policy_path),
+        source="none",
+        unity_meta_pairing=False,
+    )
+
+
+def bootstrap_workspace_policy(paths: StatePaths, project_root: Path) -> dict[str, Any]:
+    project_root = project_root.resolve()
+    canonical = canonical_project_root(project_root)
+    project_policy = load_workspace_policy(project_root)
+    if project_policy.source == "project":
+        if not project_policy.valid:
+            raise IncompatibleError(
+                "The project workspace policy is invalid or unsupported.",
+                details={"policy": project_policy.public_payload()},
+            )
+        return {
+            "created": False,
+            "project_root": str(project_root),
+            "registration_path": None,
+            "policy": project_policy.public_payload(),
+        }
+
+    registration_path = workspace_registration_path(paths, project_root)
+    with project_lock(paths, canonical, "workspace-bootstrap", 30):
+        if registration_path.is_file():
+            policy = load_workspace_policy(project_root, paths)
+            if not policy.valid:
+                raise IncompatibleError(
+                    "The workspace registration is invalid or mismatched.",
+                    details={"policy": policy.public_payload()},
+                )
+            created = False
+        else:
+            value = {
+                "schemaVersion": POLICY_SCHEMA_MAX,
+                "projectRoot": canonical,
+                "enforcement": "required",
+                "unityMetaPairing": True,
+            }
+            _atomic_write(
+                registration_path,
+                json.dumps(value, indent=2, sort_keys=True) + "\n",
+            )
+            policy = load_workspace_policy(project_root, paths)
+            require_usable_policy(policy)
+            created = True
+    return {
+        "created": created,
+        "project_root": str(project_root),
+        "registration_path": str(registration_path),
+        "policy": policy.public_payload(),
+    }
+
+
+def unregister_workspace_policy(
+    paths: StatePaths, project_root: Path, *, lease_ttl_seconds: float
+) -> dict[str, Any]:
+    project_root = project_root.resolve()
+    canonical = canonical_project_root(project_root)
+    registration_path = workspace_registration_path(paths, project_root)
+    coordinator = WorkspaceCoordinator(
+        paths,
+        project_root,
+        canonical,
+        lease_ttl_seconds=lease_ttl_seconds,
+    )
+    with project_lock(paths, canonical, "workspace-unregister", 30):
+        if registration_path.is_file():
+            registered = _load_policy_file(
+                registration_path,
+                source="registration",
+                expected_project_root=canonical,
+            )
+            if not registered.valid:
+                raise IncompatibleError(
+                    "The workspace registration is invalid or mismatched.",
+                    details={"policy": registered.public_payload()},
+                )
+            with coordinator._transaction() as connection:
+                coordinator._cleanup(connection, time.time())
+                task_count = int(
+                    connection.execute(
+                        """
+                        SELECT COUNT(*) AS count FROM tasks
+                        WHERE project_root = ? AND state IN (
+                            'active', 'outcome_unknown', 'orphaned_unknown'
+                        )
+                        """,
+                        (canonical,),
+                    ).fetchone()["count"]
+                )
+                claim_count = int(
+                    connection.execute(
+                        """
+                        SELECT COUNT(*) AS count FROM claims
+                        WHERE project_root = ? AND state IN ('queued', 'granted')
+                        """,
+                        (canonical,),
+                    ).fetchone()["count"]
+                )
+                lease = inspect_project_lease(paths, canonical)
+                lease_queue = inspect_project_lease_queue(paths, canonical)
+                if task_count or claim_count or lease is not None or lease_queue:
+                    raise ProjectBusyError(
+                        "Cannot unregister while workspace coordination is active.",
+                        details={
+                            "reason": "workspace-registration-active",
+                            "task_count": task_count,
+                            "claim_count": claim_count,
+                            "unity_lease_active": lease is not None,
+                            "unity_lease_queue_count": len(lease_queue),
+                        },
+                    )
+                _unlink_with_retry(registration_path)
+            removed = True
+        else:
+            removed = False
+        policy = load_workspace_policy(project_root, paths)
+    return {
+        "removed": removed,
+        "project_root": str(project_root),
+        "registration_path": str(registration_path),
+        "policy": policy.public_payload(),
+    }
 
 
 def require_usable_policy(policy: WorkspacePolicy) -> None:
@@ -254,7 +422,7 @@ class WorkspaceCoordinator:
         self.project_root = project_root.resolve()
         self.canonical_project_root = canonical_project_root
         self.lease_ttl_seconds = lease_ttl_seconds
-        self.policy = load_workspace_policy(self.project_root)
+        self.policy = load_workspace_policy(self.project_root, self.paths)
         require_usable_policy(self.policy)
         self.paths.ensure()
         ensure_private_directory(self.paths.workspace_control.parent)
@@ -684,7 +852,15 @@ class WorkspaceCoordinator:
         now = time.time()
         token = secrets.token_urlsafe(32)
         task_id = _public_id("task")
-        with self._transaction() as connection:
+        with (
+            project_lock(
+                self.paths,
+                self.canonical_project_root,
+                "workspace-task-start",
+                30,
+            ),
+            self._transaction() as connection,
+        ):
             self._cleanup(connection, now)
             epoch = self._epoch(connection)
             connection.execute(

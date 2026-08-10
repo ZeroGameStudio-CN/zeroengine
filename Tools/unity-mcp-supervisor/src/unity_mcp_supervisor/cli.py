@@ -44,7 +44,9 @@ from .upstream_cli import run_upstream_cli
 from .workspace_control import (
     TOKEN_ENVIRONMENT_VARIABLE,
     WorkspaceCoordinator,
+    bootstrap_workspace_policy,
     load_workspace_policy,
+    unregister_workspace_policy,
 )
 
 
@@ -364,7 +366,7 @@ def _required_workspace_lease_id(
     root: Path,
     canonical: str,
 ) -> str | None:
-    policy = load_workspace_policy(root)
+    policy = load_workspace_policy(root, settings.paths)
     token = _read_workspace_token()
     if policy.enforcement not in {"audit", "required"}:
         return None
@@ -413,6 +415,40 @@ def _require_effective_project_lease(
 @cli.group("workspace")
 def workspace_group() -> None:
     """Coordinate project tasks, write scopes, freezes, and shared resources."""
+
+
+@workspace_group.command("bootstrap")
+@click.option("--project", type=click.Path(path_type=Path), default=Path.cwd)
+@click.pass_obj
+def workspace_bootstrap(app: AppContext, project: Path) -> None:
+    """Register a Unity project without modifying its files."""
+
+    def action() -> ActionResult:
+        settings = app.settings()
+        root = _project_root(project)
+        result = bootstrap_workspace_policy(settings.paths, root)
+        return ActionResult("Workspace project bootstrapped.", result)
+
+    _execute(app, action)
+
+
+@workspace_group.command("unregister")
+@click.option("--project", type=click.Path(path_type=Path), default=Path.cwd)
+@click.pass_obj
+def workspace_unregister(app: AppContext, project: Path) -> None:
+    """Remove only the user-level workspace registration."""
+
+    def action() -> ActionResult:
+        settings = app.settings()
+        root = _project_root(project)
+        result = unregister_workspace_policy(
+            settings.paths,
+            root,
+            lease_ttl_seconds=settings.project_lease_ttl_seconds,
+        )
+        return ActionResult("Workspace project registration removed.", result)
+
+    _execute(app, action)
 
 
 @workspace_group.group("task")
@@ -725,7 +761,7 @@ def _workspace_status_value(
         return {
             "schema_version": None,
             "project_root": str(root),
-            "policy": load_workspace_policy(root).public_payload(),
+            "policy": load_workspace_policy(root, settings.paths).public_payload(),
             "workspace_epoch": None,
             "tasks": [],
             "claims": [],
@@ -953,7 +989,7 @@ def lease_acquire(
         settings = app.settings()
         root = _project_root(project)
         canonical = canonical_project_root(root)
-        policy = load_workspace_policy(root)
+        policy = load_workspace_policy(root, settings.paths)
         if policy.enforcement == "required":
             claim = _workspace_coordinator(settings, root, canonical).acquire_claim(
                 _read_workspace_token(),
