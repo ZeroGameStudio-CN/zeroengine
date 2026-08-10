@@ -171,6 +171,22 @@ class StatePaths:
         return self.root / "workspace-registrations"
 
     @property
+    def test_farm(self) -> Path:
+        return self.root / "test-farm"
+
+    @property
+    def test_farm_database(self) -> Path:
+        return self.test_farm / "test-farm.sqlite3"
+
+    @property
+    def test_farm_slots(self) -> Path:
+        return self.test_farm / "slots"
+
+    @property
+    def test_farm_artifacts(self) -> Path:
+        return self.test_farm / "artifacts"
+
+    @property
     def logs(self) -> Path:
         return self.root / "logs"
 
@@ -187,6 +203,8 @@ class StatePaths:
         ensure_private_directory(self.locks)
         ensure_private_directory(self.project_leases)
         ensure_private_directory(self.workspace_registrations)
+        ensure_private_directory(self.test_farm)
+        ensure_private_directory(self.test_farm_artifacts)
         ensure_private_directory(self.logs)
         ensure_private_directory(self.editor_discovery)
         ensure_private_directory(self.editor_requests)

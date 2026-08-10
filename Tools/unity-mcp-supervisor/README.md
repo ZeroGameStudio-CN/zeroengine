@@ -71,4 +71,39 @@ state. See [docs/setup.md](docs/setup.md) for the complete workflow.
 See [docs/setup.md](docs/setup.md) for bootstrap safety and operational
 boundaries.
 
+## Isolated Unity tests
+
+`umcp test` can run exact Unity Test Framework scopes concurrently without
+opening a second Unity process on the main project. Each worker uses a separate
+Git or Plastic workspace, project root, Library, log, result, and artifact tree.
+The project needs no package, policy, or adapter change beyond normal workspace
+bootstrap.
+
+Provision machine capacity once, then submit from an active workspace task:
+
+```powershell
+umcp test farm provision --workers 2
+umcp test submit --project D:\unity\projects\Game --platform EditMode `
+  --test-filter Namespace.Fixture.Test `
+  --overlay-path Assets/Scripts/Changed.cs `
+  --external-state-safe
+umcp test farm status
+umcp test wait --job <job-id>
+```
+
+Use `--baseline-only` instead of `--overlay-path` to test the checked-in
+revision. Every overlay path must be current SCM pending, explicitly declared,
+and covered by the submitting task's granted write claim; the farm never infers
+ownership from a dirty directory. Add/delete/move and Unity `.meta` pairs are
+reproduced explicitly. Unsafe snapshots, missing capacity, or absent external
+state proof return the safe serial route instead of starting concurrent Unity.
+
+Unity 2022.3 has no official Editor argument that redirects
+`Application.persistentDataPath` per project root. Declare
+`--external-state-safe` only after confirming the selected scope does not use
+PlayerPrefs, persistent data, fixed ports/devices, or another process-external
+writable singleton. The first job for each distinct baseline, critical-input,
+and overlay fingerprint on a slot runs cold and warm; Library reuse starts only
+when per-test outcomes match.
+
 Design record: [Unity workspace zero-code bootstrap](../../docs/specs/2026-08-10-unity-workspace-bootstrap.md).

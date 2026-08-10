@@ -21,6 +21,7 @@ from .errors import (
     ProjectError,
     ServiceError,
     UmcpError,
+    UnityCommandError,
     UsageError,
 )
 from .locking import project_lock
@@ -40,6 +41,9 @@ from .rest_client import RestClient
 from .service_state import Settings
 from .startup import disable_startup, enable_startup
 from .supervisor import ServiceManager, run_daemon
+from .test_farm import TestFarmStore, TestJobRequest
+from .test_snapshot import create_snapshot, normalize_relative, scope_covers
+from .test_worker import launch_workers, run_worker
 from .upstream_cli import run_upstream_cli
 from .workspace_control import (
     TOKEN_ENVIRONMENT_VARIABLE,
@@ -410,6 +414,279 @@ def _require_effective_project_lease(
             "The workspace unity-live claim lost its Unity lease binding.",
             details={"reason": "unity-lease-binding-expired"},
         )
+
+
+@cli.group("test")
+def test_group() -> None:
+    """Run exact Unity Test Framework scopes in isolated local slots."""
+
+
+@test_group.group("farm")
+def test_farm_group() -> None:
+    """Provision and inspect the machine-local isolated test farm."""
+
+
+@test_farm_group.command("provision")
+@click.option("--workers", type=click.IntRange(min=1), required=True)
+@click.option("--slot-root", type=click.Path(path_type=Path), default=None)
+@click.pass_obj
+def test_farm_provision(app: AppContext, workers: int, slot_root: Path | None) -> None:
+    def action() -> ActionResult:
+        value = TestFarmStore(app.settings().paths).provision(workers, slot_root)
+        return ActionResult("Unity test farm provisioned.", value)
+
+    _execute(app, action)
+
+
+@test_farm_group.command("status")
+@click.pass_obj
+def test_farm_status(app: AppContext) -> None:
+    def action() -> ActionResult:
+        store = TestFarmStore(app.settings().paths)
+        recovered = store.recover_dead_workers()
+        value = store.status()
+        value["recovered_jobs"] = recovered
+        return ActionResult("Unity test farm status inspected.", value)
+
+    _execute(app, action)
+
+
+@test_farm_group.command("watch")
+@click.option("--interval", type=click.FloatRange(min=0.1), default=2.0)
+@click.pass_obj
+def test_farm_watch(app: AppContext, interval: float) -> None:
+    try:
+        while True:
+            store = TestFarmStore(app.settings().paths)
+            recovered = store.recover_dead_workers()
+            value = store.status()
+            value["recovered_jobs"] = recovered
+            _emit(
+                app,
+                {
+                    "ok": True,
+                    "code": "ok",
+                    "message": "Unity test farm status inspected.",
+                    "project_hash": None,
+                    "endpoint": app.settings().endpoint,
+                    "duration_ms": 0,
+                    "result": value,
+                },
+            )
+            time.sleep(interval)
+    except KeyboardInterrupt:
+        return
+
+
+def _test_job_result(value: dict[str, Any]) -> ActionResult:
+    if value["state"] != "passed":
+        raise UnityCommandError(
+            f"Unity test job ended as {value['state']}.", details=value
+        )
+    return ActionResult("Unity test job passed.", value)
+
+
+@test_group.command("submit")
+@click.option("--project", type=click.Path(path_type=Path), default=Path.cwd)
+@click.option(
+    "--platform", type=click.Choice(["EditMode", "PlayMode"]), default="EditMode"
+)
+@click.option("--test-filter", multiple=True)
+@click.option("--category", multiple=True)
+@click.option("--assembly", multiple=True)
+@click.option("--overlay-path", multiple=True)
+@click.option("--baseline-only", is_flag=True)
+@click.option("--external-state-safe", is_flag=True)
+@click.option(
+    "--timeout", "timeout_seconds", type=click.FloatRange(min=1), default=900.0
+)
+@click.option("--wait", "wait_for_result", is_flag=True)
+@click.option("--wait-timeout", type=click.FloatRange(min=0), default=1800.0)
+@click.option("--token-file", type=click.Path(path_type=Path), default=None)
+@click.option("--token-stdin", is_flag=True)
+@click.pass_obj
+def test_submit(
+    app: AppContext,
+    project: Path,
+    platform: str,
+    test_filter: tuple[str, ...],
+    category: tuple[str, ...],
+    assembly: tuple[str, ...],
+    overlay_path: tuple[str, ...],
+    baseline_only: bool,
+    external_state_safe: bool,
+    timeout_seconds: float,
+    wait_for_result: bool,
+    wait_timeout: float,
+    token_file: Path | None,
+    token_stdin: bool,
+) -> None:
+    def action() -> ActionResult:
+        settings = app.settings()
+        root = _project_root(project)
+        store = TestFarmStore(settings.paths)
+        if not external_state_safe:
+            return ActionResult(
+                "Unity test requires the safe serial route.",
+                {
+                    "route": "serial",
+                    "reason": "external-state-safety-not-declared",
+                    "project_root": str(root),
+                },
+            )
+        if not store.is_provisioned():
+            return ActionResult(
+                "Unity test requires the safe serial route.",
+                {
+                    "route": "serial",
+                    "reason": "test-farm-not-provisioned",
+                    "project_root": str(root),
+                },
+            )
+        if not any((test_filter, category, assembly)):
+            raise UsageError(
+                "Isolated tests require at least one exact test, category, or assembly filter."
+            )
+        policy = load_workspace_policy(root, settings.paths)
+        if policy.enforcement != "required" or not policy.valid:
+            raise IncompatibleError(
+                "Isolated tests require a valid required workspace policy.",
+                details={"policy": policy.public_payload()},
+            )
+        canonical = canonical_project_root(root)
+        coordinator = _workspace_coordinator(settings, root, canonical)
+        token = _read_workspace_token(token_file, token_stdin=token_stdin)
+        assertion = coordinator.assert_claims(token)
+        task_id = str(assertion["task_id"])
+        write_scopes = sorted(
+            {
+                scope
+                for claim in coordinator.status()["claims"]
+                if claim["task_id"] == task_id and claim["state"] == "granted"
+                for scope in claim["write"]
+            }
+        )
+        if baseline_only and overlay_path:
+            raise UsageError("Use either --baseline-only or --overlay-path, not both.")
+        if not baseline_only and (not write_scopes or not overlay_path):
+            raise UsageError(
+                "Submit exact --overlay-path values under a granted write claim, "
+                "or use --baseline-only."
+            )
+        normalized_overlay = tuple(
+            normalize_relative(root, value) for value in overlay_path
+        )
+        for value in normalized_overlay:
+            if not any(scope_covers(scope, value) for scope in write_scopes):
+                raise UsageError(
+                    f"Overlay path is outside the task write claims: {value}"
+                )
+        artifact_root = (
+            settings.paths.test_farm_artifacts / f"snapshot-{uuid.uuid4().hex[:16]}"
+        )
+        try:
+            snapshot = create_snapshot(
+                root,
+                artifact_root,
+                () if baseline_only else write_scopes,
+                () if baseline_only else normalized_overlay,
+                baseline_only=baseline_only,
+            )
+        except (ProjectBusyError, UsageError) as exc:
+            return ActionResult(
+                "Unity test requires the safe serial route.",
+                {
+                    "route": "serial",
+                    "reason": "isolated-snapshot-unavailable",
+                    "detail": exc.message,
+                    "project_root": str(root),
+                },
+            )
+        job = store.submit(
+            TestJobRequest(
+                project_root=canonical,
+                task_id=task_id,
+                platform=platform,
+                filters=test_filter,
+                categories=category,
+                assemblies=assembly,
+                artifact_root=str(artifact_root),
+                snapshot_id=snapshot["snapshot_id"],
+                snapshot_manifest=snapshot["manifest"],
+                timeout_seconds=timeout_seconds,
+            )
+        )
+        launch_workers(settings.paths, store.status()["workers"])
+        if wait_for_result:
+            return _test_job_result(store.wait(job["job_id"], wait_timeout))
+        job["route"] = "isolated"
+        return ActionResult("Unity test job submitted.", job)
+
+    _execute(app, action)
+
+
+@test_group.command("status")
+@click.option("--job", "job_id", required=True)
+@click.pass_obj
+def test_status(app: AppContext, job_id: str) -> None:
+    def action() -> ActionResult:
+        store = TestFarmStore(app.settings().paths)
+        store.recover_dead_workers()
+        return ActionResult("Unity test job status inspected.", store.job(job_id))
+
+    _execute(app, action)
+
+
+@test_group.command("wait")
+@click.option("--job", "job_id", required=True)
+@click.option(
+    "--timeout", "timeout_seconds", type=click.FloatRange(min=0), default=1800.0
+)
+@click.pass_obj
+def test_wait(app: AppContext, job_id: str, timeout_seconds: float) -> None:
+    def action() -> ActionResult:
+        value = TestFarmStore(app.settings().paths).wait(job_id, timeout_seconds)
+        return _test_job_result(value)
+
+    _execute(app, action)
+
+
+@test_group.command("cancel")
+@click.option("--job", "job_id", required=True)
+@click.option("--token-file", type=click.Path(path_type=Path), default=None)
+@click.option("--token-stdin", is_flag=True)
+@click.pass_obj
+def test_cancel(
+    app: AppContext, job_id: str, token_file: Path | None, token_stdin: bool
+) -> None:
+    def action() -> ActionResult:
+        settings = app.settings()
+        store = TestFarmStore(settings.paths)
+        job = store.job(job_id)
+        root = _project_root(Path(job["project_root"]))
+        coordinator = _workspace_coordinator(
+            settings, root, canonical_project_root(root)
+        )
+        assertion = coordinator.authenticate_task_token(
+            _read_workspace_token(token_file, token_stdin=token_stdin),
+            expected_task_id=str(job["task_id"]),
+        )
+        value = store.cancel(job_id, str(assertion["task_id"]))
+        return ActionResult("Unity test job cancellation requested.", value)
+
+    _execute(app, action)
+
+
+@test_group.command("_worker", hidden=True)
+@click.pass_obj
+def test_worker(app: AppContext) -> None:
+    def action() -> ActionResult:
+        count = run_worker(app.settings().paths)
+        return ActionResult(
+            "Unity test worker drained its queue.", {"completed": count}
+        )
+
+    _execute(app, action)
 
 
 @cli.group("workspace")
