@@ -89,6 +89,31 @@ def test_non_overlapping_claims_run_and_overlapping_claims_queue_fifo(
     assert granted["state"] == "granted"
 
 
+def test_cleanup_idle_task_ends_claimless_task_without_token(tmp_path: Path) -> None:
+    project = _project(tmp_path)
+    coordinator = _coordinator(tmp_path, project)
+    task = _task(coordinator, "abandoned")
+
+    result = coordinator.cleanup_idle_task(task["task_id"])
+
+    assert result["state"] == "failed"
+    assert result["reason"] == "idle-task-cleaned"
+    assert coordinator.status()["tasks"] == []
+
+
+def test_cleanup_idle_task_refuses_claim_owner(tmp_path: Path) -> None:
+    project = _project(tmp_path)
+    coordinator = _coordinator(tmp_path, project)
+    task = _task(coordinator, "active-owner")
+    coordinator.acquire_claim(task["task_token"], writes=("Assets/A",))
+
+    with pytest.raises(ProjectBusyError) as exc_info:
+        coordinator.cleanup_idle_task(task["task_id"])
+
+    assert exc_info.value.details["reason"] == "task-has-claims"
+    assert coordinator.status()["tasks"][0]["task_id"] == task["task_id"]
+
+
 def test_unity_asset_and_meta_are_one_conflict_unit(tmp_path: Path) -> None:
     project = _project(tmp_path)
     coordinator = _coordinator(tmp_path, project)

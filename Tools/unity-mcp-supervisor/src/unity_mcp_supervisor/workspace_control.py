@@ -838,6 +838,7 @@ class WorkspaceCoordinator:
         summary: str,
         task_uri: str | None,
         ttl_seconds: float,
+        task_token: str | None = None,
     ) -> dict[str, Any]:
         owner = _validate_plain_text(owner, "Task owner", 128)
         summary = _validate_plain_text(summary, "Task summary", 512)
@@ -860,7 +861,9 @@ class WorkspaceCoordinator:
         if (self.project_root / ".plastic").is_dir():
             self.reconcile_plastic()
         now = time.time()
-        token = secrets.token_urlsafe(32)
+        token = task_token or secrets.token_urlsafe(32)
+        if len(token) < 32 or any(character.isspace() for character in token):
+            raise UsageError("Workspace task token is invalid.")
         task_id = _public_id("task")
         with (
             project_lock(
@@ -1656,6 +1659,22 @@ class WorkspaceCoordinator:
                 "legacy_lease_id": legacy_lease_id,
             }
 
+    def granted_claims_for_task(self, token: str | None) -> list[dict[str, Any]]:
+        now = time.time()
+        with self._transaction() as connection:
+            self._cleanup(connection, now)
+            task = self._task_for_token(connection, token)
+            epoch = self._epoch(connection)
+            rows = connection.execute(
+                """
+                SELECT * FROM claims
+                WHERE task_id = ? AND state = 'granted' AND epoch = ?
+                ORDER BY queue_order
+                """,
+                (task["task_id"], epoch),
+            ).fetchall()
+            return [self._public_claim(connection, row) for row in rows]
+
     def authenticate_task_token(
         self, token: str | None, *, expected_task_id: str
     ) -> dict[str, Any]:
@@ -1774,6 +1793,16 @@ class WorkspaceCoordinator:
                     "Outcome-unknown tasks require evidence-backed recovery.",
                     details={"reason": "outcome-unknown-recovery-required"},
                 )
+            jobs = [
+                job
+                for job in open_test_jobs(self.paths, self.canonical_project_root)
+                if str(job["task_id"]) == str(task["task_id"])
+            ]
+            if jobs:
+                raise ProjectBusyError(
+                    "Workspace task still owns queued or running Unity test jobs.",
+                    details={"reason": "task-has-test-jobs", "jobs": jobs},
+                )
             claims = connection.execute(
                 """
                     SELECT * FROM claims
@@ -1818,6 +1847,86 @@ class WorkspaceCoordinator:
                 "task_id": task["task_id"],
                 "state": result,
                 "released_claim_count": len(claims),
+                "ended_at": now,
+            }
+
+    def cleanup_idle_task(self, task_id: str) -> dict[str, Any]:
+        task_id = _validate_plain_text(task_id, "Task id", 128)
+        now = time.time()
+        with (
+            project_lock(
+                self.paths,
+                self.canonical_project_root,
+                "workspace-task-cleanup-idle",
+                30,
+            ),
+            self._transaction() as connection,
+        ):
+            self._cleanup(connection, now)
+            task = connection.execute(
+                """
+                SELECT * FROM tasks
+                WHERE task_id = ? AND project_root = ? AND state = 'active'
+                """,
+                (task_id, self.canonical_project_root),
+            ).fetchone()
+            if task is None:
+                raise UsageError("Task is not an active idle-cleanup candidate.")
+            claims = connection.execute(
+                """
+                SELECT claim_id, kind, state FROM claims
+                WHERE task_id = ? AND state IN ('queued', 'granted')
+                """,
+                (task_id,),
+            ).fetchall()
+            if claims:
+                raise ProjectBusyError(
+                    "Task still owns or is waiting for workspace resources.",
+                    details={
+                        "reason": "task-has-claims",
+                        "claims": [dict(claim) for claim in claims],
+                    },
+                )
+            adopted = connection.execute(
+                """
+                SELECT path FROM vcs_dispositions
+                WHERE project_root = ? AND kind = 'adopt' AND task_id = ?
+                ORDER BY path
+                """,
+                (self.canonical_project_root, task_id),
+            ).fetchall()
+            if adopted:
+                raise ProjectBusyError(
+                    "Task still owns adopted workspace pending paths.",
+                    details={
+                        "reason": "task-has-adopted-pending",
+                        "paths": [str(row["path"]) for row in adopted],
+                    },
+                )
+            jobs = [
+                job
+                for job in open_test_jobs(self.paths, self.canonical_project_root)
+                if str(job["task_id"]) == task_id
+            ]
+            if jobs:
+                raise ProjectBusyError(
+                    "Task still owns queued or running Unity test jobs.",
+                    details={"reason": "task-has-test-jobs", "jobs": jobs},
+                )
+            connection.execute(
+                """
+                UPDATE tasks
+                SET state = 'failed', phase = 'idle-cleanup',
+                    note = 'claimless task cleaned without token',
+                    ended_at = ?, expires_at = ?
+                WHERE task_id = ?
+                """,
+                (now, now, task_id),
+            )
+            return {
+                "task_id": task_id,
+                "state": "failed",
+                "reason": "idle-task-cleaned",
                 "ended_at": now,
             }
 

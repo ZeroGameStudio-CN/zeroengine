@@ -1,6 +1,6 @@
 # Unity 隔离测试调度器
 
-- 状态：Implemented（本地实现与代理验证完成；提交、发布、安装和跨机验收待授权）
+- 状态：Archived
 - 最后更新：2026-08-11
 - 基线：ZeroEngine `3b63c7dbe2c68298d862c1e0ac243c5ea6afc227`
 - 设计批准：已批准；用户于 2026-08-10 要求“自审修订后开干”
@@ -168,4 +168,10 @@ POB 和其他 Unity 项目无需文件、package、AGENTS 或 adapter 变更。
 - Plastic 的 status/add/change/move/delete/private 解析、仓库身份校验、switch/reset 和 overlay 应用由隔离 adapter 测试覆盖；未在 POB 或其他生产 Plastic workspace 试跑。
 - 合成项目的全部 registration 已经标准 unregister；确认 farm queue/running、claims 和 Unity owner 均为 0 后，12 个临时 project/state/slot/token 路径已移入 Windows 回收站，Temp 中同前缀残留为 0。
 
-本轮终态操作已获授权但尚未执行：两个源仓库仍未 commit、push、建 PR、合并、安装或跨机发布；macOS 实机、生产项目“主 Editor 打开时并发”以及正式 Plastic workspace 端到端验收随提交流程完成。POB 文件、Plastic 状态和 Unity 均未被本任务触碰。
+发布与跨机证据：
+
+- ZeroEngine PR #33 通过全部必需检查并正常合并为 `c20f6b96d1e14d1223e1437e9e2a623fefe56552`；Supervisor 0.6.0 已安装到 9950 与 M5。
+- personal-codex-skills PR #25 正常合并为 `098d698996ef70f381fc13b860cc8e6f353ee65e`；两机 `unity-test-router` 源/runtime SHA-256 回读一致。
+- 9950 与 M5 均机器级 provision 2 workers。相同 Git 基线的两个 8 秒 EditMode 精确测试分别进入 slot 1/2，两个作业时间区间重叠；两机均各 1/1 Passed、cold/warm 结论一致、`slot_mutated=false`，队列与 running 最终归零。
+- Windows 合成项目完成标准 unregister 后已移入回收站；M5 合成项目的无 claim 丢失-token task 按 TTL 终止后也已标准 unregister，项目、slot、压缩包与 wheel 临时路径均精确清理。该事件不影响测试结果，并成为后续 task token 续接/自动收口 spec 的真实复现输入。
+- POB 文件、Plastic 状态与主 Editor 未被本 spec 的跨机验收触碰。

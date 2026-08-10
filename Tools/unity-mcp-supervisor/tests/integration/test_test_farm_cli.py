@@ -228,7 +228,9 @@ def test_open_test_job_blocks_workspace_unregister(monkeypatch, tmp_path: Path) 
         "--token-file",
         str(token_file),
     )
-    assert released.exit_code == 0, released.output
+    assert released.exit_code == 5, released.output
+    assert json.loads(released.output)["result"]["reason"] == "task-has-test-jobs"
+    assert token_file.is_file()
     blocked = invoke(state, "workspace", "unregister", "--project", str(project))
     assert blocked.exit_code == 5, blocked.output
     assert json.loads(blocked.output)["result"]["test_job_count"] == 1
@@ -243,5 +245,19 @@ def test_open_test_job_blocks_workspace_unregister(monkeypatch, tmp_path: Path) 
     )
     assert cancelled.exit_code == 0, cancelled.output
     assert json.loads(cancelled.output)["result"]["state"] == "cancelled"
+    released = invoke(
+        state,
+        "workspace",
+        "task",
+        "release",
+        "--project",
+        str(project),
+        "--result",
+        "completed",
+        "--token-file",
+        str(token_file),
+    )
+    assert released.exit_code == 0, released.output
+    assert not token_file.exists()
     removed = invoke(state, "workspace", "unregister", "--project", str(project))
     assert removed.exit_code == 0, removed.output

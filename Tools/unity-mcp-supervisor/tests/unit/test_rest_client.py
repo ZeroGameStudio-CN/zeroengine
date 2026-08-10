@@ -33,7 +33,27 @@ def test_loopback_requests_ignore_invalid_proxy_environment(monkeypatch) -> None
         assert RestClient(endpoint).classify().kind == EndpointKind.COMPATIBLE
 
 
-def test_business_command_disconnect_is_outcome_unknown_and_not_replayed(
+def test_business_command_disconnect_recovers_completed_receipt_without_replay(
+    tmp_path: Path,
+) -> None:
+    project = create_unity_project(tmp_path / "Project")
+    counter = [0]
+    instances = [
+        {
+            "hash": "aaaaaaaaaaaaaaaa",
+            "project": "Project",
+            "unity_version": "2022.3.62f3",
+            "connected_at": "now",
+            "project_root": str(project),
+        }
+    ]
+    with fake_http_server(instances, drop_counter=counter) as endpoint:
+        result = RestClient(endpoint).command("drop_response", {}, "aaaaaaaaaaaaaaaa")
+    assert result["data"]["recovered"] is True
+    assert counter == [1]
+
+
+def test_business_command_started_without_result_stays_outcome_unknown(
     tmp_path: Path,
 ) -> None:
     project = create_unity_project(tmp_path / "Project")
@@ -51,5 +71,27 @@ def test_business_command_disconnect_is_outcome_unknown_and_not_replayed(
         fake_http_server(instances, drop_counter=counter) as endpoint,
         pytest.raises(OutcomeUnknownError),
     ):
-        RestClient(endpoint).command("drop_response", {}, "aaaaaaaaaaaaaaaa")
+        RestClient(endpoint).command("ambiguous_response", {}, "aaaaaaaaaaaaaaaa")
+    assert counter == [1]
+
+
+def test_server_error_recovers_completed_receipt_without_replay(
+    tmp_path: Path,
+) -> None:
+    project = create_unity_project(tmp_path / "Project")
+    counter = [0]
+    instances = [
+        {
+            "hash": "aaaaaaaaaaaaaaaa",
+            "project": "Project",
+            "unity_version": "2022.3.62f3",
+            "connected_at": "now",
+            "project_root": str(project),
+        }
+    ]
+    with fake_http_server(instances, drop_counter=counter) as endpoint:
+        result = RestClient(endpoint).command(
+            "server_error_after_receipt", {}, "aaaaaaaaaaaaaaaa"
+        )
+    assert result["data"]["recovered"] is True
     assert counter == [1]

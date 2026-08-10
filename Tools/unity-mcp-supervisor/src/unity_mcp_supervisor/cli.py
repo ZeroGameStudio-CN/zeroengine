@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import json
 import os
+import secrets
+import subprocess
 import time
 import uuid
 from collections.abc import Callable
@@ -365,6 +367,64 @@ def _read_workspace_token(
     return os.environ.get(TOKEN_ENVIRONMENT_VARIABLE)
 
 
+def _create_workspace_token_file(path: Path, token: str) -> Path:
+    resolved = path.expanduser().resolve()
+    try:
+        resolved.parent.mkdir(parents=True, exist_ok=True)
+        if os.name != "nt":
+            resolved.parent.chmod(0o700)
+        descriptor = os.open(resolved, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+        os.close(descriptor)
+        if os.name == "nt":
+            domain = os.environ.get("USERDOMAIN")
+            username = os.environ.get("USERNAME")
+            if not domain or not username:
+                raise OSError("Current Windows identity is unavailable.")
+            creationflags = getattr(subprocess, "CREATE_NO_WINDOW", 0)
+            secured = subprocess.run(
+                [
+                    "icacls",
+                    str(resolved),
+                    "/inheritance:r",
+                    "/grant:r",
+                    f"{domain}\\{username}:(F)",
+                ],
+                check=False,
+                capture_output=True,
+                text=True,
+                creationflags=creationflags,
+            )
+            if secured.returncode != 0:
+                raise OSError("Windows owner-only ACL could not be applied.")
+        else:
+            resolved.chmod(0o600)
+        try:
+            with resolved.open("w", encoding="utf-8", newline="\n") as stream:
+                stream.write(token + "\n")
+                stream.flush()
+                os.fsync(stream.fileno())
+        except Exception:
+            resolved.unlink(missing_ok=True)
+            raise
+    except OSError as exc:
+        resolved.unlink(missing_ok=True)
+        raise UsageError(f"Cannot create workspace token file: {exc}") from exc
+    return resolved
+
+
+def _remove_matching_workspace_token_file(path: Path, token: str) -> bool:
+    resolved = path.expanduser().resolve()
+    try:
+        if resolved.read_text(encoding="utf-8").strip() != token:
+            return False
+        resolved.unlink()
+        return True
+    except FileNotFoundError:
+        return True
+    except OSError as exc:
+        raise UsageError(f"Cannot remove workspace token file: {exc}") from exc
+
+
 def _required_workspace_lease_id(
     settings: Settings,
     root: Path,
@@ -556,66 +616,73 @@ def test_submit(
         canonical = canonical_project_root(root)
         coordinator = _workspace_coordinator(settings, root, canonical)
         token = _read_workspace_token(token_file, token_stdin=token_stdin)
-        assertion = coordinator.assert_claims(token)
-        task_id = str(assertion["task_id"])
-        write_scopes = sorted(
-            {
-                scope
-                for claim in coordinator.status()["claims"]
-                if claim["task_id"] == task_id and claim["state"] == "granted"
-                for scope in claim["write"]
-            }
-        )
-        if baseline_only and overlay_path:
-            raise UsageError("Use either --baseline-only or --overlay-path, not both.")
-        if not baseline_only and (not write_scopes or not overlay_path):
-            raise UsageError(
-                "Submit exact --overlay-path values under a granted write claim, "
-                "or use --baseline-only."
-            )
-        normalized_overlay = tuple(
-            normalize_relative(root, value) for value in overlay_path
-        )
-        for value in normalized_overlay:
-            if not any(scope_covers(scope, value) for scope in write_scopes):
-                raise UsageError(
-                    f"Overlay path is outside the task write claims: {value}"
-                )
-        artifact_root = (
-            settings.paths.test_farm_artifacts / f"snapshot-{uuid.uuid4().hex[:16]}"
-        )
-        try:
-            snapshot = create_snapshot(
-                root,
-                artifact_root,
-                () if baseline_only else write_scopes,
-                () if baseline_only else normalized_overlay,
-                baseline_only=baseline_only,
-            )
-        except (ProjectBusyError, UsageError) as exc:
-            return ActionResult(
-                "Unity test requires the safe serial route.",
+        with project_lock(
+            settings.paths,
+            canonical,
+            "test-submit",
+            settings.project_lock_timeout_seconds,
+        ):
+            assertion = coordinator.assert_claims(token)
+            task_id = str(assertion["task_id"])
+            write_scopes = sorted(
                 {
-                    "route": "serial",
-                    "reason": "isolated-snapshot-unavailable",
-                    "detail": exc.message,
-                    "project_root": str(root),
-                },
+                    scope
+                    for claim in coordinator.granted_claims_for_task(token)
+                    for scope in claim["write"]
+                }
             )
-        job = store.submit(
-            TestJobRequest(
-                project_root=canonical,
-                task_id=task_id,
-                platform=platform,
-                filters=test_filter,
-                categories=category,
-                assemblies=assembly,
-                artifact_root=str(artifact_root),
-                snapshot_id=snapshot["snapshot_id"],
-                snapshot_manifest=snapshot["manifest"],
-                timeout_seconds=timeout_seconds,
+            if baseline_only and overlay_path:
+                raise UsageError(
+                    "Use either --baseline-only or --overlay-path, not both."
+                )
+            if not baseline_only and (not write_scopes or not overlay_path):
+                raise UsageError(
+                    "Submit exact --overlay-path values under a granted write claim, "
+                    "or use --baseline-only."
+                )
+            normalized_overlay = tuple(
+                normalize_relative(root, value) for value in overlay_path
             )
-        )
+            for value in normalized_overlay:
+                if not any(scope_covers(scope, value) for scope in write_scopes):
+                    raise UsageError(
+                        f"Overlay path is outside the task write claims: {value}"
+                    )
+            artifact_root = (
+                settings.paths.test_farm_artifacts / f"snapshot-{uuid.uuid4().hex[:16]}"
+            )
+            try:
+                snapshot = create_snapshot(
+                    root,
+                    artifact_root,
+                    () if baseline_only else write_scopes,
+                    () if baseline_only else normalized_overlay,
+                    baseline_only=baseline_only,
+                )
+            except (ProjectBusyError, UsageError) as exc:
+                return ActionResult(
+                    "Unity test requires the safe serial route.",
+                    {
+                        "route": "serial",
+                        "reason": "isolated-snapshot-unavailable",
+                        "detail": exc.message,
+                        "project_root": str(root),
+                    },
+                )
+            job = store.submit(
+                TestJobRequest(
+                    project_root=canonical,
+                    task_id=task_id,
+                    platform=platform,
+                    filters=test_filter,
+                    categories=category,
+                    assemblies=assembly,
+                    artifact_root=str(artifact_root),
+                    snapshot_id=snapshot["snapshot_id"],
+                    snapshot_manifest=snapshot["manifest"],
+                    timeout_seconds=timeout_seconds,
+                )
+            )
         launch_workers(settings.paths, store.status()["workers"])
         if wait_for_result:
             return _test_job_result(store.wait(job["job_id"], wait_timeout))
@@ -739,6 +806,7 @@ def workspace_task_group() -> None:
 @click.option("--summary", required=True)
 @click.option("--task-uri", default=None)
 @click.option("--ttl", type=float, default=None)
+@click.option("--token-file", type=click.Path(path_type=Path), default=None)
 @click.pass_obj
 def workspace_task_start(
     app: AppContext,
@@ -747,18 +815,35 @@ def workspace_task_start(
     summary: str,
     task_uri: str | None,
     ttl: float | None,
+    token_file: Path | None,
 ) -> None:
     def action() -> ActionResult:
         settings = app.settings()
         root = _project_root(project)
         canonical = canonical_project_root(root)
         coordinator = _workspace_coordinator(settings, root, canonical)
-        result = coordinator.start_task(
-            owner=owner,
-            summary=summary,
-            task_uri=task_uri,
-            ttl_seconds=ttl if ttl is not None else settings.project_lease_ttl_seconds,
-        )
+        token = secrets.token_urlsafe(32) if token_file is not None else None
+        resolved_token_file = None
+        if token_file is not None and token is not None:
+            resolved_token_file = _create_workspace_token_file(token_file, token)
+        try:
+            result = coordinator.start_task(
+                owner=owner,
+                summary=summary,
+                task_uri=task_uri,
+                ttl_seconds=(
+                    ttl if ttl is not None else settings.project_lease_ttl_seconds
+                ),
+                task_token=token,
+            )
+        except Exception:
+            if resolved_token_file is not None and token is not None:
+                _remove_matching_workspace_token_file(resolved_token_file, token)
+            raise
+        if resolved_token_file is not None:
+            result = dict(result)
+            result.pop("task_token", None)
+            result["token_file"] = str(resolved_token_file)
         return ActionResult("Workspace task started.", result)
 
     _execute(app, action)
@@ -813,10 +898,32 @@ def workspace_task_release(
         settings = app.settings()
         root = _project_root(project)
         canonical = canonical_project_root(root)
+        token = _read_workspace_token(token_file, token_stdin=token_stdin)
         value = _workspace_coordinator(settings, root, canonical).release_task(
-            _read_workspace_token(token_file, token_stdin=token_stdin), result=result
+            token, result=result
         )
+        if token_file is not None and token is not None:
+            value["token_file_removed"] = _remove_matching_workspace_token_file(
+                token_file, token
+            )
         return ActionResult("Workspace task released.", value)
+
+    _execute(app, action)
+
+
+@workspace_task_group.command("cleanup-idle")
+@click.option("--project", type=click.Path(path_type=Path), default=Path.cwd)
+@click.option("--task-id", required=True)
+@click.pass_obj
+def workspace_task_cleanup_idle(app: AppContext, project: Path, task_id: str) -> None:
+    def action() -> ActionResult:
+        settings = app.settings()
+        root = _project_root(project)
+        canonical = canonical_project_root(root)
+        value = _workspace_coordinator(settings, root, canonical).cleanup_idle_task(
+            task_id
+        )
+        return ActionResult("Idle workspace task cleaned.", value)
 
     _execute(app, action)
 

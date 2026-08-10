@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import os
 from pathlib import Path
 
 from click.testing import CliRunner
@@ -640,6 +641,108 @@ def test_workspace_cli_uses_environment_token_and_sanitizes_status(
     ]
 
 
+def test_workspace_task_token_file_is_private_and_removed_on_release(
+    tmp_path: Path,
+) -> None:
+    project = create_unity_project(tmp_path / "Project")
+    _write_workspace_policy(project, "required")
+    state = tmp_path / "state"
+    token_file = tmp_path / "private" / "task.token"
+    runner = CliRunner()
+
+    started = runner.invoke(
+        cli,
+        [
+            "--state-dir",
+            str(state),
+            "workspace",
+            "task",
+            "start",
+            "--project",
+            str(project),
+            "--owner",
+            "token-file",
+            "--summary",
+            "token file contract",
+            "--token-file",
+            str(token_file),
+        ],
+    )
+
+    assert started.exit_code == 0, started.output
+    payload = json.loads(started.output)["result"]
+    assert "task_token" not in payload
+    assert payload["token_file"] == str(token_file.resolve())
+    token = token_file.read_text(encoding="utf-8").strip()
+    assert token
+    assert token not in started.output
+    if os.name != "nt":
+        assert token_file.stat().st_mode & 0o777 == 0o600
+
+    released = runner.invoke(
+        cli,
+        [
+            "--state-dir",
+            str(state),
+            "workspace",
+            "task",
+            "release",
+            "--project",
+            str(project),
+            "--result",
+            "completed",
+            "--token-file",
+            str(token_file),
+        ],
+    )
+
+    assert released.exit_code == 0, released.output
+    assert json.loads(released.output)["result"]["token_file_removed"] is True
+    assert not token_file.exists()
+
+
+def test_workspace_cleanup_idle_cli_needs_no_task_token(tmp_path: Path) -> None:
+    project = create_unity_project(tmp_path / "Project")
+    _write_workspace_policy(project, "required")
+    state = tmp_path / "state"
+    runner = CliRunner()
+    started = runner.invoke(
+        cli,
+        [
+            "--state-dir",
+            str(state),
+            "workspace",
+            "task",
+            "start",
+            "--project",
+            str(project),
+            "--owner",
+            "lost-token",
+            "--summary",
+            "claimless task",
+        ],
+    )
+    task_id = json.loads(started.output)["result"]["task_id"]
+
+    cleaned = runner.invoke(
+        cli,
+        [
+            "--state-dir",
+            str(state),
+            "workspace",
+            "task",
+            "cleanup-idle",
+            "--project",
+            str(project),
+            "--task-id",
+            task_id,
+        ],
+    )
+
+    assert cleaned.exit_code == 0, cleaned.output
+    assert json.loads(cleaned.output)["result"]["reason"] == "idle-task-cleaned"
+
+
 def test_required_outcome_unknown_marks_task_after_project_lock_releases(
     monkeypatch, tmp_path: Path
 ) -> None:
@@ -711,7 +814,7 @@ def test_required_outcome_unknown_marks_task_after_project_lock_releases(
                     "--endpoint",
                     endpoint,
                     "call",
-                    "drop_response",
+                    "ambiguous_response",
                     "--project",
                     str(project),
                 ],
