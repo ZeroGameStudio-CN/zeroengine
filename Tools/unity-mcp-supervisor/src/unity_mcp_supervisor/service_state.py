@@ -167,6 +167,10 @@ class StatePaths:
         return self.root / "workspace-control.sqlite3"
 
     @property
+    def workspace_registrations(self) -> Path:
+        return self.root / "workspace-registrations"
+
+    @property
     def logs(self) -> Path:
         return self.root / "logs"
 
@@ -182,6 +186,7 @@ class StatePaths:
         ensure_private_directory(self.root)
         ensure_private_directory(self.locks)
         ensure_private_directory(self.project_leases)
+        ensure_private_directory(self.workspace_registrations)
         ensure_private_directory(self.logs)
         ensure_private_directory(self.editor_discovery)
         ensure_private_directory(self.editor_requests)

@@ -446,6 +446,89 @@ def _write_workspace_policy(project: Path, enforcement: str) -> None:
     )
 
 
+def test_workspace_bootstrap_registers_without_project_writes(tmp_path: Path) -> None:
+    project = create_unity_project(tmp_path / "Project")
+    state = tmp_path / "state"
+    runner = CliRunner()
+    before = {
+        path.relative_to(project).as_posix(): path.read_bytes()
+        for path in project.rglob("*")
+        if path.is_file()
+    }
+
+    first = runner.invoke(
+        cli,
+        [
+            "--state-dir",
+            str(state),
+            "workspace",
+            "bootstrap",
+            "--project",
+            str(project),
+        ],
+    )
+    second = runner.invoke(
+        cli,
+        [
+            "--state-dir",
+            str(state),
+            "workspace",
+            "bootstrap",
+            "--project",
+            str(project),
+        ],
+    )
+    status = runner.invoke(
+        cli,
+        [
+            "--state-dir",
+            str(state),
+            "workspace",
+            "status",
+            "--project",
+            str(project),
+        ],
+    )
+
+    assert first.exit_code == 0, first.output
+    assert second.exit_code == 0, second.output
+    assert status.exit_code == 0, status.output
+    assert json.loads(first.output)["result"]["created"] is True
+    assert json.loads(second.output)["result"]["created"] is False
+    status_value = json.loads(status.output)["result"]
+    assert status_value["policy"]["enforcement"] == "required"
+    assert status_value["policy"]["source"] == "registration"
+    assert status_value["tasks"] == []
+    assert status_value["claims"] == []
+    assert before == {
+        path.relative_to(project).as_posix(): path.read_bytes()
+        for path in project.rglob("*")
+        if path.is_file()
+    }
+
+    removed = runner.invoke(
+        cli,
+        [
+            "--state-dir",
+            str(state),
+            "workspace",
+            "unregister",
+            "--project",
+            str(project),
+        ],
+    )
+
+    assert removed.exit_code == 0, removed.output
+    removed_value = json.loads(removed.output)["result"]
+    assert removed_value["removed"] is True
+    assert removed_value["policy"]["enforcement"] == "disabled"
+    assert before == {
+        path.relative_to(project).as_posix(): path.read_bytes()
+        for path in project.rglob("*")
+        if path.is_file()
+    }
+
+
 def test_workspace_cli_uses_environment_token_and_sanitizes_status(
     tmp_path: Path,
 ) -> None:

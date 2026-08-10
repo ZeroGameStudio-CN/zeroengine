@@ -26,6 +26,7 @@ fixes that do not change that compatibility contract.
 uv sync --locked
 uv run umcp service ensure
 uv run umcp control package-path
+uv run umcp workspace bootstrap --project D:\unity\projects\POB
 $task = uv run umcp workspace task start --project D:\unity\projects\POB --owner task-label --summary "Unity inspection" | ConvertFrom-Json
 $env:UMCP_WORKSPACE_TASK_TOKEN = $task.result.task_token
 uv run umcp workspace claim acquire --project D:\unity\projects\POB --resource unity-live
@@ -39,6 +40,7 @@ Remove-Item Env:UMCP_WORKSPACE_TASK_TOKEN -ErrorAction SilentlyContinue
 # Installed tool (replace <tested-commit>)
 uv tool install "unity-mcp-supervisor @ git+https://github.com/ZeroGameStudio-CN/zeroengine.git@<tested-commit>#subdirectory=Tools/unity-mcp-supervisor"
 umcp service ensure
+umcp workspace bootstrap --project D:\unity\projects\POB
 $task = umcp workspace task start --project D:\unity\projects\POB --owner task-label --summary "Unity inspection" | ConvertFrom-Json
 $env:UMCP_WORKSPACE_TASK_TOKEN = $task.result.task_token
 umcp workspace claim acquire --project D:\unity\projects\POB --resource unity-live
@@ -47,7 +49,13 @@ umcp workspace task release --project D:\unity\projects\POB --result completed
 Remove-Item Env:UMCP_WORKSPACE_TASK_TOKEN -ErrorAction SilentlyContinue
 ```
 
-Projects without a workspace policy retain the legacy `umcp lease` contract.
+`workspace bootstrap` creates an idempotent user-level `required` registration
+inside Supervisor private state; it does not write the Unity project. An existing
+project-local policy remains authoritative. Remove only the user registration
+with `umcp workspace unregister --project <root>` after all tasks, claims, and
+Unity leases have drained.
+
+Projects without a workspace registration or policy retain the legacy `umcp lease` contract.
 An `audit` or `required` policy enables `umcp workspace status/watch`, persistent
 path/resource queues, Plastic observations, and whole-workspace freezes. In
 `required`, `connect`, `call`, `run`, and legacy lease commands require the task

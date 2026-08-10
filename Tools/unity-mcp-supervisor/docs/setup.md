@@ -116,6 +116,21 @@ request and retries the exact new session within its bounded budget.
 Agents use only `umcp`; remove their direct Unity MCP `/mcp` client entries
 after the two-Editor acceptance run passes.
 
+Register a project once without changing its files:
+
+```powershell
+umcp workspace bootstrap --project D:\unity\projects\POB
+```
+
+The command writes a schema-1 `required` registration under the current user's
+Supervisor private state. It is idempotent and does not start Unity, inspect SCM,
+or create a task or claim. An existing project-local policy remains authoritative.
+`umcp workspace unregister --project <root>` removes only the user registration
+and fails closed while any task, claim, Unity lease, lease waiter, or coordination
+error remains.
+The independent Unity companion package described above is still required for
+live Editor connection; bootstrap does not install or change packages.
+
 ```powershell
 $task = umcp workspace task start --project D:\unity\projects\POB --owner task-label --summary "Targeted Unity work" | ConvertFrom-Json
 $env:UMCP_WORKSPACE_TASK_TOKEN = $task.result.task_token
@@ -131,8 +146,9 @@ try {
 }
 ```
 
-The project policy at `Tools/Coordination/workspace-control.json` selects
-`audit` or `required`. A task token is returned only at task creation; pass it
+The user registration selects `required`; the compatible project policy at
+`Tools/Coordination/workspace-control.json` may instead select `audit` or
+`required` and takes precedence. A task token is returned only at task creation; pass it
 through `UMCP_WORKSPACE_TASK_TOKEN`, an owner-only token file, or stdin. Never
 put it in argv or logs. Path claims include Unity `.meta` pairs. Overlapping
 claims queue FIFO while unrelated paths remain parallel. A queued

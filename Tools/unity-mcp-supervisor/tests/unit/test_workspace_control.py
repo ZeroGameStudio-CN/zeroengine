@@ -15,7 +15,10 @@ from unity_mcp_supervisor.project_resolver import canonical_project_root
 from unity_mcp_supervisor.service_state import StatePaths
 from unity_mcp_supervisor.workspace_control import (
     WorkspaceCoordinator,
+    bootstrap_workspace_policy,
     load_workspace_policy,
+    unregister_workspace_policy,
+    workspace_registration_path,
 )
 
 
@@ -620,6 +623,165 @@ def test_policy_rejects_coerced_scalar_types(
 
     assert loaded.valid is False
     assert loaded.error is not None
+
+
+def test_user_registration_is_project_clean_idempotent_and_reversible(
+    tmp_path: Path,
+) -> None:
+    project = tmp_path / "Project"
+    (project / "Assets").mkdir(parents=True)
+    (project / "ProjectSettings").mkdir()
+    (project / "ProjectSettings" / "ProjectVersion.txt").write_text(
+        "m_EditorVersion: 2022.3.62f3\n", encoding="utf-8"
+    )
+    paths = StatePaths(tmp_path / "state")
+    before = {
+        path.relative_to(project).as_posix(): path.read_bytes()
+        for path in project.rglob("*")
+        if path.is_file()
+    }
+
+    created = bootstrap_workspace_policy(paths, project)
+    repeated = bootstrap_workspace_policy(paths, project)
+
+    assert created["created"] is True
+    assert repeated["created"] is False
+    assert created["registration_path"] == repeated["registration_path"]
+    policy = load_workspace_policy(project, paths)
+    assert policy.valid is True
+    assert policy.enforcement == "required"
+    assert policy.source == "registration"
+    assert not (project / "Tools").exists()
+    assert before == {
+        path.relative_to(project).as_posix(): path.read_bytes()
+        for path in project.rglob("*")
+        if path.is_file()
+    }
+
+    removed = unregister_workspace_policy(paths, project, lease_ttl_seconds=30)
+
+    assert removed["removed"] is True
+    assert removed["policy"]["enforcement"] == "disabled"
+    assert load_workspace_policy(project, paths).source == "none"
+
+
+def test_project_policy_precedes_bootstrap_without_user_registration(
+    tmp_path: Path,
+) -> None:
+    project = _project(tmp_path, enforcement="audit")
+    paths = StatePaths(tmp_path / "state")
+    policy_path = project / "Tools" / "Coordination" / "workspace-control.json"
+    before = policy_path.read_bytes()
+
+    result = bootstrap_workspace_policy(paths, project)
+
+    assert result["created"] is False
+    assert result["registration_path"] is None
+    assert result["policy"]["source"] == "project"
+    assert policy_path.read_bytes() == before
+    assert not paths.workspace_registrations.exists()
+
+
+def test_mismatched_user_registration_fails_closed(tmp_path: Path) -> None:
+    project = tmp_path / "Project"
+    (project / "Assets").mkdir(parents=True)
+    (project / "ProjectSettings").mkdir()
+    (project / "ProjectSettings" / "ProjectVersion.txt").write_text(
+        "m_EditorVersion: 2022.3.62f3\n", encoding="utf-8"
+    )
+    paths = StatePaths(tmp_path / "state")
+    paths.ensure()
+    registration = workspace_registration_path(paths, project)
+    registration.write_text(
+        json.dumps(
+            {
+                "schemaVersion": 1,
+                "projectRoot": str(tmp_path / "OtherProject"),
+                "enforcement": "required",
+                "unityMetaPairing": True,
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    policy = load_workspace_policy(project, paths)
+
+    assert policy.valid is False
+    assert policy.enforcement == "required"
+    assert policy.source == "registration"
+    with pytest.raises(IncompatibleError):
+        WorkspaceCoordinator(
+            paths,
+            project,
+            canonical_project_root(project),
+            lease_ttl_seconds=30,
+        )
+
+
+@pytest.mark.parametrize("corruption", ["invalid-json", "unsupported-schema"])
+def test_invalid_user_registration_fails_closed(
+    tmp_path: Path, corruption: str
+) -> None:
+    project = tmp_path / "Project"
+    (project / "Assets").mkdir(parents=True)
+    (project / "ProjectSettings").mkdir()
+    (project / "ProjectSettings" / "ProjectVersion.txt").write_text(
+        "m_EditorVersion: 2022.3.62f3\n", encoding="utf-8"
+    )
+    paths = StatePaths(tmp_path / "state")
+    paths.ensure()
+    registration = workspace_registration_path(paths, project)
+    if corruption == "invalid-json":
+        registration.write_text("{", encoding="utf-8")
+    else:
+        registration.write_text(
+            json.dumps(
+                {
+                    "schemaVersion": 2,
+                    "projectRoot": canonical_project_root(project),
+                    "enforcement": "required",
+                    "unityMetaPairing": True,
+                }
+            ),
+            encoding="utf-8",
+        )
+
+    with pytest.raises(IncompatibleError):
+        bootstrap_workspace_policy(paths, project)
+    with pytest.raises(IncompatibleError):
+        WorkspaceCoordinator(
+            paths,
+            project,
+            canonical_project_root(project),
+            lease_ttl_seconds=30,
+        )
+
+
+def test_unregister_blocks_active_workspace_task(tmp_path: Path) -> None:
+    project = tmp_path / "Project"
+    (project / "Assets").mkdir(parents=True)
+    (project / "ProjectSettings").mkdir()
+    (project / "ProjectSettings" / "ProjectVersion.txt").write_text(
+        "m_EditorVersion: 2022.3.62f3\n", encoding="utf-8"
+    )
+    paths = StatePaths(tmp_path / "state")
+    bootstrap_workspace_policy(paths, project)
+    coordinator = WorkspaceCoordinator(
+        paths,
+        project,
+        canonical_project_root(project),
+        lease_ttl_seconds=30,
+    )
+    task = _task(coordinator, "active")
+
+    with pytest.raises(ProjectBusyError) as exc_info:
+        unregister_workspace_policy(paths, project, lease_ttl_seconds=30)
+
+    assert exc_info.value.details["reason"] == "workspace-registration-active"
+    assert workspace_registration_path(paths, project).is_file()
+    coordinator.release_task(task["task_token"], result="completed")
+    removed = unregister_workspace_policy(paths, project, lease_ttl_seconds=30)
+    assert removed["removed"] is True
 
 
 def test_workspace_database_v1_migrates_adoption_owner_column(
