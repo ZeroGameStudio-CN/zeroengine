@@ -28,6 +28,24 @@ namespace ZeroEngine.Dashboard.Tests.Editor
         }
 
         [Test]
+        public void DashboardFixedTooltips_AreNonEmptyChineseText()
+        {
+            Type textType = typeof(ZeroEngineDashboard).Assembly.GetType("ZeroEngine.Editor.DashboardText");
+            Assert.That(textType, Is.Not.Null);
+            FieldInfo[] tooltipFields = textType.GetFields(BindingFlags.Static | BindingFlags.NonPublic)
+                .Where(field => field.FieldType == typeof(string) && field.Name.EndsWith("Tooltip", StringComparison.Ordinal))
+                .ToArray();
+
+            Assert.That(tooltipFields, Has.Length.GreaterThanOrEqualTo(12));
+            foreach (FieldInfo field in tooltipFields)
+            {
+                string value = (string)field.GetRawConstantValue();
+                Assert.That(value, Is.Not.Empty, field.Name);
+                Assert.That(value.Any(character => character >= '\u3400' && character <= '\u9fff'), Is.True, field.Name);
+            }
+        }
+
+        [Test]
         public void Build_ValidUtf8Descriptor_UsesDeterministicDefaults()
         {
             DashboardCatalog catalog = Build(Source(Descriptor(
@@ -39,6 +57,7 @@ namespace ZeroEngine.Dashboard.Tests.Editor
             Assert.AreEqual("工具", catalog.Modules[0].DisplayName);
             Assert.AreEqual(0, catalog.Modules[0].Order);
             Assert.AreEqual(0, catalog.Modules[0].Entries[0].Order);
+            Assert.AreEqual("常规", catalog.Modules[0].VisibleSurfaces[0].Section);
             Assert.AreEqual(0, catalog.Diagnostics.Count);
         }
 

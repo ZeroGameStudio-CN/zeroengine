@@ -103,6 +103,13 @@ namespace ZeroEngine.Formula.Tests.Editor
         [Test]
         public void Labels_TranslateEditorStatusAndIssueSummary()
         {
+            Assert.AreEqual("公式中心", FormulaEditorLabels.Studio);
+            Assert.AreEqual("公式目录", FormulaEditorLabels.CatalogPage);
+            Assert.That(FormulaEditorLabels.StudioTooltip, Does.Contain("同一个窗口"));
+            Assert.That(FormulaEditorLabels.EvaluateTooltip, Does.Contain("预览输入"));
+            Assert.That(FormulaEditorLabels.PreviewCaseTooltip, Does.Contain("样例"));
+            Assert.That(FormulaEditorLabels.GenerateMissingCatalogEntriesTooltip, Does.Contain("保存"));
+            Assert.That(FormulaEditorLabels.OpenWorkbenchTooltip, Does.Contain("当前公式中心"));
             Assert.AreEqual("全部", FormulaEditorLabels.FilterName(FormulaCatalogWindowFilter.All));
             Assert.AreEqual("错误", FormulaEditorLabels.FilterName(FormulaCatalogWindowFilter.Errors));
             Assert.AreEqual("草稿", FormulaEditorLabels.CatalogStatusName(FormulaCatalogStatus.Draft));

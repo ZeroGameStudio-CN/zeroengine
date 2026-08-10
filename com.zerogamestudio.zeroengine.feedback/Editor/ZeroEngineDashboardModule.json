@@ -1,21 +1,21 @@
 {
   "schemaVersion": 1,
   "moduleId": "com.zerogamestudio.zeroengine.feedback",
-  "displayName": "Feedback",
-  "description": "Player feedback UI setup and diagnostics.",
+  "displayName": "玩家反馈",
+  "description": "玩家反馈界面的安装与诊断工具。",
   "order": 500,
   "documentationPath": "README.md",
   "entries": [
     {
       "id": "install-default-ui",
-      "displayName": "Install Default Feedback UI",
-      "description": "Forward to the package-owned installer after confirmation.",
+      "displayName": "安装默认反馈界面",
+      "description": "确认后调用由反馈包维护的安装器。",
       "category": "setup",
       "kind": "command",
       "menuPath": "ZeroEngine/Feedback/Install Default UI",
       "order": 100,
       "safety": "project-write",
-      "confirmation": "Install editable Feedback assets under Assets/ZeroEngineGenerated/Feedback? The package installer retains ownership of write safety.",
+      "confirmation": "是否在 Assets/ZeroEngineGenerated/Feedback 下安装可编辑的反馈资源？写入安全仍由反馈包安装器负责。",
       "availability": "edit-mode",
       "replaces": []
     }

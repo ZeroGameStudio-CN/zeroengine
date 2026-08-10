@@ -1,6 +1,6 @@
 # ZeroEngine Dashboard
 
-ZeroEngine Dashboard 3.1 是一个可选、仅限 Unity Editor 的工具目录。它从已注册 UPM 包以及项目 `Assets/**/Editor/` 中读取 `ZeroEngineDashboardModule.json`，只展示所有者明确声明的窗口和命令。
+ZeroEngine Dashboard 3.1.1 是一个可选、仅限 Unity Editor 的简体中文工具目录。它从已注册 UPM 包以及项目 `Assets/**/Editor/` 中读取 `ZeroEngineDashboardModule.json`，只展示所有者明确声明的窗口和命令。
 
 ## 特性
 
@@ -12,6 +12,7 @@ ZeroEngine Dashboard 3.1 是一个可选、仅限 Unity Editor 的工具目录�
 - 项目适配入口可通过 `mountModuleId` 挂到已安装的通用模块，不产生独立项目 Tab。
 - 可选 `section` 将大型模块拆成可读分区；共享 `surfaceId` 可把同一宿主窗口的兼容入口合并为一行多动作。
 - Tools/System 两页自适应窄宽布局，技术 ID 与菜单路径默认折叠到 Details。
+- 固定 label、状态、安全提示与可操作控件 tooltip 使用简体中文；品牌缩写和技术标识保持原值。
 - 不安装包、不写 manifest、不清理 PlayerPrefs/存档、不写项目资源。
 
 ## 安装
@@ -27,7 +28,7 @@ ZeroEngine Dashboard 3.1 是一个可选、仅限 Unity Editor 的工具目录�
 }
 ```
 
-Unity 2022.3 不会为 Git URL 包自动解析同仓 editor-ui；两项必须直接 pin 到同一提交。3.1.0 要求 editor-ui 1.1.0。
+Unity 2022.3 不会为 Git URL 包自动解析同仓 editor-ui；两项必须直接 pin 到同一提交。3.1.1 要求 editor-ui 1.1.1。
 
 本地 `file:` 依赖只用于临时联调，不应进入共享分支。
 

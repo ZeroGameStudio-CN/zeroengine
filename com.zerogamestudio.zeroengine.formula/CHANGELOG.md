@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.5.1
+
+- Localized Formula Studio labels and actionable-control tooltips to Simplified Chinese.
+- Localized Dashboard descriptor labels while preserving existing menus and public open APIs.
+- Updated the Editor UI dependency to 1.1.1.
+
 ## 0.5.0
 
 - Merged Formula Catalog and Workbench into one Formula Studio window with two pages.

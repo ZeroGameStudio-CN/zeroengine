@@ -185,7 +185,7 @@ namespace ZeroEngine.Editor.Dashboard
             Replaces = replaces ?? Array.Empty<string>();
             MountModuleId = mountModuleId ?? string.Empty;
             SourcePath = sourcePath;
-            Section = string.IsNullOrEmpty(section) ? "General" : section;
+            Section = string.IsNullOrEmpty(section) ? "常规" : section;
             SurfaceId = surfaceId ?? string.Empty;
             SurfaceDisplayName = surfaceDisplayName ?? string.Empty;
             SurfaceActionLabel = surfaceActionLabel ?? string.Empty;

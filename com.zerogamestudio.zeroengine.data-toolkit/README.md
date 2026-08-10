@@ -8,6 +8,8 @@ Add the package through Unity Package Manager using the Git URL for this reposit
 
 Version 2.0.0 also requires a direct Git pin for `com.zerogamestudio.zeroengine.editor-ui@1.0.0` at the same commit. Unity 2022.3 does not resolve same-repository sibling packages transitively.
 
+Version 2.0.1 localizes the Dashboard host label and description to Simplified Chinese; project adapters and menu routes remain compatible.
+
 ## Project Profile
 
 Projects register a profile at editor load time:

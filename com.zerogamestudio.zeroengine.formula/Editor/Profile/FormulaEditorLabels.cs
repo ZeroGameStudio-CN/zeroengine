@@ -5,6 +5,7 @@ namespace ZeroEngine.Formula.Editor
     public static class FormulaEditorLabels
     {
         public const string Formula = "公式";
+        public const string FormulaTooltip = "选择要预览计算的公式资源。";
         public const string InitialValue = "初始值";
         public const string Steps = "步骤";
         public const string Operation = "操作";
@@ -17,30 +18,50 @@ namespace ZeroEngine.Formula.Editor
         public const string Result = "结果";
         public const string PreviewResult = "预览结果";
         public const string Workbench = "公式工作台";
+        public const string WorkbenchTooltip = "编辑预览输入并计算公式、批量样例和曲线。";
+        public const string Studio = "公式中心";
+        public const string StudioTooltip = "在同一个窗口中浏览公式目录并进行预览计算。";
+        public const string CatalogPage = "公式目录";
+        public const string CatalogPageTooltip = "浏览、筛选并检查已登记的公式资源。";
         public const string Diagnostics = "诊断";
         public const string StepTrace = "步骤追踪";
         public const string Evaluate = "预览计算";
+        public const string EvaluateTooltip = "使用当前 Profile 和预览输入计算所选公式。";
         public const string PreviewInputs = "预览输入";
         public const string PreviewCases = "预览样例";
+        public const string PreviewCaseTooltip = "选择一个批量预览样例资源。";
         public const string AddPreviewCase = "添加样例";
+        public const string AddPreviewCaseTooltip = "添加一个批量预览样例资源槽。";
+        public const string RemovePreviewCaseTooltip = "移除当前批量预览样例资源槽。";
         public const string EvaluatePreviewCases = "批量预览";
+        public const string EvaluatePreviewCasesTooltip = "使用当前输入运行全部预览样例并生成报告。";
         public const string PreviewReportJson = "JSON 报告";
         public const string PreviewReportMarkdown = "Markdown 报告";
         public const string CurvePreview = "曲线预览";
         public const string CurveInput = "曲线输入";
+        public const string CurveInputTooltip = "选择用于横轴采样的预览输入。";
         public const string CurveRange = "曲线范围";
+        public const string CurveRangeTooltip = "设置曲线预览的最小值和最大值。";
         public const string CurveSamples = "采样数";
+        public const string CurveSamplesTooltip = "设置曲线范围内的采样点数量。";
         public const string BuildCurve = "生成曲线";
+        public const string BuildCurveTooltip = "按当前输入、范围和采样数生成公式结果曲线。";
         public const string ResetPreviewInputs = "重置预览输入";
+        public const string ResetPreviewInputsTooltip = "将所有预览输入恢复为当前 Profile 的默认值。";
         public const string AddStep = "添加步骤";
         public const string RemoveStep = "删除步骤";
         public const string FormulaRoot = "公式根目录";
         public const string Catalog = "目录资产";
         public const string Refresh = "刷新";
+        public const string RefreshTooltip = "重新读取公式资源和当前目录状态。";
         public const string Scan = "扫描";
+        public const string ScanTooltip = "只读扫描公式引用和诊断，不修改项目资源。";
         public const string GenerateMissingCatalogEntries = "生成缺失目录项";
+        public const string GenerateMissingCatalogEntriesTooltip = "为缺失公式生成草稿目录项并保存目录资源。";
         public const string Search = "搜索";
+        public const string SearchTooltip = "按公式名称、路径、用途、负责人、标签或诊断内容筛选。";
         public const string Filter = "筛选";
+        public const string FilterTooltip = "按错误、警告、缺目录或未引用状态筛选公式。";
         public const string ScanSummary = "扫描摘要";
         public const string FormulaList = "公式列表";
         public const string References = "引用";
@@ -53,7 +74,9 @@ namespace ZeroEngine.Formula.Editor
         public const string PreviewSucceeded = "预览通过";
         public const string PreviewFailed = "预览失败";
         public const string Ping = "定位";
+        public const string PingTooltip = "在 Project 窗口中定位该公式资源。";
         public const string OpenWorkbench = "工作台";
+        public const string OpenWorkbenchTooltip = "在当前公式中心切换到工作台并选中该公式。";
         public const string All = "全部";
 
         public static string OperationName(FormulaOperationType operation)

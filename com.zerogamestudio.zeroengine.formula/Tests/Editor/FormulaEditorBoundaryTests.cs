@@ -35,9 +35,12 @@ namespace ZeroEngine.Formula.Tests.Editor
 
             StringAssert.Contains("FormulaEditorLabels.Formula", source);
             StringAssert.Contains("FormulaEditorLabels.Evaluate", source);
+            StringAssert.Contains("FormulaEditorLabels.EvaluateTooltip", source);
+            StringAssert.Contains("FormulaEditorLabels.StudioTooltip", source);
             StringAssert.Contains("FormulaEditorGUILayout.DrawReport", source);
             StringAssert.Contains("FormulaEditorLabels.Diagnostics", guiSource);
             StringAssert.Contains("FormulaEditorLabels.StepTrace", guiSource);
+            StringAssert.Contains("FormulaEditorLabels.FilterTooltip", guiSource);
             StringAssert.DoesNotContain("EditorGUILayout.LabelField(\"Succeeded\"", combinedSource);
             StringAssert.DoesNotContain("EditorGUILayout.LabelField(\"Result\"", combinedSource);
             StringAssert.DoesNotContain("EditorGUILayout.LabelField(\"Diagnostics\"", combinedSource);

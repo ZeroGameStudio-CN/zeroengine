@@ -94,17 +94,27 @@ namespace ZeroEngine.EditorUI
 
         public static bool PrimaryButton(string label, params GUILayoutOption[] options)
         {
+            return PrimaryButton(new GUIContent(label), options);
+        }
+
+        public static bool PrimaryButton(GUIContent content, params GUILayoutOption[] options)
+        {
             EditorUiStyles.EnsureCurrent();
-            return GUILayout.Button(label, EditorUiStyles.PrimaryButton, options);
+            return GUILayout.Button(content, EditorUiStyles.PrimaryButton, options);
         }
 
         public static bool SelectionButton(string label, bool selected, params GUILayoutOption[] options)
+        {
+            return SelectionButton(new GUIContent(label), selected, options);
+        }
+
+        public static bool SelectionButton(GUIContent content, bool selected, params GUILayoutOption[] options)
         {
             Color previous = GUI.backgroundColor;
             if (selected)
                 GUI.backgroundColor = EditorUiPalette.Current.Selection;
             bool clicked = GUILayout.Button(
-                label,
+                content,
                 selected ? EditorStyles.miniButtonMid : EditorStyles.miniButton,
                 options);
             GUI.backgroundColor = previous;
@@ -119,13 +129,21 @@ namespace ZeroEngine.EditorUI
 
         public static void ActionRow(string title, string description, Action drawTrailing = null)
         {
+            ActionRow(
+                new GUIContent(title, description),
+                new GUIContent(description, description),
+                drawTrailing);
+        }
+
+        public static void ActionRow(GUIContent title, GUIContent description, Action drawTrailing = null)
+        {
             EditorUiStyles.EnsureCurrent();
             using (new EditorGUILayout.HorizontalScope(EditorUiStyles.ActionRow))
             {
                 using (new EditorGUILayout.VerticalScope())
                 {
                     GUILayout.Label(title, EditorStyles.boldLabel);
-                    if (!string.IsNullOrWhiteSpace(description))
+                    if (description != null && !string.IsNullOrWhiteSpace(description.text))
                         GUILayout.Label(description, EditorStyles.wordWrappedMiniLabel);
                 }
 
@@ -139,15 +157,25 @@ namespace ZeroEngine.EditorUI
 
         public static void Chip(string text, params GUILayoutOption[] options)
         {
-            if (string.IsNullOrWhiteSpace(text))
+            Chip(new GUIContent(text), options);
+        }
+
+        public static void Chip(GUIContent content, params GUILayoutOption[] options)
+        {
+            if (content == null || string.IsNullOrWhiteSpace(content.text))
                 return;
             EditorUiStyles.EnsureCurrent();
-            GUILayout.Label(text, EditorUiStyles.Chip, options);
+            GUILayout.Label(content, EditorUiStyles.Chip, options);
         }
 
         public static bool Disclosure(bool expanded, string label)
         {
-            return EditorGUILayout.Foldout(expanded, label, true);
+            return Disclosure(expanded, new GUIContent(label));
+        }
+
+        public static bool Disclosure(bool expanded, GUIContent content)
+        {
+            return EditorGUILayout.Foldout(expanded, content, true);
         }
 
         public static EditorUiResponsiveMode ResponsiveMode(float width)
