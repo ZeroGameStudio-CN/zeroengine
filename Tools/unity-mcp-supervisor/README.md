@@ -55,6 +55,12 @@ project-local policy remains authoritative. Remove only the user registration
 with `umcp workspace unregister --project <root>` after all tasks, claims, and
 Unity leases have drained.
 
+Agent lifecycle rule: on first use of a Unity project on a machine, inspect
+`workspace status` and bootstrap when its policy source is `none`. Before moving,
+renaming, or deleting a project, drain coordination and unregister the old root;
+after a move or rename, bootstrap the new canonical root. A failed unregister
+blocks the filesystem operation. Never edit registration files directly.
+
 Projects without a workspace registration or policy retain the legacy `umcp lease` contract.
 An `audit` or `required` policy enables `umcp workspace status/watch`, persistent
 path/resource queues, Plastic observations, and whole-workspace freezes. In

@@ -131,6 +131,36 @@ error remains.
 The independent Unity companion package described above is still required for
 live Editor connection; bootstrap does not install or change packages.
 
+### Agent project lifecycle
+
+On first use of a Unity project on each machine, resolve its canonical root and
+inspect policy before any project write or live Editor operation:
+
+```powershell
+$status = umcp workspace status --project <root> | ConvertFrom-Json
+if ($status.result.policy.source -eq "none") {
+    umcp workspace bootstrap --project <root>
+    $status = umcp workspace status --project <root> | ConvertFrom-Json
+}
+```
+
+Continue only when the policy is valid, `enforcement` is `required`, and
+`coordination_error` is null. A project-local policy may report source
+`project`; otherwise the source is `registration`.
+
+Before moving, renaming, or deleting a project, finish its tasks and require no
+claims, Unity lease, lease waiter, freeze, or coordination error. Then remove
+only the old machine-local registration:
+
+```powershell
+umcp workspace unregister --project <old-root>
+```
+
+If unregister fails, leave the project in place. After a move or rename,
+bootstrap the new canonical root. If the directory was already removed, pass
+its exact former absolute root to unregister. Never edit or delete files under
+`workspace-registrations/` directly.
+
 ```powershell
 $task = umcp workspace task start --project D:\unity\projects\POB --owner task-label --summary "Targeted Unity work" | ConvertFrom-Json
 $env:UMCP_WORKSPACE_TASK_TOKEN = $task.result.task_token
