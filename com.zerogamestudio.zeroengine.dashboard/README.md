@@ -75,6 +75,11 @@ Dashboard 入口：`ZeroEngine > Dashboard`。
 
 ## 版本历史
 
+### 3.1.1
+
+- Dashboard shell、正式模块描述符与动作 tooltip 使用简体中文，技术 ID、菜单路径和安全语义保持不变。
+- V2 信息架构、Formula Studio 合并与 POB rollout 证据见[归档 spec](../docs/specs/2026-08-10-zeroengine-dashboard-v2-information-architecture.md)。
+
 ### 3.1.0
 
 - Tools 与 System 两页替代分散的 Installed/Diagnostics Tab，并在窄窗口切换为紧凑模块选择器。

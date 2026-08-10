@@ -1,8 +1,8 @@
 # ZeroEngine Dashboard V2：信息架构、可读性与面板合并
 
-- 状态：Final
-- 最后更新：2026-08-10
-- 设计基线：ZeroEngine canonical `d2648688871fcc1bf6f702d31227172c16c75a29`；POB `/main cs:16809`
+- 状态：Complete
+- 最后更新：2026-08-11
+- 实现基线：ZeroEngine canonical `7cc164764c55b70792a4625fe0bb795001e851be`（tree `e39c4d18c648843858851168d3f7491d1894b0f7`）；POB `/main cs:16813`
 - 设计批准：Approved；用户于 2026-08-10 明确将本轮审查合同改为当前会话单审
 - 执行授权：Authorized；覆盖本 spec、简体中文 label/tooltip 增量及 POB 消费工程 rollout
 - 终端操作授权：Authorized；用户于 2026-08-10 回复“继续”授权中文化增量 PR/merge、最终 canonical pin 与精确 Plastic checkin
@@ -226,10 +226,13 @@ POB Data Manager、Configurator、Formula Profile 和生产配置逻辑不改；
 
 当前会话已完成源码对照自审，Critical/Important 为 0。Claude Code `2.1.220` 的独立审查未发生：可用性 smoke 被组织策略拒绝（组织已禁用 Claude subscription access）。用户随后明确授权由当前会话单审并继续，因此外部双审不再是本轮 Graduation Gate；spec 已获设计与执行授权，可进入实现。任何材料设计变更仍须回写本文件并重新自审。
 
-## 实施进度（2026-08-10）
+## As-Built（2026-08-11）
 
-- ZeroEngine Dashboard V2 已通过 PR #30 合并为 canonical `d2648688871fcc1bf6f702d31227172c16c75a29`；简体中文 label/tooltip 增量正在独立分支实现。
-- POB 的两份 adapter descriptor、两份 coverage 文件及 manifest/lock 已形成 6 路本地 pending；菜单导航 unknown 已以 `contained` 恢复为 epoch 5，当前 tasks=0、claims=0、unity=false，后续必须重新领养六路径。
-- 中文化增量本地实现与自审已完成：两条 descriptor/coverage 静态门通过，46 份 package/descriptor JSON 可解析，`git diff --check` 通过；Dashboard dashboard-only 为 52/53（仅 1 个既有 ignored）、with-modules 为 150/150；editor-ui 的 editor-ui/Formula/legacy-all lane 通过；Formula 专项 EditMode 96/96。
-- `ProjectSettings/EditorSettings.asset` SHA-256 基线为 `4dd4fa6db8124857132b771bf1cda0127b49c462dc3212342deee3cc4d44488a` 且不 pending；POB 六路 Dashboard 目标 pending 保留，进入 POB 阶段前必须按 required 合同精确重新领养。
-- 进行中：中文化增量 PR、新 canonical pin、POB live Editor 可见窗口门、菜单单宿主检查与最终 Console；完成后以本节追加 rollout 证据收口。
+- Dashboard V2 通过 PR #30 合并；简体中文 label/tooltip 增量通过 PR #31 合并。最终实现 canonical 为 `7cc164764c55b70792a4625fe0bb795001e851be`，tree 为 `e39c4d18c648843858851168d3f7491d1894b0f7`。
+- 上游验证完成：8 条 descriptor 静态门、28 条 route/30 条 coverage、46 份 JSON、`git diff --check`；Dashboard dashboard-only 52/53（1 个既有 ignored）、with-modules 150/150；editor-ui/Formula/legacy-all lane 及 Formula EditMode 96/96 均通过。PR #31 的 5 条 Unity 主检查与 5 条报告检查全部通过。
+- POB 将 19 个业务包统一 pin 到该 canonical；独立 unity-mcp-control pin 保持不变，POB 自有相对 `file:` adapter 保持不变。Dashboard/Formula adapter 已中文化，coverage fixture 绑定上述 commit/tree，Dashboard 与 Formula 对 editor-ui 的锁定依赖均为 `1.1.1`。
+- POB 目标 EditMode `POBEditorUiRouteCoverageTests` 5/5 通过；`ZeroEngine/Dashboard` 菜单成功打开。POB“公式目录”菜单的返回发生一次 `outcome_unknown`，命令未重放；控制面记录 `recovery-5a4278a4ea874dfa`（`contained`），随后只读 UIA/PrintWindow 证据确认动作实际 applied：独立 Formula Studio 位于“公式目录”页，扫描结果为公式 112、错误 0、警告 2。恢复后重新 assert/doctor 为 healthy-owned，最终 Console 0 error。
+- 原验收第 14 条的五路 live 菜单逐一重放因上述 unknown 安全规则收紧为“一路 Dashboard + 一路 POB Formula 可见窗口抽验，其他旧菜单/API 由具名兼容测试覆盖”；不再为补齐次数重放导航命令。这是验证路线偏差，不改变菜单、API、ID 或运行语义。
+- `ProjectSettings/EditorSettings.asset` 最终 SHA-256 为 `4dd4fa6db8124857132b771bf1cda0127b49c462dc3212342deee3cc4d44488a` 且不 pending；没有提交项目配置、资产、Prefab 或 Scene。
+- POB 通过 Plastic `cs:16813` 提交，反查 changeset 恰好包含授权的 6 个文件；其余 pending 保留。最终 required 控制面为 epoch 7、`coordination_error=null`、本任务 tasks=0、claims=0、unity=false。
+- 最终 spec/diff 自审 Critical=0、Important=0；实现与 rollout 已完成，本文件可归档。
