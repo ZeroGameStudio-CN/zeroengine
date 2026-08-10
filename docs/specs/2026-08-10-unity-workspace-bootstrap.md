@@ -1,10 +1,10 @@
 # Unity 工作区零代码注册
 
-- 状态：Implemented
+- 状态：Closed
 - 最后更新：2026-08-10
 - 基线：ZeroEngine `3abd18065a5a996b0517b6126edcedc1d195edd1`
 - 执行授权：Authorized；用户 2026-08-10“可以，继续”，范围为本 spec 的实现与本地验证
-- 终端操作授权：Not requested
+- 终端操作授权：Authorized；用户 2026-08-10“收尾”，范围为提交、PR、正常合并、9950/M5 CLI 安装与任务资源清理
 
 ## 目标与非目标
 
@@ -57,4 +57,8 @@
 - 已实现用户级原子注册、项目策略优先、幂等 bootstrap、空闲门控 unregister、策略来源状态与错误 fail-closed。
 - CLI 合同测试证明 bootstrap/unregister 前后 Unity 项目逐文件内容完全一致，且未创建 task/claim。
 - Supervisor 完整测试：`135 passed`；Ruff check 与 format check：通过；`git diff --check`：通过。
-- 提交、发布和安装：Pending，未获得终端操作授权。
+- 实现 PR #25 正常合并为 `52db8b029404eb822ad029dd8297dc2e85ee2267`，11 项 PR checks 全绿，无管理绕过。
+- 9950 与 M5 均从该 canonical commit 安装 `unity-mcp-supervisor 0.5.0`，`direct_url.json` 精确回读 commit；两机 `workspace bootstrap --help` 可用且 Supervisor 为 `healthy-owned`。
+- M5 在空闲硬门后正常重启 Supervisor；9950 因无关临时 Unity 租约安全拒绝重启，CLI-only 功能无需 daemon 重启，已安装 CLI 与健康服务均可用，未干扰该租约。
+- POB 项目、package pin、Unity、Plastic 和生产配置均未修改。
+- 归档状态：可归档，无任务自有残留。

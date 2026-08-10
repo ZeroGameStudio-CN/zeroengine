@@ -64,3 +64,5 @@ state. See [docs/setup.md](docs/setup.md) for the complete workflow.
 
 See [docs/setup.md](docs/setup.md) for bootstrap safety and operational
 boundaries.
+
+Design record: [Unity workspace zero-code bootstrap](../../docs/specs/2026-08-10-unity-workspace-bootstrap.md).
