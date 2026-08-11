@@ -1,17 +1,17 @@
 # ZeroEngine Dashboard
 
-ZeroEngine Dashboard 3.2.0 是一个可选、仅限 Unity Editor 的简体中文工具与工作区中心。它从已注册 UPM 包以及项目 `Assets/**/Editor/` 中读取 `ZeroEngineDashboardModule.json`，只展示所有者明确声明的窗口、命令和内嵌面板。
+ZeroEngine Dashboard 4.0.0 是一个可选、仅限 Unity Editor 的简体中文工作台。它从已注册 UPM 包以及项目 `Assets/**/Editor/` 中读取 `ZeroEngineDashboardModule.json`，只展示所有者明确声明的窗口、命令和内嵌面板。
 
 ## 特性
 
 - 不依赖 Core 或任何可选 ZeroEngine 业务模块；只依赖 Editor-only 的公共 editor-ui，模块也不需要引用 Dashboard。
 - 安装、移除或升级带描述符的包后自动刷新目录。
-- 通过模块已有 `MenuItem` 懒执行，不反射构造或嵌入窗口。
+- 通过 editor-ui 的 typed action provider 懒执行；Dashboard 不反射任意方法，也不依赖业务包。
 - 对描述符错误、入口冲突、替代循环和失效菜单提供可见诊断。
 - `project-write` 与 `destructive` 命令执行前要求明确确认。
 - 项目适配入口可通过 `mountModuleId` 挂到已安装的通用模块，不产生独立项目 Tab。
 - 可选 `section` 将大型模块拆成可读分区；共享 `surfaceId` 可把同一宿主窗口的兼容入口合并为一行多动作。
-- Tools/Workspace/System 三页采用自适应窄宽布局，分离启动入口、内嵌面板和系统健康；技术 ID 与菜单路径默认收进帮助/详情，provider 缺失或失败时只隔离对应面板。
+- 工具/工作区/系统三页采用自适应窄宽布局；工具页按六个固定任务分类、通用/项目范围以及高级/维护可见性筛选，技术 ID 默认收进帮助/详情。
 - 工具说明默认进入 tooltip/帮助抽屉，动作区按实际文字宽度自动横排或换行。
 - 固定 label、状态、安全提示与可操作控件 tooltip 使用简体中文；品牌缩写和技术标识保持原值。
 - 不安装包、不写 manifest、不清理 PlayerPrefs/存档、不写项目资源。
@@ -29,54 +29,67 @@ ZeroEngine Dashboard 3.2.0 是一个可选、仅限 Unity Editor 的简体中文
 }
 ```
 
-Unity 2022.3 不会为 Git URL 包自动解析同仓 editor-ui；两项必须直接 pin 到同一提交。3.2.0 要求 editor-ui 1.2.0。
+Unity 2022.3 不会为 Git URL 包自动解析同仓 editor-ui；两项必须直接 pin 到同一提交。4.0.0 要求 editor-ui 1.3.0。
 
 本地 `file:` 依赖只用于临时联调，不应进入共享分支。
 
 ## 描述符
 
-包描述符固定放在 `Editor/ZeroEngineDashboardModule.json`；项目描述符可放在任意 `Assets/**/Editor/ZeroEngineDashboardModule.json`。`moduleId`、入口 ID、菜单路径、安全等级及替代关系必须符合仓库设计规范。
+包描述符固定放在 `Editor/ZeroEngineDashboardModule.json`；项目描述符可放在任意 `Assets/**/Editor/ZeroEngineDashboardModule.json`。正式入口使用 schema v2 的稳定 provider/action 绑定，不声明菜单路径。
 
 ```json
 {
-  "schemaVersion": 1,
+  "schemaVersion": 2,
   "moduleId": "com.zerogamestudio.zeroengine.example",
   "displayName": "Example",
   "description": "Example editor tools.",
   "order": 100,
+  "scope": "universal",
   "documentationPath": "README.md",
   "entries": [
     {
       "id": "open-window",
-      "displayName": "Open Window",
-      "description": "Open the existing module window.",
+      "displayName": "打开示例窗口",
+      "description": "打开模块已有的示例窗口。",
       "mountModuleId": "com.zerogamestudio.zeroengine.example",
-      "section": "Authoring",
+      "section": "内容创作",
       "surfaceId": "example-studio",
-      "surfaceDisplayName": "Example Studio",
-      "surfaceActionLabel": "Open",
+      "surfaceDisplayName": "示例中心",
+      "surfaceActionLabel": "打开",
       "surfaceDefault": true,
       "category": "authoring",
       "kind": "window",
-      "menuPath": "ZeroEngine/Example/Open Window",
       "order": 100,
       "safety": "navigation",
       "availability": "always",
+      "visibility": "primary",
+      "executionKind": "provider",
+      "providerId": "zeroengine.example",
+      "actionId": "open-window",
+      "legacyKeywords": ["ZeroEngine/Example/Open Window"],
       "replaces": []
     }
   ]
 }
 ```
 
-Dashboard 入口：`ZeroEngine > Dashboard`。
+工作台入口：`ZGS > 工作台`。
 
 `mountModuleId` 可省略；省略时入口显示在自己的模块下。指定后只改变展示归属，入口 ID、来源、替代关系和执行路径不变。目标模块缺失或冲突时入口会隐藏并进入 Diagnostics，不会回退成独立适配器 Tab。
 
-`section` 与全部 `surface*` 字段均可省略，旧描述符保持一入口一行。只有同一展示宿主内共享 `surfaceId` 且 kind、availability、safety、section、显示名和默认动作兼容的入口才会合并；冲突会显示诊断并安全回退为独立行。
+`section` 与全部 `surface*` 字段均可省略。只有同一展示宿主内共享 `surfaceId` 且分类、section、显示名和默认动作兼容的入口才会合并；每个 action 仍保留独立安全等级、可用性和确认。冲突会显示诊断并安全回退为独立行。
 
 entry 可选 `usage` 只在帮助抽屉显示。module 可选 `panels` 数组声明内嵌工作区面板；每项包含稳定 `id/providerId`、显示文案、section、order、safety 与 availability。provider 通过 editor-ui 的 `IEditorWorkspacePanelProvider.CreatePanel(panelId)` 延迟创建；缺失、重复或异常 provider 不影响工具和系统页。
 
+Dashboard 4.x 仍兼容外部 schema v1，并把它标记为“旧版入口”；第一方正式描述符必须使用 v2。v1 兼容将在首个 5.x 版本移除。
+
 ## 版本历史
+
+### 4.0.0
+
+- 唯一顶栏入口改为 `ZGS/工作台`，正式入口由 typed action provider 执行。
+- 新增 schema v2、六类任务导航、动态项目范围、高级/维护筛选和 action 级安全状态。
+- 保留外部 schema v1 的 4.x 兼容执行与诊断。
 
 ### 3.2.0
 

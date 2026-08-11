@@ -1,9 +1,10 @@
 {
-  "schemaVersion": 1,
+  "schemaVersion": 2,
   "moduleId": "com.zerogamestudio.zeroengine.formula",
   "displayName": "公式",
   "description": "公式目录、编写与治理工具。",
   "order": 300,
+  "scope": "universal",
   "documentationPath": "README.md",
   "entries": [
     {
@@ -17,10 +18,14 @@
       "surfaceDefault": true,
       "category": "authoring",
       "kind": "window",
-      "menuPath": "ZeroEngine/Formula/Formula Catalog",
       "order": 100,
       "safety": "navigation",
       "availability": "always",
+      "visibility": "primary",
+      "executionKind": "provider",
+      "providerId": "zeroengine.formula",
+      "actionId": "formula-catalog",
+      "legacyKeywords": ["ZeroEngine/Formula/Formula Catalog"],
       "replaces": []
     },
     {
@@ -34,10 +39,14 @@
       "surfaceDefault": false,
       "category": "authoring",
       "kind": "window",
-      "menuPath": "ZeroEngine/Formula/Formula Workbench",
       "order": 200,
       "safety": "navigation",
       "availability": "always",
+      "visibility": "primary",
+      "executionKind": "provider",
+      "providerId": "zeroengine.formula",
+      "actionId": "formula-workbench",
+      "legacyKeywords": ["ZeroEngine/Formula/Formula Workbench"],
       "replaces": []
     },
     {
@@ -47,10 +56,14 @@
       "section": "诊断",
       "category": "diagnostics",
       "kind": "command",
-      "menuPath": "ZeroEngine/Formula/Scan Formula Assets",
       "order": 300,
       "safety": "read-only",
       "availability": "edit-mode",
+      "visibility": "advanced",
+      "executionKind": "provider",
+      "providerId": "zeroengine.formula",
+      "actionId": "scan-formula-assets",
+      "legacyKeywords": ["ZeroEngine/Formula/Scan Formula Assets"],
       "replaces": []
     }
   ]

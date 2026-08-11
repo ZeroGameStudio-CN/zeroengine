@@ -26,7 +26,6 @@ namespace ZeroEngine.Editor.Notification
         private NotificationPosition _position = NotificationPosition.TopRight;
         private NotificationAnimation _animation = NotificationAnimation.SlideIn;
 
-        [MenuItem("ZeroEngine/Notification/Notification Editor")]
         public static void ShowWindow()
         {
             var window = GetWindow<NotificationEditorWindow>("Notification Editor");

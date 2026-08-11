@@ -4,7 +4,7 @@ Schema-first configuration pipeline for Unity 2022.3 projects. It keeps one
 authoring source, validates through a typed intermediate document, emits
 deterministic artifacts, and loads immutable runtime snapshots.
 
-Version 2.0.0 uses `com.zerogamestudio.zeroengine.editor-ui@1.0.0` for its Editor window. Git URL consumers must directly pin both packages to the same ZeroEngine commit because Unity 2022.3 does not resolve same-repository sibling dependencies transitively.
+Version 2.0.1 uses `com.zerogamestudio.zeroengine.editor-ui@1.3.0` for its Editor window and typed workbench action. Git URL consumers must directly pin both packages to the same ZeroEngine commit because Unity 2022.3 does not resolve same-repository sibling dependencies transitively.
 
 Version 2.0.1 localizes the Dashboard module label, description, and tooltip to Simplified Chinese without changing the menu route.
 
@@ -18,4 +18,4 @@ prerequisite.
 
 ## ZeroEngine Dashboard
 
-The optional Dashboard discovers this package through `Editor/ZeroEngineDashboardModule.json` and navigates to the existing `ZGS/Config Pipeline` menu. This package does not reference or require Dashboard.
+The optional Dashboard discovers this package through its schema v2 descriptor and invokes the package-owned typed provider. Open it from `ZGS > 工作台 > 内容创作`; this package does not reference or require Dashboard.

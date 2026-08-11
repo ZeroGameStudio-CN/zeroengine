@@ -3,7 +3,8 @@
   "rootNamespace": "ZeroEngine.UI.Editor",
   "references": [
     "ZeroEngine.UI",
-    "Unity.TextMeshPro"
+    "Unity.TextMeshPro",
+    "ZeroEngine.EditorUI.Editor"
   ],
   "includePlatforms": [
     "Editor"

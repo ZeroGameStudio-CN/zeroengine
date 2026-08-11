@@ -45,10 +45,10 @@ Network failure is silent and retries in the background. `Uploaded` appears only
 an HTTP success for a submission created in the current process. This package does not
 provide feedback history, progress, processing state or player replies.
 
-Run `ZeroEngine/Feedback/Install Default UI` to generate an editable theme and prefab
+Open `ZGS > 工作台 > 系统与安装`, enable `高级工具`, then run `安装默认反馈界面` to generate an editable theme and prefab
 under `Assets/ZeroEngineGenerated/Feedback`. Assign a TMP font that covers every project
 language; no third-party font or POB artwork is bundled.
 
 ## ZeroEngine Dashboard
 
-The optional Dashboard exposes the existing installer as a `project-write` command and requires confirmation before forwarding to `ZeroEngine/Feedback/Install Default UI`. The installer keeps ownership of its own write safety and this package does not depend on Dashboard.
+The optional Dashboard exposes the package-owned typed installer action as a confirmed `project-write` command. The installer keeps ownership of its own write safety and this package does not depend on Dashboard.

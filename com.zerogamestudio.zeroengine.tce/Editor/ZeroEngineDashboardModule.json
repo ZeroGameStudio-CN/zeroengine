@@ -1,9 +1,10 @@
 {
-  "schemaVersion": 1,
+  "schemaVersion": 2,
   "moduleId": "com.zerogamestudio.zeroengine.tce",
   "displayName": "TCE",
   "description": "触发器、条件与效果图的编写和目录工具。",
   "order": 400,
+  "scope": "universal",
   "documentationPath": "README.md",
   "entries": [
     {
@@ -12,23 +13,31 @@
       "description": "打开现有的 TCE 图编辑器。",
       "category": "authoring",
       "kind": "window",
-      "menuPath": "ZGS/ZeroEngine/TCE/Graph Editor",
       "order": 100,
       "safety": "navigation",
       "availability": "always",
+      "visibility": "primary",
+      "executionKind": "provider",
+      "providerId": "zeroengine.tce",
+      "actionId": "graph-editor",
+      "legacyKeywords": ["ZGS/ZeroEngine/TCE/Graph Editor"],
       "replaces": []
     },
     {
       "id": "regenerate-component-catalog",
       "displayName": "重新生成组件目录",
       "description": "重新生成 TCE 组件文档目录。",
-      "category": "documentation",
+      "category": "data-localization",
       "kind": "command",
-      "menuPath": "ZGS/ZeroEngine/TCE/Regenerate Component Catalog",
       "order": 200,
       "safety": "project-write",
       "confirmation": "是否重新生成当前项目的 TCE 组件目录？提交前请检查产生的文件改动。",
       "availability": "edit-mode",
+      "visibility": "advanced",
+      "executionKind": "provider",
+      "providerId": "zeroengine.tce",
+      "actionId": "regenerate-component-catalog",
+      "legacyKeywords": ["ZGS/ZeroEngine/TCE/Regenerate Component Catalog"],
       "replaces": []
     }
   ]

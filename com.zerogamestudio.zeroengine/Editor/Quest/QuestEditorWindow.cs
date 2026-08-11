@@ -15,8 +15,7 @@ namespace ZeroEngine.Editor.Quest
     [ZeroEngine.EditorUI.EditorUiSurface]
     public class QuestEditorWindow : OdinMenuEditorWindow
     {
-        [MenuItem("ZeroEngine/Tools/Quest Editor")]
-        private static void OpenWindow()
+        internal static void OpenWindow()
         {
             var window = GetWindow<QuestEditorWindow>();
             window.titleContent = new GUIContent("Quest Editor");
@@ -93,8 +92,7 @@ namespace ZeroEngine.Editor.Quest
     [ZeroEngine.EditorUI.EditorUiSurface]
     public class QuestEditorWindow : EditorWindow
     {
-        [MenuItem("ZeroEngine/Tools/Quest Editor")]
-        private static void OpenWindow() => GetWindow<QuestEditorWindow>("Quest Editor");
+        internal static void OpenWindow() => GetWindow<QuestEditorWindow>("Quest Editor");
 
         private void OnGUI()
         {

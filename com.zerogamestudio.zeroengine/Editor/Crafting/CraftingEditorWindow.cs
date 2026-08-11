@@ -23,7 +23,6 @@ namespace ZeroEngine.Editor.Crafting
         private int _tabIndex = 0;
         private readonly string[] _tabNames = { "配方列表", "配方书", "统计" };
 
-        [MenuItem("ZeroEngine/Crafting/Recipe Editor")]
         public static void ShowWindow()
         {
             var window = GetWindow<CraftingEditorWindow>("Recipe Editor");

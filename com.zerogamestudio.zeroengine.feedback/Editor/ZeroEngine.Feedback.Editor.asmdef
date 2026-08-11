@@ -4,7 +4,8 @@
   "references": [
     "ZeroEngine.Feedback",
     "Unity.TextMeshPro",
-    "UnityEngine.UI"
+    "UnityEngine.UI",
+    "ZeroEngine.EditorUI.Editor"
   ],
   "includePlatforms": [
     "Editor"

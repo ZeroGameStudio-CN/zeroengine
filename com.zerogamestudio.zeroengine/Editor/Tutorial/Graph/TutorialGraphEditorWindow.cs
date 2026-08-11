@@ -20,7 +20,6 @@ namespace ZeroEngine.Editor.Tutorial
         private Label _titleLabel;
         private VisualElement _inspectorContainer;
 
-        [MenuItem("ZeroEngine/Tutorial/Tutorial Graph Editor")]
         public static void Open()
         {
             var window = GetWindow<TutorialGraphEditorWindow>();

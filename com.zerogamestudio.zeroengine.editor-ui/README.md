@@ -11,3 +11,5 @@ Version 1.1.0 adds compact headers, action rows, chips, disclosure rows, constra
 Version 1.1.1 adds `GUIContent` overloads for buttons, action rows, chips, selections, and disclosures so package-owned labels can provide localized tooltips.
 
 Version 1.2.0 adds measured inline/stacked action-row layout, a wide responsive mode, and an Editor-only workspace panel SPI. The SPI defines lifecycle and explicit action safety only; discovery and business behavior remain outside this package.
+
+Version 1.3.0 adds the Editor-only tool action SPI used by Dashboard schema v2. Providers are discovered by stable attributes, create typed actions lazily, expose read-only availability state, and return explicit execution results without menu or reflection dependencies.

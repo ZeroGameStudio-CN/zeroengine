@@ -13,7 +13,6 @@ namespace ZeroEngine.Editor.BehaviorTree
     [ZeroEngine.EditorUI.EditorUiSurface]
     public class BehaviorTreeViewerWindow : EditorWindow
     {
-        [MenuItem("ZeroEngine/BehaviorTree Viewer")]
         public static void ShowWindow()
         {
             var window = GetWindow<BehaviorTreeViewerWindow>("BT Viewer");

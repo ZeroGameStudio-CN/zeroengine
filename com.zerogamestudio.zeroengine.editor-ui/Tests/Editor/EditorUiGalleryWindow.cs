@@ -9,8 +9,7 @@ namespace ZeroEngine.EditorUI.Tests.Editor
         private bool _details;
         private bool _help;
 
-        [MenuItem("ZeroEngine Tests/Editor UI Gallery")]
-        private static void Open()
+        internal static void Open()
         {
             var window = GetWindow<EditorUiGalleryWindow>("Editor UI Gallery");
             window.minSize = new Vector2(420f, 480f);

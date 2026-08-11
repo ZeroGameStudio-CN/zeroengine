@@ -18,7 +18,6 @@ namespace ZeroEngine.Editor.TalentTree
         private Label _titleLabel;
         private TalentNodeInspector _inspector;
 
-        [MenuItem("ZeroEngine/TalentTree/Talent Tree Editor")]
         public static void Open()
         {
             var window = GetWindow<TalentTreeEditorWindow>();

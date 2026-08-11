@@ -24,7 +24,6 @@ namespace ZeroEngine.Editor.Equipment
         private string _searchFilter = "";
         private EquipmentSlotType _slotFilter;
 
-        [MenuItem("ZeroEngine/Equipment/Equipment Editor")]
         public static void Open()
         {
             var window = GetWindow<EquipmentEditorWindow>();

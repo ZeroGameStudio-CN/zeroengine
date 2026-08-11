@@ -23,7 +23,6 @@ namespace ZeroEngine.Editor.Relationship
         private int _tabIndex = 0;
         private readonly string[] _tabNames = { "NPC列表", "NPC组", "统计" };
 
-        [MenuItem("ZeroEngine/Relationship/Relationship Editor")]
         public static void ShowWindow()
         {
             var window = GetWindow<RelationshipEditorWindow>("Relationship Editor");

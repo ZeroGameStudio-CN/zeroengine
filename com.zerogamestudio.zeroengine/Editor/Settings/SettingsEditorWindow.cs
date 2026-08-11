@@ -23,7 +23,6 @@ namespace ZeroEngine.Editor.Settings
         private SettingValueType _newValueType = SettingValueType.Bool;
         private string _newDefaultValue = "";
 
-        [MenuItem("ZeroEngine/Settings/Settings Editor")]
         public static void ShowWindow()
         {
             var window = GetWindow<SettingsEditorWindow>("Settings Editor");

@@ -219,7 +219,6 @@ namespace ZeroEngine.TCE.Editor
             return builder.ToString();
         }
 
-        [MenuItem("ZGS/ZeroEngine/TCE/Regenerate Component Catalog")]
         public static void RegenerateComponentCatalog()
         {
             IReadOnlyList<TceComponentCatalogEntry> entries = TceComponentCatalogBuilder.Build();

@@ -1,9 +1,10 @@
 {
-  "schemaVersion": 1,
+  "schemaVersion": 2,
   "moduleId": "com.zerogamestudio.analytics",
   "displayName": "ZGS 数据分析",
   "description": "ZeroGameStudio 数据分析诊断与服务工具。",
   "order": 700,
+  "scope": "universal",
   "documentationPath": "README.md",
   "entries": [
     {
@@ -12,10 +13,14 @@
       "description": "打开现有的 ZGS 数据分析编辑器仪表盘。",
       "category": "diagnostics",
       "kind": "window",
-      "menuPath": "ZGS/Analytics Dashboard",
       "order": 100,
       "safety": "navigation",
       "availability": "always",
+      "visibility": "primary",
+      "executionKind": "provider",
+      "providerId": "zeroengine.analytics",
+      "actionId": "analytics-dashboard",
+      "legacyKeywords": ["ZGS/Analytics Dashboard"],
       "replaces": []
     }
   ]

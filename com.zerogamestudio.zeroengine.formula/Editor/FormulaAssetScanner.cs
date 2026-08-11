@@ -72,7 +72,6 @@ namespace ZeroEngine.Formula.Editor
 
     public static class FormulaAssetScanner
     {
-        [MenuItem("ZeroEngine/Formula/Scan Formula Assets", priority = 130)]
         public static void RunMenu()
         {
             var profile = FormulaEditorProfileRegistry.ActiveProfile;

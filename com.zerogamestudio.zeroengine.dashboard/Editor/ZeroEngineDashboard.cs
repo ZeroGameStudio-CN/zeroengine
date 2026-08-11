@@ -20,6 +20,26 @@ namespace ZeroEngine.Editor
             new GUIContent(DashboardText.System, DashboardText.SystemTooltip)
         };
 
+        private static readonly string[] ToolCategoryIds =
+        {
+            "authoring",
+            "data-localization",
+            "assets-build",
+            "diagnostics",
+            "test-release",
+            "system-setup"
+        };
+
+        private static readonly GUIContent[] ToolCategoryNames =
+        {
+            new GUIContent("内容创作", "数据编辑器、公式、任务、工坊和内容预览。"),
+            new GUIContent("数据与本地化", "配置、Schema、检索、导入导出和本地化工具。"),
+            new GUIContent("资源与构建", "Addressables、纹理、字体、音频、Shader 与构建准备。"),
+            new GUIContent("检查与调试", "只读审计、运行诊断、可视化调试和健康报告。"),
+            new GUIContent("测试与发布", "具名窄范围测试、发布检查和可审计打包流程。"),
+            new GUIContent("系统与安装", "通用包安装、系统工具和框架级维护。")
+        };
+
         private readonly Dictionary<string, DashboardDiagnostic> _runtimeDiagnostics =
             new Dictionary<string, DashboardDiagnostic>(StringComparer.Ordinal);
 
@@ -27,6 +47,11 @@ namespace ZeroEngine.Editor
         private int _page;
         private string _search = string.Empty;
         private string _selectedModuleId = string.Empty;
+        private string _selectedCategoryId = "authoring";
+        private string _selectedScopeId = string.Empty;
+        private bool _showAdvanced;
+        private bool _showMaintenance;
+        private bool _focusSearch;
         private Vector2 _moduleScroll;
         private Vector2 _contentScroll;
         private Vector2 _systemScroll;
@@ -40,6 +65,7 @@ namespace ZeroEngine.Editor
         private DashboardSurface _helpSurface;
         private DashboardPanel _helpPanel;
         private DashboardWorkspaceRegistry _workspaceRegistry;
+        private DashboardActionRegistry _actionRegistry;
         private DashboardPanel _activePanelDescriptor;
         private IEditorWorkspacePanel _activePanel;
         private EditorWorkspacePanelContext _activePanelContext;
@@ -47,12 +73,16 @@ namespace ZeroEngine.Editor
         private readonly HashSet<string> _failedWorkspacePanels = new HashSet<string>(StringComparer.Ordinal);
         private readonly HashSet<string> _expandedDetails = new HashSet<string>(StringComparer.Ordinal);
 
-        [MenuItem("ZeroEngine/Dashboard")]
+        [MenuItem("ZGS/工作台")]
         public static void ShowWindow()
         {
             ZeroEngineDashboard window = GetWindow<ZeroEngineDashboard>(DashboardText.WindowTitle);
             window.titleContent = new GUIContent(DashboardText.WindowTitle, DashboardText.ToolsTooltip);
             window.minSize = new Vector2(760f, 460f);
+            window._page = 0;
+            window._focusSearch = true;
+            window.Show();
+            window.Focus();
         }
 
         public static void ShowWorkspace(string moduleId, string panelId)
@@ -81,6 +111,7 @@ namespace ZeroEngine.Editor
             DashboardDescriptorAssetPostprocessor.DescriptorsChanged -= RefreshCatalog;
             EditorApplication.update -= OnEditorUpdate;
             DeactivateWorkspacePanel();
+            _actionRegistry = null;
         }
 
         private void OnRegisteredPackages(PackageRegistrationEventArgs eventArgs)
@@ -114,8 +145,11 @@ namespace ZeroEngine.Editor
             _runtimeDiagnostics.Clear();
             _failedWorkspacePanels.Clear();
             _workspaceRegistry = DashboardWorkspaceRegistry.Build(_catalog);
+            _actionRegistry = DashboardActionRegistry.Build(_catalog);
             foreach (DashboardDiagnostic diagnostic in _workspaceRegistry.Diagnostics)
                 _runtimeDiagnostics["workspace/" + diagnostic.ModuleId + "/" + diagnostic.EntryId + "/" + diagnostic.Code] = diagnostic;
+            foreach (DashboardDiagnostic diagnostic in _actionRegistry.Diagnostics)
+                _runtimeDiagnostics["action/" + diagnostic.ModuleId + "/" + diagnostic.EntryId + "/" + diagnostic.Code] = diagnostic;
             if (_catalog.Diagnostics.Count > 0)
             {
                 Debug.LogWarning(
@@ -245,6 +279,7 @@ namespace ZeroEngine.Editor
 
         private void DrawSearchField(GUIStyle searchStyle)
         {
+            GUI.SetNextControlName("ZGS.Workbench.Search");
             Rect rect = GUILayoutUtility.GetRect(
                 140f,
                 22f,
@@ -257,6 +292,11 @@ namespace ZeroEngine.Editor
                 ? new GUIContent(DashboardText.SearchPlaceholder, DashboardText.SearchTooltip)
                 : new GUIContent(string.Empty, DashboardText.SearchTooltip);
             GUI.Label(rect, overlay, EditorStyles.centeredGreyMiniLabel);
+            if (_focusSearch)
+            {
+                EditorGUI.FocusTextInControl("ZGS.Workbench.Search");
+                _focusSearch = false;
+            }
         }
 
         private void DrawTools()
@@ -270,74 +310,108 @@ namespace ZeroEngine.Editor
                 return;
             }
 
+            DrawToolFilters(modules);
+
             if (EditorUiGUILayout.ResponsiveMode(position.width) == EditorUiResponsiveMode.Compact)
             {
-                DrawCompactModuleSelector(modules);
+                DrawCompactCategorySelector(modules);
                 DrawToolContent(modules);
                 return;
             }
 
             using (new EditorGUILayout.HorizontalScope())
             {
-                DrawModuleList(modules);
+                DrawCategoryList(modules);
                 EditorGUILayout.Space(8f);
                 DrawToolContent(modules);
             }
         }
 
-        private void DrawModuleList(IReadOnlyList<DashboardModule> modules)
+        private void DrawToolFilters(IReadOnlyList<DashboardModule> modules)
+        {
+            var scopeIds = new List<string> { string.Empty, "universal" };
+            var scopeLabels = new List<GUIContent>
+            {
+                new GUIContent("全部", "显示通用模块和所有项目适配器。"),
+                new GUIContent("通用", "只显示通用 ZeroEngine 模块。")
+            };
+            foreach (IGrouping<string, DashboardModule> group in modules
+                         .Where(module => module.Scope == DashboardModuleScope.Project)
+                         .GroupBy(module => module.ProjectId, StringComparer.Ordinal)
+                         .OrderBy(group => group.Key, StringComparer.Ordinal))
+            {
+                DashboardModule module = group.First();
+                scopeIds.Add(module.ProjectId);
+                scopeLabels.Add(new GUIContent(
+                    module.ProjectDisplayName,
+                    "只显示 " + module.ProjectDisplayName + " 项目适配器。"));
+            }
+
+            int scopeIndex = scopeIds.FindIndex(id => string.Equals(id, _selectedScopeId, StringComparison.Ordinal));
+            if (scopeIndex < 0)
+                scopeIndex = 0;
+            using (new EditorGUILayout.HorizontalScope(EditorStyles.toolbar))
+            {
+                GUILayout.Label(new GUIContent("范围", "按 descriptor 声明的通用或项目范围筛选。"), GUILayout.Width(32f));
+                int selected = EditorGUILayout.Popup(scopeIndex, scopeLabels.ToArray(), GUILayout.Width(120f));
+                _selectedScopeId = scopeIds[Mathf.Clamp(selected, 0, scopeIds.Count - 1)];
+                GUILayout.Space(EditorUiTokens.SpaceSm);
+                _showAdvanced = GUILayout.Toggle(
+                    _showAdvanced,
+                    new GUIContent("高级工具", "显示专业检查、构建和项目写入工具。"),
+                    EditorStyles.toolbarButton,
+                    GUILayout.Width(80f));
+                _showMaintenance = GUILayout.Toggle(
+                    _showMaintenance,
+                    new GUIContent("维护工具", "显示恢复、迁移和高影响工具。"),
+                    EditorStyles.toolbarButton,
+                    GUILayout.Width(80f));
+                GUILayout.FlexibleSpace();
+            }
+            if (_showMaintenance)
+                EditorGUILayout.HelpBox("维护工具可能修改或破坏项目数据；请逐项阅读安全提示和确认内容。", MessageType.Warning);
+        }
+
+        private void DrawCategoryList(IReadOnlyList<DashboardModule> modules)
         {
             using (new EditorGUILayout.VerticalScope(EditorUiStyles.Card, GUILayout.Width(EditorUiTokens.DashboardSidebarWidth)))
             {
-                GUILayout.Label(DashboardText.Modules, EditorStyles.boldLabel);
+                GUILayout.Label("任务分类", EditorStyles.boldLabel);
                 _moduleScroll = EditorGUILayout.BeginScrollView(_moduleScroll);
-                int allToolCount = modules.Sum(module => module.VisibleEntries.Count);
-                if (DrawSelectionButton(
-                        DashboardText.AllTools,
-                        DashboardText.ToolsTooltip,
-                        allToolCount,
-                        string.IsNullOrEmpty(_selectedModuleId)))
-                    _selectedModuleId = string.Empty;
-
-                foreach (DashboardModule module in modules)
+                for (int index = 0; index < ToolCategoryIds.Length; index++)
                 {
-                    if (!ModuleMatchesSearch(module))
-                        continue;
+                    string categoryId = ToolCategoryIds[index];
+                    GUIContent category = ToolCategoryNames[index];
                     if (DrawSelectionButton(
-                            module.DisplayName,
-                            module.Description,
-                            module.VisibleEntries.Count,
-                            string.Equals(_selectedModuleId, module.ModuleId, StringComparison.Ordinal)))
+                            category.text,
+                            category.tooltip,
+                            CountVisibleEntries(modules, categoryId),
+                            string.Equals(_selectedCategoryId, categoryId, StringComparison.Ordinal)))
                     {
-                        _selectedModuleId = module.ModuleId;
+                        _selectedCategoryId = categoryId;
                     }
                 }
                 EditorGUILayout.EndScrollView();
             }
         }
 
-        private void DrawCompactModuleSelector(IReadOnlyList<DashboardModule> modules)
+        private void DrawCompactCategorySelector(IReadOnlyList<DashboardModule> modules)
         {
-            var visible = modules.Where(ModuleMatchesSearch).ToList();
-            var ids = new List<string> { string.Empty };
-            var labels = new List<GUIContent>
+            var labels = new List<GUIContent>();
+            for (int index = 0; index < ToolCategoryIds.Length; index++)
             {
-                new GUIContent(DashboardText.AllTools, DashboardText.ToolsTooltip)
-            };
-            foreach (DashboardModule module in visible)
-            {
-                ids.Add(module.ModuleId);
+                GUIContent category = ToolCategoryNames[index];
                 labels.Add(new GUIContent(
-                    module.DisplayName + "（" + module.VisibleEntries.Count + "）",
-                    module.Description));
+                    category.text + "（" + CountVisibleEntries(modules, ToolCategoryIds[index]) + "）",
+                    category.tooltip));
             }
 
-            int index = Math.Max(0, ids.FindIndex(id => string.Equals(id, _selectedModuleId, StringComparison.Ordinal)));
+            int currentIndex = Math.Max(0, Array.IndexOf(ToolCategoryIds, _selectedCategoryId));
             int selected = EditorGUILayout.Popup(
-                new GUIContent(DashboardText.Modules, DashboardText.ModuleSelectorTooltip),
-                index,
+                new GUIContent("任务分类", "选择当前要浏览的工具分类。"),
+                currentIndex,
                 labels.ToArray());
-            _selectedModuleId = ids[Mathf.Clamp(selected, 0, ids.Count - 1)];
+            _selectedCategoryId = ToolCategoryIds[Mathf.Clamp(selected, 0, ToolCategoryIds.Length - 1)];
             EditorGUILayout.Space(EditorUiTokens.SpaceSm);
         }
 
@@ -353,14 +427,15 @@ namespace ZeroEngine.Editor
         private void DrawToolContent(IReadOnlyList<DashboardModule> modules)
         {
             _contentScroll = EditorGUILayout.BeginScrollView(_contentScroll);
-            IEnumerable<DashboardModule> selectedModules = string.IsNullOrEmpty(_selectedModuleId)
-                ? modules
-                : modules.Where(module => string.Equals(module.ModuleId, _selectedModuleId, StringComparison.Ordinal));
+            IEnumerable<DashboardModule> selectedModules = modules.Where(ModuleMatchesScope);
 
             int drawnSurfaces = 0;
             foreach (DashboardModule module in selectedModules)
             {
-                DashboardSurface[] surfaces = module.VisibleSurfaces.Where(SurfaceMatchesSearch).ToArray();
+                DashboardSurface[] surfaces = module.VisibleSurfaces
+                    .Where(surface => SurfaceMatchesCategoryAndVisibility(surface) &&
+                                      (SurfaceMatchesSearch(surface) || ModuleTextMatchesSearch(module)))
+                    .ToArray();
                 if (surfaces.Length == 0 && !ModuleTextMatchesSearch(module))
                     continue;
 
@@ -385,7 +460,91 @@ namespace ZeroEngine.Editor
 
             if (drawnSurfaces == 0)
                 EditorGUILayout.HelpBox(DashboardText.NoSearchResults, MessageType.Info);
+            DrawHiddenSearchSummary(modules);
             EditorGUILayout.EndScrollView();
+        }
+
+        private void DrawHiddenSearchSummary(IEnumerable<DashboardModule> modules)
+        {
+            if (string.IsNullOrEmpty(_search))
+                return;
+
+            var hidden = new List<DashboardEntry>();
+            bool needsCategoryOrScope = false;
+            bool needsAdvanced = false;
+            bool needsMaintenance = false;
+            foreach (DashboardModule module in modules)
+            {
+                foreach (DashboardEntry entry in module.VisibleEntries.Where(EntryMatchesSearch))
+                {
+                    bool scopeVisible = ModuleMatchesScope(module);
+                    bool categoryVisible = string.Equals(EffectiveCategory(entry), _selectedCategoryId, StringComparison.Ordinal);
+                    bool visibilityVisible = EntryMatchesVisibility(entry);
+                    if (scopeVisible && categoryVisible && visibilityVisible)
+                        continue;
+                    hidden.Add(entry);
+                    needsCategoryOrScope |= !scopeVisible || !categoryVisible;
+                    needsAdvanced |= entry.Visibility == DashboardEntryVisibility.Advanced && !_showAdvanced;
+                    needsMaintenance |= entry.Visibility == DashboardEntryVisibility.Maintenance && !_showMaintenance;
+                }
+            }
+
+            int count = hidden.Select(entry => entry.FullId).Distinct(StringComparer.Ordinal).Count();
+            if (count == 0)
+                return;
+            var actions = new List<string>();
+            if (needsCategoryOrScope) actions.Add("切换任务分类或范围");
+            if (needsAdvanced) actions.Add("开启高级工具");
+            if (needsMaintenance) actions.Add("开启维护工具");
+            EditorGUILayout.HelpBox(
+                "另有 " + count + " 个匹配项被筛选隐藏；请" + string.Join("、", actions) + "。",
+                MessageType.Info);
+        }
+
+        private int CountVisibleEntries(IEnumerable<DashboardModule> modules, string categoryId)
+        {
+            return modules.Where(ModuleMatchesScope)
+                .SelectMany(module => module.VisibleEntries)
+                .Count(entry => string.Equals(EffectiveCategory(entry), categoryId, StringComparison.Ordinal) &&
+                                EntryMatchesVisibility(entry));
+        }
+
+        private bool ModuleMatchesScope(DashboardModule module)
+        {
+            if (string.IsNullOrEmpty(_selectedScopeId))
+                return true;
+            if (string.Equals(_selectedScopeId, "universal", StringComparison.Ordinal))
+                return module.Scope == DashboardModuleScope.Universal;
+            return module.Scope == DashboardModuleScope.Project &&
+                   string.Equals(module.ProjectId, _selectedScopeId, StringComparison.Ordinal);
+        }
+
+        private bool SurfaceMatchesCategoryAndVisibility(DashboardSurface surface)
+        {
+            return surface.Entries.Any(entry =>
+                string.Equals(EffectiveCategory(entry), _selectedCategoryId, StringComparison.Ordinal) &&
+                EntryMatchesVisibility(entry));
+        }
+
+        private bool EntryMatchesVisibility(DashboardEntry entry)
+        {
+            return entry.Visibility == DashboardEntryVisibility.Primary ||
+                   (entry.Visibility == DashboardEntryVisibility.Advanced && _showAdvanced) ||
+                   (entry.Visibility == DashboardEntryVisibility.Maintenance && _showMaintenance);
+        }
+
+        private static string EffectiveCategory(DashboardEntry entry)
+        {
+            if (!entry.IsLegacy)
+                return entry.Category;
+            switch (entry.Category)
+            {
+                case "setup":
+                case "documentation":
+                    return "system-setup";
+                default:
+                    return entry.Category;
+            }
         }
 
         private void DrawModuleHeader(DashboardModule module)
@@ -407,7 +566,14 @@ namespace ZeroEngine.Editor
 
         private void DrawSurface(DashboardModule module, DashboardSurface surface)
         {
-            float trailingWidth = CalculateSurfaceActionWidth(surface) + 34f;
+            DashboardEntry[] visibleEntries = surface.Entries
+                .Where(entry => string.Equals(EffectiveCategory(entry), _selectedCategoryId, StringComparison.Ordinal) &&
+                                EntryMatchesVisibility(entry))
+                .ToArray();
+            DashboardEntry visibleDefault = visibleEntries.Contains(surface.DefaultEntry)
+                ? surface.DefaultEntry
+                : visibleEntries[0];
+            float trailingWidth = CalculateSurfaceActionWidth(visibleEntries) + 34f;
             float availableWidth = Mathf.Max(240f, position.width -
                 (EditorUiGUILayout.ResponsiveMode(position.width) == EditorUiResponsiveMode.Compact
                     ? 56f
@@ -418,7 +584,7 @@ namespace ZeroEngine.Editor
                 null,
                 () =>
                 {
-                    DrawSurfaceActions(surface);
+                    DrawSurfaceActions(visibleEntries, visibleDefault);
                     if (GUILayout.Button(new GUIContent("?", DashboardText.HelpTooltip), GUILayout.Width(28f), GUILayout.Height(EditorUiTokens.PrimaryButtonHeight)))
                         ShowHelp(module, surface, null);
                 },
@@ -430,9 +596,8 @@ namespace ZeroEngine.Editor
                 string context = SurfaceContextLabel(surface);
                 if (!string.IsNullOrEmpty(context))
                     EditorUiGUILayout.Chip(context);
-                DashboardEntrySafety safety = surface.DefaultEntry.Safety;
-                if (safety != DashboardEntrySafety.Navigation)
-                    EditorUiGUILayout.Chip(new GUIContent(SafetyLabel(safety), SafetyTooltip(safety)));
+                if (visibleEntries.Any(entry => entry.IsLegacy))
+                    EditorUiGUILayout.Chip(new GUIContent("旧版入口", "此入口仍使用 schema v1，仅在 Dashboard 4.x 兼容。"));
                 GUILayout.FlexibleSpace();
 
                 string detailKey = module.ModuleId + "/" + surface.SurfaceId;
@@ -451,16 +616,16 @@ namespace ZeroEngine.Editor
             if (_expandedDetails.Contains(currentKey))
             {
                 EditorGUILayout.SelectableLabel(module.ModuleId, EditorStyles.miniLabel, GUILayout.Height(16f));
-                foreach (DashboardEntry entry in surface.Entries)
+                foreach (DashboardEntry entry in visibleEntries)
                 {
                     EditorGUILayout.SelectableLabel(
-                        entry.FullId + "  ·  " + entry.MenuPath,
+                        EntryTechnicalRoute(entry),
                         EditorStyles.miniLabel,
                         GUILayout.Height(16f));
                 }
             }
 
-            foreach (DashboardEntry entry in surface.Entries)
+            foreach (DashboardEntry entry in visibleEntries)
             {
                 if (!IsAvailable(entry))
                 {
@@ -470,24 +635,59 @@ namespace ZeroEngine.Editor
                             : DashboardText.PlayModeOnly(entry.DisplayName),
                         MessageType.Info);
                 }
-                if (_runtimeDiagnostics.TryGetValue(entry.FullId, out DashboardDiagnostic diagnostic))
+                DashboardDiagnostic diagnostic = FindActionDiagnostic(entry);
+                if (diagnostic != null)
+                {
                     EditorGUILayout.HelpBox(entry.DisplayName + ": " + diagnostic.Message, MessageType.Error);
+                    continue;
+                }
+                if (entry.ExecutionKind != DashboardEntryExecutionKind.Provider || _actionRegistry == null)
+                    continue;
+                if (_actionRegistry.TryGetState(entry, out EditorToolActionState state, out DashboardDiagnostic stateDiagnostic))
+                {
+                    if (!state.Enabled)
+                        EditorGUILayout.HelpBox(entry.DisplayName + "：" + state.DisabledReason, MessageType.Info);
+                }
+                else
+                {
+                    RecordActionDiagnostic(entry, stateDiagnostic);
+                }
             }
         }
 
-        private void DrawSurfaceActions(DashboardSurface surface)
+        private void DrawSurfaceActions(IReadOnlyList<DashboardEntry> entries, DashboardEntry defaultEntry)
         {
-            foreach (DashboardEntry entry in surface.Entries)
+            foreach (DashboardEntry entry in entries)
             {
                 bool available = IsAvailable(entry);
-                bool failed = _runtimeDiagnostics.ContainsKey(entry.FullId);
-                string label = string.IsNullOrEmpty(entry.SurfaceActionLabel)
-                    ? entry.Kind == DashboardEntryKind.Window ? DashboardText.Open : DashboardText.Run
-                    : entry.SurfaceActionLabel;
-                var content = new GUIContent(label, entry.Description);
+                bool failed = FindActionDiagnostic(entry) != null;
+                bool isChecked = false;
+                string disabledReason = string.Empty;
+                if (entry.ExecutionKind == DashboardEntryExecutionKind.Provider && _actionRegistry != null)
+                {
+                    if (_actionRegistry.TryGetState(entry, out EditorToolActionState state, out DashboardDiagnostic diagnostic))
+                    {
+                        available &= state.Enabled;
+                        isChecked = state.IsChecked;
+                        disabledReason = state.DisabledReason;
+                    }
+                    else
+                    {
+                        failed = true;
+                        RecordActionDiagnostic(entry, diagnostic);
+                    }
+                }
+
+                string label = ActionLabel(entry);
+                if (isChecked)
+                    label = "✓ " + label;
+                string tooltip = string.IsNullOrEmpty(disabledReason)
+                    ? entry.Description
+                    : entry.Description + "\n" + disabledReason;
+                var content = new GUIContent(label, tooltip);
                 using (new EditorGUI.DisabledScope(!available || failed))
                 {
-                    bool clicked = entry == surface.DefaultEntry
+                    bool clicked = entry == defaultEntry
                         ? EditorUiGUILayout.PrimaryButton(content, GUILayout.MinWidth(72f))
                         : GUILayout.Button(content, GUILayout.MinWidth(72f), GUILayout.Height(EditorUiTokens.PrimaryButtonHeight));
                     if (clicked)
@@ -496,14 +696,12 @@ namespace ZeroEngine.Editor
             }
         }
 
-        private static float CalculateSurfaceActionWidth(DashboardSurface surface)
+        private static float CalculateSurfaceActionWidth(IEnumerable<DashboardEntry> entries)
         {
             float width = 0f;
-            foreach (DashboardEntry entry in surface.Entries)
+            foreach (DashboardEntry entry in entries)
             {
-                string label = string.IsNullOrEmpty(entry.SurfaceActionLabel)
-                    ? entry.Kind == DashboardEntryKind.Window ? DashboardText.Open : DashboardText.Run
-                    : entry.SurfaceActionLabel;
+                string label = ActionLabel(entry);
                 width += Mathf.Max(72f, GUI.skin.button.CalcSize(new GUIContent(label)).x + 12f);
                 width += EditorUiTokens.SpaceXs;
             }
@@ -512,37 +710,73 @@ namespace ZeroEngine.Editor
 
         private void ExecuteEntry(DashboardEntry entry)
         {
-            DashboardExecutionResult result = DashboardEntryExecutor.Execute(entry);
+            DashboardExecutionResult result = entry.ExecutionKind == DashboardEntryExecutionKind.Provider
+                ? DashboardEntryExecutor.Execute(entry, _actionRegistry, this)
+                : DashboardEntryExecutor.Execute(entry);
             if (result.Status != DashboardExecutionStatus.MenuMissing &&
                 result.Status != DashboardExecutionStatus.Failed)
             {
                 return;
             }
 
-            _runtimeDiagnostics[entry.FullId] = new DashboardDiagnostic(
-                DashboardDiagnosticSeverity.Error,
-                result.Status == DashboardExecutionStatus.MenuMissing ? "menu-execution-failed" : "menu-execution-exception",
-                result.Message,
-                entry.SourcePath,
-                entry.ModuleId,
-                entry.Id,
-                entry.MenuPath);
+            RecordActionDiagnostic(
+                entry,
+                result.Diagnostic ?? new DashboardDiagnostic(
+                    DashboardDiagnosticSeverity.Error,
+                    result.Status == DashboardExecutionStatus.MenuMissing ? "menu-execution-failed" : "action-execution-failed",
+                    result.Message,
+                    entry.SourcePath,
+                    entry.ModuleId,
+                    entry.Id,
+                    entry.MenuPath));
             Repaint();
         }
 
-        private void OpenLocalDocumentation(DashboardModule module)
+        private static string ActionLabel(DashboardEntry entry)
         {
-            if (File.Exists(module.DocumentationPath) || Directory.Exists(module.DocumentationPath))
+            string label = string.IsNullOrEmpty(entry.SurfaceActionLabel)
+                ? entry.Kind == DashboardEntryKind.Window ? DashboardText.Open : DashboardText.Run
+                : entry.SurfaceActionLabel;
+            return entry.Safety == DashboardEntrySafety.Navigation
+                ? label
+                : label + " · " + SafetyLabel(entry.Safety);
+        }
+
+        private static string EntryTechnicalRoute(DashboardEntry entry)
+        {
+            return entry.IsLegacy
+                ? entry.FullId + "  ·  " + entry.MenuPath
+                : entry.FullId + "  ·  " + entry.ProviderId + "/" + entry.ActionId;
+        }
+
+        private DashboardDiagnostic FindActionDiagnostic(DashboardEntry entry)
+        {
+            return _runtimeDiagnostics.Values.FirstOrDefault(item =>
+                item.Severity == DashboardDiagnosticSeverity.Error &&
+                string.Equals(item.ModuleId, entry.ModuleId, StringComparison.Ordinal) &&
+                string.Equals(item.EntryId, entry.Id, StringComparison.Ordinal));
+        }
+
+        private void RecordActionDiagnostic(DashboardEntry entry, DashboardDiagnostic diagnostic)
+        {
+            if (diagnostic == null)
+                return;
+            _runtimeDiagnostics["action/" + entry.FullId + "/" + diagnostic.Code] = diagnostic;
+        }
+
+        private void OpenLocalDocumentation(DashboardModule module, string documentationPath, string keySuffix)
+        {
+            if (File.Exists(documentationPath) || Directory.Exists(documentationPath))
             {
-                EditorUtility.RevealInFinder(module.DocumentationPath);
+                EditorUtility.RevealInFinder(documentationPath);
                 return;
             }
 
-            string key = module.ModuleId + "/documentation";
+            string key = module.ModuleId + "/documentation/" + (keySuffix ?? string.Empty);
             _runtimeDiagnostics[key] = new DashboardDiagnostic(
                 DashboardDiagnosticSeverity.Warning,
                 "documentation-missing",
-                DashboardText.DocumentationMissing(module.DocumentationPath),
+                DashboardText.DocumentationMissing(documentationPath),
                 module.Source.SourcePath,
                 module.ModuleId);
         }
@@ -927,24 +1161,37 @@ namespace ZeroEngine.Editor
                     GUILayout.Label(usage, EditorStyles.wordWrappedLabel);
                 }
 
-                if (_helpModule != null &&
-                    (!string.IsNullOrEmpty(_helpModule.DocumentationPath) || !string.IsNullOrEmpty(_helpModule.DocumentationUrl)))
+                if (_helpModule != null)
                 {
-                    EditorGUILayout.Space(EditorUiTokens.SpaceXs);
-                    using (new EditorGUILayout.HorizontalScope())
+                    DashboardEntry[] documentedEntries = _helpSurface?.Entries
+                        .Where(entry => !string.IsNullOrEmpty(entry.DocumentationPath) ||
+                                        !string.IsNullOrEmpty(entry.DocumentationUrl))
+                        .ToArray() ?? Array.Empty<DashboardEntry>();
+                    if (documentedEntries.Length > 0)
                     {
-                        if (!string.IsNullOrEmpty(_helpModule.DocumentationPath) && GUILayout.Button(
-                                new GUIContent(DashboardText.Documentation, DashboardText.DocumentationTooltip),
-                                GUILayout.Width(64f)))
+                        EditorGUILayout.Space(EditorUiTokens.SpaceXs);
+                        GUILayout.Label(DashboardText.Documentation, EditorStyles.miniBoldLabel);
+                        foreach (DashboardEntry entry in documentedEntries)
                         {
-                            OpenLocalDocumentation(_helpModule);
+                            DrawDocumentationButtons(
+                                string.IsNullOrEmpty(entry.SurfaceActionLabel) ? entry.DisplayName : entry.SurfaceActionLabel,
+                                entry.DocumentationPath,
+                                entry.DocumentationUrl,
+                                _helpModule,
+                                entry.Id);
                         }
-                        if (!string.IsNullOrEmpty(_helpModule.DocumentationUrl) && GUILayout.Button(
-                                new GUIContent(DashboardText.Website, DashboardText.WebsiteTooltip),
-                                GUILayout.Width(64f)))
-                        {
-                            Application.OpenURL(_helpModule.DocumentationUrl);
-                        }
+                    }
+                    else if (!string.IsNullOrEmpty(_helpModule.DocumentationPath) ||
+                             !string.IsNullOrEmpty(_helpModule.DocumentationUrl))
+                    {
+                        EditorGUILayout.Space(EditorUiTokens.SpaceXs);
+                        GUILayout.Label(DashboardText.Documentation, EditorStyles.miniBoldLabel);
+                        DrawDocumentationButtons(
+                            _helpModule.DisplayName,
+                            _helpModule.DocumentationPath,
+                            _helpModule.DocumentationUrl,
+                            _helpModule,
+                            "module");
                     }
                 }
 
@@ -962,7 +1209,7 @@ namespace ZeroEngine.Editor
                     else if (_helpSurface != null)
                     {
                         foreach (DashboardEntry entry in _helpSurface.Entries)
-                            DrawTechnicalValue(entry.FullId + "  ·  " + entry.MenuPath);
+                            DrawTechnicalValue(EntryTechnicalRoute(entry));
                     }
                     else
                     {
@@ -971,6 +1218,32 @@ namespace ZeroEngine.Editor
                 }
             }
             EditorGUILayout.Space(EditorUiTokens.SpaceXs);
+        }
+
+        private void DrawDocumentationButtons(
+            string label,
+            string documentationPath,
+            string documentationUrl,
+            DashboardModule module,
+            string keySuffix)
+        {
+            using (new EditorGUILayout.HorizontalScope())
+            {
+                GUILayout.Label(label, EditorStyles.miniLabel, GUILayout.MinWidth(100f));
+                GUILayout.FlexibleSpace();
+                if (!string.IsNullOrEmpty(documentationPath) && GUILayout.Button(
+                        new GUIContent(DashboardText.Documentation, DashboardText.DocumentationTooltip),
+                        GUILayout.Width(64f)))
+                {
+                    OpenLocalDocumentation(module, documentationPath, keySuffix);
+                }
+                if (!string.IsNullOrEmpty(documentationUrl) && GUILayout.Button(
+                        new GUIContent(DashboardText.Website, DashboardText.WebsiteTooltip),
+                        GUILayout.Width(64f)))
+                {
+                    Application.OpenURL(documentationUrl);
+                }
+            }
         }
 
         private static void DrawTechnicalValue(string value)
@@ -1122,7 +1395,8 @@ namespace ZeroEngine.Editor
 
         private bool ModuleTextMatchesSearch(DashboardModule module)
         {
-            return Matches(module.DisplayName) || Matches(module.Description) || Matches(module.ModuleId);
+            return Matches(module.DisplayName) || Matches(module.Description) || Matches(module.ModuleId) ||
+                   Matches(module.ProjectId) || Matches(module.ProjectDisplayName);
         }
 
         private bool EntryMatchesSearch(DashboardEntry entry)
@@ -1135,6 +1409,11 @@ namespace ZeroEngine.Editor
                    Matches(entry.SurfaceDisplayName) ||
                    Matches(entry.SurfaceActionLabel) ||
                    Matches(entry.MenuPath) ||
+                   Matches(entry.ProviderId) ||
+                   Matches(entry.ActionId) ||
+                   Matches(entry.DocumentationPath) ||
+                   Matches(entry.DocumentationUrl) ||
+                   entry.LegacyKeywords.Any(Matches) ||
                    Matches(entry.FullId) ||
                    Matches(entry.ModuleId);
         }

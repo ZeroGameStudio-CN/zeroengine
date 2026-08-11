@@ -129,7 +129,7 @@ namespace ZeroEngine.ModSystem.Tests.Editor
         }
 
         [Test]
-        public void PackageManifest_DoesNotAddZeroEngineSiblingDependencies()
+        public void PackageManifest_AllowsOnlySharedEditorUiSiblingDependency()
         {
             string manifest = File.ReadAllText(Path.Combine(PackageRoot, "package.json"));
             Match dependencies = Regex.Match(
@@ -138,7 +138,20 @@ namespace ZeroEngine.ModSystem.Tests.Editor
 
             Assert.That(manifest, Does.Contain("\"version\": \"0.3.0\""));
             Assert.That(dependencies.Success, Is.True);
-            Assert.That(dependencies.Groups["body"].Value, Does.Not.Contain("com.zerogamestudio."));
+            string dependencyBody = dependencies.Groups["body"].Value;
+            string[] zeroEngineDependencies = Regex.Matches(
+                    dependencyBody,
+                    "\\\"(?<name>com\\.zerogamestudio\\.[^\\\"]+)\\\"\\s*:")
+                .Cast<Match>()
+                .Select(match => match.Groups["name"].Value)
+                .ToArray();
+
+            Assert.That(
+                zeroEngineDependencies,
+                Is.EquivalentTo(new[] { "com.zerogamestudio.zeroengine.editor-ui" }));
+            Assert.That(
+                dependencyBody,
+                Does.Contain("\"com.zerogamestudio.zeroengine.editor-ui\": \"1.3.0\""));
         }
 
         [Test]

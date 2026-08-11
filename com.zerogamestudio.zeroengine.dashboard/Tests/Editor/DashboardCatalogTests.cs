@@ -12,20 +12,14 @@ using UnityEngine.TestTools;
 using PackageManagerPackageInfo = UnityEditor.PackageManager.PackageInfo;
 using ZeroEngine.Editor;
 using ZeroEngine.Editor.Dashboard;
+using ZeroEngine.EditorUI;
 
 namespace ZeroEngine.Dashboard.Tests.Editor
 {
     [TestFixture]
     public sealed class DashboardCatalogTests
     {
-        private static int _shortcutCounter;
         private const string RemovalFixturePackageName = "com.zerogamestudio.dashboard-removal-fixture";
-
-        [MenuItem("ZeroEngine Dashboard Tests/Shortcut Counter %g")]
-        private static void CountShortcutMenuExecution()
-        {
-            _shortcutCounter++;
-        }
 
         [Test]
         public void DashboardFixedTooltips_AreNonEmptyChineseText()
@@ -58,7 +52,8 @@ namespace ZeroEngine.Dashboard.Tests.Editor
             Assert.AreEqual(0, catalog.Modules[0].Order);
             Assert.AreEqual(0, catalog.Modules[0].Entries[0].Order);
             Assert.AreEqual("常规", catalog.Modules[0].VisibleSurfaces[0].Section);
-            Assert.AreEqual(0, catalog.Diagnostics.Count);
+            Assert.IsFalse(catalog.Diagnostics.Any(item => item.Severity == DashboardDiagnosticSeverity.Error));
+            Assert.That(catalog.Diagnostics.Single().Code, Is.EqualTo("legacy-schema-v1"));
         }
 
         [Test]
@@ -68,7 +63,7 @@ namespace ZeroEngine.Dashboard.Tests.Editor
 
             Assert.AreEqual(1, catalog.Modules.Count);
             Assert.AreEqual(0, catalog.VisibleModules.Count);
-            Assert.AreEqual(0, catalog.Diagnostics.Count);
+            Assert.IsFalse(catalog.Diagnostics.Any(item => item.Severity == DashboardDiagnosticSeverity.Error));
         }
 
         [Test]
@@ -85,7 +80,7 @@ namespace ZeroEngine.Dashboard.Tests.Editor
             Assert.AreEqual(1, catalog.VisibleWorkspaceModules.Count);
             Assert.AreEqual("project.panels/runtime", catalog.Modules[0].Panels[0].FullId);
             Assert.AreEqual("使用运行概览。", catalog.Modules[0].Panels[0].Usage);
-            Assert.AreEqual(0, catalog.Diagnostics.Count);
+            Assert.IsFalse(catalog.Diagnostics.Any(item => item.Severity == DashboardDiagnosticSeverity.Error));
         }
 
         [Test]
@@ -105,7 +100,7 @@ namespace ZeroEngine.Dashboard.Tests.Editor
         public void Build_UnknownSchema_IsolatesOnlyBadDescriptor()
         {
             string bad = Descriptor("project.bad", "Bad", Entry("open", "Open", "ZGS/Bad/Open"))
-                .Replace("\"schemaVersion\":1", "\"schemaVersion\":2");
+                .Replace("\"schemaVersion\":1", "\"schemaVersion\":99");
             DashboardCatalog catalog = Build(
                 Source(bad, "bad.json"),
                 Source(Descriptor("project.good", "Good", Entry("open", "Open", "ZGS/Good/Open")), "good.json"));
@@ -137,6 +132,138 @@ namespace ZeroEngine.Dashboard.Tests.Editor
 
             Assert.AreEqual(0, catalog.Modules.Count);
             StringAssert.Contains("duplicate id", catalog.Diagnostics[0].Message);
+        }
+
+        [Test]
+        public void Build_ValidV2ProviderEntry_UsesExplicitProjectScope()
+        {
+            DashboardCatalog catalog = Build(Source(DescriptorV2(
+                "project.tools",
+                "POB 工具",
+                EntryV2("open", "打开", "project.tools", "open"),
+                scope: "project",
+                projectId: "pob",
+                projectDisplayName: "POB")));
+
+            DashboardModule module = catalog.Modules.Single();
+            DashboardEntry entry = module.Entries.Single();
+            Assert.AreEqual(2, module.SchemaVersion);
+            Assert.AreEqual(DashboardModuleScope.Project, module.Scope);
+            Assert.AreEqual("pob", module.ProjectId);
+            Assert.AreEqual(DashboardEntryExecutionKind.Provider, entry.ExecutionKind);
+            Assert.AreEqual("project.tools", entry.ProviderId);
+            Assert.AreEqual("open", entry.ActionId);
+            Assert.IsEmpty(entry.MenuPath);
+            Assert.IsFalse(catalog.Diagnostics.Any(item => item.Severity == DashboardDiagnosticSeverity.Error));
+        }
+
+        [Test]
+        public void Build_V2MenuPath_IsRejected()
+        {
+            string entry = EntryV2("open", "打开", "project.tools", "open")
+                .Replace("\"executionKind\":", "\"menuPath\":\"ZGS/旧入口\",\"executionKind\":");
+
+            DashboardCatalog catalog = Build(Source(DescriptorV2("project.tools", "工具", entry)));
+
+            Assert.AreEqual(0, catalog.Modules.Count);
+            StringAssert.Contains("menuPath is not allowed", catalog.Diagnostics.Single().Message);
+        }
+
+        [Test]
+        public void Build_V2DuplicateProviderActionBinding_IsolatesBothEntries()
+        {
+            DashboardCatalog catalog = Build(Source(DescriptorV2(
+                "project.tools",
+                "工具",
+                EntryV2("one", "一", "project.tools", "run") + "," +
+                EntryV2("two", "二", "project.tools", "run"))));
+
+            Assert.AreEqual(0, catalog.VisibleModules.Count);
+            Assert.AreEqual(2, catalog.Diagnostics.Count(item => item.Code == "duplicate-action-binding"));
+        }
+
+        [Test]
+        public void Build_V2ProjectDocumentation_UsesProjectRoot()
+        {
+            string projectRoot = Path.Combine(Path.GetTempPath(), "zeroengine-dashboard-project");
+            string descriptorRoot = Path.Combine(projectRoot, "Assets", "Editor");
+            string descriptor = DescriptorV2("project.docs", "文档", EntryV2("open", "打开", "project.docs", "open"))
+                .Replace("\"entries\":", "\"documentationPath\":\"docs/guide.md\",\"entries\":");
+            var source = new DashboardDescriptorSource(
+                DashboardSourceKind.Project,
+                Path.Combine(descriptorRoot, "ZeroEngineDashboardModule.json"),
+                descriptorRoot,
+                string.Empty,
+                string.Empty,
+                descriptor,
+                projectRootPath: projectRoot);
+
+            DashboardCatalog catalog = Build(new[] { source }, Array.Empty<DashboardInstalledPackage>());
+
+            Assert.AreEqual(Path.GetFullPath(Path.Combine(projectRoot, "docs", "guide.md")), catalog.Modules.Single().DocumentationPath);
+            Assert.IsFalse(catalog.Diagnostics.Any(item => item.Severity == DashboardDiagnosticSeverity.Error));
+        }
+
+        [Test]
+        public void Build_V2RejectsUnknownCategory()
+        {
+            string entry = EntryV2("open", "打开", "project.tools", "open", category: "setup");
+
+            DashboardCatalog catalog = Build(Source(DescriptorV2("project.tools", "工具", entry)));
+
+            Assert.That(catalog.Modules, Is.Empty);
+            StringAssert.Contains("category is invalid", catalog.Diagnostics.Single().Message);
+        }
+
+        [Test]
+        public void Build_V2ProjectWriteCannotBePrimary()
+        {
+            string entry = EntryV2(
+                "generate",
+                "生成",
+                "project.tools",
+                "generate",
+                safety: "project-write",
+                confirmation: "确认写入项目？",
+                kind: "command");
+
+            DashboardCatalog catalog = Build(Source(DescriptorV2("project.tools", "工具", entry)));
+
+            Assert.That(catalog.Modules, Is.Empty);
+            StringAssert.Contains("project-write entries must use advanced or maintenance", catalog.Diagnostics.Single().Message);
+        }
+
+        [Test]
+        public void Build_V2DestructiveActionRequiresMaintenanceVisibility()
+        {
+            string entry = EntryV2(
+                "cleanup",
+                "清理",
+                "project.tools",
+                "cleanup",
+                safety: "destructive",
+                visibility: "advanced",
+                confirmation: "确认清理项目？",
+                kind: "command");
+
+            DashboardCatalog catalog = Build(Source(DescriptorV2("project.tools", "工具", entry)));
+
+            Assert.That(catalog.Modules, Is.Empty);
+            StringAssert.Contains("destructive entries must use maintenance", catalog.Diagnostics.Single().Message);
+        }
+
+        [Test]
+        public void Build_V2ProjectScopeRequiresProjectIdentity()
+        {
+            DashboardCatalog catalog = Build(Source(DescriptorV2(
+                "project.tools",
+                "工具",
+                EntryV2("open", "打开", "project.tools", "open"),
+                scope: "project")));
+
+            Assert.That(catalog.Modules, Is.Empty);
+            StringAssert.Contains("projectId", catalog.Diagnostics.Single().Message);
+            StringAssert.Contains("projectDisplayName", catalog.Diagnostics.Single().Message);
         }
 
         [Test]
@@ -492,7 +619,7 @@ namespace ZeroEngine.Dashboard.Tests.Editor
             DashboardCatalog catalog = Build(Source(descriptor));
 
             Assert.AreEqual(1, catalog.VisibleModules.Count);
-            Assert.AreEqual(0, catalog.Diagnostics.Count);
+            Assert.IsFalse(catalog.Diagnostics.Any(item => item.Severity == DashboardDiagnosticSeverity.Error));
         }
 
         [TestCase("../README.md", null)]
@@ -511,15 +638,6 @@ namespace ZeroEngine.Dashboard.Tests.Editor
 
             Assert.AreEqual(0, catalog.Modules.Count);
             Assert.AreEqual("descriptor-invalid", catalog.Diagnostics[0].Code);
-        }
-
-        [Test]
-        public void ExecuteMenuItem_UsesSuffixFreeDisplayPath()
-        {
-            _shortcutCounter = 0;
-
-            Assert.IsTrue(EditorApplication.ExecuteMenuItem("ZeroEngine Dashboard Tests/Shortcut Counter"));
-            Assert.AreEqual(1, _shortcutCounter);
         }
 
         [Test]
@@ -546,7 +664,7 @@ namespace ZeroEngine.Dashboard.Tests.Editor
         }
 
         [Test]
-        public void Discover_DescriptorMenusMatchLoadedMenuItemAttributes()
+        public void Discover_DescriptorBindingsMatchLoadedOwners()
         {
             var loadedMenuPaths = new HashSet<string>(
                 AppDomain.CurrentDomain.GetAssemblies()
@@ -564,14 +682,27 @@ namespace ZeroEngine.Dashboard.Tests.Editor
                 StringComparer.Ordinal);
 
             DashboardCatalog catalog = DashboardCatalogDiscovery.Discover();
-            foreach (DashboardEntry entry in catalog.Modules
+            DashboardEntry[] entries = catalog.Modules
                          .Where(module => module.Source.Kind == DashboardSourceKind.Package &&
                                           module.ModuleId != RemovalFixturePackageName)
-                         .SelectMany(module => module.Entries))
+                         .SelectMany(module => module.Entries)
+                         .ToArray();
+            foreach (DashboardEntry entry in entries.Where(entry => entry.IsLegacy))
             {
                 Assert.That(
                     loadedMenuPaths.Contains(entry.MenuPath),
                     "No loaded MenuItem attribute matches " + entry.FullId + " -> " + entry.MenuPath);
+            }
+
+            DashboardActionRegistry registry = DashboardActionRegistry.Build(catalog);
+            Assert.That(registry.Diagnostics, Is.Empty);
+            foreach (DashboardEntry entry in entries.Where(entry => !entry.IsLegacy))
+            {
+                Assert.That(
+                    registry.TryGetState(entry, out EditorToolActionState state, out DashboardDiagnostic diagnostic),
+                    Is.True,
+                    diagnostic?.Message ?? entry.FullId);
+                Assert.That(state, Is.Not.Null, entry.FullId);
             }
         }
 
@@ -761,6 +892,58 @@ namespace ZeroEngine.Dashboard.Tests.Editor
                    "\"displayName\":\"" + displayName + "\"," +
                    "\"description\":\"Description\"," +
                    "\"entries\":[" + entries + "]" + panelsField + "}";
+        }
+
+        private static string DescriptorV2(
+            string moduleId,
+            string displayName,
+            string entries,
+            string scope = "universal",
+            string projectId = null,
+            string projectDisplayName = null)
+        {
+            string projectFields = string.IsNullOrEmpty(projectId)
+                ? string.Empty
+                : "\"projectId\":\"" + projectId + "\"," +
+                  "\"projectDisplayName\":\"" + projectDisplayName + "\",";
+            return "{" +
+                   "\"schemaVersion\":2," +
+                   "\"moduleId\":\"" + moduleId + "\"," +
+                   "\"displayName\":\"" + displayName + "\"," +
+                   "\"description\":\"说明。\"," +
+                   "\"scope\":\"" + scope + "\"," +
+                   projectFields +
+                   "\"entries\":[" + entries + "]}";
+        }
+
+        private static string EntryV2(
+            string id,
+            string displayName,
+            string providerId,
+            string actionId,
+            string safety = "navigation",
+            string visibility = "primary",
+            string confirmation = null,
+            string kind = "window",
+            string category = "authoring")
+        {
+            string confirmationField = confirmation == null
+                ? string.Empty
+                : ",\"confirmation\":\"" + confirmation + "\"";
+            return "{" +
+                   "\"id\":\"" + id + "\"," +
+                   "\"displayName\":\"" + displayName + "\"," +
+                   "\"description\":\"说明。\"," +
+                   "\"category\":\"" + category + "\"," +
+                   "\"kind\":\"" + kind + "\"," +
+                   "\"order\":0," +
+                   "\"safety\":\"" + safety + "\"," +
+                   "\"availability\":\"always\"," +
+                   "\"visibility\":\"" + visibility + "\"," +
+                   "\"executionKind\":\"provider\"," +
+                   "\"providerId\":\"" + providerId + "\"," +
+                   "\"actionId\":\"" + actionId + "\"," +
+                   "\"replaces\":[]" + confirmationField + "}";
         }
 
         private static string Panel(string id, string displayName, string providerId)

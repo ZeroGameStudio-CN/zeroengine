@@ -14,7 +14,6 @@ namespace ZeroEngine.UI.Editor.Toast
         private const string ItemPrefabPath = InstallRoot + "/ToastItemView.prefab";
         private const string RootPrefabPath = InstallRoot + "/ToastRootPresenter.prefab";
 
-        [MenuItem("ZeroEngine/UI/Install Toast System")]
         public static void Install()
         {
             Directory.CreateDirectory(InstallRoot);

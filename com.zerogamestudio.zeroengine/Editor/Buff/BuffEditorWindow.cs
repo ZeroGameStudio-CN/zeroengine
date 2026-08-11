@@ -1,19 +1,22 @@
+using UnityEditor;
+using UnityEngine;
+
 #if ODIN_INSPECTOR
 using Sirenix.OdinInspector;
 using Sirenix.OdinInspector.Editor;
 using Sirenix.Utilities;
 using Sirenix.Utilities.Editor;
-using UnityEditor;
-using UnityEngine;
 using System.Linq;
 using ZeroEngine.BuffSystem;
+#endif
 
 namespace ZeroEngine.Editor.Buff
 {
+#if ODIN_INSPECTOR
+    [ZeroEngine.EditorUI.EditorUiSurface]
     public class BuffEditorWindow : OdinMenuEditorWindow
     {
-        [MenuItem("ZeroEngine/Buff Editor")]
-        private static void OpenWindow()
+        internal static void OpenWindow()
         {
             var window = GetWindow<BuffEditorWindow>();
             window.Show();
@@ -25,8 +28,8 @@ namespace ZeroEngine.Editor.Buff
             tree.Config.DrawSearchToolbar = true;
             tree.DefaultMenuStyle = OdinMenuStyle.TreeViewStyle;
 
-            tree.Add("Create New Buff", new CreateNewBuffData());
-            tree.AddAllAssetsAtPath("Buffs", "Assets/Data/Buffs", typeof(BuffData), true, true);
+            tree.Add("新建 Buff", new CreateNewBuffData());
+            tree.AddAllAssetsAtPath("Buff 资源", "Assets/Data/Buffs", typeof(BuffData), true, true);
             
             // Add Icons
             tree.EnumerateTree().Where(x => x.Value is BuffData).ForEach(node =>
@@ -46,12 +49,17 @@ namespace ZeroEngine.Editor.Buff
             return tree;
         }
 
+        protected override void OnBeginDrawEditors()
+        {
+            ZeroEngine.EditorUI.EditorUiGUILayout.SectionHeader("Buff 编辑器");
+        }
+
         public class CreateNewBuffData
         {
-            [LabelText("Buff Name")]
+            [LabelText("Buff 名称")]
             public string BuffName = "NewBuff";
 
-            [Button("Create Buff")]
+            [Button("创建 Buff")]
             public void Create()
             {
                 string path = "Assets/Data/Buffs";
@@ -75,5 +83,20 @@ namespace ZeroEngine.Editor.Buff
             }
         }
     }
-}
+#else
+    [ZeroEngine.EditorUI.EditorUiSurface]
+    public class BuffEditorWindow : EditorWindow
+    {
+        internal static void OpenWindow()
+        {
+            GetWindow<BuffEditorWindow>("Buff 编辑器");
+        }
+
+        private void OnGUI()
+        {
+            ZeroEngine.EditorUI.EditorUiGUILayout.Header("Buff 编辑器", "安装 Odin Inspector 后可使用完整的 Buff 创作界面。");
+            EditorGUILayout.HelpBox("高级 Buff 编辑功能需要 Odin Inspector；仍可在 Project 窗口中直接编辑 BuffData 资源。", MessageType.Warning);
+        }
+    }
 #endif
+}

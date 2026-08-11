@@ -1,5 +1,5 @@
 {
-  "schemaVersion": 1,
+  "schemaVersion": 2,
   "moduleId": "com.zerogamestudio.zeroengine",
   "displayName": "核心工具",
   "description": "核心内容创作、流程、世界与诊断工具。",
@@ -13,11 +13,17 @@
       "section": "内容创作",
       "category": "authoring",
       "kind": "window",
-      "menuPath": "ZeroEngine/Tools/Ability Editor",
       "order": 100,
       "safety": "navigation",
       "availability": "always",
-      "replaces": []
+      "replaces": [],
+      "visibility": "primary",
+      "executionKind": "provider",
+      "providerId": "zeroengine.core-tools",
+      "actionId": "ability-editor",
+      "legacyKeywords": [
+        "ZeroEngine/Tools/Ability Editor"
+      ]
     },
     {
       "id": "achievement-editor",
@@ -26,11 +32,17 @@
       "section": "内容创作",
       "category": "authoring",
       "kind": "window",
-      "menuPath": "ZeroEngine/Achievement/Achievement Editor",
       "order": 110,
       "safety": "navigation",
       "availability": "always",
-      "replaces": []
+      "replaces": [],
+      "visibility": "primary",
+      "executionKind": "provider",
+      "providerId": "zeroengine.core-tools",
+      "actionId": "achievement-editor",
+      "legacyKeywords": [
+        "ZeroEngine/Achievement/Achievement Editor"
+      ]
     },
     {
       "id": "behavior-tree-editor",
@@ -39,11 +51,17 @@
       "section": "逻辑与流程",
       "category": "authoring",
       "kind": "window",
-      "menuPath": "ZeroEngine/BehaviorTree/BT Graph Editor",
       "order": 120,
       "safety": "navigation",
       "availability": "always",
-      "replaces": []
+      "replaces": [],
+      "visibility": "primary",
+      "executionKind": "provider",
+      "providerId": "zeroengine.core-tools",
+      "actionId": "behavior-tree-editor",
+      "legacyKeywords": [
+        "ZeroEngine/BehaviorTree/BT Graph Editor"
+      ]
     },
     {
       "id": "behavior-tree-viewer",
@@ -52,11 +70,35 @@
       "section": "逻辑与流程",
       "category": "diagnostics",
       "kind": "window",
-      "menuPath": "ZeroEngine/BehaviorTree Viewer",
       "order": 130,
       "safety": "navigation",
       "availability": "always",
-      "replaces": []
+      "replaces": [],
+      "visibility": "primary",
+      "executionKind": "provider",
+      "providerId": "zeroengine.core-tools",
+      "actionId": "behavior-tree-viewer",
+      "legacyKeywords": [
+        "ZeroEngine/BehaviorTree Viewer"
+      ]
+    },
+    {
+      "id": "buff-editor",
+      "displayName": "Buff 编辑器",
+      "description": "打开 Buff 配置编辑器。",
+      "category": "authoring",
+      "kind": "window",
+      "order": 140,
+      "safety": "navigation",
+      "availability": "always",
+      "replaces": [],
+      "visibility": "primary",
+      "executionKind": "provider",
+      "providerId": "zeroengine.core-tools",
+      "actionId": "buff-editor",
+      "legacyKeywords": [
+        "ZeroEngine/Tools/Buff Editor"
+      ]
     },
     {
       "id": "calendar-editor",
@@ -65,11 +107,17 @@
       "section": "世界与元数据",
       "category": "authoring",
       "kind": "window",
-      "menuPath": "ZeroEngine/Calendar/Calendar Editor",
       "order": 150,
       "safety": "navigation",
       "availability": "always",
-      "replaces": []
+      "replaces": [],
+      "visibility": "primary",
+      "executionKind": "provider",
+      "providerId": "zeroengine.core-tools",
+      "actionId": "calendar-editor",
+      "legacyKeywords": [
+        "ZeroEngine/Calendar/Calendar Editor"
+      ]
     },
     {
       "id": "crafting-editor",
@@ -78,11 +126,35 @@
       "section": "内容创作",
       "category": "authoring",
       "kind": "window",
-      "menuPath": "ZeroEngine/Crafting/Recipe Editor",
       "order": 160,
       "safety": "navigation",
       "availability": "always",
-      "replaces": []
+      "replaces": [],
+      "visibility": "primary",
+      "executionKind": "provider",
+      "providerId": "zeroengine.core-tools",
+      "actionId": "crafting-editor",
+      "legacyKeywords": [
+        "ZeroEngine/Crafting/Recipe Editor"
+      ]
+    },
+    {
+      "id": "dialog-export",
+      "displayName": "对话导出",
+      "description": "打开对话 CSV 导出工具。",
+      "category": "data-localization",
+      "kind": "window",
+      "order": 165,
+      "safety": "navigation",
+      "availability": "always",
+      "replaces": [],
+      "visibility": "advanced",
+      "executionKind": "provider",
+      "providerId": "zeroengine.core-tools",
+      "actionId": "dialog-export",
+      "legacyKeywords": [
+        "ZeroEngine/Dialog/Export to CSV"
+      ]
     },
     {
       "id": "dialog-graph-editor",
@@ -91,11 +163,17 @@
       "section": "逻辑与流程",
       "category": "authoring",
       "kind": "window",
-      "menuPath": "ZeroEngine/Dialog/Dialog Graph Editor",
       "order": 170,
       "safety": "navigation",
       "availability": "always",
-      "replaces": []
+      "replaces": [],
+      "visibility": "primary",
+      "executionKind": "provider",
+      "providerId": "zeroengine.core-tools",
+      "actionId": "dialog-graph-editor",
+      "legacyKeywords": [
+        "ZeroEngine/Dialog/Dialog Graph Editor"
+      ]
     },
     {
       "id": "dialog-node-inspector",
@@ -104,11 +182,17 @@
       "section": "逻辑与流程",
       "category": "authoring",
       "kind": "window",
-      "menuPath": "ZeroEngine/Dialog/Node Inspector",
       "order": 180,
       "safety": "navigation",
       "availability": "always",
-      "replaces": []
+      "replaces": [],
+      "visibility": "primary",
+      "executionKind": "provider",
+      "providerId": "zeroengine.core-tools",
+      "actionId": "dialog-node-inspector",
+      "legacyKeywords": [
+        "ZeroEngine/Dialog/Node Inspector"
+      ]
     },
     {
       "id": "equipment-editor",
@@ -117,11 +201,17 @@
       "section": "内容创作",
       "category": "authoring",
       "kind": "window",
-      "menuPath": "ZeroEngine/Equipment/Equipment Editor",
       "order": 190,
       "safety": "navigation",
       "availability": "always",
-      "replaces": []
+      "replaces": [],
+      "visibility": "primary",
+      "executionKind": "provider",
+      "providerId": "zeroengine.core-tools",
+      "actionId": "equipment-editor",
+      "legacyKeywords": [
+        "ZeroEngine/Equipment/Equipment Editor"
+      ]
     },
     {
       "id": "global-search",
@@ -130,11 +220,17 @@
       "section": "诊断与模组",
       "category": "diagnostics",
       "kind": "window",
-      "menuPath": "ZeroEngine/Tools/Global Search",
       "order": 200,
       "safety": "navigation",
       "availability": "always",
-      "replaces": []
+      "replaces": [],
+      "visibility": "primary",
+      "executionKind": "provider",
+      "providerId": "zeroengine.core-tools",
+      "actionId": "global-search",
+      "legacyKeywords": [
+        "ZeroEngine/Tools/Global Search"
+      ]
     },
     {
       "id": "inventory-editor",
@@ -143,11 +239,17 @@
       "section": "内容创作",
       "category": "authoring",
       "kind": "window",
-      "menuPath": "ZeroEngine/Tools/Inventory Editor",
       "order": 210,
       "safety": "navigation",
       "availability": "always",
-      "replaces": []
+      "replaces": [],
+      "visibility": "primary",
+      "executionKind": "provider",
+      "providerId": "zeroengine.core-tools",
+      "actionId": "inventory-editor",
+      "legacyKeywords": [
+        "ZeroEngine/Tools/Inventory Editor"
+      ]
     },
     {
       "id": "translation-checker",
@@ -156,11 +258,17 @@
       "section": "诊断与模组",
       "category": "diagnostics",
       "kind": "window",
-      "menuPath": "ZeroEngine/Localization/Translation Checker",
       "order": 220,
       "safety": "navigation",
       "availability": "always",
-      "replaces": []
+      "replaces": [],
+      "visibility": "primary",
+      "executionKind": "provider",
+      "providerId": "zeroengine.core-tools",
+      "actionId": "translation-checker",
+      "legacyKeywords": [
+        "ZeroEngine/Localization/Translation Checker"
+      ]
     },
     {
       "id": "loot-table-editor",
@@ -169,11 +277,36 @@
       "section": "内容创作",
       "category": "authoring",
       "kind": "window",
-      "menuPath": "ZeroEngine/Loot/Loot Table Editor",
       "order": 230,
       "safety": "navigation",
       "availability": "always",
-      "replaces": []
+      "replaces": [],
+      "visibility": "primary",
+      "executionKind": "provider",
+      "providerId": "zeroengine.core-tools",
+      "actionId": "loot-table-editor",
+      "legacyKeywords": [
+        "ZeroEngine/Loot/Loot Table Editor"
+      ]
+    },
+    {
+      "id": "package-export",
+      "displayName": "导出 ZeroEngine 包",
+      "description": "选择目录并导出 ZeroEngine 包。",
+      "category": "assets-build",
+      "kind": "command",
+      "order": 235,
+      "safety": "project-write",
+      "confirmation": "是否开始导出 ZeroEngine 包？请确认目标目录与现有文件覆盖风险。",
+      "availability": "edit-mode",
+      "replaces": [],
+      "visibility": "advanced",
+      "executionKind": "provider",
+      "providerId": "zeroengine.core-tools",
+      "actionId": "package-export",
+      "legacyKeywords": [
+        "ZeroEngine/Export Package"
+      ]
     },
     {
       "id": "mod-creator",
@@ -182,11 +315,35 @@
       "section": "诊断与模组",
       "category": "authoring",
       "kind": "window",
-      "menuPath": "ZeroEngine/Mod System/Create New Mod...",
       "order": 240,
       "safety": "navigation",
       "availability": "always",
-      "replaces": []
+      "replaces": [],
+      "visibility": "primary",
+      "executionKind": "provider",
+      "providerId": "zeroengine.modsystem",
+      "actionId": "mod-creator",
+      "legacyKeywords": [
+        "ZeroEngine/Mod System/Create New Mod..."
+      ]
+    },
+    {
+      "id": "mod-exporter",
+      "displayName": "模组导出器",
+      "description": "打开模组导出工具。",
+      "category": "assets-build",
+      "kind": "window",
+      "order": 245,
+      "safety": "navigation",
+      "availability": "always",
+      "replaces": [],
+      "visibility": "primary",
+      "executionKind": "provider",
+      "providerId": "zeroengine.modsystem",
+      "actionId": "mod-exporter",
+      "legacyKeywords": [
+        "ZeroEngine/Mod System/Export to Mod..."
+      ]
     },
     {
       "id": "mod-validator",
@@ -195,11 +352,17 @@
       "section": "诊断与模组",
       "category": "diagnostics",
       "kind": "window",
-      "menuPath": "ZeroEngine/Mod System/Validate Mods...",
       "order": 250,
       "safety": "navigation",
       "availability": "always",
-      "replaces": []
+      "replaces": [],
+      "visibility": "primary",
+      "executionKind": "provider",
+      "providerId": "zeroengine.modsystem",
+      "actionId": "mod-validator",
+      "legacyKeywords": [
+        "ZeroEngine/Mod System/Validate Mods..."
+      ]
     },
     {
       "id": "notification-editor",
@@ -208,11 +371,17 @@
       "section": "世界与元数据",
       "category": "authoring",
       "kind": "window",
-      "menuPath": "ZeroEngine/Notification/Notification Editor",
       "order": 260,
       "safety": "navigation",
       "availability": "always",
-      "replaces": []
+      "replaces": [],
+      "visibility": "primary",
+      "executionKind": "provider",
+      "providerId": "zeroengine.core-tools",
+      "actionId": "notification-editor",
+      "legacyKeywords": [
+        "ZeroEngine/Notification/Notification Editor"
+      ]
     },
     {
       "id": "quest-editor",
@@ -221,11 +390,17 @@
       "section": "内容创作",
       "category": "authoring",
       "kind": "window",
-      "menuPath": "ZeroEngine/Tools/Quest Editor",
       "order": 270,
       "safety": "navigation",
       "availability": "always",
-      "replaces": []
+      "replaces": [],
+      "visibility": "primary",
+      "executionKind": "provider",
+      "providerId": "zeroengine.core-tools",
+      "actionId": "quest-editor",
+      "legacyKeywords": [
+        "ZeroEngine/Tools/Quest Editor"
+      ]
     },
     {
       "id": "relationship-editor",
@@ -234,11 +409,17 @@
       "section": "世界与元数据",
       "category": "authoring",
       "kind": "window",
-      "menuPath": "ZeroEngine/Relationship/Relationship Editor",
       "order": 280,
       "safety": "navigation",
       "availability": "always",
-      "replaces": []
+      "replaces": [],
+      "visibility": "primary",
+      "executionKind": "provider",
+      "providerId": "zeroengine.core-tools",
+      "actionId": "relationship-editor",
+      "legacyKeywords": [
+        "ZeroEngine/Relationship/Relationship Editor"
+      ]
     },
     {
       "id": "settings-editor",
@@ -247,11 +428,17 @@
       "section": "世界与元数据",
       "category": "authoring",
       "kind": "window",
-      "menuPath": "ZeroEngine/Settings/Settings Editor",
       "order": 290,
       "safety": "navigation",
       "availability": "always",
-      "replaces": []
+      "replaces": [],
+      "visibility": "primary",
+      "executionKind": "provider",
+      "providerId": "zeroengine.core-tools",
+      "actionId": "settings-editor",
+      "legacyKeywords": [
+        "ZeroEngine/Settings/Settings Editor"
+      ]
     },
     {
       "id": "shop-editor",
@@ -260,11 +447,17 @@
       "section": "内容创作",
       "category": "authoring",
       "kind": "window",
-      "menuPath": "ZeroEngine/Shop/Shop Editor",
       "order": 300,
       "safety": "navigation",
       "availability": "always",
-      "replaces": []
+      "replaces": [],
+      "visibility": "primary",
+      "executionKind": "provider",
+      "providerId": "zeroengine.core-tools",
+      "actionId": "shop-editor",
+      "legacyKeywords": [
+        "ZeroEngine/Shop/Shop Editor"
+      ]
     },
     {
       "id": "talent-tree-editor",
@@ -273,11 +466,17 @@
       "section": "逻辑与流程",
       "category": "authoring",
       "kind": "window",
-      "menuPath": "ZeroEngine/TalentTree/Talent Tree Editor",
       "order": 310,
       "safety": "navigation",
       "availability": "always",
-      "replaces": []
+      "replaces": [],
+      "visibility": "primary",
+      "executionKind": "provider",
+      "providerId": "zeroengine.core-tools",
+      "actionId": "talent-tree-editor",
+      "legacyKeywords": [
+        "ZeroEngine/TalentTree/Talent Tree Editor"
+      ]
     },
     {
       "id": "tutorial-editor",
@@ -286,11 +485,17 @@
       "section": "逻辑与流程",
       "category": "authoring",
       "kind": "window",
-      "menuPath": "ZeroEngine/Tutorial/Tutorial Editor",
       "order": 320,
       "safety": "navigation",
       "availability": "always",
-      "replaces": []
+      "replaces": [],
+      "visibility": "primary",
+      "executionKind": "provider",
+      "providerId": "zeroengine.core-tools",
+      "actionId": "tutorial-editor",
+      "legacyKeywords": [
+        "ZeroEngine/Tutorial/Tutorial Editor"
+      ]
     },
     {
       "id": "tutorial-graph-editor",
@@ -299,11 +504,18 @@
       "section": "逻辑与流程",
       "category": "authoring",
       "kind": "window",
-      "menuPath": "ZeroEngine/Tutorial/Tutorial Graph Editor",
       "order": 330,
       "safety": "navigation",
       "availability": "always",
-      "replaces": []
+      "replaces": [],
+      "visibility": "primary",
+      "executionKind": "provider",
+      "providerId": "zeroengine.core-tools",
+      "actionId": "tutorial-graph-editor",
+      "legacyKeywords": [
+        "ZeroEngine/Tutorial/Tutorial Graph Editor"
+      ]
     }
-  ]
+  ],
+  "scope": "universal"
 }

@@ -82,10 +82,10 @@ The generated catalog lives at:
 Documentation~/component-catalog.md
 ```
 
-Regenerate it from Unity with:
+Regenerate it from Unity by opening `ZGS > 工作台 > 数据与本地化`, enabling `高级工具`, and running:
 
 ```text
-ZGS/ZeroEngine/TCE/Regenerate Component Catalog
+重新生成组件目录
 ```
 
 Every concrete runtime component data type must declare `TceComponentDocAttribute`, and catalog determinism is covered by package tests.
@@ -103,7 +103,7 @@ Graph assets store a runtime `TceGraph` and can be executed by `TceRuntime`.
 
 ## Graph Editor
 
-Open `ZGS/ZeroEngine/TCE/Graph Editor` with a `TceGraphAsset` selected. The MVP
+Open `ZGS > 工作台 > 内容创作 > TCE 图编辑器` with a `TceGraphAsset` selected. The MVP
 editor exposes Trigger, Condition, and Effect lanes, catalog-backed component
 creation, validation, saving, and a generic preview route.
 
@@ -115,4 +115,4 @@ validation, or editor tooling.
 
 ## ZeroEngine Dashboard
 
-The optional Dashboard discovers the graph editor and component-catalog generator through `Editor/ZeroEngineDashboardModule.json`. Existing `ZGS/ZeroEngine/TCE/*` menus remain available and this package does not depend on Dashboard.
+The optional Dashboard discovers the graph editor and component-catalog generator through the schema v2 descriptor and invokes this package's typed provider. This package does not depend on Dashboard.

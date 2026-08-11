@@ -16,7 +16,6 @@ namespace ZeroEngine.TCE.Editor
         private int selectedIndex = -1;
         private TcePreviewResult lastPreviewResult;
 
-        [MenuItem("ZGS/ZeroEngine/TCE/Graph Editor")]
         public static void OpenMenu()
         {
             Open(Selection.activeObject as TceGraphAsset);

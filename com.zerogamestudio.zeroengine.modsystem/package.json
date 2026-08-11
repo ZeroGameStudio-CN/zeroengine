@@ -5,6 +5,7 @@
   "description": "Project-neutral mod discovery, management, source, Steam Workshop, and import orchestration foundation for ZeroEngine projects.",
   "unity": "2022.3",
   "dependencies": {
+    "com.zerogamestudio.zeroengine.editor-ui": "1.3.0",
     "com.unity.nuget.newtonsoft-json": "3.2.1"
   },
   "keywords": [
