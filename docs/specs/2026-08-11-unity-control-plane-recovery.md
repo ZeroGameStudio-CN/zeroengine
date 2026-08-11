@@ -1,6 +1,6 @@
 # Unity 控制面自动恢复毕业门
 
-- 状态：Final
+- 状态：Archived
 - 日期：2026-08-11
 - 设计批准：用户要求“继续下一轮，做到毕业为止”
 - 执行授权：Authorized；覆盖本 spec 的实现、测试、正常 PR/合并、双机安装、POB 精确 pin/checkin 与归档
@@ -82,4 +82,6 @@ M5 首次安装验收发现 0.7.0 会对已存在的 POSIX token 父目录执行
 
 实现期证据：Supervisor `172 passed in 265.29s`，Ruff check/format 通过；MCP Server `1351 passed, 3 skipped`，receipt 定向测试 9 项通过；Unity 2022.3.62f3 receipt EditMode 5/5；router 17 项与两项 skill validator 通过。MCP fork PR #3 的 4 项检查全绿并正常合并为 `a67a2f3ab447a769d08c7e5498e905dc1c347fb2`；personal-codex-skills PR #27 正常合并为 `7cb9f4aa2cdea569831a02547ae836f2f5857f36`，Windows 与 M5 已安装同一技能版本。
 
-ZeroEngine 0.7.0 主功能已由 PR #34 的 11 项检查全绿后正常合并为 `75a7239bdb48de7053813ac71c71d008ec7f37c9`。POB 已把插件 pin/lock 精确提交为 Plastic `cs:16819`，changeset 仅含两目标文件；实机公布 receipt protocol v1、只读命令成功、Console 0 error、receipt ack 后 journal 为空，EditorSettings 保持基线 SHA-256 `4dd4fa6d…4488a`，本任务 task/claim/Unity owner 已归零。0.7.1 补丁、双机最终安装与归档状态在发布完成后补入 closeout 提交。
+ZeroEngine 0.7.0 主功能已由 PR #34 的 11 项检查全绿后正常合并为 `75a7239bdb48de7053813ac71c71d008ec7f37c9`。0.7.1 POSIX 修复由 PR #35 正常合并为 `620804fa0adb5cf9b2cc936cd8f2ecd1b304f00f`；Supervisor/POSIX 测试和五条 Unity lane 最终全绿，其中 `Modules without Dashboard` 首轮仅因 `packages.unity.com` `ECONNRESET` 失败，失败 job 重跑后通过。Windows 9950 与 M5 均已安装 Supervisor 0.7.1、Server 10.1.2，并返回 `healthy-owned`。
+
+M5 真实 `/tmp` token 验收为 `0600`、owner `lzq`，未改变既有父目录权限；删除 token 后 `cleanup-idle` 立即收口空 task，正常 release 返回 `token_file_removed=true`。Windows token ACL 仅当前用户 FullControl，正常 release 同样删除 token。两机最终均无本任务 task、claim 或 Unity owner。POB 已把插件 pin/lock 精确提交为 Plastic `cs:16819`，changeset 仅含两目标文件；实机公布 receipt protocol v1、只读命令成功、Console 0 error、receipt ack 后 journal 为空，EditorSettings 保持基线 SHA-256 `4dd4fa6d…4488a`。全部验收门满足，本 spec 归档。
