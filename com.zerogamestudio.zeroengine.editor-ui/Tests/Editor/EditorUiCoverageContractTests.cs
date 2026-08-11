@@ -44,11 +44,11 @@ namespace ZeroEngine.EditorUI.Tests
 
             Assert.That(document, Is.Not.Null);
             Assert.That(document.schemaVersion, Is.EqualTo(1));
-            Assert.That(document.records, Has.Length.EqualTo(30));
-            Assert.That(document.records.Count(record => record.countsTowardModuleTotal), Is.EqualTo(28));
-            Assert.That(document.records.Count(record => !string.IsNullOrEmpty(record.descriptorFullId)), Is.EqualTo(28));
-            Assert.That(document.records.Select(record => record.targetId).Distinct().Count(), Is.EqualTo(30));
-            Assert.That(document.records.Select(record => record.typeName).Distinct().Count(), Is.EqualTo(29));
+            Assert.That(document.records, Has.Length.EqualTo(33));
+            Assert.That(document.records.Count(record => record.countsTowardModuleTotal), Is.EqualTo(31));
+            Assert.That(document.records.Count(record => !string.IsNullOrEmpty(record.descriptorFullId)), Is.EqualTo(31));
+            Assert.That(document.records.Select(record => record.targetId).Distinct().Count(), Is.EqualTo(33));
+            Assert.That(document.records.Select(record => record.typeName).Distinct().Count(), Is.EqualTo(32));
             Assert.That(document.records.All(record => record.migrationStatus == "migrated"), Is.True);
             Assert.That(document.records.All(record => !string.IsNullOrEmpty(record.sourcePath)), Is.True);
             Assert.That(document.records.All(record => !string.IsNullOrEmpty(record.integrationMethod)), Is.True);
