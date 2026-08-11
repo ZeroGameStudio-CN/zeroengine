@@ -59,6 +59,12 @@ namespace ZeroEngine.Editor.Dashboard
         Provider
     }
 
+    internal enum DashboardEntryContentType
+    {
+        Action,
+        Reference
+    }
+
     [Serializable]
     internal sealed class DashboardDescriptorData
     {
@@ -104,6 +110,7 @@ namespace ZeroEngine.Editor.Dashboard
         public string[] legacyKeywords;
         public string documentationPath;
         public string documentationUrl;
+        public string contentType;
     }
 
     [Serializable]
@@ -224,7 +231,8 @@ namespace ZeroEngine.Editor.Dashboard
             DashboardEntryVisibility visibility = DashboardEntryVisibility.Primary,
             IReadOnlyList<string> legacyKeywords = null,
             string documentationPath = null,
-            string documentationUrl = null)
+            string documentationUrl = null,
+            DashboardEntryContentType contentType = DashboardEntryContentType.Action)
         {
             ModuleId = moduleId;
             Id = id;
@@ -254,6 +262,7 @@ namespace ZeroEngine.Editor.Dashboard
             LegacyKeywords = legacyKeywords ?? Array.Empty<string>();
             DocumentationPath = documentationPath ?? string.Empty;
             DocumentationUrl = documentationUrl ?? string.Empty;
+            ContentType = contentType;
         }
 
         internal string ModuleId { get; }
@@ -285,6 +294,8 @@ namespace ZeroEngine.Editor.Dashboard
         internal IReadOnlyList<string> LegacyKeywords { get; }
         internal string DocumentationPath { get; }
         internal string DocumentationUrl { get; }
+        internal DashboardEntryContentType ContentType { get; }
+        internal bool IsReference => ContentType == DashboardEntryContentType.Reference;
         internal bool IsLegacy => ExecutionKind == DashboardEntryExecutionKind.LegacyMenu;
         internal bool Isolated { get; set; }
         internal bool HiddenByReplacement { get; set; }
@@ -375,15 +386,42 @@ namespace ZeroEngine.Editor.Dashboard
             Entries.Where(entry => !entry.Isolated && !entry.HiddenByReplacement).ToArray();
         internal IReadOnlyList<DashboardEntry> VisibleEntries =>
             _visibleEntries.Where(entry => !entry.Isolated && !entry.HiddenByReplacement).ToArray();
-        internal IReadOnlyList<DashboardSurface> VisibleSurfaces => VisibleEntries
-            .GroupBy(entry => entry.SurfaceGroupingRejected ? entry.FullId : entry.EffectiveSurfaceId, StringComparer.Ordinal)
-            .Select(group => new DashboardSurface(group.ToArray()))
-            .OrderBy(surface => surface.Order)
-            .ThenBy(surface => surface.DisplayName, StringComparer.OrdinalIgnoreCase)
-            .ThenBy(surface => surface.SurfaceId, StringComparer.Ordinal)
-            .ToArray();
+        internal IReadOnlyList<DashboardEntry> VisibleActions => DashboardPresentation.Actions(VisibleEntries);
+        internal IReadOnlyList<DashboardEntry> VisibleReferences => DashboardPresentation.References(VisibleEntries);
+        internal IReadOnlyList<DashboardSurface> VisibleSurfaces => DashboardPresentation.Surfaces(VisibleEntries);
 
         private readonly IReadOnlyList<DashboardEntry> _visibleEntries;
+    }
+
+    internal static class DashboardPresentation
+    {
+        internal static IReadOnlyList<DashboardEntry> Actions(IEnumerable<DashboardEntry> entries)
+        {
+            return (entries ?? Array.Empty<DashboardEntry>())
+                .Where(entry => entry.ContentType == DashboardEntryContentType.Action)
+                .ToArray();
+        }
+
+        internal static IReadOnlyList<DashboardEntry> References(IEnumerable<DashboardEntry> entries)
+        {
+            return (entries ?? Array.Empty<DashboardEntry>())
+                .Where(entry => entry.ContentType == DashboardEntryContentType.Reference)
+                .OrderBy(entry => entry.Order)
+                .ThenBy(entry => entry.DisplayName, StringComparer.OrdinalIgnoreCase)
+                .ThenBy(entry => entry.FullId, StringComparer.Ordinal)
+                .ToArray();
+        }
+
+        internal static IReadOnlyList<DashboardSurface> Surfaces(IEnumerable<DashboardEntry> entries)
+        {
+            return Actions(entries)
+                .GroupBy(entry => entry.SurfaceGroupingRejected ? entry.FullId : entry.EffectiveSurfaceId, StringComparer.Ordinal)
+                .Select(group => new DashboardSurface(group.ToArray()))
+                .OrderBy(surface => surface.Order)
+                .ThenBy(surface => surface.DisplayName, StringComparer.OrdinalIgnoreCase)
+                .ThenBy(surface => surface.SurfaceId, StringComparer.Ordinal)
+                .ToArray();
+        }
     }
 
     internal sealed class DashboardPanel
@@ -816,6 +854,7 @@ namespace ZeroEngine.Editor.Dashboard
 
             DashboardEntryExecutionKind executionKind = DashboardEntryExecutionKind.LegacyMenu;
             DashboardEntryVisibility visibility = DashboardEntryVisibility.Primary;
+            DashboardEntryContentType contentType = DashboardEntryContentType.Action;
             if (isV2)
             {
                 if (!string.IsNullOrEmpty(menuPath))
@@ -830,10 +869,17 @@ namespace ZeroEngine.Editor.Dashboard
                     errors.Add(prefix + "actionId must be lowercase kebab-case.");
                 if (!TryParseVisibility(data.visibility, out visibility))
                     errors.Add(prefix + "visibility is invalid.");
+                if (!TryParseContentType(data.contentType, out contentType))
+                    errors.Add(prefix + "contentType must be action or reference.");
                 if (safety == DashboardEntrySafety.Destructive && visibility != DashboardEntryVisibility.Maintenance)
                     errors.Add(prefix + "destructive entries must use maintenance visibility.");
                 if (safety == DashboardEntrySafety.ProjectWrite && visibility == DashboardEntryVisibility.Primary)
                     errors.Add(prefix + "project-write entries must use advanced or maintenance visibility.");
+                if (contentType == DashboardEntryContentType.Reference &&
+                    safety != DashboardEntrySafety.Navigation && safety != DashboardEntrySafety.ReadOnly)
+                {
+                    errors.Add(prefix + "reference entries must use navigation or read-only safety.");
+                }
             }
             else if (!IsValidMenuPath(menuPath))
             {
@@ -910,7 +956,8 @@ namespace ZeroEngine.Editor.Dashboard
                 visibility,
                 legacyKeywords,
                 documentationPath,
-                documentationUrl);
+                documentationUrl,
+                contentType);
         }
 
         private static DashboardPanel ParsePanel(
@@ -966,7 +1013,10 @@ namespace ZeroEngine.Editor.Dashboard
             List<DashboardDiagnostic> diagnostics)
         {
             foreach (IGrouping<string, DashboardEntry> group in entries
-                         .Where(entry => !entry.Isolated && !entry.HiddenByReplacement && !string.IsNullOrEmpty(entry.SurfaceId))
+                         .Where(entry => !entry.Isolated &&
+                                         !entry.HiddenByReplacement &&
+                                         entry.ContentType == DashboardEntryContentType.Action &&
+                                         !string.IsNullOrEmpty(entry.SurfaceId))
                          .GroupBy(entry => entry.DisplayModuleId + "/" + entry.SurfaceId, StringComparer.Ordinal))
             {
                 DashboardEntry[] members = group.ToArray();
@@ -1292,6 +1342,17 @@ namespace ZeroEngine.Editor.Dashboard
                 case "primary": result = DashboardEntryVisibility.Primary; return true;
                 case "advanced": result = DashboardEntryVisibility.Advanced; return true;
                 case "maintenance": result = DashboardEntryVisibility.Maintenance; return true;
+                default: result = default; return false;
+            }
+        }
+
+        private static bool TryParseContentType(string value, out DashboardEntryContentType result)
+        {
+            switch (Trim(value))
+            {
+                case "":
+                case "action": result = DashboardEntryContentType.Action; return true;
+                case "reference": result = DashboardEntryContentType.Reference; return true;
                 default: result = default; return false;
             }
         }

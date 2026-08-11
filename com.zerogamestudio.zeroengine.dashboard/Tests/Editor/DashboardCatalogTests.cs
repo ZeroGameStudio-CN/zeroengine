@@ -234,6 +234,67 @@ namespace ZeroEngine.Dashboard.Tests.Editor
         }
 
         [Test]
+        public void Build_V2ContentTypeDefaultsToAction()
+        {
+            DashboardCatalog catalog = Build(Source(DescriptorV2(
+                "project.tools",
+                "工具",
+                EntryV2("open", "打开", "project.tools", "open"))));
+
+            DashboardModule module = catalog.Modules.Single();
+            Assert.That(module.VisibleActions.Select(entry => entry.Id), Is.EqualTo(new[] { "open" }));
+            Assert.That(module.VisibleReferences, Is.Empty);
+            Assert.That(module.VisibleSurfaces.Count, Is.EqualTo(1));
+        }
+
+        [Test]
+        public void Build_V2ReferenceIsSeparatedFromActionSurfaces()
+        {
+            DashboardCatalog catalog = Build(Source(DescriptorV2(
+                "project.tools",
+                "工具",
+                EntryV2("open", "打开", "project.tools", "open") + "," +
+                EntryV2("guide", "使用指南", "project.tools", "guide", contentType: "reference"))));
+
+            DashboardModule module = catalog.Modules.Single();
+            Assert.That(module.VisibleActions.Select(entry => entry.Id), Is.EqualTo(new[] { "open" }));
+            Assert.That(module.VisibleReferences.Select(entry => entry.Id), Is.EqualTo(new[] { "guide" }));
+            Assert.That(module.VisibleSurfaces.Select(surface => surface.DefaultEntry.Id), Is.EqualTo(new[] { "open" }));
+            Assert.IsFalse(catalog.Diagnostics.Any(item => item.Severity == DashboardDiagnosticSeverity.Error));
+        }
+
+        [Test]
+        public void Build_V2ReferenceRejectsWriteSafety()
+        {
+            string entry = EntryV2(
+                "guide",
+                "生成指南",
+                "project.tools",
+                "guide",
+                safety: "project-write",
+                visibility: "advanced",
+                confirmation: "确认生成？",
+                kind: "command",
+                contentType: "reference");
+
+            DashboardCatalog catalog = Build(Source(DescriptorV2("project.tools", "工具", entry)));
+
+            Assert.That(catalog.Modules, Is.Empty);
+            StringAssert.Contains("reference entries must use navigation or read-only", catalog.Diagnostics.Single().Message);
+        }
+
+        [Test]
+        public void Build_V2RejectsUnknownContentType()
+        {
+            string entry = EntryV2("guide", "指南", "project.tools", "guide", contentType: "article");
+
+            DashboardCatalog catalog = Build(Source(DescriptorV2("project.tools", "工具", entry)));
+
+            Assert.That(catalog.Modules, Is.Empty);
+            StringAssert.Contains("contentType must be action or reference", catalog.Diagnostics.Single().Message);
+        }
+
+        [Test]
         public void Build_V2DestructiveActionRequiresMaintenanceVisibility()
         {
             string entry = EntryV2(
@@ -925,11 +986,15 @@ namespace ZeroEngine.Dashboard.Tests.Editor
             string visibility = "primary",
             string confirmation = null,
             string kind = "window",
-            string category = "authoring")
+            string category = "authoring",
+            string contentType = null)
         {
             string confirmationField = confirmation == null
                 ? string.Empty
                 : ",\"confirmation\":\"" + confirmation + "\"";
+            string contentTypeField = contentType == null
+                ? string.Empty
+                : ",\"contentType\":\"" + contentType + "\"";
             return "{" +
                    "\"id\":\"" + id + "\"," +
                    "\"displayName\":\"" + displayName + "\"," +
@@ -943,7 +1008,7 @@ namespace ZeroEngine.Dashboard.Tests.Editor
                    "\"executionKind\":\"provider\"," +
                    "\"providerId\":\"" + providerId + "\"," +
                    "\"actionId\":\"" + actionId + "\"," +
-                   "\"replaces\":[]" + confirmationField + "}";
+                   "\"replaces\":[]" + confirmationField + contentTypeField + "}";
         }
 
         private static string Panel(string id, string displayName, string providerId)

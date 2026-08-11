@@ -48,6 +48,7 @@ $allowedSafety = @('navigation', 'read-only', 'project-write', 'destructive')
 $allowedAvailability = @('always', 'edit-mode', 'play-mode')
 $allowedScopes = @('universal', 'project')
 $allowedVisibility = @('primary', 'advanced', 'maintenance')
+$allowedContentTypes = @('action', 'reference')
 $stableModuleIdPattern = '^[a-z0-9]+(?:[.-][a-z0-9]+)*$'
 $stableActionIdPattern = '^[a-z0-9]+(?:-[a-z0-9]+)*$'
 $hanPattern = '[\u3400-\u9fff]'
@@ -106,6 +107,11 @@ foreach ($descriptorPath in $descriptorPaths) {
         Assert-Condition ($allowedAvailability -contains $entry.availability) "Invalid availability for '$($entry.id)' in $descriptorPath"
         Assert-Condition ($entry.PSObject.Properties.Name -notcontains 'menuPath') "schema v2 forbids menuPath for '$($entry.id)' in $descriptorPath"
         Assert-Condition ($allowedVisibility -contains $entry.visibility) "Invalid visibility for '$($entry.id)' in $descriptorPath"
+        $contentType = if ([string]::IsNullOrWhiteSpace($entry.contentType)) { 'action' } else { $entry.contentType }
+        Assert-Condition ($allowedContentTypes -contains $contentType) "Invalid contentType for '$($entry.id)' in $descriptorPath"
+        if ($contentType -eq 'reference') {
+            Assert-Condition ($entry.safety -in @('navigation', 'read-only')) "Reference '$($entry.id)' must be navigation or read-only"
+        }
         Assert-Condition ($entry.executionKind -eq 'provider') "First-party entry '$($entry.id)' must use provider execution"
         Assert-Condition ($entry.providerId -match $stableModuleIdPattern) "Invalid providerId for '$($entry.id)' in $descriptorPath"
         Assert-Condition ($entry.actionId -match $stableActionIdPattern) "Invalid actionId for '$($entry.id)' in $descriptorPath"
@@ -139,7 +145,7 @@ foreach ($descriptorPath in $descriptorPaths) {
 $dashboardRoot = Join-Path $RootPath 'com.zerogamestudio.zeroengine.dashboard'
 $dashboardPackage = Get-Content -LiteralPath (Join-Path $dashboardRoot 'package.json') -Raw -Encoding UTF8 | ConvertFrom-Json
 $dashboardAsmdef = Get-Content -LiteralPath (Join-Path $dashboardRoot 'Editor\ZeroEngine.Dashboard.Editor.asmdef') -Raw -Encoding UTF8 | ConvertFrom-Json
-Assert-Condition ($dashboardPackage.version -eq '4.0.0') 'Dashboard package version must be 4.0.0.'
+Assert-Condition ($dashboardPackage.version -eq '4.1.0') 'Dashboard package version must be 4.1.0.'
 $dashboardDependencies = @($dashboardPackage.dependencies.psobject.Properties)
 Assert-Condition ($dashboardDependencies.Count -eq 1) 'Dashboard package must depend only on editor-ui.'
 Assert-Condition ($dashboardDependencies[0].Name -eq 'com.zerogamestudio.zeroengine.editor-ui' -and $dashboardDependencies[0].Value -eq '1.3.0') 'Dashboard editor-ui dependency must be exactly 1.3.0.'
