@@ -182,9 +182,9 @@ The user registration selects `required`; the compatible project policy at
 `required` and takes precedence. Use `task start --token-file` so the token is
 created owner-only before the task and never appears in stdout; the matching
 file is removed by `task release --token-file`. Environment/stdin remain legacy
-inputs. Never put the token in argv or logs. On POSIX, a missing parent chain is
-created with owner-only permissions and the token file is `0600`; permissions
-on an existing parent such as `/tmp` are never changed. On Windows, the token
+inputs. Never put the token in argv or logs. On POSIX, a missing immediate
+parent is requested as `0700` and the token file is `0600`; permissions on
+existing parents or ancestors such as `/tmp` are never changed. On Windows, the token
 file grants FullControl only to the current user. If a token file is lost before
 any claim, adopted pending path, test job, freeze, or unknown outcome exists,
 `workspace task cleanup-idle --task-id <id>` may close only that zero-resource

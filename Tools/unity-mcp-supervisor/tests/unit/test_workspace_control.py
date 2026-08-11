@@ -9,6 +9,7 @@ from pathlib import Path
 
 import pytest
 
+from unity_mcp_supervisor import test_farm
 from unity_mcp_supervisor.errors import IncompatibleError, ProjectBusyError, UsageError
 from unity_mcp_supervisor.project_lease import inspect_project_lease
 from unity_mcp_supervisor.project_resolver import canonical_project_root
@@ -111,6 +112,92 @@ def test_cleanup_idle_task_refuses_claim_owner(tmp_path: Path) -> None:
         coordinator.cleanup_idle_task(task["task_id"])
 
     assert exc_info.value.details["reason"] == "task-has-claims"
+    assert coordinator.status()["tasks"][0]["task_id"] == task["task_id"]
+
+
+def test_cleanup_idle_task_refuses_freeze_owner(tmp_path: Path) -> None:
+    project = _project(tmp_path)
+    coordinator = _coordinator(tmp_path, project)
+    task = _task(coordinator, "freeze-owner")
+    coordinator.acquire_claim(task["task_token"], freeze=True)
+
+    with pytest.raises(ProjectBusyError) as exc_info:
+        coordinator.cleanup_idle_task(task["task_id"])
+
+    assert exc_info.value.details["reason"] == "task-has-claims"
+    assert coordinator.status()["tasks"][0]["task_id"] == task["task_id"]
+
+
+def test_cleanup_idle_task_refuses_outcome_unknown(tmp_path: Path) -> None:
+    project = _project(tmp_path)
+    coordinator = _coordinator(tmp_path, project)
+    task = _task(coordinator, "unknown")
+    coordinator.heartbeat(
+        task["task_token"],
+        phase="outcome_unknown",
+        note="result delivery was lost",
+        ttl_seconds=120,
+    )
+
+    with pytest.raises(UsageError, match="active idle-cleanup candidate"):
+        coordinator.cleanup_idle_task(task["task_id"])
+
+    status = coordinator.status()["tasks"]
+    assert status[0]["task_id"] == task["task_id"]
+    assert status[0]["state"] == "outcome_unknown"
+
+
+def test_cleanup_idle_task_refuses_open_test_job(tmp_path: Path) -> None:
+    project = _project(tmp_path)
+    coordinator = _coordinator(tmp_path, project)
+    task = _task(coordinator, "test-owner")
+    store = test_farm.TestFarmStore(coordinator.paths)
+    store.provision(1)
+    store.submit(
+        test_farm.TestJobRequest(
+            project_root=coordinator.canonical_project_root,
+            task_id=task["task_id"],
+            platform="EditMode",
+            filters=("Tests.CleanupIdle",),
+            artifact_root=str(tmp_path / "artifacts"),
+            snapshot_id="snapshot-cleanup-idle",
+            snapshot_manifest=str(tmp_path / "artifacts" / "snapshot.json"),
+        )
+    )
+
+    with pytest.raises(ProjectBusyError) as exc_info:
+        coordinator.cleanup_idle_task(task["task_id"])
+
+    assert exc_info.value.details["reason"] == "task-has-test-jobs"
+    assert coordinator.status()["tasks"][0]["task_id"] == task["task_id"]
+
+
+def test_cleanup_idle_task_refuses_adopted_pending(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    project = _project(tmp_path)
+    (project / ".plastic").mkdir()
+    pending_path = project / "Assets" / "Owned.asset"
+
+    def fake_status(*_args, **_kwargs):
+        return subprocess.CompletedProcess([], 0, f"CH|{pending_path}|False\n", "")
+
+    monkeypatch.setattr(
+        "unity_mcp_supervisor.workspace_control.subprocess.run", fake_status
+    )
+    coordinator = _coordinator(tmp_path, project)
+    task = _task(coordinator, "pending-owner")
+    coordinator.set_disposition(
+        task["task_token"],
+        kind="adopt",
+        writes=("Assets/Owned.asset",),
+        evidence="owner confirmed",
+    )
+
+    with pytest.raises(ProjectBusyError) as exc_info:
+        coordinator.cleanup_idle_task(task["task_id"])
+
+    assert exc_info.value.details["reason"] == "task-has-adopted-pending"
     assert coordinator.status()["tasks"][0]["task_id"] == task["task_id"]
 
 

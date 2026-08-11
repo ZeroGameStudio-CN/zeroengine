@@ -55,6 +55,7 @@ def fake_http_server(
     foreign: bool = False,
     drop_counter: list[int] | None = None,
     health_version: str = "10.1.2",
+    receipt_protocol_unavailable: bool = False,
 ) -> Iterator[str]:
     instance_values = instances or []
     receipts: dict[str, dict] = {}
@@ -125,6 +126,9 @@ def fake_http_server(
             )
             if instance is None:
                 self._json(404, {"success": False, "error": "instance missing"})
+                return
+            if receipt_protocol_unavailable and payload.get("command_id"):
+                self._json(409, {"code": "receipt_protocol_unavailable"})
                 return
             if payload.get("type") == "drop_response":
                 if drop_counter is not None:
