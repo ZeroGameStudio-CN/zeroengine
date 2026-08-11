@@ -6,6 +6,8 @@ namespace ZeroEngine.Editor
         internal const string HeaderSubtitle = "在一个编辑器工作区中管理已安装模块和项目适配器。";
         internal const string Tools = "工具";
         internal const string ToolsTooltip = "浏览并打开已安装模块提供的工具。";
+        internal const string Workspace = "工作区";
+        internal const string WorkspaceTooltip = "使用已安装模块和项目适配器提供的内嵌面板。";
         internal const string System = "系统";
         internal const string SystemTooltip = "查看描述符健康状态、已安装包和项目适配器。";
         internal const string RefreshTooltip = "重新扫描模块描述符和项目适配器。";
@@ -22,10 +24,22 @@ namespace ZeroEngine.Editor
         internal const string WebsiteTooltip = "在浏览器中打开该模块的在线文档。";
         internal const string Details = "详情";
         internal const string DetailsTooltip = "显示模块 ID、入口 ID 和菜单路径等技术详情。";
+        internal const string Help = "帮助";
+        internal const string HelpTooltip = "查看当前模块、工具或面板的用途、用法和技术详情。";
+        internal const string Close = "关闭";
+        internal const string CloseHelpTooltip = "关闭帮助抽屉。";
         internal const string Open = "打开";
         internal const string Run = "运行";
         internal const string NoDeclaredTools = "当前没有已声明的模块工具。请安装带有效描述符的包，或添加项目适配器。";
         internal const string NoSearchResults = "没有工具符合当前搜索条件。";
+        internal const string NoWorkspacePanels = "当前没有可用的工作区面板。安装带 panels 描述符和 provider 的模块后会自动显示。";
+        internal const string NoWorkspaceSearchResults = "没有工作区面板符合当前搜索条件。";
+        internal const string Purpose = "用途";
+        internal const string Usage = "使用方法";
+        internal const string TechnicalDetails = "技术详情";
+        internal const string Retry = "重试加载";
+        internal const string RetryTooltip = "重新创建当前工作区面板。";
+        internal const string ConfirmAction = "确认操作";
         internal const string SystemSubtitle = "描述符健康状态、已安装包和项目适配器。";
         internal const string Healthy = "健康 · 无诊断";
         internal const string HealthyDescription = "所有已发现的 Dashboard 描述符均有效。";
@@ -43,6 +57,7 @@ namespace ZeroEngine.Editor
 
         internal static string ModuleCount(int count) => count + " 个模块";
         internal static string ToolCount(int count) => count + " 个工具";
+        internal static string PanelCount(int count) => count + " 个面板";
         internal static string IssueCount(int count) => count + " 个问题";
         internal static string IssuesRequireAttention(int count) => count + " 个问题需要处理";
         internal static string InstalledPackages(int count) => "已安装包（" + count + "）";

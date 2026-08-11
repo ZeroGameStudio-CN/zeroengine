@@ -16,6 +16,7 @@ namespace ZeroEngine.Editor
         private static readonly GUIContent[] PageNames =
         {
             new GUIContent(DashboardText.Tools, DashboardText.ToolsTooltip),
+            new GUIContent(DashboardText.Workspace, DashboardText.WorkspaceTooltip),
             new GUIContent(DashboardText.System, DashboardText.SystemTooltip)
         };
 
@@ -29,8 +30,21 @@ namespace ZeroEngine.Editor
         private Vector2 _moduleScroll;
         private Vector2 _contentScroll;
         private Vector2 _systemScroll;
+        private Vector2 _workspaceNavigationScroll;
+        private Vector2 _workspaceContentScroll;
         private bool _showInstalledPackages;
         private bool _showProjectAdapters;
+        private bool _showHelp;
+        private string _selectedPanelFullId = string.Empty;
+        private DashboardModule _helpModule;
+        private DashboardSurface _helpSurface;
+        private DashboardPanel _helpPanel;
+        private DashboardWorkspaceRegistry _workspaceRegistry;
+        private DashboardPanel _activePanelDescriptor;
+        private IEditorWorkspacePanel _activePanel;
+        private EditorWorkspacePanelContext _activePanelContext;
+        private double _nextPanelTick;
+        private readonly HashSet<string> _failedWorkspacePanels = new HashSet<string>(StringComparer.Ordinal);
         private readonly HashSet<string> _expandedDetails = new HashSet<string>(StringComparer.Ordinal);
 
         [MenuItem("ZeroEngine/Dashboard")]
@@ -41,10 +55,22 @@ namespace ZeroEngine.Editor
             window.minSize = new Vector2(760f, 460f);
         }
 
+        public static void ShowWorkspace(string moduleId, string panelId)
+        {
+            ShowWindow();
+            ZeroEngineDashboard window = GetWindow<ZeroEngineDashboard>(DashboardText.WindowTitle);
+            window._page = 1;
+            window._selectedPanelFullId = (moduleId ?? string.Empty) + "/" + (panelId ?? string.Empty);
+            window.Show();
+            window.Focus();
+            window.Repaint();
+        }
+
         private void OnEnable()
         {
             UnityEditor.PackageManager.Events.registeredPackages += OnRegisteredPackages;
             DashboardDescriptorAssetPostprocessor.DescriptorsChanged += RefreshCatalog;
+            EditorApplication.update += OnEditorUpdate;
             minSize = new Vector2(760f, 460f);
             RefreshCatalog();
         }
@@ -53,6 +79,8 @@ namespace ZeroEngine.Editor
         {
             UnityEditor.PackageManager.Events.registeredPackages -= OnRegisteredPackages;
             DashboardDescriptorAssetPostprocessor.DescriptorsChanged -= RefreshCatalog;
+            EditorApplication.update -= OnEditorUpdate;
+            DeactivateWorkspacePanel();
         }
 
         private void OnRegisteredPackages(PackageRegistrationEventArgs eventArgs)
@@ -62,6 +90,7 @@ namespace ZeroEngine.Editor
 
         private void RefreshCatalog()
         {
+            DeactivateWorkspacePanel();
             try
             {
                 _catalog = DashboardCatalogDiscovery.Discover();
@@ -83,6 +112,10 @@ namespace ZeroEngine.Editor
             }
 
             _runtimeDiagnostics.Clear();
+            _failedWorkspacePanels.Clear();
+            _workspaceRegistry = DashboardWorkspaceRegistry.Build(_catalog);
+            foreach (DashboardDiagnostic diagnostic in _workspaceRegistry.Diagnostics)
+                _runtimeDiagnostics["workspace/" + diagnostic.ModuleId + "/" + diagnostic.EntryId + "/" + diagnostic.Code] = diagnostic;
             if (_catalog.Diagnostics.Count > 0)
             {
                 Debug.LogWarning(
@@ -99,7 +132,35 @@ namespace ZeroEngine.Editor
             {
                 _selectedModuleId = string.Empty;
             }
+
+            if (!string.IsNullOrEmpty(_selectedPanelFullId) &&
+                !_catalog.VisibleWorkspaceModules.SelectMany(module => module.Panels)
+                    .Any(panel => string.Equals(panel.FullId, _selectedPanelFullId, StringComparison.Ordinal)))
+            {
+                _selectedPanelFullId = string.Empty;
+                DeactivateWorkspacePanel();
+            }
             Repaint();
+        }
+
+        private void OnEditorUpdate()
+        {
+            if (_page != 1 || _activePanel == null || _activePanelContext == null)
+                return;
+            float interval = _activePanel.RefreshInterval;
+            if (interval <= 0f || EditorApplication.timeSinceStartup < _nextPanelTick)
+                return;
+
+            try
+            {
+                _activePanel.Tick(_activePanelContext, EditorApplication.timeSinceStartup);
+                _nextPanelTick = EditorApplication.timeSinceStartup + interval;
+                Repaint();
+            }
+            catch (Exception exception)
+            {
+                RecordWorkspaceFailure("workspace-panel-tick-failed", exception);
+            }
         }
 
         private void OnGUI()
@@ -107,12 +168,18 @@ namespace ZeroEngine.Editor
             EditorUiStyles.EnsureCurrent();
             DrawHeader();
             DrawNavigation();
+            DrawHelpDrawer();
             switch (_page)
             {
                 case 0:
+                    DeactivateWorkspacePanel();
                     DrawTools();
                     break;
+                case 1:
+                    DrawWorkspace();
+                    break;
                 default:
+                    DeactivateWorkspacePanel();
                     DrawSystem();
                     break;
             }
@@ -128,10 +195,12 @@ namespace ZeroEngine.Editor
                 {
                     int diagnosticCount = _catalog.Diagnostics.Count + _runtimeDiagnostics.Count;
                     int toolCount = _catalog.VisibleModules.Sum(module => module.VisibleEntries.Count);
+                    int panelCount = _catalog.VisibleWorkspaceModules.Sum(module => module.Panels.Count);
                     if (!compact)
                     {
                         DrawInlineMetric(DashboardText.ModuleCount(_catalog.VisibleModules.Count), AccentColor);
                         DrawInlineMetric(DashboardText.ToolCount(toolCount), SuccessColor);
+                        DrawInlineMetric(DashboardText.PanelCount(panelCount), AccentColor);
                     }
                     DrawInlineMetric(DashboardText.IssueCount(diagnosticCount), diagnosticCount == 0 ? SuccessColor : WarningColor);
                     if (GUILayout.Button(
@@ -140,6 +209,13 @@ namespace ZeroEngine.Editor
                             GUILayout.Height(24f)))
                     {
                         RefreshCatalog();
+                    }
+                    if (GUILayout.Button(
+                            new GUIContent("?", DashboardText.HelpTooltip),
+                            GUILayout.Width(30f),
+                            GUILayout.Height(24f)))
+                    {
+                        _showHelp = !_showHelp;
                     }
                 });
         }
@@ -319,19 +395,11 @@ namespace ZeroEngine.Editor
                 using (new EditorGUILayout.VerticalScope())
                 {
                     EditorGUILayout.LabelField(module.DisplayName, EditorUiStyles.SectionTitle);
-                    if (!string.IsNullOrEmpty(module.Description))
-                        EditorGUILayout.LabelField(module.Description, EditorStyles.wordWrappedMiniLabel);
                 }
                 GUILayout.FlexibleSpace();
                 GUILayout.Label(DashboardText.ToolCount(module.VisibleEntries.Count), EditorStyles.miniLabel);
-                if (!string.IsNullOrEmpty(module.DocumentationPath) && GUILayout.Button(
-                        new GUIContent(DashboardText.Documentation, DashboardText.DocumentationTooltip),
-                        GUILayout.Width(48f)))
-                    OpenLocalDocumentation(module);
-                if (!string.IsNullOrEmpty(module.DocumentationUrl) && GUILayout.Button(
-                        new GUIContent(DashboardText.Website, DashboardText.WebsiteTooltip),
-                        GUILayout.Width(48f)))
-                    Application.OpenURL(module.DocumentationUrl);
+                if (GUILayout.Button(new GUIContent("?", DashboardText.HelpTooltip), GUILayout.Width(28f)))
+                    ShowHelp(module, null, null);
             }
             EditorUiGUILayout.AccentLine(AccentColor);
             EditorGUILayout.Space(EditorUiTokens.SpaceXs);
@@ -339,10 +407,22 @@ namespace ZeroEngine.Editor
 
         private void DrawSurface(DashboardModule module, DashboardSurface surface)
         {
+            float trailingWidth = CalculateSurfaceActionWidth(surface) + 34f;
+            float availableWidth = Mathf.Max(240f, position.width -
+                (EditorUiGUILayout.ResponsiveMode(position.width) == EditorUiResponsiveMode.Compact
+                    ? 56f
+                    : EditorUiTokens.DashboardSidebarWidth + 92f));
+            EditorUiActionRowMode rowMode = EditorUiGUILayout.ResolveActionRowMode(availableWidth, trailingWidth);
             EditorUiGUILayout.ActionRow(
                 new GUIContent(surface.DisplayName, surface.Description),
-                new GUIContent(surface.Description, surface.Description),
-                () => DrawSurfaceActions(surface));
+                null,
+                () =>
+                {
+                    DrawSurfaceActions(surface);
+                    if (GUILayout.Button(new GUIContent("?", DashboardText.HelpTooltip), GUILayout.Width(28f), GUILayout.Height(EditorUiTokens.PrimaryButtonHeight)))
+                        ShowHelp(module, surface, null);
+                },
+                rowMode);
 
             using (new EditorGUILayout.HorizontalScope())
             {
@@ -416,6 +496,20 @@ namespace ZeroEngine.Editor
             }
         }
 
+        private static float CalculateSurfaceActionWidth(DashboardSurface surface)
+        {
+            float width = 0f;
+            foreach (DashboardEntry entry in surface.Entries)
+            {
+                string label = string.IsNullOrEmpty(entry.SurfaceActionLabel)
+                    ? entry.Kind == DashboardEntryKind.Window ? DashboardText.Open : DashboardText.Run
+                    : entry.SurfaceActionLabel;
+                width += Mathf.Max(72f, GUI.skin.button.CalcSize(new GUIContent(label)).x + 12f);
+                width += EditorUiTokens.SpaceXs;
+            }
+            return width;
+        }
+
         private void ExecuteEntry(DashboardEntry entry)
         {
             DashboardExecutionResult result = DashboardEntryExecutor.Execute(entry);
@@ -451,6 +545,440 @@ namespace ZeroEngine.Editor
                 DashboardText.DocumentationMissing(module.DocumentationPath),
                 module.Source.SourcePath,
                 module.ModuleId);
+        }
+
+        private void DrawWorkspace()
+        {
+            DashboardModule[] modules = _catalog.VisibleWorkspaceModules
+                .Where(module => ModulePanelMatchesSearch(module))
+                .Select(module => new DashboardModule(
+                    module.ModuleId,
+                    module.DisplayName,
+                    module.Description,
+                    module.Order,
+                    module.DocumentationPath,
+                    module.DocumentationUrl,
+                    module.Source,
+                    module.Entries,
+                    panels: module.Panels.Where(panel =>
+                            (_workspaceRegistry?.IsAvailable(panel) ?? false) && PanelMatchesSearch(panel))
+                        .ToArray()))
+                .Where(module => module.Panels.Count > 0)
+                .ToArray();
+
+            if (modules.Length == 0)
+            {
+                DeactivateWorkspacePanel();
+                EditorGUILayout.HelpBox(
+                    string.IsNullOrEmpty(_search)
+                        ? DashboardText.NoWorkspacePanels
+                        : DashboardText.NoWorkspaceSearchResults,
+                    MessageType.Info);
+                return;
+            }
+
+            EnsureWorkspaceSelection(modules);
+            if (EditorUiGUILayout.ResponsiveMode(position.width) == EditorUiResponsiveMode.Compact)
+            {
+                DrawCompactWorkspaceSelector(modules);
+                DrawWorkspaceContent(modules);
+                return;
+            }
+
+            using (new EditorGUILayout.HorizontalScope())
+            {
+                DrawWorkspaceNavigation(modules);
+                EditorGUILayout.Space(EditorUiTokens.SpaceSm);
+                DrawWorkspaceContent(modules);
+            }
+        }
+
+        private void DrawWorkspaceNavigation(IReadOnlyList<DashboardModule> modules)
+        {
+            using (new EditorGUILayout.VerticalScope(EditorUiStyles.Card, GUILayout.Width(EditorUiTokens.DashboardSidebarWidth)))
+            {
+                GUILayout.Label(DashboardText.Workspace, EditorStyles.boldLabel);
+                _workspaceNavigationScroll = EditorGUILayout.BeginScrollView(_workspaceNavigationScroll);
+                foreach (DashboardModule module in modules)
+                {
+                    GUILayout.Label(module.DisplayName, EditorStyles.miniBoldLabel);
+                    foreach (DashboardPanel panel in module.Panels)
+                    {
+                        if (EditorUiGUILayout.SelectionButton(
+                                new GUIContent(panel.DisplayName, panel.Description),
+                                string.Equals(_selectedPanelFullId, panel.FullId, StringComparison.Ordinal),
+                                GUILayout.ExpandWidth(true),
+                                GUILayout.Height(30f)))
+                        {
+                            SelectWorkspacePanel(panel.FullId);
+                        }
+                    }
+                    EditorGUILayout.Space(EditorUiTokens.SpaceXs);
+                }
+                EditorGUILayout.EndScrollView();
+            }
+        }
+
+        private void DrawCompactWorkspaceSelector(IReadOnlyList<DashboardModule> modules)
+        {
+            DashboardPanel[] panels = modules.SelectMany(module => module.Panels).ToArray();
+            GUIContent[] labels = panels.Select(panel =>
+            {
+                DashboardModule module = modules.First(item => string.Equals(item.ModuleId, panel.ModuleId, StringComparison.Ordinal));
+                return new GUIContent(module.DisplayName + " · " + panel.DisplayName, panel.Description);
+            }).ToArray();
+            int index = Math.Max(0, Array.FindIndex(panels, panel =>
+                string.Equals(panel.FullId, _selectedPanelFullId, StringComparison.Ordinal)));
+            int next = EditorGUILayout.Popup(
+                new GUIContent(DashboardText.Workspace, DashboardText.WorkspaceTooltip),
+                index,
+                labels);
+            if (panels.Length > 0 && next >= 0 && next < panels.Length)
+                SelectWorkspacePanel(panels[next].FullId);
+            EditorGUILayout.Space(EditorUiTokens.SpaceSm);
+        }
+
+        private void DrawWorkspaceContent(IReadOnlyList<DashboardModule> modules)
+        {
+            DashboardPanel descriptor = modules.SelectMany(module => module.Panels)
+                .FirstOrDefault(panel => string.Equals(panel.FullId, _selectedPanelFullId, StringComparison.Ordinal));
+            if (descriptor == null)
+                return;
+            DashboardModule module = modules.First(item => string.Equals(item.ModuleId, descriptor.ModuleId, StringComparison.Ordinal));
+
+            _workspaceContentScroll = EditorGUILayout.BeginScrollView(_workspaceContentScroll);
+            using (new EditorGUILayout.HorizontalScope())
+            {
+                using (new EditorGUILayout.VerticalScope())
+                {
+                    GUILayout.Label(descriptor.DisplayName, EditorUiStyles.SectionTitle);
+                    GUILayout.Label(module.DisplayName, EditorStyles.miniLabel);
+                }
+                GUILayout.FlexibleSpace();
+                if (descriptor.Safety != DashboardEntrySafety.Navigation)
+                    EditorUiGUILayout.Chip(new GUIContent(SafetyLabel(descriptor.Safety), SafetyTooltip(descriptor.Safety)));
+                if (GUILayout.Button(new GUIContent("?", DashboardText.HelpTooltip), GUILayout.Width(28f)))
+                    ShowHelp(module, null, descriptor);
+            }
+            EditorUiGUILayout.AccentLine(AccentColor);
+            EditorGUILayout.Space(EditorUiTokens.SpaceSm);
+
+            if (!IsAvailable(descriptor))
+            {
+                DeactivateWorkspacePanel();
+                EditorGUILayout.HelpBox(
+                    descriptor.Availability == DashboardEntryAvailability.EditMode
+                        ? DashboardText.EditModeOnly(descriptor.DisplayName)
+                        : DashboardText.PlayModeOnly(descriptor.DisplayName),
+                    MessageType.Info);
+                EditorGUILayout.EndScrollView();
+                return;
+            }
+
+            if (_failedWorkspacePanels.Contains(descriptor.FullId))
+            {
+                EditorGUILayout.HelpBox("面板加载失败。可在“系统”页复制诊断详情。", MessageType.Error);
+                if (GUILayout.Button(new GUIContent(DashboardText.Retry, DashboardText.RetryTooltip)))
+                {
+                    _failedWorkspacePanels.Remove(descriptor.FullId);
+                    RemoveWorkspaceDiagnostics(descriptor.FullId);
+                }
+                EditorGUILayout.EndScrollView();
+                return;
+            }
+
+            if (EnsureActiveWorkspacePanel(descriptor))
+            {
+                _activePanelContext.AvailableWidth = Mathf.Min(EditorUiTokens.FormContentMaxWidth, Mathf.Max(240f, position.width -
+                    (EditorUiGUILayout.ResponsiveMode(position.width) == EditorUiResponsiveMode.Compact
+                        ? 40f
+                        : EditorUiTokens.DashboardSidebarWidth + 72f)));
+                try
+                {
+                    using (EditorUiGUILayout.ConstrainedContent())
+                        _activePanel.OnGUI(_activePanelContext);
+                }
+                catch (Exception exception)
+                {
+                    RecordWorkspaceFailure("workspace-panel-draw-failed", exception);
+                }
+            }
+            EditorGUILayout.EndScrollView();
+        }
+
+        private bool EnsureActiveWorkspacePanel(DashboardPanel descriptor)
+        {
+            if (_activePanel != null && _activePanelDescriptor != null &&
+                string.Equals(_activePanelDescriptor.FullId, descriptor.FullId, StringComparison.Ordinal))
+            {
+                return true;
+            }
+
+            DeactivateWorkspacePanel();
+            IEditorWorkspacePanel panel = null;
+            DashboardDiagnostic diagnostic = null;
+            if (_workspaceRegistry == null ||
+                !_workspaceRegistry.TryCreate(descriptor, out panel, out diagnostic))
+            {
+                if (diagnostic != null)
+                    RecordWorkspaceDiagnostic(descriptor, diagnostic);
+                _failedWorkspacePanels.Add(descriptor.FullId);
+                return false;
+            }
+
+            _activePanelDescriptor = descriptor;
+            _activePanel = panel;
+            _activePanelContext = new EditorWorkspacePanelContext(
+                this,
+                descriptor.ModuleId,
+                descriptor.Id,
+                DrawWorkspaceAction);
+            try
+            {
+                _activePanel.Activate(_activePanelContext);
+                _nextPanelTick = EditorApplication.timeSinceStartup + Math.Max(0f, _activePanel.RefreshInterval);
+                return true;
+            }
+            catch (Exception exception)
+            {
+                RecordWorkspaceFailure("workspace-panel-activate-failed", exception);
+                return false;
+            }
+        }
+
+        private void DeactivateWorkspacePanel()
+        {
+            IEditorWorkspacePanel panel = _activePanel;
+            _activePanel = null;
+            _activePanelContext = null;
+            _activePanelDescriptor = null;
+            if (panel == null)
+                return;
+            try
+            {
+                panel.Deactivate();
+            }
+            catch (Exception exception)
+            {
+                Debug.LogException(exception);
+            }
+
+            try
+            {
+                panel.Dispose();
+            }
+            catch (Exception exception)
+            {
+                Debug.LogException(exception);
+            }
+        }
+
+        private bool DrawWorkspaceAction(EditorWorkspaceAction action, GUILayoutOption[] options)
+        {
+            bool clicked;
+            using (new EditorGUI.DisabledScope(!action.Enabled))
+            {
+                switch (action.Style)
+                {
+                    case EditorWorkspaceActionStyle.Primary:
+                        clicked = EditorUiGUILayout.PrimaryButton(action.Content, options);
+                        break;
+                    case EditorWorkspaceActionStyle.Destructive:
+                        clicked = EditorUiGUILayout.DestructiveButton(action.Content, options);
+                        break;
+                    default:
+                        clicked = GUILayout.Button(action.Content, options);
+                        break;
+                }
+            }
+
+            if (!clicked)
+                return false;
+            bool needsConfirmation = action.Safety == EditorWorkspaceActionSafety.ProjectWrite ||
+                                     action.Safety == EditorWorkspaceActionSafety.Destructive;
+            if (needsConfirmation && string.IsNullOrWhiteSpace(action.Confirmation))
+                throw new InvalidOperationException("Write-capable workspace actions require confirmation text.");
+            if (!string.IsNullOrWhiteSpace(action.Confirmation) &&
+                !EditorUtility.DisplayDialog(DashboardText.ConfirmAction, action.Confirmation, "继续", "取消"))
+            {
+                return false;
+            }
+            action.Execute();
+            return true;
+        }
+
+        private void SelectWorkspacePanel(string fullId)
+        {
+            if (string.Equals(_selectedPanelFullId, fullId, StringComparison.Ordinal))
+                return;
+            _selectedPanelFullId = fullId ?? string.Empty;
+            _workspaceContentScroll = Vector2.zero;
+            DeactivateWorkspacePanel();
+        }
+
+        private void EnsureWorkspaceSelection(IReadOnlyList<DashboardModule> modules)
+        {
+            if (modules.SelectMany(module => module.Panels)
+                .Any(panel => string.Equals(panel.FullId, _selectedPanelFullId, StringComparison.Ordinal)))
+            {
+                return;
+            }
+            SelectWorkspacePanel(modules.SelectMany(module => module.Panels).First().FullId);
+        }
+
+        private bool ModulePanelMatchesSearch(DashboardModule module)
+        {
+            return string.IsNullOrEmpty(_search) ||
+                   Matches(module.DisplayName) ||
+                   Matches(module.Description) ||
+                   Matches(module.ModuleId) ||
+                   module.Panels.Any(PanelMatchesSearch);
+        }
+
+        private bool PanelMatchesSearch(DashboardPanel panel)
+        {
+            return Matches(panel.DisplayName) ||
+                   Matches(panel.Description) ||
+                   Matches(panel.Usage) ||
+                   Matches(panel.Section) ||
+                   Matches(panel.ProviderId) ||
+                   Matches(panel.FullId);
+        }
+
+        private static bool IsAvailable(DashboardPanel panel)
+        {
+            return panel.Availability == DashboardEntryAvailability.Always ||
+                   (panel.Availability == DashboardEntryAvailability.EditMode && !EditorApplication.isPlaying) ||
+                   (panel.Availability == DashboardEntryAvailability.PlayMode && EditorApplication.isPlaying);
+        }
+
+        private void RecordWorkspaceFailure(string code, Exception exception)
+        {
+            DashboardPanel descriptor = _activePanelDescriptor;
+            if (descriptor == null)
+            {
+                Debug.LogException(exception);
+                return;
+            }
+            var diagnostic = new DashboardDiagnostic(
+                DashboardDiagnosticSeverity.Error,
+                code,
+                exception.GetBaseException().Message,
+                descriptor.SourcePath,
+                descriptor.ModuleId,
+                descriptor.Id);
+            _failedWorkspacePanels.Add(descriptor.FullId);
+            RecordWorkspaceDiagnostic(descriptor, diagnostic);
+            DeactivateWorkspacePanel();
+            Repaint();
+        }
+
+        private void RecordWorkspaceDiagnostic(DashboardPanel descriptor, DashboardDiagnostic diagnostic)
+        {
+            _runtimeDiagnostics["workspace/" + descriptor.FullId + "/" + diagnostic.Code] = diagnostic;
+        }
+
+        private void RemoveWorkspaceDiagnostics(string fullId)
+        {
+            string prefix = "workspace/" + fullId + "/";
+            foreach (string key in _runtimeDiagnostics.Keys.Where(key => key.StartsWith(prefix, StringComparison.Ordinal)).ToArray())
+                _runtimeDiagnostics.Remove(key);
+        }
+
+        private void ShowHelp(DashboardModule module, DashboardSurface surface, DashboardPanel panel)
+        {
+            _helpModule = module;
+            _helpSurface = surface;
+            _helpPanel = panel;
+            _showHelp = true;
+            Repaint();
+        }
+
+        private void DrawHelpDrawer()
+        {
+            if (!_showHelp)
+                return;
+
+            using (new EditorGUILayout.VerticalScope(EditorUiStyles.Card))
+            {
+                using (new EditorGUILayout.HorizontalScope())
+                {
+                    GUILayout.Label(DashboardText.Help, EditorUiStyles.SectionTitle);
+                    GUILayout.FlexibleSpace();
+                    if (GUILayout.Button(
+                            new GUIContent(DashboardText.Close, DashboardText.CloseHelpTooltip),
+                            GUILayout.Width(48f)))
+                    {
+                        _showHelp = false;
+                    }
+                }
+
+                string description = _helpPanel?.Description ?? _helpSurface?.Description ?? _helpModule?.Description;
+                string usage = _helpPanel?.Usage ?? _helpSurface?.Usage;
+                if (string.IsNullOrWhiteSpace(description))
+                    description = DashboardText.HeaderSubtitle;
+
+                GUILayout.Label(DashboardText.Purpose, EditorStyles.miniBoldLabel);
+                GUILayout.Label(description, EditorStyles.wordWrappedLabel);
+                if (!string.IsNullOrWhiteSpace(usage))
+                {
+                    EditorGUILayout.Space(EditorUiTokens.SpaceXs);
+                    GUILayout.Label(DashboardText.Usage, EditorStyles.miniBoldLabel);
+                    GUILayout.Label(usage, EditorStyles.wordWrappedLabel);
+                }
+
+                if (_helpModule != null &&
+                    (!string.IsNullOrEmpty(_helpModule.DocumentationPath) || !string.IsNullOrEmpty(_helpModule.DocumentationUrl)))
+                {
+                    EditorGUILayout.Space(EditorUiTokens.SpaceXs);
+                    using (new EditorGUILayout.HorizontalScope())
+                    {
+                        if (!string.IsNullOrEmpty(_helpModule.DocumentationPath) && GUILayout.Button(
+                                new GUIContent(DashboardText.Documentation, DashboardText.DocumentationTooltip),
+                                GUILayout.Width(64f)))
+                        {
+                            OpenLocalDocumentation(_helpModule);
+                        }
+                        if (!string.IsNullOrEmpty(_helpModule.DocumentationUrl) && GUILayout.Button(
+                                new GUIContent(DashboardText.Website, DashboardText.WebsiteTooltip),
+                                GUILayout.Width(64f)))
+                        {
+                            Application.OpenURL(_helpModule.DocumentationUrl);
+                        }
+                    }
+                }
+
+                if (_helpModule != null)
+                {
+                    EditorGUILayout.Space(EditorUiTokens.SpaceXs);
+                    GUILayout.Label(DashboardText.TechnicalDetails, EditorStyles.miniBoldLabel);
+                    DrawTechnicalValue(_helpModule.ModuleId);
+                    if (_helpPanel != null)
+                    {
+                        DrawTechnicalValue(_helpPanel.FullId);
+                        DrawTechnicalValue(_helpPanel.ProviderId);
+                        DrawTechnicalValue(_helpPanel.SourcePath);
+                    }
+                    else if (_helpSurface != null)
+                    {
+                        foreach (DashboardEntry entry in _helpSurface.Entries)
+                            DrawTechnicalValue(entry.FullId + "  ·  " + entry.MenuPath);
+                    }
+                    else
+                    {
+                        DrawTechnicalValue(_helpModule.Source.SourcePath);
+                    }
+                }
+            }
+            EditorGUILayout.Space(EditorUiTokens.SpaceXs);
+        }
+
+        private static void DrawTechnicalValue(string value)
+        {
+            if (string.IsNullOrWhiteSpace(value))
+                return;
+            float height = Mathf.Max(16f, EditorStyles.miniLabel.CalcHeight(new GUIContent(value), EditorGUIUtility.currentViewWidth - 56f));
+            EditorGUILayout.SelectableLabel(value, EditorStyles.miniLabel, GUILayout.Height(height));
         }
 
         private void DrawSystem()
@@ -601,6 +1129,7 @@ namespace ZeroEngine.Editor
         {
             return Matches(entry.DisplayName) ||
                    Matches(entry.Description) ||
+                   Matches(entry.Usage) ||
                    Matches(entry.Category) ||
                    Matches(entry.Section) ||
                    Matches(entry.SurfaceDisplayName) ||

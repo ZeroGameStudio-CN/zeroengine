@@ -7,7 +7,14 @@ namespace ZeroEngine.EditorUI
     public enum EditorUiResponsiveMode
     {
         Compact,
-        Standard
+        Standard,
+        Wide
+    }
+
+    public enum EditorUiActionRowMode
+    {
+        Inline,
+        Stacked
     }
 
     public enum EditorUiStatus
@@ -123,8 +130,13 @@ namespace ZeroEngine.EditorUI
 
         public static bool DestructiveButton(string label, params GUILayoutOption[] options)
         {
+            return DestructiveButton(new GUIContent(label), options);
+        }
+
+        public static bool DestructiveButton(GUIContent content, params GUILayoutOption[] options)
+        {
             EditorUiStyles.EnsureCurrent();
-            return GUILayout.Button(label, EditorUiStyles.DestructiveButton, options);
+            return GUILayout.Button(content, EditorUiStyles.DestructiveButton, options);
         }
 
         public static void ActionRow(string title, string description, Action drawTrailing = null)
@@ -137,22 +149,56 @@ namespace ZeroEngine.EditorUI
 
         public static void ActionRow(GUIContent title, GUIContent description, Action drawTrailing = null)
         {
+            ActionRow(title, description, drawTrailing, EditorUiActionRowMode.Inline);
+        }
+
+        public static void ActionRow(
+            GUIContent title,
+            GUIContent description,
+            Action drawTrailing,
+            EditorUiActionRowMode mode)
+        {
             EditorUiStyles.EnsureCurrent();
-            using (new EditorGUILayout.HorizontalScope(EditorUiStyles.ActionRow))
+            using (new EditorGUILayout.VerticalScope(EditorUiStyles.ActionRow))
             {
-                using (new EditorGUILayout.VerticalScope())
+                if (mode == EditorUiActionRowMode.Inline)
                 {
-                    GUILayout.Label(title, EditorStyles.boldLabel);
-                    if (description != null && !string.IsNullOrWhiteSpace(description.text))
-                        GUILayout.Label(description, EditorStyles.wordWrappedMiniLabel);
+                    using (new EditorGUILayout.HorizontalScope())
+                    {
+                        DrawActionRowText(title, description);
+                        if (drawTrailing != null)
+                        {
+                            GUILayout.Space(EditorUiTokens.SpaceMd);
+                            drawTrailing();
+                        }
+                    }
+                    return;
                 }
 
+                DrawActionRowText(title, description);
                 if (drawTrailing != null)
                 {
-                    GUILayout.Space(EditorUiTokens.SpaceMd);
-                    drawTrailing();
+                    EditorGUILayout.Space(EditorUiTokens.SpaceXs);
+                    using (new EditorGUILayout.HorizontalScope())
+                    {
+                        GUILayout.FlexibleSpace();
+                        drawTrailing();
+                    }
                 }
             }
+        }
+
+        public static EditorUiActionRowMode ResolveActionRowMode(
+            float availableWidth,
+            float trailingWidth,
+            float minimumContentWidth = EditorUiTokens.ActionRowMinimumContentWidth)
+        {
+            float required = Math.Max(0f, trailingWidth) +
+                             Math.Max(0f, minimumContentWidth) +
+                             EditorUiTokens.SpaceMd;
+            return availableWidth >= required
+                ? EditorUiActionRowMode.Inline
+                : EditorUiActionRowMode.Stacked;
         }
 
         public static void Chip(string text, params GUILayoutOption[] options)
@@ -180,8 +226,10 @@ namespace ZeroEngine.EditorUI
 
         public static EditorUiResponsiveMode ResponsiveMode(float width)
         {
-            return width < EditorUiTokens.CompactBreakpoint
-                ? EditorUiResponsiveMode.Compact
+            if (width < EditorUiTokens.CompactBreakpoint)
+                return EditorUiResponsiveMode.Compact;
+            return width >= EditorUiTokens.WideBreakpoint
+                ? EditorUiResponsiveMode.Wide
                 : EditorUiResponsiveMode.Standard;
         }
 
@@ -205,6 +253,16 @@ namespace ZeroEngine.EditorUI
                     return palette.Accent;
                 default:
                     return palette.MutedText;
+            }
+        }
+
+        private static void DrawActionRowText(GUIContent title, GUIContent description)
+        {
+            using (new EditorGUILayout.VerticalScope(GUILayout.ExpandWidth(true)))
+            {
+                GUILayout.Label(title, EditorStyles.boldLabel);
+                if (description != null && !string.IsNullOrWhiteSpace(description.text))
+                    GUILayout.Label(description, EditorStyles.wordWrappedMiniLabel);
             }
         }
 

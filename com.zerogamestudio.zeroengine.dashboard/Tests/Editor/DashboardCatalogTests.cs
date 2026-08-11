@@ -72,6 +72,36 @@ namespace ZeroEngine.Dashboard.Tests.Editor
         }
 
         [Test]
+        public void Build_PanelOnlyModule_IsVisibleOnlyInWorkspace()
+        {
+            DashboardCatalog catalog = Build(Source(Descriptor(
+                "project.panels",
+                "Panels",
+                string.Empty,
+                Panel("runtime", "运行概览", "project.panels"))));
+
+            Assert.AreEqual(1, catalog.Modules.Count);
+            Assert.AreEqual(0, catalog.VisibleModules.Count);
+            Assert.AreEqual(1, catalog.VisibleWorkspaceModules.Count);
+            Assert.AreEqual("project.panels/runtime", catalog.Modules[0].Panels[0].FullId);
+            Assert.AreEqual("使用运行概览。", catalog.Modules[0].Panels[0].Usage);
+            Assert.AreEqual(0, catalog.Diagnostics.Count);
+        }
+
+        [Test]
+        public void Build_InvalidPanelProviderId_RejectsDescriptor()
+        {
+            DashboardCatalog catalog = Build(Source(Descriptor(
+                "project.panels",
+                "Panels",
+                string.Empty,
+                Panel("runtime", "运行概览", "Invalid Provider"))));
+
+            Assert.AreEqual(0, catalog.Modules.Count);
+            Assert.That(catalog.Diagnostics.Single().Message, Does.Contain("providerId"));
+        }
+
+        [Test]
         public void Build_UnknownSchema_IsolatesOnlyBadDescriptor()
         {
             string bad = Descriptor("project.bad", "Bad", Entry("open", "Open", "ZGS/Bad/Open"))
@@ -722,14 +752,29 @@ namespace ZeroEngine.Dashboard.Tests.Editor
             return names.Select(name => new DashboardInstalledPackage(name, "1.0.0", Path.Combine(Path.GetTempPath(), name))).ToArray();
         }
 
-        private static string Descriptor(string moduleId, string displayName, string entries)
+        private static string Descriptor(string moduleId, string displayName, string entries, string panels = null)
         {
+            string panelsField = panels == null ? string.Empty : ",\"panels\":[" + panels + "]";
             return "{" +
                    "\"schemaVersion\":1," +
                    "\"moduleId\":\"" + moduleId + "\"," +
                    "\"displayName\":\"" + displayName + "\"," +
                    "\"description\":\"Description\"," +
-                   "\"entries\":[" + entries + "]}";
+                   "\"entries\":[" + entries + "]" + panelsField + "}";
+        }
+
+        private static string Panel(string id, string displayName, string providerId)
+        {
+            return "{" +
+                   "\"id\":\"" + id + "\"," +
+                   "\"displayName\":\"" + displayName + "\"," +
+                   "\"description\":\"运行时状态。\"," +
+                   "\"usage\":\"使用运行概览。\"," +
+                   "\"section\":\"诊断\"," +
+                   "\"providerId\":\"" + providerId + "\"," +
+                   "\"order\":100," +
+                   "\"safety\":\"read-only\"," +
+                   "\"availability\":\"always\"}";
         }
 
         private static string Entry(
@@ -799,7 +844,8 @@ namespace ZeroEngine.Dashboard.Tests.Editor
                 string.Empty,
                 string.Empty,
                 string.Empty,
-                false);
+                false,
+                string.Empty);
         }
 
         private sealed class FakeExecutionHost : IDashboardExecutionHost

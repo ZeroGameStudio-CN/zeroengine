@@ -32,10 +32,38 @@ namespace ZeroEngine.EditorUI.Tests.Editor
 
         [TestCase(899f, EditorUiResponsiveMode.Compact)]
         [TestCase(900f, EditorUiResponsiveMode.Standard)]
-        [TestCase(1200f, EditorUiResponsiveMode.Standard)]
+        [TestCase(1279f, EditorUiResponsiveMode.Standard)]
+        [TestCase(1280f, EditorUiResponsiveMode.Wide)]
         public void ResponsiveMode_UsesStableDashboardBreakpoint(float width, EditorUiResponsiveMode expected)
         {
             Assert.That(EditorUiGUILayout.ResponsiveMode(width), Is.EqualTo(expected));
+        }
+
+        [TestCase(380f, 220f, EditorUiActionRowMode.Stacked)]
+        [TestCase(420f, 120f, EditorUiActionRowMode.Inline)]
+        [TestCase(420f, 240f, EditorUiActionRowMode.Stacked)]
+        [TestCase(760f, 220f, EditorUiActionRowMode.Inline)]
+        [TestCase(960f, 420f, EditorUiActionRowMode.Inline)]
+        [TestCase(500f, 420f, EditorUiActionRowMode.Stacked)]
+        public void ActionRowMode_ReservesContentAndTrailingRegions(
+            float availableWidth,
+            float trailingWidth,
+            EditorUiActionRowMode expected)
+        {
+            Assert.That(
+                EditorUiGUILayout.ResolveActionRowMode(availableWidth, trailingWidth),
+                Is.EqualTo(expected));
+        }
+
+        [Test]
+        public void WorkspaceProviderContract_IsPublicAndPanelIdDriven()
+        {
+            Assert.That(typeof(IEditorWorkspacePanelProvider).IsPublic, Is.True);
+            Assert.That(
+                typeof(IEditorWorkspacePanelProvider).GetMethod(nameof(IEditorWorkspacePanelProvider.CreatePanel))
+                    ?.GetParameters()[0].ParameterType,
+                Is.EqualTo(typeof(string)));
+            Assert.That(typeof(EditorWorkspacePanelProviderAttribute).IsPublic, Is.True);
         }
 
         [Test]

@@ -1,6 +1,6 @@
 # ZeroEngine Dashboard
 
-ZeroEngine Dashboard 3.1.1 是一个可选、仅限 Unity Editor 的简体中文工具目录。它从已注册 UPM 包以及项目 `Assets/**/Editor/` 中读取 `ZeroEngineDashboardModule.json`，只展示所有者明确声明的窗口和命令。
+ZeroEngine Dashboard 3.2.0 是一个可选、仅限 Unity Editor 的简体中文工具与工作区中心。它从已注册 UPM 包以及项目 `Assets/**/Editor/` 中读取 `ZeroEngineDashboardModule.json`，只展示所有者明确声明的窗口、命令和内嵌面板。
 
 ## 特性
 
@@ -11,7 +11,8 @@ ZeroEngine Dashboard 3.1.1 是一个可选、仅限 Unity Editor 的简体中文
 - `project-write` 与 `destructive` 命令执行前要求明确确认。
 - 项目适配入口可通过 `mountModuleId` 挂到已安装的通用模块，不产生独立项目 Tab。
 - 可选 `section` 将大型模块拆成可读分区；共享 `surfaceId` 可把同一宿主窗口的兼容入口合并为一行多动作。
-- Tools/System 两页自适应窄宽布局，技术 ID 与菜单路径默认折叠到 Details。
+- Tools/Workspace/System 三页采用自适应窄宽布局，分离启动入口、内嵌面板和系统健康；技术 ID 与菜单路径默认收进帮助/详情，provider 缺失或失败时只隔离对应面板。
+- 工具说明默认进入 tooltip/帮助抽屉，动作区按实际文字宽度自动横排或换行。
 - 固定 label、状态、安全提示与可操作控件 tooltip 使用简体中文；品牌缩写和技术标识保持原值。
 - 不安装包、不写 manifest、不清理 PlayerPrefs/存档、不写项目资源。
 
@@ -28,7 +29,7 @@ ZeroEngine Dashboard 3.1.1 是一个可选、仅限 Unity Editor 的简体中文
 }
 ```
 
-Unity 2022.3 不会为 Git URL 包自动解析同仓 editor-ui；两项必须直接 pin 到同一提交。3.1.1 要求 editor-ui 1.1.1。
+Unity 2022.3 不会为 Git URL 包自动解析同仓 editor-ui；两项必须直接 pin 到同一提交。3.2.0 要求 editor-ui 1.2.0。
 
 本地 `file:` 依赖只用于临时联调，不应进入共享分支。
 
@@ -73,7 +74,14 @@ Dashboard 入口：`ZeroEngine > Dashboard`。
 
 `section` 与全部 `surface*` 字段均可省略，旧描述符保持一入口一行。只有同一展示宿主内共享 `surfaceId` 且 kind、availability、safety、section、显示名和默认动作兼容的入口才会合并；冲突会显示诊断并安全回退为独立行。
 
+entry 可选 `usage` 只在帮助抽屉显示。module 可选 `panels` 数组声明内嵌工作区面板；每项包含稳定 `id/providerId`、显示文案、section、order、safety 与 availability。provider 通过 editor-ui 的 `IEditorWorkspacePanelProvider.CreatePanel(panelId)` 延迟创建；缺失、重复或异常 provider 不影响工具和系统页。
+
 ## 版本历史
+
+### 3.2.0
+
+- 新增工作区页面、显式 panel descriptor/provider 绑定和单面板生命周期隔离。
+- 工具行移除重复常驻说明，增加统一帮助抽屉和测量式响应布局。
 
 ### 3.1.1
 

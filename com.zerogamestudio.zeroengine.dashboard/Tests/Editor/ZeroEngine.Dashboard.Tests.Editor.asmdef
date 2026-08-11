@@ -3,6 +3,7 @@
   "rootNamespace": "ZeroEngine.Dashboard.Tests.Editor",
   "references": [
     "ZeroEngine.Dashboard.Editor",
+    "ZeroEngine.EditorUI.Editor",
     "UnityEngine.TestRunner",
     "UnityEditor.TestRunner"
   ],

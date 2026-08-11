@@ -115,10 +115,10 @@ foreach ($descriptorPath in $descriptorPaths) {
 $dashboardRoot = Join-Path $RootPath 'com.zerogamestudio.zeroengine.dashboard'
 $dashboardPackage = Get-Content -LiteralPath (Join-Path $dashboardRoot 'package.json') -Raw -Encoding UTF8 | ConvertFrom-Json
 $dashboardAsmdef = Get-Content -LiteralPath (Join-Path $dashboardRoot 'Editor\ZeroEngine.Dashboard.Editor.asmdef') -Raw -Encoding UTF8 | ConvertFrom-Json
-Assert-Condition ($dashboardPackage.version -eq '3.1.1') 'Dashboard package version must be 3.1.1.'
+Assert-Condition ($dashboardPackage.version -eq '3.2.0') 'Dashboard package version must be 3.2.0.'
 $dashboardDependencies = @($dashboardPackage.dependencies.psobject.Properties)
 Assert-Condition ($dashboardDependencies.Count -eq 1) 'Dashboard package must depend only on editor-ui.'
-Assert-Condition ($dashboardDependencies[0].Name -eq 'com.zerogamestudio.zeroengine.editor-ui' -and $dashboardDependencies[0].Value -eq '1.1.1') 'Dashboard editor-ui dependency must be exactly 1.1.1.'
+Assert-Condition ($dashboardDependencies[0].Name -eq 'com.zerogamestudio.zeroengine.editor-ui' -and $dashboardDependencies[0].Value -eq '1.2.0') 'Dashboard editor-ui dependency must be exactly 1.2.0.'
 $dashboardReferences = @($dashboardAsmdef.references)
 Assert-Condition ($dashboardReferences.Count -eq 1 -and $dashboardReferences[0] -eq 'ZeroEngine.EditorUI.Editor') 'Dashboard production asmdef must reference only editor-ui.'
 Assert-Condition (@($dashboardAsmdef.includePlatforms).Count -eq 1 -and $dashboardAsmdef.includePlatforms[0] -eq 'Editor') 'Dashboard production asmdef must be Editor-only.'
