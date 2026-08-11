@@ -17,7 +17,6 @@ namespace ZeroEngine.Editor.BehaviorTree
         private BTTreeAsset _currentTree;
         private Label _titleLabel;
 
-        [MenuItem("ZeroEngine/BehaviorTree/BT Graph Editor")]
         public static void Open()
         {
             var window = GetWindow<BTGraphEditorWindow>();

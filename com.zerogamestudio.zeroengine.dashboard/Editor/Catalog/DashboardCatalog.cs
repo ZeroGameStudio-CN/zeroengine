@@ -40,6 +40,25 @@ namespace ZeroEngine.Editor.Dashboard
         PlayMode
     }
 
+    internal enum DashboardModuleScope
+    {
+        Universal,
+        Project
+    }
+
+    internal enum DashboardEntryVisibility
+    {
+        Primary,
+        Advanced,
+        Maintenance
+    }
+
+    internal enum DashboardEntryExecutionKind
+    {
+        LegacyMenu,
+        Provider
+    }
+
     [Serializable]
     internal sealed class DashboardDescriptorData
     {
@@ -50,6 +69,9 @@ namespace ZeroEngine.Editor.Dashboard
         public int order;
         public string documentationPath;
         public string documentationUrl;
+        public string scope;
+        public string projectId;
+        public string projectDisplayName;
         public DashboardEntryData[] entries;
         public DashboardPanelData[] panels;
     }
@@ -75,6 +97,13 @@ namespace ZeroEngine.Editor.Dashboard
         public string surfaceDisplayName;
         public string surfaceActionLabel;
         public bool surfaceDefault;
+        public string visibility;
+        public string executionKind;
+        public string providerId;
+        public string actionId;
+        public string[] legacyKeywords;
+        public string documentationPath;
+        public string documentationUrl;
     }
 
     [Serializable]
@@ -100,7 +129,8 @@ namespace ZeroEngine.Editor.Dashboard
             string packageName,
             string packageVersion,
             string json,
-            string readError = null)
+            string readError = null,
+            string projectRootPath = null)
         {
             Kind = kind;
             SourcePath = sourcePath ?? string.Empty;
@@ -109,6 +139,7 @@ namespace ZeroEngine.Editor.Dashboard
             PackageVersion = packageVersion ?? string.Empty;
             Json = json;
             ReadError = readError;
+            ProjectRootPath = projectRootPath ?? RootPath;
         }
 
         internal DashboardSourceKind Kind { get; }
@@ -118,6 +149,7 @@ namespace ZeroEngine.Editor.Dashboard
         internal string PackageVersion { get; }
         internal string Json { get; }
         internal string ReadError { get; }
+        internal string ProjectRootPath { get; }
     }
 
     internal sealed class DashboardInstalledPackage
@@ -185,7 +217,14 @@ namespace ZeroEngine.Editor.Dashboard
             string surfaceDisplayName,
             string surfaceActionLabel,
             bool surfaceDefault,
-            string usage)
+            string usage,
+            DashboardEntryExecutionKind executionKind = DashboardEntryExecutionKind.LegacyMenu,
+            string providerId = null,
+            string actionId = null,
+            DashboardEntryVisibility visibility = DashboardEntryVisibility.Primary,
+            IReadOnlyList<string> legacyKeywords = null,
+            string documentationPath = null,
+            string documentationUrl = null)
         {
             ModuleId = moduleId;
             Id = id;
@@ -194,7 +233,7 @@ namespace ZeroEngine.Editor.Dashboard
             Description = description ?? string.Empty;
             Category = category;
             Kind = kind;
-            MenuPath = menuPath;
+            MenuPath = menuPath ?? string.Empty;
             Order = order;
             Safety = safety;
             Confirmation = confirmation ?? string.Empty;
@@ -208,6 +247,13 @@ namespace ZeroEngine.Editor.Dashboard
             SurfaceActionLabel = surfaceActionLabel ?? string.Empty;
             SurfaceDefault = surfaceDefault;
             Usage = usage ?? string.Empty;
+            ExecutionKind = executionKind;
+            ProviderId = providerId ?? string.Empty;
+            ActionId = actionId ?? string.Empty;
+            Visibility = visibility;
+            LegacyKeywords = legacyKeywords ?? Array.Empty<string>();
+            DocumentationPath = documentationPath ?? string.Empty;
+            DocumentationUrl = documentationUrl ?? string.Empty;
         }
 
         internal string ModuleId { get; }
@@ -232,6 +278,14 @@ namespace ZeroEngine.Editor.Dashboard
         internal string SurfaceActionLabel { get; }
         internal bool SurfaceDefault { get; }
         internal string Usage { get; }
+        internal DashboardEntryExecutionKind ExecutionKind { get; }
+        internal string ProviderId { get; }
+        internal string ActionId { get; }
+        internal DashboardEntryVisibility Visibility { get; }
+        internal IReadOnlyList<string> LegacyKeywords { get; }
+        internal string DocumentationPath { get; }
+        internal string DocumentationUrl { get; }
+        internal bool IsLegacy => ExecutionKind == DashboardEntryExecutionKind.LegacyMenu;
         internal bool Isolated { get; set; }
         internal bool HiddenByReplacement { get; set; }
         internal bool SurfaceGroupingRejected { get; set; }
@@ -281,7 +335,11 @@ namespace ZeroEngine.Editor.Dashboard
             DashboardDescriptorSource source,
             IReadOnlyList<DashboardEntry> entries,
             IReadOnlyList<DashboardEntry> visibleEntries = null,
-            IReadOnlyList<DashboardPanel> panels = null)
+            IReadOnlyList<DashboardPanel> panels = null,
+            int schemaVersion = 1,
+            DashboardModuleScope scope = DashboardModuleScope.Universal,
+            string projectId = null,
+            string projectDisplayName = null)
         {
             ModuleId = moduleId;
             DisplayName = displayName;
@@ -293,6 +351,10 @@ namespace ZeroEngine.Editor.Dashboard
             Entries = entries ?? Array.Empty<DashboardEntry>();
             _visibleEntries = visibleEntries ?? Entries;
             Panels = panels ?? Array.Empty<DashboardPanel>();
+            SchemaVersion = schemaVersion;
+            Scope = scope;
+            ProjectId = projectId ?? string.Empty;
+            ProjectDisplayName = projectDisplayName ?? string.Empty;
         }
 
         internal string ModuleId { get; }
@@ -304,6 +366,11 @@ namespace ZeroEngine.Editor.Dashboard
         internal DashboardDescriptorSource Source { get; }
         internal IReadOnlyList<DashboardEntry> Entries { get; }
         internal IReadOnlyList<DashboardPanel> Panels { get; }
+        internal int SchemaVersion { get; }
+        internal DashboardModuleScope Scope { get; }
+        internal string ProjectId { get; }
+        internal string ProjectDisplayName { get; }
+        internal bool IsLegacy => SchemaVersion == 1;
         internal IReadOnlyList<DashboardEntry> OwnedVisibleEntries =>
             Entries.Where(entry => !entry.Isolated && !entry.HiddenByReplacement).ToArray();
         internal IReadOnlyList<DashboardEntry> VisibleEntries =>
@@ -408,12 +475,22 @@ namespace ZeroEngine.Editor.Dashboard
             "\\s[%#&_][^\\s]*$",
             RegexOptions.CultureInvariant);
 
-        private static readonly HashSet<string> Categories = new HashSet<string>(StringComparer.Ordinal)
+        private static readonly HashSet<string> LegacyCategories = new HashSet<string>(StringComparer.Ordinal)
         {
             "authoring",
             "diagnostics",
             "setup",
             "documentation"
+        };
+
+        private static readonly HashSet<string> CategoriesV2 = new HashSet<string>(StringComparer.Ordinal)
+        {
+            "authoring",
+            "data-localization",
+            "assets-build",
+            "diagnostics",
+            "test-release",
+            "system-setup"
         };
 
         internal static DashboardCatalog Build(
@@ -457,6 +534,7 @@ namespace ZeroEngine.Editor.Dashboard
             List<DashboardEntry> entries = activeModules.SelectMany(module => module.Entries).ToList();
 
             IsolateEntryConflicts(entries, diagnostics);
+            IsolateActionBindingConflicts(entries, diagnostics);
             ValidateMountTargets(activeModules, entries, diagnostics);
             ApplyReplacements(activeModules, entries, installedNames, diagnostics);
             ValidateSurfaceGroups(entries, diagnostics);
@@ -491,7 +569,11 @@ namespace ZeroEngine.Editor.Dashboard
                         .OrderBy(panel => panel.Order)
                         .ThenBy(panel => panel.DisplayName, StringComparer.OrdinalIgnoreCase)
                         .ThenBy(panel => panel.FullId, StringComparer.Ordinal)
-                        .ToArray()))
+                        .ToArray(),
+                    module.SchemaVersion,
+                    module.Scope,
+                    module.ProjectId,
+                    module.ProjectDisplayName))
                 .ToArray();
 
             DashboardInstalledPackage[] orderedPackages = installedPackages
@@ -544,9 +626,10 @@ namespace ZeroEngine.Editor.Dashboard
 
             string moduleId = Trim(data.moduleId);
             string displayName = Trim(data.displayName);
+            bool isV2 = data.schemaVersion == 2;
 
-            if (data.schemaVersion != 1)
-                errors.Add("schemaVersion must be 1.");
+            if (data.schemaVersion != 1 && !isV2)
+                errors.Add("schemaVersion must be 1 or 2.");
             if (!ModuleIdPattern.IsMatch(moduleId))
                 errors.Add("moduleId must be a lowercase ASCII stable ID.");
             if (string.IsNullOrEmpty(displayName))
@@ -565,7 +648,32 @@ namespace ZeroEngine.Editor.Dashboard
             if (source.Kind == DashboardSourceKind.Project && installedPackageNames.Contains(moduleId))
                 errors.Add("Project descriptor moduleId must not impersonate an installed package.");
 
-            string documentationPath = ValidateDocumentationPath(data.documentationPath, source.RootPath, errors);
+            DashboardModuleScope scope = DashboardModuleScope.Universal;
+            string projectId = string.Empty;
+            string projectDisplayName = string.Empty;
+            if (isV2)
+            {
+                if (!TryParseScope(data.scope, out scope))
+                    errors.Add("scope must be universal or project.");
+                projectId = Trim(data.projectId);
+                projectDisplayName = Trim(data.projectDisplayName);
+                if (scope == DashboardModuleScope.Project)
+                {
+                    if (!ModuleIdPattern.IsMatch(projectId))
+                        errors.Add("projectId must be a lowercase ASCII stable ID for project scope.");
+                    if (string.IsNullOrEmpty(projectDisplayName) || ContainsMarkup(projectDisplayName))
+                        errors.Add("projectDisplayName is required and must not contain markup for project scope.");
+                }
+                else if (!string.IsNullOrEmpty(projectId) || !string.IsNullOrEmpty(projectDisplayName))
+                {
+                    errors.Add("universal scope must not declare projectId or projectDisplayName.");
+                }
+            }
+
+            string documentationRoot = isV2 && source.Kind == DashboardSourceKind.Project
+                ? source.ProjectRootPath
+                : source.RootPath;
+            string documentationPath = ValidateDocumentationPath(data.documentationPath, documentationRoot, errors);
             string documentationUrl = ValidateDocumentationUrl(data.documentationUrl, errors);
             var entries = new List<DashboardEntry>();
             var entryIds = new HashSet<string>(StringComparer.Ordinal);
@@ -576,7 +684,14 @@ namespace ZeroEngine.Editor.Dashboard
             {
                 for (int index = 0; index < data.entries.Length; index++)
                 {
-                    DashboardEntry entry = ParseEntry(data.entries[index], moduleId, source.SourcePath, index, errors);
+                    DashboardEntry entry = ParseEntry(
+                        data.entries[index],
+                        moduleId,
+                        source.SourcePath,
+                        documentationRoot,
+                        data.schemaVersion,
+                        index,
+                        errors);
                     if (entry == null)
                         continue;
                     if (!entryIds.Add(entry.Id))
@@ -608,6 +723,16 @@ namespace ZeroEngine.Editor.Dashboard
                 return null;
             }
 
+            if (!isV2)
+            {
+                diagnostics.Add(new DashboardDiagnostic(
+                    DashboardDiagnosticSeverity.Warning,
+                    "legacy-schema-v1",
+                    "Schema v1 entry execution is deprecated and supported only through Dashboard 4.x.",
+                    source.SourcePath,
+                    moduleId));
+            }
+
             return new DashboardModule(
                 moduleId,
                 displayName,
@@ -617,13 +742,19 @@ namespace ZeroEngine.Editor.Dashboard
                 documentationUrl,
                 source,
                 entries,
-                panels: panels);
+                panels: panels,
+                schemaVersion: data.schemaVersion,
+                scope: scope,
+                projectId: projectId,
+                projectDisplayName: projectDisplayName);
         }
 
         private static DashboardEntry ParseEntry(
             DashboardEntryData data,
             string moduleId,
             string sourcePath,
+            string documentationRoot,
+            int schemaVersion,
             int index,
             List<string> errors)
         {
@@ -645,6 +776,9 @@ namespace ZeroEngine.Editor.Dashboard
             string surfaceDisplayName = Trim(data.surfaceDisplayName);
             string surfaceActionLabel = Trim(data.surfaceActionLabel);
             string usage = Trim(data.usage);
+            string providerId = Trim(data.providerId);
+            string actionId = Trim(data.actionId);
+            bool isV2 = schemaVersion == 2;
 
             if (!EntryIdPattern.IsMatch(id))
                 errors.Add(prefix + "id must be lowercase kebab-case.");
@@ -664,12 +798,10 @@ namespace ZeroEngine.Editor.Dashboard
                 errors.Add(prefix + "surfaceDisplayName must not contain markup.");
             if (ContainsMarkup(surfaceActionLabel))
                 errors.Add(prefix + "surfaceActionLabel must not contain markup.");
-            if (!Categories.Contains(category))
+            if (!(isV2 ? CategoriesV2 : LegacyCategories).Contains(category))
                 errors.Add(prefix + "category is invalid.");
             if (!TryParseKind(data.kind, out DashboardEntryKind kind))
                 errors.Add(prefix + "kind is invalid.");
-            if (!IsValidMenuPath(menuPath))
-                errors.Add(prefix + "menuPath must be a full path without a shortcut suffix.");
             if (!TryParseSafety(data.safety, out DashboardEntrySafety safety))
                 errors.Add(prefix + "safety is invalid.");
             if (!TryParseAvailability(data.availability, out DashboardEntryAvailability availability))
@@ -681,6 +813,58 @@ namespace ZeroEngine.Editor.Dashboard
             {
                 errors.Add(prefix + "confirmation is required for write-capable entries.");
             }
+
+            DashboardEntryExecutionKind executionKind = DashboardEntryExecutionKind.LegacyMenu;
+            DashboardEntryVisibility visibility = DashboardEntryVisibility.Primary;
+            if (isV2)
+            {
+                if (!string.IsNullOrEmpty(menuPath))
+                    errors.Add(prefix + "menuPath is not allowed in schema v2.");
+                if (!string.Equals(Trim(data.executionKind), "provider", StringComparison.Ordinal))
+                    errors.Add(prefix + "executionKind must be provider in schema v2.");
+                else
+                    executionKind = DashboardEntryExecutionKind.Provider;
+                if (!ModuleIdPattern.IsMatch(providerId))
+                    errors.Add(prefix + "providerId must be a lowercase ASCII stable ID.");
+                if (!EntryIdPattern.IsMatch(actionId))
+                    errors.Add(prefix + "actionId must be lowercase kebab-case.");
+                if (!TryParseVisibility(data.visibility, out visibility))
+                    errors.Add(prefix + "visibility is invalid.");
+                if (safety == DashboardEntrySafety.Destructive && visibility != DashboardEntryVisibility.Maintenance)
+                    errors.Add(prefix + "destructive entries must use maintenance visibility.");
+                if (safety == DashboardEntrySafety.ProjectWrite && visibility == DashboardEntryVisibility.Primary)
+                    errors.Add(prefix + "project-write entries must use advanced or maintenance visibility.");
+            }
+            else if (!IsValidMenuPath(menuPath))
+            {
+                errors.Add(prefix + "menuPath must be a full path without a shortcut suffix.");
+            }
+
+            var legacyKeywords = new List<string>();
+            if (data.legacyKeywords != null)
+            {
+                foreach (string rawKeyword in data.legacyKeywords)
+                {
+                    string keyword = Trim(rawKeyword);
+                    if (string.IsNullOrEmpty(keyword) || ContainsMarkup(keyword))
+                    {
+                        errors.Add(prefix + "legacyKeywords must contain non-empty text without markup.");
+                        continue;
+                    }
+                    if (!legacyKeywords.Contains(keyword, StringComparer.OrdinalIgnoreCase))
+                        legacyKeywords.Add(keyword);
+                }
+            }
+
+            var documentationErrors = new List<string>();
+            string documentationPath = isV2
+                ? ValidateDocumentationPath(data.documentationPath, documentationRoot, documentationErrors)
+                : string.Empty;
+            string documentationUrl = isV2
+                ? ValidateDocumentationUrl(data.documentationUrl, documentationErrors)
+                : string.Empty;
+            foreach (string documentationError in documentationErrors)
+                errors.Add(prefix + documentationError);
 
             var replacements = new List<string>();
             if (data.replaces != null)
@@ -719,7 +903,14 @@ namespace ZeroEngine.Editor.Dashboard
                 surfaceDisplayName,
                 surfaceActionLabel,
                 data.surfaceDefault,
-                usage);
+                usage,
+                executionKind,
+                providerId,
+                actionId,
+                visibility,
+                legacyKeywords,
+                documentationPath,
+                documentationUrl);
         }
 
         private static DashboardPanel ParsePanel(
@@ -787,9 +978,7 @@ namespace ZeroEngine.Editor.Dashboard
                     .Where(value => !string.IsNullOrEmpty(value))
                     .Distinct(StringComparer.Ordinal)
                     .ToArray();
-                bool valid = members.All(entry => entry.Kind == first.Kind) &&
-                             members.All(entry => entry.Availability == first.Availability) &&
-                             members.All(entry => entry.Safety == first.Safety) &&
+                bool valid = members.All(entry => string.Equals(entry.Category, first.Category, StringComparison.Ordinal)) &&
                              members.All(entry => string.Equals(entry.Section, first.Section, StringComparison.Ordinal)) &&
                              names.Length <= 1 &&
                              members.Count(entry => entry.SurfaceDefault) <= 1;
@@ -801,7 +990,7 @@ namespace ZeroEngine.Editor.Dashboard
                     entry.SurfaceGroupingRejected = true;
                     diagnostics.Add(EntryError(
                         "surface-contract-conflict",
-                        "Surface '" + group.Key + "' has incompatible kind, availability, safety, section, display name, or defaults; entries are shown separately.",
+                        "Surface '" + group.Key + "' has incompatible category, section, display name, or defaults; entries are shown separately.",
                         entry));
                 }
             }
@@ -852,7 +1041,7 @@ namespace ZeroEngine.Editor.Dashboard
             }
 
             foreach (IGrouping<string, DashboardEntry> group in entries
-                         .Where(entry => !entry.Isolated)
+                         .Where(entry => !entry.Isolated && entry.IsLegacy && !string.IsNullOrEmpty(entry.MenuPath))
                          .GroupBy(entry => entry.MenuPath, StringComparer.Ordinal))
             {
                 if (group.Count() < 2)
@@ -863,6 +1052,27 @@ namespace ZeroEngine.Editor.Dashboard
                     diagnostics.Add(EntryError(
                         "duplicate-menu-path",
                         "Menu path '" + entry.MenuPath + "' is declared by multiple entries; all are isolated.",
+                        entry));
+                }
+            }
+        }
+
+        private static void IsolateActionBindingConflicts(
+            IReadOnlyList<DashboardEntry> entries,
+            List<DashboardDiagnostic> diagnostics)
+        {
+            foreach (IGrouping<string, DashboardEntry> group in entries
+                         .Where(entry => !entry.Isolated && entry.ExecutionKind == DashboardEntryExecutionKind.Provider)
+                         .GroupBy(entry => entry.ProviderId + "/" + entry.ActionId, StringComparer.Ordinal))
+            {
+                if (group.Count() < 2)
+                    continue;
+                foreach (DashboardEntry entry in group)
+                {
+                    entry.Isolated = true;
+                    diagnostics.Add(EntryError(
+                        "duplicate-action-binding",
+                        "Provider action '" + group.Key + "' is bound by multiple entries; all are isolated.",
                         entry));
                 }
             }
@@ -1061,6 +1271,27 @@ namespace ZeroEngine.Editor.Dashboard
                 case "always": result = DashboardEntryAvailability.Always; return true;
                 case "edit-mode": result = DashboardEntryAvailability.EditMode; return true;
                 case "play-mode": result = DashboardEntryAvailability.PlayMode; return true;
+                default: result = default; return false;
+            }
+        }
+
+        private static bool TryParseScope(string value, out DashboardModuleScope result)
+        {
+            switch (Trim(value))
+            {
+                case "universal": result = DashboardModuleScope.Universal; return true;
+                case "project": result = DashboardModuleScope.Project; return true;
+                default: result = default; return false;
+            }
+        }
+
+        private static bool TryParseVisibility(string value, out DashboardEntryVisibility result)
+        {
+            switch (Trim(value))
+            {
+                case "primary": result = DashboardEntryVisibility.Primary; return true;
+                case "advanced": result = DashboardEntryVisibility.Advanced; return true;
+                case "maintenance": result = DashboardEntryVisibility.Maintenance; return true;
                 default: result = default; return false;
             }
         }

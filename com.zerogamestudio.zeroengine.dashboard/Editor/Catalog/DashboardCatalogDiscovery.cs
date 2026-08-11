@@ -4,6 +4,7 @@ using System.IO;
 using System.Linq;
 using System.Text;
 using UnityEditor;
+using UnityEngine;
 using PackageManagerPackageInfo = UnityEditor.PackageManager.PackageInfo;
 
 namespace ZeroEngine.Editor.Dashboard
@@ -45,7 +46,8 @@ namespace ZeroEngine.Editor.Dashboard
                     absolutePath,
                     Path.GetDirectoryName(absolutePath),
                     string.Empty,
-                    string.Empty));
+                    string.Empty,
+                    Path.GetDirectoryName(Application.dataPath)));
             }
 
             return DashboardCatalogBuilder.Build(sources, installedPackages);
@@ -56,7 +58,8 @@ namespace ZeroEngine.Editor.Dashboard
             string path,
             string rootPath,
             string packageName,
-            string packageVersion)
+            string packageVersion,
+            string projectRootPath = null)
         {
             try
             {
@@ -66,7 +69,8 @@ namespace ZeroEngine.Editor.Dashboard
                     rootPath,
                     packageName,
                     packageVersion,
-                    File.ReadAllText(path, Encoding.UTF8));
+                    File.ReadAllText(path, Encoding.UTF8),
+                    projectRootPath: projectRootPath);
             }
             catch (Exception exception)
             {
@@ -77,7 +81,8 @@ namespace ZeroEngine.Editor.Dashboard
                     packageName,
                     packageVersion,
                     null,
-                    exception.Message);
+                    exception.Message,
+                    projectRootPath);
             }
         }
 

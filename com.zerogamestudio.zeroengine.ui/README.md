@@ -52,4 +52,4 @@ UIManager.Instance.OnViewOpened += name => Debug.Log(name);
 
 ## ZeroEngine Dashboard
 
-可选 Dashboard 会把现有 `ZeroEngine/UI/Install Toast System` 注册为需确认的 `project-write` 命令；实际安装、Undo 和资源写入安全仍由本包负责，本包不依赖 Dashboard。
+可选 Dashboard 会在 `ZGS > 工作台 > 系统与安装` 的高级工具中注册本包 typed 安装动作，并按 `project-write` 要求确认；实际安装、Undo 和资源写入安全仍由本包负责，本包不依赖 Dashboard。

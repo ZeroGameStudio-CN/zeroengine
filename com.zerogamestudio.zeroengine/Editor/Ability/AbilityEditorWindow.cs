@@ -16,8 +16,7 @@ namespace ZeroEngine.Editor.AbilitySystem
     [ZeroEngine.EditorUI.EditorUiSurface]
     public class AbilityEditorWindow : OdinMenuEditorWindow
     {
-        [MenuItem("ZeroEngine/Tools/Ability Editor")]
-        private static void OpenWindow()
+        internal static void OpenWindow()
         {
             var window = GetWindow<AbilityEditorWindow>();
             window.titleContent = new GUIContent("Ability Editor");
@@ -126,8 +125,7 @@ namespace ZeroEngine.Editor.AbilitySystem
     [ZeroEngine.EditorUI.EditorUiSurface]
     public class AbilityEditorWindow : EditorWindow
     {
-        [MenuItem("ZeroEngine/Tools/Ability Editor")]
-        private static void OpenWindow() => GetWindow<AbilityEditorWindow>("Ability Editor");
+        internal static void OpenWindow() => GetWindow<AbilityEditorWindow>("Ability Editor");
 
         private void OnGUI()
         {

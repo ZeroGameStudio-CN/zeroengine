@@ -21,7 +21,6 @@ namespace ZeroEngine.Editor.Shop
         private string _searchFilter = "";
         private ShopType _typeFilter = (ShopType)(-1);
 
-        [MenuItem("ZeroEngine/Shop/Shop Editor")]
         public static void ShowWindow()
         {
             var window = GetWindow<ShopEditorWindow>("Shop Editor");

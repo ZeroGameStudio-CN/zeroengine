@@ -23,7 +23,6 @@ namespace ZeroEngine.Editor.Achievement
         private int _tabIndex = 0;
         private readonly string[] _tabNames = { "成就列表", "成就组", "统计" };
 
-        [MenuItem("ZeroEngine/Achievement/Achievement Editor")]
         public static void ShowWindow()
         {
             var window = GetWindow<AchievementEditorWindow>("Achievement Editor");

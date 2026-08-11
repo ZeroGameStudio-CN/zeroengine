@@ -23,7 +23,6 @@ namespace ZeroEngine.Editor.Loot
         private Dictionary<string, int> _simulateResults = new Dictionary<string, int>();
         private bool _showSimulateResults;
 
-        [MenuItem("ZeroEngine/Loot/Loot Table Editor")]
         public static void ShowWindow()
         {
             var window = GetWindow<LootTableEditorWindow>("Loot Table Editor");

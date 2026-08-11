@@ -15,7 +15,6 @@ namespace ZGS.Analytics.Editor
         private GUIStyle _valueStyle;
         private bool _stylesInitialized;
 
-        [MenuItem("ZGS/Analytics Dashboard")]
         public static void ShowWindow()
         {
             var window = GetWindow<AnalyticsDashboardWindow>("Analytics Dashboard");

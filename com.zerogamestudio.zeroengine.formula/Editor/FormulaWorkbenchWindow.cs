@@ -42,12 +42,6 @@ namespace ZeroEngine.Formula.Editor
         [System.NonSerialized]
         private FormulaCatalogPane catalogPane;
 
-        [MenuItem("ZeroEngine/Formula/Formula Workbench", priority = 131)]
-        private static void Open()
-        {
-            OpenWithProfile(FormulaEditorProfileRegistry.ActiveProfile);
-        }
-
         public static void OpenWithProfile(FormulaEditorProfile profile)
         {
             Open(profile, null, FormulaStudioPage.Workbench);

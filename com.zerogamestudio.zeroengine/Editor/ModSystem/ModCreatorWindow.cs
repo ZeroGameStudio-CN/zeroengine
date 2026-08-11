@@ -24,7 +24,6 @@ namespace ZeroEngine.ModSystem.Editor
         
         private Vector2 _scrollPos;
         
-        [MenuItem("ZeroEngine/Mod System/Create New Mod...", priority = 100)]
         public static void ShowWindow()
         {
             var window = GetWindow<ModCreatorWindow>("Create New Mod");

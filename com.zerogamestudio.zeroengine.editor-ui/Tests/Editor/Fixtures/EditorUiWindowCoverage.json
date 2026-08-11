@@ -68,6 +68,17 @@
       "exceptions": []
     },
     {
+      "targetId": "com.zerogamestudio.zeroengine/buff-editor",
+      "descriptorFullId": "com.zerogamestudio.zeroengine/buff-editor",
+      "countsTowardModuleTotal": true,
+      "sourcePath": "com.zerogamestudio.zeroengine/Editor/Buff/BuffEditorWindow.cs",
+      "typeName": "ZeroEngine.Editor.Buff.BuffEditorWindow",
+      "technology": "conditional-odin",
+      "migrationStatus": "migrated",
+      "integrationMethod": "OnBeginDrawEditors / OnGUI",
+      "exceptions": []
+    },
+    {
       "targetId": "com.zerogamestudio.zeroengine/achievement-editor",
       "descriptorFullId": "com.zerogamestudio.zeroengine/achievement-editor",
       "countsTowardModuleTotal": true,
@@ -131,6 +142,17 @@
       "technology": "ui-toolkit",
       "migrationStatus": "migrated",
       "integrationMethod": "BuildUI",
+      "exceptions": []
+    },
+    {
+      "targetId": "com.zerogamestudio.zeroengine/dialog-export",
+      "descriptorFullId": "com.zerogamestudio.zeroengine/dialog-export",
+      "countsTowardModuleTotal": true,
+      "sourcePath": "com.zerogamestudio.zeroengine/Editor/Dialog/DialogExportWindow.cs",
+      "typeName": "ZeroEngine.Editor.Dialog.DialogExportWindow",
+      "technology": "imgui",
+      "migrationStatus": "migrated",
+      "integrationMethod": "OnGUI",
       "exceptions": []
     },
     {
@@ -205,6 +227,17 @@
       "countsTowardModuleTotal": true,
       "sourcePath": "com.zerogamestudio.zeroengine/Editor/ModSystem/ModCreatorWindow.cs",
       "typeName": "ZeroEngine.ModSystem.Editor.ModCreatorWindow",
+      "technology": "imgui",
+      "migrationStatus": "migrated",
+      "integrationMethod": "OnGUI",
+      "exceptions": []
+    },
+    {
+      "targetId": "com.zerogamestudio.zeroengine/mod-exporter",
+      "descriptorFullId": "com.zerogamestudio.zeroengine/mod-exporter",
+      "countsTowardModuleTotal": true,
+      "sourcePath": "com.zerogamestudio.zeroengine/Editor/ModSystem/ModExporter.cs",
+      "typeName": "ZeroEngine.ModSystem.Editor.ModExporter",
       "technology": "imgui",
       "migrationStatus": "migrated",
       "integrationMethod": "OnGUI",

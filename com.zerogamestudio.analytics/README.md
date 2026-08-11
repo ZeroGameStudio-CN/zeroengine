@@ -230,4 +230,4 @@ Streamlit Dashboard (可视化)
 
 ## ZeroEngine Dashboard
 
-安装可选的 `com.zerogamestudio.zeroengine.dashboard` 后，Dashboard 会从本包描述符发现并导航到现有 `ZGS/Analytics Dashboard`；本包不依赖 Dashboard。
+安装可选的 `com.zerogamestudio.zeroengine.dashboard` 后，工作台会从本包 schema v2 描述符发现数据分析入口，并通过本包 typed provider 打开窗口；本包不依赖 Dashboard。入口位于 `ZGS > 工作台 > 检查与调试`。

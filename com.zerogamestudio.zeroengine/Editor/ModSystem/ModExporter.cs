@@ -14,6 +14,7 @@ namespace ZeroEngine.ModSystem.Editor
     /// <summary>
     /// Mod内容导出器，将游戏内资源导出为mod格式
     /// </summary>
+    [ZeroEngine.EditorUI.EditorUiSurface]
     public class ModExporter : EditorWindow
     {
         private enum ExportType
@@ -30,10 +31,9 @@ namespace ZeroEngine.ModSystem.Editor
         
         private Vector2 _scrollPos;
         
-        [MenuItem("ZeroEngine/Mod System/Export to Mod...", priority = 101)]
         public static void ShowWindow()
         {
-            var window = GetWindow<ModExporter>("Export to Mod");
+            var window = GetWindow<ModExporter>("模组导出器");
             window.minSize = new Vector2(400, 300);
             window.Show();
         }
@@ -44,7 +44,7 @@ namespace ZeroEngine.ModSystem.Editor
             var selected = Selection.activeObject;
             if (selected == null) return;
             
-            var window = GetWindow<ModExporter>("Export to Mod");
+            var window = GetWindow<ModExporter>("模组导出器");
             window._assetToExport = selected;
             window.DetectAssetType();
             window.Show();
@@ -67,12 +67,12 @@ namespace ZeroEngine.ModSystem.Editor
         {
             _scrollPos = EditorGUILayout.BeginScrollView(_scrollPos);
             
-            EditorGUILayout.LabelField("Export Asset to Mod", EditorStyles.boldLabel);
+            ZeroEngine.EditorUI.EditorUiGUILayout.Header("模组导出器", "把能力、Buff 或物品资源导出为可分发的模组 JSON。");
             EditorGUILayout.Space(10);
             
             // 资源选择
-            EditorGUILayout.LabelField("Source Asset", EditorStyles.boldLabel);
-            _exportType = (ExportType)EditorGUILayout.EnumPopup("Asset Type", _exportType);
+            EditorGUILayout.LabelField("源资源", EditorStyles.boldLabel);
+            _exportType = (ExportType)EditorGUILayout.EnumPopup(new GUIContent("资源类型", "选择要导出的资源类型。"), _exportType);
             
             Type assetType = _exportType switch
             {
@@ -82,17 +82,17 @@ namespace ZeroEngine.ModSystem.Editor
                 _ => typeof(UnityEngine.Object)
             };
             
-            _assetToExport = EditorGUILayout.ObjectField("Asset", _assetToExport, assetType, false);
+            _assetToExport = EditorGUILayout.ObjectField(new GUIContent("资源", "选择要导出的项目资源。"), _assetToExport, assetType, false);
             
             EditorGUILayout.Space(10);
             
             // 输出设置
-            EditorGUILayout.LabelField("Output Settings", EditorStyles.boldLabel);
+            EditorGUILayout.LabelField("输出设置", EditorStyles.boldLabel);
             EditorGUILayout.BeginHorizontal();
-            _outputPath = EditorGUILayout.TextField("Output Folder", _outputPath);
-            if (GUILayout.Button("Browse...", GUILayout.Width(80)))
+            _outputPath = EditorGUILayout.TextField(new GUIContent("输出目录", "模组 JSON 与引用资源的目标目录。"), _outputPath);
+            if (GUILayout.Button(new GUIContent("浏览…", "选择输出目录。"), GUILayout.Width(80)))
             {
-                var path = EditorUtility.OpenFolderPanel("Select Output Folder", _outputPath, "");
+                var path = EditorUtility.OpenFolderPanel("选择输出目录", _outputPath, "");
                 if (!string.IsNullOrEmpty(path))
                 {
                     _outputPath = path;
@@ -100,18 +100,17 @@ namespace ZeroEngine.ModSystem.Editor
             }
             EditorGUILayout.EndHorizontal();
             
-            _includeReferencedAssets = EditorGUILayout.Toggle("Include Referenced Assets", _includeReferencedAssets);
-            EditorGUILayout.HelpBox("If enabled, sprites and other referenced assets will be exported to an 'assets' folder.", MessageType.Info);
+            _includeReferencedAssets = EditorGUILayout.Toggle(new GUIContent("包含引用资源", "同时导出 Sprite 等引用资源。"), _includeReferencedAssets);
+            EditorGUILayout.HelpBox("启用后，Sprite 等引用资源会导出到 assets 子目录。", MessageType.Info);
             
             EditorGUILayout.Space(20);
             
             // 导出按钮
-            GUI.enabled = _assetToExport != null && !string.IsNullOrEmpty(_outputPath);
-            if (GUILayout.Button("Export", GUILayout.Height(35)))
+            using (new EditorGUI.DisabledScope(_assetToExport == null || string.IsNullOrEmpty(_outputPath)))
             {
-                Export();
+                if (ZeroEngine.EditorUI.EditorUiGUILayout.PrimaryButton(new GUIContent("导出", "将所选资源写入模组输出目录。"), GUILayout.Height(35)))
+                    Export();
             }
-            GUI.enabled = true;
             
             EditorGUILayout.EndScrollView();
         }
@@ -154,18 +153,18 @@ namespace ZeroEngine.ModSystem.Editor
                 var jsonPath = Path.Combine(_outputPath, fileName);
                 File.WriteAllText(jsonPath, json);
                 
-                var message = $"Exported successfully!\n\nJSON: {jsonPath}";
+                var message = $"导出成功！\n\nJSON：{jsonPath}";
                 if (exportedAssets.Count > 0)
                 {
-                    message += $"\n\nAssets exported: {exportedAssets.Count}";
+                    message += $"\n\n已导出资源：{exportedAssets.Count}";
                 }
                 
-                EditorUtility.DisplayDialog("Success", message, "OK");
+                EditorUtility.DisplayDialog("导出成功", message, "确定");
                 EditorUtility.RevealInFinder(jsonPath);
             }
             catch (Exception ex)
             {
-                EditorUtility.DisplayDialog("Error", $"Export failed:\n{ex.Message}", "OK");
+                EditorUtility.DisplayDialog("导出失败", $"导出失败：\n{ex.Message}", "确定");
             }
         }
         

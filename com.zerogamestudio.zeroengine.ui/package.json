@@ -7,6 +7,7 @@
   "unityRelease": "0f1",
   "dependencies": {
     "com.zerogamestudio.zeroengine.core": "2.0.0",
+    "com.zerogamestudio.zeroengine.editor-ui": "1.3.0",
     "com.unity.textmeshpro": "3.0.6"
   },
   "keywords": [

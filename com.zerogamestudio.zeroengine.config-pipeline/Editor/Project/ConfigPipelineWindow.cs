@@ -14,7 +14,6 @@ namespace ZeroGameStudio.ConfigPipeline.Editor
         private string status = "Not checked";
         private Vector2 scroll;
 
-        [MenuItem("ZGS/Config Pipeline")]
         public static void Open()
         {
             GetWindow<ConfigPipelineWindow>("Config Pipeline");

@@ -14,8 +14,7 @@ namespace ZeroEngine.Editor
         private Vector2 resultsScroll;
         private string[] componentTypes = Array.Empty<string>();
 
-        [MenuItem("ZeroEngine/Tools/Global Search")]
-        private static void OpenWindow()
+        internal static void OpenWindow()
         {
             var window = GetWindow<GlobalSearchWindow>();
             window.titleContent = new GUIContent("Global Search");

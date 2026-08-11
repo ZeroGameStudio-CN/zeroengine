@@ -241,4 +241,4 @@ Unity.exe -runTests -testPlatform EditMode -projectPath "<项目路径>" -testRe
 
 ## ZeroEngine Dashboard
 
-主包通过 `Editor/ZeroEngineDashboardModule.json` 声明现有历史编辑器窗口。Dashboard 2.0 只负责发现和导航，不改变这些公开菜单路径，也不承载窗口业务逻辑。
+主包通过 `Editor/ZeroEngineDashboardModule.json` 声明编辑器工具，并由本包 typed action provider 执行。安装 Dashboard 4.x 后统一从 `ZGS > 工作台` 进入；本包不依赖 Dashboard，窗口业务逻辑仍归本包所有。

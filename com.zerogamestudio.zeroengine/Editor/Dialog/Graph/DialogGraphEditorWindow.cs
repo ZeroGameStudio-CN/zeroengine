@@ -17,7 +17,6 @@ namespace ZeroEngine.Editor.Dialog
         private DialogGraphSO _currentGraph;
         private Label _titleLabel;
 
-        [MenuItem("ZeroEngine/Dialog/Dialog Graph Editor")]
         public static void Open()
         {
             var window = GetWindow<DialogGraphEditorWindow>();

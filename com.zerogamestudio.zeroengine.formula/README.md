@@ -123,12 +123,12 @@ Then evaluate the asset with `FormulaEvaluator.TryEvaluate`.
 
 ## Editor Tools
 
-Menu items:
+Open `ZGS > 工作台`, then use:
 
 ```text
-ZeroEngine/Formula/Scan Formula Assets
-ZeroEngine/Formula/Formula Catalog
-ZeroEngine/Formula/Formula Workbench
+内容创作 > 公式中心 > 目录
+内容创作 > 公式中心 > 工作台
+检查与调试 > 扫描公式资源（高级工具）
 ```
 
 The scanner evaluates formula assets with an empty provider registry and reports
@@ -213,4 +213,4 @@ adapt their game data into `IFormulaValueProvider` implementations.
 
 ## ZeroEngine Dashboard
 
-The optional Dashboard discovers Formula Catalog, Formula Workbench, and the read-only asset scan through `Editor/ZeroEngineDashboardModule.json`. Existing menu paths remain the authoritative entrypoints and this package does not depend on Dashboard.
+The optional Dashboard discovers Formula Catalog, Formula Workbench, and the read-only asset scan through the schema v2 descriptor and invokes this package's typed provider. This package does not depend on Dashboard.

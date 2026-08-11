@@ -11,7 +11,6 @@ namespace ZeroEngine.Feedback.Editor
         private const string ThemePath = InstallRoot + "/FeedbackUiTheme.asset";
         private const string PrefabPath = InstallRoot + "/FeedbackPanel.prefab";
 
-        [MenuItem("ZeroEngine/Feedback/Install Default UI")]
         public static void Install()
         {
             Directory.CreateDirectory(InstallRoot);

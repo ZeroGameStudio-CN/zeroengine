@@ -20,7 +20,6 @@ namespace ZeroEngine.Editor.Calendar
         private int _previewYear = 1;
         private int _previewMonth = 1;
 
-        [MenuItem("ZeroEngine/Calendar/Calendar Editor")]
         public static void ShowWindow()
         {
             var window = GetWindow<CalendarEditorWindow>("Calendar Editor");

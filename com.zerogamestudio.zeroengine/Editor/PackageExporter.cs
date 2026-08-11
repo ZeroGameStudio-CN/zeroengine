@@ -7,7 +7,6 @@ namespace ZeroEngine.Editor
 {
     public static class PackageExporter
     {
-        [MenuItem("ZeroEngine/Export Package")]
         public static void Export()
         {
             string fileName = $"ZeroEngine_v{System.DateTime.Now:yyyyMMdd_HHmm}.unitypackage";

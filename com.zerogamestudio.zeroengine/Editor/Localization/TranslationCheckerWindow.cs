@@ -19,7 +19,6 @@ namespace ZeroEngine.Editor.Localization
     [ZeroEngine.EditorUI.EditorUiSurface]
     public class TranslationCheckerWindow : EditorWindow
     {
-        [MenuItem("ZeroEngine/Localization/Translation Checker")]
         public static void ShowWindow()
         {
             var window = GetWindow<TranslationCheckerWindow>("Translation Checker");

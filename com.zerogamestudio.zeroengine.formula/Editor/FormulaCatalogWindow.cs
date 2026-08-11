@@ -7,12 +7,6 @@ namespace ZeroEngine.Formula.Editor
     [ZeroEngine.EditorUI.EditorUiSurface]
     public sealed class FormulaCatalogWindow : EditorWindow
     {
-        [MenuItem("ZeroEngine/Formula/Formula Catalog", priority = 129)]
-        private static void Open()
-        {
-            OpenWithProfile(FormulaEditorProfileRegistry.ActiveProfile);
-        }
-
         public static void OpenWithProfile(FormulaEditorProfile profile)
         {
             FormulaWorkbenchWindow.OpenCatalogWithProfile(profile);

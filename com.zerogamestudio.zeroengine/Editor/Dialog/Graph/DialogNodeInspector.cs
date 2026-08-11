@@ -16,7 +16,6 @@ namespace ZeroEngine.Editor.Dialog
         private DialogGraphSO _currentGraph;
         private ScrollView _scrollView;
 
-        [MenuItem("ZeroEngine/Dialog/Node Inspector")]
         public static void Open()
         {
             var window = GetWindow<DialogNodeInspector>();

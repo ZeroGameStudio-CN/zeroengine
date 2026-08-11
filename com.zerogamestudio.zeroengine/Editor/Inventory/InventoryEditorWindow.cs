@@ -15,8 +15,7 @@ namespace ZeroEngine.Editor.Inventory
     [ZeroEngine.EditorUI.EditorUiSurface]
     public class InventoryEditorWindow : OdinMenuEditorWindow
     {
-        [MenuItem("ZeroEngine/Tools/Inventory Editor")]
-        private static void OpenWindow()
+        internal static void OpenWindow()
         {
             var window = GetWindow<InventoryEditorWindow>();
             window.titleContent = new GUIContent("Inventory Editor");
@@ -100,8 +99,7 @@ namespace ZeroEngine.Editor.Inventory
     [ZeroEngine.EditorUI.EditorUiSurface]
     public class InventoryEditorWindow : EditorWindow
     {
-        [MenuItem("ZeroEngine/Tools/Inventory Editor")]
-        private static void OpenWindow()
+        internal static void OpenWindow()
         {
             GetWindow<InventoryEditorWindow>("Inventory Editor");
         }

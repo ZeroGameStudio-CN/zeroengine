@@ -1,22 +1,27 @@
 {
-  "schemaVersion": 1,
+  "schemaVersion": 2,
   "moduleId": "com.zerogamestudio.zeroengine.ui",
   "displayName": "界面工具",
   "description": "ZeroEngine 界面安装工具。",
   "order": 600,
+  "scope": "universal",
   "documentationPath": "README.md",
   "entries": [
     {
       "id": "install-toast-system",
       "displayName": "安装通知系统",
       "description": "确认后调用由 UI 包维护的通知系统安装器。",
-      "category": "setup",
+      "category": "system-setup",
       "kind": "command",
-      "menuPath": "ZeroEngine/UI/Install Toast System",
       "order": 100,
       "safety": "project-write",
       "confirmation": "是否在当前项目中安装通知系统资源？写入安全与撤销仍由 UI 包安装器负责。",
       "availability": "edit-mode",
+      "visibility": "advanced",
+      "executionKind": "provider",
+      "providerId": "zeroengine.ui",
+      "actionId": "install-toast-system",
+      "legacyKeywords": ["ZeroEngine/UI/Install Toast System"],
       "replaces": []
     }
   ]

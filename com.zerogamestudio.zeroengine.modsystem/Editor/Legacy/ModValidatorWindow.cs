@@ -18,7 +18,6 @@ namespace ZeroEngine.ModSystem.Editor
         private List<ModValidationResult> _results = new();
         private bool _isValidating = false;
         
-        [MenuItem("ZeroEngine/Mod System/Validate Mods...", priority = 102)]
         public static void ShowWindow()
         {
             var window = GetWindow<ModValidatorWindow>("Mod Validator");

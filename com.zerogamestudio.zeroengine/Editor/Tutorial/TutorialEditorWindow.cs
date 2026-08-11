@@ -17,7 +17,6 @@ namespace ZeroEngine.Editor.Tutorial
         private TutorialSO _selectedTutorial;
         private string _searchFilter = "";
 
-        [MenuItem("ZeroEngine/Tutorial/Tutorial Editor")]
         public static void ShowWindow()
         {
             var window = GetWindow<TutorialEditorWindow>("Tutorial Editor");

@@ -1,9 +1,10 @@
 {
-  "schemaVersion": 1,
+  "schemaVersion": 2,
   "moduleId": "com.zerogamestudio.zeroengine.data-toolkit",
   "displayName": "数据工具箱",
   "description": "用于浏览、检查和校验项目数据的工具。",
   "order": 250,
+  "scope": "universal",
   "documentationPath": "README.md",
   "entries": []
 }
