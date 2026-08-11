@@ -1,7 +1,9 @@
 # Unity 控制面自动恢复毕业门
 
-- 状态：Archived
+- 状态：Closed
 - 日期：2026-08-11
+- 最后更新：2026-08-11
+- 检查基线：ZeroEngine `8df99c6c`；MCP fork `4a29cdf0`
 - 设计批准：用户要求“继续下一轮，做到毕业为止”
 - 执行授权：Authorized；覆盖本 spec 的实现、测试、正常 PR/合并、双机安装、POB 精确 pin/checkin 与归档
 
@@ -82,6 +84,10 @@ M5 首次安装验收发现 0.7.0 会对已存在的 POSIX token 父目录执行
 
 实现期证据：Supervisor `172 passed in 265.29s`，Ruff check/format 通过；MCP Server `1351 passed, 3 skipped`，receipt 定向测试 9 项通过；Unity 2022.3.62f3 receipt EditMode 5/5；router 17 项与两项 skill validator 通过。MCP fork PR #3 的 4 项检查全绿并正常合并为 `a67a2f3ab447a769d08c7e5498e905dc1c347fb2`；personal-codex-skills PR #27 正常合并为 `7cb9f4aa2cdea569831a02547ae836f2f5857f36`，Windows 与 M5 已安装同一技能版本。
 
+终审补强为此前只有实现证据、缺少直接负向覆盖的边界新增回归：`cleanup-idle` 明确拒绝 freeze、`outcome_unknown`、未完成 farm job 与 adopted pending；新 Supervisor 明确拒绝不支持 receipt protocol 的旧插件。Supervisor 最终全套为 `177 passed in 271.94s`，Ruff check/format 与 diff check 通过。MCP fork PR #4 为 Server 内存态丢失后的 completed receipt 恢复、损坏 journal 保留证据、容量耗尽不驱逐未确认 receipt 新增直接测试；Python 全套 `1352 passed, 3 skipped`，3 项 PR 检查全绿，正常合并为 `4a29cdf0681fffb216b8aca75465bfcee2bea937`。这些仅为测试与文档补强，不改变已部署的 Supervisor/Server/插件版本，也不需要更新 POB pin。
+
 ZeroEngine 0.7.0 主功能已由 PR #34 的 11 项检查全绿后正常合并为 `75a7239bdb48de7053813ac71c71d008ec7f37c9`。0.7.1 POSIX 修复由 PR #35 正常合并为 `620804fa0adb5cf9b2cc936cd8f2ecd1b304f00f`；Supervisor/POSIX 测试和五条 Unity lane 最终全绿，其中 `Modules without Dashboard` 首轮仅因 `packages.unity.com` `ECONNRESET` 失败，失败 job 重跑后通过。Windows 9950 与 M5 均已安装 Supervisor 0.7.1、Server 10.1.2，并返回 `healthy-owned`。
 
-M5 真实 `/tmp` token 验收为 `0600`、owner `lzq`，未改变既有父目录权限；删除 token 后 `cleanup-idle` 立即收口空 task，正常 release 返回 `token_file_removed=true`。Windows token ACL 仅当前用户 FullControl，正常 release 同样删除 token。两机最终均无本任务 task、claim 或 Unity owner。POB 已把插件 pin/lock 精确提交为 Plastic `cs:16819`，changeset 仅含两目标文件；实机公布 receipt protocol v1、只读命令成功、Console 0 error、receipt ack 后 journal 为空，EditorSettings 保持基线 SHA-256 `4dd4fa6d…4488a`。全部验收门满足，本 spec 归档。
+M5 真实 `/tmp` token 验收为 `0600`、owner `lzq`，未改变既有父目录权限；删除 token 后 `cleanup-idle` 立即收口空 task，正常 release 返回 `token_file_removed=true`。Windows token ACL 仅当前用户 FullControl，正常 release 同样删除 token。setup 文档已收窄为实现实际保证：缺失的末级父目录请求 `0700`、token 为 `0600`，既有父目录和祖先目录权限不变，不再声称整条缺失父链都会 owner-only。
+
+两机最终均无本任务 task、claim 或 Unity owner。POB 已把插件 pin/lock 精确提交为 Plastic `cs:16819`，changeset 仅含两目标文件；实机公布 receipt protocol v1、只读命令成功、Console 0 error、receipt ack 后 journal 为空。该次提交与联调检查时 EditorSettings 为基线 SHA-256 `4dd4fa6d…4488a` 且未纳入；终审只读复核发现其后来已有无关 `CO+CH`，当前 hash 为 `ee88f9bf…84b33`。依据配置安全规则，本任务未回滚、未提交该文件；它不影响 `cs:16819` 的两文件范围，但作为已知残留明确保留。全部验收门已有直接证据，本 spec 关闭。

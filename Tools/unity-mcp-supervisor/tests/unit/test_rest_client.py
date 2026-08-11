@@ -6,7 +6,7 @@ from pathlib import Path
 import pytest
 
 from tests.helpers import create_unity_project, fake_http_server
-from unity_mcp_supervisor.errors import OutcomeUnknownError
+from unity_mcp_supervisor.errors import IncompatibleError, OutcomeUnknownError
 from unity_mcp_supervisor.rest_client import (
     PINNED_SERVER_VERSION,
     EndpointKind,
@@ -73,6 +73,28 @@ def test_business_command_started_without_result_stays_outcome_unknown(
     ):
         RestClient(endpoint).command("ambiguous_response", {}, "aaaaaaaaaaaaaaaa")
     assert counter == [1]
+
+
+def test_business_command_rejects_plugin_without_receipt_protocol(
+    tmp_path: Path,
+) -> None:
+    project = create_unity_project(tmp_path / "Project")
+    instances = [
+        {
+            "hash": "aaaaaaaaaaaaaaaa",
+            "project": "Project",
+            "unity_version": "2022.3.62f3",
+            "connected_at": "now",
+            "project_root": str(project),
+        }
+    ]
+    with (
+        fake_http_server(instances, receipt_protocol_unavailable=True) as endpoint,
+        pytest.raises(IncompatibleError) as exc_info,
+    ):
+        RestClient(endpoint).command("probe", {}, "aaaaaaaaaaaaaaaa")
+
+    assert exc_info.value.details["reason"] == "receipt-protocol-unavailable"
 
 
 def test_server_error_recovers_completed_receipt_without_replay(
