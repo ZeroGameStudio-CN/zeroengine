@@ -7,7 +7,7 @@
 - 设计批准：Approved；用户于 2026-08-11 要求“审一下修订好后开干”
 - 执行授权：Authorized；范围为本 Spec 的本地实现与验证，来源同上
 - 终端操作授权：Authorized；用户于 2026-08-11 回复“授权继续”，范围限定为提交、推送、创建并完成 ZeroEngine PR，随后将 POB 19 个业务包统一 pin 到该 canonical merge commit 并精确 Plastic checkin；不得纳入其他 pending
-- 关闭授权：Authorized；用户于 2026-08-11 再次回复“授权继续”，范围限定为通过独立 docs-only PR 持久化本 Spec 的最终关闭证据并清理本任务 Git 资源
+- 关闭授权：Authorized；用户于 2026-08-11 回复“授权继续”，范围限定为通过独立 closeout PR 持久化本 Spec 的最终关闭证据并清理本任务 Git 资源；当 required checks 因 `docs/specs/**` 未命中 PR 路径过滤而阻塞后，用户再次授权仅在 `.github/workflows/tests.yml` 的 `pull_request.paths` 增加该路径，不改变 push 触发、测试 job、保护规则或 POB
 
 ## 结论
 
@@ -291,5 +291,5 @@ Dashboard 右上角提供统一“帮助”入口；工具行和工作区面板�
 - ZeroEngine：PR #39 已合并；canonical merge commit 与 tree 分别为 `6f9ee5d3258a4eaf53fdffbd273a3e27e08482da`、`a81014fc5aead5fa6fd6d68384b6e803e2d925df`。
 - POB：Plastic `cs:16824` 已精确提交 `Packages/manifest.json`、`Packages/packages-lock.json`、`POB.Editor.asmdef`、`AddressableDebugWindow.cs`、`ZeroEngineDashboardModule.json`、`POB.EditorUiCoverage.Tests.Editor.asmdef`、`POBEditorUiRouteCoverage.json`、`POBEditorUiRouteCoverageTests.cs`、`POBDashboardPanelProvider.cs` 及其 `.meta`，共 10 个文件。
 - 验收：PR 必需检查通过；POB 三条目标测试 3/3 passed、Console 0 error、生产配置哈希不变、19 个业务 pin 一致且无 `file:`。内部 Editor 工具的可见路线与确定性自动测试已覆盖全部验收项，因此独立人工验收与 acceptance card 均为 N/A。
-- 交接：POB AfterCheckin 服务 CI 已按项目 helper 异步触发，不是同步关闭门；本任务未等待其服务端结果。无发布、迁移或回滚待办。
-- 清洁度：POB 本任务 task/claims/Unity ownership 已释放，目标 pending 为 0；本 docs-only closeout 不触碰 POB。关闭 PR 合并后，本任务 Git 分支与隔离工作树必须清理。
+- 交接：POB AfterCheckin 服务 CI 已按项目 helper 异步触发，不是同步关闭门；本任务未等待其服务端结果。closeout PR 已获批在 `pull_request.paths` 增加 `docs/specs/**`，让 Spec 变更通过既有真实 required checks，未改变测试内容或保护规则。无发布、迁移或回滚待办。
+- 清洁度：POB 本任务 task/claims/Unity ownership 已释放，目标 pending 为 0；本 closeout 不触碰 POB。关闭 PR 合并后，本任务 Git 分支与隔离工作树必须清理。
