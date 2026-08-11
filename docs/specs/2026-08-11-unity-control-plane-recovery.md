@@ -74,10 +74,12 @@
 
 ## As-Built
 
-Supervisor 0.7.0 已实现 owner-only `--token-file`、匹配删除、零资源 `cleanup-idle`、farm 作业生命周期保护，以及带同一 command id 的 bounded receipt recovery。MCP fork 10.1.2 已实现插件 `started/completed` 原子 journal、Server 去重/查询/ack、重连补发、envelope 冲突和容量 fail-closed；动态 custom tool 的外层和子命令同样使用确定性 durable receipt。
+Supervisor 0.7.1 已实现 owner-only `--token-file`、匹配删除、零资源 `cleanup-idle`、farm 作业生命周期保护，以及带同一 command id 的 bounded receipt recovery。MCP fork 10.1.2 已实现插件 `started/completed` 原子 journal、Server 去重/查询/ack、重连补发、envelope 冲突和容量 fail-closed；动态 custom tool 的外层和子命令同样使用确定性 durable receipt。
 
 全局 `unity-mcp-instance-bootstrap` 与 `unity-test-router` 已统一为 delegated token-file 路线；router 不再解析或回显 task token。Windows ACL 实测只有当前用户 `(F)`，macOS 使用 `0600`。M5 的真实丢失-token 空 task 在 TTL 后由标准 unregister 收口，其项目、slot 与安装临时文件已精确清理。
 
-实现期证据：Supervisor `170 passed in 252.78s`，Ruff check 通过；MCP Server `1351 passed, 3 skipped`，receipt 定向测试 9 项通过；Unity 2022.3.62f3 receipt EditMode 5/5；router 17 项与两项 skill validator 通过。MCP fork PR #3 的 4 项检查全绿并正常合并为 `a67a2f3ab447a769d08c7e5498e905dc1c347fb2`；personal-codex-skills PR #27 正常合并为 `7cb9f4aa2cdea569831a02547ae836f2f5857f36`，Windows 与 M5 已安装同一技能版本。
+M5 首次安装验收发现 0.7.0 会对已存在的 POSIX token 父目录执行 `chmod 0700`，导致 `/private/tmp` 正确拒绝；失败发生在 task 创建前，无孤儿或 token 泄露。0.7.1 改为只用 `0700` 创建缺失的末级父目录，绝不改既有目录权限；排他创建失败也不删除调用方原有文件，并新增 POSIX 与既有文件回归覆盖。
 
-ZeroEngine、双机 Supervisor 安装、POB pin/checkin 与最终零状态证据在发布完成后补入归档提交。
+实现期证据：Supervisor `172 passed in 265.29s`，Ruff check/format 通过；MCP Server `1351 passed, 3 skipped`，receipt 定向测试 9 项通过；Unity 2022.3.62f3 receipt EditMode 5/5；router 17 项与两项 skill validator 通过。MCP fork PR #3 的 4 项检查全绿并正常合并为 `a67a2f3ab447a769d08c7e5498e905dc1c347fb2`；personal-codex-skills PR #27 正常合并为 `7cb9f4aa2cdea569831a02547ae836f2f5857f36`，Windows 与 M5 已安装同一技能版本。
+
+ZeroEngine 0.7.0 主功能已由 PR #34 的 11 项检查全绿后正常合并为 `75a7239bdb48de7053813ac71c71d008ec7f37c9`。POB 已把插件 pin/lock 精确提交为 Plastic `cs:16819`，changeset 仅含两目标文件；实机公布 receipt protocol v1、只读命令成功、Console 0 error、receipt ack 后 journal 为空，EditorSettings 保持基线 SHA-256 `4dd4fa6d…4488a`，本任务 task/claim/Unity owner 已归零。0.7.1 补丁、双机最终安装与归档状态在发布完成后补入 closeout 提交。
