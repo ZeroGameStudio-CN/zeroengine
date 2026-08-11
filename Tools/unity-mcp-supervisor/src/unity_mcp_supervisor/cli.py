@@ -369,11 +369,11 @@ def _read_workspace_token(
 
 def _create_workspace_token_file(path: Path, token: str) -> Path:
     resolved = path.expanduser().resolve()
+    created = False
     try:
-        resolved.parent.mkdir(parents=True, exist_ok=True)
-        if os.name != "nt":
-            resolved.parent.chmod(0o700)
+        resolved.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
         descriptor = os.open(resolved, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+        created = True
         os.close(descriptor)
         if os.name == "nt":
             domain = os.environ.get("USERDOMAIN")
@@ -407,7 +407,8 @@ def _create_workspace_token_file(path: Path, token: str) -> Path:
             resolved.unlink(missing_ok=True)
             raise
     except OSError as exc:
-        resolved.unlink(missing_ok=True)
+        if created:
+            resolved.unlink(missing_ok=True)
         raise UsageError(f"Cannot create workspace token file: {exc}") from exc
     return resolved
 

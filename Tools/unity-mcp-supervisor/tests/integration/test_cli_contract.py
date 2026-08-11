@@ -701,6 +701,110 @@ def test_workspace_task_token_file_is_private_and_removed_on_release(
     assert not token_file.exists()
 
 
+def test_workspace_task_token_file_preserves_existing_posix_parent_mode(
+    tmp_path: Path,
+) -> None:
+    if os.name == "nt":
+        return
+    project = create_unity_project(tmp_path / "Project")
+    _write_workspace_policy(project, "required")
+    state = tmp_path / "state"
+    shared_parent = tmp_path / "shared"
+    shared_parent.mkdir(mode=0o755)
+    shared_parent.chmod(0o755)
+    token_file = shared_parent / "task.token"
+    runner = CliRunner()
+
+    started = runner.invoke(
+        cli,
+        [
+            "--state-dir",
+            str(state),
+            "workspace",
+            "task",
+            "start",
+            "--project",
+            str(project),
+            "--owner",
+            "token-file",
+            "--summary",
+            "existing parent mode contract",
+            "--token-file",
+            str(token_file),
+        ],
+    )
+
+    assert started.exit_code == 0, started.output
+    assert shared_parent.stat().st_mode & 0o777 == 0o755
+    assert token_file.stat().st_mode & 0o777 == 0o600
+
+    released = runner.invoke(
+        cli,
+        [
+            "--state-dir",
+            str(state),
+            "workspace",
+            "task",
+            "release",
+            "--project",
+            str(project),
+            "--result",
+            "completed",
+            "--token-file",
+            str(token_file),
+        ],
+    )
+
+    assert released.exit_code == 0, released.output
+    assert not token_file.exists()
+
+
+def test_workspace_task_token_file_refuses_existing_file_without_deleting_it(
+    tmp_path: Path,
+) -> None:
+    project = create_unity_project(tmp_path / "Project")
+    _write_workspace_policy(project, "required")
+    state = tmp_path / "state"
+    token_file = tmp_path / "task.token"
+    token_file.write_text("pre-existing content\n", encoding="utf-8")
+    runner = CliRunner()
+
+    started = runner.invoke(
+        cli,
+        [
+            "--state-dir",
+            str(state),
+            "workspace",
+            "task",
+            "start",
+            "--project",
+            str(project),
+            "--owner",
+            "token-file",
+            "--summary",
+            "exclusive token file contract",
+            "--token-file",
+            str(token_file),
+        ],
+    )
+
+    assert started.exit_code != 0
+    assert token_file.read_text(encoding="utf-8") == "pre-existing content\n"
+    status = runner.invoke(
+        cli,
+        [
+            "--state-dir",
+            str(state),
+            "workspace",
+            "status",
+            "--project",
+            str(project),
+        ],
+    )
+    assert status.exit_code == 0, status.output
+    assert json.loads(status.output)["result"]["tasks"] == []
+
+
 def test_workspace_cleanup_idle_cli_needs_no_task_token(tmp_path: Path) -> None:
     project = create_unity_project(tmp_path / "Project")
     _write_workspace_policy(project, "required")
