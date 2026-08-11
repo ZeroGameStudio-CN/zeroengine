@@ -51,6 +51,7 @@ namespace ZeroEngine.Editor.Dashboard
         public string documentationPath;
         public string documentationUrl;
         public DashboardEntryData[] entries;
+        public DashboardPanelData[] panels;
     }
 
     [Serializable]
@@ -59,6 +60,7 @@ namespace ZeroEngine.Editor.Dashboard
         public string id;
         public string displayName;
         public string description;
+        public string usage;
         public string mountModuleId;
         public string category;
         public string kind;
@@ -73,6 +75,20 @@ namespace ZeroEngine.Editor.Dashboard
         public string surfaceDisplayName;
         public string surfaceActionLabel;
         public bool surfaceDefault;
+    }
+
+    [Serializable]
+    internal sealed class DashboardPanelData
+    {
+        public string id;
+        public string displayName;
+        public string description;
+        public string usage;
+        public string section;
+        public string providerId;
+        public int order;
+        public string safety;
+        public string availability;
     }
 
     internal sealed class DashboardDescriptorSource
@@ -168,7 +184,8 @@ namespace ZeroEngine.Editor.Dashboard
             string surfaceId,
             string surfaceDisplayName,
             string surfaceActionLabel,
-            bool surfaceDefault)
+            bool surfaceDefault,
+            string usage)
         {
             ModuleId = moduleId;
             Id = id;
@@ -190,6 +207,7 @@ namespace ZeroEngine.Editor.Dashboard
             SurfaceDisplayName = surfaceDisplayName ?? string.Empty;
             SurfaceActionLabel = surfaceActionLabel ?? string.Empty;
             SurfaceDefault = surfaceDefault;
+            Usage = usage ?? string.Empty;
         }
 
         internal string ModuleId { get; }
@@ -213,6 +231,7 @@ namespace ZeroEngine.Editor.Dashboard
         internal string SurfaceDisplayName { get; }
         internal string SurfaceActionLabel { get; }
         internal bool SurfaceDefault { get; }
+        internal string Usage { get; }
         internal bool Isolated { get; set; }
         internal bool HiddenByReplacement { get; set; }
         internal bool SurfaceGroupingRejected { get; set; }
@@ -236,6 +255,7 @@ namespace ZeroEngine.Editor.Dashboard
                               .FirstOrDefault(value => !string.IsNullOrEmpty(value)) ??
                           primary.DisplayName;
             Description = primary.Description;
+            Usage = primary.Usage;
             Order = Entries.Min(entry => entry.Order);
         }
 
@@ -243,6 +263,7 @@ namespace ZeroEngine.Editor.Dashboard
         internal string Section { get; }
         internal string DisplayName { get; }
         internal string Description { get; }
+        internal string Usage { get; }
         internal int Order { get; }
         internal DashboardEntry DefaultEntry { get; }
         internal IReadOnlyList<DashboardEntry> Entries { get; }
@@ -259,7 +280,8 @@ namespace ZeroEngine.Editor.Dashboard
             string documentationUrl,
             DashboardDescriptorSource source,
             IReadOnlyList<DashboardEntry> entries,
-            IReadOnlyList<DashboardEntry> visibleEntries = null)
+            IReadOnlyList<DashboardEntry> visibleEntries = null,
+            IReadOnlyList<DashboardPanel> panels = null)
         {
             ModuleId = moduleId;
             DisplayName = displayName;
@@ -270,6 +292,7 @@ namespace ZeroEngine.Editor.Dashboard
             Source = source;
             Entries = entries ?? Array.Empty<DashboardEntry>();
             _visibleEntries = visibleEntries ?? Entries;
+            Panels = panels ?? Array.Empty<DashboardPanel>();
         }
 
         internal string ModuleId { get; }
@@ -280,6 +303,7 @@ namespace ZeroEngine.Editor.Dashboard
         internal string DocumentationUrl { get; }
         internal DashboardDescriptorSource Source { get; }
         internal IReadOnlyList<DashboardEntry> Entries { get; }
+        internal IReadOnlyList<DashboardPanel> Panels { get; }
         internal IReadOnlyList<DashboardEntry> OwnedVisibleEntries =>
             Entries.Where(entry => !entry.Isolated && !entry.HiddenByReplacement).ToArray();
         internal IReadOnlyList<DashboardEntry> VisibleEntries =>
@@ -293,6 +317,49 @@ namespace ZeroEngine.Editor.Dashboard
             .ToArray();
 
         private readonly IReadOnlyList<DashboardEntry> _visibleEntries;
+    }
+
+    internal sealed class DashboardPanel
+    {
+        internal DashboardPanel(
+            string moduleId,
+            string id,
+            string displayName,
+            string description,
+            string usage,
+            string section,
+            string providerId,
+            int order,
+            DashboardEntrySafety safety,
+            DashboardEntryAvailability availability,
+            string sourcePath)
+        {
+            ModuleId = moduleId;
+            Id = id;
+            FullId = moduleId + "/" + id;
+            DisplayName = displayName;
+            Description = description ?? string.Empty;
+            Usage = usage ?? string.Empty;
+            Section = string.IsNullOrEmpty(section) ? "常规" : section;
+            ProviderId = providerId;
+            Order = order;
+            Safety = safety;
+            Availability = availability;
+            SourcePath = sourcePath;
+        }
+
+        internal string ModuleId { get; }
+        internal string Id { get; }
+        internal string FullId { get; }
+        internal string DisplayName { get; }
+        internal string Description { get; }
+        internal string Usage { get; }
+        internal string Section { get; }
+        internal string ProviderId { get; }
+        internal int Order { get; }
+        internal DashboardEntrySafety Safety { get; }
+        internal DashboardEntryAvailability Availability { get; }
+        internal string SourcePath { get; }
     }
 
     internal sealed class DashboardCatalog
@@ -316,6 +383,7 @@ namespace ZeroEngine.Editor.Dashboard
         internal IReadOnlyList<DashboardInstalledPackage> InstalledPackages { get; }
         internal IReadOnlyList<DashboardDiagnostic> Diagnostics { get; }
         internal IReadOnlyList<DashboardModule> VisibleModules => Modules.Where(module => module.VisibleEntries.Count > 0).ToArray();
+        internal IReadOnlyList<DashboardModule> VisibleWorkspaceModules => Modules.Where(module => module.Panels.Count > 0).ToArray();
     }
 
     internal static class DashboardCatalogBuilder
@@ -418,6 +486,11 @@ namespace ZeroEngine.Editor.Dashboard
                         .OrderBy(entry => entry.Order)
                         .ThenBy(entry => entry.DisplayName, StringComparer.OrdinalIgnoreCase)
                         .ThenBy(entry => entry.FullId, StringComparer.Ordinal)
+                        .ToArray(),
+                    module.Panels
+                        .OrderBy(panel => panel.Order)
+                        .ThenBy(panel => panel.DisplayName, StringComparer.OrdinalIgnoreCase)
+                        .ThenBy(panel => panel.FullId, StringComparer.Ordinal)
                         .ToArray()))
                 .ToArray();
 
@@ -496,6 +569,8 @@ namespace ZeroEngine.Editor.Dashboard
             string documentationUrl = ValidateDocumentationUrl(data.documentationUrl, errors);
             var entries = new List<DashboardEntry>();
             var entryIds = new HashSet<string>(StringComparer.Ordinal);
+            var panels = new List<DashboardPanel>();
+            var panelIds = new HashSet<string>(StringComparer.Ordinal);
 
             if (data.entries != null)
             {
@@ -507,6 +582,19 @@ namespace ZeroEngine.Editor.Dashboard
                     if (!entryIds.Add(entry.Id))
                         errors.Add("entries contains duplicate id '" + entry.Id + "'.");
                     entries.Add(entry);
+                }
+            }
+
+            if (data.panels != null)
+            {
+                for (int index = 0; index < data.panels.Length; index++)
+                {
+                    DashboardPanel panel = ParsePanel(data.panels[index], moduleId, source.SourcePath, index, errors);
+                    if (panel == null)
+                        continue;
+                    if (!panelIds.Add(panel.Id))
+                        errors.Add("panels contains duplicate id '" + panel.Id + "'.");
+                    panels.Add(panel);
                 }
             }
 
@@ -528,7 +616,8 @@ namespace ZeroEngine.Editor.Dashboard
                 documentationPath,
                 documentationUrl,
                 source,
-                entries);
+                entries,
+                panels: panels);
         }
 
         private static DashboardEntry ParseEntry(
@@ -555,6 +644,7 @@ namespace ZeroEngine.Editor.Dashboard
             string surfaceId = Trim(data.surfaceId);
             string surfaceDisplayName = Trim(data.surfaceDisplayName);
             string surfaceActionLabel = Trim(data.surfaceActionLabel);
+            string usage = Trim(data.usage);
 
             if (!EntryIdPattern.IsMatch(id))
                 errors.Add(prefix + "id must be lowercase kebab-case.");
@@ -562,6 +652,8 @@ namespace ZeroEngine.Editor.Dashboard
                 errors.Add(prefix + "displayName is required.");
             if (ContainsMarkup(data.description))
                 errors.Add(prefix + "description must not contain markup.");
+            if (ContainsMarkup(usage))
+                errors.Add(prefix + "usage must not contain markup.");
             if (!string.IsNullOrEmpty(mountModuleId) && !ModuleIdPattern.IsMatch(mountModuleId))
                 errors.Add(prefix + "mountModuleId must be a lowercase ASCII stable ID.");
             if (!string.IsNullOrEmpty(surfaceId) && !EntryIdPattern.IsMatch(surfaceId))
@@ -626,7 +718,56 @@ namespace ZeroEngine.Editor.Dashboard
                 surfaceId,
                 surfaceDisplayName,
                 surfaceActionLabel,
-                data.surfaceDefault);
+                data.surfaceDefault,
+                usage);
+        }
+
+        private static DashboardPanel ParsePanel(
+            DashboardPanelData data,
+            string moduleId,
+            string sourcePath,
+            int index,
+            List<string> errors)
+        {
+            if (data == null)
+            {
+                errors.Add("panels[" + index + "] must be an object.");
+                return null;
+            }
+
+            string prefix = "panels[" + index + "] ";
+            string id = Trim(data.id);
+            string displayName = Trim(data.displayName);
+            string description = Trim(data.description);
+            string usage = Trim(data.usage);
+            string section = Trim(data.section);
+            string providerId = Trim(data.providerId);
+
+            if (!EntryIdPattern.IsMatch(id))
+                errors.Add(prefix + "id must be lowercase kebab-case.");
+            if (string.IsNullOrEmpty(displayName))
+                errors.Add(prefix + "displayName is required.");
+            if (ContainsMarkup(displayName) || ContainsMarkup(description) || ContainsMarkup(usage) || ContainsMarkup(section))
+                errors.Add(prefix + "display text must not contain markup.");
+            if (!ModuleIdPattern.IsMatch(providerId))
+                errors.Add(prefix + "providerId must be a lowercase ASCII stable ID.");
+            if (!TryParseSafety(data.safety, out DashboardEntrySafety safety))
+                errors.Add(prefix + "safety is invalid.");
+            if (!TryParseAvailability(data.availability, out DashboardEntryAvailability availability))
+                errors.Add(prefix + "availability is invalid.");
+
+            return new DashboardPanel(
+                moduleId,
+                id,
+                displayName,
+                description,
+                usage,
+                section,
+                providerId,
+                data.order,
+                safety,
+                availability,
+                sourcePath);
         }
 
         private static void ValidateSurfaceGroups(

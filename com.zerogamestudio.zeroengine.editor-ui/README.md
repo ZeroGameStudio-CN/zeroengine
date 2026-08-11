@@ -9,3 +9,5 @@ Production windows use `EditorUiPalette.Current`, `EditorUiGUILayout`, and `Edit
 Version 1.1.0 adds compact headers, action rows, chips, disclosure rows, constrained content, and a deterministic compact/standard breakpoint for Editor dashboards.
 
 Version 1.1.1 adds `GUIContent` overloads for buttons, action rows, chips, selections, and disclosures so package-owned labels can provide localized tooltips.
+
+Version 1.2.0 adds measured inline/stacked action-row layout, a wide responsive mode, and an Editor-only workspace panel SPI. The SPI defines lifecycle and explicit action safety only; discovery and business behavior remain outside this package.

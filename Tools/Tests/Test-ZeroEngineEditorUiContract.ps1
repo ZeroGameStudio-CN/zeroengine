@@ -108,7 +108,7 @@ $expectedPackages = [ordered]@{
     'com.zerogamestudio.analytics' = '2.0.1'
     'com.zerogamestudio.zeroengine' = '2.1.1'
     'com.zerogamestudio.zeroengine.config-pipeline' = '2.0.1'
-    'com.zerogamestudio.zeroengine.dashboard' = '3.1.1'
+    'com.zerogamestudio.zeroengine.dashboard' = '3.2.0'
     'com.zerogamestudio.zeroengine.data-toolkit' = '2.0.1'
     'com.zerogamestudio.zeroengine.formula' = '0.5.1'
     'com.zerogamestudio.zeroengine.tce' = '0.2.1'
@@ -117,7 +117,7 @@ $expectedPackages = [ordered]@{
 $editorUiRoot = Join-Path $RepoRoot 'com.zerogamestudio.zeroengine.editor-ui'
 $editorUiPackage = Read-Json (Join-Path $editorUiRoot 'package.json')
 Assert-Contract ($editorUiPackage.name -eq 'com.zerogamestudio.zeroengine.editor-ui') 'Unexpected editor-ui package name.'
-Assert-Contract ($editorUiPackage.version -eq '1.1.1') 'editor-ui must be version 1.1.1.'
+Assert-Contract ($editorUiPackage.version -eq '1.2.0') 'editor-ui must be version 1.2.0.'
 Assert-Contract ($editorUiPackage.unity -eq '2022.3') 'editor-ui must target Unity 2022.3.'
 Assert-Contract ($null -eq $editorUiPackage.dependencies -or @($editorUiPackage.dependencies.psobject.Properties).Count -eq 0) 'editor-ui production package must not declare dependencies.'
 
@@ -150,7 +150,7 @@ $asmdefs = [ordered]@{
 
 $expectedEditorUiDependencies = @{
     'com.zerogamestudio.zeroengine' = '1.1.1'
-    'com.zerogamestudio.zeroengine.dashboard' = '1.1.1'
+    'com.zerogamestudio.zeroengine.dashboard' = '1.2.0'
     'com.zerogamestudio.zeroengine.formula' = '1.1.1'
 }
 
