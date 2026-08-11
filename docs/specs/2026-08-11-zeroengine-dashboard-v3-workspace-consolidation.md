@@ -1,12 +1,13 @@
 # ZeroEngine Dashboard V3：可读工作区与 POB 面板归并
 
-- 状态：Implemented
+- 状态：Closed
 - 最后更新：2026-08-11
 - ZeroEngine 基线：`main@bbc45849a934f63e0068cf32022c8dd33b79cf9a`；POB 当前消费实现 `7cc164764c55b70792a4625fe0bb795001e851be`
 - POB 基线：Dashboard rollout `/main cs:16813`；检查时工作区 `/main cs:16819`，远端 `cs:16820-16821` 与 Dashboard 无路径重叠
 - 设计批准：Approved；用户于 2026-08-11 要求“审一下修订好后开干”
 - 执行授权：Authorized；范围为本 Spec 的本地实现与验证，来源同上
 - 终端操作授权：Authorized；用户于 2026-08-11 回复“授权继续”，范围限定为提交、推送、创建并完成 ZeroEngine PR，随后将 POB 19 个业务包统一 pin 到该 canonical merge commit 并精确 Plastic checkin；不得纳入其他 pending
+- 关闭授权：Authorized；用户于 2026-08-11 回复“授权继续”，范围限定为通过独立 closeout PR 持久化本 Spec 的最终关闭证据并清理本任务 Git 资源；当 required checks 因 `docs/specs/**` 未命中 PR 路径过滤而阻塞后，用户再次授权仅在 `.github/workflows/tests.yml` 的 `pull_request.paths` 增加该路径，不改变 push 触发、测试 job、保护规则或 POB
 
 ## 结论
 
@@ -269,8 +270,10 @@ Dashboard 右上角提供统一“帮助”入口；工具行和工作区面板�
 - ZeroEngine 静态门通过：Dashboard descriptors=8；Editor UI descriptors=28、coverage=30、modules=28。editor-ui 六个隔离 lane 全部通过；Dashboard `dashboard-only` 68 个测试中 67 passed、1 ignored，`dashboard-with-modules` 165/165 passed。
 - Dashboard 默认矩阵的非必需 `modules-only` 广域 lane 另有 1 个既有 Data Toolkit 测试在 `-nographics` 下因无图形设备失败（719 passed、1 failed、2 skipped）；失败不经过 Dashboard/editor-ui 改动路径，本次未扩 scope 修改该模块。
 - POB 本地 3.2.0 过渡态的 provider/route 两条精确 EditMode 测试各 1/1 passed；恢复旧 Git pin 后 19 包同 commit 合同测试 1/1 passed，最终 Console 0 error。旧菜单实测将同一 Dashboard 定位到运行概览，不产生第二业务窗口。
-- POB `manifest.json`、`packages-lock.json`、`EditorSettings.asset`、`LevelConfig.asset`、`EndlessBuildSettings.asset` 均与验证前 SHA-256 基线一致；manifest/lock 无本任务 `file:`。Plastic 对内容未变的 `manifest.json` 仍显示 `CH ... False` 元数据标记，本任务未越权执行 undo/checkin。
-- PR、push、canonical 发布和 Plastic checkin 尚未执行；用户已授权按既定精确范围完成上述终端操作，状态在提交、发布、POB pin、验证和 Plastic checkin 全部落地前保持 Implemented。
+- ZeroEngine 实现已通过 PR #39 合并到 canonical main：merge commit `6f9ee5d3258a4eaf53fdffbd273a3e27e08482da`，tree `a81014fc5aead5fa6fd6d68384b6e803e2d925df`。五条必需 Unity CI 全绿；同提交上一条与本功能无关的 Toast 时序 lane 重跑后通过，未为其改代码。
+- POB 19 个业务包已统一 pin 到上述 canonical merge commit，`manifest.json` 与 `packages-lock.json` 成对落地且无业务 `file:`，独立 unity-mcp-control pin 未改变。最终三条精确 EditMode 验证 3/3 passed，Console 0 error。
+- POB 生产配置保持不变：`EditorSettings.asset` SHA-256 `ee88f9bf514d391131f32928955607a1f1f3b7b7f5d0d36c477bdb2bda184b33`，`LevelConfig.asset` `5f7647450579e8724deea0a0c616e15be09295a4f3d601052145a2c91fc7f68c`，`EndlessBuildSettings.asset` `d5921ae3c2ebd88c11a62948d13e069e2612f820bd5212abb6930abda49e4326`。
+- POB 精确提交为 Plastic `cs:16824`；changeset 实际仅含本任务 10 个目标文件，其他 pending 未纳入。结束时本任务 workspace task/claims 均为 0，Unity ownership 已释放，10 个目标路径 pending 为 0。
 
 ## 自审记录
 
@@ -282,3 +285,11 @@ Dashboard 右上角提供统一“帮助”入口；工具行和工作区面板�
 - 验证：自动几何/生命周期门覆盖结构，可见路线覆盖真实 Unity 排版；截图不替代行为测试。
 
 终审修订补齐四个实现风险：多 panel provider factory、仅 panel 模块的独立可见性、旧窗口延迟转发，以及 canonical 未发布前的 version-define 双基线编译。修订后源码对照自审 Critical=0、Important=0。用户已批准设计、本地实现与验证，并于 2026-08-11 授权按既定精确范围完成 PR、push、canonical 发布和 POB Plastic checkin。
+
+## 关闭记录
+
+- ZeroEngine：PR #39 已合并；canonical merge commit 与 tree 分别为 `6f9ee5d3258a4eaf53fdffbd273a3e27e08482da`、`a81014fc5aead5fa6fd6d68384b6e803e2d925df`。
+- POB：Plastic `cs:16824` 已精确提交 `Packages/manifest.json`、`Packages/packages-lock.json`、`POB.Editor.asmdef`、`AddressableDebugWindow.cs`、`ZeroEngineDashboardModule.json`、`POB.EditorUiCoverage.Tests.Editor.asmdef`、`POBEditorUiRouteCoverage.json`、`POBEditorUiRouteCoverageTests.cs`、`POBDashboardPanelProvider.cs` 及其 `.meta`，共 10 个文件。
+- 验收：PR 必需检查通过；POB 三条目标测试 3/3 passed、Console 0 error、生产配置哈希不变、19 个业务 pin 一致且无 `file:`。内部 Editor 工具的可见路线与确定性自动测试已覆盖全部验收项，因此独立人工验收与 acceptance card 均为 N/A。
+- 交接：POB AfterCheckin 服务 CI 已按项目 helper 异步触发，不是同步关闭门；本任务未等待其服务端结果。closeout PR 已获批在 `pull_request.paths` 增加 `docs/specs/**`，让 Spec 变更通过既有真实 required checks，未改变测试内容或保护规则。无发布、迁移或回滚待办。
+- 清洁度：POB 本任务 task/claims/Unity ownership 已释放，目标 pending 为 0；本 closeout 不触碰 POB。关闭 PR 合并后，本任务 Git 分支与隔离工作树必须清理。
