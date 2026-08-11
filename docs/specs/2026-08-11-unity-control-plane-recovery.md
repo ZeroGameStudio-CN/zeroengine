@@ -5,7 +5,7 @@
 - 最后更新：2026-08-11
 - 检查基线：ZeroEngine `8df99c6c`；MCP fork `4a29cdf0`
 - 设计批准：用户要求“继续下一轮，做到毕业为止”
-- 执行授权：Authorized；覆盖本 spec 的实现、测试、正常 PR/合并、双机安装、POB 精确 pin/checkin 与归档
+- 执行授权：Authorized；覆盖本 spec 的实现、测试、正常 PR/合并、双机安装、POB 精确 pin/checkin 与关闭
 
 ## 目标与非目标
 
@@ -57,7 +57,7 @@
 3. Supervisor 接入 caller command id 和 bounded recovery；兼容旧插件 fail closed。
 4. 更新两个全局 skills，完成 current-machine 与 M5 跨机安装。
 5. 正常合并 fork 与 ZeroEngine PR；双机安装 Supervisor；POB 精确更新 MCP pin/lock。
-6. 在合成项目与 POB 定向菜单/只读命令上验证断线恢复、无重复执行、最终 tasks/claims/queue/unknown 为零，再归档。
+6. 在合成项目与 POB 定向菜单/只读命令上验证断线恢复、无重复执行、最终 tasks/claims/queue/unknown 为零，再关闭 spec。
 
 ## 验收标准
 
