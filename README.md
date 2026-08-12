@@ -34,7 +34,6 @@ mixing in game-specific content.
 | `com.zerogamestudio.zeroengine.persistence` | Save and persistence infrastructure. |
 | `com.zerogamestudio.zeroengine.ui` | Runtime UI framework and toast notification systems. |
 | `com.zerogamestudio.analytics` | Self-hostable analytics and bug feedback SDK. |
-| `com.zerogamestudio.unity-mcp-control` | Editor-only control companion bundled with the Unity MCP Supervisor CLI. |
 
 There are also packages for AI, audio, combat, economy, input, localization,
 network, RPG, social, world, and editor dashboard systems.
@@ -84,8 +83,9 @@ com.zerogamestudio.zeroengine.<module>/
 Not every package has every folder; small runtime-only packages stay minimal.
 
 Repository tooling that is not a general runtime package lives under `Tools/`.
-`Tools/unity-mcp-supervisor` contains the `umcp` CLI and its independently
-installable Editor-only companion package.
+`Tools/unity-workspace-scheduler` contains the independent `unity-scheduler`
+control plane for coordinating shared Unity workspaces. It is not a UPM package
+and has no Unity project integration.
 
 ## Testing
 

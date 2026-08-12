@@ -1,0 +1,32 @@
+[project]
+name = "unity-workspace-scheduler"
+version = "1.0.0"
+description = "Independent machine-local scheduler for shared Unity workspaces"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = []
+
+[project.scripts]
+unity-scheduler = "unity_workspace_scheduler.cli:main"
+
+[dependency-groups]
+dev = [
+  "pytest>=8,<9",
+  "pytest-cov>=5,<8",
+  "ruff==0.16.1",
+]
+
+[build-system]
+requires = ["setuptools>=75"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-ra"
+pythonpath = ["src"]
+
+[tool.ruff]
+line-length = 100
