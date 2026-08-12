@@ -1,6 +1,5 @@
 {
   "dependencies": {
-    "com.coplaydev.unity-mcp": "https://github.com/CoplayDev/unity-mcp.git?path=/MCPForUnity",
     "com.github.siccity.xnode": "https://github.com/siccity/xNode.git",
     "com.tuyoogame.yooasset": "2.3.18",
     "com.unity.ai.assistant": "1.0.0-pre.12",
