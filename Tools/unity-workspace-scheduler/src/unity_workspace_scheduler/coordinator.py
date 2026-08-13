@@ -17,7 +17,7 @@ from .errors import AuthorizationError, BusyError, StateError, UsageError
 from .state import StatePaths, canonical_workspace, open_database
 
 ACTIVE_TASK_STATES = ("active", "outcome_unknown")
-OPEN_CLAIM_STATES = ("queued", "active")
+OPEN_CLAIM_STATES = ("queued", "active", "parked")
 TERMINAL_TASK_STATES = ("completed", "failed", "expired")
 DEFAULT_TASK_TTL_SECONDS = 1800.0
 
@@ -94,6 +94,10 @@ class WorkspaceCoordinator:
             (now,),
         ).fetchall()
         for task in expired:
+            queued_freezes = connection.execute(
+                "SELECT id FROM claims WHERE task_id = ? AND kind = 'freeze' AND state = 'queued'",
+                (task["id"],),
+            ).fetchall()
             active_claim = connection.execute(
                 "SELECT 1 FROM claims WHERE task_id = ? AND state = 'active' LIMIT 1",
                 (task["id"],),
@@ -102,6 +106,9 @@ class WorkspaceCoordinator:
                 "UPDATE claims SET state = 'cancelled', released_at = ? "
                 "WHERE task_id = ? AND state = 'queued'",
                 (now, task["id"]),
+            )
+            WorkspaceCoordinator._resume_parked_for_freezes(
+                connection, [row["id"] for row in queued_freezes]
             )
             if active_claim is not None:
                 connection.execute(
@@ -112,6 +119,16 @@ class WorkspaceCoordinator:
                     (now, task["id"]),
                 )
             else:
+                connection.execute(
+                    "UPDATE claims SET state = 'cancelled', released_at = ? "
+                    "WHERE task_id = ? AND state = 'parked'",
+                    (now, task["id"]),
+                )
+                connection.execute(
+                    "DELETE FROM claim_scopes WHERE scope_type = 'parked_for' "
+                    "AND claim_id IN (SELECT id FROM claims WHERE task_id = ?)",
+                    (task["id"],),
+                )
                 connection.execute(
                     "UPDATE tasks SET state = 'expired', finished_at = ?, "
                     "result = 'expired' WHERE id = ?",
@@ -129,6 +146,65 @@ class WorkspaceCoordinator:
         return {
             "write": tuple(row["value"] for row in rows if row["scope_type"] == "write"),
             "resource": tuple(row["value"] for row in rows if row["scope_type"] == "resource"),
+            "parked_for": tuple(row["value"] for row in rows if row["scope_type"] == "parked_for"),
+        }
+
+    @staticmethod
+    def _resume_parked_for_freezes(
+        connection: sqlite3.Connection, freeze_ids: Sequence[str]
+    ) -> None:
+        for freeze_id in freeze_ids:
+            parked = connection.execute(
+                "SELECT claims.id FROM claims "
+                "JOIN claim_scopes ON claim_scopes.claim_id = claims.id "
+                "WHERE claims.state = 'parked' "
+                "AND claim_scopes.scope_type = 'parked_for' "
+                "AND claim_scopes.value = ?",
+                (freeze_id,),
+            ).fetchall()
+            claim_ids = [row["id"] for row in parked]
+            if not claim_ids:
+                continue
+            placeholders = ", ".join("?" for _ in claim_ids)
+            connection.execute(
+                f"UPDATE claims SET state = 'queued', granted_at = NULL "
+                f"WHERE id IN ({placeholders}) AND state = 'parked'",
+                claim_ids,
+            )
+            connection.execute(
+                f"DELETE FROM claim_scopes WHERE scope_type = 'parked_for' "
+                f"AND claim_id IN ({placeholders})",
+                claim_ids,
+            )
+
+    @staticmethod
+    def _task_drain_request(
+        connection: sqlite3.Connection, workspace_id: str, task_id: str
+    ) -> dict[str, Any] | None:
+        freeze = connection.execute(
+            "SELECT id, queue_order FROM claims WHERE workspace_id = ? "
+            "AND task_id != ? AND kind = 'freeze' AND state = 'queued' "
+            "ORDER BY queue_order LIMIT 1",
+            (workspace_id, task_id),
+        ).fetchone()
+        if freeze is None:
+            return None
+        resource_claims = connection.execute(
+            "SELECT DISTINCT claims.id FROM claims "
+            "JOIN claim_scopes ON claim_scopes.claim_id = claims.id "
+            "WHERE claims.workspace_id = ? AND claims.task_id = ? "
+            "AND claims.state = 'active' AND claim_scopes.scope_type = 'resource'",
+            (workspace_id, task_id),
+        ).fetchall()
+        freeze_claim = connection.execute(
+            "SELECT 1 FROM claims WHERE workspace_id = ? AND task_id = ? "
+            "AND state = 'active' AND kind = 'freeze' LIMIT 1",
+            (workspace_id, task_id),
+        ).fetchone()
+        return {
+            "freeze_id": freeze["id"],
+            "queue_order": freeze["queue_order"],
+            "park_ready": not resource_claims and freeze_claim is None,
         }
 
     @staticmethod
@@ -298,6 +374,7 @@ class WorkspaceCoordinator:
             "queue_order": claim["queue_order"],
             "writes": list(scopes["write"]),
             "resources": list(scopes["resource"]),
+            "parked_for": scopes["parked_for"][0] if scopes["parked_for"] else None,
             "created_at": claim["created_at"],
             "granted_at": claim["granted_at"],
         }
@@ -341,7 +418,7 @@ class WorkspaceCoordinator:
             ).fetchone()
             open_claim = connection.execute(
                 "SELECT 1 FROM claims WHERE workspace_id = ? "
-                "AND state IN ('queued', 'active') LIMIT 1",
+                "AND state IN ('queued', 'active', 'parked') LIMIT 1",
                 (registered["id"],),
             ).fetchone()
             if open_task is not None or open_claim is not None:
@@ -362,7 +439,7 @@ class WorkspaceCoordinator:
                 ).fetchone()["count"]
                 open_claims = connection.execute(
                     "SELECT COUNT(*) AS count FROM claims WHERE workspace_id = ? "
-                    "AND state IN ('queued', 'active')",
+                    "AND state IN ('queued', 'active', 'parked')",
                     (row["id"],),
                 ).fetchone()["count"]
                 values.append(
@@ -389,10 +466,17 @@ class WorkspaceCoordinator:
             ).fetchall()
             claims = connection.execute(
                 "SELECT * FROM claims WHERE workspace_id = ? "
-                "AND state IN ('queued', 'active') ORDER BY queue_order",
+                "AND state IN ('queued', 'active', 'parked') ORDER BY queue_order",
                 (registered["id"],),
             ).fetchall()
             blocked = any(task["state"] == "outcome_unknown" for task in tasks)
+            public_tasks = []
+            for task in tasks:
+                public_task = self._public_task(task)
+                drain = self._task_drain_request(connection, registered["id"], task["id"])
+                if drain is not None:
+                    public_task["drain_requested"] = drain
+                public_tasks.append(public_task)
             return {
                 "schema_version": 1,
                 "coordination_mode": "required",
@@ -404,7 +488,7 @@ class WorkspaceCoordinator:
                     "registered_at": registered["registered_at"],
                     "epoch": registered["epoch"],
                 },
-                "tasks": [self._public_task(task) for task in tasks],
+                "tasks": public_tasks,
                 "claims": [self._public_claim(connection, claim) for claim in claims],
             }
 
@@ -478,7 +562,11 @@ class WorkspaceCoordinator:
                 "SELECT * FROM tasks WHERE id = ?", (task["id"],)
             ).fetchone()
             assert updated is not None
-            return self._public_task(updated)
+            result = self._public_task(updated)
+            drain = self._task_drain_request(connection, registered["id"], task["id"])
+            if drain is not None:
+                result["drain_requested"] = drain
+            return result
 
     def release_task(
         self,
@@ -496,19 +584,34 @@ class WorkspaceCoordinator:
             self._maintain(connection)
             registered = self._workspace(connection, root)
             task = self._authenticate_task(connection, registered["id"], token)
+            open_freezes = connection.execute(
+                "SELECT id, state FROM claims WHERE task_id = ? AND kind = 'freeze' "
+                "AND state IN ('queued', 'active')",
+                (task["id"],),
+            ).fetchall()
             if result == "outcome-unknown":
                 connection.execute(
                     "UPDATE claims SET state = 'cancelled', released_at = ? "
                     "WHERE task_id = ? AND state = 'queued'",
                     (now, task["id"]),
                 )
+                self._resume_parked_for_freezes(
+                    connection,
+                    [row["id"] for row in open_freezes if row["state"] == "queued"],
+                )
                 task_state = "outcome_unknown"
             else:
                 connection.execute(
                     "UPDATE claims SET state = 'released', released_at = ? "
-                    "WHERE task_id = ? AND state IN ('queued', 'active')",
+                    "WHERE task_id = ? AND state IN ('queued', 'active', 'parked')",
                     (now, task["id"]),
                 )
+                connection.execute(
+                    "DELETE FROM claim_scopes WHERE scope_type = 'parked_for' "
+                    "AND claim_id IN (SELECT id FROM claims WHERE task_id = ?)",
+                    (task["id"],),
+                )
+                self._resume_parked_for_freezes(connection, [row["id"] for row in open_freezes])
                 task_state = result
             connection.execute(
                 "UPDATE tasks SET state = ?, finished_at = ?, result = ?, note = ? WHERE id = ?",
@@ -549,6 +652,15 @@ class WorkspaceCoordinator:
             if self._unknown_exists(connection, registered["id"]):
                 raise BusyError("Workspace is blocked by an unknown task outcome.")
             task = self._authenticate_task(connection, registered["id"], token)
+            parked = connection.execute(
+                "SELECT id FROM claims WHERE task_id = ? AND state = 'parked' LIMIT 1",
+                (task["id"],),
+            ).fetchone()
+            if parked is not None:
+                raise BusyError(
+                    "Task claims are parked for workspace maintenance.",
+                    details={"reason": "task-parked", "claim_id": parked["id"]},
+                )
             order = connection.execute(
                 "SELECT COALESCE(MAX(queue_order), 0) + 1 AS next_order FROM claims"
             ).fetchone()["next_order"]
@@ -606,7 +718,10 @@ class WorkspaceCoordinator:
                     "WHERE id = ? AND state = 'queued'",
                     (time.time(), claim_id),
                 )
+                if freeze:
+                    self._resume_parked_for_freezes(connection, (claim_id,))
                 self._touch(connection, registered["id"])
+                self._schedule_workspace(connection, registered["id"], time.time())
                 claim = connection.execute(
                     "SELECT * FROM claims WHERE id = ?", (claim_id,)
                 ).fetchone()
@@ -615,6 +730,130 @@ class WorkspaceCoordinator:
         result["granted"] = False
         result["timed_out"] = True
         return result
+
+    def park_task(
+        self,
+        workspace: Path | str,
+        token: str,
+        *,
+        wait_seconds: float = 0.0,
+    ) -> dict[str, Any]:
+        root = canonical_workspace(workspace)
+        if wait_seconds < 0:
+            raise UsageError("Task park wait must not be negative.")
+        with self._transaction() as connection:
+            self._maintain(connection)
+            registered = self._workspace(connection, root)
+            task = self._authenticate_task(connection, registered["id"], token)
+            existing_parked = connection.execute(
+                "SELECT * FROM claims WHERE workspace_id = ? AND task_id = ? "
+                "AND state = 'parked' ORDER BY queue_order",
+                (registered["id"], task["id"]),
+            ).fetchall()
+            if existing_parked:
+                parked_for = {
+                    self._claim_scopes(connection, claim["id"])["parked_for"]
+                    for claim in existing_parked
+                }
+                if len(parked_for) != 1 or len(next(iter(parked_for))) != 1:
+                    raise StateError("Parked claims have inconsistent freeze ownership.")
+                freeze_id = next(iter(next(iter(parked_for))))
+                target_freeze = connection.execute(
+                    "SELECT * FROM claims WHERE id = ? AND workspace_id = ? "
+                    "AND kind = 'freeze' AND state IN ('queued', 'active')",
+                    (freeze_id, registered["id"]),
+                ).fetchone()
+                if target_freeze is None:
+                    raise StateError("Parked claims reference a closed freeze.")
+                parked_claims = existing_parked
+            else:
+                target_freeze = connection.execute(
+                    "SELECT * FROM claims WHERE workspace_id = ? AND task_id != ? "
+                    "AND kind = 'freeze' AND state = 'queued' ORDER BY queue_order LIMIT 1",
+                    (registered["id"], task["id"]),
+                ).fetchone()
+                if target_freeze is None:
+                    raise StateError(
+                        "No queued freeze is requesting this task to drain.",
+                        details={"reason": "freeze-drain-not-requested"},
+                    )
+                owned = connection.execute(
+                    "SELECT * FROM claims WHERE workspace_id = ? AND task_id = ? "
+                    "AND state IN ('queued', 'active') ORDER BY queue_order",
+                    (registered["id"], task["id"]),
+                ).fetchall()
+                if not owned:
+                    raise StateError(
+                        "Task has no open claims to park.",
+                        details={"reason": "task-claimless"},
+                    )
+                unsafe: list[dict[str, Any]] = []
+                for claim in owned:
+                    scopes = self._claim_scopes(connection, claim["id"])
+                    if claim["kind"] == "freeze" or scopes["resource"]:
+                        unsafe.append(
+                            {
+                                "claim_id": claim["id"],
+                                "kind": claim["kind"],
+                                "resources": list(scopes["resource"]),
+                            }
+                        )
+                if unsafe:
+                    raise BusyError(
+                        "Task still owns claims that cannot be parked safely.",
+                        details={"reason": "task-holds-unsafe-claims", "claims": unsafe},
+                    )
+                freeze_id = target_freeze["id"]
+                parked_claims = owned
+                claim_ids = [claim["id"] for claim in parked_claims]
+                placeholders = ", ".join("?" for _ in claim_ids)
+                connection.execute(
+                    f"UPDATE claims SET state = 'parked' WHERE id IN ({placeholders})",
+                    claim_ids,
+                )
+                connection.executemany(
+                    "INSERT INTO claim_scopes(claim_id, scope_type, value) "
+                    "VALUES(?, 'parked_for', ?)",
+                    ((claim_id, freeze_id) for claim_id in claim_ids),
+                )
+                self._touch(connection, registered["id"])
+                self._schedule_workspace(connection, registered["id"], time.time())
+            claim_ids = [claim["id"] for claim in parked_claims]
+
+        def result_payload(*, timed_out: bool = False) -> dict[str, Any]:
+            with self._transaction() as connection:
+                self._maintain(connection)
+                registered = self._workspace(connection, root)
+                self._authenticate_task(connection, registered["id"], token)
+                placeholders = ", ".join("?" for _ in claim_ids)
+                claims = connection.execute(
+                    f"SELECT * FROM claims WHERE id IN ({placeholders}) ORDER BY queue_order",
+                    claim_ids,
+                ).fetchall()
+                states = {claim["id"]: claim["state"] for claim in claims}
+                resumed = len(claims) == len(claim_ids) and all(
+                    state == "active" for state in states.values()
+                )
+                return {
+                    "task_id": task["id"],
+                    "freeze_id": freeze_id,
+                    "claim_ids": claim_ids,
+                    "states": states,
+                    "parked": not resumed,
+                    "resumed": resumed,
+                    "timed_out": timed_out,
+                }
+
+        result = result_payload()
+        if wait_seconds == 0 or result["resumed"]:
+            return result
+        deadline = time.monotonic() + wait_seconds
+        while time.monotonic() < deadline:
+            time.sleep(min(0.1, max(0.0, deadline - time.monotonic())))
+            result = result_payload()
+            if result["resumed"]:
+                return result
+        return result_payload(timed_out=True)
 
     def release_claim(self, workspace: Path | str, token: str, claim_id: str) -> dict[str, Any]:
         root = canonical_workspace(workspace)
@@ -636,6 +875,13 @@ class WorkspaceCoordinator:
                 "UPDATE claims SET state = ?, released_at = ? WHERE id = ?",
                 (next_state, now, claim_id),
             )
+            if claim["state"] == "parked":
+                connection.execute(
+                    "DELETE FROM claim_scopes WHERE claim_id = ? AND scope_type = 'parked_for'",
+                    (claim_id,),
+                )
+            if claim["kind"] == "freeze":
+                self._resume_parked_for_freezes(connection, (claim_id,))
             self._touch(connection, registered["id"])
             self._schedule_workspace(connection, registered["id"], now)
             updated = connection.execute(
@@ -660,6 +906,12 @@ class WorkspaceCoordinator:
             self._maintain(connection)
             registered = self._workspace(connection, root)
             task = self._authenticate_task(connection, registered["id"], token)
+            drain = self._task_drain_request(connection, registered["id"], task["id"])
+            if drain is not None and drain["park_ready"]:
+                raise BusyError(
+                    "Workspace freeze is waiting for this task to park its claims.",
+                    details={"reason": "freeze-drain-requested", **drain},
+                )
             claims = connection.execute(
                 "SELECT * FROM claims WHERE workspace_id = ? AND task_id = ? AND state = 'active'",
                 (registered["id"], task["id"]),
@@ -721,11 +973,22 @@ class WorkspaceCoordinator:
             ).fetchone()
             if task is None or task["state"] != "outcome_unknown":
                 raise StateError("Task is not waiting for unknown-outcome recovery.")
+            open_freezes = connection.execute(
+                "SELECT id FROM claims WHERE task_id = ? AND kind = 'freeze' "
+                "AND state IN ('queued', 'active')",
+                (task_id,),
+            ).fetchall()
             connection.execute(
                 "UPDATE claims SET state = 'released', released_at = ? "
-                "WHERE task_id = ? AND state IN ('queued', 'active')",
+                "WHERE task_id = ? AND state IN ('queued', 'active', 'parked')",
                 (now, task_id),
             )
+            connection.execute(
+                "DELETE FROM claim_scopes WHERE scope_type = 'parked_for' "
+                "AND claim_id IN (SELECT id FROM claims WHERE task_id = ?)",
+                (task_id,),
+            )
+            self._resume_parked_for_freezes(connection, [row["id"] for row in open_freezes])
             connection.execute(
                 "UPDATE tasks SET state = ?, result = ?, finished_at = ?, note = ? WHERE id = ?",
                 (resolution, f"recovered-{resolution}", now, evidence.strip(), task_id),

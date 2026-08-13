@@ -112,6 +112,74 @@ def test_cli_reports_unregistered_workspace_without_traceback(tmp_path: Path, ca
     assert payload["code"] == "workspace-state-invalid"
 
 
+def test_cli_task_park_drains_and_automatically_restores_claims(tmp_path: Path, capsys) -> None:
+    state = tmp_path / "state"
+    workspace = tmp_path / "workspace"
+    owner_token = tmp_path / "owner.token"
+    freeze_token = tmp_path / "freeze.token"
+    workspace.mkdir()
+
+    def invoke(*arguments: str) -> dict[str, object]:
+        assert run(["--state-dir", str(state), *arguments]) == 0
+        return read_output(capsys)
+
+    invoke("workspace", "register", "--workspace", str(workspace))
+    for token_file, owner in ((owner_token, "owner"), (freeze_token, "maintenance")):
+        invoke(
+            "task",
+            "start",
+            "--workspace",
+            str(workspace),
+            "--owner",
+            owner,
+            "--summary",
+            owner,
+            "--token-file",
+            str(token_file),
+        )
+    owned = invoke(
+        "claim",
+        "acquire",
+        "--workspace",
+        str(workspace),
+        "--write",
+        "Assets/Hero.prefab",
+        "--token-file",
+        str(owner_token),
+    )["result"]
+    freeze = invoke(
+        "freeze",
+        "acquire",
+        "--workspace",
+        str(workspace),
+        "--token-file",
+        str(freeze_token),
+    )["result"]
+    parked = invoke(
+        "task",
+        "park",
+        "--workspace",
+        str(workspace),
+        "--token-file",
+        str(owner_token),
+    )["result"]
+    assert parked["states"] == {owned["id"]: "parked"}
+
+    invoke(
+        "claim",
+        "release",
+        "--workspace",
+        str(workspace),
+        "--claim-id",
+        str(freeze["id"]),
+        "--token-file",
+        str(freeze_token),
+    )
+    status = invoke("workspace", "status", "--workspace", str(workspace))["result"]
+    restored = next(claim for claim in status["claims"] if claim["id"] == owned["id"])
+    assert restored["state"] == "active"
+
+
 def _subprocess_json(arguments: list[str], env: dict[str, str]) -> dict[str, object]:
     completed = subprocess.run(
         [sys.executable, "-m", "unity_workspace_scheduler", *arguments],
