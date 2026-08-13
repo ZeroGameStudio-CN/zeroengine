@@ -55,6 +55,8 @@ namespace ZGS.DataToolkit.Editor.Tests
             var uiText = new DataToolkitUiText(
                 dataTypes: "数据类型",
                 assets: "资产",
+                browse: "浏览数据",
+                inspector: "资产详情",
                 selectAssetPrompt: "从中栏选择一个数据资产。",
                 assetSummaryFormat: "{0} 类 / {1}{2} 项资产");
             var settings = new DataToolkitProjectSettings(
@@ -69,6 +71,8 @@ namespace ZGS.DataToolkit.Editor.Tests
             Assert.AreSame(uiText, settings.UiText);
             Assert.AreEqual("数据类型", settings.UiText.DataTypes);
             Assert.AreEqual("资产", settings.UiText.Assets);
+            Assert.AreEqual("浏览数据", settings.UiText.Browse);
+            Assert.AreEqual("资产详情", settings.UiText.Inspector);
             Assert.AreEqual("从中栏选择一个数据资产。", settings.UiText.SelectAssetPrompt);
             Assert.AreEqual("2 类 / 3+ 项资产", string.Format(settings.UiText.AssetSummaryFormat, 2, 3, "+"));
         }
@@ -100,6 +104,24 @@ namespace ZGS.DataToolkit.Editor.Tests
             Assert.AreEqual(new Vector2(1f, 2f), GetWindowField(reopenedWindow, "typeColumnScroll"));
             Assert.AreEqual(new Vector2(3f, 4f), GetWindowField(reopenedWindow, "assetColumnScroll"));
             Assert.AreEqual(new Vector2(5f, 6f), GetWindowField(reopenedWindow, "inspectorScroll"));
+        }
+
+        [Test]
+        public void CompactView_SwitchesToInspectorWhenAssetIsSelectedAndPersistsChoice()
+        {
+            CreateTestAsset(OriginalAssetPath);
+            var window = Track(DataToolkitWindow.Open(CreateProfile()));
+
+            InvokeWindowMethod(window, "SelectType", typeof(SelectedToolkitTestData));
+            InvokeWindowMethod(window, "SelectAssetByPath", OriginalAssetPath);
+
+            Assert.AreEqual(1, GetWindowField(window, "compactBodyView"));
+            Assert.AreEqual(1, EditorPrefs.GetInt(EditorPrefsPrefix + "_CompactView", -1));
+
+            InvokeWindowMethod(window, "SetCompactBodyView", 0);
+
+            Assert.AreEqual(0, GetWindowField(window, "compactBodyView"));
+            Assert.AreEqual(0, EditorPrefs.GetInt(EditorPrefsPrefix + "_CompactView", -1));
         }
 
         [Test]
@@ -270,6 +292,7 @@ namespace ZGS.DataToolkit.Editor.Tests
             EditorPrefs.DeleteKey(EditorPrefsPrefix + "_AssetScrollY");
             EditorPrefs.DeleteKey(EditorPrefsPrefix + "_InspectorScrollX");
             EditorPrefs.DeleteKey(EditorPrefsPrefix + "_InspectorScrollY");
+            EditorPrefs.DeleteKey(EditorPrefsPrefix + "_CompactView");
         }
 
         private static object InvokeWindowMethod(DataToolkitWindow window, string methodName, params object[] arguments)

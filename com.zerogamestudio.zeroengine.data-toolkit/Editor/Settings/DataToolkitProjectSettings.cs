@@ -86,7 +86,9 @@ namespace ZGS.DataToolkit.Editor
             string path = "Path",
             string size = "Size",
             string unknown = "(unknown)",
-            string assetSummaryFormat = "{0} types / {1}{2} assets")
+            string assetSummaryFormat = "{0} types / {1}{2} assets",
+            string browse = "Browse Data",
+            string inspector = "Asset Details")
         {
             Refresh = refresh;
             Diagnostics = diagnostics;
@@ -102,6 +104,8 @@ namespace ZGS.DataToolkit.Editor
             Size = size;
             Unknown = unknown;
             AssetSummaryFormat = assetSummaryFormat;
+            Browse = browse;
+            Inspector = inspector;
         }
 
         public string Refresh { get; }
@@ -118,5 +122,7 @@ namespace ZGS.DataToolkit.Editor
         public string Size { get; }
         public string Unknown { get; }
         public string AssetSummaryFormat { get; }
+        public string Browse { get; }
+        public string Inspector { get; }
     }
 }
