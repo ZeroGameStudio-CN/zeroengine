@@ -932,7 +932,10 @@ namespace ZeroEngine.Editor
                     DrawWorkspaceNavigation(modules);
                     EditorGUILayout.Space(EditorUiTokens.SpaceSm);
                 }
-                using (new EditorGUILayout.VerticalScope(GUILayout.ExpandWidth(true), GUILayout.ExpandHeight(true)))
+                float contentWidth = Mathf.Max(
+                    240f,
+                    position.width - EditorUiTokens.DashboardSidebarWidth - EditorUiTokens.SpaceSm - 16f);
+                using (new EditorGUILayout.VerticalScope(GUILayout.Width(contentWidth), GUILayout.ExpandHeight(true)))
                     DrawHomeContent(modules, primarySurfaces);
             }
         }
