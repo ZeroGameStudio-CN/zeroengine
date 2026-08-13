@@ -16,3 +16,5 @@ Version 1.3.0 adds the Editor-only tool action SPI used by Dashboard schema v2. 
 
 Version 1.4.0 adds `IEditorWorkspaceNavigator`, allowing typed action providers to request an in-place workspace panel without referencing the Dashboard package or opening another window.
 Workspace panels that need a canvas layout can also implement `IEditorWorkspaceFullWidthPanel`; form-style panels remain width-constrained by default.
+
+The 1.4.0 workspace contract also includes the typed `EditorWindowWorkspacePanel<TWindow>` adapter for reusing an IMGUI EditorWindow view inside a workspace. It creates only the active hidden view, supports optional explicit `EditorPrefs` state, and destroys the view when the panel deactivates.
