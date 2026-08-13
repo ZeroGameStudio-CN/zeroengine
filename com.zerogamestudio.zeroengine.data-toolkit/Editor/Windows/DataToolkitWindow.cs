@@ -1283,7 +1283,7 @@ namespace ZGS.DataToolkit.Editor
 
     }
 
-    public sealed class DataToolkitWorkspacePanel : IEditorWorkspacePanel
+    public sealed class DataToolkitWorkspacePanel : IEditorWorkspacePanel, IEditorWorkspaceFullWidthPanel
     {
         private readonly Func<DataToolkitProjectProfile> profileFactory;
         private DataToolkitWindow embeddedView;

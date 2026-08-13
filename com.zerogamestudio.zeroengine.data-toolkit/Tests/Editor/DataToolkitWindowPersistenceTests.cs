@@ -102,6 +102,7 @@ namespace ZGS.DataToolkit.Editor.Tests
             Assert.NotNull(panelType);
             Assert.IsTrue(panelType.IsPublic);
             Assert.IsTrue(panelType.GetInterfaces().Any(type => type.FullName == "ZeroEngine.EditorUI.IEditorWorkspacePanel"));
+            Assert.IsTrue(panelType.GetInterfaces().Any(type => type.FullName == "ZeroEngine.EditorUI.IEditorWorkspaceFullWidthPanel"));
             Assert.NotNull(panelType.GetConstructor(new[] { typeof(Func<DataToolkitProjectProfile>) }));
         }
 

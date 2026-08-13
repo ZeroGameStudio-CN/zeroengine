@@ -18,7 +18,7 @@ Dashboard adapters can reuse the complete Data Toolkit view without opening anot
 return new DataToolkitWorkspacePanel(ExampleDataToolkitRegistration.CreateProfile);
 ```
 
-The embedded panel shares the standalone window's inspectors and `EditorPrefs` state, including selected type/asset, searches, column widths, and scroll positions.
+The embedded panel fills the workspace canvas and shares the standalone window's inspectors and `EditorPrefs` state, including selected type/asset, searches, column widths, and scroll positions.
 
 ## Project Profile
 

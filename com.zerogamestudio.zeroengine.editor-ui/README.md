@@ -15,3 +15,4 @@ Version 1.2.0 adds measured inline/stacked action-row layout, a wide responsive 
 Version 1.3.0 adds the Editor-only tool action SPI used by Dashboard schema v2. Providers are discovered by stable attributes, create typed actions lazily, expose read-only availability state, and return explicit execution results without menu or reflection dependencies.
 
 Version 1.4.0 adds `IEditorWorkspaceNavigator`, allowing typed action providers to request an in-place workspace panel without referencing the Dashboard package or opening another window.
+Workspace panels that need a canvas layout can also implement `IEditorWorkspaceFullWidthPanel`; form-style panels remain width-constrained by default.

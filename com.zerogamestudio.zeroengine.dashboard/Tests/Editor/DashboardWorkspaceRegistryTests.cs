@@ -1,4 +1,5 @@
 using System;
+using System.Reflection;
 using NUnit.Framework;
 using UnityEngine;
 using ZeroEngine.Editor;
@@ -88,6 +89,18 @@ namespace ZeroEngine.Dashboard.Tests.Editor
         public void Dashboard_ImplementsTypedWorkspaceNavigation()
         {
             Assert.That(typeof(IEditorWorkspaceNavigator).IsAssignableFrom(typeof(ZeroEngineDashboard)), Is.True);
+        }
+
+        [Test]
+        public void FullWidthPanelMarker_SelectsUnconstrainedWorkspaceLayout()
+        {
+            MethodInfo method = typeof(ZeroEngineDashboard).GetMethod(
+                "UsesFullWidthWorkspaceLayout",
+                BindingFlags.Static | BindingFlags.NonPublic);
+
+            Assert.NotNull(method);
+            Assert.IsFalse((bool)method.Invoke(null, new object[] { new TestPanel() }));
+            Assert.IsTrue((bool)method.Invoke(null, new object[] { new FullWidthTestPanel() }));
         }
 
         [Test]
@@ -210,7 +223,7 @@ namespace ZeroEngine.Dashboard.Tests.Editor
             public IEditorWorkspacePanel CreatePanel(string panelId) => null;
         }
 
-        private sealed class TestPanel : IEditorWorkspacePanel
+        private class TestPanel : IEditorWorkspacePanel
         {
             public float RefreshInterval => 0f;
             public void Activate(EditorWorkspacePanelContext context) { }
@@ -218,6 +231,10 @@ namespace ZeroEngine.Dashboard.Tests.Editor
             public void Tick(EditorWorkspacePanelContext context, double timeSinceStartup) { }
             public void OnGUI(EditorWorkspacePanelContext context) { }
             public void Dispose() { }
+        }
+
+        private sealed class FullWidthTestPanel : TestPanel, IEditorWorkspaceFullWidthPanel
+        {
         }
     }
 }

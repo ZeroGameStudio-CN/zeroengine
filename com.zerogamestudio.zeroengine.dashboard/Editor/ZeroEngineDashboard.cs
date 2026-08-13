@@ -1079,14 +1079,23 @@ namespace ZeroEngine.Editor
 
             if (EnsureActiveWorkspacePanel(descriptor))
             {
-                _activePanelContext.AvailableWidth = Mathf.Min(EditorUiTokens.FormContentMaxWidth, Mathf.Max(240f, position.width -
+                float availableWidth = Mathf.Max(240f, position.width -
                     (EditorUiGUILayout.ResponsiveMode(position.width) == EditorUiResponsiveMode.Compact
                         ? 40f
-                        : EditorUiTokens.DashboardSidebarWidth + 72f)));
+                        : EditorUiTokens.DashboardSidebarWidth + 72f));
+                bool fullWidth = UsesFullWidthWorkspaceLayout(_activePanel);
+                _activePanelContext.AvailableWidth = fullWidth
+                    ? availableWidth
+                    : Mathf.Min(EditorUiTokens.FormContentMaxWidth, availableWidth);
                 try
                 {
-                    using (EditorUiGUILayout.ConstrainedContent())
+                    if (fullWidth)
                         _activePanel.OnGUI(_activePanelContext);
+                    else
+                    {
+                        using (EditorUiGUILayout.ConstrainedContent())
+                            _activePanel.OnGUI(_activePanelContext);
+                    }
                 }
                 catch (Exception exception)
                 {
@@ -1094,6 +1103,11 @@ namespace ZeroEngine.Editor
                 }
             }
             EditorGUILayout.EndScrollView();
+        }
+
+        private static bool UsesFullWidthWorkspaceLayout(IEditorWorkspacePanel panel)
+        {
+            return panel is IEditorWorkspaceFullWidthPanel;
         }
 
         private bool EnsureActiveWorkspacePanel(DashboardPanel descriptor)

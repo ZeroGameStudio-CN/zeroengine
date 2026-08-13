@@ -49,6 +49,10 @@ namespace ZeroEngine.EditorUI
         void OnGUI(EditorWorkspacePanelContext context);
     }
 
+    public interface IEditorWorkspaceFullWidthPanel
+    {
+    }
+
     public sealed class EditorWorkspaceAction
     {
         public EditorWorkspaceAction(
