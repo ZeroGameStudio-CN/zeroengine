@@ -189,22 +189,25 @@ class WorkspaceCoordinator:
         ).fetchone()
         if freeze is None:
             return None
-        resource_claims = connection.execute(
-            "SELECT DISTINCT claims.id FROM claims "
-            "JOIN claim_scopes ON claim_scopes.claim_id = claims.id "
-            "WHERE claims.workspace_id = ? AND claims.task_id = ? "
-            "AND claims.state = 'active' AND claim_scopes.scope_type = 'resource'",
-            (workspace_id, task_id),
-        ).fetchall()
-        freeze_claim = connection.execute(
+        blocking_claim = connection.execute(
             "SELECT 1 FROM claims WHERE workspace_id = ? AND task_id = ? "
-            "AND state = 'active' AND kind = 'freeze' LIMIT 1",
+            "AND (state = 'active' OR (state = 'queued' AND queue_order < ?)) LIMIT 1",
+            (workspace_id, task_id, freeze["queue_order"]),
+        ).fetchone()
+        if blocking_claim is None:
+            return None
+        unsafe_claim = connection.execute(
+            "SELECT 1 FROM claims "
+            "LEFT JOIN claim_scopes ON claim_scopes.claim_id = claims.id "
+            "WHERE claims.workspace_id = ? AND claims.task_id = ? "
+            "AND claims.state IN ('queued', 'active') "
+            "AND (claims.kind = 'freeze' OR claim_scopes.scope_type = 'resource') LIMIT 1",
             (workspace_id, task_id),
         ).fetchone()
         return {
             "freeze_id": freeze["id"],
             "queue_order": freeze["queue_order"],
-            "park_ready": not resource_claims and freeze_claim is None,
+            "park_ready": unsafe_claim is None,
         }
 
     @staticmethod
@@ -767,16 +770,17 @@ class WorkspaceCoordinator:
                     raise StateError("Parked claims reference a closed freeze.")
                 parked_claims = existing_parked
             else:
-                target_freeze = connection.execute(
-                    "SELECT * FROM claims WHERE workspace_id = ? AND task_id != ? "
-                    "AND kind = 'freeze' AND state = 'queued' ORDER BY queue_order LIMIT 1",
-                    (registered["id"], task["id"]),
-                ).fetchone()
-                if target_freeze is None:
+                drain = self._task_drain_request(connection, registered["id"], task["id"])
+                if drain is None:
                     raise StateError(
                         "No queued freeze is requesting this task to drain.",
                         details={"reason": "freeze-drain-not-requested"},
                     )
+                target_freeze = connection.execute(
+                    "SELECT * FROM claims WHERE id = ?",
+                    (drain["freeze_id"],),
+                ).fetchone()
+                assert target_freeze is not None
                 owned = connection.execute(
                     "SELECT * FROM claims WHERE workspace_id = ? AND task_id = ? "
                     "AND state IN ('queued', 'active') ORDER BY queue_order",
@@ -907,7 +911,7 @@ class WorkspaceCoordinator:
             registered = self._workspace(connection, root)
             task = self._authenticate_task(connection, registered["id"], token)
             drain = self._task_drain_request(connection, registered["id"], task["id"])
-            if drain is not None and drain["park_ready"]:
+            if drain is not None:
                 raise BusyError(
                     "Workspace freeze is waiting for this task to park its claims.",
                     details={"reason": "freeze-drain-requested", **drain},

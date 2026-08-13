@@ -141,6 +141,44 @@ def test_park_refuses_unsafe_claims_and_requires_a_freeze(
         scheduler.park_task(workspace, "not-the-owner-token")
 
 
+def test_drain_targets_only_blockers_and_reports_queued_unsafe_claims(
+    scheduler: WorkspaceCoordinator, workspace: Path
+) -> None:
+    _, owner_token = start(scheduler, workspace, "owner")
+    _, resource_blocker_token = start(scheduler, workspace, "resource-blocker")
+    _, maintenance_token = start(scheduler, workspace, "maintenance")
+    _, claimless_token = start(scheduler, workspace, "claimless")
+    _, later_token = start(scheduler, workspace, "later")
+
+    scheduler.acquire_claim(workspace, owner_token, writes=("Assets/Hero.prefab",))
+    scheduler.acquire_claim(workspace, resource_blocker_token, resources=("exclusive-tool",))
+    queued_resource = scheduler.acquire_claim(workspace, owner_token, resources=("exclusive-tool",))
+    freeze = scheduler.acquire_claim(workspace, maintenance_token, freeze=True)
+    scheduler.acquire_claim(workspace, later_token, writes=("Assets/Hero.prefab",))
+
+    drain = scheduler.heartbeat(workspace, owner_token)["drain_requested"]
+    assert drain == {
+        "freeze_id": freeze["id"],
+        "queue_order": freeze["queue_order"],
+        "park_ready": False,
+    }
+    assert "drain_requested" not in scheduler.heartbeat(workspace, claimless_token)
+    assert "drain_requested" not in scheduler.heartbeat(workspace, later_token)
+
+    with pytest.raises(BusyError) as asserted:
+        scheduler.assert_claims(workspace, owner_token, writes=("Assets/Hero.prefab",))
+    assert asserted.value.details == {"reason": "freeze-drain-requested", **drain}
+    with pytest.raises(BusyError) as unsafe:
+        scheduler.park_task(workspace, owner_token)
+    assert unsafe.value.details["reason"] == "task-holds-unsafe-claims"
+
+    scheduler.release_claim(workspace, owner_token, str(queued_resource["id"]))
+    assert scheduler.heartbeat(workspace, owner_token)["drain_requested"]["park_ready"] is True
+    with pytest.raises(StateError) as non_blocker:
+        scheduler.park_task(workspace, later_token)
+    assert non_blocker.value.details["reason"] == "freeze-drain-not-requested"
+
+
 def test_park_wait_resumes_without_reacquiring_claims(
     scheduler: WorkspaceCoordinator, workspace: Path
 ) -> None:
