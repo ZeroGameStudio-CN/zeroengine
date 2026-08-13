@@ -9,6 +9,32 @@ using PackageManagerPackageInfo = UnityEditor.PackageManager.PackageInfo;
 
 namespace ZeroEngine.Editor.Dashboard
 {
+    internal static class DashboardCatalogSession
+    {
+        private static DashboardCatalog _catalog;
+
+        static DashboardCatalogSession()
+        {
+            UnityEditor.PackageManager.Events.registeredPackages += _ => Invalidate();
+        }
+
+        internal static bool TryGet(out DashboardCatalog catalog)
+        {
+            catalog = _catalog;
+            return catalog != null;
+        }
+
+        internal static void Store(DashboardCatalog catalog)
+        {
+            _catalog = catalog ?? throw new ArgumentNullException(nameof(catalog));
+        }
+
+        internal static void Invalidate()
+        {
+            _catalog = null;
+        }
+    }
+
     internal static class DashboardCatalogDiscovery
     {
         internal const string DescriptorFileName = "ZeroEngineDashboardModule.json";

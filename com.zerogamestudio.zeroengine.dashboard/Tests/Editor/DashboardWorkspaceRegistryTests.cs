@@ -92,6 +92,41 @@ namespace ZeroEngine.Dashboard.Tests.Editor
         }
 
         [Test]
+        public void Dashboard_OnEnable_QueuesColdCatalogDiscoveryInsteadOfRunningIt()
+        {
+            DashboardViewState originalState = DashboardViewStateStore.Load();
+            bool hadCachedCatalog = DashboardCatalogSession.TryGet(out DashboardCatalog originalCatalog);
+            ZeroEngineDashboard window = null;
+            try
+            {
+                DashboardCatalogSession.Invalidate();
+                window = ScriptableObject.CreateInstance<ZeroEngineDashboard>();
+
+                Assert.IsFalse(DashboardCatalogSession.TryGet(out _));
+                Assert.IsTrue(GetPrivateField<bool>(window, "_catalogLoading"));
+                Assert.IsTrue(GetPrivateField<bool>(window, "_catalogRefreshQueued"));
+                Assert.IsFalse(GetPrivateField<bool>(window, "_hasDrawnShell"));
+                Assert.AreSame(DashboardCatalog.Empty, GetPrivateField<DashboardCatalog>(window, "_catalog"));
+
+                typeof(ZeroEngineDashboard)
+                    .GetMethod("OnEditorUpdate", BindingFlags.Instance | BindingFlags.NonPublic)
+                    .Invoke(window, null);
+
+                Assert.IsFalse(DashboardCatalogSession.TryGet(out _), "Catalog discovery must wait until the shell has drawn.");
+            }
+            finally
+            {
+                if (window != null)
+                    UnityEngine.Object.DestroyImmediate(window);
+                DashboardViewStateStore.Save(originalState);
+                if (hadCachedCatalog)
+                    DashboardCatalogSession.Store(originalCatalog);
+                else
+                    DashboardCatalogSession.Invalidate();
+            }
+        }
+
+        [Test]
         public void FullWidthPanelMarker_SelectsUnconstrainedWorkspaceLayout()
         {
             MethodInfo method = typeof(ZeroEngineDashboard).GetMethod(
@@ -120,6 +155,11 @@ namespace ZeroEngine.Dashboard.Tests.Editor
                     ShowAdvanced = false,
                     ShowMaintenance = true,
                     SelectedPanelFullId = "pob.tools.data-manager/data-manager",
+                    WorkspacePanelOrder = new[]
+                    {
+                        "pob.tools.data-manager/data-manager",
+                        "pob.dashboard/runtime-overview"
+                    },
                     ModuleScroll = new Vector2(1f, 2f),
                     ContentScroll = new Vector2(3f, 4f),
                     SystemScroll = new Vector2(5f, 6f),
@@ -139,6 +179,11 @@ namespace ZeroEngine.Dashboard.Tests.Editor
                 Assert.That(state.ShowAdvanced, Is.False);
                 Assert.That(state.ShowMaintenance, Is.True);
                 Assert.That(state.SelectedPanelFullId, Is.EqualTo("pob.tools.data-manager/data-manager"));
+                Assert.That(state.WorkspacePanelOrder, Is.EqualTo(new[]
+                {
+                    "pob.tools.data-manager/data-manager",
+                    "pob.dashboard/runtime-overview"
+                }));
                 Assert.That(state.WorkspaceContentScroll, Is.EqualTo(new Vector2(9f, 10f)));
                 Assert.That(state.ContextScroll, Is.EqualTo(new Vector2(11f, 12f)));
             }
@@ -146,6 +191,48 @@ namespace ZeroEngine.Dashboard.Tests.Editor
             {
                 DashboardViewStateStore.Delete(prefix);
             }
+        }
+
+        [Test]
+        public void WorkspaceOrder_MoveAcrossModules_PreservesMissingIdsAndAppendsNewPanels()
+        {
+            string[] preferred =
+            {
+                "module.a/first",
+                "removed.module/old",
+                "module.b/second"
+            };
+            string[] available =
+            {
+                "module.a/first",
+                "module.b/second",
+                "module.c/new"
+            };
+
+            string[] reordered = DashboardWorkspaceOrder.Move(
+                preferred,
+                available,
+                "module.a/first",
+                "module.b/second",
+                before: false);
+
+            Assert.That(reordered, Is.EqualTo(new[]
+            {
+                "removed.module/old",
+                "module.b/second",
+                "module.a/first",
+                "module.c/new"
+            }));
+            Assert.That(
+                DashboardWorkspaceOrder.Visible(reordered, available),
+                Is.EqualTo(new[] { "module.b/second", "module.a/first", "module.c/new" }));
+        }
+
+        private static T GetPrivateField<T>(ZeroEngineDashboard window, string name)
+        {
+            FieldInfo field = typeof(ZeroEngineDashboard).GetField(name, BindingFlags.Instance | BindingFlags.NonPublic);
+            Assert.IsNotNull(field, "Dashboard field was not found: " + name);
+            return (T)field.GetValue(window);
         }
 
         private static DashboardCatalog Catalog(DashboardPanel panel)

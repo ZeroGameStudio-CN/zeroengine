@@ -24,6 +24,12 @@ namespace ZeroEngine.Editor
         internal const string CommonWorkflowsSubtitle = "高频、安全且适合直接进入的工作入口。";
         internal const string WorkspaceNavigation = "工作区";
         internal const string WorkspaceNavigationTooltip = "选择当前项目提供的内嵌工作区面板。";
+        internal const string LoadingCatalog = "正在载入工作台模块；窗口已可操作。";
+        internal const string LoadingPanel = "正在恢复上次面板…";
+        internal const string ReorderWorkspacePanels = "调整工作区顺序";
+        internal const string ReorderWorkspacePanelsTooltip = "拖动此处调整左侧面板顺序；关闭工作台后仍会保留。";
+        internal const string ResetOrder = "重置";
+        internal const string ResetOrderTooltip = "恢复描述符提供的默认面板顺序。";
         internal const string Scope = "范围";
         internal const string ScopeTooltip = "按通用模块或项目适配器范围筛选。";
         internal const string All = "全部";
