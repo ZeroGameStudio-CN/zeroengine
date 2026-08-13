@@ -32,9 +32,12 @@ unity-scheduler task release --workspace <root> --token-file <path> --result com
 
 Write paths are normalized inside the registered root; absolute paths outside it are rejected. Ancestor/descendant paths conflict, and an asset path conflicts with its `.meta` partner. Resource names are opaque workspace-local locks. Conflicting claims queue FIFO; non-conflicting claims can run together. A queued freeze is a fair barrier and becomes exclusive after earlier owners leave.
 
-An external queued freeze is also a cooperative drain request. Before its next project write, an
-owner's `claim assert` returns `workspace-busy` with `reason=freeze-drain-requested`. After the
-current operation reaches a known terminal state, the owner runs `task park`. The command
+An external queued freeze is also a cooperative drain request for tasks whose earlier claims block
+that freeze; claimless tasks and tasks with only later queued claims are not signalled. Before its
+next project write, a blocking owner's `claim assert` returns `workspace-busy` with
+`reason=freeze-drain-requested`. `park_ready=false` means the task must first release an open
+resource or freeze claim. After the current operation reaches a known terminal state, the owner
+runs `task park`. The command
 atomically parks that task's active or queued path-only claims and optionally waits for them to
 resume. Parking refuses resource claims, freeze claims, unknown tasks, and calls made without a
 queued external freeze. When the target freeze is released or cancelled, the same claim IDs and
