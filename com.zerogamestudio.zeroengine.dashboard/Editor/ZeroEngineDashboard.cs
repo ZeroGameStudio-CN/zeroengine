@@ -932,7 +932,8 @@ namespace ZeroEngine.Editor
                     DrawWorkspaceNavigation(modules);
                     EditorGUILayout.Space(EditorUiTokens.SpaceSm);
                 }
-                DrawHomeContent(modules, primarySurfaces);
+                using (new EditorGUILayout.VerticalScope(GUILayout.ExpandWidth(true), GUILayout.ExpandHeight(true)))
+                    DrawHomeContent(modules, primarySurfaces);
             }
         }
 
