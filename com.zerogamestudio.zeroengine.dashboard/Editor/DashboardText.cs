@@ -26,10 +26,17 @@ namespace ZeroEngine.Editor
         internal const string WorkspaceNavigationTooltip = "选择当前项目提供的内嵌工作区面板。";
         internal const string LoadingCatalog = "正在载入工作台模块；窗口已可操作。";
         internal const string LoadingPanel = "正在恢复上次面板…";
-        internal const string ReorderWorkspacePanels = "调整工作区顺序";
-        internal const string ReorderWorkspacePanelsTooltip = "拖动此处调整左侧面板顺序；关闭工作台后仍会保留。";
+        internal const string ReorderWorkspaceModules = "调整工作区分组顺序";
+        internal const string ReorderWorkspaceModulesTooltip = "拖动此处调整左侧模块分组顺序；关闭工作台后仍会保留。";
+        internal const string ReorderWorkspacePanels = "调整分组内面板顺序";
+        internal const string ReorderWorkspacePanelsTooltip = "拖动此处调整当前分组内的面板顺序；关闭工作台后仍会保留。";
+        internal const string ResizeWorkspaceNavigationTooltip = "拖动分隔线调整左侧工作区宽度；关闭工作台后仍会保留。";
+        internal const string ExpandAllGroups = "展";
+        internal const string ExpandAllGroupsTooltip = "展开当前工作区的全部分组。";
+        internal const string CollapseAllGroups = "收";
+        internal const string CollapseAllGroupsTooltip = "折叠当前工作区的全部分组。";
         internal const string ResetOrder = "重置";
-        internal const string ResetOrderTooltip = "恢复描述符提供的默认面板顺序。";
+        internal const string ResetOrderTooltip = "恢复描述符提供的默认分组和面板顺序；折叠状态保持不变。";
         internal const string Scope = "范围";
         internal const string ScopeTooltip = "按通用模块或项目适配器范围筛选。";
         internal const string All = "全部";
@@ -135,6 +142,13 @@ namespace ZeroEngine.Editor
         internal static string ContributedTools(int count) => "提供工具：" + count;
         internal static string ConnectedTools(int count) => "已连接 · " + count + " 个工具";
         internal static string ProjectScopeTooltip(string name) => "只显示 " + name + " 项目适配器。";
+        internal static string WorkspaceGroupTooltip(string description, bool searchActive)
+        {
+            string action = searchActive
+                ? "搜索期间匹配分组会临时展开；清空搜索后恢复原折叠状态。"
+                : "点击展开或折叠此分组；关闭工作台后仍会保留。";
+            return string.IsNullOrWhiteSpace(description) ? action : description + "\n" + action;
+        }
         internal static string HiddenMatches(int count, string actions) => "另有 " + count + " 个匹配项被筛选隐藏；请" + actions + "。";
         internal static string ActionDisabled(string name, string reason) => name + "：" + reason;
         internal static string EditModeOnly(string name) => name + " 仅在编辑模式可用。";

@@ -13,7 +13,12 @@ namespace ZeroEngine.Editor
     [EditorUiSurface]
     public sealed class ZeroEngineDashboard : EditorWindow, IEditorWorkspaceNavigator
     {
+        private const string WorkspaceModuleDragDataKey = "ZGS.Workbench.WorkspaceModule";
         private const string WorkspacePanelDragDataKey = "ZGS.Workbench.WorkspacePanel";
+        private const float WorkspaceSidebarMinWidth = 196f;
+        private const float WorkspaceSidebarMaxWidth = 360f;
+        private const float WorkspaceSidebarSplitterWidth = 6f;
+        private const float WorkspaceContentMinWidth = 420f;
 
         private static readonly GUIContent[] PageNames =
         {
@@ -45,8 +50,22 @@ namespace ZeroEngine.Editor
 
         private readonly Dictionary<string, DashboardDiagnostic> _runtimeDiagnostics =
             new Dictionary<string, DashboardDiagnostic>(StringComparer.Ordinal);
+        private readonly List<string> _workspaceModuleOrder = new List<string>();
         private readonly List<string> _workspacePanelOrder = new List<string>();
+        private readonly HashSet<string> _collapsedWorkspaceModules = new HashSet<string>(StringComparer.Ordinal);
+        private readonly Dictionary<string, WorkspacePanelView> _workspacePanelsById =
+            new Dictionary<string, WorkspacePanelView>(StringComparer.Ordinal);
+        private readonly Dictionary<string, WorkspacePanelView[]> _workspacePanelsByModule =
+            new Dictionary<string, WorkspacePanelView[]>(StringComparer.Ordinal);
+        private DashboardModule[] _orderedWorkspaceModules = Array.Empty<DashboardModule>();
         private WorkspacePanelView[] _orderedWorkspacePanels = Array.Empty<WorkspacePanelView>();
+        private DashboardModule[] _visibleWorkspaceModules = Array.Empty<DashboardModule>();
+        private WorkspaceModuleView[] _visibleWorkspaceModuleViews = Array.Empty<WorkspaceModuleView>();
+        private WorkspacePanelView[] _visibleWorkspacePanels = Array.Empty<WorkspacePanelView>();
+        private DashboardCatalog _workspaceViewCatalog;
+        private DashboardWorkspaceRegistry _workspaceViewRegistry;
+        private string _workspaceViewSearch;
+        private bool _workspaceViewDirty = true;
 
         private DashboardCatalog _catalog = DashboardCatalog.Empty;
         private int _page;
@@ -64,6 +83,7 @@ namespace ZeroEngine.Editor
         private Vector2 _workspaceNavigationScroll;
         private Vector2 _workspaceContentScroll;
         private Vector2 _contextScroll;
+        private float _workspaceSidebarWidth = DashboardViewState.DefaultWorkspaceSidebarWidth;
         private bool _showInstalledPackages;
         private bool _showProjectAdapters;
         private bool _showContext;
@@ -82,7 +102,10 @@ namespace ZeroEngine.Editor
         private bool _catalogRefreshQueued;
         private bool _hasDrawnShell;
         private bool _deferRestoredPanelActivation;
+        private string _pressedWorkspaceModuleId = string.Empty;
         private string _pressedWorkspacePanelId = string.Empty;
+        private string _workspaceModuleDropTargetId = string.Empty;
+        private bool _workspaceModuleDropBefore;
         private string _workspaceDropTargetId = string.Empty;
         private bool _workspaceDropBefore;
         private readonly HashSet<string> _failedWorkspacePanels = new HashSet<string>(StringComparer.Ordinal);
@@ -931,22 +954,8 @@ namespace ZeroEngine.Editor
 
         private void DrawHome()
         {
-            DashboardModule[] modules = _catalog.VisibleWorkspaceModules
-                .Where(module => ModulePanelMatchesSearch(module))
-                .Select(module => new DashboardModule(
-                    module.ModuleId,
-                    module.DisplayName,
-                    module.Description,
-                    module.Order,
-                    module.DocumentationPath,
-                    module.DocumentationUrl,
-                    module.Source,
-                    module.Entries,
-                    panels: module.Panels.Where(panel =>
-                            (_workspaceRegistry?.IsAvailable(panel) ?? false) && PanelMatchesSearch(panel))
-                        .ToArray()))
-                .Where(module => module.Panels.Count > 0)
-                .ToArray();
+            EnsureWorkspaceViewCache();
+            DashboardModule[] modules = _visibleWorkspaceModules;
             SurfaceView[] primarySurfaces = BuildSurfaceViews(
                     _catalog.VisibleModules,
                     string.Empty,
@@ -983,7 +992,7 @@ namespace ZeroEngine.Editor
             if (mode == EditorUiResponsiveMode.Compact)
             {
                 if (modules.Length > 0)
-                    DrawCompactWorkspaceSelector(modules);
+                    DrawCompactWorkspaceSelector();
                 DrawHomeContent(modules, primarySurfaces);
                 return;
             }
@@ -992,12 +1001,15 @@ namespace ZeroEngine.Editor
             {
                 if (modules.Length > 0)
                 {
-                    DrawWorkspaceNavigation(modules);
+                    _workspaceSidebarWidth = ClampWorkspaceSidebarWidth(_workspaceSidebarWidth);
+                    DrawWorkspaceNavigation(_visibleWorkspaceModuleViews);
+                    DrawWorkspaceSidebarSplitter();
                     EditorGUILayout.Space(EditorUiTokens.SpaceSm);
                 }
                 float contentWidth = Mathf.Max(
                     240f,
-                    position.width - EditorUiTokens.DashboardSidebarWidth - EditorUiTokens.SpaceSm - 16f);
+                    position.width - _workspaceSidebarWidth - WorkspaceSidebarSplitterWidth -
+                    EditorUiTokens.SpaceSm - 16f);
                 using (new EditorGUILayout.VerticalScope(GUILayout.Width(contentWidth), GUILayout.ExpandHeight(true)))
                     DrawHomeContent(modules, primarySurfaces);
             }
@@ -1025,26 +1037,59 @@ namespace ZeroEngine.Editor
             EditorGUILayout.EndScrollView();
         }
 
-        private void DrawWorkspaceNavigation(IReadOnlyList<DashboardModule> modules)
+        private void DrawWorkspaceNavigation(IReadOnlyList<WorkspaceModuleView> moduleViews)
         {
             if (Event.current.type == EventType.DragExited)
             {
+                _workspaceModuleDropTargetId = string.Empty;
                 _workspaceDropTargetId = string.Empty;
                 Repaint();
             }
-            using (new EditorGUILayout.VerticalScope(EditorUiStyles.Card, GUILayout.Width(EditorUiTokens.DashboardSidebarWidth)))
+            using (new EditorGUILayout.VerticalScope(EditorUiStyles.Card, GUILayout.Width(_workspaceSidebarWidth)))
             {
                 using (new EditorGUILayout.HorizontalScope())
                 {
                     GUILayout.Label(DashboardText.WorkspaceNavigation, EditorStyles.boldLabel);
                     GUILayout.FlexibleSpace();
-                    using (new EditorGUI.DisabledScope(_workspacePanelOrder.Count == 0))
+                    bool searchActive = !string.IsNullOrEmpty(_search);
+                    using (new EditorGUI.DisabledScope(searchActive || _orderedWorkspaceModules.Length == 0))
+                    {
+                        if (GUILayout.Button(
+                                new GUIContent(
+                                    DashboardText.ExpandAllGroups,
+                                    DashboardText.ExpandAllGroupsTooltip),
+                                EditorStyles.miniButtonLeft,
+                                GUILayout.Width(26f)))
+                        {
+                            DashboardWorkspaceFoldout.SetAll(
+                                _collapsedWorkspaceModules,
+                                _orderedWorkspaceModules.Select(module => module.ModuleId),
+                                expanded: true);
+                            SaveViewState();
+                        }
+                        if (GUILayout.Button(
+                                new GUIContent(
+                                    DashboardText.CollapseAllGroups,
+                                    DashboardText.CollapseAllGroupsTooltip),
+                                EditorStyles.miniButtonRight,
+                                GUILayout.Width(26f)))
+                        {
+                            DashboardWorkspaceFoldout.SetAll(
+                                _collapsedWorkspaceModules,
+                                _orderedWorkspaceModules.Select(module => module.ModuleId),
+                                expanded: false);
+                            SaveViewState();
+                        }
+                    }
+                    using (new EditorGUI.DisabledScope(
+                               _workspaceModuleOrder.Count == 0 && _workspacePanelOrder.Count == 0))
                     {
                         if (GUILayout.Button(
                                 new GUIContent(DashboardText.ResetOrder, DashboardText.ResetOrderTooltip),
                                 EditorStyles.miniButton,
                                 GUILayout.Width(44f)))
                         {
+                            _workspaceModuleOrder.Clear();
                             _workspacePanelOrder.Clear();
                             RebuildWorkspacePanelOrder();
                             SaveViewState();
@@ -1061,31 +1106,27 @@ namespace ZeroEngine.Editor
                     SelectWorkspacePanel(string.Empty);
                 }
                 EditorGUILayout.Space(EditorUiTokens.SpaceXs);
-                string previousModuleId = string.Empty;
-                foreach (WorkspacePanelView item in _orderedWorkspacePanels)
+                foreach (WorkspaceModuleView moduleView in moduleViews)
                 {
-                    if (!ContainsWorkspacePanel(modules, item.Panel.FullId))
+                    if (!DrawWorkspaceModuleHeader(moduleView.Module, moduleView.Panels.Length))
                         continue;
-                    if (!string.Equals(previousModuleId, item.Module.ModuleId, StringComparison.Ordinal))
+                    foreach (WorkspacePanelView item in moduleView.Panels)
                     {
-                        GUILayout.Label(item.Module.DisplayName, EditorStyles.miniBoldLabel);
-                        previousModuleId = item.Module.ModuleId;
+                        if (DrawWorkspacePanelTab(item.Panel))
+                        {
+                            SelectWorkspacePanel(item.Panel.FullId);
+                            ShowContext(moduleView.Module, null, item.Panel);
+                        }
                     }
-                    if (DrawWorkspacePanelTab(item.Panel))
-                    {
-                        SelectWorkspacePanel(item.Panel.FullId);
-                        ShowContext(item.Module, null, item.Panel);
-                    }
+                    EditorGUILayout.Space(2f);
                 }
                 EditorGUILayout.EndScrollView();
             }
         }
 
-        private void DrawCompactWorkspaceSelector(IReadOnlyList<DashboardModule> modules)
+        private void DrawCompactWorkspaceSelector()
         {
-            WorkspacePanelView[] items = _orderedWorkspacePanels
-                .Where(item => ContainsWorkspacePanel(modules, item.Panel.FullId))
-                .ToArray();
+            WorkspacePanelView[] items = _visibleWorkspacePanels;
             DashboardPanel[] panels = items.Select(item => item.Panel).ToArray();
             GUIContent[] labels = new[] { new GUIContent(DashboardText.Overview, DashboardText.OverviewTooltip) }
                 .Concat(items.Select(item =>
@@ -1108,7 +1149,7 @@ namespace ZeroEngine.Editor
             else if (next > 0 && next <= panels.Length)
             {
                 DashboardPanel selected = panels[next - 1];
-                DashboardModule module = modules.First(item => string.Equals(item.ModuleId, selected.ModuleId, StringComparison.Ordinal));
+                DashboardModule module = items[next - 1].Module;
                 SelectWorkspacePanel(selected.FullId);
                 ShowContext(module, null, selected);
             }
@@ -1117,53 +1158,294 @@ namespace ZeroEngine.Editor
 
         private void RebuildWorkspacePanelOrder()
         {
+            var modules = new Dictionary<string, DashboardModule>(StringComparer.Ordinal);
+            var defaultModuleOrder = new List<string>();
             var items = new Dictionary<string, WorkspacePanelView>(StringComparer.Ordinal);
-            var defaultOrder = new List<string>();
+            var defaultPanelOrder = new List<string>();
             foreach (DashboardModule module in _catalog.VisibleWorkspaceModules)
             {
+                if (!modules.ContainsKey(module.ModuleId))
+                {
+                    modules.Add(module.ModuleId, module);
+                    defaultModuleOrder.Add(module.ModuleId);
+                }
                 foreach (DashboardPanel panel in module.Panels)
                 {
                     if (items.ContainsKey(panel.FullId))
                         continue;
                     items[panel.FullId] = new WorkspacePanelView(module, panel);
-                    defaultOrder.Add(panel.FullId);
+                    defaultPanelOrder.Add(panel.FullId);
                 }
             }
 
-            _orderedWorkspacePanels = DashboardWorkspaceOrder.Visible(_workspacePanelOrder, defaultOrder)
-                .Where(items.ContainsKey)
-                .Select(id => items[id])
+            _orderedWorkspaceModules = DashboardWorkspaceOrder.Visible(_workspaceModuleOrder, defaultModuleOrder)
+                .Where(modules.ContainsKey)
+                .Select(id => modules[id])
                 .ToArray();
+            string[] orderedPanelIds = DashboardWorkspaceOrder.Visible(_workspacePanelOrder, defaultPanelOrder);
+            _workspacePanelsById.Clear();
+            foreach (KeyValuePair<string, WorkspacePanelView> item in items)
+                _workspacePanelsById.Add(item.Key, item.Value);
+            _workspacePanelsByModule.Clear();
+            foreach (DashboardModule module in _orderedWorkspaceModules)
+            {
+                _workspacePanelsByModule[module.ModuleId] = orderedPanelIds
+                    .Where(items.ContainsKey)
+                    .Select(id => items[id])
+                    .Where(item => string.Equals(item.Module.ModuleId, module.ModuleId, StringComparison.Ordinal))
+                    .ToArray();
+            }
+            _orderedWorkspacePanels = _orderedWorkspaceModules
+                .SelectMany(module => _workspacePanelsByModule[module.ModuleId])
+                .ToArray();
+            _workspaceViewDirty = true;
         }
 
-        private static bool ContainsWorkspacePanel(IReadOnlyList<DashboardModule> modules, string panelFullId)
+        private void EnsureWorkspaceViewCache()
         {
-            for (int moduleIndex = 0; moduleIndex < modules.Count; moduleIndex++)
+            string search = _search ?? string.Empty;
+            if (!_workspaceViewDirty &&
+                ReferenceEquals(_workspaceViewCatalog, _catalog) &&
+                ReferenceEquals(_workspaceViewRegistry, _workspaceRegistry) &&
+                string.Equals(_workspaceViewSearch, search, StringComparison.Ordinal))
             {
-                IReadOnlyList<DashboardPanel> panels = modules[moduleIndex].Panels;
-                for (int panelIndex = 0; panelIndex < panels.Count; panelIndex++)
-                {
-                    if (string.Equals(panels[panelIndex].FullId, panelFullId, StringComparison.Ordinal))
-                        return true;
-                }
+                return;
             }
-            return false;
+
+            _visibleWorkspaceModules = _catalog.VisibleWorkspaceModules
+                .Where(module => ModulePanelMatchesSearch(module))
+                .Select(module => new DashboardModule(
+                    module.ModuleId,
+                    module.DisplayName,
+                    module.Description,
+                    module.Order,
+                    module.DocumentationPath,
+                    module.DocumentationUrl,
+                    module.Source,
+                    module.Entries,
+                    panels: module.Panels.Where(panel =>
+                            (_workspaceRegistry?.IsAvailable(panel) ?? false) && PanelMatchesSearch(panel))
+                        .ToArray()))
+                .Where(module => module.Panels.Count > 0)
+                .ToArray();
+
+            var visibleModules = _visibleWorkspaceModules.ToDictionary(
+                module => module.ModuleId,
+                StringComparer.Ordinal);
+            var moduleViews = new List<WorkspaceModuleView>();
+            var visiblePanels = new List<WorkspacePanelView>();
+            foreach (DashboardModule orderedModule in _orderedWorkspaceModules)
+            {
+                if (!visibleModules.TryGetValue(orderedModule.ModuleId, out DashboardModule visibleModule) ||
+                    !_workspacePanelsByModule.TryGetValue(orderedModule.ModuleId, out WorkspacePanelView[] orderedPanels))
+                {
+                    continue;
+                }
+
+                var visiblePanelIds = new HashSet<string>(
+                    visibleModule.Panels.Select(panel => panel.FullId),
+                    StringComparer.Ordinal);
+                WorkspacePanelView[] panels = orderedPanels
+                    .Where(item => visiblePanelIds.Contains(item.Panel.FullId))
+                    .ToArray();
+                moduleViews.Add(new WorkspaceModuleView(visibleModule, panels));
+                visiblePanels.AddRange(panels);
+            }
+
+            _visibleWorkspaceModuleViews = moduleViews.ToArray();
+            _visibleWorkspacePanels = visiblePanels.ToArray();
+            _workspaceViewCatalog = _catalog;
+            _workspaceViewRegistry = _workspaceRegistry;
+            _workspaceViewSearch = search;
+            _workspaceViewDirty = false;
+        }
+
+        private bool DrawWorkspaceModuleHeader(DashboardModule module, int panelCount)
+        {
+            Rect rowRect = GUILayoutUtility.GetRect(1f, 26f, GUILayout.ExpandWidth(true));
+            Rect handleRect = new Rect(rowRect.x + 2f, rowRect.y, 18f, rowRect.height);
+            Rect countRect = new Rect(rowRect.xMax - 30f, rowRect.y, 28f, rowRect.height);
+            Rect foldoutRect = new Rect(
+                handleRect.xMax + 2f,
+                rowRect.y,
+                Mathf.Max(1f, countRect.x - handleRect.xMax - 4f),
+                rowRect.height);
+            if (Event.current.type == EventType.Repaint)
+                EditorGUI.DrawRect(rowRect, EditorUiPalette.Current.RaisedSurface);
+            EditorGUIUtility.AddCursorRect(handleRect, MouseCursor.Pan);
+            GUI.Label(
+                handleRect,
+                new GUIContent("≡", DashboardText.ReorderWorkspaceModulesTooltip),
+                EditorStyles.centeredGreyMiniLabel);
+            GUI.Label(
+                countRect,
+                new GUIContent(panelCount.ToString(), DashboardText.WorkspaceNavigationTooltip),
+                EditorStyles.centeredGreyMiniLabel);
+
+            bool searchActive = !string.IsNullOrEmpty(_search);
+            bool expanded = DashboardWorkspaceFoldout.IsExpanded(
+                _collapsedWorkspaceModules,
+                module.ModuleId,
+                searchActive);
+            bool nextExpanded = EditorGUI.Foldout(
+                foldoutRect,
+                expanded,
+                new GUIContent(
+                    module.DisplayName,
+                    DashboardText.WorkspaceGroupTooltip(module.Description, searchActive)),
+                toggleOnLabelClick: true);
+            if (!searchActive && nextExpanded != expanded)
+            {
+                if (nextExpanded)
+                    _collapsedWorkspaceModules.Remove(module.ModuleId);
+                else
+                    _collapsedWorkspaceModules.Add(module.ModuleId);
+                expanded = nextExpanded;
+                SaveViewState();
+            }
+
+            HandleWorkspaceModuleDrag(handleRect, rowRect, module.ModuleId);
+            if (Event.current.type == EventType.Repaint &&
+                string.Equals(_workspaceModuleDropTargetId, module.ModuleId, StringComparison.Ordinal))
+            {
+                float y = _workspaceModuleDropBefore ? rowRect.y : rowRect.yMax - 2f;
+                EditorGUI.DrawRect(new Rect(rowRect.x, y, rowRect.width, 2f), AccentColor);
+            }
+            return expanded;
+        }
+
+        private void DrawWorkspaceSidebarSplitter()
+        {
+            Rect splitterRect = GUILayoutUtility.GetRect(
+                WorkspaceSidebarSplitterWidth,
+                WorkspaceSidebarSplitterWidth,
+                GUILayout.Width(WorkspaceSidebarSplitterWidth),
+                GUILayout.ExpandHeight(true));
+            GUI.Label(
+                splitterRect,
+                new GUIContent(string.Empty, DashboardText.ResizeWorkspaceNavigationTooltip));
+            EditorGUIUtility.AddCursorRect(splitterRect, MouseCursor.ResizeHorizontal);
+            int controlId = GUIUtility.GetControlID(FocusType.Passive, splitterRect);
+            Event current = Event.current;
+            switch (current.GetTypeForControl(controlId))
+            {
+                case EventType.MouseDown when current.button == 0 && splitterRect.Contains(current.mousePosition):
+                    GUIUtility.hotControl = controlId;
+                    current.Use();
+                    break;
+                case EventType.MouseDrag when GUIUtility.hotControl == controlId:
+                    _workspaceSidebarWidth = ClampWorkspaceSidebarWidth(_workspaceSidebarWidth + current.delta.x);
+                    current.Use();
+                    Repaint();
+                    break;
+                case EventType.MouseUp when GUIUtility.hotControl == controlId:
+                    GUIUtility.hotControl = 0;
+                    SaveViewState();
+                    current.Use();
+                    break;
+                case EventType.Repaint:
+                    EditorGUI.DrawRect(
+                        new Rect(splitterRect.center.x, splitterRect.y, 1f, splitterRect.height),
+                        EditorUiPalette.Current.Border);
+                    break;
+            }
+        }
+
+        private float ClampWorkspaceSidebarWidth(float width)
+        {
+            float availableMaximum = Mathf.Min(
+                WorkspaceSidebarMaxWidth,
+                Mathf.Max(WorkspaceSidebarMinWidth, position.width - WorkspaceContentMinWidth));
+            return Mathf.Clamp(width, WorkspaceSidebarMinWidth, availableMaximum);
+        }
+
+        private void HandleWorkspaceModuleDrag(Rect handleRect, Rect rowRect, string moduleId)
+        {
+            Event current = Event.current;
+            if (current.type == EventType.MouseDown && current.button == 0 && handleRect.Contains(current.mousePosition))
+            {
+                _pressedWorkspaceModuleId = moduleId;
+                current.Use();
+                return;
+            }
+            if (current.type == EventType.MouseDrag &&
+                string.Equals(_pressedWorkspaceModuleId, moduleId, StringComparison.Ordinal))
+            {
+                DragAndDrop.PrepareStartDrag();
+                DragAndDrop.SetGenericData(WorkspaceModuleDragDataKey, moduleId);
+                DragAndDrop.StartDrag(DashboardText.ReorderWorkspaceModules);
+                _pressedWorkspaceModuleId = string.Empty;
+                current.Use();
+                return;
+            }
+            if (current.type == EventType.MouseUp)
+                _pressedWorkspaceModuleId = string.Empty;
+
+            string draggedModuleId = DragAndDrop.GetGenericData(WorkspaceModuleDragDataKey) as string;
+            if (string.IsNullOrEmpty(draggedModuleId) ||
+                string.Equals(draggedModuleId, moduleId, StringComparison.Ordinal) ||
+                !rowRect.Contains(current.mousePosition))
+            {
+                return;
+            }
+            if (current.type != EventType.DragUpdated && current.type != EventType.DragPerform)
+                return;
+
+            _workspaceModuleDropTargetId = moduleId;
+            _workspaceModuleDropBefore = current.mousePosition.y < rowRect.center.y;
+            DragAndDrop.visualMode = DragAndDropVisualMode.Move;
+            if (current.type == EventType.DragPerform)
+            {
+                DragAndDrop.AcceptDrag();
+                ReorderWorkspaceModule(draggedModuleId, moduleId, _workspaceModuleDropBefore);
+                _workspaceModuleDropTargetId = string.Empty;
+            }
+            current.Use();
+            Repaint();
+        }
+
+        private void ReorderWorkspaceModule(string draggedModuleId, string targetModuleId, bool before)
+        {
+            string[] defaultOrder = _catalog.VisibleWorkspaceModules
+                .Select(module => module.ModuleId)
+                .ToArray();
+            string[] next = DashboardWorkspaceOrder.Move(
+                _workspaceModuleOrder,
+                defaultOrder,
+                draggedModuleId,
+                targetModuleId,
+                before);
+            _workspaceModuleOrder.Clear();
+            _workspaceModuleOrder.AddRange(next);
+            RebuildWorkspacePanelOrder();
+            SaveViewState();
         }
 
         private bool DrawWorkspacePanelTab(DashboardPanel panel)
         {
-            Rect rowRect = GUILayoutUtility.GetRect(1f, 30f, GUILayout.ExpandWidth(true));
-            Rect handleRect = new Rect(rowRect.x, rowRect.y, 20f, rowRect.height);
+            Rect rowRect = GUILayoutUtility.GetRect(1f, 28f, GUILayout.ExpandWidth(true));
+            Rect handleRect = new Rect(rowRect.x + 12f, rowRect.y, 14f, rowRect.height);
             Rect buttonRect = new Rect(
                 handleRect.xMax + 2f,
                 rowRect.y,
                 Mathf.Max(1f, rowRect.width - handleRect.width - 2f),
                 rowRect.height);
             EditorGUIUtility.AddCursorRect(handleRect, MouseCursor.Pan);
+            bool showHandle = handleRect.Contains(Event.current.mousePosition) ||
+                              string.Equals(_pressedWorkspacePanelId, panel.FullId, StringComparison.Ordinal) ||
+                              string.Equals(
+                                  DragAndDrop.GetGenericData(WorkspacePanelDragDataKey) as string,
+                                  panel.FullId,
+                                  StringComparison.Ordinal);
+            Color previousGuiColor = GUI.color;
+            Color handleColor = previousGuiColor;
+            handleColor.a *= showHandle ? 1f : 0.2f;
+            GUI.color = handleColor;
             GUI.Label(
                 handleRect,
-                new GUIContent("≡", DashboardText.ReorderWorkspacePanelsTooltip),
+                new GUIContent("⋮", DashboardText.ReorderWorkspacePanelsTooltip),
                 EditorStyles.centeredGreyMiniLabel);
+            GUI.color = previousGuiColor;
 
             bool selected = string.Equals(_selectedPanelFullId, panel.FullId, StringComparison.Ordinal);
             Color previous = GUI.backgroundColor;
@@ -1174,6 +1456,12 @@ namespace ZeroEngine.Editor
                 new GUIContent(panel.DisplayName, panel.Description),
                 selected ? EditorStyles.miniButtonMid : EditorStyles.miniButton);
             GUI.backgroundColor = previous;
+            if (Event.current.type == EventType.Repaint && selected)
+            {
+                EditorGUI.DrawRect(
+                    new Rect(buttonRect.x + 1f, buttonRect.y + 3f, 3f, buttonRect.height - 6f),
+                    AccentColor);
+            }
 
             HandleWorkspacePanelDrag(handleRect, rowRect, panel.FullId);
             if (Event.current.type == EventType.Repaint &&
@@ -1210,6 +1498,7 @@ namespace ZeroEngine.Editor
             string draggedPanelId = DragAndDrop.GetGenericData(WorkspacePanelDragDataKey) as string;
             if (string.IsNullOrEmpty(draggedPanelId) ||
                 string.Equals(draggedPanelId, panelFullId, StringComparison.Ordinal) ||
+                !PanelsShareWorkspaceModule(draggedPanelId, panelFullId) ||
                 !rowRect.Contains(current.mousePosition))
             {
                 return;
@@ -1232,6 +1521,8 @@ namespace ZeroEngine.Editor
 
         private void ReorderWorkspacePanel(string draggedPanelId, string targetPanelId, bool before)
         {
+            if (!PanelsShareWorkspaceModule(draggedPanelId, targetPanelId))
+                return;
             string[] defaultOrder = _catalog.VisibleWorkspaceModules
                 .SelectMany(module => module.Panels)
                 .Select(panel => panel.FullId)
@@ -1246,6 +1537,13 @@ namespace ZeroEngine.Editor
             _workspacePanelOrder.AddRange(next);
             RebuildWorkspacePanelOrder();
             SaveViewState();
+        }
+
+        private bool PanelsShareWorkspaceModule(string firstPanelId, string secondPanelId)
+        {
+            return _workspacePanelsById.TryGetValue(firstPanelId, out WorkspacePanelView first) &&
+                   _workspacePanelsById.TryGetValue(secondPanelId, out WorkspacePanelView second) &&
+                   string.Equals(first.Module.ModuleId, second.Module.ModuleId, StringComparison.Ordinal);
         }
 
         private void DrawWorkspaceContent(IReadOnlyList<DashboardModule> modules)
@@ -1535,8 +1833,16 @@ namespace ZeroEngine.Editor
             _showAdvanced = state.ShowAdvanced;
             _showMaintenance = state.ShowMaintenance;
             _selectedPanelFullId = state.SelectedPanelFullId;
+            _workspaceModuleOrder.Clear();
+            _workspaceModuleOrder.AddRange(state.WorkspaceModuleOrder);
             _workspacePanelOrder.Clear();
             _workspacePanelOrder.AddRange(state.WorkspacePanelOrder);
+            _collapsedWorkspaceModules.Clear();
+            _collapsedWorkspaceModules.UnionWith(state.CollapsedWorkspaceModuleIds);
+            _workspaceSidebarWidth = Mathf.Clamp(
+                state.WorkspaceSidebarWidth,
+                WorkspaceSidebarMinWidth,
+                WorkspaceSidebarMaxWidth);
             _moduleScroll = state.ModuleScroll;
             _contentScroll = state.ContentScroll;
             _systemScroll = state.SystemScroll;
@@ -1558,7 +1864,12 @@ namespace ZeroEngine.Editor
                 ShowAdvanced = _showAdvanced,
                 ShowMaintenance = _showMaintenance,
                 SelectedPanelFullId = _selectedPanelFullId,
+                WorkspaceModuleOrder = _workspaceModuleOrder.ToArray(),
                 WorkspacePanelOrder = _workspacePanelOrder.ToArray(),
+                CollapsedWorkspaceModuleIds = _collapsedWorkspaceModules
+                    .OrderBy(id => id, StringComparer.Ordinal)
+                    .ToArray(),
+                WorkspaceSidebarWidth = _workspaceSidebarWidth,
                 ModuleScroll = _moduleScroll,
                 ContentScroll = _contentScroll,
                 SystemScroll = _systemScroll,
@@ -2170,6 +2481,18 @@ namespace ZeroEngine.Editor
             internal DashboardPanel Panel { get; }
         }
 
+        private sealed class WorkspaceModuleView
+        {
+            internal WorkspaceModuleView(DashboardModule module, WorkspacePanelView[] panels)
+            {
+                Module = module;
+                Panels = panels ?? Array.Empty<WorkspacePanelView>();
+            }
+
+            internal DashboardModule Module { get; }
+            internal WorkspacePanelView[] Panels { get; }
+        }
+
         private sealed class ReferenceView
         {
             internal ReferenceView(DashboardModule module, DashboardEntry entry)
@@ -2219,6 +2542,8 @@ namespace ZeroEngine.Editor
 
     internal sealed class DashboardViewState
     {
+        internal const float DefaultWorkspaceSidebarWidth = 244f;
+
         internal int Page;
         internal string Search = string.Empty;
         internal string SelectedCategoryId = "authoring";
@@ -2228,7 +2553,10 @@ namespace ZeroEngine.Editor
         internal bool ShowAdvanced = true;
         internal bool ShowMaintenance;
         internal string SelectedPanelFullId = string.Empty;
+        internal string[] WorkspaceModuleOrder = Array.Empty<string>();
         internal string[] WorkspacePanelOrder = Array.Empty<string>();
+        internal string[] CollapsedWorkspaceModuleIds = Array.Empty<string>();
+        internal float WorkspaceSidebarWidth = DefaultWorkspaceSidebarWidth;
         internal Vector2 ModuleScroll;
         internal Vector2 ContentScroll;
         internal Vector2 SystemScroll;
@@ -2255,7 +2583,12 @@ namespace ZeroEngine.Editor
                 ShowAdvanced = EditorPrefs.GetBool(prefix + "ShowAdvanced", true),
                 ShowMaintenance = EditorPrefs.GetBool(prefix + "ShowMaintenance", false),
                 SelectedPanelFullId = EditorPrefs.GetString(prefix + "SelectedPanel", string.Empty),
+                WorkspaceModuleOrder = LoadStringList(prefix + "WorkspaceModuleOrder"),
                 WorkspacePanelOrder = LoadStringList(prefix + "WorkspacePanelOrder"),
+                CollapsedWorkspaceModuleIds = LoadStringList(prefix + "CollapsedWorkspaceModuleIds"),
+                WorkspaceSidebarWidth = EditorPrefs.GetFloat(
+                    prefix + "WorkspaceSidebarWidth",
+                    DashboardViewState.DefaultWorkspaceSidebarWidth),
                 ModuleScroll = LoadVector(prefix + "ModuleScroll"),
                 ContentScroll = LoadVector(prefix + "ContentScroll"),
                 SystemScroll = LoadVector(prefix + "SystemScroll"),
@@ -2280,8 +2613,15 @@ namespace ZeroEngine.Editor
             EditorPrefs.SetBool(prefix + "ShowMaintenance", state.ShowMaintenance);
             EditorPrefs.SetString(prefix + "SelectedPanel", state.SelectedPanelFullId ?? string.Empty);
             EditorPrefs.SetString(
+                prefix + "WorkspaceModuleOrder",
+                string.Join("\n", state.WorkspaceModuleOrder ?? Array.Empty<string>()));
+            EditorPrefs.SetString(
                 prefix + "WorkspacePanelOrder",
                 string.Join("\n", state.WorkspacePanelOrder ?? Array.Empty<string>()));
+            EditorPrefs.SetString(
+                prefix + "CollapsedWorkspaceModuleIds",
+                string.Join("\n", state.CollapsedWorkspaceModuleIds ?? Array.Empty<string>()));
+            EditorPrefs.SetFloat(prefix + "WorkspaceSidebarWidth", state.WorkspaceSidebarWidth);
             SaveVector(prefix + "ModuleScroll", state.ModuleScroll);
             SaveVector(prefix + "ContentScroll", state.ContentScroll);
             SaveVector(prefix + "SystemScroll", state.SystemScroll);
@@ -2297,7 +2637,8 @@ namespace ZeroEngine.Editor
             {
                 "Page", "Search", "SelectedCategory", "SelectedScope", "SelectedSafety",
                 "SelectedAvailability", "ShowAdvanced", "ShowMaintenance", "SelectedPanel",
-                "WorkspacePanelOrder"
+                "WorkspaceModuleOrder", "WorkspacePanelOrder", "CollapsedWorkspaceModuleIds",
+                "WorkspaceSidebarWidth"
             };
             foreach (string key in scalarKeys)
                 EditorPrefs.DeleteKey(prefix + key);
@@ -2395,6 +2736,33 @@ namespace ZeroEngine.Editor
                 .Select(id => id.Trim())
                 .Distinct(StringComparer.Ordinal)
                 .ToArray();
+        }
+    }
+
+    internal static class DashboardWorkspaceFoldout
+    {
+        internal static bool IsExpanded(IEnumerable<string> collapsedModuleIds, string moduleId, bool searchActive)
+        {
+            return searchActive || !(collapsedModuleIds ?? Array.Empty<string>())
+                .Contains(moduleId, StringComparer.Ordinal);
+        }
+
+        internal static void SetAll(
+            ISet<string> collapsedModuleIds,
+            IEnumerable<string> availableModuleIds,
+            bool expanded)
+        {
+            if (collapsedModuleIds == null)
+                return;
+            foreach (string moduleId in (availableModuleIds ?? Array.Empty<string>())
+                         .Where(id => !string.IsNullOrWhiteSpace(id))
+                         .Distinct(StringComparer.Ordinal))
+            {
+                if (expanded)
+                    collapsedModuleIds.Remove(moduleId);
+                else
+                    collapsedModuleIds.Add(moduleId);
+            }
         }
     }
 }

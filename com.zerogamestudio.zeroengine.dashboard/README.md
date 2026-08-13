@@ -1,6 +1,6 @@
 # ZeroEngine Dashboard
 
-ZeroEngine Dashboard 4.3.0 是一个可选、仅限 Unity Editor 的简体中文工作台。它从已注册 UPM 包以及项目 `Assets/**/Editor/` 中读取 `ZeroEngineDashboardModule.json`，只展示所有者明确声明的窗口、命令、资料和内嵌面板。
+ZeroEngine Dashboard 4.4.0 是一个可选、仅限 Unity Editor 的简体中文工作台。它从已注册 UPM 包以及项目 `Assets/**/Editor/` 中读取 `ZeroEngineDashboardModule.json`，只展示所有者明确声明的窗口、命令、资料和内嵌面板。
 
 ## 特性
 
@@ -16,7 +16,7 @@ ZeroEngine Dashboard 4.3.0 是一个可选、仅限 Unity Editor 的简体中文
 - 说明、使用方法、安全影响和技术来源进入 tooltip 或独立帮助页，不占用工作面板正文。
 - 本机记忆上次页面、面板、搜索、筛选和主要滚动位置；失效面板会安全回到首页总览。
 - 工作台先显示框架再延迟发现目录和恢复面板；同一脚本 Domain 内重开复用目录快照。
-- 首页左侧面板可拖拽跨模块排序并持久化，也可一键恢复描述符默认顺序。
+- 首页左侧模块分组可拖拽排序和折叠，面板可在组内拖拽；侧栏宽度、顺序与折叠状态均持久化，也可一键展开、折叠或恢复描述符默认顺序。
 - 固定 label、状态、安全提示与可操作控件 tooltip 使用简体中文；品牌缩写和技术标识保持原值。
 - 不安装包、不写 manifest、不清理 PlayerPrefs/存档、不写项目资源。
 
@@ -33,7 +33,7 @@ ZeroEngine Dashboard 4.3.0 是一个可选、仅限 Unity Editor 的简体中文
 }
 ```
 
-Unity 2022.3 不会为 Git URL 包自动解析同仓 editor-ui；两项必须直接 pin 到同一提交。4.3.0 要求 editor-ui 1.4.0。
+Unity 2022.3 不会为 Git URL 包自动解析同仓 editor-ui；两项必须直接 pin 到同一提交。4.4.0 要求 editor-ui 1.4.0。
 
 本地 `file:` 依赖只用于临时联调，不应进入共享分支。
 
@@ -89,6 +89,13 @@ entry 可选 `usage` 只在帮助抽屉显示。module 可选 `panels` 数组声
 Dashboard 4.x 仍兼容外部 schema v1，并把它标记为“旧版入口”；第一方正式描述符必须使用 v2。v1 兼容将在首个 5.x 版本移除。
 
 ## 版本历史
+
+### 4.4.0
+
+- 首页左侧模块分组支持拖拽排序、折叠和持久记忆；搜索期间匹配分组临时展开。
+- 面板排序收口为组内拖拽，保持模块归属与连续分组布局。
+- 侧栏支持拖动调宽并记忆；分组与面板采用两级视觉层次，面板拖柄仅在需要时强调。
+- 导航分组视图按目录、搜索与排序变化缓存，未变化帧不再重复分组扫描。
 
 ### 4.3.0
 

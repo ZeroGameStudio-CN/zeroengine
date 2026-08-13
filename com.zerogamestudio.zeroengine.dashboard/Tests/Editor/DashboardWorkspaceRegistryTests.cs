@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Reflection;
 using NUnit.Framework;
 using UnityEngine;
@@ -155,11 +156,21 @@ namespace ZeroEngine.Dashboard.Tests.Editor
                     ShowAdvanced = false,
                     ShowMaintenance = true,
                     SelectedPanelFullId = "pob.tools.data-manager/data-manager",
+                    WorkspaceModuleOrder = new[]
+                    {
+                        "pob.tools.data-manager",
+                        "pob.dashboard"
+                    },
                     WorkspacePanelOrder = new[]
                     {
                         "pob.tools.data-manager/data-manager",
                         "pob.dashboard/runtime-overview"
                     },
+                    CollapsedWorkspaceModuleIds = new[]
+                    {
+                        "pob.dashboard"
+                    },
+                    WorkspaceSidebarWidth = 286f,
                     ModuleScroll = new Vector2(1f, 2f),
                     ContentScroll = new Vector2(3f, 4f),
                     SystemScroll = new Vector2(5f, 6f),
@@ -179,11 +190,18 @@ namespace ZeroEngine.Dashboard.Tests.Editor
                 Assert.That(state.ShowAdvanced, Is.False);
                 Assert.That(state.ShowMaintenance, Is.True);
                 Assert.That(state.SelectedPanelFullId, Is.EqualTo("pob.tools.data-manager/data-manager"));
+                Assert.That(state.WorkspaceModuleOrder, Is.EqualTo(new[]
+                {
+                    "pob.tools.data-manager",
+                    "pob.dashboard"
+                }));
                 Assert.That(state.WorkspacePanelOrder, Is.EqualTo(new[]
                 {
                     "pob.tools.data-manager/data-manager",
                     "pob.dashboard/runtime-overview"
                 }));
+                Assert.That(state.CollapsedWorkspaceModuleIds, Is.EqualTo(new[] { "pob.dashboard" }));
+                Assert.That(state.WorkspaceSidebarWidth, Is.EqualTo(286f));
                 Assert.That(state.WorkspaceContentScroll, Is.EqualTo(new Vector2(9f, 10f)));
                 Assert.That(state.ContextScroll, Is.EqualTo(new Vector2(11f, 12f)));
             }
@@ -194,7 +212,7 @@ namespace ZeroEngine.Dashboard.Tests.Editor
         }
 
         [Test]
-        public void WorkspaceOrder_MoveAcrossModules_PreservesMissingIdsAndAppendsNewPanels()
+        public void WorkspaceOrder_Move_PreservesMissingIdsAndAppendsNewItems()
         {
             string[] preferred =
             {
@@ -226,6 +244,65 @@ namespace ZeroEngine.Dashboard.Tests.Editor
             Assert.That(
                 DashboardWorkspaceOrder.Visible(reordered, available),
                 Is.EqualTo(new[] { "module.b/second", "module.a/first", "module.c/new" }));
+        }
+
+        [Test]
+        public void WorkspaceOrder_MoveModules_PreservesMissingIdsAndAppendsNewModules()
+        {
+            string[] reordered = DashboardWorkspaceOrder.Move(
+                new[] { "module.a", "removed.module", "module.b" },
+                new[] { "module.a", "module.b", "module.c" },
+                "module.a",
+                "module.b",
+                before: false);
+
+            Assert.That(reordered, Is.EqualTo(new[]
+            {
+                "removed.module",
+                "module.b",
+                "module.a",
+                "module.c"
+            }));
+            Assert.That(
+                DashboardWorkspaceOrder.Visible(reordered, new[] { "module.a", "module.b", "module.c" }),
+                Is.EqualTo(new[] { "module.b", "module.a", "module.c" }));
+        }
+
+        [Test]
+        public void WorkspaceFoldout_SearchTemporarilyExpandsCollapsedGroup()
+        {
+            string[] collapsed = { "module.a" };
+
+            Assert.That(DashboardWorkspaceFoldout.IsExpanded(collapsed, "module.a", searchActive: false), Is.False);
+            Assert.That(DashboardWorkspaceFoldout.IsExpanded(collapsed, "module.a", searchActive: true), Is.True);
+            Assert.That(collapsed, Is.EqualTo(new[] { "module.a" }));
+        }
+
+        [Test]
+        public void WorkspaceFoldout_SetAll_ChangesAvailableGroupsAndPreservesMissingGroups()
+        {
+            var collapsed = new HashSet<string>(StringComparer.Ordinal)
+            {
+                "module.a",
+                "removed.module"
+            };
+
+            DashboardWorkspaceFoldout.SetAll(
+                collapsed,
+                new[] { "module.a", "module.b" },
+                expanded: true);
+            Assert.That(collapsed, Is.EquivalentTo(new[] { "removed.module" }));
+
+            DashboardWorkspaceFoldout.SetAll(
+                collapsed,
+                new[] { "module.a", "module.b" },
+                expanded: false);
+            Assert.That(collapsed, Is.EquivalentTo(new[]
+            {
+                "module.a",
+                "module.b",
+                "removed.module"
+            }));
         }
 
         private static T GetPrivateField<T>(ZeroEngineDashboard window, string name)
