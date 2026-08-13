@@ -7,11 +7,19 @@ import subprocess
 import sys
 from pathlib import Path
 
-from unity_workspace_scheduler.cli import run
+from unity_workspace_scheduler.cli import _emit, run
 
 
 def read_output(capsys) -> dict[str, object]:
     return json.loads(capsys.readouterr().out)
+
+
+def test_cli_json_output_is_ascii_safe_and_preserves_unicode(capsys) -> None:
+    _emit({"message": "中文任务备注"})
+
+    output = capsys.readouterr().out
+    assert output.isascii()
+    assert json.loads(output) == {"message": "中文任务备注"}
 
 
 def test_cli_task_flow_uses_private_token_file_and_json_contract(tmp_path: Path, capsys) -> None:
