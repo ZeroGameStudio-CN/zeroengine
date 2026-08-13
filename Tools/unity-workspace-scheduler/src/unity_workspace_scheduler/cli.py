@@ -279,7 +279,7 @@ def _recovery_resolve(
 
 
 def _emit(payload: dict[str, Any]) -> None:
-    print(json.dumps(payload, ensure_ascii=False, sort_keys=True))
+    print(json.dumps(payload, ensure_ascii=True, sort_keys=True))
 
 
 def run(argv: Sequence[str] | None = None) -> int:
