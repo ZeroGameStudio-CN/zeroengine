@@ -11,13 +11,14 @@ using ZeroEngine.EditorUI;
 namespace ZeroEngine.Editor
 {
     [EditorUiSurface]
-    public sealed class ZeroEngineDashboard : EditorWindow
+    public sealed class ZeroEngineDashboard : EditorWindow, IEditorWorkspaceNavigator
     {
         private static readonly GUIContent[] PageNames =
         {
             new GUIContent(DashboardText.Home, DashboardText.HomeTooltip),
             new GUIContent(DashboardText.ToolLibrary, DashboardText.ToolLibraryTooltip),
-            new GUIContent(DashboardText.System, DashboardText.SystemTooltip)
+            new GUIContent(DashboardText.System, DashboardText.SystemTooltip),
+            new GUIContent(DashboardText.Help, DashboardText.HelpTooltip)
         };
 
         private static readonly string[] ToolCategoryIds =
@@ -80,8 +81,7 @@ namespace ZeroEngine.Editor
         {
             ZeroEngineDashboard window = GetWindow<ZeroEngineDashboard>(DashboardText.WindowTitle);
             window.titleContent = new GUIContent(DashboardText.WindowTitle, DashboardText.HomeTooltip);
-            window.minSize = new Vector2(760f, 460f);
-            window._page = 0;
+            window.minSize = new Vector2(980f, 560f);
             window._focusSearch = true;
             window.Show();
             window.Focus();
@@ -91,8 +91,7 @@ namespace ZeroEngine.Editor
         {
             ShowWindow();
             ZeroEngineDashboard window = GetWindow<ZeroEngineDashboard>(DashboardText.WindowTitle);
-            window._page = 0;
-            window._selectedPanelFullId = (moduleId ?? string.Empty) + "/" + (panelId ?? string.Empty);
+            window.TryShowWorkspaceInternal(moduleId, panelId);
             window.Show();
             window.Focus();
             window.Repaint();
@@ -103,7 +102,8 @@ namespace ZeroEngine.Editor
             UnityEditor.PackageManager.Events.registeredPackages += OnRegisteredPackages;
             DashboardDescriptorAssetPostprocessor.DescriptorsChanged += RefreshCatalog;
             EditorApplication.update += OnEditorUpdate;
-            minSize = new Vector2(760f, 460f);
+            minSize = new Vector2(980f, 560f);
+            RestoreViewState();
             RefreshCatalog();
         }
 
@@ -112,6 +112,7 @@ namespace ZeroEngine.Editor
             UnityEditor.PackageManager.Events.registeredPackages -= OnRegisteredPackages;
             DashboardDescriptorAssetPostprocessor.DescriptorsChanged -= RefreshCatalog;
             EditorApplication.update -= OnEditorUpdate;
+            SaveViewState();
             DeactivateWorkspacePanel();
             _actionRegistry = null;
         }
@@ -166,7 +167,10 @@ namespace ZeroEngine.Editor
             {
                 _selectedPanelFullId = string.Empty;
                 DeactivateWorkspacePanel();
+                SaveViewState();
             }
+            if (_page == 3)
+                RestoreHelpSelectionFromSelectedPanel();
             Repaint();
         }
 
@@ -206,10 +210,12 @@ namespace ZeroEngine.Editor
                     break;
                 default:
                     DeactivateWorkspacePanel();
-                    DrawSystem();
+                    if (_page == 2)
+                        DrawSystem();
+                    else
+                        DrawHelp();
                     break;
             }
-            DrawContextOverlay();
         }
 
         private void DrawHeader()
@@ -222,14 +228,6 @@ namespace ZeroEngine.Editor
                 {
                     int diagnosticCount = _catalog.Diagnostics.Count + _runtimeDiagnostics.Count;
                     DrawInlineMetric(DashboardText.IssueCount(diagnosticCount), diagnosticCount == 0 ? SuccessColor : WarningColor);
-                    if (EditorUiGUILayout.ResponsiveMode(position.width) != EditorUiResponsiveMode.Wide && HasContextSelection() &&
-                        GUILayout.Button(
-                            new GUIContent(DashboardText.Context, DashboardText.ContextTooltip),
-                            GUILayout.Width(48f),
-                            GUILayout.Height(24f)))
-                    {
-                        _showContext = !_showContext;
-                    }
                     if (GUILayout.Button(
                             EditorGUIUtility.IconContent("Refresh", DashboardText.RefreshTooltip),
                             GUILayout.Width(30f),
@@ -245,11 +243,14 @@ namespace ZeroEngine.Editor
             EditorGUILayout.Space(4f);
             using (new EditorGUILayout.HorizontalScope())
             {
-                int nextPage = GUILayout.Toolbar(_page, PageNames, GUILayout.Width(210f), GUILayout.Height(24f));
+                int nextPage = GUILayout.Toolbar(_page, PageNames, GUILayout.Width(280f), GUILayout.Height(24f));
                 if (nextPage != _page)
                 {
                     _page = nextPage;
                     _showContext = false;
+                    if (_page == 3)
+                        RestoreHelpSelectionFromSelectedPanel();
+                    SaveViewState();
                 }
 
                 GUIStyle searchStyle = GUI.skin.FindStyle("ToolbarSearchTextField") ??
@@ -317,11 +318,6 @@ namespace ZeroEngine.Editor
                 DrawCategoryList(modules);
                 EditorGUILayout.Space(8f);
                 DrawToolContent(modules);
-                if (mode == EditorUiResponsiveMode.Wide && HasContextSelection())
-                {
-                    EditorGUILayout.Space(EditorUiTokens.SpaceSm);
-                    DrawContextDrawer(GUILayout.Width(300f));
-                }
             }
         }
 
@@ -639,9 +635,8 @@ namespace ZeroEngine.Editor
                                 new GUIContent(view.Surface.DisplayName, DashboardText.ContextTooltip),
                                 EditorStyles.boldLabel))
                         {
-                            ShowContext(view.Module, view.Surface, null);
+                            OpenHelp(view.Module, view.Surface, null);
                         }
-                        GUILayout.Label(view.Surface.Description, EditorStyles.wordWrappedMiniLabel);
                         using (new EditorGUILayout.HorizontalScope())
                         {
                             EditorUiGUILayout.Chip(new GUIContent(view.Module.DisplayName, view.Module.Description));
@@ -938,11 +933,6 @@ namespace ZeroEngine.Editor
                     EditorGUILayout.Space(EditorUiTokens.SpaceSm);
                 }
                 DrawHomeContent(modules, primarySurfaces);
-                if (mode == EditorUiResponsiveMode.Wide && HasContextSelection())
-                {
-                    EditorGUILayout.Space(EditorUiTokens.SpaceSm);
-                    DrawContextDrawer(GUILayout.Width(300f));
-                }
             }
         }
 
@@ -1051,7 +1041,7 @@ namespace ZeroEngine.Editor
                             new GUIContent(descriptor.DisplayName, DashboardText.ContextTooltip),
                             EditorUiStyles.SectionTitle))
                     {
-                        ShowContext(module, null, descriptor);
+                        OpenHelp(module, null, descriptor);
                     }
                     EditorUiGUILayout.Chip(new GUIContent(module.DisplayName, module.Description));
                 }
@@ -1224,9 +1214,95 @@ namespace ZeroEngine.Editor
             {
                 if (_helpPanel != null)
                     ClearContext();
+                SaveViewState();
                 return;
             }
             ShowContext(module, null, panel);
+            SaveViewState();
+        }
+
+        bool IEditorWorkspaceNavigator.TryShowWorkspace(string moduleId, string panelId)
+        {
+            return TryShowWorkspaceInternal(moduleId, panelId);
+        }
+
+        private bool TryShowWorkspaceInternal(string moduleId, string panelId)
+        {
+            string fullId = (moduleId ?? string.Empty) + "/" + (panelId ?? string.Empty);
+            bool exists = _catalog.VisibleWorkspaceModules
+                .SelectMany(module => module.Panels)
+                .Any(panel => string.Equals(panel.FullId, fullId, StringComparison.Ordinal));
+            if (!exists)
+                return false;
+
+            _page = 0;
+            SelectWorkspacePanel(fullId);
+            SaveViewState();
+            Repaint();
+            return true;
+        }
+
+        private void RestoreHelpSelectionFromSelectedPanel()
+        {
+            if (HasContextSelection() || string.IsNullOrEmpty(_selectedPanelFullId))
+                return;
+
+            DashboardPanel panel = _catalog.VisibleWorkspaceModules
+                .SelectMany(module => module.Panels)
+                .FirstOrDefault(item => string.Equals(item.FullId, _selectedPanelFullId, StringComparison.Ordinal));
+            DashboardModule module = panel == null
+                ? null
+                : _catalog.Modules.FirstOrDefault(item =>
+                    string.Equals(item.ModuleId, panel.ModuleId, StringComparison.Ordinal));
+            if (panel == null || module == null)
+                return;
+
+            _helpModule = module;
+            _helpSurface = null;
+            _helpPanel = panel;
+            _showContext = true;
+        }
+
+        private void RestoreViewState()
+        {
+            DashboardViewState state = DashboardViewStateStore.Load();
+            _page = Mathf.Clamp(state.Page, 0, PageNames.Length - 1);
+            _search = state.Search;
+            _selectedCategoryId = state.SelectedCategoryId;
+            _selectedScopeId = state.SelectedScopeId;
+            _selectedSafetyId = state.SelectedSafetyId;
+            _selectedAvailabilityId = state.SelectedAvailabilityId;
+            _showAdvanced = state.ShowAdvanced;
+            _showMaintenance = state.ShowMaintenance;
+            _selectedPanelFullId = state.SelectedPanelFullId;
+            _moduleScroll = state.ModuleScroll;
+            _contentScroll = state.ContentScroll;
+            _systemScroll = state.SystemScroll;
+            _workspaceNavigationScroll = state.WorkspaceNavigationScroll;
+            _workspaceContentScroll = state.WorkspaceContentScroll;
+            _contextScroll = state.ContextScroll;
+        }
+
+        private void SaveViewState()
+        {
+            DashboardViewStateStore.Save(new DashboardViewState
+            {
+                Page = _page,
+                Search = _search,
+                SelectedCategoryId = _selectedCategoryId,
+                SelectedScopeId = _selectedScopeId,
+                SelectedSafetyId = _selectedSafetyId,
+                SelectedAvailabilityId = _selectedAvailabilityId,
+                ShowAdvanced = _showAdvanced,
+                ShowMaintenance = _showMaintenance,
+                SelectedPanelFullId = _selectedPanelFullId,
+                ModuleScroll = _moduleScroll,
+                ContentScroll = _contentScroll,
+                SystemScroll = _systemScroll,
+                WorkspaceNavigationScroll = _workspaceNavigationScroll,
+                WorkspaceContentScroll = _workspaceContentScroll,
+                ContextScroll = _contextScroll
+            });
         }
 
         private bool ModulePanelMatchesSearch(DashboardModule module)
@@ -1297,6 +1373,19 @@ namespace ZeroEngine.Editor
             _showDeveloperInfo = false;
             _contextScroll = Vector2.zero;
             Repaint();
+        }
+
+        private void OpenHelp(DashboardModule module, DashboardSurface surface, DashboardPanel panel)
+        {
+            ShowContext(module, surface, panel);
+            _page = 3;
+            SaveViewState();
+        }
+
+        private void DrawHelp()
+        {
+            using (new EditorGUILayout.VerticalScope(EditorUiStyles.Card, GUILayout.ExpandWidth(true), GUILayout.ExpandHeight(true)))
+                DrawContextContents(canClose: false);
         }
 
         private void ClearContext()
@@ -1850,6 +1939,112 @@ namespace ZeroEngine.Editor
             {
                 return false;
             }
+        }
+    }
+
+    internal sealed class DashboardViewState
+    {
+        internal int Page;
+        internal string Search = string.Empty;
+        internal string SelectedCategoryId = "authoring";
+        internal string SelectedScopeId = string.Empty;
+        internal string SelectedSafetyId = string.Empty;
+        internal string SelectedAvailabilityId = string.Empty;
+        internal bool ShowAdvanced = true;
+        internal bool ShowMaintenance;
+        internal string SelectedPanelFullId = string.Empty;
+        internal Vector2 ModuleScroll;
+        internal Vector2 ContentScroll;
+        internal Vector2 SystemScroll;
+        internal Vector2 WorkspaceNavigationScroll;
+        internal Vector2 WorkspaceContentScroll;
+        internal Vector2 ContextScroll;
+    }
+
+    internal static class DashboardViewStateStore
+    {
+        private const string DefaultPrefix = "ZGS.Workbench.";
+
+        internal static DashboardViewState Load(string prefix = DefaultPrefix)
+        {
+            prefix = NormalizePrefix(prefix);
+            return new DashboardViewState
+            {
+                Page = EditorPrefs.GetInt(prefix + "Page", 0),
+                Search = EditorPrefs.GetString(prefix + "Search", string.Empty),
+                SelectedCategoryId = EditorPrefs.GetString(prefix + "SelectedCategory", "authoring"),
+                SelectedScopeId = EditorPrefs.GetString(prefix + "SelectedScope", string.Empty),
+                SelectedSafetyId = EditorPrefs.GetString(prefix + "SelectedSafety", string.Empty),
+                SelectedAvailabilityId = EditorPrefs.GetString(prefix + "SelectedAvailability", string.Empty),
+                ShowAdvanced = EditorPrefs.GetBool(prefix + "ShowAdvanced", true),
+                ShowMaintenance = EditorPrefs.GetBool(prefix + "ShowMaintenance", false),
+                SelectedPanelFullId = EditorPrefs.GetString(prefix + "SelectedPanel", string.Empty),
+                ModuleScroll = LoadVector(prefix + "ModuleScroll"),
+                ContentScroll = LoadVector(prefix + "ContentScroll"),
+                SystemScroll = LoadVector(prefix + "SystemScroll"),
+                WorkspaceNavigationScroll = LoadVector(prefix + "WorkspaceNavigationScroll"),
+                WorkspaceContentScroll = LoadVector(prefix + "WorkspaceContentScroll"),
+                ContextScroll = LoadVector(prefix + "ContextScroll")
+            };
+        }
+
+        internal static void Save(DashboardViewState state, string prefix = DefaultPrefix)
+        {
+            if (state == null)
+                throw new ArgumentNullException(nameof(state));
+            prefix = NormalizePrefix(prefix);
+            EditorPrefs.SetInt(prefix + "Page", state.Page);
+            EditorPrefs.SetString(prefix + "Search", state.Search ?? string.Empty);
+            EditorPrefs.SetString(prefix + "SelectedCategory", state.SelectedCategoryId ?? string.Empty);
+            EditorPrefs.SetString(prefix + "SelectedScope", state.SelectedScopeId ?? string.Empty);
+            EditorPrefs.SetString(prefix + "SelectedSafety", state.SelectedSafetyId ?? string.Empty);
+            EditorPrefs.SetString(prefix + "SelectedAvailability", state.SelectedAvailabilityId ?? string.Empty);
+            EditorPrefs.SetBool(prefix + "ShowAdvanced", state.ShowAdvanced);
+            EditorPrefs.SetBool(prefix + "ShowMaintenance", state.ShowMaintenance);
+            EditorPrefs.SetString(prefix + "SelectedPanel", state.SelectedPanelFullId ?? string.Empty);
+            SaveVector(prefix + "ModuleScroll", state.ModuleScroll);
+            SaveVector(prefix + "ContentScroll", state.ContentScroll);
+            SaveVector(prefix + "SystemScroll", state.SystemScroll);
+            SaveVector(prefix + "WorkspaceNavigationScroll", state.WorkspaceNavigationScroll);
+            SaveVector(prefix + "WorkspaceContentScroll", state.WorkspaceContentScroll);
+            SaveVector(prefix + "ContextScroll", state.ContextScroll);
+        }
+
+        internal static void Delete(string prefix)
+        {
+            prefix = NormalizePrefix(prefix);
+            string[] scalarKeys =
+            {
+                "Page", "Search", "SelectedCategory", "SelectedScope", "SelectedSafety",
+                "SelectedAvailability", "ShowAdvanced", "ShowMaintenance", "SelectedPanel"
+            };
+            foreach (string key in scalarKeys)
+                EditorPrefs.DeleteKey(prefix + key);
+            foreach (string key in new[]
+                     {
+                         "ModuleScroll", "ContentScroll", "SystemScroll", "WorkspaceNavigationScroll",
+                         "WorkspaceContentScroll", "ContextScroll"
+                     })
+            {
+                EditorPrefs.DeleteKey(prefix + key + "X");
+                EditorPrefs.DeleteKey(prefix + key + "Y");
+            }
+        }
+
+        private static Vector2 LoadVector(string key)
+        {
+            return new Vector2(EditorPrefs.GetFloat(key + "X", 0f), EditorPrefs.GetFloat(key + "Y", 0f));
+        }
+
+        private static void SaveVector(string key, Vector2 value)
+        {
+            EditorPrefs.SetFloat(key + "X", value.x);
+            EditorPrefs.SetFloat(key + "Y", value.y);
+        }
+
+        private static string NormalizePrefix(string prefix)
+        {
+            return string.IsNullOrWhiteSpace(prefix) ? DefaultPrefix : prefix;
         }
     }
 }

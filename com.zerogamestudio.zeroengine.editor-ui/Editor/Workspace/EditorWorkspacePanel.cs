@@ -35,6 +35,11 @@ namespace ZeroEngine.EditorUI
         IEditorWorkspacePanel CreatePanel(string panelId);
     }
 
+    public interface IEditorWorkspaceNavigator
+    {
+        bool TryShowWorkspace(string moduleId, string panelId);
+    }
+
     public interface IEditorWorkspacePanel : IDisposable
     {
         float RefreshInterval { get; }

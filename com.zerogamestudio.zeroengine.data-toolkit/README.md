@@ -6,9 +6,19 @@ ZeroEngine Data Toolkit is a reusable Unity package for marking, browsing, searc
 
 Add the package through Unity Package Manager using the Git URL for this repository and the `com.zerogamestudio.zeroengine.data-toolkit` path. Production projects should pin a release tag or reviewed commit.
 
-Version 2.0.0 also requires a direct Git pin for `com.zerogamestudio.zeroengine.editor-ui@1.0.0` at the same commit. Unity 2022.3 does not resolve same-repository sibling packages transitively.
+Version 2.1.0 requires a direct Git pin for `com.zerogamestudio.zeroengine.editor-ui@1.4.0` at the same commit. Unity 2022.3 does not resolve same-repository sibling packages transitively.
 
 Version 2.0.1 localizes the Dashboard host label and description to Simplified Chinese; project adapters and menu routes remain compatible.
+
+## Embedded Workspace Panel
+
+Dashboard adapters can reuse the complete Data Toolkit view without opening another window:
+
+```csharp
+return new DataToolkitWorkspacePanel(ExampleDataToolkitRegistration.CreateProfile);
+```
+
+The embedded panel shares the standalone window's inspectors and `EditorPrefs` state, including selected type/asset, searches, column widths, and scroll positions.
 
 ## Project Profile
 

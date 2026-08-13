@@ -1,5 +1,7 @@
 using System;
 using NUnit.Framework;
+using UnityEngine;
+using ZeroEngine.Editor;
 using ZeroEngine.Editor.Dashboard;
 using ZeroEngine.EditorUI;
 
@@ -80,6 +82,57 @@ namespace ZeroEngine.Dashboard.Tests.Editor
             Assert.IsFalse(registry.TryCreate(descriptor, out IEditorWorkspacePanel panel, out DashboardDiagnostic diagnostic));
             Assert.IsNull(panel);
             Assert.AreEqual("workspace-panel-not-created", diagnostic.Code);
+        }
+
+        [Test]
+        public void Dashboard_ImplementsTypedWorkspaceNavigation()
+        {
+            Assert.That(typeof(IEditorWorkspaceNavigator).IsAssignableFrom(typeof(ZeroEngineDashboard)), Is.True);
+        }
+
+        [Test]
+        public void ViewStateStore_RoundTripsNavigationFiltersAndScrolls()
+        {
+            string prefix = "ZGS.Dashboard.Tests." + Guid.NewGuid().ToString("N") + ".";
+            try
+            {
+                DashboardViewStateStore.Save(new DashboardViewState
+                {
+                    Page = 3,
+                    Search = "数据",
+                    SelectedCategoryId = "data-localization",
+                    SelectedScopeId = "pob",
+                    SelectedSafetyId = "read-only",
+                    SelectedAvailabilityId = "available",
+                    ShowAdvanced = false,
+                    ShowMaintenance = true,
+                    SelectedPanelFullId = "pob.tools.data-manager/data-manager",
+                    ModuleScroll = new Vector2(1f, 2f),
+                    ContentScroll = new Vector2(3f, 4f),
+                    SystemScroll = new Vector2(5f, 6f),
+                    WorkspaceNavigationScroll = new Vector2(7f, 8f),
+                    WorkspaceContentScroll = new Vector2(9f, 10f),
+                    ContextScroll = new Vector2(11f, 12f)
+                }, prefix);
+
+                DashboardViewState state = DashboardViewStateStore.Load(prefix);
+
+                Assert.That(state.Page, Is.EqualTo(3));
+                Assert.That(state.Search, Is.EqualTo("数据"));
+                Assert.That(state.SelectedCategoryId, Is.EqualTo("data-localization"));
+                Assert.That(state.SelectedScopeId, Is.EqualTo("pob"));
+                Assert.That(state.SelectedSafetyId, Is.EqualTo("read-only"));
+                Assert.That(state.SelectedAvailabilityId, Is.EqualTo("available"));
+                Assert.That(state.ShowAdvanced, Is.False);
+                Assert.That(state.ShowMaintenance, Is.True);
+                Assert.That(state.SelectedPanelFullId, Is.EqualTo("pob.tools.data-manager/data-manager"));
+                Assert.That(state.WorkspaceContentScroll, Is.EqualTo(new Vector2(9f, 10f)));
+                Assert.That(state.ContextScroll, Is.EqualTo(new Vector2(11f, 12f)));
+            }
+            finally
+            {
+                DashboardViewStateStore.Delete(prefix);
+            }
         }
 
         private static DashboardCatalog Catalog(DashboardPanel panel)

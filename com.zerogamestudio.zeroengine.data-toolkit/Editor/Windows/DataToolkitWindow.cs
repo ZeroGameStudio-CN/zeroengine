@@ -4,6 +4,7 @@ using System.IO;
 using System.Linq;
 using UnityEditor;
 using UnityEngine;
+using ZeroEngine.EditorUI;
 
 namespace ZGS.DataToolkit.Editor
 {
@@ -28,6 +29,12 @@ namespace ZGS.DataToolkit.Editor
         private const string SelectedAssetPathPrefSuffix = "SelectedAssetPath";
         private const string TypeSearchPrefSuffix = "TypeSearch";
         private const string AssetSearchPrefSuffix = "AssetSearch";
+        private const string TypeScrollXPrefSuffix = "TypeScrollX";
+        private const string TypeScrollYPrefSuffix = "TypeScrollY";
+        private const string AssetScrollXPrefSuffix = "AssetScrollX";
+        private const string AssetScrollYPrefSuffix = "AssetScrollY";
+        private const string InspectorScrollXPrefSuffix = "InspectorScrollX";
+        private const string InspectorScrollYPrefSuffix = "InspectorScrollY";
 
         private readonly CompositeAssetInspector inspector = new();
         private readonly SafeSerializedAssetInspector safeInspector = new();
@@ -58,6 +65,8 @@ namespace ZGS.DataToolkit.Editor
         private string activeResizeKey;
         private bool isWarmingAssetCounts;
         private bool allowFullInspectorForSelectedAsset;
+        private bool embeddedHost;
+        private Action repaintRequested;
 
         private readonly struct SelectionSnapshot
         {
@@ -107,10 +116,25 @@ namespace ZGS.DataToolkit.Editor
 
         public static DataToolkitWindow Open(DataToolkitProjectProfile profile)
         {
-            var window = GetWindow<DataToolkitWindow>();
+            var window = Resources.FindObjectsOfTypeAll<DataToolkitWindow>()
+                .FirstOrDefault(candidate => candidate != null && !candidate.embeddedHost);
+            if (window == null)
+            {
+                window = CreateWindow<DataToolkitWindow>();
+            }
             window.Initialize(profile);
             window.Show();
             return window;
+        }
+
+        internal static DataToolkitWindow CreateEmbedded(DataToolkitProjectProfile profile, Action repaint)
+        {
+            var view = CreateInstance<DataToolkitWindow>();
+            view.embeddedHost = true;
+            view.hideFlags = HideFlags.HideAndDontSave;
+            view.repaintRequested = repaint;
+            view.Initialize(profile);
+            return view;
         }
 
         private void Initialize(DataToolkitProjectProfile profile, string serializedProjectIdOverride = null)
@@ -134,6 +158,9 @@ namespace ZGS.DataToolkit.Editor
             assetColumnWidth = Mathf.Clamp(EditorPrefs.GetFloat(settings.PrefKey("AssetColumnWidth"), DefaultAssetColumnWidth), MinColumnWidth, MaxColumnWidth);
             typeSearch = EditorPrefs.GetString(settings.PrefKey(TypeSearchPrefSuffix), string.Empty);
             assetSearch = EditorPrefs.GetString(settings.PrefKey(AssetSearchPrefSuffix), string.Empty);
+            typeColumnScroll = LoadScroll(settings, TypeScrollXPrefSuffix, TypeScrollYPrefSuffix);
+            assetColumnScroll = LoadScroll(settings, AssetScrollXPrefSuffix, AssetScrollYPrefSuffix);
+            inspectorScroll = LoadScroll(settings, InspectorScrollXPrefSuffix, InspectorScrollYPrefSuffix);
             typesToDisplay = ManageableDataTypeDiscovery.GetManageableScriptableObjectTypes().ToArray();
             if (!RestorePersistedSelection())
             {
@@ -169,6 +196,7 @@ namespace ZGS.DataToolkit.Editor
             StopAssetCountWarmup();
             DataToolkitProjectRegistry.ProfilesChanged -= RestoreRegisteredProfileForSerializedProjectId;
             DataToolkitProjectRegistry.DefaultProfileRegistered -= RestoreDefaultProfileIfUsingGenericFallback;
+            repaintRequested = null;
         }
 
         private void OnProjectChange()
@@ -199,12 +227,47 @@ namespace ZGS.DataToolkit.Editor
             DrawBodyLayout(bodyRect);
         }
 
+        internal void DrawEmbedded(Rect rect)
+        {
+            EnsureContext();
+            GUI.BeginGroup(rect);
+            try
+            {
+                var visibleToolbarProviders = GetVisibleToolbarProviders();
+                var visibleHeaderActionProviders = GetVisibleHeaderActionProviders();
+                var headerHeight = CalculateHeaderHeight(visibleToolbarProviders.Count);
+                var contentWidth = Mathf.Max(0f, rect.width - WindowPadding * 2f);
+                var contentHeight = Mathf.Max(0f, rect.height - WindowPadding * 2f);
+                var headerRect = new Rect(WindowPadding, WindowPadding, contentWidth, headerHeight);
+                var bodyRect = new Rect(
+                    WindowPadding,
+                    headerRect.yMax + HeaderBodySpacing,
+                    contentWidth,
+                    Mathf.Max(0f, contentHeight - headerHeight - HeaderBodySpacing));
+
+                DrawHeaderToolbar(headerRect, visibleToolbarProviders, visibleHeaderActionProviders);
+                DrawBodyLayout(bodyRect);
+            }
+            finally
+            {
+                GUI.EndGroup();
+            }
+        }
+
         private void EnsureContext()
         {
             if (context == null)
             {
                 InitializeFromSerializedProjectId();
             }
+        }
+
+        private void RequestRepaint()
+        {
+            if (embeddedHost)
+                repaintRequested?.Invoke();
+            else
+                Repaint();
         }
 
         private void RestoreDefaultProfileIfUsingGenericFallback()
@@ -220,7 +283,7 @@ namespace ZGS.DataToolkit.Editor
             }
 
             Initialize(DataToolkitProjectRegistry.CreateDefaultProfile());
-            Repaint();
+            RequestRepaint();
         }
 
         private void InitializeFromSerializedProjectId()
@@ -260,7 +323,7 @@ namespace ZGS.DataToolkit.Editor
             }
 
             Initialize(profile);
-            Repaint();
+            RequestRepaint();
             return true;
         }
 
@@ -524,7 +587,7 @@ namespace ZGS.DataToolkit.Editor
                         if (EditorGUI.EndChangeCheck())
                         {
                             EditorUtility.SetDirty(selectedAsset);
-                            Repaint();
+                            RequestRepaint();
                         }
 
                         EditorGUILayout.EndScrollView();
@@ -543,7 +606,7 @@ namespace ZGS.DataToolkit.Editor
             if (EditorGUI.EndChangeCheck())
             {
                 EditorUtility.SetDirty(selectedAsset);
-                Repaint();
+                RequestRepaint();
             }
 
             EditorGUILayout.Space(8f);
@@ -551,7 +614,7 @@ namespace ZGS.DataToolkit.Editor
             {
                 allowFullInspectorForSelectedAsset = true;
                 inspector.SetTarget(selectedAsset);
-                Repaint();
+                RequestRepaint();
             }
 
             EditorGUILayout.EndScrollView();
@@ -566,7 +629,7 @@ namespace ZGS.DataToolkit.Editor
             if (EditorGUI.EndChangeCheck())
             {
                 EditorUtility.SetDirty(selectedAsset);
-                Repaint();
+                RequestRepaint();
             }
 
             EditorGUILayout.Space(8f);
@@ -574,7 +637,7 @@ namespace ZGS.DataToolkit.Editor
             {
                 allowFullInspectorForSelectedAsset = true;
                 inspector.SetTarget(selectedAsset);
-                Repaint();
+                RequestRepaint();
             }
 
             EditorGUILayout.EndScrollView();
@@ -614,7 +677,7 @@ namespace ZGS.DataToolkit.Editor
             {
                 allowFullInspectorForSelectedAsset = true;
                 inspector.SetTarget(selectedAsset);
-                Repaint();
+                RequestRepaint();
             }
         }
 
@@ -764,7 +827,7 @@ namespace ZGS.DataToolkit.Editor
             {
                 var maxWidth = Mathf.Max(MinColumnWidth, Mathf.Min(MaxColumnWidth, maxWidthByLayout));
                 width = Mathf.Clamp(width + currentEvent.delta.x, MinColumnWidth, maxWidth);
-                Repaint();
+                RequestRepaint();
                 currentEvent.Use();
             }
 
@@ -918,7 +981,7 @@ namespace ZGS.DataToolkit.Editor
             RestoreSelectionAfterRefresh(selectionSnapshot);
             SavePersistentState();
             StartAssetCountWarmup();
-            Repaint();
+            RequestRepaint();
         }
 
         private void SavePersistentState()
@@ -930,6 +993,9 @@ namespace ZGS.DataToolkit.Editor
 
             EditorPrefs.SetString(context.Settings.PrefKey(TypeSearchPrefSuffix), typeSearch ?? string.Empty);
             EditorPrefs.SetString(context.Settings.PrefKey(AssetSearchPrefSuffix), assetSearch ?? string.Empty);
+            SaveScroll(context.Settings, TypeScrollXPrefSuffix, TypeScrollYPrefSuffix, typeColumnScroll);
+            SaveScroll(context.Settings, AssetScrollXPrefSuffix, AssetScrollYPrefSuffix, assetColumnScroll);
+            SaveScroll(context.Settings, InspectorScrollXPrefSuffix, InspectorScrollYPrefSuffix, inspectorScroll);
 
             if (selectedType == null)
             {
@@ -956,6 +1022,23 @@ namespace ZGS.DataToolkit.Editor
 
             EditorPrefs.SetString(context.Settings.PrefKey(SelectedAssetPathPrefSuffix), assetPath);
             EditorPrefs.SetString(context.Settings.PrefKey(SelectedAssetGuidPrefSuffix), AssetDatabase.AssetPathToGUID(assetPath));
+        }
+
+        private static Vector2 LoadScroll(DataToolkitProjectSettings settings, string xSuffix, string ySuffix)
+        {
+            return new Vector2(
+                EditorPrefs.GetFloat(settings.PrefKey(xSuffix), 0f),
+                EditorPrefs.GetFloat(settings.PrefKey(ySuffix), 0f));
+        }
+
+        private static void SaveScroll(
+            DataToolkitProjectSettings settings,
+            string xSuffix,
+            string ySuffix,
+            Vector2 value)
+        {
+            EditorPrefs.SetFloat(settings.PrefKey(xSuffix), value.x);
+            EditorPrefs.SetFloat(settings.PrefKey(ySuffix), value.y);
         }
 
         private bool RestorePersistedSelection()
@@ -1181,7 +1264,7 @@ namespace ZGS.DataToolkit.Editor
             if (pendingCountTypes.Count == 0)
             {
                 StopAssetCountWarmup();
-                Repaint();
+                RequestRepaint();
                 return;
             }
 
@@ -1191,12 +1274,71 @@ namespace ZGS.DataToolkit.Editor
                 CountAssetsForType(type);
             }
 
-            Repaint();
+            RequestRepaint();
             if (pendingCountTypes.Count == 0)
             {
                 StopAssetCountWarmup();
             }
         }
 
+    }
+
+    public sealed class DataToolkitWorkspacePanel : IEditorWorkspacePanel
+    {
+        private readonly Func<DataToolkitProjectProfile> profileFactory;
+        private DataToolkitWindow embeddedView;
+
+        public DataToolkitWorkspacePanel(Func<DataToolkitProjectProfile> profileFactory)
+        {
+            this.profileFactory = profileFactory ?? throw new ArgumentNullException(nameof(profileFactory));
+        }
+
+        public float RefreshInterval => 0f;
+
+        public void Activate(EditorWorkspacePanelContext context)
+        {
+            if (context == null)
+                throw new ArgumentNullException(nameof(context));
+            DisposeView();
+            embeddedView = DataToolkitWindow.CreateEmbedded(profileFactory(), context.RequestRepaint);
+        }
+
+        public void Deactivate()
+        {
+            DisposeView();
+        }
+
+        public void Tick(EditorWorkspacePanelContext context, double timeSinceStartup)
+        {
+        }
+
+        public void OnGUI(EditorWorkspacePanelContext context)
+        {
+            if (context == null)
+                throw new ArgumentNullException(nameof(context));
+            if (embeddedView == null)
+                Activate(context);
+
+            float height = Mathf.Max(440f, context.Owner.position.height - 170f);
+            Rect rect = GUILayoutUtility.GetRect(
+                0f,
+                height,
+                GUILayout.ExpandWidth(true),
+                GUILayout.Height(height));
+            embeddedView.DrawEmbedded(rect);
+        }
+
+        public void Dispose()
+        {
+            DisposeView();
+        }
+
+        private void DisposeView()
+        {
+            if (embeddedView == null)
+                return;
+            UnityEngine.Object.DestroyImmediate(embeddedView);
+            embeddedView = null;
+        }
     }
 }

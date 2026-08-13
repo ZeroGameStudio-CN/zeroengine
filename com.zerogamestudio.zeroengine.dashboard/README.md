@@ -1,6 +1,6 @@
 # ZeroEngine Dashboard
 
-ZeroEngine Dashboard 4.1.0 是一个可选、仅限 Unity Editor 的简体中文工作台。它从已注册 UPM 包以及项目 `Assets/**/Editor/` 中读取 `ZeroEngineDashboardModule.json`，只展示所有者明确声明的窗口、命令、资料和内嵌面板。
+ZeroEngine Dashboard 4.2.0 是一个可选、仅限 Unity Editor 的简体中文工作台。它从已注册 UPM 包以及项目 `Assets/**/Editor/` 中读取 `ZeroEngineDashboardModule.json`，只展示所有者明确声明的窗口、命令、资料和内嵌面板。
 
 ## 特性
 
@@ -11,9 +11,10 @@ ZeroEngine Dashboard 4.1.0 是一个可选、仅限 Unity Editor 的简体中文
 - `project-write` 与 `destructive` 命令执行前要求明确确认。
 - 项目适配入口可通过 `mountModuleId` 挂到已安装的通用模块，不产生独立项目 Tab。
 - 可选 `section` 将大型模块拆成可读分区；共享 `surfaceId` 可把同一宿主窗口的兼容入口合并为一行多动作。
-- 首页/工具库/系统三页采用自适应布局：首页汇总项目面板和主要流程，工具库按任务、范围、安全和可用性筛选，系统页集中健康状态与诊断。
+- 首页/工具库/系统/帮助四页采用自适应布局：首页左侧汇总项目面板，工具库按任务、范围、安全和可用性筛选，系统页集中健康状态与诊断，帮助页单独承载用途、用法与技术信息。
 - 工具库以 surface 为主行，同一窗口的次要动作收入“更多”；文档类 entry 通过 `contentType: "reference"` 独立进入相关资料，不参与动作 surface。
-- 说明、使用方法、安全影响和技术来源默认进入 tooltip 或上下文抽屉；宽窗口使用右栏，窄窗口使用覆盖层。
+- 说明、使用方法、安全影响和技术来源进入 tooltip 或独立帮助页，不占用工作面板正文。
+- 本机记忆上次页面、面板、搜索、筛选和主要滚动位置；失效面板会安全回到首页总览。
 - 固定 label、状态、安全提示与可操作控件 tooltip 使用简体中文；品牌缩写和技术标识保持原值。
 - 不安装包、不写 manifest、不清理 PlayerPrefs/存档、不写项目资源。
 
@@ -30,7 +31,7 @@ ZeroEngine Dashboard 4.1.0 是一个可选、仅限 Unity Editor 的简体中文
 }
 ```
 
-Unity 2022.3 不会为 Git URL 包自动解析同仓 editor-ui；两项必须直接 pin 到同一提交。4.1.0 要求 editor-ui 1.3.0。
+Unity 2022.3 不会为 Git URL 包自动解析同仓 editor-ui；两项必须直接 pin 到同一提交。4.2.0 要求 editor-ui 1.4.0。
 
 本地 `file:` 依赖只用于临时联调，不应进入共享分支。
 
@@ -86,6 +87,12 @@ entry 可选 `usage` 只在帮助抽屉显示。module 可选 `panels` 数组声
 Dashboard 4.x 仍兼容外部 schema v1，并把它标记为“旧版入口”；第一方正式描述符必须使用 v2。v1 兼容将在首个 5.x 版本移除。
 
 ## 版本历史
+
+### 4.2.0
+
+- 新增独立帮助页，移除工作区与工具列表的常驻说明抽屉。
+- 记住上次页面、面板、搜索、筛选和主要滚动位置。
+- 支持 typed action provider 通过 editor-ui 导航接口切换现有内嵌面板。
 
 ### 4.1.0
 

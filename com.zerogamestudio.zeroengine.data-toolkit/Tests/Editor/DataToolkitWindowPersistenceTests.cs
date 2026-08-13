@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Reflection;
 using NUnit.Framework;
 using UnityEditor;
@@ -57,6 +58,9 @@ namespace ZGS.DataToolkit.Editor.Tests
             var firstWindow = Track(DataToolkitWindow.Open(profile));
             InvokeWindowMethod(firstWindow, "SelectType", typeof(SelectedToolkitTestData));
             InvokeWindowMethod(firstWindow, "SelectAssetByPath", OriginalAssetPath);
+            SetWindowField(firstWindow, "typeColumnScroll", new Vector2(1f, 2f));
+            SetWindowField(firstWindow, "assetColumnScroll", new Vector2(3f, 4f));
+            SetWindowField(firstWindow, "inspectorScroll", new Vector2(5f, 6f));
             Assert.AreEqual(OriginalAssetPath, EditorPrefs.GetString(EditorPrefsPrefix + "_SelectedAssetPath", string.Empty));
             var selectedAssetGuid = EditorPrefs.GetString(EditorPrefsPrefix + "_SelectedAssetGuid", string.Empty);
             Assert.IsNotEmpty(selectedAssetGuid);
@@ -69,6 +73,36 @@ namespace ZGS.DataToolkit.Editor.Tests
             Assert.AreEqual(typeof(SelectedToolkitTestData), GetWindowField(reopenedWindow, "selectedType"));
             Assert.AreEqual(OriginalAssetPath, GetWindowField(reopenedWindow, "selectedAssetPath"));
             Assert.AreEqual(OriginalAssetPath, AssetDatabase.GUIDToAssetPath(selectedAssetGuid));
+            Assert.AreEqual(new Vector2(1f, 2f), GetWindowField(reopenedWindow, "typeColumnScroll"));
+            Assert.AreEqual(new Vector2(3f, 4f), GetWindowField(reopenedWindow, "assetColumnScroll"));
+            Assert.AreEqual(new Vector2(5f, 6f), GetWindowField(reopenedWindow, "inspectorScroll"));
+        }
+
+        [Test]
+        public void EmbeddedView_IsHiddenAndWorkspacePanelIsPublic()
+        {
+            var createEmbedded = typeof(DataToolkitWindow).GetMethod(
+                "CreateEmbedded",
+                BindingFlags.Static | BindingFlags.NonPublic);
+            Assert.NotNull(createEmbedded);
+            var embedded = (DataToolkitWindow)createEmbedded.Invoke(
+                null,
+                new object[] { CreateProfile(), (Action)(() => { }) });
+            try
+            {
+                Assert.AreEqual(HideFlags.HideAndDontSave, embedded.hideFlags);
+                Assert.AreEqual(true, GetWindowField(embedded, "embeddedHost"));
+            }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(embedded);
+            }
+
+            var panelType = typeof(DataToolkitWindow).Assembly.GetType("ZGS.DataToolkit.Editor.DataToolkitWorkspacePanel");
+            Assert.NotNull(panelType);
+            Assert.IsTrue(panelType.IsPublic);
+            Assert.IsTrue(panelType.GetInterfaces().Any(type => type.FullName == "ZeroEngine.EditorUI.IEditorWorkspacePanel"));
+            Assert.NotNull(panelType.GetConstructor(new[] { typeof(Func<DataToolkitProjectProfile>) }));
         }
 
         [Test]
@@ -205,6 +239,12 @@ namespace ZGS.DataToolkit.Editor.Tests
             EditorPrefs.DeleteKey(EditorPrefsPrefix + "_SelectedAssetPath");
             EditorPrefs.DeleteKey(EditorPrefsPrefix + "_TypeSearch");
             EditorPrefs.DeleteKey(EditorPrefsPrefix + "_AssetSearch");
+            EditorPrefs.DeleteKey(EditorPrefsPrefix + "_TypeScrollX");
+            EditorPrefs.DeleteKey(EditorPrefsPrefix + "_TypeScrollY");
+            EditorPrefs.DeleteKey(EditorPrefsPrefix + "_AssetScrollX");
+            EditorPrefs.DeleteKey(EditorPrefsPrefix + "_AssetScrollY");
+            EditorPrefs.DeleteKey(EditorPrefsPrefix + "_InspectorScrollX");
+            EditorPrefs.DeleteKey(EditorPrefsPrefix + "_InspectorScrollY");
         }
 
         private static object InvokeWindowMethod(DataToolkitWindow window, string methodName, params object[] arguments)
