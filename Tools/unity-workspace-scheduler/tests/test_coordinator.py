@@ -9,7 +9,7 @@ from pathlib import Path
 import pytest
 
 from unity_workspace_scheduler.coordinator import WorkspaceCoordinator
-from unity_workspace_scheduler.errors import AuthorizationError, BusyError
+from unity_workspace_scheduler.errors import AuthorizationError, BusyError, StateError
 from unity_workspace_scheduler.state import open_database, resolve_state_paths
 
 
@@ -76,6 +76,193 @@ def test_freeze_is_fair_barrier(scheduler: WorkspaceCoordinator, workspace: Path
     status = scheduler.status(workspace)
     promoted = next(claim for claim in status["claims"] if claim["id"] == later["id"])
     assert promoted["state"] == "active"
+
+
+def test_park_drains_freeze_and_restores_original_fifo(
+    scheduler: WorkspaceCoordinator, workspace: Path
+) -> None:
+    _, owner_token = start(scheduler, workspace, "owner")
+    _, freeze_token = start(scheduler, workspace, "maintenance")
+    _, later_token = start(scheduler, workspace, "later")
+
+    owned = scheduler.acquire_claim(workspace, owner_token, writes=("Assets/Hero.prefab",))
+    freeze = scheduler.acquire_claim(workspace, freeze_token, freeze=True)
+    later = scheduler.acquire_claim(workspace, later_token, writes=("Assets/Hero.prefab",))
+
+    assert freeze["state"] == "queued"
+    assert later["state"] == "queued"
+    with pytest.raises(BusyError) as drain_error:
+        scheduler.assert_claims(workspace, owner_token, writes=("Assets/Hero.prefab",))
+    assert drain_error.value.details == {
+        "reason": "freeze-drain-requested",
+        "freeze_id": freeze["id"],
+        "queue_order": freeze["queue_order"],
+        "park_ready": True,
+    }
+
+    parked = scheduler.park_task(workspace, owner_token)
+    assert parked["claim_ids"] == [owned["id"]]
+    assert parked["states"] == {owned["id"]: "parked"}
+    status = scheduler.status(workspace)
+    by_id = {claim["id"]: claim for claim in status["claims"]}
+    assert by_id[owned["id"]]["parked_for"] == freeze["id"]
+    assert by_id[freeze["id"]]["state"] == "active"
+
+    scheduler.release_claim(workspace, freeze_token, str(freeze["id"]))
+    status = scheduler.status(workspace)
+    by_id = {claim["id"]: claim for claim in status["claims"]}
+    assert by_id[owned["id"]]["state"] == "active"
+    assert by_id[owned["id"]]["parked_for"] is None
+    assert by_id[later["id"]]["state"] == "queued"
+
+
+def test_park_refuses_unsafe_claims_and_requires_a_freeze(
+    scheduler: WorkspaceCoordinator, workspace: Path
+) -> None:
+    _, owner_token = start(scheduler, workspace, "owner")
+    scheduler.acquire_claim(workspace, owner_token, writes=("Assets/Hero.prefab",))
+    with pytest.raises(StateError) as no_freeze:
+        scheduler.park_task(workspace, owner_token)
+    assert no_freeze.value.details["reason"] == "freeze-drain-not-requested"
+
+    scheduler.acquire_claim(workspace, owner_token, resources=("unity-live",))
+    _, freeze_token = start(scheduler, workspace, "maintenance")
+    freeze = scheduler.acquire_claim(workspace, freeze_token, freeze=True)
+    heartbeat = scheduler.heartbeat(workspace, owner_token)
+    assert heartbeat["drain_requested"] == {
+        "freeze_id": freeze["id"],
+        "queue_order": freeze["queue_order"],
+        "park_ready": False,
+    }
+    with pytest.raises(BusyError) as unsafe:
+        scheduler.park_task(workspace, owner_token)
+    assert unsafe.value.details["reason"] == "task-holds-unsafe-claims"
+    with pytest.raises(AuthorizationError):
+        scheduler.park_task(workspace, "not-the-owner-token")
+
+
+def test_park_wait_resumes_without_reacquiring_claims(
+    scheduler: WorkspaceCoordinator, workspace: Path
+) -> None:
+    _, owner_token = start(scheduler, workspace, "owner")
+    _, freeze_token = start(scheduler, workspace, "maintenance")
+    owned = scheduler.acquire_claim(workspace, owner_token, writes=("Assets/Hero.prefab",))
+    freeze = scheduler.acquire_claim(workspace, freeze_token, freeze=True)
+
+    with ThreadPoolExecutor(max_workers=1) as pool:
+        waiting = pool.submit(scheduler.park_task, workspace, owner_token, wait_seconds=2)
+        deadline = time.monotonic() + 1
+        while time.monotonic() < deadline:
+            status = scheduler.status(workspace)
+            freeze_state = next(
+                claim["state"] for claim in status["claims"] if claim["id"] == freeze["id"]
+            )
+            if freeze_state == "active":
+                break
+            time.sleep(0.01)
+        else:
+            pytest.fail("Freeze did not become active after owner parked.")
+        scheduler.release_claim(workspace, freeze_token, str(freeze["id"]))
+        resumed = waiting.result(timeout=2)
+
+    assert resumed["resumed"] is True
+    assert resumed["timed_out"] is False
+    assert resumed["claim_ids"] == [owned["id"]]
+    assert resumed["states"] == {owned["id"]: "active"}
+
+
+def test_park_timeout_preserves_claim_until_freeze_owner_releases_task(
+    scheduler: WorkspaceCoordinator, workspace: Path
+) -> None:
+    _, owner_token = start(scheduler, workspace, "owner")
+    _, freeze_token = start(scheduler, workspace, "maintenance")
+    owned = scheduler.acquire_claim(workspace, owner_token, writes=("Assets/Hero.prefab",))
+    scheduler.acquire_claim(workspace, freeze_token, freeze=True)
+
+    timed_out = scheduler.park_task(workspace, owner_token, wait_seconds=0.01)
+    assert timed_out["timed_out"] is True
+    assert timed_out["states"] == {owned["id"]: "parked"}
+
+    scheduler.release_task(workspace, freeze_token, result="completed")
+    status = scheduler.status(workspace)
+    restored = next(claim for claim in status["claims"] if claim["id"] == owned["id"])
+    assert restored["state"] == "active"
+    assert restored["parked_for"] is None
+
+
+def test_cancelling_queued_freeze_restores_parked_owner_before_later_claim(
+    scheduler: WorkspaceCoordinator, workspace: Path
+) -> None:
+    _, first_token = start(scheduler, workspace, "first")
+    _, blocker_token = start(scheduler, workspace, "blocker")
+    _, freeze_token = start(scheduler, workspace, "maintenance")
+    _, later_token = start(scheduler, workspace, "later")
+    first = scheduler.acquire_claim(workspace, first_token, writes=("Assets/Hero.prefab",))
+    scheduler.acquire_claim(workspace, blocker_token, writes=("Assets/Villain.prefab",))
+    freeze = scheduler.acquire_claim(workspace, freeze_token, freeze=True)
+    later = scheduler.acquire_claim(workspace, later_token, writes=("Assets/Hero.prefab",))
+
+    scheduler.park_task(workspace, first_token)
+    status = scheduler.status(workspace)
+    by_id = {claim["id"]: claim for claim in status["claims"]}
+    assert by_id[freeze["id"]]["state"] == "queued"
+    assert by_id[first["id"]]["state"] == "parked"
+
+    scheduler.release_claim(workspace, freeze_token, str(freeze["id"]))
+    status = scheduler.status(workspace)
+    by_id = {claim["id"]: claim for claim in status["claims"]}
+    assert by_id[first["id"]]["state"] == "active"
+    assert by_id[later["id"]]["state"] == "queued"
+
+
+def test_parked_task_ttl_expiry_cancels_its_claim_without_unknown_fence(
+    scheduler: WorkspaceCoordinator, workspace: Path
+) -> None:
+    owner_task, owner_token = start(scheduler, workspace, "owner")
+    _, freeze_token = start(scheduler, workspace, "maintenance")
+    owned = scheduler.acquire_claim(workspace, owner_token, writes=("Assets/Hero.prefab",))
+    scheduler.acquire_claim(workspace, freeze_token, freeze=True)
+    scheduler.park_task(workspace, owner_token)
+    with open_database(scheduler.paths) as connection:
+        connection.execute(
+            "UPDATE tasks SET expires_at = ? WHERE id = ?",
+            (time.time() - 1, owner_task["id"]),
+        )
+
+    status = scheduler.status(workspace)
+    assert status["blocked"] is False
+    assert not [task for task in status["tasks"] if task["id"] == owner_task["id"]]
+    assert not [claim for claim in status["claims"] if claim["id"] == owned["id"]]
+
+
+def test_unknown_active_freeze_keeps_parked_claims_until_recovery(
+    scheduler: WorkspaceCoordinator, workspace: Path
+) -> None:
+    _, owner_token = start(scheduler, workspace, "owner")
+    freeze_task, freeze_token = start(scheduler, workspace, "maintenance")
+    owned = scheduler.acquire_claim(workspace, owner_token, writes=("Assets/Hero.prefab",))
+    scheduler.acquire_claim(workspace, freeze_token, freeze=True)
+    scheduler.park_task(workspace, owner_token)
+    with open_database(scheduler.paths) as connection:
+        connection.execute(
+            "UPDATE tasks SET expires_at = ? WHERE id = ?",
+            (time.time() - 1, freeze_task["id"]),
+        )
+
+    status = scheduler.status(workspace)
+    assert status["blocked"] is True
+    still_parked = next(claim for claim in status["claims"] if claim["id"] == owned["id"])
+    assert still_parked["state"] == "parked"
+
+    scheduler.resolve_unknown(
+        workspace,
+        str(freeze_task["id"]),
+        resolution="failed",
+        evidence="Maintenance process stopped before touching the workspace.",
+    )
+    status = scheduler.status(workspace)
+    restored = next(claim for claim in status["claims"] if claim["id"] == owned["id"])
+    assert restored["state"] == "active"
 
 
 def test_expired_owner_blocks_until_evidence_recovery(

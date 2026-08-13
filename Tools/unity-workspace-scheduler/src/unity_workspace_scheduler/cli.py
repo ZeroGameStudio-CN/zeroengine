@@ -78,6 +78,11 @@ def build_parser() -> SchedulerArgumentParser:
     heartbeat.add_argument("--ttl", type=float, default=DEFAULT_TASK_TTL_SECONDS)
     heartbeat.add_argument("--note", default=None)
     heartbeat.set_defaults(handler=_task_heartbeat)
+    park = task_commands.add_parser("park")
+    _workspace_argument(park)
+    _token_argument(park)
+    park.add_argument("--wait", type=float, default=0.0)
+    park.set_defaults(handler=_task_park)
     release = task_commands.add_parser("release")
     _workspace_argument(release)
     _token_argument(release)
@@ -189,6 +194,15 @@ def _task_heartbeat(
     token = read_token_file(args.token_file)
     return "Task heartbeat renewed.", coordinator.heartbeat(
         args.workspace, token, ttl_seconds=args.ttl, note=args.note
+    )
+
+
+def _task_park(
+    coordinator: WorkspaceCoordinator, args: argparse.Namespace
+) -> tuple[str, dict[str, Any]]:
+    token = read_token_file(args.token_file)
+    return "Task claims parked for workspace maintenance.", coordinator.park_task(
+        args.workspace, token, wait_seconds=args.wait
     )
 
 

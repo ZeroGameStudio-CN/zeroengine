@@ -22,6 +22,7 @@ Registration is machine-local and writes nothing into the workspace. Unregistere
 ```text
 unity-scheduler task start --workspace <root> --owner <label> --summary <text> --token-file <path> [--ttl <seconds>]
 unity-scheduler task heartbeat --workspace <root> --token-file <path> [--ttl <seconds>] [--note <text>]
+unity-scheduler task park --workspace <root> --token-file <path> [--wait <seconds>]
 unity-scheduler claim acquire --workspace <root> --token-file <path> [--write <path>]... [--resource <name>]... [--wait <seconds>] [--keep-queued]
 unity-scheduler claim assert --workspace <root> --token-file <path> [--write <path>]... [--resource <name>]... [--freeze]
 unity-scheduler claim release --workspace <root> --token-file <path> --claim-id <id>
@@ -30,6 +31,15 @@ unity-scheduler task release --workspace <root> --token-file <path> --result com
 ```
 
 Write paths are normalized inside the registered root; absolute paths outside it are rejected. Ancestor/descendant paths conflict, and an asset path conflicts with its `.meta` partner. Resource names are opaque workspace-local locks. Conflicting claims queue FIFO; non-conflicting claims can run together. A queued freeze is a fair barrier and becomes exclusive after earlier owners leave.
+
+An external queued freeze is also a cooperative drain request. Before its next project write, an
+owner's `claim assert` returns `workspace-busy` with `reason=freeze-drain-requested`. After the
+current operation reaches a known terminal state, the owner runs `task park`. The command
+atomically parks that task's active or queued path-only claims and optionally waits for them to
+resume. Parking refuses resource claims, freeze claims, unknown tasks, and calls made without a
+queued external freeze. When the target freeze is released or cancelled, the same claim IDs and
+scopes return to the FIFO queue at their original order. A wait timeout leaves them parked or
+queued for later automatic resumption; it never duplicates or discards them.
 
 Token files use exclusive creation. POSIX mode is `0600`; Windows inheritance is removed and Full Control is granted only to the current identity. A normal task release removes only a file whose content still matches the task token.
 
