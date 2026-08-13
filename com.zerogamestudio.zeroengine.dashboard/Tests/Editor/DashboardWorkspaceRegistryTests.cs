@@ -93,6 +93,68 @@ namespace ZeroEngine.Dashboard.Tests.Editor
         }
 
         [Test]
+        public void WorkspacePanelLayout_ReservesRightInsetAndAlignsSelectionBar()
+        {
+            Rect row = new Rect(10f, 20f, 300f, 28f);
+
+            DashboardWorkspacePanelLayout layout = DashboardWorkspaceLayout.CalculatePanelLayout(
+                row,
+                handleInset: 12f,
+                handleWidth: 14f,
+                gap: 2f,
+                rightInset: 8f,
+                verticalInset: 4f,
+                selectionWidth: 3f);
+
+            Assert.That(layout.HandleRect, Is.EqualTo(new Rect(22f, 20f, 14f, 28f)));
+            Assert.That(layout.ButtonRect, Is.EqualTo(new Rect(38f, 24f, 264f, 20f)));
+            Assert.That(layout.ButtonRect.xMax, Is.EqualTo(row.xMax - 8f));
+            Assert.That(layout.SelectionRect, Is.EqualTo(new Rect(38f, 25f, 3f, 18f)));
+        }
+
+        [Test]
+        public void WorkspacePanelLayout_NarrowRowNeverOverflowsRightEdge()
+        {
+            Rect row = new Rect(10f, 20f, 30f, 28f);
+
+            DashboardWorkspacePanelLayout layout = DashboardWorkspaceLayout.CalculatePanelLayout(
+                row,
+                handleInset: 12f,
+                handleWidth: 14f,
+                gap: 2f,
+                rightInset: 8f,
+                verticalInset: 4f,
+                selectionWidth: 3f);
+
+            Assert.That(layout.ButtonRect.width, Is.GreaterThanOrEqualTo(1f));
+            Assert.That(layout.ButtonRect.xMax, Is.LessThanOrEqualTo(row.xMax));
+            Assert.That(layout.SelectionRect.x, Is.EqualTo(layout.ButtonRect.x));
+            Assert.That(layout.SelectionRect.yMin, Is.GreaterThan(layout.ButtonRect.yMin));
+            Assert.That(layout.SelectionRect.yMax, Is.LessThan(layout.ButtonRect.yMax));
+        }
+
+        [Test]
+        public void InstalledPackagePresentation_SeparatesInstallAndWorkspaceState()
+        {
+            var namedPackage = new DashboardInstalledPackage(
+                "com.zerogamestudio.zeroengine.dashboard",
+                "4.5.0",
+                "Packages/dashboard",
+                "ZeroEngine Dashboard");
+            var unnamedPackage = new DashboardInstalledPackage(
+                "com.zerogamestudio.zeroengine.core",
+                "2.0.0",
+                "Packages/core");
+
+            Assert.That(namedPackage.DisplayName, Is.EqualTo("ZeroEngine Dashboard"));
+            Assert.That(unnamedPackage.DisplayName, Is.EqualTo(unnamedPackage.Name));
+            Assert.That(DashboardText.InstalledWithoutWorkspaceEntry, Is.EqualTo("已安装 · 无工作台入口"));
+            Assert.That(
+                DashboardText.InstalledWorkspaceContent(2, 1, 3),
+                Is.EqualTo("已安装 · 2 个工具 · 1 个面板 · 3 份资料"));
+        }
+
+        [Test]
         public void Dashboard_OnEnable_QueuesColdCatalogDiscoveryInsteadOfRunningIt()
         {
             DashboardViewState originalState = DashboardViewStateStore.Load();
@@ -147,7 +209,8 @@ namespace ZeroEngine.Dashboard.Tests.Editor
             {
                 DashboardViewStateStore.Save(new DashboardViewState
                 {
-                    Page = 3,
+                    Page = 2,
+                    HomeView = 1,
                     Search = "数据",
                     SelectedCategoryId = "data-localization",
                     SelectedScopeId = "pob",
@@ -181,7 +244,8 @@ namespace ZeroEngine.Dashboard.Tests.Editor
 
                 DashboardViewState state = DashboardViewStateStore.Load(prefix);
 
-                Assert.That(state.Page, Is.EqualTo(3));
+                Assert.That(state.Page, Is.EqualTo(2));
+                Assert.That(state.HomeView, Is.EqualTo(1));
                 Assert.That(state.Search, Is.EqualTo("数据"));
                 Assert.That(state.SelectedCategoryId, Is.EqualTo("data-localization"));
                 Assert.That(state.SelectedScopeId, Is.EqualTo("pob"));
@@ -204,6 +268,28 @@ namespace ZeroEngine.Dashboard.Tests.Editor
                 Assert.That(state.WorkspaceSidebarWidth, Is.EqualTo(286f));
                 Assert.That(state.WorkspaceContentScroll, Is.EqualTo(new Vector2(9f, 10f)));
                 Assert.That(state.ContextScroll, Is.EqualTo(new Vector2(11f, 12f)));
+            }
+            finally
+            {
+                DashboardViewStateStore.Delete(prefix);
+            }
+        }
+
+        [TestCase(0, 0, 0)]
+        [TestCase(1, 0, 1)]
+        [TestCase(2, 1, 0)]
+        [TestCase(3, 2, 0)]
+        public void ViewStateStore_MigratesLegacyFourPageNavigation(int legacyPage, int expectedPage, int expectedHomeView)
+        {
+            string prefix = "ZGS.Dashboard.Tests." + Guid.NewGuid().ToString("N") + ".";
+            try
+            {
+                UnityEditor.EditorPrefs.SetInt(prefix + "Page", legacyPage);
+
+                DashboardViewState state = DashboardViewStateStore.Load(prefix);
+
+                Assert.That(state.Page, Is.EqualTo(expectedPage));
+                Assert.That(state.HomeView, Is.EqualTo(expectedHomeView));
             }
             finally
             {

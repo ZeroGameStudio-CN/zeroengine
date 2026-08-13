@@ -45,7 +45,11 @@ namespace ZeroEngine.Editor.Dashboard
                 PackageManagerPackageInfo.GetAllRegisteredPackages() ?? Array.Empty<PackageManagerPackageInfo>();
             var installedPackages = registeredPackages
                 .Where(package => package != null && !string.IsNullOrEmpty(package.name))
-                .Select(package => new DashboardInstalledPackage(package.name, package.version, package.resolvedPath))
+                .Select(package => new DashboardInstalledPackage(
+                    package.name,
+                    package.version,
+                    package.resolvedPath,
+                    package.displayName))
                 .ToArray();
             var sources = new List<DashboardDescriptorSource>();
 

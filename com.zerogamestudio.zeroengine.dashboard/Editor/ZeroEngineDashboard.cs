@@ -19,11 +19,19 @@ namespace ZeroEngine.Editor
         private const float WorkspaceSidebarMaxWidth = 360f;
         private const float WorkspaceSidebarSplitterWidth = 6f;
         private const float WorkspaceContentMinWidth = 420f;
+        private const float DashboardPageHorizontalInset = 12f;
+        private const float WorkspaceNavigationRightInset = 8f;
+        private const float WorkspacePanelHandleInset = 12f;
+        private const float WorkspacePanelHandleWidth = 14f;
+        private const float WorkspacePanelGap = 2f;
+        private const float WorkspacePanelVerticalInset = 4f;
+        private const float WorkspaceSelectionBarWidth = 3f;
+        private const int HomeViewOverview = 0;
+        private const int HomeViewAllTools = 1;
 
         private static readonly GUIContent[] PageNames =
         {
             new GUIContent(DashboardText.Home, DashboardText.HomeTooltip),
-            new GUIContent(DashboardText.ToolLibrary, DashboardText.ToolLibraryTooltip),
             new GUIContent(DashboardText.System, DashboardText.SystemTooltip),
             new GUIContent(DashboardText.Help, DashboardText.HelpTooltip)
         };
@@ -62,6 +70,7 @@ namespace ZeroEngine.Editor
         private DashboardModule[] _visibleWorkspaceModules = Array.Empty<DashboardModule>();
         private WorkspaceModuleView[] _visibleWorkspaceModuleViews = Array.Empty<WorkspaceModuleView>();
         private WorkspacePanelView[] _visibleWorkspacePanels = Array.Empty<WorkspacePanelView>();
+        private InstalledPackageView[] _installedPackageViews = Array.Empty<InstalledPackageView>();
         private DashboardCatalog _workspaceViewCatalog;
         private DashboardWorkspaceRegistry _workspaceViewRegistry;
         private string _workspaceViewSearch;
@@ -69,6 +78,7 @@ namespace ZeroEngine.Editor
 
         private DashboardCatalog _catalog = DashboardCatalog.Empty;
         private int _page;
+        private int _homeView;
         private string _search = string.Empty;
         private string _selectedCategoryId = "authoring";
         private string _selectedScopeId = string.Empty;
@@ -84,7 +94,10 @@ namespace ZeroEngine.Editor
         private Vector2 _workspaceContentScroll;
         private Vector2 _contextScroll;
         private float _workspaceSidebarWidth = DashboardViewState.DefaultWorkspaceSidebarWidth;
-        private bool _showInstalledPackages;
+        private bool _showInstalledPackages = true;
+        private bool _showConnectedPackages = true;
+        private bool _showPackageIssues = true;
+        private bool _showPackagesWithoutWorkspaceEntry;
         private bool _showProjectAdapters;
         private bool _showContext;
         private bool _showDeveloperInfo;
@@ -209,6 +222,10 @@ namespace ZeroEngine.Editor
         {
             DeactivateWorkspacePanel();
             _catalog = catalog ?? DashboardCatalog.Empty;
+            _installedPackageViews = _catalog.InstalledPackages
+                .Where(ShouldShowInstalledPackage)
+                .Select(CreateInstalledPackageView)
+                .ToArray();
             _catalogLoading = false;
             RebuildWorkspacePanelOrder();
 
@@ -236,7 +253,7 @@ namespace ZeroEngine.Editor
                 DeactivateWorkspacePanel();
                 SaveViewState();
             }
-            if (_page == 3)
+            if (_page == 2)
                 RestoreHelpSelectionFromSelectedPanel();
             Repaint();
         }
@@ -271,6 +288,24 @@ namespace ZeroEngine.Editor
             EditorUiStyles.EnsureCurrent();
             DrawHeader();
             DrawNavigation();
+            using (new EditorGUILayout.HorizontalScope())
+            {
+                GUILayout.Space(DashboardPageHorizontalInset);
+                using (new EditorGUILayout.VerticalScope(GUILayout.ExpandWidth(true), GUILayout.ExpandHeight(true)))
+                    DrawActivePage();
+                GUILayout.Space(DashboardPageHorizontalInset);
+            }
+
+            if (!_hasDrawnShell)
+            {
+                _hasDrawnShell = true;
+                if (_deferRestoredPanelActivation)
+                    Repaint();
+            }
+        }
+
+        private void DrawActivePage()
+        {
             if (_catalogLoading && _catalog.Modules.Count == 0 && _catalog.InstalledPackages.Count == 0)
             {
                 EditorGUILayout.HelpBox(DashboardText.LoadingCatalog, MessageType.Info);
@@ -284,23 +319,13 @@ namespace ZeroEngine.Editor
                         break;
                     case 1:
                         DeactivateWorkspacePanel();
-                        DrawToolLibrary();
+                        DrawSystem();
                         break;
                     default:
                         DeactivateWorkspacePanel();
-                        if (_page == 2)
-                            DrawSystem();
-                        else
-                            DrawHelp();
+                        DrawHelp();
                         break;
                 }
-            }
-
-            if (!_hasDrawnShell)
-            {
-                _hasDrawnShell = true;
-                if (_deferRestoredPanelActivation)
-                    Repaint();
             }
         }
 
@@ -329,12 +354,13 @@ namespace ZeroEngine.Editor
             EditorGUILayout.Space(4f);
             using (new EditorGUILayout.HorizontalScope())
             {
-                int nextPage = GUILayout.Toolbar(_page, PageNames, GUILayout.Width(280f), GUILayout.Height(24f));
+                GUILayout.Space(DashboardPageHorizontalInset);
+                int nextPage = GUILayout.Toolbar(_page, PageNames, GUILayout.Width(224f), GUILayout.Height(24f));
                 if (nextPage != _page)
                 {
                     _page = nextPage;
                     _showContext = false;
-                    if (_page == 3)
+                    if (_page == 2)
                         RestoreHelpSelectionFromSelectedPanel();
                     SaveViewState();
                 }
@@ -351,6 +377,7 @@ namespace ZeroEngine.Editor
                             GUILayout.Height(22f)))
                         _search = string.Empty;
                 }
+                GUILayout.Space(DashboardPageHorizontalInset);
             }
             EditorGUILayout.Space(6f);
         }
@@ -377,7 +404,7 @@ namespace ZeroEngine.Editor
             }
         }
 
-        private void DrawToolLibrary()
+        private void DrawEmbeddedToolLibrary()
         {
             IReadOnlyList<DashboardModule> modules = _catalog.VisibleModules;
             if (modules.Count == 0)
@@ -390,21 +417,9 @@ namespace ZeroEngine.Editor
 
             DrawToolFilters(modules);
 
-            EditorUiResponsiveMode mode = EditorUiGUILayout.ResponsiveMode(position.width);
             EnsureSelectedCategory(modules);
-            if (mode == EditorUiResponsiveMode.Compact)
-            {
-                DrawCompactCategorySelector(modules);
-                DrawToolContent(modules);
-                return;
-            }
-
-            using (new EditorGUILayout.HorizontalScope())
-            {
-                DrawCategoryList(modules);
-                EditorGUILayout.Space(8f);
-                DrawToolContent(modules);
-            }
+            DrawCompactCategorySelector(modules);
+            DrawToolContent(modules);
         }
 
         private void DrawToolFilters(IReadOnlyList<DashboardModule> modules)
@@ -685,6 +700,7 @@ namespace ZeroEngine.Editor
                 {
                     DashboardEntry[] entries = surface.Entries
                         .Where(entry => entry.ContentType == DashboardEntryContentType.Action)
+                        .Where(entry => !IsWorkspaceNavigationDuplicate(entry))
                         .Where(entry => primaryOnly
                             ? entry.Visibility == DashboardEntryVisibility.Primary
                             : string.Equals(EffectiveCategory(entry), categoryId, StringComparison.Ordinal) &&
@@ -1008,9 +1024,11 @@ namespace ZeroEngine.Editor
                 }
                 float contentWidth = Mathf.Max(
                     240f,
-                    position.width - _workspaceSidebarWidth - WorkspaceSidebarSplitterWidth -
-                    EditorUiTokens.SpaceSm - 16f);
-                using (new EditorGUILayout.VerticalScope(GUILayout.Width(contentWidth), GUILayout.ExpandHeight(true)))
+                    position.width - DashboardPageHorizontalInset * 2f - _workspaceSidebarWidth -
+                    WorkspaceSidebarSplitterWidth - EditorUiTokens.SpaceSm - 16f);
+                using (new EditorGUILayout.VerticalScope(
+                           GUILayout.Width(contentWidth),
+                           GUILayout.ExpandHeight(true)))
                     DrawHomeContent(modules, primarySurfaces);
             }
         }
@@ -1020,6 +1038,12 @@ namespace ZeroEngine.Editor
             if (!string.IsNullOrEmpty(_selectedPanelFullId))
             {
                 DrawWorkspaceContent(modules);
+                return;
+            }
+
+            if (_homeView == HomeViewAllTools)
+            {
+                DrawEmbeddedToolLibrary();
                 return;
             }
 
@@ -1099,11 +1123,19 @@ namespace ZeroEngine.Editor
                 _workspaceNavigationScroll = EditorGUILayout.BeginScrollView(_workspaceNavigationScroll);
                 if (EditorUiGUILayout.SelectionButton(
                         new GUIContent(DashboardText.Overview, DashboardText.OverviewTooltip),
-                        string.IsNullOrEmpty(_selectedPanelFullId),
+                        string.IsNullOrEmpty(_selectedPanelFullId) && _homeView == HomeViewOverview,
                         GUILayout.ExpandWidth(true),
                         GUILayout.Height(30f)))
                 {
-                    SelectWorkspacePanel(string.Empty);
+                    SelectHomeView(HomeViewOverview);
+                }
+                if (EditorUiGUILayout.SelectionButton(
+                        new GUIContent(DashboardText.AllTools, DashboardText.AllToolsTooltip),
+                        string.IsNullOrEmpty(_selectedPanelFullId) && _homeView == HomeViewAllTools,
+                        GUILayout.ExpandWidth(true),
+                        GUILayout.Height(30f)))
+                {
+                    SelectHomeView(HomeViewAllTools);
                 }
                 EditorGUILayout.Space(EditorUiTokens.SpaceXs);
                 foreach (WorkspaceModuleView moduleView in moduleViews)
@@ -1128,7 +1160,11 @@ namespace ZeroEngine.Editor
         {
             WorkspacePanelView[] items = _visibleWorkspacePanels;
             DashboardPanel[] panels = items.Select(item => item.Panel).ToArray();
-            GUIContent[] labels = new[] { new GUIContent(DashboardText.Overview, DashboardText.OverviewTooltip) }
+            GUIContent[] labels = new[]
+                {
+                    new GUIContent(DashboardText.Overview, DashboardText.OverviewTooltip),
+                    new GUIContent(DashboardText.AllTools, DashboardText.AllToolsTooltip)
+                }
                 .Concat(items.Select(item =>
             {
                 return new GUIContent(
@@ -1137,19 +1173,23 @@ namespace ZeroEngine.Editor
             })).ToArray();
             int panelIndex = Array.FindIndex(panels, panel =>
                 string.Equals(panel.FullId, _selectedPanelFullId, StringComparison.Ordinal));
-            int index = panelIndex < 0 ? 0 : panelIndex + 1;
+            int index = panelIndex < 0 ? _homeView : panelIndex + 2;
             int next = EditorGUILayout.Popup(
                 new GUIContent(DashboardText.WorkspaceNavigation, DashboardText.WorkspaceNavigationTooltip),
                 index,
                 labels);
             if (next == 0)
             {
-                SelectWorkspacePanel(string.Empty);
+                SelectHomeView(HomeViewOverview);
             }
-            else if (next > 0 && next <= panels.Length)
+            else if (next == 1)
             {
-                DashboardPanel selected = panels[next - 1];
-                DashboardModule module = items[next - 1].Module;
+                SelectHomeView(HomeViewAllTools);
+            }
+            else if (next > 1 && next <= panels.Length + 1)
+            {
+                DashboardPanel selected = panels[next - 2];
+                DashboardModule module = items[next - 2].Module;
                 SelectWorkspacePanel(selected.FullId);
                 ShowContext(module, null, selected);
             }
@@ -1264,7 +1304,11 @@ namespace ZeroEngine.Editor
         {
             Rect rowRect = GUILayoutUtility.GetRect(1f, 26f, GUILayout.ExpandWidth(true));
             Rect handleRect = new Rect(rowRect.x + 2f, rowRect.y, 18f, rowRect.height);
-            Rect countRect = new Rect(rowRect.xMax - 30f, rowRect.y, 28f, rowRect.height);
+            Rect countRect = new Rect(
+                rowRect.xMax - WorkspaceNavigationRightInset - 28f,
+                rowRect.y,
+                28f,
+                rowRect.height);
             Rect foldoutRect = new Rect(
                 handleRect.xMax + 2f,
                 rowRect.y,
@@ -1351,6 +1395,14 @@ namespace ZeroEngine.Editor
             }
         }
 
+        private bool IsWorkspaceNavigationDuplicate(DashboardEntry entry)
+        {
+            if (entry == null || entry.Safety != DashboardEntrySafety.Navigation || _workspaceRegistry == null)
+                return false;
+            return _workspacePanelsById.TryGetValue(entry.FullId, out WorkspacePanelView view) &&
+                   _workspaceRegistry.IsAvailable(view.Panel);
+        }
+
         private float ClampWorkspaceSidebarWidth(float width)
         {
             float availableMaximum = Mathf.Min(
@@ -1424,12 +1476,16 @@ namespace ZeroEngine.Editor
         private bool DrawWorkspacePanelTab(DashboardPanel panel)
         {
             Rect rowRect = GUILayoutUtility.GetRect(1f, 28f, GUILayout.ExpandWidth(true));
-            Rect handleRect = new Rect(rowRect.x + 12f, rowRect.y, 14f, rowRect.height);
-            Rect buttonRect = new Rect(
-                handleRect.xMax + 2f,
-                rowRect.y,
-                Mathf.Max(1f, rowRect.width - handleRect.width - 2f),
-                rowRect.height);
+            DashboardWorkspacePanelLayout layout = DashboardWorkspaceLayout.CalculatePanelLayout(
+                rowRect,
+                WorkspacePanelHandleInset,
+                WorkspacePanelHandleWidth,
+                WorkspacePanelGap,
+                WorkspaceNavigationRightInset,
+                WorkspacePanelVerticalInset,
+                WorkspaceSelectionBarWidth);
+            Rect handleRect = layout.HandleRect;
+            Rect buttonRect = layout.ButtonRect;
             EditorGUIUtility.AddCursorRect(handleRect, MouseCursor.Pan);
             bool showHandle = handleRect.Contains(Event.current.mousePosition) ||
                               string.Equals(_pressedWorkspacePanelId, panel.FullId, StringComparison.Ordinal) ||
@@ -1457,11 +1513,7 @@ namespace ZeroEngine.Editor
                 selected ? EditorStyles.miniButtonMid : EditorStyles.miniButton);
             GUI.backgroundColor = previous;
             if (Event.current.type == EventType.Repaint && selected)
-            {
-                EditorGUI.DrawRect(
-                    new Rect(buttonRect.x + 1f, buttonRect.y + 3f, 3f, buttonRect.height - 6f),
-                    AccentColor);
-            }
+                EditorGUI.DrawRect(layout.SelectionRect, AccentColor);
 
             HandleWorkspacePanelDrag(handleRect, rowRect, panel.FullId);
             if (Event.current.type == EventType.Repaint &&
@@ -1757,6 +1809,8 @@ namespace ZeroEngine.Editor
         private void SelectWorkspacePanel(string fullId)
         {
             _deferRestoredPanelActivation = false;
+            if (!string.IsNullOrEmpty(fullId))
+                _homeView = HomeViewOverview;
             if (string.Equals(_selectedPanelFullId, fullId, StringComparison.Ordinal))
                 return;
             _selectedPanelFullId = fullId ?? string.Empty;
@@ -1779,6 +1833,14 @@ namespace ZeroEngine.Editor
             SaveViewState();
         }
 
+        private void SelectHomeView(int view)
+        {
+            _homeView = Mathf.Clamp(view, HomeViewOverview, HomeViewAllTools);
+            SelectWorkspacePanel(string.Empty);
+            _workspaceContentScroll = Vector2.zero;
+            SaveViewState();
+        }
+
         bool IEditorWorkspaceNavigator.TryShowWorkspace(string moduleId, string panelId)
         {
             return TryShowWorkspaceInternal(moduleId, panelId);
@@ -1794,6 +1856,7 @@ namespace ZeroEngine.Editor
                 return false;
 
             _page = 0;
+            _homeView = HomeViewOverview;
             SelectWorkspacePanel(fullId);
             SaveViewState();
             Repaint();
@@ -1825,6 +1888,7 @@ namespace ZeroEngine.Editor
         {
             DashboardViewState state = DashboardViewStateStore.Load();
             _page = Mathf.Clamp(state.Page, 0, PageNames.Length - 1);
+            _homeView = Mathf.Clamp(state.HomeView, HomeViewOverview, HomeViewAllTools);
             _search = state.Search;
             _selectedCategoryId = state.SelectedCategoryId;
             _selectedScopeId = state.SelectedScopeId;
@@ -1856,6 +1920,7 @@ namespace ZeroEngine.Editor
             DashboardViewStateStore.Save(new DashboardViewState
             {
                 Page = _page,
+                HomeView = _homeView,
                 Search = _search,
                 SelectedCategoryId = _selectedCategoryId,
                 SelectedScopeId = _selectedScopeId,
@@ -1952,7 +2017,7 @@ namespace ZeroEngine.Editor
         private void OpenHelp(DashboardModule module, DashboardSurface surface, DashboardPanel panel)
         {
             ShowContext(module, surface, panel);
-            _page = 3;
+            _page = 2;
             SaveViewState();
         }
 
@@ -2211,8 +2276,7 @@ namespace ZeroEngine.Editor
                     EditorGUILayout.SelectableLabel(diagnostic.MenuPath, EditorStyles.miniLabel, GUILayout.Height(16));
             }
 
-            DashboardInstalledPackage[] packages = _catalog.InstalledPackages
-                .Where(ShouldShowInstalledPackage)
+            InstalledPackageView[] packages = _installedPackageViews
                 .Where(InstalledPackageMatchesSearch)
                 .ToArray();
             _showInstalledPackages = EditorUiGUILayout.Disclosure(
@@ -2224,12 +2288,37 @@ namespace ZeroEngine.Editor
             {
                 using (new EditorGUILayout.VerticalScope(EditorUiStyles.Card))
                 {
-                    for (int index = 0; index < packages.Length; index++)
+                    InstalledPackageView[] issuePackages = packages.Where(item => item.HasDescriptorError).ToArray();
+                    InstalledPackageView[] connectedPackages = packages
+                        .Where(item => !item.HasDescriptorError && item.Module != null)
+                        .ToArray();
+                    InstalledPackageView[] packagesWithoutEntry = packages
+                        .Where(item => !item.HasDescriptorError && item.Module == null)
+                        .ToArray();
+                    using (new EditorGUILayout.HorizontalScope())
                     {
-                        DrawInstalledPackage(packages[index]);
-                        if (index < packages.Length - 1)
-                            EditorUiGUILayout.AccentLine(EditorUiPalette.Current.Border, 1f);
+                        DrawInlineMetric(DashboardText.InstalledCount(packages.Length), AccentColor);
+                        DrawInlineMetric(DashboardText.ConnectedPackageCount(connectedPackages.Length), SuccessColor);
+                        DrawInlineMetric(
+                            DashboardText.PackageWithoutEntryCount(packagesWithoutEntry.Length),
+                            EditorUiPalette.Current.MutedText);
                     }
+                    EditorGUILayout.Space(EditorUiTokens.SpaceXs);
+                    DrawInstalledPackageGroup(
+                        issuePackages,
+                        ref _showPackageIssues,
+                        DashboardText.PackageIssues(issuePackages.Length),
+                        DashboardText.PackageIssuesTooltip);
+                    DrawInstalledPackageGroup(
+                        connectedPackages,
+                        ref _showConnectedPackages,
+                        DashboardText.ConnectedPackages(connectedPackages.Length),
+                        DashboardText.ConnectedPackagesTooltip);
+                    DrawInstalledPackageGroup(
+                        packagesWithoutEntry,
+                        ref _showPackagesWithoutWorkspaceEntry,
+                        DashboardText.PackagesWithoutWorkspaceEntry(packagesWithoutEntry.Length),
+                        DashboardText.PackagesWithoutWorkspaceEntryTooltip);
                 }
             }
 
@@ -2259,20 +2348,116 @@ namespace ZeroEngine.Editor
             EditorGUILayout.EndScrollView();
         }
 
-        private void DrawInstalledPackage(DashboardInstalledPackage package)
+        private InstalledPackageView CreateInstalledPackageView(DashboardInstalledPackage package)
         {
             DashboardModule module = _catalog.Modules.FirstOrDefault(item =>
                 item.Source.Kind == DashboardSourceKind.Package &&
                 string.Equals(item.Source.PackageName, package.Name, StringComparison.Ordinal));
             bool hasDescriptorError = _catalog.Diagnostics.Any(item => IsBelow(item.SourcePath, package.ResolvedPath));
-            string status = hasDescriptorError
-                ? DashboardText.DescriptorIssue
-                : module != null && module.VisibleActions.Count > 0
-                    ? DashboardText.ConnectedTools(module.VisibleActions.Count)
-                    : module != null
-                        ? DashboardText.ConnectedNoTools
-                        : DashboardText.NoToolsDeclared;
-            EditorUiGUILayout.ActionRow(package.Name, status, () => EditorUiGUILayout.Chip(package.Version));
+            return new InstalledPackageView(package, module, hasDescriptorError);
+        }
+
+        private void DrawInstalledPackageGroup(
+            IReadOnlyList<InstalledPackageView> packages,
+            ref bool expanded,
+            string label,
+            string tooltip)
+        {
+            if (packages.Count == 0)
+                return;
+            bool searchActive = !string.IsNullOrEmpty(_search);
+            bool visibleExpanded = searchActive || expanded;
+            bool nextExpanded = EditorUiGUILayout.Disclosure(
+                visibleExpanded,
+                new GUIContent(label, searchActive ? DashboardText.PackageSearchExpandedTooltip(tooltip) : tooltip));
+            if (!searchActive)
+            {
+                expanded = nextExpanded;
+                visibleExpanded = nextExpanded;
+            }
+            if (!visibleExpanded)
+                return;
+
+            for (int index = 0; index < packages.Count; index++)
+            {
+                DrawInstalledPackage(packages[index]);
+                if (index < packages.Count - 1)
+                    EditorUiGUILayout.AccentLine(EditorUiPalette.Current.Border, 1f);
+            }
+            EditorGUILayout.Space(EditorUiTokens.SpaceXs);
+        }
+
+        private static void DrawInstalledPackage(InstalledPackageView view)
+        {
+            DashboardInstalledPackage package = view.Package;
+            DashboardModule module = view.Module;
+            string status = view.HasDescriptorError
+                ? DashboardText.InstalledDescriptorIssue
+                : module != null
+                    ? DashboardText.InstalledWorkspaceContent(
+                        view.ToolCount,
+                        view.PanelCount,
+                        view.ReferenceCount)
+                    : DashboardText.InstalledWithoutWorkspaceEntry;
+            string statusTooltip = view.HasDescriptorError
+                ? DashboardText.InstalledDescriptorIssueTooltip
+                : module != null
+                    ? DashboardText.InstalledWorkspaceContentTooltip
+                    : DashboardText.InstalledWithoutWorkspaceEntryTooltip;
+            Color statusColor = view.HasDescriptorError
+                ? WarningColor
+                : module != null
+                    ? SuccessColor
+                    : EditorUiPalette.Current.MutedText;
+            string packageTooltip = DashboardText.InstalledPackageTooltip(package.Name, package.ResolvedPath);
+            string versionLabel = DashboardText.PackageVersion(package.Version);
+            var versionContent = new GUIContent(versionLabel, DashboardText.PackageVersionTooltip(package.Version));
+
+            using (new EditorGUILayout.VerticalScope(EditorUiStyles.ActionRow))
+            using (new EditorGUILayout.HorizontalScope())
+            {
+                using (new EditorGUILayout.VerticalScope(GUILayout.ExpandWidth(true)))
+                {
+                    GUILayout.Label(new GUIContent(package.DisplayName, packageTooltip), EditorStyles.boldLabel);
+                    if (!string.Equals(package.DisplayName, package.Name, StringComparison.Ordinal))
+                        GUILayout.Label(new GUIContent(package.Name, packageTooltip), EditorStyles.miniLabel);
+                    DrawStatusLabel(new GUIContent(status, statusTooltip), statusColor);
+                }
+                GUILayout.Space(EditorUiTokens.SpaceMd);
+                float versionWidth = Mathf.Clamp(EditorUiStyles.Chip.CalcSize(versionContent).x + 4f, 56f, 112f);
+                EditorUiGUILayout.Chip(versionContent, GUILayout.Width(versionWidth));
+            }
+        }
+
+        private static void DrawStatusLabel(GUIContent content, Color color, params GUILayoutOption[] options)
+        {
+            Color previous = GUI.contentColor;
+            GUI.contentColor = color;
+            GUILayout.Label(content, EditorStyles.miniBoldLabel, options);
+            GUI.contentColor = previous;
+        }
+
+        private sealed class InstalledPackageView
+        {
+            internal InstalledPackageView(
+                DashboardInstalledPackage package,
+                DashboardModule module,
+                bool hasDescriptorError)
+            {
+                Package = package;
+                Module = module;
+                HasDescriptorError = hasDescriptorError;
+                ToolCount = module?.VisibleActions.Count ?? 0;
+                PanelCount = module?.Panels.Count ?? 0;
+                ReferenceCount = module?.VisibleReferences.Count ?? 0;
+            }
+
+            internal DashboardInstalledPackage Package { get; }
+            internal DashboardModule Module { get; }
+            internal bool HasDescriptorError { get; }
+            internal int ToolCount { get; }
+            internal int PanelCount { get; }
+            internal int ReferenceCount { get; }
         }
 
         private bool ShouldShowInstalledPackage(DashboardInstalledPackage package)
@@ -2293,14 +2478,14 @@ namespace ZeroEngine.Editor
             return _catalog.Diagnostics.Any(item => IsBelow(item.SourcePath, package.ResolvedPath));
         }
 
-        private bool InstalledPackageMatchesSearch(DashboardInstalledPackage package)
+        private bool InstalledPackageMatchesSearch(InstalledPackageView view)
         {
             if (string.IsNullOrEmpty(_search))
                 return true;
-            DashboardModule module = _catalog.Modules.FirstOrDefault(item =>
-                item.Source.Kind == DashboardSourceKind.Package &&
-                string.Equals(item.Source.PackageName, package.Name, StringComparison.Ordinal));
+            DashboardInstalledPackage package = view.Package;
+            DashboardModule module = view.Module;
             return Matches(package.Name) ||
+                   Matches(package.DisplayName) ||
                    Matches(package.Version) ||
                    (module != null && ModuleMatchesSearch(module)) ||
                    _catalog.Diagnostics.Any(item => IsBelow(item.SourcePath, package.ResolvedPath) && DiagnosticMatchesSearch(item));
@@ -2545,6 +2730,7 @@ namespace ZeroEngine.Editor
         internal const float DefaultWorkspaceSidebarWidth = 244f;
 
         internal int Page;
+        internal int HomeView;
         internal string Search = string.Empty;
         internal string SelectedCategoryId = "authoring";
         internal string SelectedScopeId = string.Empty;
@@ -2568,13 +2754,35 @@ namespace ZeroEngine.Editor
     internal static class DashboardViewStateStore
     {
         private const string DefaultPrefix = "ZGS.Workbench.";
+        private const int CurrentNavigationVersion = 1;
+        private const int AllToolsHomeView = 1;
 
         internal static DashboardViewState Load(string prefix = DefaultPrefix)
         {
             prefix = NormalizePrefix(prefix);
+            int navigationVersion = EditorPrefs.GetInt(prefix + "NavigationVersion", 0);
+            int page = EditorPrefs.GetInt(prefix + "Page", 0);
+            int homeView = EditorPrefs.GetInt(prefix + "HomeView", 0);
+            if (navigationVersion < CurrentNavigationVersion)
+            {
+                if (page == 1)
+                {
+                    page = 0;
+                    homeView = AllToolsHomeView;
+                }
+                else if (page == 2)
+                {
+                    page = 1;
+                }
+                else if (page >= 3)
+                {
+                    page = 2;
+                }
+            }
             return new DashboardViewState
             {
-                Page = EditorPrefs.GetInt(prefix + "Page", 0),
+                Page = page,
+                HomeView = homeView,
                 Search = EditorPrefs.GetString(prefix + "Search", string.Empty),
                 SelectedCategoryId = EditorPrefs.GetString(prefix + "SelectedCategory", "authoring"),
                 SelectedScopeId = EditorPrefs.GetString(prefix + "SelectedScope", string.Empty),
@@ -2603,7 +2811,9 @@ namespace ZeroEngine.Editor
             if (state == null)
                 throw new ArgumentNullException(nameof(state));
             prefix = NormalizePrefix(prefix);
+            EditorPrefs.SetInt(prefix + "NavigationVersion", CurrentNavigationVersion);
             EditorPrefs.SetInt(prefix + "Page", state.Page);
+            EditorPrefs.SetInt(prefix + "HomeView", state.HomeView);
             EditorPrefs.SetString(prefix + "Search", state.Search ?? string.Empty);
             EditorPrefs.SetString(prefix + "SelectedCategory", state.SelectedCategoryId ?? string.Empty);
             EditorPrefs.SetString(prefix + "SelectedScope", state.SelectedScopeId ?? string.Empty);
@@ -2635,7 +2845,7 @@ namespace ZeroEngine.Editor
             prefix = NormalizePrefix(prefix);
             string[] scalarKeys =
             {
-                "Page", "Search", "SelectedCategory", "SelectedScope", "SelectedSafety",
+                "NavigationVersion", "Page", "HomeView", "Search", "SelectedCategory", "SelectedScope", "SelectedSafety",
                 "SelectedAvailability", "ShowAdvanced", "ShowMaintenance", "SelectedPanel",
                 "WorkspaceModuleOrder", "WorkspacePanelOrder", "CollapsedWorkspaceModuleIds",
                 "WorkspaceSidebarWidth"
@@ -2736,6 +2946,62 @@ namespace ZeroEngine.Editor
                 .Select(id => id.Trim())
                 .Distinct(StringComparer.Ordinal)
                 .ToArray();
+        }
+    }
+
+    internal readonly struct DashboardWorkspacePanelLayout
+    {
+        internal DashboardWorkspacePanelLayout(Rect handleRect, Rect buttonRect, Rect selectionRect)
+        {
+            HandleRect = handleRect;
+            ButtonRect = buttonRect;
+            SelectionRect = selectionRect;
+        }
+
+        internal Rect HandleRect { get; }
+        internal Rect ButtonRect { get; }
+        internal Rect SelectionRect { get; }
+    }
+
+    internal static class DashboardWorkspaceLayout
+    {
+        internal static DashboardWorkspacePanelLayout CalculatePanelLayout(
+            Rect rowRect,
+            float handleInset,
+            float handleWidth,
+            float gap,
+            float rightInset,
+            float verticalInset,
+            float selectionWidth)
+        {
+            float safeHandleInset = Mathf.Max(0f, handleInset);
+            float safeHandleWidth = Mathf.Max(0f, handleWidth);
+            float safeGap = Mathf.Max(0f, gap);
+            float safeRightInset = Mathf.Max(0f, rightInset);
+            float safeVerticalInset = Mathf.Clamp(verticalInset, 0f, Mathf.Max(0f, (rowRect.height - 1f) * 0.5f));
+            float buttonRight = Mathf.Max(rowRect.x + 1f, rowRect.xMax - safeRightInset);
+            float buttonX = Mathf.Min(
+                rowRect.x + safeHandleInset + safeHandleWidth + safeGap,
+                buttonRight - 1f);
+            float handleX = Mathf.Min(rowRect.x + safeHandleInset, buttonX);
+            float actualHandleWidth = Mathf.Min(safeHandleWidth, Mathf.Max(0f, buttonX - safeGap - handleX));
+            Rect handleRect = new Rect(
+                handleX,
+                rowRect.y,
+                actualHandleWidth,
+                rowRect.height);
+            Rect buttonRect = new Rect(
+                buttonX,
+                rowRect.y + safeVerticalInset,
+                buttonRight - buttonX,
+                Mathf.Max(1f, rowRect.height - safeVerticalInset * 2f));
+            float safeSelectionWidth = Mathf.Min(Mathf.Max(1f, selectionWidth), buttonRect.width);
+            Rect selectionRect = new Rect(
+                buttonRect.x,
+                buttonRect.y + 1f,
+                safeSelectionWidth,
+                Mathf.Max(1f, buttonRect.height - 2f));
+            return new DashboardWorkspacePanelLayout(handleRect, buttonRect, selectionRect);
         }
     }
 
