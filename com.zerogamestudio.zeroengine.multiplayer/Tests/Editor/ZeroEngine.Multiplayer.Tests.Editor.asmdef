@@ -1,0 +1,27 @@
+{
+  "name": "ZeroEngine.Multiplayer.Tests.Editor",
+  "rootNamespace": "ZeroEngine.Multiplayer.Tests",
+  "references": [
+    "ZeroEngine.Multiplayer.Core",
+    "ZeroEngine.Multiplayer.Local",
+    "ZeroEngine.Multiplayer.Editor",
+    "ZeroEngine.Multiplayer.Presentation",
+    "UnityEngine.TestRunner",
+    "UnityEditor.TestRunner"
+  ],
+  "includePlatforms": [
+    "Editor"
+  ],
+  "excludePlatforms": [],
+  "allowUnsafeCode": false,
+  "overrideReferences": true,
+  "precompiledReferences": [
+    "nunit.framework.dll"
+  ],
+  "autoReferenced": false,
+  "defineConstraints": [
+    "UNITY_INCLUDE_TESTS"
+  ],
+  "versionDefines": [],
+  "noEngineReferences": false
+}
