@@ -50,6 +50,30 @@ namespace ZGS.DataToolkit.Editor.Tests
         }
 
         [Test]
+        public void ProjectSettings_UseConfiguredUiText()
+        {
+            var uiText = new DataToolkitUiText(
+                dataTypes: "数据类型",
+                assets: "资产",
+                selectAssetPrompt: "从中栏选择一个数据资产。",
+                assetSummaryFormat: "{0} 类 / {1}{2} 项资产");
+            var settings = new DataToolkitProjectSettings(
+                projectId: "LocalizedDataToolkit",
+                windowTitle: "数据管理",
+                menuPath: "工具/数据管理",
+                editorPrefsPrefix: "LocalizedDataToolkit",
+                searchRoots: new[] { TestRoot },
+                excludedPaths: Array.Empty<string>(),
+                uiText: uiText);
+
+            Assert.AreSame(uiText, settings.UiText);
+            Assert.AreEqual("数据类型", settings.UiText.DataTypes);
+            Assert.AreEqual("资产", settings.UiText.Assets);
+            Assert.AreEqual("从中栏选择一个数据资产。", settings.UiText.SelectAssetPrompt);
+            Assert.AreEqual("2 类 / 3+ 项资产", string.Format(settings.UiText.AssetSummaryFormat, 2, 3, "+"));
+        }
+
+        [Test]
         public void ReopenedWindow_RestoresSelectedTypeAndAsset()
         {
             CreateTestAsset(OriginalAssetPath);

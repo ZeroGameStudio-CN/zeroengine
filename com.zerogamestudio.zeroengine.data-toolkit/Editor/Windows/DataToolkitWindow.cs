@@ -404,12 +404,12 @@ namespace ZGS.DataToolkit.Editor
                     GUILayout.Space(HeaderActionSpacing);
                 }
 
-                if (GUILayout.Button("Refresh", GUILayout.Width(82f), GUILayout.Height(24f)))
+                if (GUILayout.Button(context.Settings.UiText.Refresh, GUILayout.Width(82f), GUILayout.Height(24f)))
                 {
                     RefreshCaches();
                 }
 
-                if (GUILayout.Button("Diagnostics", GUILayout.Width(96f), GUILayout.Height(24f)))
+                if (GUILayout.Button(context.Settings.UiText.Diagnostics, GUILayout.Width(96f), GUILayout.Height(24f)))
                 {
                     DataToolkitDiagnosticsWindow.Open(context, assetInspectorProviders);
                 }
@@ -501,7 +501,7 @@ namespace ZGS.DataToolkit.Editor
             GUILayout.BeginArea(rect);
             using (new EditorGUILayout.VerticalScope(EditorStyles.helpBox, GUILayout.ExpandWidth(true), GUILayout.ExpandHeight(true)))
             {
-                EditorGUILayout.LabelField("Data Types", EditorStyles.boldLabel);
+                EditorGUILayout.LabelField(context.Settings.UiText.DataTypes, EditorStyles.boldLabel);
                 typeSearch = EditorGUILayout.TextField(typeSearch, GUI.skin.FindStyle("ToolbarSearchTextField") ?? EditorStyles.toolbarSearchField);
 
                 typeColumnScroll = EditorGUILayout.BeginScrollView(typeColumnScroll);
@@ -523,7 +523,7 @@ namespace ZGS.DataToolkit.Editor
             GUILayout.BeginArea(rect);
             using (new EditorGUILayout.VerticalScope(EditorStyles.helpBox, GUILayout.ExpandWidth(true), GUILayout.ExpandHeight(true)))
             {
-                EditorGUILayout.LabelField(selectedType == null ? "Assets" : selectedType.Name, EditorStyles.boldLabel);
+                EditorGUILayout.LabelField(selectedType == null ? context.Settings.UiText.Assets : selectedType.Name, EditorStyles.boldLabel);
                 assetSearch = EditorGUILayout.TextField(assetSearch, GUI.skin.FindStyle("ToolbarSearchTextField") ?? EditorStyles.toolbarSearchField);
 
                 assetColumnScroll = EditorGUILayout.BeginScrollView(assetColumnScroll);
@@ -553,7 +553,7 @@ namespace ZGS.DataToolkit.Editor
                 {
                     EditorGUILayout.BeginHorizontal();
                     EditorGUILayout.LabelField(selectedAsset.name, EditorStyles.boldLabel);
-                    if (GUILayout.Button("Ping", GUILayout.Width(64f), GUILayout.Height(22f)))
+                    if (GUILayout.Button(context.Settings.UiText.Ping, GUILayout.Width(64f), GUILayout.Height(22f)))
                     {
                         EditorGUIUtility.PingObject(selectedAsset);
                     }
@@ -610,7 +610,7 @@ namespace ZGS.DataToolkit.Editor
             }
 
             EditorGUILayout.Space(8f);
-            if (GUILayout.Button("Open Full Inspector", GUILayout.Height(28f)))
+            if (GUILayout.Button(context.Settings.UiText.OpenFullInspector, GUILayout.Height(28f)))
             {
                 allowFullInspectorForSelectedAsset = true;
                 inspector.SetTarget(selectedAsset);
@@ -633,7 +633,7 @@ namespace ZGS.DataToolkit.Editor
             }
 
             EditorGUILayout.Space(8f);
-            if (GUILayout.Button("Open Full Inspector", GUILayout.Height(28f)))
+            if (GUILayout.Button(context.Settings.UiText.OpenFullInspector, GUILayout.Height(28f)))
             {
                 allowFullInspectorForSelectedAsset = true;
                 inspector.SetTarget(selectedAsset);
@@ -645,20 +645,20 @@ namespace ZGS.DataToolkit.Editor
 
         private void DrawEmptyInspectorState()
         {
-            EditorGUILayout.HelpBox("Select a data asset from the middle column.", MessageType.Info);
+            EditorGUILayout.HelpBox(context.Settings.UiText.SelectAssetPrompt, MessageType.Info);
         }
 
         private void DrawDeferredInspectorState()
         {
             DrawInspectorSummary(
-                "This asset is large, so the full inspector is deferred to keep Data Manager responsive.",
+                context.Settings.UiText.LargeAssetDeferred,
                 MessageType.Info);
         }
 
         private void DrawSafeSummaryInspectorState()
         {
             DrawInspectorSummary(
-                "The full inspector is hidden by default to keep Data Manager responsive.",
+                context.Settings.UiText.FullInspectorHidden,
                 MessageType.Info);
         }
 
@@ -668,12 +668,12 @@ namespace ZGS.DataToolkit.Editor
             var sizeInBytes = GetAssetFileSize(assetPath);
 
             EditorGUILayout.HelpBox(message, messageType);
-            EditorGUILayout.LabelField("Type", selectedAsset.GetType().Name);
-            EditorGUILayout.LabelField("Path", string.IsNullOrEmpty(assetPath) ? "(unknown)" : assetPath);
-            EditorGUILayout.LabelField("Size", FormatByteSize(sizeInBytes));
+            EditorGUILayout.LabelField(context.Settings.UiText.Type, selectedAsset.GetType().Name);
+            EditorGUILayout.LabelField(context.Settings.UiText.Path, string.IsNullOrEmpty(assetPath) ? context.Settings.UiText.Unknown : assetPath);
+            EditorGUILayout.LabelField(context.Settings.UiText.Size, FormatByteSize(sizeInBytes));
 
             EditorGUILayout.Space(8f);
-            if (GUILayout.Button("Open Full Inspector", GUILayout.Height(28f)))
+            if (GUILayout.Button(context.Settings.UiText.OpenFullInspector, GUILayout.Height(28f)))
             {
                 allowFullInspectorForSelectedAsset = true;
                 inspector.SetTarget(selectedAsset);
@@ -951,7 +951,11 @@ namespace ZGS.DataToolkit.Editor
         {
             var countedAssets = assetCountCache.Values.Sum();
             var suffix = assetCountCache.Count < typesToDisplay.Length ? "+" : string.Empty;
-            return $"{typesToDisplay.Length} types / {countedAssets}{suffix} assets";
+            return string.Format(
+                context.Settings.UiText.AssetSummaryFormat,
+                typesToDisplay.Length,
+                countedAssets,
+                suffix);
         }
 
         private string GetAssetCountLabel(Type type)
