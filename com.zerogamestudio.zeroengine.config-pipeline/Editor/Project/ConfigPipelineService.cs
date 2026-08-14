@@ -186,6 +186,36 @@ namespace ZeroGameStudio.ConfigPipeline.Editor
                 () => Check(projectRoot, profileRelativePath, configSetId, packageIdentity));
         }
 
+        public ConfigApplyResult ApplyExpectedPlan(
+            string projectRoot,
+            string profileRelativePath,
+            string configSetId,
+            string packageIdentity,
+            string expectedPlanId)
+        {
+            if (string.IsNullOrWhiteSpace(expectedPlanId))
+            {
+                throw new ArgumentException("Expected Plan ID is required.", nameof(expectedPlanId));
+            }
+
+            ConfigPipelinePreparedPlan prepared = Plan(
+                projectRoot,
+                profileRelativePath,
+                configSetId,
+                packageIdentity);
+            if (!string.Equals(prepared.Plan.PlanId, expectedPlanId, StringComparison.Ordinal))
+            {
+                throw new ConfigPlanStaleException("CONFIG_PLAN_CHANGED_REPLAN_REQUIRED");
+            }
+
+            return new ConfigTransactionalApplier().Apply(
+                projectRoot,
+                prepared.Plan,
+                packageIdentity,
+                prepared.Artifacts,
+                () => Check(projectRoot, profileRelativePath, configSetId, packageIdentity));
+        }
+
         public void WriteTemplates(
             string projectRoot,
             string profileRelativePath,
@@ -236,17 +266,29 @@ namespace ZeroGameStudio.ConfigPipeline.Editor
                     nameof(outputDirectory));
             }
 
-            string output = Path.GetFullPath(outputDirectory);
-            bool createdDirectory = !Directory.Exists(output);
-            Directory.CreateDirectory(output);
-            if (Directory.EnumerateFileSystemEntries(output).Any())
+            string output = Path.GetFullPath(outputDirectory)
+                .TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+            if (Directory.Exists(output) || File.Exists(output))
             {
-                throw new InvalidOperationException("Workbook refresh candidate output directory must be empty.");
+                throw new InvalidOperationException(
+                    "Workbook refresh candidate output directory must not already exist.");
             }
 
-            var candidates = new Dictionary<ConfigWorkbookProfile, WorkbookRefreshCandidateFile>();
+            string parent = Path.GetDirectoryName(output);
+            string outputName = Path.GetFileName(output);
+            if (string.IsNullOrEmpty(parent) || string.IsNullOrEmpty(outputName))
+            {
+                throw new InvalidOperationException(
+                    "Workbook refresh candidate output directory requires a parent directory.");
+            }
+
+            Directory.CreateDirectory(parent);
+            string staging = Path.Combine(
+                parent,
+                "." + outputName + ".staging." + Guid.NewGuid().ToString("N"));
+            Directory.CreateDirectory(staging);
+            var candidates = new Dictionary<ConfigWorkbookProfile, string>();
             var names = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-            var published = new List<string>();
             try
             {
                 foreach (ConfigWorkbookProfile workbook in set.Workbooks)
@@ -257,11 +299,10 @@ namespace ZeroGameStudio.ConfigPipeline.Editor
                         throw new InvalidOperationException("Candidate workbook names must be unique.");
                     }
 
-                    string destination = Path.Combine(output, name);
-                    string temporary = destination + ".tmp." + Guid.NewGuid().ToString("N");
-                    candidates.Add(workbook, new WorkbookRefreshCandidateFile(destination, temporary));
+                    string candidatePath = Path.Combine(staging, name);
+                    candidates.Add(workbook, candidatePath);
                     using (FileStream stream = new FileStream(
-                               temporary,
+                               candidatePath,
                                FileMode.CreateNew,
                                FileAccess.ReadWrite,
                                FileShare.None))
@@ -279,51 +320,26 @@ namespace ZeroGameStudio.ConfigPipeline.Editor
                 XlsxReadResult roundTrip = ReadWorkbooks(
                     set,
                     schema,
-                    workbook => candidates[workbook].TemporaryPath,
-                    workbook => candidates[workbook].DestinationPath);
+                    workbook => candidates[workbook],
+                    workbook => Path.Combine(output, Path.GetFileName(candidates[workbook])));
                 byte[] roundTripBytes = CanonicalJsonWriter.WriteUtf8(roundTrip.Document.Root);
                 if (!sourceBytes.SequenceEqual(roundTripBytes))
                 {
                     throw new InvalidDataException("CONFIG_WORKBOOK_REFRESH_DATA_MISMATCH");
                 }
 
-                foreach (WorkbookRefreshCandidateFile candidate in candidates.Values)
-                {
-                    File.Move(candidate.TemporaryPath, candidate.DestinationPath);
-                    published.Add(candidate.DestinationPath);
-                }
+                Directory.Move(staging, output);
 
                 return new ConfigWorkbookRefreshCandidateResult(sourceHash, candidates.Count);
             }
             catch
             {
-                foreach (WorkbookRefreshCandidateFile candidate in candidates.Values)
+                if (Directory.Exists(staging))
                 {
-                    if (File.Exists(candidate.TemporaryPath))
-                    {
-                        File.Delete(candidate.TemporaryPath);
-                    }
-
-                }
-
-                foreach (string publishedPath in published)
-                {
-                    if (File.Exists(publishedPath))
-                    {
-                        File.Delete(publishedPath);
-                    }
+                    Directory.Delete(staging, true);
                 }
 
                 throw;
-            }
-            finally
-            {
-                if (createdDirectory &&
-                    Directory.Exists(output) &&
-                    !Directory.EnumerateFileSystemEntries(output).Any())
-                {
-                    Directory.Delete(output);
-                }
             }
         }
 
@@ -701,18 +717,6 @@ namespace ZeroGameStudio.ConfigPipeline.Editor
                 new ConfigDocument(set.ConfigSetId, schema.SchemaId, schema.SchemaVersion, new ConfigObjectNode(ordered)),
                 string.Empty,
                 sourceMap);
-        }
-
-        private sealed class WorkbookRefreshCandidateFile
-        {
-            public WorkbookRefreshCandidateFile(string destinationPath, string temporaryPath)
-            {
-                DestinationPath = destinationPath;
-                TemporaryPath = temporaryPath;
-            }
-
-            public string DestinationPath { get; }
-            public string TemporaryPath { get; }
         }
 
         private static void ValidateAssets(

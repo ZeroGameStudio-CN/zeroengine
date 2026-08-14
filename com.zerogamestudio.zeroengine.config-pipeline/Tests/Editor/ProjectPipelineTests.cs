@@ -84,6 +84,62 @@ namespace ZeroGameStudio.ConfigPipeline.Tests.Editor
         }
 
         [Test]
+        public void ExpectedPlanApply_AppliesExactBatchPreview()
+        {
+            ConfigPipelineCommandResult preview = ConfigPipelineBatch.Run(
+                root,
+                "Config/config-project.json",
+                "sample",
+                "package@1",
+                ConfigPipelineMode.Plan);
+
+            Assert.That(preview.PlanId, Is.Not.Empty);
+            Assert.That(
+                Encoding.UTF8.GetString(preview.MachineJson),
+                Does.Contain("\"planId\": \"" + preview.PlanId + "\""));
+
+            ConfigPipelineCommandResult applied = ConfigPipelineBatch.ApplyExpectedPlan(
+                root,
+                "Config/config-project.json",
+                "sample",
+                "package@1",
+                preview.PlanId);
+
+            Assert.That(applied.Current, Is.True);
+            Assert.That(applied.PlanId, Is.EqualTo(preview.PlanId));
+            Assert.That(
+                new ConfigPipelineService().Check(
+                    root,
+                    "Config/config-project.json",
+                    "sample",
+                    "package@1"),
+                Is.True);
+        }
+
+        [Test]
+        public void ExpectedPlanApply_RejectsChangedWorkbookWithoutWriting()
+        {
+            var service = new ConfigPipelineService();
+            ConfigPipelinePreparedPlan preview = service.Plan(
+                root,
+                "Config/config-project.json",
+                "sample",
+                "package@1");
+            WriteWorkbook("Config/items.xlsx", "items", "item-a", 9);
+
+            ConfigPlanStaleException exception = Assert.Throws<ConfigPlanStaleException>(() =>
+                service.ApplyExpectedPlan(
+                    root,
+                    "Config/config-project.json",
+                    "sample",
+                    "package@1",
+                    preview.Plan.PlanId));
+
+            Assert.That(exception.Message, Is.EqualTo("CONFIG_PLAN_CHANGED_REPLAN_REQUIRED"));
+            Assert.That(File.Exists(Path.Combine(root, "Generated", "sample.json")), Is.False);
+        }
+
+        [Test]
         public void ExportJsonCandidate_NeverOverwritesOfficialWorkbooks()
         {
             var service = new ConfigPipelineService();
@@ -174,6 +230,33 @@ namespace ZeroGameStudio.ConfigPipeline.Tests.Editor
 
             Assert.That(File.ReadAllText(marker), Is.EqualTo("keep"));
             Assert.That(Directory.GetFiles(candidates), Is.EqualTo(new[] { marker }));
+        }
+
+        [Test]
+        public void RefreshCandidate_FailureAfterStagingLeavesNoPublishedSet()
+        {
+            string duplicateDirectory = Path.Combine(root, "Config", "duplicate");
+            Directory.CreateDirectory(duplicateDirectory);
+            File.Copy(
+                Path.Combine(root, "Config", "groups.xlsx"),
+                Path.Combine(duplicateDirectory, "items.xlsx"));
+            File.WriteAllText(
+                Path.Combine(root, "Config", "config-project.json"),
+                ProfileJson().Replace("Config/groups.xlsx", "Config/duplicate/items.xlsx"),
+                new UTF8Encoding(false));
+            string candidates = Path.Combine(root, "AtomicCandidates");
+
+            Assert.Throws<InvalidOperationException>(() =>
+                new ConfigPipelineService().ExportWorkbookRefreshCandidate(
+                    root,
+                    "Config/config-project.json",
+                    "sample",
+                    candidates));
+
+            Assert.That(Directory.Exists(candidates), Is.False);
+            Assert.That(
+                Directory.GetDirectories(root, ".AtomicCandidates.staging.*"),
+                Is.Empty);
         }
 
         [Test]

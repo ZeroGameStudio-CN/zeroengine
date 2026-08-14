@@ -36,6 +36,8 @@
 - 可选“配置目录”不占用原有业务/内部 Sheet 安全配额；未知或重复 Sheet 仍计入并拒绝，从而保持旧上限边界兼容。
 - 通用流水线提供数据保留的 `RefreshCandidate`：一次读取配置集全部正式工作簿，按 Profile 的工作簿/Sheet 归属生成 `.candidate.xlsx`，再把整组候选回读为规范化文档；候选与源文档哈希不一致时失败且不发布半成品。
 - 候选文件以临时文件完成整组写入和回读门禁，成功后再原子发布到候选目录；任何失败都不覆盖正式工作簿或既有候选。
+- `Plan` 返回稳定 `planId`；交互式 `Apply` 必须携带该预览 ID。服务会重新生成计划并逐字比对，任何 Excel、Schema、Profile、包身份或输出基线变化均以 `CONFIG_PLAN_CHANGED_REPLAN_REQUIRED` 失败且零写入；一次性/自动化调用可继续使用兼容的 `Apply`。
+- `RefreshCandidate` 在目标目录同级的隐藏 staging 目录完成整组写入和回读，再用一次目录重命名发布；目标目录必须事先不存在。受控失败会删除 staging，进程中断最多遗留未发布的 staging，不会暴露部分正式候选集。
 - 格式升级不做 Schema 迁移、默认值补写、排序或数值规范化；工作簿拆分、表归属、行顺序和所有配置值保持不变。
 - 回滚仅需恢复生成器；已生成工作簿的数据行仍符合原有 Reader 契约。
 
@@ -61,8 +63,9 @@
 8. 任意 Schema 展示标题生成的 Table 列名不超过 255 字符，超长标题工作簿通过 OpenXML Validator 并能由桌面 Excel 正常打开。
 9. 原有 Sheet 上限边界在增加可选目录后仍可读取；未知或重复 Sheet 仍拒绝。
 10. `RefreshCandidate` 对多工作簿配置集生成与 Profile 一一对应的候选；整组候选回读后的规范文档与源文档逐字节一致，正式工作簿哈希不变，注入不一致或写入失败时不发布半成品。
-11. POB 三本正式工作簿先在项目外生成候选并通过源/候选数据哈希一致、OpenXML 0 error 与桌面 Excel 可打开门禁，才允许显式替换；替换后三本工作簿均包含完整动态目录且 `Check` 仍为 current。
-12. `ZeroGameStudio.ConfigPipeline.Tests.XlsxWorkbookTests` 与 `ProjectPipelineTests` 全部通过，相关 Unity 编译为零错误，Console Error=0。
+11. `Plan → ApplyExpectedPlan` 只接受同一 `planId`；预览后修改工作簿会拒绝应用并保持生成目录未写入。
+12. POB 三本正式工作簿先在项目外生成候选并通过源/候选数据哈希一致、OpenXML 0 error 与桌面 Excel 可打开门禁，才允许显式替换；替换后三本工作簿均包含完整动态目录且 `Check` 仍为 current。
+13. `ZeroGameStudio.ConfigPipeline.Tests.XlsxWorkbookTests` 与 `ProjectPipelineTests` 全部通过，相关 Unity 编译为零错误，Console Error=0。
 
 ## 实施证据
 
