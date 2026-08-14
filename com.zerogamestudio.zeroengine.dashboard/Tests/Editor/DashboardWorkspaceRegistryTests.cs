@@ -92,6 +92,14 @@ namespace ZeroEngine.Dashboard.Tests.Editor
             Assert.That(typeof(IEditorWorkspaceNavigator).IsAssignableFrom(typeof(ZeroEngineDashboard)), Is.True);
         }
 
+        [TestCase(669f, false)]
+        [TestCase(670f, true)]
+        [TestCase(859f, true)]
+        public void Dashboard_WorkspaceSidebarUsesActualAvailableWidth(float width, bool expected)
+        {
+            Assert.That(ZeroEngineDashboard.UsesWorkspaceSidebarLayout(width), Is.EqualTo(expected));
+        }
+
         [Test]
         public void WorkspacePanelLayout_ReservesRightInsetAndAlignsSelectionBar()
         {

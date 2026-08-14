@@ -1004,8 +1004,7 @@ namespace ZeroEngine.Editor
                 ShowContext(module, null, panel);
             }
 
-            EditorUiResponsiveMode mode = EditorUiGUILayout.ResponsiveMode(position.width);
-            if (mode == EditorUiResponsiveMode.Compact)
+            if (!UsesWorkspaceSidebarLayout(position.width))
             {
                 if (modules.Length > 0)
                     DrawCompactWorkspaceSelector();
@@ -1411,6 +1410,14 @@ namespace ZeroEngine.Editor
             return Mathf.Clamp(width, WorkspaceSidebarMinWidth, availableMaximum);
         }
 
+        internal static bool UsesWorkspaceSidebarLayout(float width)
+        {
+            float minimumWidth = DashboardPageHorizontalInset * 2f + WorkspaceSidebarMinWidth +
+                                 WorkspaceSidebarSplitterWidth + EditorUiTokens.SpaceSm +
+                                 WorkspaceContentMinWidth + 16f;
+            return width >= minimumWidth;
+        }
+
         private void HandleWorkspaceModuleDrag(Rect handleRect, Rect rowRect, string moduleId)
         {
             Event current = Event.current;
@@ -1675,9 +1682,10 @@ namespace ZeroEngine.Editor
             if (EnsureActiveWorkspacePanel(descriptor))
             {
                 float availableWidth = Mathf.Max(240f, position.width -
-                    (EditorUiGUILayout.ResponsiveMode(position.width) == EditorUiResponsiveMode.Compact
-                        ? 40f
-                        : EditorUiTokens.DashboardSidebarWidth + 72f));
+                    (UsesWorkspaceSidebarLayout(position.width)
+                        ? _workspaceSidebarWidth + WorkspaceSidebarSplitterWidth +
+                          EditorUiTokens.SpaceSm + DashboardPageHorizontalInset * 2f + 16f
+                        : 40f));
                 bool fullWidth = UsesFullWidthWorkspaceLayout(_activePanel);
                 _activePanelContext.AvailableWidth = fullWidth
                     ? availableWidth
