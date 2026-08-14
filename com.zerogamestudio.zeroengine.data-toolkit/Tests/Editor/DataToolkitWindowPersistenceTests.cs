@@ -249,7 +249,7 @@ namespace ZGS.DataToolkit.Editor.Tests
             testWindows.Remove(window);
             if (window != null)
             {
-                window.Close();
+                UnityEngine.Object.DestroyImmediate(window);
             }
         }
 
