@@ -412,8 +412,8 @@ namespace ZGS.DataToolkit.Editor
                     using (new EditorGUILayout.HorizontalScope())
                     {
                         GUILayout.Label(context.Settings.WindowTitle, EditorStyles.boldLabel, GUILayout.MinWidth(160f));
-                        GUILayout.FlexibleSpace();
-                        GUILayout.Label(BuildAssetSummaryText(), EditorStyles.miniLabel);
+                        GUILayout.Space(HeaderActionSpacing);
+                        GUILayout.Label(BuildAssetSummaryText(), EditorStyles.miniLabel, GUILayout.ExpandWidth(true));
                     }
 
                     using (new EditorGUILayout.HorizontalScope())
