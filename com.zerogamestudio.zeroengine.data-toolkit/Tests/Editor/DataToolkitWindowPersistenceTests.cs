@@ -36,7 +36,7 @@ namespace ZGS.DataToolkit.Editor.Tests
             {
                 if (window != null)
                 {
-                    UnityEngine.Object.DestroyImmediate(window);
+                    window.Close();
                 }
             }
 
@@ -249,7 +249,7 @@ namespace ZGS.DataToolkit.Editor.Tests
             testWindows.Remove(window);
             if (window != null)
             {
-                UnityEngine.Object.DestroyImmediate(window);
+                window.Close();
             }
         }
 
