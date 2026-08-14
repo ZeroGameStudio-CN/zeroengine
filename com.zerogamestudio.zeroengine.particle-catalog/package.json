@@ -1,0 +1,25 @@
+{
+  "name": "com.zerogamestudio.zeroengine.particle-catalog",
+  "version": "0.1.0",
+  "displayName": "ZeroEngine Particle Catalog",
+  "description": "Editor-only particle catalog schema, search, persistence, Ollama classification, and personal DeepSeek recommendation client.",
+  "unity": "2022.3",
+  "dependencies": {},
+  "keywords": [
+    "zeroengine",
+    "particle",
+    "catalog",
+    "ollama",
+    "deepseek"
+  ],
+  "author": {
+    "name": "ZeroGameStudio",
+    "url": "https://github.com/zerogamestudio"
+  },
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/liuzqk/zeroengine.git",
+    "directory": "com.zerogamestudio.zeroengine.particle-catalog"
+  }
+}
