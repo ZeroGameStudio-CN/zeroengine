@@ -2,6 +2,8 @@ using System;
 using System.IO;
 using System.Linq;
 using System.Text;
+using DocumentFormat.OpenXml.Packaging;
+using DocumentFormat.OpenXml.Validation;
 using NUnit.Framework;
 using ZeroGameStudio.ConfigPipeline.Editor;
 
@@ -102,6 +104,76 @@ namespace ZeroGameStudio.ConfigPipeline.Tests.Editor
             Assert.That(
                 ConfigPipelinePlanBuilder.HashFile(Path.Combine(root, "Config", "items.xlsx")),
                 Is.EqualTo(officialHash));
+        }
+
+        [Test]
+        public void RefreshCandidate_PreservesAllWorkbookDataAndOfficialFiles()
+        {
+            var service = new ConfigPipelineService();
+            string itemsHash = ConfigPipelinePlanBuilder.HashFile(Path.Combine(root, "Config", "items.xlsx"));
+            string groupsHash = ConfigPipelinePlanBuilder.HashFile(Path.Combine(root, "Config", "groups.xlsx"));
+            string candidates = Path.Combine(root, "RefreshCandidates");
+
+            ConfigWorkbookRefreshCandidateResult result = service.ExportWorkbookRefreshCandidate(
+                root,
+                "Config/config-project.json",
+                "sample",
+                candidates);
+
+            Assert.That(result.CandidateFileCount, Is.EqualTo(2));
+            Assert.That(result.SourceHash, Is.Not.Empty);
+            Assert.That(
+                ConfigPipelinePlanBuilder.HashFile(Path.Combine(root, "Config", "items.xlsx")),
+                Is.EqualTo(itemsHash));
+            Assert.That(
+                ConfigPipelinePlanBuilder.HashFile(Path.Combine(root, "Config", "groups.xlsx")),
+                Is.EqualTo(groupsHash));
+            foreach (string name in new[] { "items.candidate.xlsx", "groups.candidate.xlsx" })
+            {
+                string path = Path.Combine(candidates, name);
+                Assert.That(File.Exists(path), Is.True);
+                using (SpreadsheetDocument workbook = SpreadsheetDocument.Open(path, false))
+                {
+                    Assert.That(new OpenXmlValidator().Validate(workbook), Is.Empty);
+                    Assert.That(
+                        workbook.WorkbookPart.Workbook.Sheets
+                            .Elements<DocumentFormat.OpenXml.Spreadsheet.Sheet>()
+                            .Any(value => value.Name.Value == XlsxConfigWorkbookWriter.NavigationSheetName),
+                        Is.True);
+                }
+            }
+
+            ConfigPipelineCommandResult batch = ConfigPipelineBatch.Run(
+                root,
+                "Config/config-project.json",
+                "sample",
+                null,
+                ConfigPipelineMode.RefreshCandidate,
+                Path.Combine(root, "BatchRefreshCandidates"));
+            Assert.That(batch.Success, Is.True);
+            Assert.That(batch.Summary, Does.Contain(result.SourceHash));
+            Assert.That(
+                ConfigPipelineBatch.RequiresPackageIdentity(ConfigPipelineMode.RefreshCandidate),
+                Is.False);
+        }
+
+        [Test]
+        public void RefreshCandidate_RejectsNonEmptyOutputWithoutChangingIt()
+        {
+            string candidates = Path.Combine(root, "ExistingCandidates");
+            Directory.CreateDirectory(candidates);
+            string marker = Path.Combine(candidates, "keep.txt");
+            File.WriteAllText(marker, "keep", new UTF8Encoding(false));
+
+            Assert.Throws<InvalidOperationException>(() =>
+                new ConfigPipelineService().ExportWorkbookRefreshCandidate(
+                    root,
+                    "Config/config-project.json",
+                    "sample",
+                    candidates));
+
+            Assert.That(File.ReadAllText(marker), Is.EqualTo("keep"));
+            Assert.That(Directory.GetFiles(candidates), Is.EqualTo(new[] { marker }));
         }
 
         [Test]

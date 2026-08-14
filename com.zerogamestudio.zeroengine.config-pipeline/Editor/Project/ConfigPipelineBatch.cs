@@ -13,6 +13,7 @@ namespace ZeroGameStudio.ConfigPipeline.Editor
         Apply,
         Compile,
         ExportCandidate,
+        RefreshCandidate,
         UpgradeCandidate
     }
 
@@ -91,6 +92,21 @@ namespace ZeroGameStudio.ConfigPipeline.Editor
                         candidateOutputDirectory);
                     current = false;
                     detail = candidate.DiagnosticCode;
+                    break;
+                case ConfigPipelineMode.RefreshCandidate:
+                    if (string.IsNullOrWhiteSpace(candidateOutputDirectory))
+                    {
+                        throw new ArgumentException("Candidate output directory is required.");
+                    }
+
+                    ConfigWorkbookRefreshCandidateResult refresh =
+                        service.ExportWorkbookRefreshCandidate(
+                            projectRoot,
+                            profileRelativePath,
+                            configSetId,
+                            candidateOutputDirectory);
+                    current = false;
+                    detail = refresh.SourceHash + ":" + refresh.CandidateFileCount;
                     break;
                 case ConfigPipelineMode.UpgradeCandidate:
                     if (string.IsNullOrWhiteSpace(candidateOutputDirectory) ||
@@ -199,7 +215,8 @@ namespace ZeroGameStudio.ConfigPipeline.Editor
 
         public static bool RequiresPackageIdentity(ConfigPipelineMode mode)
         {
-            return mode != ConfigPipelineMode.ExportCandidate;
+            return mode != ConfigPipelineMode.ExportCandidate &&
+                   mode != ConfigPipelineMode.RefreshCandidate;
         }
 
         internal static byte[] CreateFailureMachineJson(Exception exception)

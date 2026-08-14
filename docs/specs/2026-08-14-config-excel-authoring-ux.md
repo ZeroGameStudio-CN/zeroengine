@@ -2,7 +2,7 @@
 
 - 状态：Implemented
 - 更新日期：2026-08-14
-- 基线：`49251f09005cd21c579cf3475833b3caccdff430` 加当前未提交的通用导航 Sheet 实现
+- 基线：`70fe1f75ceca7507352f3a5f7bf96474b55f2a5f`
 - 执行授权：已授权；来源为用户要求优化布局、筛选与操作体验并“修审到毕业”
 - 终态提交授权：已授权；来源为用户要求“修审到毕业”
 
@@ -10,7 +10,7 @@
 
 把通用配置流水线生成的 XLSX 做成适合策划长期批量录入的工作簿：容易找到业务 Sheet、容易筛选和追加记录、字段含义与必填状态清楚，同时保持可靠的双向导入导出。
 
-不引入宏、脚本按钮、COM 运行时依赖或搜打撤专用名称；不改变 Schema、JSON、行列数据契约，也不修改任何项目生产配置工作簿。
+不引入宏、脚本按钮、COM 运行时依赖或搜打撤专用名称；不改变 Schema、JSON、行列数据契约。正式工作簿升级必须由数据保留候选经过回读一致性门禁后显式替换，生成候选本身不得修改生产配置。
 
 ## 当前与目标行为
 
@@ -34,13 +34,19 @@
 - Schema 字符串列使用 Excel 文本格式，策划输入 `00123` 等标识符时不得被 Excel 自动转成数字。
 - Table 展示表头在添加必填标识、目录前缀和去重后仍不得超过 Excel 的 255 字符限制；完整机器字段名和 Schema 元数据保持不变。
 - 可选“配置目录”不占用原有业务/内部 Sheet 安全配额；未知或重复 Sheet 仍计入并拒绝，从而保持旧上限边界兼容。
+- 通用流水线提供数据保留的 `RefreshCandidate`：一次读取配置集全部正式工作簿，按 Profile 的工作簿/Sheet 归属生成 `.candidate.xlsx`，再把整组候选回读为规范化文档；候选与源文档哈希不一致时失败且不发布半成品。
+- 候选文件以临时文件完成整组写入和回读门禁，成功后再原子发布到候选目录；任何失败都不覆盖正式工作簿或既有候选。
+- 格式升级不做 Schema 迁移、默认值补写、排序或数值规范化；工作簿拆分、表归属、行顺序和所有配置值保持不变。
 - 回滚仅需恢复生成器；已生成工作簿的数据行仍符合原有 Reader 契约。
 
 ## 范围
 
 - `com.zerogamestudio.zeroengine.config-pipeline/Editor/Excel/XlsxConfigWorkbookWriter.cs`
 - `com.zerogamestudio.zeroengine.config-pipeline/Editor/Excel/XlsxConfigSourceReader.cs`
+- `com.zerogamestudio.zeroengine.config-pipeline/Editor/Project/ConfigPipelineService.cs`
+- `com.zerogamestudio.zeroengine.config-pipeline/Editor/Project/ConfigPipelineBatch.cs`
 - `com.zerogamestudio.zeroengine.config-pipeline/Tests/Editor/XlsxWorkbookTests.cs`
+- `com.zerogamestudio.zeroengine.config-pipeline/Tests/Editor/ProjectPipelineTests.cs`
 - 本规格
 
 ## 验证与验收
@@ -54,7 +60,9 @@
 7. Schema 字符串列使用文本格式；桌面 Excel 输入 `00123`、保存并重开后仍为 `00123`，Reader 能按字符串导入。
 8. 任意 Schema 展示标题生成的 Table 列名不超过 255 字符，超长标题工作簿通过 OpenXML Validator 并能由桌面 Excel 正常打开。
 9. 原有 Sheet 上限边界在增加可选目录后仍可读取；未知或重复 Sheet 仍拒绝。
-10. `ZeroGameStudio.ConfigPipeline.Tests.XlsxWorkbookTests` 全部通过，相关 Unity 编译为零错误，Console Error=0。
+10. `RefreshCandidate` 对多工作簿配置集生成与 Profile 一一对应的候选；整组候选回读后的规范文档与源文档逐字节一致，正式工作簿哈希不变，注入不一致或写入失败时不发布半成品。
+11. POB 三本正式工作簿先在项目外生成候选并通过源/候选数据哈希一致、OpenXML 0 error 与桌面 Excel 可打开门禁，才允许显式替换；替换后三本工作簿均包含完整动态目录且 `Check` 仍为 current。
+12. `ZeroGameStudio.ConfigPipeline.Tests.XlsxWorkbookTests` 与 `ProjectPipelineTests` 全部通过，相关 Unity 编译为零错误，Console Error=0。
 
 ## 实施证据
 
@@ -62,3 +70,13 @@
 - 桌面 Excel：默认打开“配置目录”；目录与业务 Sheet 可筛选、跳转、追加行；字符串 `00123` 保存重开后保持不变且 Reader 可导入；业务 Sheet 未受保护，技术 Sheet 仍受保护。
 - 独立 .NET 回归：15/15；Unity EditMode `ZeroGameStudio.ConfigPipeline.Tests.XlsxWorkbookTests`：15/15。
 - Unity 编译：0 error；Console：0 Error；未修改任何生产配置工作簿。
+- 数据保留候选独立全源编译与真实旧表验证：源文档哈希 `4f348c916365380db753d64b654f90c9feb3673d82775ea2e577b9085d6fe7b7`；三本候选分别为 16/27/13 个业务 Sheet，导航项与 Table 数量逐一相等，OpenXML 0 error，生成前后正式旧表哈希不变；非空输出目录拒绝且原内容不变。
+- Unity 本地包验证：`ProjectPipelineTests` 12/12、`XlsxWorkbookTests` 15/15、最终消费者代码编译 0 error/0 warning。
+- POB 正式迁移：三本候选通过门禁后显式替换正式表，替换后 `POBExtractionConfigPipelineIntegrationTests` 11/11（含 `Check current`）；旧 `ExtractionItem_New.xlsm` SHA-256 保持 `BD07DB91617E9FC697CE4EB7DDB72B1115B63D5C6056FEFA8DC9FAB2D261E8D1`。
+
+## 本轮实施顺序与恢复
+
+1. 先实现并回归 `RefreshCandidate`，只写系统临时候选目录。
+2. 对 POB 旧表记录 SHA-256 与规范文档哈希，生成三本候选并完成 OpenXML、Reader 和桌面 Excel 验证。
+3. 仅在全部门禁通过后备份旧表到任务临时目录，再用候选替换三本正式表；任一替换或后续 Check 失败时停止并保留备份与现场证据，不自动掩盖失败。
+4. 成功后提交三本新格式正式表；历史 `ExtractionItem_New` 不在范围内且保持不变。

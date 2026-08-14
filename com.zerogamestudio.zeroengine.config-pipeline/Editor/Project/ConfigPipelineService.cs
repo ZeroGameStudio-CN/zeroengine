@@ -45,6 +45,18 @@ namespace ZeroGameStudio.ConfigPipeline.Editor
         public int CandidateFileCount { get; }
     }
 
+    public sealed class ConfigWorkbookRefreshCandidateResult
+    {
+        internal ConfigWorkbookRefreshCandidateResult(string sourceHash, int candidateFileCount)
+        {
+            SourceHash = sourceHash;
+            CandidateFileCount = candidateFileCount;
+        }
+
+        public string SourceHash { get; }
+        public int CandidateFileCount { get; }
+    }
+
     public sealed class ConfigPipelineService
     {
         public ConfigPipelinePreparedPlan Plan(
@@ -199,6 +211,118 @@ namespace ZeroGameStudio.ConfigPipeline.Editor
                         null,
                         null,
                         workbook.Tables);
+                }
+            }
+        }
+
+        public ConfigWorkbookRefreshCandidateResult ExportWorkbookRefreshCandidate(
+            string projectRoot,
+            string profileRelativePath,
+            string configSetId,
+            string outputDirectory)
+        {
+            string root = ConfigPathGuard.NormalizeProjectRoot(projectRoot);
+            ConfigProjectProfile profile = ConfigProjectProfileParser.Parse(File.ReadAllBytes(
+                ConfigPathGuard.ResolveInside(root, profileRelativePath)));
+            ConfigSetProfile set = profile.GetConfigSet(configSetId);
+            ConfigSchema schema = ConfigSchemaParser.Parse(File.ReadAllBytes(
+                ConfigPathGuard.ResolveInside(root, set.SchemaPath)));
+            XlsxReadResult source = ReadWorkbooks(root, set, schema);
+            byte[] sourceBytes = CanonicalJsonWriter.WriteUtf8(source.Document.Root);
+            string sourceHash = ConfigHash.Sha256(sourceBytes);
+            if (string.IsNullOrWhiteSpace(outputDirectory))
+            {
+                throw new ArgumentException("Workbook refresh candidate output directory is required.",
+                    nameof(outputDirectory));
+            }
+
+            string output = Path.GetFullPath(outputDirectory);
+            bool createdDirectory = !Directory.Exists(output);
+            Directory.CreateDirectory(output);
+            if (Directory.EnumerateFileSystemEntries(output).Any())
+            {
+                throw new InvalidOperationException("Workbook refresh candidate output directory must be empty.");
+            }
+
+            var candidates = new Dictionary<ConfigWorkbookProfile, WorkbookRefreshCandidateFile>();
+            var names = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            var published = new List<string>();
+            try
+            {
+                foreach (ConfigWorkbookProfile workbook in set.Workbooks)
+                {
+                    string name = Path.GetFileNameWithoutExtension(workbook.Path) + ".candidate.xlsx";
+                    if (!names.Add(name))
+                    {
+                        throw new InvalidOperationException("Candidate workbook names must be unique.");
+                    }
+
+                    string destination = Path.Combine(output, name);
+                    string temporary = destination + ".tmp." + Guid.NewGuid().ToString("N");
+                    candidates.Add(workbook, new WorkbookRefreshCandidateFile(destination, temporary));
+                    using (FileStream stream = new FileStream(
+                               temporary,
+                               FileMode.CreateNew,
+                               FileAccess.ReadWrite,
+                               FileShare.None))
+                    {
+                        new XlsxConfigWorkbookWriter().WriteTemplate(
+                            stream,
+                            schema,
+                            configSetId,
+                            source.Document,
+                            sourceHash,
+                            workbook.Tables);
+                    }
+                }
+
+                XlsxReadResult roundTrip = ReadWorkbooks(
+                    set,
+                    schema,
+                    workbook => candidates[workbook].TemporaryPath,
+                    workbook => candidates[workbook].DestinationPath);
+                byte[] roundTripBytes = CanonicalJsonWriter.WriteUtf8(roundTrip.Document.Root);
+                if (!sourceBytes.SequenceEqual(roundTripBytes))
+                {
+                    throw new InvalidDataException("CONFIG_WORKBOOK_REFRESH_DATA_MISMATCH");
+                }
+
+                foreach (WorkbookRefreshCandidateFile candidate in candidates.Values)
+                {
+                    File.Move(candidate.TemporaryPath, candidate.DestinationPath);
+                    published.Add(candidate.DestinationPath);
+                }
+
+                return new ConfigWorkbookRefreshCandidateResult(sourceHash, candidates.Count);
+            }
+            catch
+            {
+                foreach (WorkbookRefreshCandidateFile candidate in candidates.Values)
+                {
+                    if (File.Exists(candidate.TemporaryPath))
+                    {
+                        File.Delete(candidate.TemporaryPath);
+                    }
+
+                }
+
+                foreach (string publishedPath in published)
+                {
+                    if (File.Exists(publishedPath))
+                    {
+                        File.Delete(publishedPath);
+                    }
+                }
+
+                throw;
+            }
+            finally
+            {
+                if (createdDirectory &&
+                    Directory.Exists(output) &&
+                    !Directory.EnumerateFileSystemEntries(output).Any())
+                {
+                    Directory.Delete(output);
                 }
             }
         }
@@ -518,11 +642,24 @@ namespace ZeroGameStudio.ConfigPipeline.Editor
             ConfigSetProfile set,
             ConfigSchema schema)
         {
+            return ReadWorkbooks(
+                set,
+                schema,
+                workbook => ConfigPathGuard.ResolveInside(root, workbook.Path),
+                workbook => workbook.Path);
+        }
+
+        private static XlsxReadResult ReadWorkbooks(
+            ConfigSetProfile set,
+            ConfigSchema schema,
+            Func<ConfigWorkbookProfile, string> pathResolver,
+            Func<ConfigWorkbookProfile, string> workbookNameResolver)
+        {
             var properties = new Dictionary<string, ConfigNode>(StringComparer.Ordinal);
             var sourceMap = new List<XlsxSourceMapEntry>();
             foreach (ConfigWorkbookProfile workbook in set.Workbooks)
             {
-                string absolute = ConfigPathGuard.ResolveInside(root, workbook.Path);
+                string absolute = pathResolver(workbook);
                 using (FileStream stream = File.OpenRead(absolute))
                 {
                     XlsxReadResult read = new XlsxConfigSourceReader(
@@ -531,7 +668,7 @@ namespace ZeroGameStudio.ConfigPipeline.Editor
                         workbook.Tables).ReadWithSourceMap(
                             stream,
                             new ConfigReadContext(set.ConfigSetId, schema.SchemaId, schema.SchemaVersion),
-                            workbook.Path);
+                            workbookNameResolver(workbook));
                     foreach (ConfigProperty property in read.Document.Root.Properties)
                     {
                         if (properties.ContainsKey(property.Name))
@@ -564,6 +701,18 @@ namespace ZeroGameStudio.ConfigPipeline.Editor
                 new ConfigDocument(set.ConfigSetId, schema.SchemaId, schema.SchemaVersion, new ConfigObjectNode(ordered)),
                 string.Empty,
                 sourceMap);
+        }
+
+        private sealed class WorkbookRefreshCandidateFile
+        {
+            public WorkbookRefreshCandidateFile(string destinationPath, string temporaryPath)
+            {
+                DestinationPath = destinationPath;
+                TemporaryPath = temporaryPath;
+            }
+
+            public string DestinationPath { get; }
+            public string TemporaryPath { get; }
         }
 
         private static void ValidateAssets(
