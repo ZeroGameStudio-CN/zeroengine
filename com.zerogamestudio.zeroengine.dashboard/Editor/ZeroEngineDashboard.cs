@@ -1045,8 +1045,7 @@ namespace ZeroEngine.Editor
                     EditorGUILayout.Space(EditorUiTokens.SpaceSm);
                 }
                 using (new EditorGUILayout.VerticalScope(
-                           GUILayout.MinWidth(1f),
-                           GUILayout.ExpandWidth(true),
+                           GUILayout.Width(splitLayout.ContentWidth),
                            GUILayout.ExpandHeight(true)))
                     DrawHomeContent(modules, primarySurfaces);
             }
