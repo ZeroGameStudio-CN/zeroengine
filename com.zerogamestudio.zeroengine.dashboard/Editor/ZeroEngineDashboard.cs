@@ -15,10 +15,11 @@ namespace ZeroEngine.Editor
     {
         private const string WorkspaceModuleDragDataKey = "ZGS.Workbench.WorkspaceModule";
         private const string WorkspacePanelDragDataKey = "ZGS.Workbench.WorkspacePanel";
-        private const float WorkspaceSidebarMinWidth = 196f;
+        private const float WorkspaceSidebarMinWidth = 148f;
         private const float WorkspaceSidebarMaxWidth = 360f;
+        private const float WorkspaceSidebarMaximumFraction = 0.42f;
         private const float WorkspaceSidebarSplitterWidth = 6f;
-        private const float WorkspaceContentMinWidth = 420f;
+        private const float StackedNavigationMaxWidth = 560f;
         private const float DashboardPageHorizontalInset = 12f;
         private const float WorkspaceNavigationRightInset = 8f;
         private const float WorkspacePanelHandleInset = 12f;
@@ -352,34 +353,62 @@ namespace ZeroEngine.Editor
         private void DrawNavigation()
         {
             EditorGUILayout.Space(4f);
-            using (new EditorGUILayout.HorizontalScope())
+            GUIStyle searchStyle = GUI.skin.FindStyle("ToolbarSearchTextField") ??
+                                   GUI.skin.FindStyle("ToolbarSeachTextField") ??
+                                   EditorStyles.textField;
+            if (UsesStackedTopNavigation(position.width))
             {
-                GUILayout.Space(DashboardPageHorizontalInset);
-                int nextPage = GUILayout.Toolbar(_page, PageNames, GUILayout.Width(224f), GUILayout.Height(24f));
-                if (nextPage != _page)
+                using (new EditorGUILayout.HorizontalScope())
                 {
-                    _page = nextPage;
-                    _showContext = false;
-                    if (_page == 2)
-                        RestoreHelpSelectionFromSelectedPanel();
-                    SaveViewState();
+                    GUILayout.Space(DashboardPageHorizontalInset);
+                    DrawPageNavigation(GUILayout.ExpandWidth(true), GUILayout.Height(24f));
+                    GUILayout.Space(DashboardPageHorizontalInset);
                 }
-
-                GUIStyle searchStyle = GUI.skin.FindStyle("ToolbarSearchTextField") ??
-                                       GUI.skin.FindStyle("ToolbarSeachTextField") ??
-                                       EditorStyles.textField;
-                DrawSearchField(searchStyle);
-                using (new EditorGUI.DisabledScope(string.IsNullOrEmpty(_search)))
+                EditorGUILayout.Space(2f);
+                using (new EditorGUILayout.HorizontalScope())
                 {
-                    if (GUILayout.Button(
-                            new GUIContent(DashboardText.Clear, DashboardText.ClearTooltip),
-                            GUILayout.Width(48f),
-                            GUILayout.Height(22f)))
-                        _search = string.Empty;
+                    GUILayout.Space(DashboardPageHorizontalInset);
+                    DrawSearchControls(searchStyle);
+                    GUILayout.Space(DashboardPageHorizontalInset);
                 }
-                GUILayout.Space(DashboardPageHorizontalInset);
+            }
+            else
+            {
+                using (new EditorGUILayout.HorizontalScope())
+                {
+                    GUILayout.Space(DashboardPageHorizontalInset);
+                    DrawPageNavigation(GUILayout.Width(224f), GUILayout.Height(24f));
+                    DrawSearchControls(searchStyle);
+                    GUILayout.Space(DashboardPageHorizontalInset);
+                }
             }
             EditorGUILayout.Space(6f);
+        }
+
+        private void DrawPageNavigation(params GUILayoutOption[] options)
+        {
+            int nextPage = GUILayout.Toolbar(_page, PageNames, options);
+            if (nextPage == _page)
+                return;
+
+            _page = nextPage;
+            _showContext = false;
+            if (_page == 2)
+                RestoreHelpSelectionFromSelectedPanel();
+            SaveViewState();
+        }
+
+        private void DrawSearchControls(GUIStyle searchStyle)
+        {
+            DrawSearchField(searchStyle);
+            using (new EditorGUI.DisabledScope(string.IsNullOrEmpty(_search)))
+            {
+                if (GUILayout.Button(
+                        new GUIContent(DashboardText.Clear, DashboardText.ClearTooltip),
+                        GUILayout.Width(48f),
+                        GUILayout.Height(22f)))
+                    _search = string.Empty;
+            }
         }
 
         private void DrawSearchField(GUIStyle searchStyle)
@@ -389,7 +418,7 @@ namespace ZeroEngine.Editor
                 140f,
                 22f,
                 searchStyle,
-                GUILayout.MinWidth(140f),
+                GUILayout.MinWidth(80f),
                 GUILayout.ExpandWidth(true),
                 GUILayout.Height(22f));
             _search = GUI.TextField(rect, _search ?? string.Empty, searchStyle);
@@ -1004,29 +1033,20 @@ namespace ZeroEngine.Editor
                 ShowContext(module, null, panel);
             }
 
-            if (!UsesWorkspaceSidebarLayout(position.width))
-            {
-                if (modules.Length > 0)
-                    DrawCompactWorkspaceSelector();
-                DrawHomeContent(modules, primarySurfaces);
-                return;
-            }
-
+            DashboardWorkspaceSplitLayout splitLayout = CalculateWorkspaceSplitLayout(
+                position.width,
+                _workspaceSidebarWidth);
             using (new EditorGUILayout.HorizontalScope())
             {
                 if (modules.Length > 0)
                 {
-                    _workspaceSidebarWidth = ClampWorkspaceSidebarWidth(_workspaceSidebarWidth);
-                    DrawWorkspaceNavigation(_visibleWorkspaceModuleViews);
-                    DrawWorkspaceSidebarSplitter();
+                    DrawWorkspaceNavigation(_visibleWorkspaceModuleViews, splitLayout.SidebarWidth);
+                    DrawWorkspaceSidebarSplitter(splitLayout.SidebarWidth);
                     EditorGUILayout.Space(EditorUiTokens.SpaceSm);
                 }
-                float contentWidth = Mathf.Max(
-                    240f,
-                    position.width - DashboardPageHorizontalInset * 2f - _workspaceSidebarWidth -
-                    WorkspaceSidebarSplitterWidth - EditorUiTokens.SpaceSm - 16f);
                 using (new EditorGUILayout.VerticalScope(
-                           GUILayout.Width(contentWidth),
+                           GUILayout.MinWidth(1f),
+                           GUILayout.ExpandWidth(true),
                            GUILayout.ExpandHeight(true)))
                     DrawHomeContent(modules, primarySurfaces);
             }
@@ -1060,7 +1080,9 @@ namespace ZeroEngine.Editor
             EditorGUILayout.EndScrollView();
         }
 
-        private void DrawWorkspaceNavigation(IReadOnlyList<WorkspaceModuleView> moduleViews)
+        private void DrawWorkspaceNavigation(
+            IReadOnlyList<WorkspaceModuleView> moduleViews,
+            float sidebarWidth)
         {
             if (Event.current.type == EventType.DragExited)
             {
@@ -1068,11 +1090,13 @@ namespace ZeroEngine.Editor
                 _workspaceDropTargetId = string.Empty;
                 Repaint();
             }
-            using (new EditorGUILayout.VerticalScope(EditorUiStyles.Card, GUILayout.Width(_workspaceSidebarWidth)))
+            using (new EditorGUILayout.VerticalScope(EditorUiStyles.Card, GUILayout.Width(sidebarWidth)))
             {
                 using (new EditorGUILayout.HorizontalScope())
                 {
-                    GUILayout.Label(DashboardText.WorkspaceNavigation, EditorStyles.boldLabel);
+                    bool compactHeader = sidebarWidth < 132f;
+                    if (!compactHeader)
+                        GUILayout.Label(DashboardText.WorkspaceNavigation, EditorStyles.boldLabel);
                     GUILayout.FlexibleSpace();
                     bool searchActive = !string.IsNullOrEmpty(_search);
                     using (new EditorGUI.DisabledScope(searchActive || _orderedWorkspaceModules.Length == 0))
@@ -1108,9 +1132,11 @@ namespace ZeroEngine.Editor
                                _workspaceModuleOrder.Count == 0 && _workspacePanelOrder.Count == 0))
                     {
                         if (GUILayout.Button(
-                                new GUIContent(DashboardText.ResetOrder, DashboardText.ResetOrderTooltip),
+                                compactHeader
+                                    ? new GUIContent("↺", DashboardText.ResetOrderTooltip)
+                                    : new GUIContent(DashboardText.ResetOrder, DashboardText.ResetOrderTooltip),
                                 EditorStyles.miniButton,
-                                GUILayout.Width(44f)))
+                                GUILayout.Width(compactHeader ? 26f : 44f)))
                         {
                             _workspaceModuleOrder.Clear();
                             _workspacePanelOrder.Clear();
@@ -1153,46 +1179,6 @@ namespace ZeroEngine.Editor
                 }
                 EditorGUILayout.EndScrollView();
             }
-        }
-
-        private void DrawCompactWorkspaceSelector()
-        {
-            WorkspacePanelView[] items = _visibleWorkspacePanels;
-            DashboardPanel[] panels = items.Select(item => item.Panel).ToArray();
-            GUIContent[] labels = new[]
-                {
-                    new GUIContent(DashboardText.Overview, DashboardText.OverviewTooltip),
-                    new GUIContent(DashboardText.AllTools, DashboardText.AllToolsTooltip)
-                }
-                .Concat(items.Select(item =>
-            {
-                return new GUIContent(
-                    item.Module.DisplayName + " · " + item.Panel.DisplayName,
-                    item.Panel.Description);
-            })).ToArray();
-            int panelIndex = Array.FindIndex(panels, panel =>
-                string.Equals(panel.FullId, _selectedPanelFullId, StringComparison.Ordinal));
-            int index = panelIndex < 0 ? _homeView : panelIndex + 2;
-            int next = EditorGUILayout.Popup(
-                new GUIContent(DashboardText.WorkspaceNavigation, DashboardText.WorkspaceNavigationTooltip),
-                index,
-                labels);
-            if (next == 0)
-            {
-                SelectHomeView(HomeViewOverview);
-            }
-            else if (next == 1)
-            {
-                SelectHomeView(HomeViewAllTools);
-            }
-            else if (next > 1 && next <= panels.Length + 1)
-            {
-                DashboardPanel selected = panels[next - 2];
-                DashboardModule module = items[next - 2].Module;
-                SelectWorkspacePanel(selected.FullId);
-                ShowContext(module, null, selected);
-            }
-            EditorGUILayout.Space(EditorUiTokens.SpaceSm);
         }
 
         private void RebuildWorkspacePanelOrder()
@@ -1357,7 +1343,7 @@ namespace ZeroEngine.Editor
             return expanded;
         }
 
-        private void DrawWorkspaceSidebarSplitter()
+        private void DrawWorkspaceSidebarSplitter(float sidebarWidth)
         {
             Rect splitterRect = GUILayoutUtility.GetRect(
                 WorkspaceSidebarSplitterWidth,
@@ -1377,7 +1363,10 @@ namespace ZeroEngine.Editor
                     current.Use();
                     break;
                 case EventType.MouseDrag when GUIUtility.hotControl == controlId:
-                    _workspaceSidebarWidth = ClampWorkspaceSidebarWidth(_workspaceSidebarWidth + current.delta.x);
+                    _workspaceSidebarWidth = Mathf.Clamp(
+                        sidebarWidth + current.delta.x,
+                        WorkspaceSidebarMinWidth,
+                        WorkspaceSidebarMaxWidth);
                     current.Use();
                     Repaint();
                     break;
@@ -1402,20 +1391,23 @@ namespace ZeroEngine.Editor
                    _workspaceRegistry.IsAvailable(view.Panel);
         }
 
-        private float ClampWorkspaceSidebarWidth(float width)
+        internal static DashboardWorkspaceSplitLayout CalculateWorkspaceSplitLayout(
+            float windowWidth,
+            float preferredSidebarWidth)
         {
-            float availableMaximum = Mathf.Min(
+            return DashboardWorkspaceLayout.CalculateSplitLayout(
+                windowWidth,
+                preferredSidebarWidth,
+                DashboardPageHorizontalInset * 2f + WorkspaceSidebarSplitterWidth +
+                EditorUiTokens.SpaceSm + 16f,
+                WorkspaceSidebarMinWidth,
                 WorkspaceSidebarMaxWidth,
-                Mathf.Max(WorkspaceSidebarMinWidth, position.width - WorkspaceContentMinWidth));
-            return Mathf.Clamp(width, WorkspaceSidebarMinWidth, availableMaximum);
+                WorkspaceSidebarMaximumFraction);
         }
 
-        internal static bool UsesWorkspaceSidebarLayout(float width)
+        internal static bool UsesStackedTopNavigation(float width)
         {
-            float minimumWidth = DashboardPageHorizontalInset * 2f + WorkspaceSidebarMinWidth +
-                                 WorkspaceSidebarSplitterWidth + EditorUiTokens.SpaceSm +
-                                 WorkspaceContentMinWidth + 16f;
-            return width >= minimumWidth;
+            return width < StackedNavigationMaxWidth;
         }
 
         private void HandleWorkspaceModuleDrag(Rect handleRect, Rect rowRect, string moduleId)
@@ -1681,11 +1673,9 @@ namespace ZeroEngine.Editor
 
             if (EnsureActiveWorkspacePanel(descriptor))
             {
-                float availableWidth = Mathf.Max(240f, position.width -
-                    (UsesWorkspaceSidebarLayout(position.width)
-                        ? _workspaceSidebarWidth + WorkspaceSidebarSplitterWidth +
-                          EditorUiTokens.SpaceSm + DashboardPageHorizontalInset * 2f + 16f
-                        : 40f));
+                float availableWidth = CalculateWorkspaceSplitLayout(
+                    position.width,
+                    _workspaceSidebarWidth).ContentWidth;
                 bool fullWidth = UsesFullWidthWorkspaceLayout(_activePanel);
                 _activePanelContext.AvailableWidth = fullWidth
                     ? availableWidth
@@ -2971,8 +2961,39 @@ namespace ZeroEngine.Editor
         internal Rect SelectionRect { get; }
     }
 
+    internal readonly struct DashboardWorkspaceSplitLayout
+    {
+        internal DashboardWorkspaceSplitLayout(float sidebarWidth, float contentWidth)
+        {
+            SidebarWidth = sidebarWidth;
+            ContentWidth = contentWidth;
+        }
+
+        internal float SidebarWidth { get; }
+        internal float ContentWidth { get; }
+    }
+
     internal static class DashboardWorkspaceLayout
     {
+        internal static DashboardWorkspaceSplitLayout CalculateSplitLayout(
+            float windowWidth,
+            float preferredSidebarWidth,
+            float chromeWidth,
+            float sidebarMinWidth,
+            float sidebarMaxWidth,
+            float sidebarMaximumFraction)
+        {
+            float availableWidth = Mathf.Max(2f, windowWidth - Mathf.Max(0f, chromeWidth));
+            float sidebarLimit = Mathf.Min(
+                Mathf.Max(1f, sidebarMaxWidth),
+                availableWidth * Mathf.Clamp(sidebarMaximumFraction, 0.1f, 0.9f));
+            float responsiveMinimum = Mathf.Min(Mathf.Max(1f, sidebarMinWidth), sidebarLimit);
+            float sidebarWidth = Mathf.Clamp(preferredSidebarWidth, responsiveMinimum, sidebarLimit);
+            return new DashboardWorkspaceSplitLayout(
+                sidebarWidth,
+                Mathf.Max(1f, availableWidth - sidebarWidth));
+        }
+
         internal static DashboardWorkspacePanelLayout CalculatePanelLayout(
             Rect rowRect,
             float handleInset,

@@ -92,12 +92,35 @@ namespace ZeroEngine.Dashboard.Tests.Editor
             Assert.That(typeof(IEditorWorkspaceNavigator).IsAssignableFrom(typeof(ZeroEngineDashboard)), Is.True);
         }
 
-        [TestCase(669f, false)]
-        [TestCase(670f, true)]
-        [TestCase(859f, true)]
-        public void Dashboard_WorkspaceSidebarUsesActualAvailableWidth(float width, bool expected)
+        [TestCase(240f)]
+        [TestCase(320f)]
+        [TestCase(500f)]
+        [TestCase(980f)]
+        public void Dashboard_WorkspaceSplitKeepsSidebarAndContentVisible(float width)
         {
-            Assert.That(ZeroEngineDashboard.UsesWorkspaceSidebarLayout(width), Is.EqualTo(expected));
+            DashboardWorkspaceSplitLayout layout = ZeroEngineDashboard.CalculateWorkspaceSplitLayout(width, 244f);
+
+            Assert.That(layout.SidebarWidth, Is.GreaterThan(0f));
+            Assert.That(layout.ContentWidth, Is.GreaterThan(0f));
+            Assert.That(layout.SidebarWidth, Is.LessThan(layout.ContentWidth));
+        }
+
+        [Test]
+        public void Dashboard_WorkspaceSplitRestoresPreferredWidthAfterNarrowResize()
+        {
+            DashboardWorkspaceSplitLayout narrow = ZeroEngineDashboard.CalculateWorkspaceSplitLayout(400f, 244f);
+            DashboardWorkspaceSplitLayout wide = ZeroEngineDashboard.CalculateWorkspaceSplitLayout(980f, 244f);
+
+            Assert.That(narrow.SidebarWidth, Is.LessThan(244f));
+            Assert.That(wide.SidebarWidth, Is.EqualTo(244f).Within(0.01f));
+        }
+
+        [TestCase(559f, true)]
+        [TestCase(560f, false)]
+        [TestCase(980f, false)]
+        public void Dashboard_TopNavigationStacksOnlyAtNarrowWidths(float width, bool expected)
+        {
+            Assert.That(ZeroEngineDashboard.UsesStackedTopNavigation(width), Is.EqualTo(expected));
         }
 
         [Test]
