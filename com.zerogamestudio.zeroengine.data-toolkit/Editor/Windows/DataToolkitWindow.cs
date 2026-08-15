@@ -22,8 +22,9 @@ namespace ZGS.DataToolkit.Editor
         private const float CompactHeaderWidth = 820f;
         private const float CompactBodyWidth = 760f;
         private const float CompactBodyToolbarHeight = 26f;
-        private const int CompactBrowseView = 0;
+        private const int CompactTypeView = 0;
         private const int CompactInspectorView = 1;
+        private const int CompactAssetView = 2;
         private const float ProjectToolbarRowHeight = 64f;
         private const float HeaderBodySpacing = 4f;
         private const float HeaderActionSpacing = 6f;
@@ -169,10 +170,8 @@ namespace ZGS.DataToolkit.Editor
             typeColumnScroll = LoadScroll(settings, TypeScrollXPrefSuffix, TypeScrollYPrefSuffix);
             assetColumnScroll = LoadScroll(settings, AssetScrollXPrefSuffix, AssetScrollYPrefSuffix);
             inspectorScroll = LoadScroll(settings, InspectorScrollXPrefSuffix, InspectorScrollYPrefSuffix);
-            compactBodyView = Mathf.Clamp(
-                EditorPrefs.GetInt(settings.PrefKey(CompactViewPrefSuffix), CompactBrowseView),
-                CompactBrowseView,
-                CompactInspectorView);
+            compactBodyView = NormalizeCompactBodyView(
+                EditorPrefs.GetInt(settings.PrefKey(CompactViewPrefSuffix), CompactTypeView));
             typesToDisplay = ManageableDataTypeDiscovery.GetManageableScriptableObjectTypes().ToArray();
             if (!RestorePersistedSelection())
             {
@@ -524,18 +523,20 @@ namespace ZGS.DataToolkit.Editor
 
         private void DrawCompactBodyLayout(Rect bodyRect)
         {
-            if (selectedAsset == null)
+            if (selectedAsset == null && compactBodyView == CompactInspectorView)
             {
-                compactBodyView = CompactBrowseView;
+                SetCompactBodyView(CompactAssetView);
             }
 
             var toolbarRect = new Rect(bodyRect.x, bodyRect.y, bodyRect.width, CompactBodyToolbarHeight);
             var labels = new[]
             {
-                new GUIContent(context.Settings.UiText.Browse),
+                new GUIContent(context.Settings.UiText.DataTypes, "选择数据类型。"),
+                new GUIContent(context.Settings.UiText.Assets, "选择当前数据类型下的资产。"),
                 new GUIContent(context.Settings.UiText.Inspector)
             };
-            int nextView = GUI.Toolbar(toolbarRect, compactBodyView, labels);
+            int nextView = CompactViewForToolbarIndex(
+                GUI.Toolbar(toolbarRect, CompactToolbarIndexForView(compactBodyView), labels));
             if (nextView != CompactInspectorView || selectedAsset != null)
             {
                 SetCompactBodyView(nextView);
@@ -546,33 +547,24 @@ namespace ZGS.DataToolkit.Editor
                 toolbarRect.yMax + HeaderBodySpacing,
                 bodyRect.width,
                 Mathf.Max(0f, bodyRect.height - CompactBodyToolbarHeight - HeaderBodySpacing));
+            if (compactBodyView == CompactTypeView)
+            {
+                DrawTypeColumn(contentRect);
+                return;
+            }
+
             if (compactBodyView == CompactInspectorView && selectedAsset != null)
             {
                 DrawSelectedAssetInspector(contentRect);
                 return;
             }
 
-            float maxTypeWidth = Mathf.Max(MinColumnWidth, contentRect.width - SplitterWidth - MinColumnWidth);
-            float resolvedTypeWidth = Mathf.Clamp(typeColumnWidth, MinColumnWidth, Mathf.Min(MaxColumnWidth, maxTypeWidth));
-            var typeRect = new Rect(contentRect.x, contentRect.y, resolvedTypeWidth, contentRect.height);
-            var splitterRect = new Rect(typeRect.xMax, contentRect.y, SplitterWidth, contentRect.height);
-            var assetRect = new Rect(
-                splitterRect.xMax,
-                contentRect.y,
-                Mathf.Max(0f, contentRect.width - resolvedTypeWidth - SplitterWidth),
-                contentRect.height);
-            DrawTypeColumn(typeRect);
-            DrawColumnResizeHandle(
-                splitterRect,
-                ref typeColumnWidth,
-                context.Settings.PrefKey("TypeColumnWidth"),
-                contentRect.width - SplitterWidth - MinColumnWidth);
-            DrawAssetColumn(assetRect);
+            DrawAssetColumn(contentRect);
         }
 
         private void SetCompactBodyView(int view)
         {
-            view = Mathf.Clamp(view, CompactBrowseView, CompactInspectorView);
+            view = NormalizeCompactBodyView(view);
             if (compactBodyView == view)
             {
                 return;
@@ -581,6 +573,39 @@ namespace ZGS.DataToolkit.Editor
             compactBodyView = view;
             EditorPrefs.SetInt(context.Settings.PrefKey(CompactViewPrefSuffix), compactBodyView);
             RequestRepaint();
+        }
+
+        private static int NormalizeCompactBodyView(int view)
+        {
+            return view == CompactTypeView || view == CompactInspectorView || view == CompactAssetView
+                ? view
+                : CompactTypeView;
+        }
+
+        private static int CompactToolbarIndexForView(int view)
+        {
+            switch (NormalizeCompactBodyView(view))
+            {
+                case CompactAssetView:
+                    return 1;
+                case CompactInspectorView:
+                    return 2;
+                default:
+                    return 0;
+            }
+        }
+
+        private static int CompactViewForToolbarIndex(int toolbarIndex)
+        {
+            switch (toolbarIndex)
+            {
+                case 1:
+                    return CompactAssetView;
+                case 2:
+                    return CompactInspectorView;
+                default:
+                    return CompactTypeView;
+            }
         }
 
         private BodyLayoutRects CalculateBodyLayoutRects(Rect bodyRect)
@@ -959,6 +984,7 @@ namespace ZGS.DataToolkit.Editor
             assetColumnScroll = Vector2.zero;
             assetSearch = string.Empty;
             ClearSelectedAsset();
+            SetCompactBodyView(CompactAssetView);
             SavePersistentState();
         }
 
@@ -972,6 +998,7 @@ namespace ZGS.DataToolkit.Editor
 
             if (selectedAssetPath == assetPath && selectedAsset != null)
             {
+                SetCompactBodyView(CompactInspectorView);
                 return;
             }
 

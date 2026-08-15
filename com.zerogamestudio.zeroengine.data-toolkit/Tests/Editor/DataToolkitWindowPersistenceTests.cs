@@ -107,16 +107,24 @@ namespace ZGS.DataToolkit.Editor.Tests
         }
 
         [Test]
-        public void CompactView_SwitchesToInspectorWhenAssetIsSelectedAndPersistsChoice()
+        public void CompactView_UsesAccessibleTypeAssetAndInspectorTabsAndPersistsChoice()
         {
             CreateTestAsset(OriginalAssetPath);
             var window = Track(DataToolkitWindow.Open(CreateProfile()));
 
             InvokeWindowMethod(window, "SelectType", typeof(SelectedToolkitTestData));
+            Assert.AreEqual(2, GetWindowField(window, "compactBodyView"));
+            Assert.AreEqual(2, EditorPrefs.GetInt(EditorPrefsPrefix + "_CompactView", -1));
+
             InvokeWindowMethod(window, "SelectAssetByPath", OriginalAssetPath);
 
             Assert.AreEqual(1, GetWindowField(window, "compactBodyView"));
             Assert.AreEqual(1, EditorPrefs.GetInt(EditorPrefsPrefix + "_CompactView", -1));
+
+            InvokeWindowMethod(window, "SetCompactBodyView", 2);
+
+            Assert.AreEqual(2, GetWindowField(window, "compactBodyView"));
+            Assert.AreEqual(2, EditorPrefs.GetInt(EditorPrefsPrefix + "_CompactView", -1));
 
             InvokeWindowMethod(window, "SetCompactBodyView", 0);
 
