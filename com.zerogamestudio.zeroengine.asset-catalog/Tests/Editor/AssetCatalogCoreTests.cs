@@ -121,7 +121,7 @@ namespace ZeroEngine.AssetCatalog.Tests
 
             Assert.That(
                 AssetCatalogSnapshotStore.ComputeRecordsSha256(new[] { item }),
-                Is.EqualTo("42d85b497526d349951456d42da4d309c7a842f3b9d80b401ede169e21f70239"));
+                Is.EqualTo("086ee7fc6c94d623eb10581e239afd863ffb7ce48afbca5d05ebfb99af78b27b"));
         }
 
         [Test]

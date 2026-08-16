@@ -184,14 +184,10 @@ namespace ZeroEngine.AssetCatalog
 
         private static void AppendValue(StringBuilder builder, string value)
         {
-            if (value == null)
-            {
-                builder.Append("-1:|");
-                return;
-            }
-            builder.Append(Encoding.UTF8.GetByteCount(value).ToString(CultureInfo.InvariantCulture));
+            string normalized = value ?? string.Empty;
+            builder.Append(Encoding.UTF8.GetByteCount(normalized).ToString(CultureInfo.InvariantCulture));
             builder.Append(':');
-            builder.Append(value);
+            builder.Append(normalized);
             builder.Append('|');
         }
 
