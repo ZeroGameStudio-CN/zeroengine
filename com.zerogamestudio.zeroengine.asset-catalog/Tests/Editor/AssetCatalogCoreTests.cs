@@ -159,6 +159,17 @@ namespace ZeroEngine.AssetCatalog.Tests
         }
 
         [Test]
+        public void AccountCatalogCredentialsAndClientAreProjectAgnostic()
+        {
+            string endpoint = "https://catalog.example.test";
+            Assert.That(AssetCatalogCredentialStore.CatalogAccountTokenTarget(endpoint), Does.Not.Contain("pob"));
+            using (AssetCatalogApiClient client = new AssetCatalogApiClient(new AssetCatalogServiceSettings { endpoint = endpoint }))
+            {
+                Assert.That(client.ProjectId, Is.Null);
+            }
+        }
+
+        [Test]
         public void ClassificationExchange_ValidatesFullIdentityHashAndModelProposal()
         {
             string root = Path.Combine(Path.GetTempPath(), "ZE-AssetCatalog-" + Guid.NewGuid().ToString("N"));

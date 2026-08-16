@@ -130,6 +130,42 @@ namespace ZeroEngine.AssetCatalog
     }
 
     [Serializable]
+    public sealed class AssetCatalogSource
+    {
+        public string projectId;
+        public string displayName;
+        public string sourceKind;
+        public string repository;
+        public string allowedBranch;
+        public string[] scanRoots = Array.Empty<string>();
+        public string ownerAccountId;
+        public string visibility;
+        public string sourceStatus;
+        public string previewPolicy;
+        public string role;
+    }
+
+    [Serializable]
+    public sealed class AssetCatalogSourceDirectory
+    {
+        public AssetCatalogSource[] sources = Array.Empty<AssetCatalogSource>();
+    }
+
+    [Serializable]
+    public sealed class AssetCatalogGlobalSearchQuery
+    {
+        public string scope = "all";
+        public string[] projectIds = Array.Empty<string>();
+        public string text;
+        public string assetType;
+        public string facet;
+        public string tag;
+        public string reviewStatus;
+        public string cursor;
+        public int pageSize = 50;
+    }
+
+    [Serializable]
     public sealed class AssetCatalogSearchResult
     {
         public AssetCatalogRecord record;

@@ -11,6 +11,7 @@ namespace ZeroEngine.AssetCatalog
     public sealed class AssetCatalogServiceSettings
     {
         public string endpoint;
+        // Optional for account-level source directory and global search calls.
         public string projectId;
     }
 
@@ -89,9 +90,8 @@ namespace ZeroEngine.AssetCatalog
         {
             if (settings == null) throw new ArgumentNullException(nameof(settings));
             if (!AssetCatalogContracts.IsEndpointAllowed(settings.endpoint)) throw new ArgumentException("Catalog endpoint must use HTTPS unless it is loopback HTTP.", nameof(settings));
-            if (string.IsNullOrWhiteSpace(settings.projectId)) throw new ArgumentException("projectId is required.", nameof(settings));
             _endpoint = new Uri(settings.endpoint.TrimEnd('/') + "/", UriKind.Absolute);
-            ProjectId = settings.projectId.Trim();
+            ProjectId = string.IsNullOrWhiteSpace(settings.projectId) ? null : settings.projectId.Trim();
             _client = handler == null ? new HttpClient() : new HttpClient(handler, false);
             _client.Timeout = TimeSpan.FromSeconds(30);
         }
@@ -100,14 +100,34 @@ namespace ZeroEngine.AssetCatalog
 
         public Task<AssetCatalogApiResponse> GetHealthAsync() => SendAsync(HttpMethod.Get, "v1/health", null, null, null);
         public Task<AssetCatalogApiResponse> GetMeAsync(string accessToken) => SendAsync(HttpMethod.Get, "v1/me", accessToken, null, null);
-        public Task<AssetCatalogApiResponse> GetTaxonomyAsync(string accessToken) => SendAsync(HttpMethod.Get, "v1/projects/" + Uri.EscapeDataString(ProjectId) + "/taxonomy", accessToken, null, null);
-        public Task<AssetCatalogApiResponse> GetSnapshotAsync(string accessToken) => SendAsync(HttpMethod.Get, "v1/projects/" + Uri.EscapeDataString(ProjectId) + "/snapshot", accessToken, null, null);
+        public Task<AssetCatalogApiResponse> GetSourcesAsync(string accessToken) => SendAsync(HttpMethod.Get, "v1/sources", accessToken, null, null);
+        public Task<AssetCatalogApiResponse> GetTaxonomyAsync(string accessToken) => SendAsync(HttpMethod.Get, "v1/projects/" + Uri.EscapeDataString(RequireProjectId()) + "/taxonomy", accessToken, null, null);
+        public Task<AssetCatalogApiResponse> GetSnapshotAsync(string accessToken) => SendAsync(HttpMethod.Get, "v1/projects/" + Uri.EscapeDataString(RequireProjectId()) + "/snapshot", accessToken, null, null);
+        public Task<AssetCatalogApiResponse> GlobalSearchAsync(string accessToken, AssetCatalogGlobalSearchQuery query)
+        {
+            query = query ?? new AssetCatalogGlobalSearchQuery();
+            if (!string.Equals(query.scope, "all", StringComparison.Ordinal) && !string.Equals(query.scope, "current", StringComparison.Ordinal) && !string.Equals(query.scope, "selected", StringComparison.Ordinal))
+                throw new ArgumentException("scope must be all, current, or selected.", nameof(query));
+            int pageSize = query.pageSize <= 0 ? AssetCatalogContracts.DefaultPageSize : query.pageSize;
+            if (pageSize > AssetCatalogContracts.MaxPageSize) throw new ArgumentOutOfRangeException(nameof(query));
+            StringBuilder route = new StringBuilder("v1/search?scope=").Append(Uri.EscapeDataString(query.scope)).Append("&q=").Append(Uri.EscapeDataString(query.text ?? string.Empty)).Append("&pageSize=").Append(pageSize);
+            foreach (string projectId in query.projectIds ?? Array.Empty<string>())
+            {
+                if (!string.IsNullOrWhiteSpace(projectId)) route.Append("&projectId=").Append(Uri.EscapeDataString(projectId.Trim()));
+            }
+            if (!string.IsNullOrWhiteSpace(query.assetType)) route.Append("&assetType=").Append(Uri.EscapeDataString(query.assetType));
+            if (!string.IsNullOrWhiteSpace(query.facet)) route.Append("&facet=").Append(Uri.EscapeDataString(query.facet));
+            if (!string.IsNullOrWhiteSpace(query.tag)) route.Append("&tag=").Append(Uri.EscapeDataString(query.tag));
+            if (!string.IsNullOrWhiteSpace(query.reviewStatus)) route.Append("&reviewStatus=").Append(Uri.EscapeDataString(query.reviewStatus));
+            if (!string.IsNullOrWhiteSpace(query.cursor)) route.Append("&cursor=").Append(Uri.EscapeDataString(query.cursor));
+            return SendAsync(HttpMethod.Get, route.ToString(), accessToken, null, null);
+        }
         public Task<AssetCatalogApiResponse> SearchAsync(string accessToken, AssetCatalogSearchQuery query)
         {
             query = query ?? new AssetCatalogSearchQuery();
             int pageSize = query.pageSize <= 0 ? AssetCatalogContracts.DefaultPageSize : query.pageSize;
             if (pageSize > AssetCatalogContracts.MaxPageSize) throw new ArgumentOutOfRangeException(nameof(query));
-            StringBuilder route = new StringBuilder("v1/projects/").Append(Uri.EscapeDataString(ProjectId)).Append("/search?q=").Append(Uri.EscapeDataString(query.text ?? string.Empty)).Append("&pageSize=").Append(pageSize);
+            StringBuilder route = new StringBuilder("v1/projects/").Append(Uri.EscapeDataString(RequireProjectId())).Append("/search?q=").Append(Uri.EscapeDataString(query.text ?? string.Empty)).Append("&pageSize=").Append(pageSize);
             if (!string.IsNullOrWhiteSpace(query.assetType)) route.Append("&assetType=").Append(Uri.EscapeDataString(query.assetType));
             if (!string.IsNullOrWhiteSpace(query.facet)) route.Append("&facet=").Append(Uri.EscapeDataString(query.facet));
             if (!string.IsNullOrWhiteSpace(query.tag)) route.Append("&tag=").Append(Uri.EscapeDataString(query.tag));
@@ -125,7 +145,7 @@ namespace ZeroEngine.AssetCatalog
         public Task<AssetCatalogApiResponse> GetChangesAsync(string accessToken, long after, int pageSize = AssetCatalogContracts.DefaultPageSize)
         {
             if (after < 0 || pageSize < 1 || pageSize > AssetCatalogContracts.MaxPageSize) throw new ArgumentOutOfRangeException(nameof(after));
-            return SendAsync(HttpMethod.Get, "v1/projects/" + Uri.EscapeDataString(ProjectId) + "/changes?after=" + after + "&pageSize=" + pageSize, accessToken, null, null);
+            return SendAsync(HttpMethod.Get, "v1/projects/" + Uri.EscapeDataString(RequireProjectId()) + "/changes?after=" + after + "&pageSize=" + pageSize, accessToken, null, null);
         }
 
         public Task<AssetCatalogApiResponse> UpsertScanAsync(string accessToken, AssetCatalogScanRequest request, string idempotencyKey)
@@ -133,7 +153,7 @@ namespace ZeroEngine.AssetCatalog
             if (request == null) throw new ArgumentNullException(nameof(request));
             foreach (AssetCatalogScanItem item in request.items ?? Array.Empty<AssetCatalogScanItem>()) ValidateScanItem(item);
             AssetCatalogContracts.ValidateSourceRevision(request.sourceRevision);
-            return SendAsync(HttpMethod.Post, "v1/projects/" + Uri.EscapeDataString(ProjectId) + "/assets:upsert-scan", accessToken, JsonUtility.ToJson(request), idempotencyKey);
+            return SendAsync(HttpMethod.Post, "v1/projects/" + Uri.EscapeDataString(RequireProjectId()) + "/assets:upsert-scan", accessToken, JsonUtility.ToJson(request), idempotencyKey);
         }
 
         public Task<AssetCatalogApiResponse> CreateProposalAsync(string accessToken, AssetCatalogIdentity identity, AssetCatalogProposalInput proposal, string idempotencyKey)
@@ -208,8 +228,15 @@ namespace ZeroEngine.AssetCatalog
 
         private string AssetRoute(AssetCatalogIdentity identity)
         {
-            if (!string.Equals(identity.projectId, ProjectId, StringComparison.Ordinal)) throw new ArgumentException("identity projectId does not match this client.", nameof(identity));
-            return "v1/projects/" + Uri.EscapeDataString(ProjectId) + "/assets/" + identity.guid + "/" + identity.subAssetKey;
+            string projectId = RequireProjectId();
+            if (!string.Equals(identity.projectId, projectId, StringComparison.Ordinal)) throw new ArgumentException("identity projectId does not match this client.", nameof(identity));
+            return "v1/projects/" + Uri.EscapeDataString(projectId) + "/assets/" + identity.guid + "/" + identity.subAssetKey;
+        }
+
+        private string RequireProjectId()
+        {
+            if (string.IsNullOrWhiteSpace(ProjectId)) throw new InvalidOperationException("This catalog client is not configured with a projectId.");
+            return ProjectId;
         }
 
         private static void ValidateScanItem(AssetCatalogScanItem item)

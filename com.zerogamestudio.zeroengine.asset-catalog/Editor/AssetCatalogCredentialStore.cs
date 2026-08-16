@@ -32,6 +32,12 @@ namespace ZeroEngine.AssetCatalog
             return "ZeroEngine.AssetCatalog.AccessToken." + EndpointHash(endpoint) + "." + projectId.Trim();
         }
 
+        public static string CatalogAccountTokenTarget(string endpoint)
+        {
+            if (!AssetCatalogContracts.IsEndpointAllowed(endpoint)) throw new ArgumentException("Catalog endpoint must use HTTPS unless it is loopback HTTP.", nameof(endpoint));
+            return "ZeroEngine.AssetCatalog.AccessToken." + EndpointHash(endpoint) + ".account";
+        }
+
         public static string PersonalAiKeyTarget(string provider, string endpoint)
         {
             if (!AssetCatalogContracts.IsEndpointAllowed(endpoint)) throw new ArgumentException("AI endpoint must use HTTPS unless it is loopback HTTP.", nameof(endpoint));
@@ -42,6 +48,9 @@ namespace ZeroEngine.AssetCatalog
         public static void SetCatalogToken(string endpoint, string projectId, string token) => SetSecret(CatalogTokenTarget(endpoint, projectId), token);
         public static bool TryGetCatalogToken(string endpoint, string projectId, out string token) => TryGetSecret(CatalogTokenTarget(endpoint, projectId), out token);
         public static void DeleteCatalogToken(string endpoint, string projectId) => DeleteSecret(CatalogTokenTarget(endpoint, projectId));
+        public static void SetCatalogAccountToken(string endpoint, string token) => SetSecret(CatalogAccountTokenTarget(endpoint), token);
+        public static bool TryGetCatalogAccountToken(string endpoint, out string token) => TryGetSecret(CatalogAccountTokenTarget(endpoint), out token);
+        public static void DeleteCatalogAccountToken(string endpoint) => DeleteSecret(CatalogAccountTokenTarget(endpoint));
         public static void SetPersonalAiKey(string provider, string endpoint, string apiKey) => SetSecret(PersonalAiKeyTarget(provider, endpoint), apiKey);
         public static bool TryGetPersonalAiKey(string provider, string endpoint, out string apiKey) => TryGetSecret(PersonalAiKeyTarget(provider, endpoint), out apiKey);
         public static void DeletePersonalAiKey(string provider, string endpoint) => DeleteSecret(PersonalAiKeyTarget(provider, endpoint));
