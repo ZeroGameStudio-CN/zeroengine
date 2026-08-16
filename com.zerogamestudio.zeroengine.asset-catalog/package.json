@@ -1,0 +1,26 @@
+{
+  "name": "com.zerogamestudio.zeroengine.asset-catalog",
+  "version": "0.1.0",
+  "displayName": "ZeroEngine Asset Catalog",
+  "description": "Editor-only contracts, shared Catalog API client, offline snapshots, credential storage, classification exchange, and personal AI recommendations for reviewable Unity asset catalogs.",
+  "unity": "2022.3",
+  "dependencies": {},
+  "keywords": [
+    "zeroengine",
+    "asset",
+    "catalog",
+    "search",
+    "taxonomy",
+    "ai"
+  ],
+  "author": {
+    "name": "ZeroGameStudio",
+    "url": "https://github.com/ZeroGameStudio-CN"
+  },
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/ZeroGameStudio-CN/zeroengine.git",
+    "directory": "com.zerogamestudio.zeroengine.asset-catalog"
+  }
+}
