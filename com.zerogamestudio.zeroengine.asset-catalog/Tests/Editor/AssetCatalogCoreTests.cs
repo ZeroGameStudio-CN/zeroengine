@@ -57,6 +57,22 @@ namespace ZeroEngine.AssetCatalog.Tests
         }
 
         [Test]
+        public void Snapshot_PreservesMissingApprovedRevision()
+        {
+            AssetCatalogSnapshotRecord item = SnapshotRecord("a", "Assets/Assets/Vfx/A.prefab");
+            item.approvedRevision = null;
+            AssetCatalogSnapshot snapshot = new AssetCatalogSnapshot
+            {
+                manifest = new AssetCatalogSnapshotManifest { taxonomyVersion = 1 },
+                records = new[] { item }
+            };
+
+            AssetCatalogSnapshot loaded = AssetCatalogSnapshotStore.FromJson(AssetCatalogSnapshotStore.ToStableJson(snapshot));
+
+            Assert.That(loaded.records[0].approvedRevision, Is.Null);
+        }
+
+        [Test]
         public void SnapshotHash_MatchesSharedServiceContractFixture()
         {
             AssetCatalogSnapshotRecord item = new AssetCatalogSnapshotRecord

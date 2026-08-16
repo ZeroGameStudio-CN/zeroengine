@@ -206,6 +206,10 @@ namespace ZeroEngine.AssetCatalog
             foreach (AssetCatalogSnapshotRecord item in snapshot.records)
             {
                 AssetCatalogContracts.ValidateRecord(item.record);
+                // JsonUtility materializes an omitted/null serializable object as a default
+                // instance. An approved revision is optional, so restore that distinction
+                // before computing or validating the cross-client manifest hash.
+                if (IsMissingApprovedRevision(item.approvedRevision)) item.approvedRevision = null;
                 if (item.approvedRevision != null)
                 {
                     item.approvedRevision.controlledTags = AssetCatalogContracts.NormalizeValues(item.approvedRevision.controlledTags, 32);
@@ -219,6 +223,33 @@ namespace ZeroEngine.AssetCatalog
                 snapshot.manifest.recordCount = snapshot.records.Length;
                 snapshot.manifest.recordsSha256 = ComputeRecordsSha256(snapshot.records);
             }
+        }
+
+        private static bool IsMissingApprovedRevision(AssetCatalogSemanticRevision revision)
+        {
+            if (revision == null) return false;
+            return string.IsNullOrEmpty(revision.revisionId) &&
+                   string.IsNullOrEmpty(revision.descriptionZh) &&
+                   string.IsNullOrEmpty(revision.descriptionEn) &&
+                   (revision.controlledTags == null || revision.controlledTags.Length == 0) &&
+                   (revision.freeTags == null || revision.freeTags.Length == 0) &&
+                   Math.Abs(revision.confidence) < 0.000001f &&
+                   string.IsNullOrEmpty(revision.source) &&
+                   string.IsNullOrEmpty(revision.modelLabel) &&
+                   string.IsNullOrEmpty(revision.modelDigest) &&
+                   string.IsNullOrEmpty(revision.promptVersion) &&
+                   string.IsNullOrEmpty(revision.classifierVersion) &&
+                   revision.taxonomyVersion == 0 &&
+                   string.IsNullOrEmpty(revision.basedOnDependencyHash) &&
+                   string.IsNullOrEmpty(revision.createdByAccountId) &&
+                   string.IsNullOrEmpty(revision.createdByDisplayName) &&
+                   string.IsNullOrEmpty(revision.createdAtUtc) &&
+                   string.IsNullOrEmpty(revision.approvedByAccountId) &&
+                   string.IsNullOrEmpty(revision.approvedByDisplayName) &&
+                   string.IsNullOrEmpty(revision.approvedAtUtc) &&
+                   string.IsNullOrEmpty(revision.supersedesRevisionId) &&
+                   string.Equals(revision.status, AssetCatalogRevisionStatus.Proposal, StringComparison.Ordinal) &&
+                   string.IsNullOrEmpty(revision.etag);
         }
     }
 }
