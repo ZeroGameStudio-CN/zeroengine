@@ -57,6 +57,58 @@ namespace ZeroEngine.AssetCatalog.Tests
         }
 
         [Test]
+        public void SnapshotHash_MatchesSharedServiceContractFixture()
+        {
+            AssetCatalogSnapshotRecord item = new AssetCatalogSnapshotRecord
+            {
+                record = new AssetCatalogRecord
+                {
+                    identity = AssetCatalogContracts.CreateIdentity("pob", new string('a', 32), 7),
+                    path = "Assets/Assets/特效/Water.prefab",
+                    assetType = AssetCatalogAssetType.Prefab,
+                    facets = new[] { " 水 ", "a", "😀", "a" },
+                    mainObjectType = "GameObject",
+                    dependencyHash = "hash-v1",
+                    technicalMetadataJson = "{\"looping\":false}",
+                    sourceRevision = SourceRevision(),
+                    firstSeenAtUtc = "2026-08-16T00:00:00Z",
+                    lastSeenAtUtc = "2026-08-16T00:00:01Z",
+                    currentApprovedRevisionId = "revision-1",
+                    reviewStatus = AssetCatalogReviewStatus.Approved,
+                    recordRevision = 2
+                },
+                approvedRevision = new AssetCatalogSemanticRevision
+                {
+                    revisionId = "revision-1",
+                    descriptionZh = "水花 😀",
+                    descriptionEn = "water splash",
+                    controlledTags = new[] { "form.impact", "subject.water" },
+                    freeTags = new[] { " 水 ", "a", "😀", "a" },
+                    confidence = 0.9f,
+                    source = AssetCatalogRevisionSource.Model,
+                    modelLabel = "luna-max",
+                    modelDigest = "digest",
+                    promptVersion = "v1",
+                    classifierVersion = "v1",
+                    taxonomyVersion = 1,
+                    basedOnDependencyHash = "hash-v1",
+                    createdByAccountId = "editor-1",
+                    createdByDisplayName = "Editor",
+                    createdAtUtc = "2026-08-16T00:00:02Z",
+                    approvedByAccountId = "reviewer-1",
+                    approvedByDisplayName = "Reviewer",
+                    approvedAtUtc = "2026-08-16T00:00:03Z",
+                    status = AssetCatalogRevisionStatus.Approved,
+                    etag = "revision:etag"
+                }
+            };
+
+            Assert.That(
+                AssetCatalogSnapshotStore.ComputeRecordsSha256(new[] { item }),
+                Is.EqualTo("42d85b497526d349951456d42da4d309c7a842f3b9d80b401ede169e21f70239"));
+        }
+
+        [Test]
         public void LocalSearch_UsesApprovedBilingualDescriptionsAndTaxonomyAliases()
         {
             AssetCatalogSnapshot snapshot = new AssetCatalogSnapshot

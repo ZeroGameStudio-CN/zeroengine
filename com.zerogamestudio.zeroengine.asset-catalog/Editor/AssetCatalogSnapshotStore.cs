@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Security.Cryptography;
@@ -102,12 +103,96 @@ namespace ZeroEngine.AssetCatalog
 
         public static string ComputeRecordsSha256(IEnumerable<AssetCatalogSnapshotRecord> records)
         {
-            RecordEnvelope envelope = new RecordEnvelope { records = (records ?? Array.Empty<AssetCatalogSnapshotRecord>()).ToArray() };
-            string json = JsonUtility.ToJson(envelope, false);
+            StringBuilder canonical = new StringBuilder();
+            foreach (AssetCatalogSnapshotRecord item in (records ?? Array.Empty<AssetCatalogSnapshotRecord>())
+                         .Where(candidate => candidate != null && candidate.record != null)
+                         .OrderBy(candidate => candidate.record.identity?.projectId, StringComparer.Ordinal)
+                         .ThenBy(candidate => candidate.record.identity?.guid, StringComparer.Ordinal)
+                         .ThenBy(candidate => candidate.record.identity?.subAssetKey ?? 0))
+            {
+                AppendRecord(canonical, item.record);
+                AppendRevision(canonical, item.approvedRevision);
+            }
             using (SHA256 algorithm = SHA256.Create())
             {
-                return string.Concat(algorithm.ComputeHash(Encoding.UTF8.GetBytes(json)).Select(value => value.ToString("x2")));
+                return string.Concat(algorithm.ComputeHash(Encoding.UTF8.GetBytes(canonical.ToString())).Select(value => value.ToString("x2")));
             }
+        }
+
+        private static void AppendRecord(StringBuilder builder, AssetCatalogRecord record)
+        {
+            AppendValue(builder, record.identity?.projectId);
+            AppendValue(builder, record.identity?.guid);
+            AppendNumber(builder, record.identity?.subAssetKey ?? 0);
+            AppendValue(builder, record.path);
+            AppendValue(builder, record.assetType);
+            AppendValues(builder, AssetCatalogContracts.NormalizeValues(record.facets, 64));
+            AppendValue(builder, record.mainObjectType);
+            AppendValue(builder, record.dependencyHash);
+            AppendValue(builder, record.technicalMetadataJson);
+            AppendNumber(builder, record.metadataSchemaVersion);
+            AppendValue(builder, record.sourceRevision?.repository);
+            AppendValue(builder, record.sourceRevision?.branch);
+            AppendValue(builder, record.sourceRevision?.changeset);
+            AppendValue(builder, record.firstSeenAtUtc);
+            AppendValue(builder, record.lastSeenAtUtc);
+            AppendValue(builder, record.deletedAtUtc);
+            AppendValue(builder, record.currentApprovedRevisionId);
+            AppendValue(builder, record.reviewStatus);
+            AppendNumber(builder, record.recordRevision);
+        }
+
+        private static void AppendRevision(StringBuilder builder, AssetCatalogSemanticRevision revision)
+        {
+            AppendValue(builder, revision == null ? null : "revision");
+            if (revision == null) return;
+            AppendValue(builder, revision.revisionId);
+            AppendValue(builder, revision.descriptionZh);
+            AppendValue(builder, revision.descriptionEn);
+            AppendValues(builder, AssetCatalogContracts.NormalizeValues(revision.controlledTags, 32));
+            AppendValues(builder, AssetCatalogContracts.NormalizeValues(revision.freeTags, 32));
+            AppendNumber(builder, (long)Math.Floor(Math.Max(0f, revision.confidence) * 1000000f + 0.5f));
+            AppendValue(builder, revision.source);
+            AppendValue(builder, revision.modelLabel);
+            AppendValue(builder, revision.modelDigest);
+            AppendValue(builder, revision.promptVersion);
+            AppendValue(builder, revision.classifierVersion);
+            AppendNumber(builder, revision.taxonomyVersion);
+            AppendValue(builder, revision.basedOnDependencyHash);
+            AppendValue(builder, revision.createdByAccountId);
+            AppendValue(builder, revision.createdByDisplayName);
+            AppendValue(builder, revision.createdAtUtc);
+            AppendValue(builder, revision.approvedByAccountId);
+            AppendValue(builder, revision.approvedByDisplayName);
+            AppendValue(builder, revision.approvedAtUtc);
+            AppendValue(builder, revision.supersedesRevisionId);
+            AppendValue(builder, revision.status);
+            AppendValue(builder, revision.etag);
+        }
+
+        private static void AppendValues(StringBuilder builder, IEnumerable<string> values)
+        {
+            string[] normalized = (values ?? Array.Empty<string>()).ToArray();
+            AppendNumber(builder, normalized.Length);
+            foreach (string value in normalized) AppendValue(builder, value);
+        }
+
+        private static void AppendNumber(StringBuilder builder, long value)
+        {
+            AppendValue(builder, value.ToString(CultureInfo.InvariantCulture));
+        }
+
+        private static void AppendValue(StringBuilder builder, string value)
+        {
+            if (value == null)
+            {
+                builder.Append("-1:|");
+                return;
+            }
+            builder.Append(Encoding.UTF8.GetByteCount(value).ToString(CultureInfo.InvariantCulture));
+            builder.Append(':');
+            builder.Append(value);
+            builder.Append('|');
         }
 
         private static void Normalize(AssetCatalogSnapshot snapshot, bool refreshManifest)
@@ -134,12 +219,6 @@ namespace ZeroEngine.AssetCatalog
                 snapshot.manifest.recordCount = snapshot.records.Length;
                 snapshot.manifest.recordsSha256 = ComputeRecordsSha256(snapshot.records);
             }
-        }
-
-        [Serializable]
-        private sealed class RecordEnvelope
-        {
-            public AssetCatalogSnapshotRecord[] records;
         }
     }
 }
