@@ -5,8 +5,7 @@ namespace ZeroEngine.Editor
         internal const string WindowTitle = "ZGS 工作台";
         internal const string HeaderSubtitle = "从常用工作流进入任务，按需查找完整工具与资料。";
         internal const string Home = "首页";
-        internal const string HomeTooltip = "查看项目工作区面板和常用工作流。";
-        internal const string ToolLibraryTooltip = "在首页内搜索并运行已安装模块提供的完整工具。";
+        internal const string HomeTooltip = "查看常用工作流，并在左侧进入项目工作区面板。";
         internal const string System = "系统";
         internal const string SystemTooltip = "查看描述符健康状态、已安装包和项目适配器。";
         internal const string RefreshTooltip = "重新扫描模块描述符和项目适配器。";
@@ -17,12 +16,10 @@ namespace ZeroEngine.Editor
         internal const string Context = "说明";
         internal const string ContextTooltip = "查看当前所选工具或面板的用途、状态、用法和相关资料。";
         internal const string ContextEmpty = "选择一个工作流、工具或面板后，这里会显示用途、状态和相关资料。";
-        internal const string Overview = "首页总览";
-        internal const string OverviewTooltip = "返回常用工作流总览。";
-        internal const string AllTools = "全部工具";
-        internal const string AllToolsTooltip = "浏览、筛选并运行全部工具；不再打开单独工具库页面。";
         internal const string CommonWorkflows = "常用工作流";
         internal const string CommonWorkflowsSubtitle = "高频、安全且适合直接进入的工作入口。";
+        internal const string SearchResults = "搜索结果";
+        internal const string SearchResultsSubtitle = "显示与关键词匹配的工具动作和相关资料。";
         internal const string WorkspaceNavigation = "工作区";
         internal const string WorkspaceNavigationTooltip = "选择当前项目提供的内嵌工作区面板。";
         internal const string LoadingCatalog = "正在载入工作台模块；窗口已可操作。";
@@ -38,35 +35,6 @@ namespace ZeroEngine.Editor
         internal const string CollapseAllGroupsTooltip = "折叠当前工作区的全部分组。";
         internal const string ResetOrder = "重置";
         internal const string ResetOrderTooltip = "恢复描述符提供的默认分组和面板顺序；折叠状态保持不变。";
-        internal const string Scope = "范围";
-        internal const string ScopeTooltip = "按通用模块或项目适配器范围筛选。";
-        internal const string All = "全部";
-        internal const string Universal = "通用";
-        internal const string AdvancedTools = "高级工具";
-        internal const string AdvancedToolsTooltip = "显示专业检查、构建和项目写入工具。";
-        internal const string MaintenanceTools = "维护工具";
-        internal const string MaintenanceToolsTooltip = "显示恢复、迁移和高影响工具。";
-        internal const string MaintenanceWarning = "维护工具可能修改或破坏项目数据；请逐项阅读安全提示和确认内容。";
-        internal const string SafetyFilter = "安全";
-        internal const string SafetyFilterTooltip = "按动作影响范围筛选工具。";
-        internal const string AvailabilityFilter = "状态";
-        internal const string AvailabilityFilterTooltip = "按当前是否可执行筛选工具。";
-        internal const string Available = "可用";
-        internal const string Unavailable = "不可用";
-        internal const string TaskCategory = "任务分类";
-        internal const string TaskCategoryTooltip = "选择当前要浏览的工具分类。";
-        internal const string CategoryAuthoring = "内容创作";
-        internal const string CategoryAuthoringTooltip = "数据编辑器、公式、任务、工坊和内容预览。";
-        internal const string CategoryData = "数据与本地化";
-        internal const string CategoryDataTooltip = "配置、Schema、检索、导入导出和本地化工具。";
-        internal const string CategoryAssets = "资源与构建";
-        internal const string CategoryAssetsTooltip = "Addressables、纹理、字体、音频、Shader 与构建准备。";
-        internal const string CategoryDiagnostics = "检查与调试";
-        internal const string CategoryDiagnosticsTooltip = "只读审计、运行诊断、可视化调试和健康报告。";
-        internal const string CategoryRelease = "测试与发布";
-        internal const string CategoryReleaseTooltip = "具名窄范围测试、发布检查和可审计打包流程。";
-        internal const string CategorySystem = "系统与安装";
-        internal const string CategorySystemTooltip = "通用包安装、系统工具和框架级维护。";
         internal const string More = "更多…";
         internal const string MoreTooltip = "查看该工作流的其他动作。";
         internal const string RelatedResources = "相关资料";
@@ -81,10 +49,6 @@ namespace ZeroEngine.Editor
         internal const string PanelLoadFailed = "面板加载失败；其他工作流仍可使用。";
         internal const string ReferenceResults = "相关资料";
         internal const string ReferenceResultsTooltip = "与搜索词匹配的说明、指南和参考窗口。";
-        internal const string SwitchCategoryOrScope = "切换任务分类或范围";
-        internal const string EnableAdvanced = "开启高级工具";
-        internal const string EnableMaintenance = "开启维护工具";
-        internal const string ChangeSafetyOrState = "调整安全或状态筛选";
         internal const string LegacyEntry = "旧版入口";
         internal const string LegacyEntryTooltip = "此入口仍使用 schema v1，仅在 Dashboard 4.x 兼容。";
         internal const string Modules = "模块";
@@ -168,7 +132,6 @@ namespace ZeroEngine.Editor
         internal static string PackageVersionTooltip(string version) =>
             string.IsNullOrWhiteSpace(version) ? "Unity 未返回包版本。" : "当前安装版本：" + version;
         internal static string PackageSearchExpandedTooltip(string tooltip) => tooltip + "\n搜索期间匹配分组会临时展开。";
-        internal static string ProjectScopeTooltip(string name) => "只显示 " + name + " 项目适配器。";
         internal static string WorkspaceGroupTooltip(string description, bool searchActive)
         {
             string action = searchActive
@@ -176,7 +139,6 @@ namespace ZeroEngine.Editor
                 : "点击展开或折叠此分组；关闭工作台后仍会保留。";
             return string.IsNullOrWhiteSpace(description) ? action : description + "\n" + action;
         }
-        internal static string HiddenMatches(int count, string actions) => "另有 " + count + " 个匹配项被筛选隐藏；请" + actions + "。";
         internal static string ActionDisabled(string name, string reason) => name + "：" + reason;
         internal static string EditModeOnly(string name) => name + " 仅在编辑模式可用。";
         internal static string PlayModeOnly(string name) => name + " 仅在运行模式可用。";

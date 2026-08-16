@@ -27,34 +27,12 @@ namespace ZeroEngine.Editor
         private const float WorkspacePanelGap = 2f;
         private const float WorkspacePanelVerticalInset = 4f;
         private const float WorkspaceSelectionBarWidth = 3f;
-        private const int HomeViewOverview = 0;
-        private const int HomeViewAllTools = 1;
 
         private static readonly GUIContent[] PageNames =
         {
             new GUIContent(DashboardText.Home, DashboardText.HomeTooltip),
             new GUIContent(DashboardText.System, DashboardText.SystemTooltip),
             new GUIContent(DashboardText.Help, DashboardText.HelpTooltip)
-        };
-
-        private static readonly string[] ToolCategoryIds =
-        {
-            "authoring",
-            "data-localization",
-            "assets-build",
-            "diagnostics",
-            "test-release",
-            "system-setup"
-        };
-
-        private static readonly GUIContent[] ToolCategoryNames =
-        {
-            new GUIContent(DashboardText.CategoryAuthoring, DashboardText.CategoryAuthoringTooltip),
-            new GUIContent(DashboardText.CategoryData, DashboardText.CategoryDataTooltip),
-            new GUIContent(DashboardText.CategoryAssets, DashboardText.CategoryAssetsTooltip),
-            new GUIContent(DashboardText.CategoryDiagnostics, DashboardText.CategoryDiagnosticsTooltip),
-            new GUIContent(DashboardText.CategoryRelease, DashboardText.CategoryReleaseTooltip),
-            new GUIContent(DashboardText.CategorySystem, DashboardText.CategorySystemTooltip)
         };
 
         private readonly Dictionary<string, DashboardDiagnostic> _runtimeDiagnostics =
@@ -79,17 +57,8 @@ namespace ZeroEngine.Editor
 
         private DashboardCatalog _catalog = DashboardCatalog.Empty;
         private int _page;
-        private int _homeView;
         private string _search = string.Empty;
-        private string _selectedCategoryId = "authoring";
-        private string _selectedScopeId = string.Empty;
-        private string _selectedSafetyId = string.Empty;
-        private string _selectedAvailabilityId = string.Empty;
-        private bool _showAdvanced = true;
-        private bool _showMaintenance;
         private bool _focusSearch;
-        private Vector2 _moduleScroll;
-        private Vector2 _contentScroll;
         private Vector2 _systemScroll;
         private Vector2 _workspaceNavigationScroll;
         private Vector2 _workspaceContentScroll;
@@ -388,11 +357,17 @@ namespace ZeroEngine.Editor
         private void DrawPageNavigation(params GUILayoutOption[] options)
         {
             int nextPage = GUILayout.Toolbar(_page, PageNames, options);
-            if (nextPage == _page)
+            if (nextPage == _page &&
+                (nextPage != 0 || string.IsNullOrEmpty(_selectedPanelFullId)))
                 return;
 
             _page = nextPage;
             _showContext = false;
+            if (_page == 0)
+            {
+                SelectWorkspacePanel(string.Empty);
+                _workspaceContentScroll = Vector2.zero;
+            }
             if (_page == 2)
                 RestoreHelpSelectionFromSelectedPanel();
             SaveViewState();
@@ -433,316 +408,31 @@ namespace ZeroEngine.Editor
             }
         }
 
-        private void DrawEmbeddedToolLibrary()
-        {
-            IReadOnlyList<DashboardModule> modules = _catalog.VisibleModules;
-            if (modules.Count == 0)
-            {
-                EditorGUILayout.HelpBox(
-                    DashboardText.NoDeclaredTools,
-                    MessageType.Info);
-                return;
-            }
-
-            DrawToolFilters(modules);
-
-            EnsureSelectedCategory(modules);
-            DrawCompactCategorySelector(modules);
-            DrawToolContent(modules);
-        }
-
-        private void DrawToolFilters(IReadOnlyList<DashboardModule> modules)
-        {
-            var scopeIds = new List<string> { string.Empty, "universal" };
-            var scopeLabels = new List<GUIContent>
-            {
-                new GUIContent(DashboardText.All, DashboardText.ScopeTooltip),
-                new GUIContent(DashboardText.Universal, DashboardText.ToolLibraryTooltip)
-            };
-            foreach (IGrouping<string, DashboardModule> group in modules
-                         .Where(module => module.Scope == DashboardModuleScope.Project)
-                         .GroupBy(module => module.ProjectId, StringComparer.Ordinal)
-                         .OrderBy(group => group.Key, StringComparer.Ordinal))
-            {
-                DashboardModule module = group.First();
-                scopeIds.Add(module.ProjectId);
-                scopeLabels.Add(new GUIContent(
-                    module.ProjectDisplayName,
-                    DashboardText.ProjectScopeTooltip(module.ProjectDisplayName)));
-            }
-
-            int scopeIndex = scopeIds.FindIndex(id => string.Equals(id, _selectedScopeId, StringComparison.Ordinal));
-            if (scopeIndex < 0)
-                scopeIndex = 0;
-            bool compact = EditorUiGUILayout.ResponsiveMode(position.width) == EditorUiResponsiveMode.Compact;
-            using (new EditorGUILayout.HorizontalScope(EditorStyles.toolbar))
-            {
-                GUILayout.Label(new GUIContent(DashboardText.Scope, DashboardText.ScopeTooltip), GUILayout.Width(32f));
-                int selected = EditorGUILayout.Popup(scopeIndex, scopeLabels.ToArray(), GUILayout.Width(120f));
-                _selectedScopeId = scopeIds[Mathf.Clamp(selected, 0, scopeIds.Count - 1)];
-                GUILayout.Space(EditorUiTokens.SpaceSm);
-                _showAdvanced = GUILayout.Toggle(
-                    _showAdvanced,
-                    new GUIContent(DashboardText.AdvancedTools, DashboardText.AdvancedToolsTooltip),
-                    EditorStyles.toolbarButton,
-                    GUILayout.Width(80f));
-                _showMaintenance = GUILayout.Toggle(
-                    _showMaintenance,
-                    new GUIContent(DashboardText.MaintenanceTools, DashboardText.MaintenanceToolsTooltip),
-                    EditorStyles.toolbarButton,
-                    GUILayout.Width(80f));
-                GUILayout.FlexibleSpace();
-                if (!compact)
-                    DrawSafetyAndAvailabilityFilters();
-            }
-            if (compact)
-            {
-                using (new EditorGUILayout.HorizontalScope(EditorStyles.toolbar))
-                    DrawSafetyAndAvailabilityFilters();
-            }
-            if (_showMaintenance)
-                EditorGUILayout.HelpBox(DashboardText.MaintenanceWarning, MessageType.Warning);
-        }
-
-        private void DrawSafetyAndAvailabilityFilters()
-        {
-            string[] safetyIds = { string.Empty, "navigation", "read-only", "project-write", "destructive" };
-            GUIContent[] safetyLabels =
-            {
-                new GUIContent(DashboardText.All, DashboardText.SafetyFilterTooltip),
-                new GUIContent(DashboardText.Navigation, DashboardText.NavigationTooltip),
-                new GUIContent(DashboardText.ReadOnly, DashboardText.ReadOnlyTooltip),
-                new GUIContent(DashboardText.ProjectWrite, DashboardText.ProjectWriteTooltip),
-                new GUIContent(DashboardText.Destructive, DashboardText.DestructiveTooltip)
-            };
-            int safetyIndex = Math.Max(0, Array.IndexOf(safetyIds, _selectedSafetyId));
-            GUILayout.Label(new GUIContent(DashboardText.SafetyFilter, DashboardText.SafetyFilterTooltip), GUILayout.Width(32f));
-            safetyIndex = EditorGUILayout.Popup(safetyIndex, safetyLabels, GUILayout.Width(100f));
-            _selectedSafetyId = safetyIds[Mathf.Clamp(safetyIndex, 0, safetyIds.Length - 1)];
-
-            string[] availabilityIds = { string.Empty, "available", "unavailable" };
-            GUIContent[] availabilityLabels =
-            {
-                new GUIContent(DashboardText.All, DashboardText.AvailabilityFilterTooltip),
-                new GUIContent(DashboardText.Available, DashboardText.AvailabilityFilterTooltip),
-                new GUIContent(DashboardText.Unavailable, DashboardText.AvailabilityFilterTooltip)
-            };
-            int availabilityIndex = Math.Max(0, Array.IndexOf(availabilityIds, _selectedAvailabilityId));
-            GUILayout.Label(new GUIContent(DashboardText.AvailabilityFilter, DashboardText.AvailabilityFilterTooltip), GUILayout.Width(32f));
-            availabilityIndex = EditorGUILayout.Popup(availabilityIndex, availabilityLabels, GUILayout.Width(88f));
-            _selectedAvailabilityId = availabilityIds[Mathf.Clamp(availabilityIndex, 0, availabilityIds.Length - 1)];
-        }
-
-        private void DrawCategoryList(IReadOnlyList<DashboardModule> modules)
-        {
-            using (new EditorGUILayout.VerticalScope(EditorUiStyles.Card, GUILayout.Width(EditorUiTokens.DashboardSidebarWidth)))
-            {
-                GUILayout.Label(DashboardText.TaskCategory, EditorStyles.boldLabel);
-                _moduleScroll = EditorGUILayout.BeginScrollView(_moduleScroll);
-                for (int index = 0; index < ToolCategoryIds.Length; index++)
-                {
-                    string categoryId = ToolCategoryIds[index];
-                    GUIContent category = ToolCategoryNames[index];
-                    int count = CountVisibleSurfaces(modules, categoryId);
-                    if (count == 0)
-                        continue;
-                    if (DrawSelectionButton(
-                            category.text,
-                            category.tooltip,
-                            count,
-                            string.Equals(_selectedCategoryId, categoryId, StringComparison.Ordinal)))
-                    {
-                        _selectedCategoryId = categoryId;
-                    }
-                }
-                EditorGUILayout.EndScrollView();
-            }
-        }
-
-        private void DrawCompactCategorySelector(IReadOnlyList<DashboardModule> modules)
-        {
-            var ids = new List<string>();
-            var labels = new List<GUIContent>();
-            for (int index = 0; index < ToolCategoryIds.Length; index++)
-            {
-                int count = CountVisibleSurfaces(modules, ToolCategoryIds[index]);
-                if (count == 0)
-                    continue;
-                GUIContent category = ToolCategoryNames[index];
-                ids.Add(ToolCategoryIds[index]);
-                labels.Add(new GUIContent(
-                    category.text + "（" + count + "）",
-                    category.tooltip));
-            }
-
-            if (ids.Count == 0)
-                return;
-            int currentIndex = Math.Max(0, ids.FindIndex(id => string.Equals(id, _selectedCategoryId, StringComparison.Ordinal)));
-            int selected = EditorGUILayout.Popup(
-                new GUIContent(DashboardText.TaskCategory, DashboardText.TaskCategoryTooltip),
-                currentIndex,
-                labels.ToArray());
-            _selectedCategoryId = ids[Mathf.Clamp(selected, 0, ids.Count - 1)];
-            EditorGUILayout.Space(EditorUiTokens.SpaceSm);
-        }
-
-        private static bool DrawSelectionButton(string label, string tooltip, int toolCount, bool selected)
-        {
-            return EditorUiGUILayout.SelectionButton(
-                new GUIContent(label + "  ·  " + toolCount, tooltip),
-                selected,
-                GUILayout.ExpandWidth(true),
-                GUILayout.Height(30f));
-        }
-
-        private void DrawToolContent(IReadOnlyList<DashboardModule> modules)
-        {
-            _contentScroll = EditorGUILayout.BeginScrollView(_contentScroll);
-            SurfaceView[] surfaces = BuildSurfaceViews(modules, _selectedCategoryId, primaryOnly: false).ToArray();
-            for (int index = 0; index < surfaces.Length; index++)
-            {
-                DrawSurfaceRow(surfaces[index]);
-                if (index < surfaces.Length - 1)
-                    EditorGUILayout.Space(EditorUiTokens.SpaceXs);
-            }
-
-            if (surfaces.Length == 0)
-                EditorGUILayout.HelpBox(DashboardText.NoSearchResults, MessageType.Info);
-            DrawReferenceSearchResults(modules);
-            DrawHiddenSearchSummary(modules);
-            EditorGUILayout.EndScrollView();
-        }
-
-        private void DrawHiddenSearchSummary(IEnumerable<DashboardModule> modules)
-        {
-            if (string.IsNullOrEmpty(_search))
-                return;
-
-            var hidden = new List<DashboardEntry>();
-            bool needsCategoryOrScope = false;
-            bool needsAdvanced = false;
-            bool needsMaintenance = false;
-            bool needsSafetyOrAvailability = false;
-            foreach (DashboardModule module in modules)
-            {
-                foreach (DashboardEntry entry in module.VisibleActions.Where(EntryMatchesSearch))
-                {
-                    bool scopeVisible = ModuleMatchesScope(module);
-                    bool categoryVisible = string.Equals(EffectiveCategory(entry), _selectedCategoryId, StringComparison.Ordinal);
-                    bool visibilityVisible = EntryMatchesVisibility(entry);
-                    bool safetyVisible = EntryMatchesSafetyFilter(entry);
-                    bool availabilityVisible = EntryMatchesAvailabilityFilter(entry);
-                    if (scopeVisible && categoryVisible && visibilityVisible && safetyVisible && availabilityVisible)
-                        continue;
-                    hidden.Add(entry);
-                    needsCategoryOrScope |= !scopeVisible || !categoryVisible;
-                    needsAdvanced |= entry.Visibility == DashboardEntryVisibility.Advanced && !_showAdvanced;
-                    needsMaintenance |= entry.Visibility == DashboardEntryVisibility.Maintenance && !_showMaintenance;
-                    needsSafetyOrAvailability |= !safetyVisible || !availabilityVisible;
-                }
-            }
-
-            int count = hidden.Select(entry => entry.FullId).Distinct(StringComparer.Ordinal).Count();
-            if (count == 0)
-                return;
-            var actions = new List<string>();
-            if (needsCategoryOrScope) actions.Add(DashboardText.SwitchCategoryOrScope);
-            if (needsAdvanced) actions.Add(DashboardText.EnableAdvanced);
-            if (needsMaintenance) actions.Add(DashboardText.EnableMaintenance);
-            if (needsSafetyOrAvailability) actions.Add(DashboardText.ChangeSafetyOrState);
-            EditorGUILayout.HelpBox(
-                DashboardText.HiddenMatches(count, string.Join("、", actions)),
-                MessageType.Info);
-        }
-
-        private int CountVisibleSurfaces(IEnumerable<DashboardModule> modules, string categoryId)
-        {
-            return modules.Where(ModuleMatchesScope)
-                .SelectMany(module => module.VisibleSurfaces)
-                .Count(surface => surface.Entries.Any(entry =>
-                    string.Equals(EffectiveCategory(entry), categoryId, StringComparison.Ordinal) &&
-                    EntryMatchesVisibility(entry) && EntryMatchesSafetyFilter(entry) &&
-                    EntryMatchesAvailabilityFilter(entry)));
-        }
-
-        private void EnsureSelectedCategory(IEnumerable<DashboardModule> modules)
-        {
-            if (CountVisibleSurfaces(modules, _selectedCategoryId) > 0)
-                return;
-            _selectedCategoryId = ToolCategoryIds.FirstOrDefault(id => CountVisibleSurfaces(modules, id) > 0) ??
-                                  ToolCategoryIds[0];
-        }
-
-        private bool ModuleMatchesScope(DashboardModule module)
-        {
-            if (string.IsNullOrEmpty(_selectedScopeId))
-                return true;
-            if (string.Equals(_selectedScopeId, "universal", StringComparison.Ordinal))
-                return module.Scope == DashboardModuleScope.Universal;
-            return module.Scope == DashboardModuleScope.Project &&
-                   string.Equals(module.ProjectId, _selectedScopeId, StringComparison.Ordinal);
-        }
-
-        private bool EntryMatchesVisibility(DashboardEntry entry)
-        {
-            return entry.Visibility == DashboardEntryVisibility.Primary ||
-                   (entry.Visibility == DashboardEntryVisibility.Advanced && _showAdvanced) ||
-                   (entry.Visibility == DashboardEntryVisibility.Maintenance && _showMaintenance);
-        }
-
-        private bool EntryMatchesSafetyFilter(DashboardEntry entry)
-        {
-            return string.IsNullOrEmpty(_selectedSafetyId) ||
-                   string.Equals(_selectedSafetyId, SafetyId(entry.Safety), StringComparison.Ordinal);
-        }
-
-        private bool EntryMatchesAvailabilityFilter(DashboardEntry entry)
-        {
-            if (string.IsNullOrEmpty(_selectedAvailabilityId))
-                return true;
-            bool available = IsAvailable(entry);
-            return string.Equals(_selectedAvailabilityId, available ? "available" : "unavailable", StringComparison.Ordinal);
-        }
-
-        private static string EffectiveCategory(DashboardEntry entry)
-        {
-            if (!entry.IsLegacy)
-                return entry.Category;
-            switch (entry.Category)
-            {
-                case "setup":
-                case "documentation":
-                    return "system-setup";
-                default:
-                    return entry.Category;
-            }
-        }
-
         private IEnumerable<SurfaceView> BuildSurfaceViews(
             IEnumerable<DashboardModule> modules,
-            string categoryId,
             bool primaryOnly)
         {
-            foreach (DashboardModule module in modules.Where(ModuleMatchesScope))
+            bool hasSearch = !string.IsNullOrEmpty(_search);
+            foreach (DashboardModule module in modules)
             {
                 foreach (DashboardSurface surface in module.VisibleSurfaces)
                 {
                     DashboardEntry[] entries = surface.Entries
                         .Where(entry => entry.ContentType == DashboardEntryContentType.Action)
                         .Where(entry => !IsWorkspaceNavigationDuplicate(entry))
-                        .Where(entry => primaryOnly
-                            ? entry.Visibility == DashboardEntryVisibility.Primary
-                            : string.Equals(EffectiveCategory(entry), categoryId, StringComparison.Ordinal) &&
-                              EntryMatchesVisibility(entry) && EntryMatchesSafetyFilter(entry) &&
-                              EntryMatchesAvailabilityFilter(entry))
+                        .Where(entry => !primaryOnly || entry.Visibility == DashboardEntryVisibility.Primary)
                         .ToArray();
                     if (entries.Length == 0)
                         continue;
-                    if (!string.IsNullOrEmpty(_search) &&
-                        !SurfaceMatchesSearch(surface) && !ModuleTextMatchesSearch(module) &&
-                        !entries.Any(EntryMatchesSearch))
+
+                    if (hasSearch)
                     {
-                        continue;
+                        bool surfaceOrModuleMatches = SurfaceMatchesSearch(surface) || ModuleTextMatchesSearch(module);
+                        DashboardEntry[] matchingEntries = entries.Where(EntryMatchesSearch).ToArray();
+                        if (!surfaceOrModuleMatches && matchingEntries.Length == 0)
+                            continue;
+                        if (matchingEntries.Length > 0)
+                            entries = matchingEntries;
                     }
 
                     DashboardEntry defaultEntry = entries.Contains(surface.DefaultEntry)
@@ -878,7 +568,7 @@ namespace ZeroEngine.Editor
         {
             if (string.IsNullOrEmpty(_search))
                 return;
-            var matches = modules.Where(ModuleMatchesScope)
+            var matches = modules
                 .SelectMany(module => module.VisibleReferences
                     .Where(EntryMatchesSearch)
                     .Select(entry => new ReferenceView(module, entry)))
@@ -1003,8 +693,7 @@ namespace ZeroEngine.Editor
             DashboardModule[] modules = _visibleWorkspaceModules;
             SurfaceView[] primarySurfaces = BuildSurfaceViews(
                     _catalog.VisibleModules,
-                    string.Empty,
-                    primaryOnly: true)
+                    primaryOnly: string.IsNullOrEmpty(_search))
                 .ToArray();
 
             if (modules.Length == 0 && primarySurfaces.Length == 0)
@@ -1059,14 +748,10 @@ namespace ZeroEngine.Editor
                 return;
             }
 
-            if (_homeView == HomeViewAllTools)
-            {
-                DrawEmbeddedToolLibrary();
-                return;
-            }
-
             _workspaceContentScroll = EditorGUILayout.BeginScrollView(_workspaceContentScroll);
-            DrawPageTitle(DashboardText.CommonWorkflows, DashboardText.CommonWorkflowsSubtitle);
+            DrawPageTitle(
+                string.IsNullOrEmpty(_search) ? DashboardText.CommonWorkflows : DashboardText.SearchResults,
+                string.IsNullOrEmpty(_search) ? DashboardText.CommonWorkflowsSubtitle : DashboardText.SearchResultsSubtitle);
             for (int index = 0; index < primarySurfaces.Count; index++)
             {
                 DrawSurfaceRow(primarySurfaces[index]);
@@ -1145,23 +830,6 @@ namespace ZeroEngine.Editor
                     }
                 }
                 _workspaceNavigationScroll = EditorGUILayout.BeginScrollView(_workspaceNavigationScroll);
-                if (EditorUiGUILayout.SelectionButton(
-                        new GUIContent(DashboardText.Overview, DashboardText.OverviewTooltip),
-                        string.IsNullOrEmpty(_selectedPanelFullId) && _homeView == HomeViewOverview,
-                        GUILayout.ExpandWidth(true),
-                        GUILayout.Height(30f)))
-                {
-                    SelectHomeView(HomeViewOverview);
-                }
-                if (EditorUiGUILayout.SelectionButton(
-                        new GUIContent(DashboardText.AllTools, DashboardText.AllToolsTooltip),
-                        string.IsNullOrEmpty(_selectedPanelFullId) && _homeView == HomeViewAllTools,
-                        GUILayout.ExpandWidth(true),
-                        GUILayout.Height(30f)))
-                {
-                    SelectHomeView(HomeViewAllTools);
-                }
-                EditorGUILayout.Space(EditorUiTokens.SpaceXs);
                 foreach (WorkspaceModuleView moduleView in moduleViews)
                 {
                     if (!DrawWorkspaceModuleHeader(moduleView.Module, moduleView.Panels.Length))
@@ -1806,8 +1474,6 @@ namespace ZeroEngine.Editor
         private void SelectWorkspacePanel(string fullId)
         {
             _deferRestoredPanelActivation = false;
-            if (!string.IsNullOrEmpty(fullId))
-                _homeView = HomeViewOverview;
             if (string.Equals(_selectedPanelFullId, fullId, StringComparison.Ordinal))
                 return;
             _selectedPanelFullId = fullId ?? string.Empty;
@@ -1830,14 +1496,6 @@ namespace ZeroEngine.Editor
             SaveViewState();
         }
 
-        private void SelectHomeView(int view)
-        {
-            _homeView = Mathf.Clamp(view, HomeViewOverview, HomeViewAllTools);
-            SelectWorkspacePanel(string.Empty);
-            _workspaceContentScroll = Vector2.zero;
-            SaveViewState();
-        }
-
         bool IEditorWorkspaceNavigator.TryShowWorkspace(string moduleId, string panelId)
         {
             return TryShowWorkspaceInternal(moduleId, panelId);
@@ -1853,7 +1511,6 @@ namespace ZeroEngine.Editor
                 return false;
 
             _page = 0;
-            _homeView = HomeViewOverview;
             SelectWorkspacePanel(fullId);
             SaveViewState();
             Repaint();
@@ -1885,14 +1542,7 @@ namespace ZeroEngine.Editor
         {
             DashboardViewState state = DashboardViewStateStore.Load();
             _page = Mathf.Clamp(state.Page, 0, PageNames.Length - 1);
-            _homeView = Mathf.Clamp(state.HomeView, HomeViewOverview, HomeViewAllTools);
             _search = state.Search;
-            _selectedCategoryId = state.SelectedCategoryId;
-            _selectedScopeId = state.SelectedScopeId;
-            _selectedSafetyId = state.SelectedSafetyId;
-            _selectedAvailabilityId = state.SelectedAvailabilityId;
-            _showAdvanced = state.ShowAdvanced;
-            _showMaintenance = state.ShowMaintenance;
             _selectedPanelFullId = state.SelectedPanelFullId;
             _workspaceModuleOrder.Clear();
             _workspaceModuleOrder.AddRange(state.WorkspaceModuleOrder);
@@ -1904,8 +1554,6 @@ namespace ZeroEngine.Editor
                 state.WorkspaceSidebarWidth,
                 WorkspaceSidebarMinWidth,
                 WorkspaceSidebarMaxWidth);
-            _moduleScroll = state.ModuleScroll;
-            _contentScroll = state.ContentScroll;
             _systemScroll = state.SystemScroll;
             _workspaceNavigationScroll = state.WorkspaceNavigationScroll;
             _workspaceContentScroll = state.WorkspaceContentScroll;
@@ -1917,14 +1565,7 @@ namespace ZeroEngine.Editor
             DashboardViewStateStore.Save(new DashboardViewState
             {
                 Page = _page,
-                HomeView = _homeView,
                 Search = _search,
-                SelectedCategoryId = _selectedCategoryId,
-                SelectedScopeId = _selectedScopeId,
-                SelectedSafetyId = _selectedSafetyId,
-                SelectedAvailabilityId = _selectedAvailabilityId,
-                ShowAdvanced = _showAdvanced,
-                ShowMaintenance = _showMaintenance,
                 SelectedPanelFullId = _selectedPanelFullId,
                 WorkspaceModuleOrder = _workspaceModuleOrder.ToArray(),
                 WorkspacePanelOrder = _workspacePanelOrder.ToArray(),
@@ -1932,8 +1573,6 @@ namespace ZeroEngine.Editor
                     .OrderBy(id => id, StringComparer.Ordinal)
                     .ToArray(),
                 WorkspaceSidebarWidth = _workspaceSidebarWidth,
-                ModuleScroll = _moduleScroll,
-                ContentScroll = _contentScroll,
                 SystemScroll = _systemScroll,
                 WorkspaceNavigationScroll = _workspaceNavigationScroll,
                 WorkspaceContentScroll = _workspaceContentScroll,
@@ -2727,21 +2366,12 @@ namespace ZeroEngine.Editor
         internal const float DefaultWorkspaceSidebarWidth = 244f;
 
         internal int Page;
-        internal int HomeView;
         internal string Search = string.Empty;
-        internal string SelectedCategoryId = "authoring";
-        internal string SelectedScopeId = string.Empty;
-        internal string SelectedSafetyId = string.Empty;
-        internal string SelectedAvailabilityId = string.Empty;
-        internal bool ShowAdvanced = true;
-        internal bool ShowMaintenance;
         internal string SelectedPanelFullId = string.Empty;
         internal string[] WorkspaceModuleOrder = Array.Empty<string>();
         internal string[] WorkspacePanelOrder = Array.Empty<string>();
         internal string[] CollapsedWorkspaceModuleIds = Array.Empty<string>();
         internal float WorkspaceSidebarWidth = DefaultWorkspaceSidebarWidth;
-        internal Vector2 ModuleScroll;
-        internal Vector2 ContentScroll;
         internal Vector2 SystemScroll;
         internal Vector2 WorkspaceNavigationScroll;
         internal Vector2 WorkspaceContentScroll;
@@ -2751,21 +2381,18 @@ namespace ZeroEngine.Editor
     internal static class DashboardViewStateStore
     {
         private const string DefaultPrefix = "ZGS.Workbench.";
-        private const int CurrentNavigationVersion = 1;
-        private const int AllToolsHomeView = 1;
+        private const int CurrentNavigationVersion = 2;
 
         internal static DashboardViewState Load(string prefix = DefaultPrefix)
         {
             prefix = NormalizePrefix(prefix);
             int navigationVersion = EditorPrefs.GetInt(prefix + "NavigationVersion", 0);
             int page = EditorPrefs.GetInt(prefix + "Page", 0);
-            int homeView = EditorPrefs.GetInt(prefix + "HomeView", 0);
-            if (navigationVersion < CurrentNavigationVersion)
+            if (navigationVersion < 1)
             {
                 if (page == 1)
                 {
                     page = 0;
-                    homeView = AllToolsHomeView;
                 }
                 else if (page == 2)
                 {
@@ -2779,14 +2406,7 @@ namespace ZeroEngine.Editor
             return new DashboardViewState
             {
                 Page = page,
-                HomeView = homeView,
                 Search = EditorPrefs.GetString(prefix + "Search", string.Empty),
-                SelectedCategoryId = EditorPrefs.GetString(prefix + "SelectedCategory", "authoring"),
-                SelectedScopeId = EditorPrefs.GetString(prefix + "SelectedScope", string.Empty),
-                SelectedSafetyId = EditorPrefs.GetString(prefix + "SelectedSafety", string.Empty),
-                SelectedAvailabilityId = EditorPrefs.GetString(prefix + "SelectedAvailability", string.Empty),
-                ShowAdvanced = EditorPrefs.GetBool(prefix + "ShowAdvanced", true),
-                ShowMaintenance = EditorPrefs.GetBool(prefix + "ShowMaintenance", false),
                 SelectedPanelFullId = EditorPrefs.GetString(prefix + "SelectedPanel", string.Empty),
                 WorkspaceModuleOrder = LoadStringList(prefix + "WorkspaceModuleOrder"),
                 WorkspacePanelOrder = LoadStringList(prefix + "WorkspacePanelOrder"),
@@ -2794,8 +2414,6 @@ namespace ZeroEngine.Editor
                 WorkspaceSidebarWidth = EditorPrefs.GetFloat(
                     prefix + "WorkspaceSidebarWidth",
                     DashboardViewState.DefaultWorkspaceSidebarWidth),
-                ModuleScroll = LoadVector(prefix + "ModuleScroll"),
-                ContentScroll = LoadVector(prefix + "ContentScroll"),
                 SystemScroll = LoadVector(prefix + "SystemScroll"),
                 WorkspaceNavigationScroll = LoadVector(prefix + "WorkspaceNavigationScroll"),
                 WorkspaceContentScroll = LoadVector(prefix + "WorkspaceContentScroll"),
@@ -2810,14 +2428,8 @@ namespace ZeroEngine.Editor
             prefix = NormalizePrefix(prefix);
             EditorPrefs.SetInt(prefix + "NavigationVersion", CurrentNavigationVersion);
             EditorPrefs.SetInt(prefix + "Page", state.Page);
-            EditorPrefs.SetInt(prefix + "HomeView", state.HomeView);
             EditorPrefs.SetString(prefix + "Search", state.Search ?? string.Empty);
-            EditorPrefs.SetString(prefix + "SelectedCategory", state.SelectedCategoryId ?? string.Empty);
-            EditorPrefs.SetString(prefix + "SelectedScope", state.SelectedScopeId ?? string.Empty);
-            EditorPrefs.SetString(prefix + "SelectedSafety", state.SelectedSafetyId ?? string.Empty);
-            EditorPrefs.SetString(prefix + "SelectedAvailability", state.SelectedAvailabilityId ?? string.Empty);
-            EditorPrefs.SetBool(prefix + "ShowAdvanced", state.ShowAdvanced);
-            EditorPrefs.SetBool(prefix + "ShowMaintenance", state.ShowMaintenance);
+            DeleteAllToolsState(prefix);
             EditorPrefs.SetString(prefix + "SelectedPanel", state.SelectedPanelFullId ?? string.Empty);
             EditorPrefs.SetString(
                 prefix + "WorkspaceModuleOrder",
@@ -2829,8 +2441,6 @@ namespace ZeroEngine.Editor
                 prefix + "CollapsedWorkspaceModuleIds",
                 string.Join("\n", state.CollapsedWorkspaceModuleIds ?? Array.Empty<string>()));
             EditorPrefs.SetFloat(prefix + "WorkspaceSidebarWidth", state.WorkspaceSidebarWidth);
-            SaveVector(prefix + "ModuleScroll", state.ModuleScroll);
-            SaveVector(prefix + "ContentScroll", state.ContentScroll);
             SaveVector(prefix + "SystemScroll", state.SystemScroll);
             SaveVector(prefix + "WorkspaceNavigationScroll", state.WorkspaceNavigationScroll);
             SaveVector(prefix + "WorkspaceContentScroll", state.WorkspaceContentScroll);
@@ -2842,18 +2452,35 @@ namespace ZeroEngine.Editor
             prefix = NormalizePrefix(prefix);
             string[] scalarKeys =
             {
-                "NavigationVersion", "Page", "HomeView", "Search", "SelectedCategory", "SelectedScope", "SelectedSafety",
-                "SelectedAvailability", "ShowAdvanced", "ShowMaintenance", "SelectedPanel",
+                "NavigationVersion", "Page", "Search", "SelectedPanel",
                 "WorkspaceModuleOrder", "WorkspacePanelOrder", "CollapsedWorkspaceModuleIds",
                 "WorkspaceSidebarWidth"
             };
             foreach (string key in scalarKeys)
                 EditorPrefs.DeleteKey(prefix + key);
+            DeleteAllToolsState(prefix);
             foreach (string key in new[]
                      {
-                         "ModuleScroll", "ContentScroll", "SystemScroll", "WorkspaceNavigationScroll",
+                         "SystemScroll", "WorkspaceNavigationScroll",
                          "WorkspaceContentScroll", "ContextScroll"
                      })
+            {
+                EditorPrefs.DeleteKey(prefix + key + "X");
+                EditorPrefs.DeleteKey(prefix + key + "Y");
+            }
+        }
+
+        private static void DeleteAllToolsState(string prefix)
+        {
+            foreach (string key in new[]
+                     {
+                         "HomeView", "SelectedCategory", "SelectedScope", "SelectedSafety",
+                         "SelectedAvailability", "ShowAdvanced", "ShowMaintenance"
+                     })
+            {
+                EditorPrefs.DeleteKey(prefix + key);
+            }
+            foreach (string key in new[] { "ModuleScroll", "ContentScroll" })
             {
                 EditorPrefs.DeleteKey(prefix + key + "X");
                 EditorPrefs.DeleteKey(prefix + key + "Y");

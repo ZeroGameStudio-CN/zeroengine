@@ -233,7 +233,7 @@ namespace ZeroEngine.Dashboard.Tests.Editor
         }
 
         [Test]
-        public void ViewStateStore_RoundTripsNavigationFiltersAndScrolls()
+        public void ViewStateStore_RoundTripsWorkspaceNavigationAndScrolls()
         {
             string prefix = "ZGS.Dashboard.Tests." + Guid.NewGuid().ToString("N") + ".";
             try
@@ -241,14 +241,7 @@ namespace ZeroEngine.Dashboard.Tests.Editor
                 DashboardViewStateStore.Save(new DashboardViewState
                 {
                     Page = 2,
-                    HomeView = 1,
                     Search = "数据",
-                    SelectedCategoryId = "data-localization",
-                    SelectedScopeId = "pob",
-                    SelectedSafetyId = "read-only",
-                    SelectedAvailabilityId = "available",
-                    ShowAdvanced = false,
-                    ShowMaintenance = true,
                     SelectedPanelFullId = "pob.tools.data-manager/data-manager",
                     WorkspaceModuleOrder = new[]
                     {
@@ -265,8 +258,6 @@ namespace ZeroEngine.Dashboard.Tests.Editor
                         "pob.dashboard"
                     },
                     WorkspaceSidebarWidth = 286f,
-                    ModuleScroll = new Vector2(1f, 2f),
-                    ContentScroll = new Vector2(3f, 4f),
                     SystemScroll = new Vector2(5f, 6f),
                     WorkspaceNavigationScroll = new Vector2(7f, 8f),
                     WorkspaceContentScroll = new Vector2(9f, 10f),
@@ -276,14 +267,7 @@ namespace ZeroEngine.Dashboard.Tests.Editor
                 DashboardViewState state = DashboardViewStateStore.Load(prefix);
 
                 Assert.That(state.Page, Is.EqualTo(2));
-                Assert.That(state.HomeView, Is.EqualTo(1));
                 Assert.That(state.Search, Is.EqualTo("数据"));
-                Assert.That(state.SelectedCategoryId, Is.EqualTo("data-localization"));
-                Assert.That(state.SelectedScopeId, Is.EqualTo("pob"));
-                Assert.That(state.SelectedSafetyId, Is.EqualTo("read-only"));
-                Assert.That(state.SelectedAvailabilityId, Is.EqualTo("available"));
-                Assert.That(state.ShowAdvanced, Is.False);
-                Assert.That(state.ShowMaintenance, Is.True);
                 Assert.That(state.SelectedPanelFullId, Is.EqualTo("pob.tools.data-manager/data-manager"));
                 Assert.That(state.WorkspaceModuleOrder, Is.EqualTo(new[]
                 {
@@ -306,11 +290,11 @@ namespace ZeroEngine.Dashboard.Tests.Editor
             }
         }
 
-        [TestCase(0, 0, 0)]
-        [TestCase(1, 0, 1)]
-        [TestCase(2, 1, 0)]
-        [TestCase(3, 2, 0)]
-        public void ViewStateStore_MigratesLegacyFourPageNavigation(int legacyPage, int expectedPage, int expectedHomeView)
+        [TestCase(0, 0)]
+        [TestCase(1, 0)]
+        [TestCase(2, 1)]
+        [TestCase(3, 2)]
+        public void ViewStateStore_MigratesLegacyFourPageNavigation(int legacyPage, int expectedPage)
         {
             string prefix = "ZGS.Dashboard.Tests." + Guid.NewGuid().ToString("N") + ".";
             try
@@ -320,7 +304,33 @@ namespace ZeroEngine.Dashboard.Tests.Editor
                 DashboardViewState state = DashboardViewStateStore.Load(prefix);
 
                 Assert.That(state.Page, Is.EqualTo(expectedPage));
-                Assert.That(state.HomeView, Is.EqualTo(expectedHomeView));
+            }
+            finally
+            {
+                DashboardViewStateStore.Delete(prefix);
+            }
+        }
+
+        [Test]
+        public void ViewStateStore_MigratesAndDeletesDeprecatedAllToolsState()
+        {
+            string prefix = "ZGS.Dashboard.Tests." + Guid.NewGuid().ToString("N") + ".";
+            try
+            {
+                UnityEditor.EditorPrefs.SetInt(prefix + "NavigationVersion", 1);
+                UnityEditor.EditorPrefs.SetInt(prefix + "Page", 0);
+                UnityEditor.EditorPrefs.SetInt(prefix + "HomeView", 1);
+                UnityEditor.EditorPrefs.SetString(prefix + "SelectedCategory", "diagnostics");
+                UnityEditor.EditorPrefs.SetBool(prefix + "ShowMaintenance", true);
+
+                DashboardViewState state = DashboardViewStateStore.Load(prefix);
+                Assert.That(state.Page, Is.EqualTo(0));
+
+                DashboardViewStateStore.Save(state, prefix);
+
+                Assert.That(UnityEditor.EditorPrefs.HasKey(prefix + "HomeView"), Is.False);
+                Assert.That(UnityEditor.EditorPrefs.HasKey(prefix + "SelectedCategory"), Is.False);
+                Assert.That(UnityEditor.EditorPrefs.HasKey(prefix + "ShowMaintenance"), Is.False);
             }
             finally
             {
