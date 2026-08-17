@@ -27,6 +27,7 @@ namespace ZeroEngine.Editor
         private const float WorkspacePanelGap = 2f;
         private const float WorkspacePanelVerticalInset = 4f;
         private const float WorkspaceSelectionBarWidth = 3f;
+        private const float StableScrollbarVisibilityEpsilon = 0.5f;
 
         private static readonly GUIContent[] PageNames =
         {
@@ -63,6 +64,10 @@ namespace ZeroEngine.Editor
         private Vector2 _workspaceNavigationScroll;
         private Vector2 _workspaceContentScroll;
         private Vector2 _contextScroll;
+        private bool _systemScrollHasVerticalOverflow;
+        private bool _workspaceNavigationScrollHasVerticalOverflow;
+        private bool _workspaceContentScrollHasVerticalOverflow;
+        private bool _contextScrollHasVerticalOverflow;
         private float _workspaceSidebarWidth = DashboardViewState.DefaultWorkspaceSidebarWidth;
         private bool _showInstalledPackages = true;
         private bool _showConnectedPackages = true;
@@ -793,12 +798,7 @@ namespace ZeroEngine.Editor
                 EditorGUILayout.Space(2f);
                 DrawWorkspaceSearchControls(sidebarWidth);
                 EditorGUILayout.Space(4f);
-                _workspaceNavigationScroll = GUILayout.BeginScrollView(
-                    _workspaceNavigationScroll,
-                    false,
-                    ReservesWorkspaceNavigationScrollbar(),
-                    GUI.skin.horizontalScrollbar,
-                    GUI.skin.verticalScrollbar);
+                _workspaceNavigationScroll = BeginStableVerticalScrollView(_workspaceNavigationScroll);
                 foreach (WorkspaceModuleView moduleView in moduleViews)
                 {
                     if (!DrawWorkspaceModuleHeader(moduleView.Module, moduleView.Panels.Length))
@@ -813,7 +813,7 @@ namespace ZeroEngine.Editor
                     }
                     EditorGUILayout.Space(2f);
                 }
-                EditorGUILayout.EndScrollView();
+                EndStableVerticalScrollView(ref _workspaceNavigationScrollHasVerticalOverflow);
             }
         }
 
@@ -1053,6 +1053,50 @@ namespace ZeroEngine.Editor
             return true;
         }
 
+        internal static bool ShouldShowStableVerticalScrollbar(float contentHeight, float viewportHeight)
+        {
+            return contentHeight > viewportHeight + StableScrollbarVisibilityEpsilon;
+        }
+
+        private static Vector2 BeginStableVerticalScrollView(Vector2 scrollPosition)
+        {
+            return EditorGUILayout.BeginScrollView(
+                scrollPosition,
+                false,
+                true,
+                GUI.skin.horizontalScrollbar,
+                GUI.skin.verticalScrollbar);
+        }
+
+        private void EndStableVerticalScrollView(ref bool hasVerticalOverflow)
+        {
+            Rect contentRect = GUILayoutUtility.GetLastRect();
+            Color originalColor = GUI.color;
+            try
+            {
+                if (!hasVerticalOverflow)
+                    GUI.color = new Color(originalColor.r, originalColor.g, originalColor.b, 0f);
+                EditorGUILayout.EndScrollView();
+            }
+            finally
+            {
+                GUI.color = originalColor;
+            }
+
+            if (Event.current == null || Event.current.type != EventType.Repaint)
+                return;
+
+            Rect viewportRect = GUILayoutUtility.GetLastRect();
+            bool nextHasVerticalOverflow = ShouldShowStableVerticalScrollbar(
+                Mathf.Max(0f, contentRect.yMax),
+                Mathf.Max(0f, viewportRect.height));
+            if (nextHasVerticalOverflow == hasVerticalOverflow)
+                return;
+
+            hasVerticalOverflow = nextHasVerticalOverflow;
+            Repaint();
+        }
+
         private bool IsWorkspacePanelAvailable(string fullId)
         {
             return _workspacePanelsById.TryGetValue(fullId, out WorkspacePanelView view) &&
@@ -1254,7 +1298,7 @@ namespace ZeroEngine.Editor
                 return;
             DashboardModule module = modules.First(item => string.Equals(item.ModuleId, descriptor.ModuleId, StringComparison.Ordinal));
 
-            _workspaceContentScroll = EditorGUILayout.BeginScrollView(_workspaceContentScroll);
+            _workspaceContentScroll = BeginStableVerticalScrollView(_workspaceContentScroll);
             using (new EditorGUILayout.HorizontalScope())
             {
                 using (new EditorGUILayout.VerticalScope())
@@ -1281,7 +1325,7 @@ namespace ZeroEngine.Editor
                         ? DashboardText.EditModeOnly(descriptor.DisplayName)
                         : DashboardText.PlayModeOnly(descriptor.DisplayName),
                     MessageType.Info);
-                EditorGUILayout.EndScrollView();
+                EndStableVerticalScrollView(ref _workspaceContentScrollHasVerticalOverflow);
                 return;
             }
 
@@ -1295,14 +1339,14 @@ namespace ZeroEngine.Editor
                     _failedWorkspacePanels.Remove(descriptor.FullId);
                     RemoveWorkspaceDiagnostics(descriptor.FullId);
                 }
-                EditorGUILayout.EndScrollView();
+                EndStableVerticalScrollView(ref _workspaceContentScrollHasVerticalOverflow);
                 return;
             }
 
             if (_deferRestoredPanelActivation && !_hasDrawnShell)
             {
                 EditorGUILayout.HelpBox(DashboardText.LoadingPanel, MessageType.Info);
-                EditorGUILayout.EndScrollView();
+                EndStableVerticalScrollView(ref _workspaceContentScrollHasVerticalOverflow);
                 return;
             }
 
@@ -1316,7 +1360,7 @@ namespace ZeroEngine.Editor
             {
                 EditorGUILayout.HelpBox(DashboardText.LoadingPanel, MessageType.Info);
                 Repaint();
-                EditorGUILayout.EndScrollView();
+                EndStableVerticalScrollView(ref _workspaceContentScrollHasVerticalOverflow);
                 return;
             }
 
@@ -1344,7 +1388,7 @@ namespace ZeroEngine.Editor
                     RecordWorkspaceFailure("workspace-panel-draw-failed", exception);
                 }
             }
-            EditorGUILayout.EndScrollView();
+            EndStableVerticalScrollView(ref _workspaceContentScrollHasVerticalOverflow);
         }
 
         private static bool UsesFullWidthWorkspaceLayout(IEditorWorkspacePanel panel)
@@ -1705,7 +1749,7 @@ namespace ZeroEngine.Editor
                 return;
             }
 
-            _contextScroll = EditorGUILayout.BeginScrollView(_contextScroll);
+            _contextScroll = BeginStableVerticalScrollView(_contextScroll);
             string description = _helpPanel?.Description ?? _helpSurface?.Description ?? _helpModule.Description;
             string usage = _helpPanel?.Usage ?? _helpSurface?.Usage;
             GUILayout.Label(DashboardText.Purpose, EditorStyles.miniBoldLabel);
@@ -1749,7 +1793,7 @@ namespace ZeroEngine.Editor
                         DrawTechnicalValue(EntryTechnicalRoute(entry));
                 }
             }
-            EditorGUILayout.EndScrollView();
+            EndStableVerticalScrollView(ref _contextScrollHasVerticalOverflow);
         }
 
         private void DrawContextState()
@@ -1848,7 +1892,7 @@ namespace ZeroEngine.Editor
 
         private void DrawSystem()
         {
-            _systemScroll = EditorGUILayout.BeginScrollView(_systemScroll);
+            _systemScroll = BeginStableVerticalScrollView(_systemScroll);
             DashboardDiagnostic[] diagnostics = _catalog.Diagnostics
                 .Concat(_runtimeDiagnostics.Values)
                 .Where(DiagnosticMatchesSearch)
@@ -1974,7 +2018,7 @@ namespace ZeroEngine.Editor
                     }
                 }
             }
-            EditorGUILayout.EndScrollView();
+            EndStableVerticalScrollView(ref _systemScrollHasVerticalOverflow);
         }
 
         private SystemPackageView[] BuildSystemPackageViews(DashboardCatalog catalog)

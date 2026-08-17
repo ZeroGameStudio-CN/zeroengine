@@ -130,6 +130,19 @@ namespace ZeroEngine.Dashboard.Tests.Editor
             Assert.That(ZeroEngineDashboard.ReservesWorkspaceNavigationScrollbar(), Is.True);
         }
 
+        [TestCase(320f, 320f, false)]
+        [TestCase(320.5f, 320f, false)]
+        [TestCase(321f, 320f, true)]
+        public void Dashboard_StableScrollbarChromeOnlyAppearsForOverflow(
+            float contentHeight,
+            float viewportHeight,
+            bool expected)
+        {
+            Assert.That(
+                ZeroEngineDashboard.ShouldShowStableVerticalScrollbar(contentHeight, viewportHeight),
+                Is.EqualTo(expected));
+        }
+
         [Test]
         public void WorkspacePanelLayout_ReservesRightInsetAndAlignsSelectionBar()
         {
