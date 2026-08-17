@@ -49,7 +49,13 @@ namespace ZeroEngine.Editor.Dashboard
                     package.name,
                     package.version,
                     package.resolvedPath,
-                    package.displayName))
+                    package.displayName,
+                    package.packageId,
+                    package.isDirectDependency,
+                    (package.dependencies ?? Array.Empty<UnityEditor.PackageManager.DependencyInfo>())
+                    .Where(dependency => !string.IsNullOrEmpty(dependency.name))
+                    .Select(dependency => dependency.name)
+                    .ToArray()))
                 .ToArray();
             var sources = new List<DashboardDescriptorSource>();
 

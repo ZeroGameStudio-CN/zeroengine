@@ -186,10 +186,115 @@ namespace ZeroEngine.Dashboard.Tests.Editor
 
             Assert.That(namedPackage.DisplayName, Is.EqualTo("ZeroEngine Dashboard"));
             Assert.That(unnamedPackage.DisplayName, Is.EqualTo(unnamedPackage.Name));
-            Assert.That(DashboardText.InstalledWithoutWorkspaceEntry, Is.EqualTo("已安装 · 无工作台入口"));
+            Assert.That(
+                DashboardText.InstalledWithoutWorkspaceEntry,
+                Is.EqualTo("已安装 · 基础能力（无工作台面板）"));
             Assert.That(
                 DashboardText.InstalledWorkspaceContent(2, 1, 3),
                 Is.EqualTo("已安装 · 2 个工具 · 1 个面板 · 3 份资料"));
+        }
+
+        [Test]
+        public void PackageCatalog_InstallPlan_UsesDashboardGitPinAndDependencyClosure()
+        {
+            const string commit = "0123456789abcdef0123456789abcdef01234567";
+            const string repository = "https://github.com/ZeroGameStudio-CN/zeroengine.git";
+            string dashboardPackageId = repository +
+                                        "?path=com.zerogamestudio.zeroengine.dashboard#" +
+                                        commit;
+            var installed = new[]
+            {
+                new DashboardInstalledPackage(
+                    "com.zerogamestudio.zeroengine.dashboard",
+                    "4.5.3",
+                    "Packages/dashboard",
+                    packageId: dashboardPackageId,
+                    isDirectDependency: true),
+                new DashboardInstalledPackage(
+                    "com.zerogamestudio.zeroengine.core",
+                    "2.0.0",
+                    "Packages/core",
+                    packageId: repository + "?path=com.zerogamestudio.zeroengine.core#" + commit,
+                    isDirectDependency: true)
+            };
+
+            Assert.That(
+                DashboardPackageCatalog.TryCreateInstallPlan(
+                    dashboardPackageId,
+                    "com.zerogamestudio.zeroengine.audio",
+                    installed,
+                    out DashboardPackageInstallPlan plan,
+                    out string reason),
+                Is.True,
+                reason);
+            Assert.That(plan.PackageUrls, Is.EquivalentTo(new[]
+            {
+                repository + "?path=com.zerogamestudio.zeroengine.audio#" + commit,
+                repository + "?path=com.zerogamestudio.zeroengine.persistence#" + commit
+            }));
+        }
+
+        [Test]
+        public void PackageCatalog_InstallPlan_RejectsMixedZeroEnginePins()
+        {
+            const string commit = "0123456789abcdef0123456789abcdef01234567";
+            const string repository = "https://github.com/ZeroGameStudio-CN/zeroengine.git";
+            string dashboardPackageId = repository +
+                                        "?path=com.zerogamestudio.zeroengine.dashboard#" +
+                                        commit;
+            var installed = new[]
+            {
+                new DashboardInstalledPackage(
+                    "com.zerogamestudio.zeroengine.data",
+                    "2.0.0",
+                    "Packages/data",
+                    packageId: repository + "?path=com.zerogamestudio.zeroengine.data#abcdef0123456789abcdef0123456789abcdef01",
+                    isDirectDependency: true)
+            };
+
+            Assert.That(
+                DashboardPackageCatalog.TryCreateInstallPlan(
+                    dashboardPackageId,
+                    "com.zerogamestudio.zeroengine.audio",
+                    installed,
+                    out _,
+                    out string reason),
+                Is.False);
+            StringAssert.Contains("统一", reason);
+        }
+
+        [Test]
+        public void PackageCatalog_RemoveEligibility_ProtectsInfrastructureAndReverseDependencies()
+        {
+            var dashboard = new DashboardInstalledPackage(
+                "com.zerogamestudio.zeroengine.dashboard",
+                "4.5.3",
+                "Packages/dashboard",
+                isDirectDependency: true);
+            var core = new DashboardInstalledPackage(
+                "com.zerogamestudio.zeroengine.core",
+                "2.0.0",
+                "Packages/core",
+                isDirectDependency: true);
+            var audio = new DashboardInstalledPackage(
+                "com.zerogamestudio.zeroengine.audio",
+                "2.0.0",
+                "Packages/audio",
+                displayName: "音频",
+                isDirectDependency: true,
+                dependencies: new[] { "com.zerogamestudio.zeroengine.core" });
+            var assetCatalog = new DashboardInstalledPackage(
+                "com.zerogamestudio.zeroengine.asset-catalog",
+                "1.0.0",
+                "Packages/catalog",
+                isDirectDependency: true);
+            DashboardInstalledPackage[] installed = { dashboard, core, audio, assetCatalog };
+
+            Assert.That(DashboardPackageCatalog.CanRemove(dashboard, installed, out string dashboardReason), Is.False);
+            StringAssert.Contains("工作台", dashboardReason);
+            Assert.That(DashboardPackageCatalog.CanRemove(core, installed, out string coreReason), Is.False);
+            StringAssert.Contains("音频", coreReason);
+            Assert.That(DashboardPackageCatalog.CanRemove(assetCatalog, installed, out string assetCatalogReason), Is.True, assetCatalogReason);
         }
 
         [Test]

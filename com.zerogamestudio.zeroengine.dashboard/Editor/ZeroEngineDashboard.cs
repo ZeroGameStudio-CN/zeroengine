@@ -4,6 +4,7 @@ using System.IO;
 using System.Linq;
 using UnityEditor;
 using UnityEditor.PackageManager;
+using UnityEditor.PackageManager.Requests;
 using UnityEngine;
 using ZeroEngine.Editor.Dashboard;
 using ZeroEngine.EditorUI;
@@ -48,7 +49,7 @@ namespace ZeroEngine.Editor
         private DashboardModule[] _visibleWorkspaceModules = Array.Empty<DashboardModule>();
         private WorkspaceModuleView[] _visibleWorkspaceModuleViews = Array.Empty<WorkspaceModuleView>();
         private WorkspacePanelView[] _visibleWorkspacePanels = Array.Empty<WorkspacePanelView>();
-        private InstalledPackageView[] _installedPackageViews = Array.Empty<InstalledPackageView>();
+        private SystemPackageView[] _systemPackageViews = Array.Empty<SystemPackageView>();
         private DashboardCatalog _workspaceViewCatalog;
         private DashboardWorkspaceRegistry _workspaceViewRegistry;
         private string _workspaceViewSearch;
@@ -66,7 +67,8 @@ namespace ZeroEngine.Editor
         private bool _showInstalledPackages = true;
         private bool _showConnectedPackages = true;
         private bool _showPackageIssues = true;
-        private bool _showPackagesWithoutWorkspaceEntry;
+        private bool _showPackagesWithoutWorkspaceEntry = true;
+        private bool _showAvailablePackages = true;
         private bool _showProjectAdapters;
         private bool _showContext;
         private bool _showDeveloperInfo;
@@ -84,6 +86,10 @@ namespace ZeroEngine.Editor
         private bool _catalogRefreshQueued;
         private bool _hasDrawnShell;
         private bool _deferRestoredPanelActivation;
+        private AddAndRemoveRequest _packageOperation;
+        private string _packageOperationLabel = string.Empty;
+        private string _packageOperationMessage = string.Empty;
+        private MessageType _packageOperationMessageType;
         private string _pressedWorkspaceModuleId = string.Empty;
         private string _pressedWorkspacePanelId = string.Empty;
         private string _workspaceModuleDropTargetId = string.Empty;
@@ -191,10 +197,7 @@ namespace ZeroEngine.Editor
         {
             DeactivateWorkspacePanel();
             _catalog = catalog ?? DashboardCatalog.Empty;
-            _installedPackageViews = _catalog.InstalledPackages
-                .Where(ShouldShowInstalledPackage)
-                .Select(CreateInstalledPackageView)
-                .ToArray();
+            _systemPackageViews = BuildSystemPackageViews(_catalog);
             _catalogLoading = false;
             RebuildWorkspacePanelOrder();
 
@@ -229,6 +232,7 @@ namespace ZeroEngine.Editor
 
         private void OnEditorUpdate()
         {
+            PollPackageOperation();
             if (_catalogRefreshQueued && _hasDrawnShell)
             {
                 RefreshCatalogNow();
@@ -1890,49 +1894,60 @@ namespace ZeroEngine.Editor
                     EditorGUILayout.SelectableLabel(diagnostic.MenuPath, EditorStyles.miniLabel, GUILayout.Height(16));
             }
 
-            InstalledPackageView[] packages = _installedPackageViews
-                .Where(InstalledPackageMatchesSearch)
+            SystemPackageView[] packages = _systemPackageViews
+                .Where(SystemPackageMatchesSearch)
                 .ToArray();
+            SystemPackageView[] issuePackages = packages.Where(item => item.HasDescriptorError).ToArray();
+            SystemPackageView[] connectedPackages = packages
+                .Where(item => !item.HasDescriptorError && item.Installed != null && item.Module != null)
+                .ToArray();
+            SystemPackageView[] packagesWithoutEntry = packages
+                .Where(item => !item.HasDescriptorError && item.Installed != null && item.Module == null)
+                .ToArray();
+            SystemPackageView[] availablePackages = packages
+                .Where(item => item.Installed == null)
+                .ToArray();
+            int installedPackageCount = packages.Count(item => item.Installed != null);
             _showInstalledPackages = EditorUiGUILayout.Disclosure(
                 _showInstalledPackages,
                 new GUIContent(
-                    DashboardText.InstalledPackages(packages.Length),
-                    DashboardText.InstalledPackagesTooltip));
+                    DashboardText.PackageCatalog(packages.Length),
+                    DashboardText.PackageCatalogTooltip));
             if (_showInstalledPackages)
             {
                 using (new EditorGUILayout.VerticalScope(EditorUiStyles.Card))
                 {
-                    InstalledPackageView[] issuePackages = packages.Where(item => item.HasDescriptorError).ToArray();
-                    InstalledPackageView[] connectedPackages = packages
-                        .Where(item => !item.HasDescriptorError && item.Module != null)
-                        .ToArray();
-                    InstalledPackageView[] packagesWithoutEntry = packages
-                        .Where(item => !item.HasDescriptorError && item.Module == null)
-                        .ToArray();
                     using (new EditorGUILayout.HorizontalScope())
                     {
-                        DrawInlineMetric(DashboardText.InstalledCount(packages.Length), AccentColor);
+                        DrawInlineMetric(DashboardText.InstalledCount(installedPackageCount), AccentColor);
                         DrawInlineMetric(DashboardText.ConnectedPackageCount(connectedPackages.Length), SuccessColor);
-                        DrawInlineMetric(
-                            DashboardText.PackageWithoutEntryCount(packagesWithoutEntry.Length),
-                            EditorUiPalette.Current.MutedText);
+                        DrawInlineMetric(DashboardText.AvailablePackageCount(availablePackages.Length), AccentColor);
                     }
+                    if (_packageOperation != null)
+                        EditorGUILayout.HelpBox(DashboardText.PackageOperationRunning(_packageOperationLabel), MessageType.Info);
+                    else if (!string.IsNullOrEmpty(_packageOperationMessage))
+                        EditorGUILayout.HelpBox(_packageOperationMessage, _packageOperationMessageType);
                     EditorGUILayout.Space(EditorUiTokens.SpaceXs);
-                    DrawInstalledPackageGroup(
+                    DrawSystemPackageGroup(
                         issuePackages,
                         ref _showPackageIssues,
                         DashboardText.PackageIssues(issuePackages.Length),
                         DashboardText.PackageIssuesTooltip);
-                    DrawInstalledPackageGroup(
+                    DrawSystemPackageGroup(
                         connectedPackages,
                         ref _showConnectedPackages,
                         DashboardText.ConnectedPackages(connectedPackages.Length),
                         DashboardText.ConnectedPackagesTooltip);
-                    DrawInstalledPackageGroup(
+                    DrawSystemPackageGroup(
                         packagesWithoutEntry,
                         ref _showPackagesWithoutWorkspaceEntry,
                         DashboardText.PackagesWithoutWorkspaceEntry(packagesWithoutEntry.Length),
                         DashboardText.PackagesWithoutWorkspaceEntryTooltip);
+                    DrawSystemPackageGroup(
+                        availablePackages,
+                        ref _showAvailablePackages,
+                        DashboardText.AvailablePackages(availablePackages.Length),
+                        DashboardText.AvailablePackagesTooltip);
                 }
             }
 
@@ -1962,17 +1977,86 @@ namespace ZeroEngine.Editor
             EditorGUILayout.EndScrollView();
         }
 
-        private InstalledPackageView CreateInstalledPackageView(DashboardInstalledPackage package)
+        private SystemPackageView[] BuildSystemPackageViews(DashboardCatalog catalog)
         {
-            DashboardModule module = _catalog.Modules.FirstOrDefault(item =>
-                item.Source.Kind == DashboardSourceKind.Package &&
-                string.Equals(item.Source.PackageName, package.Name, StringComparison.Ordinal));
-            bool hasDescriptorError = _catalog.Diagnostics.Any(item => IsBelow(item.SourcePath, package.ResolvedPath));
-            return new InstalledPackageView(package, module, hasDescriptorError);
+            DashboardInstalledPackage[] installedPackages = catalog.InstalledPackages
+                .Where(package => package != null)
+                .ToArray();
+            var installedByName = installedPackages.ToDictionary(package => package.Name, StringComparer.Ordinal);
+            installedByName.TryGetValue("com.zerogamestudio.zeroengine.dashboard", out DashboardInstalledPackage dashboardPackage);
+            string dashboardPackageId = dashboardPackage?.PackageId ?? string.Empty;
+            var result = new List<SystemPackageView>();
+
+            foreach (DashboardKnownPackage knownPackage in DashboardPackageCatalog.KnownPackages)
+            {
+                installedByName.TryGetValue(knownPackage.Name, out DashboardInstalledPackage installedPackage);
+                DashboardModule module = FindPackageModule(catalog, knownPackage.Name);
+                bool hasDescriptorError = installedPackage != null && HasPackageDescriptorError(catalog, installedPackage);
+                DashboardPackageInstallPlan installPlan = null;
+                string installUnavailableReason = string.Empty;
+                bool canRemove = false;
+                string removeUnavailableReason = string.Empty;
+                if (installedPackage == null)
+                {
+                    DashboardPackageCatalog.TryCreateInstallPlan(
+                        dashboardPackageId,
+                        knownPackage.Name,
+                        installedPackages,
+                        out installPlan,
+                        out installUnavailableReason);
+                }
+                else
+                {
+                    canRemove = DashboardPackageCatalog.CanRemove(
+                        installedPackage,
+                        installedPackages,
+                        out removeUnavailableReason);
+                }
+                result.Add(new SystemPackageView(
+                    knownPackage,
+                    installedPackage,
+                    module,
+                    hasDescriptorError,
+                    installPlan,
+                    installUnavailableReason,
+                    canRemove,
+                    removeUnavailableReason));
+            }
+
+            foreach (DashboardInstalledPackage package in installedPackages
+                         .Where(ShouldShowInstalledPackage)
+                         .Where(package => !DashboardPackageCatalog.TryGet(package.Name, out _))
+                         .OrderBy(package => package.DisplayName, StringComparer.Ordinal))
+            {
+                DashboardModule module = FindPackageModule(catalog, package.Name);
+                result.Add(new SystemPackageView(
+                    null,
+                    package,
+                    module,
+                    HasPackageDescriptorError(catalog, package),
+                    null,
+                    DashboardText.ExternalPackageActionUnavailable,
+                    false,
+                    DashboardText.ExternalPackageActionUnavailable));
+            }
+
+            return result.ToArray();
         }
 
-        private void DrawInstalledPackageGroup(
-            IReadOnlyList<InstalledPackageView> packages,
+        private static DashboardModule FindPackageModule(DashboardCatalog catalog, string packageName)
+        {
+            return catalog.Modules.FirstOrDefault(item =>
+                item.Source.Kind == DashboardSourceKind.Package &&
+                string.Equals(item.Source.PackageName, packageName, StringComparison.Ordinal));
+        }
+
+        private static bool HasPackageDescriptorError(DashboardCatalog catalog, DashboardInstalledPackage package)
+        {
+            return catalog.Diagnostics.Any(item => IsBelow(item.SourcePath, package.ResolvedPath));
+        }
+
+        private void DrawSystemPackageGroup(
+            IReadOnlyList<SystemPackageView> packages,
             ref bool expanded,
             string label,
             string tooltip)
@@ -1994,53 +2078,206 @@ namespace ZeroEngine.Editor
 
             for (int index = 0; index < packages.Count; index++)
             {
-                DrawInstalledPackage(packages[index]);
+                DrawSystemPackage(packages[index]);
                 if (index < packages.Count - 1)
                     EditorUiGUILayout.AccentLine(EditorUiPalette.Current.Border, 1f);
             }
             EditorGUILayout.Space(EditorUiTokens.SpaceXs);
         }
 
-        private static void DrawInstalledPackage(InstalledPackageView view)
+        private void DrawSystemPackage(SystemPackageView view)
         {
-            DashboardInstalledPackage package = view.Package;
+            DashboardInstalledPackage package = view.Installed;
             DashboardModule module = view.Module;
             string status = view.HasDescriptorError
                 ? DashboardText.InstalledDescriptorIssue
-                : module != null
+                : package != null && module != null
                     ? DashboardText.InstalledWorkspaceContent(
                         view.ToolCount,
                         view.PanelCount,
                         view.ReferenceCount)
-                    : DashboardText.InstalledWithoutWorkspaceEntry;
+                    : package != null
+                        ? DashboardText.InstalledWithoutWorkspaceEntry
+                        : view.Known.Recommended
+                            ? view.Known.AutomaticallyConnects
+                                ? DashboardText.AvailableWithWorkspaceEntry
+                                : DashboardText.AvailableWithoutWorkspaceEntry
+                            : DashboardText.RetiredPackage;
             string statusTooltip = view.HasDescriptorError
                 ? DashboardText.InstalledDescriptorIssueTooltip
-                : module != null
+                : package != null && module != null
                     ? DashboardText.InstalledWorkspaceContentTooltip
-                    : DashboardText.InstalledWithoutWorkspaceEntryTooltip;
+                    : package != null
+                        ? DashboardText.InstalledWithoutWorkspaceEntryTooltip
+                        : view.Known.Recommended
+                            ? view.Known.AutomaticallyConnects
+                                ? DashboardText.AvailableWithWorkspaceEntryTooltip
+                                : DashboardText.AvailableWithoutWorkspaceEntryTooltip
+                            : DashboardText.RetiredPackageTooltip;
             Color statusColor = view.HasDescriptorError
                 ? WarningColor
-                : module != null
+                : package != null && module != null
                     ? SuccessColor
-                    : EditorUiPalette.Current.MutedText;
-            string packageTooltip = DashboardText.InstalledPackageTooltip(package.Name, package.ResolvedPath);
-            string versionLabel = DashboardText.PackageVersion(package.Version);
-            var versionContent = new GUIContent(versionLabel, DashboardText.PackageVersionTooltip(package.Version));
+                    : package == null && view.Known.Recommended
+                        ? AccentColor
+                        : EditorUiPalette.Current.MutedText;
+            string packageName = package?.Name ?? view.Known.Name;
+            string packageTooltip = package == null
+                ? DashboardText.AvailablePackageTooltip(packageName)
+                : DashboardText.InstalledPackageTooltip(package.Name, package.ResolvedPath);
+            string versionLabel = package == null ? DashboardText.NotInstalled : DashboardText.PackageVersion(package.Version);
+            var versionContent = new GUIContent(
+                versionLabel,
+                package == null ? DashboardText.NotInstalledTooltip : DashboardText.PackageVersionTooltip(package.Version));
 
             using (new EditorGUILayout.VerticalScope(EditorUiStyles.ActionRow))
+            {
+                using (new EditorGUILayout.HorizontalScope())
+                {
+                    using (new EditorGUILayout.VerticalScope(GUILayout.ExpandWidth(true)))
+                    {
+                        GUILayout.Label(new GUIContent(view.DisplayName, packageTooltip), EditorStyles.boldLabel);
+                        GUILayout.Label(new GUIContent(view.Description, packageTooltip), EditorStyles.wordWrappedMiniLabel);
+                        GUILayout.Label(new GUIContent(packageName, packageTooltip), EditorStyles.miniLabel);
+                    }
+                    GUILayout.Space(EditorUiTokens.SpaceMd);
+                    float versionWidth = Mathf.Clamp(EditorUiStyles.Chip.CalcSize(versionContent).x + 4f, 56f, 112f);
+                    EditorUiGUILayout.Chip(versionContent, GUILayout.Width(versionWidth));
+                }
+                DrawStatusLabel(new GUIContent(status, statusTooltip), statusColor);
+                DrawSystemPackageAction(view);
+            }
+        }
+
+        private void DrawSystemPackageAction(SystemPackageView view)
+        {
+            if (_packageOperation != null)
+                return;
+
             using (new EditorGUILayout.HorizontalScope())
             {
-                using (new EditorGUILayout.VerticalScope(GUILayout.ExpandWidth(true)))
+                if (view.Installed == null)
                 {
-                    GUILayout.Label(new GUIContent(package.DisplayName, packageTooltip), EditorStyles.boldLabel);
-                    if (!string.Equals(package.DisplayName, package.Name, StringComparison.Ordinal))
-                        GUILayout.Label(new GUIContent(package.Name, packageTooltip), EditorStyles.miniLabel);
-                    DrawStatusLabel(new GUIContent(status, statusTooltip), statusColor);
+                    if (view.InstallPlan == null)
+                    {
+                        DrawStatusLabel(view.InstallUnavailableReason, EditorUiPalette.Current.MutedText);
+                        return;
+                    }
+
+                    GUILayout.FlexibleSpace();
+                    string label = view.Known.AutomaticallyConnects
+                        ? DashboardText.InstallAndConnect
+                        : DashboardText.InstallWithoutWorkspaceEntry;
+                    string tooltip = view.Known.AutomaticallyConnects
+                        ? DashboardText.InstallAndConnectTooltip
+                        : DashboardText.InstallWithoutWorkspaceEntryTooltip;
+                    if (GUILayout.Button(new GUIContent(label, tooltip), GUILayout.Width(132f)))
+                        BeginInstallPackage(view);
+                    return;
                 }
-                GUILayout.Space(EditorUiTokens.SpaceMd);
-                float versionWidth = Mathf.Clamp(EditorUiStyles.Chip.CalcSize(versionContent).x + 4f, 56f, 112f);
-                EditorUiGUILayout.Chip(versionContent, GUILayout.Width(versionWidth));
+
+                if (!view.CanRemove)
+                {
+                    DrawStatusLabel(view.RemoveUnavailableReason, EditorUiPalette.Current.MutedText);
+                    return;
+                }
+
+                DrawStatusLabel(DashboardText.RemovePackageWarning, WarningColor);
+                GUILayout.FlexibleSpace();
+                if (EditorUiGUILayout.DestructiveButton(
+                        new GUIContent(DashboardText.Uninstall, DashboardText.UninstallTooltip),
+                        GUILayout.Width(72f)))
+                {
+                    BeginRemovePackage(view);
+                }
             }
+        }
+
+        private void BeginInstallPackage(SystemPackageView view)
+        {
+            DashboardPackageInstallPlan plan = view.InstallPlan;
+            if (plan == null)
+                return;
+
+            string message = DashboardText.ConfirmInstallPackage(
+                view.DisplayName,
+                plan.PackageUrls.Count,
+                view.Known.AutomaticallyConnects);
+            if (!EditorUtility.DisplayDialog(
+                    DashboardText.InstallPackageTitle,
+                    message,
+                    DashboardText.Install,
+                    DashboardText.Cancel))
+            {
+                return;
+            }
+
+            BeginPackageOperation(
+                DashboardText.InstallPackageOperation(view.DisplayName),
+                plan.PackageUrls.ToArray(),
+                Array.Empty<string>());
+        }
+
+        private void BeginRemovePackage(SystemPackageView view)
+        {
+            DashboardInstalledPackage package = view.Installed;
+            if (package == null || !view.CanRemove)
+                return;
+
+            if (!EditorUtility.DisplayDialog(
+                    DashboardText.UninstallPackageTitle,
+                    DashboardText.ConfirmUninstallPackage(view.DisplayName),
+                    DashboardText.Uninstall,
+                    DashboardText.Cancel))
+            {
+                return;
+            }
+
+            BeginPackageOperation(
+                DashboardText.UninstallPackageOperation(view.DisplayName),
+                Array.Empty<string>(),
+                new[] { package.Name });
+        }
+
+        private void BeginPackageOperation(string label, string[] packagesToAdd, string[] packagesToRemove)
+        {
+            try
+            {
+                _packageOperation = Client.AddAndRemove(packagesToAdd, packagesToRemove);
+                _packageOperationLabel = label;
+                _packageOperationMessage = string.Empty;
+            }
+            catch (Exception exception)
+            {
+                _packageOperation = null;
+                _packageOperationLabel = string.Empty;
+                _packageOperationMessage = DashboardText.PackageOperationFailed(label, exception.Message);
+                _packageOperationMessageType = MessageType.Error;
+            }
+            Repaint();
+        }
+
+        private void PollPackageOperation()
+        {
+            if (_packageOperation == null || !_packageOperation.IsCompleted)
+                return;
+
+            AddAndRemoveRequest completedRequest = _packageOperation;
+            string label = _packageOperationLabel;
+            _packageOperation = null;
+            _packageOperationLabel = string.Empty;
+            if (completedRequest.Error == null)
+            {
+                _packageOperationMessage = DashboardText.PackageOperationSucceeded(label);
+                _packageOperationMessageType = MessageType.Info;
+                InvalidateAndQueueCatalogRefresh();
+            }
+            else
+            {
+                _packageOperationMessage = DashboardText.PackageOperationFailed(label, completedRequest.Error.message);
+                _packageOperationMessageType = MessageType.Error;
+            }
+            Repaint();
         }
 
         private static void DrawStatusLabel(GUIContent content, Color color, params GUILayoutOption[] options)
@@ -2051,27 +2288,44 @@ namespace ZeroEngine.Editor
             GUI.contentColor = previous;
         }
 
-        private sealed class InstalledPackageView
+        private sealed class SystemPackageView
         {
-            internal InstalledPackageView(
-                DashboardInstalledPackage package,
+            internal SystemPackageView(
+                DashboardKnownPackage known,
+                DashboardInstalledPackage installed,
                 DashboardModule module,
-                bool hasDescriptorError)
+                bool hasDescriptorError,
+                DashboardPackageInstallPlan installPlan,
+                string installUnavailableReason,
+                bool canRemove,
+                string removeUnavailableReason)
             {
-                Package = package;
+                Known = known;
+                Installed = installed;
                 Module = module;
                 HasDescriptorError = hasDescriptorError;
+                InstallPlan = installPlan;
+                InstallUnavailableReason = installUnavailableReason ?? string.Empty;
+                CanRemove = canRemove;
+                RemoveUnavailableReason = removeUnavailableReason ?? string.Empty;
                 ToolCount = module?.VisibleActions.Count ?? 0;
                 PanelCount = module?.Panels.Count ?? 0;
                 ReferenceCount = module?.VisibleReferences.Count ?? 0;
             }
 
-            internal DashboardInstalledPackage Package { get; }
+            internal DashboardKnownPackage Known { get; }
+            internal DashboardInstalledPackage Installed { get; }
             internal DashboardModule Module { get; }
             internal bool HasDescriptorError { get; }
+            internal DashboardPackageInstallPlan InstallPlan { get; }
+            internal string InstallUnavailableReason { get; }
+            internal bool CanRemove { get; }
+            internal string RemoveUnavailableReason { get; }
             internal int ToolCount { get; }
             internal int PanelCount { get; }
             internal int ReferenceCount { get; }
+            internal string DisplayName => Known?.DisplayName ?? Installed?.DisplayName ?? string.Empty;
+            internal string Description => Known?.Description ?? Module?.Description ?? DashboardText.ExternalPackageDescription;
         }
 
         private bool ShouldShowInstalledPackage(DashboardInstalledPackage package)
@@ -2092,17 +2346,21 @@ namespace ZeroEngine.Editor
             return _catalog.Diagnostics.Any(item => IsBelow(item.SourcePath, package.ResolvedPath));
         }
 
-        private bool InstalledPackageMatchesSearch(InstalledPackageView view)
+        private bool SystemPackageMatchesSearch(SystemPackageView view)
         {
             if (string.IsNullOrEmpty(_search))
                 return true;
-            DashboardInstalledPackage package = view.Package;
+            DashboardInstalledPackage package = view.Installed;
             DashboardModule module = view.Module;
-            return Matches(package.Name) ||
-                   Matches(package.DisplayName) ||
-                   Matches(package.Version) ||
+            return Matches(view.DisplayName) ||
+                   Matches(view.Description) ||
+                   Matches(view.Known?.Name) ||
+                   (package != null && (Matches(package.Name) ||
+                                       Matches(package.DisplayName) ||
+                                       Matches(package.Version))) ||
                    (module != null && ModuleMatchesSearch(module)) ||
-                   _catalog.Diagnostics.Any(item => IsBelow(item.SourcePath, package.ResolvedPath) && DiagnosticMatchesSearch(item));
+                   (package != null && _catalog.Diagnostics.Any(item =>
+                       IsBelow(item.SourcePath, package.ResolvedPath) && DiagnosticMatchesSearch(item)));
         }
 
         private bool ModuleMatchesSearch(DashboardModule module)

@@ -161,18 +161,31 @@ namespace ZeroEngine.Editor.Dashboard
 
     internal sealed class DashboardInstalledPackage
     {
-        internal DashboardInstalledPackage(string name, string version, string resolvedPath, string displayName = null)
+        internal DashboardInstalledPackage(
+            string name,
+            string version,
+            string resolvedPath,
+            string displayName = null,
+            string packageId = null,
+            bool isDirectDependency = false,
+            IReadOnlyList<string> dependencies = null)
         {
             Name = name ?? string.Empty;
             Version = version ?? string.Empty;
             ResolvedPath = resolvedPath ?? string.Empty;
             DisplayName = string.IsNullOrWhiteSpace(displayName) ? Name : displayName.Trim();
+            PackageId = packageId ?? string.Empty;
+            IsDirectDependency = isDirectDependency;
+            Dependencies = dependencies ?? Array.Empty<string>();
         }
 
         internal string Name { get; }
         internal string Version { get; }
         internal string ResolvedPath { get; }
         internal string DisplayName { get; }
+        internal string PackageId { get; }
+        internal bool IsDirectDependency { get; }
+        internal IReadOnlyList<string> Dependencies { get; }
     }
 
     internal sealed class DashboardDiagnostic

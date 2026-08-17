@@ -7,7 +7,7 @@ namespace ZeroEngine.Editor
         internal const string Home = "首页";
         internal const string HomeTooltip = "在左侧工作区切换项目面板。";
         internal const string System = "系统";
-        internal const string SystemTooltip = "查看描述符健康状态、已安装包和项目适配器。";
+        internal const string SystemTooltip = "查看工作台健康、已安装包、可接入模块和项目适配器。";
         internal const string RefreshTooltip = "重新扫描模块描述符和项目适配器。";
         internal const string SearchPlaceholder = "筛选工作区面板…";
         internal const string SearchTooltip = "筛选左侧分组和内嵌面板；支持中文名称、说明、用法和技术标识。";
@@ -77,17 +77,37 @@ namespace ZeroEngine.Editor
         internal const string ConfirmAction = "确认操作";
         internal const string Continue = "继续";
         internal const string Cancel = "取消";
-        internal const string SystemSubtitle = "描述符健康状态、已安装包和项目适配器。";
+        internal const string SystemSubtitle = "工作台健康、已安装组件与可接入 ZeroEngine 模块。";
         internal const string Healthy = "健康 · 无诊断";
         internal const string HealthyDescription = "所有已发现的工作台描述符与 provider 均有效。";
         internal const string InstalledDescriptorIssue = "已安装 · 工作台配置异常";
         internal const string InstalledDescriptorIssueTooltip = "包已安装，但工作台描述符存在错误；可在上方诊断中查看详情。";
-        internal const string InstalledWithoutWorkspaceEntry = "已安装 · 无工作台入口";
-        internal const string InstalledWithoutWorkspaceEntryTooltip = "包已正常安装，但没有提供工作台描述符；这不表示缺失或异常。";
+        internal const string InstalledWithoutWorkspaceEntry = "已安装 · 基础能力（无工作台面板）";
+        internal const string InstalledWithoutWorkspaceEntryTooltip = "包已正常安装，但没有提供工作台描述符；它通常供游戏运行时或其他模块依赖，并非故障。";
         internal const string InstalledWorkspaceContentTooltip = "包已安装，并已向工作台提供工具、面板或资料入口。";
         internal const string PackageIssuesTooltip = "已安装但工作台描述符需要处理的包。";
         internal const string ConnectedPackagesTooltip = "已安装且已向工作台提供入口的包。";
-        internal const string PackagesWithoutWorkspaceEntryTooltip = "已安装但没有工作台入口的包；通常是基础库或仅供其他模块依赖。";
+        internal const string PackagesWithoutWorkspaceEntryTooltip = "已安装但没有工作台入口的基础或运行时包；它们可以正常被项目使用。";
+        internal const string AvailableWithWorkspaceEntry = "可安装 · 安装后自动接入工作台";
+        internal const string AvailableWithWorkspaceEntryTooltip = "安装完成并且描述符有效后，模块会自动出现在工作台中。";
+        internal const string AvailableWithoutWorkspaceEntry = "可安装 · 基础能力（无工作台面板）";
+        internal const string AvailableWithoutWorkspaceEntryTooltip = "这是可选的基础或运行时能力；安装后不会凭空生成工作台面板。";
+        internal const string RetiredPackage = "已退役 · 不推荐安装";
+        internal const string RetiredPackageTooltip = "历史聚合包已由按需模块包替代，保留展示仅用于识别旧项目。";
+        internal const string NotInstalled = "未安装";
+        internal const string NotInstalledTooltip = "当前项目未安装此官方 ZeroEngine 模块。";
+        internal const string InstallAndConnect = "安装并接入";
+        internal const string InstallAndConnectTooltip = "以当前工作台相同的 Git pin 安装该模块和所需 ZeroEngine 依赖；安装后自动发现工作台入口。";
+        internal const string InstallWithoutWorkspaceEntry = "安装（无面板）";
+        internal const string InstallWithoutWorkspaceEntryTooltip = "以当前工作台相同的 Git pin 安装该基础能力和所需 ZeroEngine 依赖；不会创建虚假的工作台面板。";
+        internal const string Install = "安装";
+        internal const string Uninstall = "卸载";
+        internal const string UninstallTooltip = "从当前项目的直接 UPM 依赖中移除此包；操作完成后 Unity 会重新解析 Packages。";
+        internal const string RemovePackageWarning = "卸载会修改 Packages；请先确认项目未使用此能力。";
+        internal const string InstallPackageTitle = "安装 ZeroEngine 模块";
+        internal const string UninstallPackageTitle = "卸载 ZeroEngine 模块";
+        internal const string ExternalPackageActionUnavailable = "项目或外部包不由官方 ZeroEngine 目录管理。";
+        internal const string ExternalPackageDescription = "项目或外部适配器提供的工作台内容。";
         internal const string ReadOnly = "只读";
         internal const string ReadOnlyTooltip = "只读取项目或编辑器数据，不写入项目文件。";
         internal const string ProjectWrite = "写入项目";
@@ -96,7 +116,8 @@ namespace ZeroEngine.Editor
         internal const string DestructiveTooltip = "该动作可能产生难以恢复的修改；执行前必须确认。";
         internal const string Navigation = "导航";
         internal const string NavigationTooltip = "仅打开或切换编辑器窗口。";
-        internal const string InstalledPackagesTooltip = "这里只列出当前项目已安装的 ZeroEngine 相关包，并单独说明是否接入工作台；不包含未安装包。";
+        internal const string PackageCatalogTooltip = "列出官方 ZeroEngine 模块的安装与工作台接入状态；安装动作会沿用当前工作台的完整 Git pin。";
+        internal const string AvailablePackagesTooltip = "当前项目尚未安装的官方模块。有效描述符会在安装完成后自动接入工作台；基础包不显示虚假面板。";
         internal const string ProjectAdaptersTooltip = "查看由当前项目贡献并挂载到上游模块的适配器。";
         internal const string Error = "错误";
         internal const string Warning = "警告";
@@ -107,13 +128,15 @@ namespace ZeroEngine.Editor
         internal static string PanelCount(int count) => count + " 个面板";
         internal static string IssueCount(int count) => count + " 个问题";
         internal static string IssuesRequireAttention(int count) => count + " 个问题需要处理";
-        internal static string InstalledPackages(int count) => "已安装包（" + count + "）";
+        internal static string PackageCatalog(int count) => "ZeroEngine 包目录（" + count + "）";
         internal static string InstalledCount(int count) => count + " 个已安装";
         internal static string ConnectedPackageCount(int count) => count + " 个已接入";
         internal static string PackageWithoutEntryCount(int count) => count + " 个无入口";
         internal static string PackageIssues(int count) => "需要处理（" + count + "）";
         internal static string ConnectedPackages(int count) => "已接入工作台（" + count + "）";
-        internal static string PackagesWithoutWorkspaceEntry(int count) => "无工作台入口（" + count + "）";
+        internal static string PackagesWithoutWorkspaceEntry(int count) => "已安装 · 基础能力（" + count + "）";
+        internal static string AvailablePackageCount(int count) => count + " 个可添加";
+        internal static string AvailablePackages(int count) => "可添加模块（" + count + "）";
         internal static string ProjectAdapters(int count) => "项目适配器（" + count + "）";
         internal static string ContributedTools(int count) => "提供工具：" + count;
         internal static string InstalledWorkspaceContent(int toolCount, int panelCount, int referenceCount)
@@ -132,6 +155,27 @@ namespace ZeroEngine.Editor
         internal static string PackageVersion(string version) => string.IsNullOrWhiteSpace(version) ? "版本未知" : "v" + version;
         internal static string PackageVersionTooltip(string version) =>
             string.IsNullOrWhiteSpace(version) ? "Unity 未返回包版本。" : "当前安装版本：" + version;
+        internal static string AvailablePackageTooltip(string packageName) =>
+            "官方包标识：" + packageName + "\n安装时会使用当前工作台相同的 Git 提交。";
+        internal static string PackageOperationRunning(string label) =>
+            "正在" + label + "；Unity 正在解析 Packages，请等待完成。";
+        internal static string InstallPackageOperation(string displayName) => "安装“" + displayName + "”";
+        internal static string UninstallPackageOperation(string displayName) => "卸载“" + displayName + "”";
+        internal static string PackageOperationSucceeded(string label) => label + "完成，正在刷新工作台目录。";
+        internal static string PackageOperationFailed(string label, string reason) =>
+            label + "失败：" + (string.IsNullOrWhiteSpace(reason) ? "Unity Package Manager 未返回详细原因。" : reason);
+        internal static string ConfirmInstallPackage(string displayName, int packageCount, bool automaticallyConnects)
+        {
+            string workspaceResult = automaticallyConnects
+                ? "该模块的有效工作台描述符会在安装后自动发现。"
+                : "该模块是基础或运行时能力，安装后不会新增虚假的工作台面板。";
+            return "将以当前工作台相同的完整 Git pin 安装“" + displayName + "”及 " + packageCount +
+                   " 个 ZeroEngine 依赖。\n\n" + workspaceResult +
+                   "\n\n此操作会修改 Packages/manifest.json 与 packages-lock.json。";
+        }
+        internal static string ConfirmUninstallPackage(string displayName) =>
+            "将从当前项目的直接 UPM 依赖中移除“" + displayName + "”。\n\n" +
+            "Unity 会重新解析 Packages；若项目代码仍依赖它，后续编译会提示需要处理的引用。";
         internal static string PackageSearchExpandedTooltip(string tooltip) => tooltip + "\n搜索期间匹配分组会临时展开。";
         internal static string WorkspaceGroupTooltip(string description, bool searchActive)
         {

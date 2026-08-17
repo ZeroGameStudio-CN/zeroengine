@@ -1,6 +1,6 @@
 # ZeroEngine Dashboard
 
-ZeroEngine Dashboard 4.5.3 是一个可选、仅限 Unity Editor 的简体中文工作台。它从已注册 UPM 包以及项目 `Assets/**/Editor/` 中读取 `ZeroEngineDashboardModule.json`，以左侧工作区呈现所有者明确声明的内嵌面板。
+ZeroEngine Dashboard 4.6.0 是一个可选、仅限 Unity Editor 的简体中文工作台。它从已注册 UPM 包以及项目 `Assets/**/Editor/` 中读取 `ZeroEngineDashboardModule.json`，以左侧工作区呈现所有者明确声明的内嵌面板。
 
 ## 特性
 
@@ -20,8 +20,10 @@ ZeroEngine Dashboard 4.5.3 是一个可选、仅限 Unity Editor 的简体中文
 - 首页左侧模块分组可拖拽排序和折叠，面板可在组内拖拽；侧栏宽度、顺序与折叠状态均持久化，也可一键展开、折叠或恢复描述符默认顺序。
 - 侧栏始终预留纵向滚动条槽位；内容跨越滚动阈值时，分组与面板的可用宽度不会跳变。
 - 系统页将包的安装状态与工作台接入状态分开，按接入情况折叠分组，并使用可读名称和紧凑版本徽标。
+- 系统页内置官方 ZeroEngine 模块目录：未安装模块也会显示；可验证的 Git pin 下可一次安装目标及其内部依赖闭包。带描述符的模块安装后自动接入工作台，基础包明确标记为无面板。
+- 仅允许卸载直接、非工作台基础依赖且没有已注册反向依赖的包；每次安装或卸载均要求 Unity 确认，运行中不会并发派发 Package Manager 请求。
 - 固定 label、状态、安全提示与可操作控件 tooltip 使用简体中文；品牌缩写和技术标识保持原值。
-- 不安装包、不写 manifest、不清理 PlayerPrefs/存档、不写项目资源。
+- 不清理 PlayerPrefs/存档，不写项目资源；只有用户确认系统页中的安装或卸载时，才通过 Unity Package Manager 改写 Packages manifest 与 lock。
 
 ## 安装
 
@@ -92,6 +94,12 @@ entry 可选 `usage` 只在帮助抽屉显示。module 可选 `panels` 数组声
 Dashboard 4.x 仍兼容外部 schema v1，并把它标记为“旧版入口”；第一方正式描述符必须使用 v2。v1 兼容将在首个 5.x 版本移除。
 
 ## 版本历史
+
+### 4.6.0
+
+- 系统页新增官方 ZeroEngine 包目录，清楚分组显示“已接入”“已安装基础能力”“可添加模块”和配置异常。
+- 未安装模块可从当前 Dashboard 的完整 Git pin 一次安装目标和内部 ZeroEngine 依赖；带有效描述符的包完成后自动发现并接入工作台。
+- 增加受保护、反向依赖检查与确认对话框的直接包卸载入口；不支持的来源、pin 漂移和历史聚合包会安全禁用操作并说明原因。
 
 ### 4.5.3
 
