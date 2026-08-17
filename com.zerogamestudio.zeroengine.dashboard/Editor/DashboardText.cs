@@ -100,6 +100,7 @@ namespace ZeroEngine.Editor
         internal const string ProjectAdaptersTooltip = "查看由当前项目贡献并挂载到上游模块的适配器。";
         internal const string Error = "错误";
         internal const string Warning = "警告";
+        internal const string Unavailable = "当前不可用。";
 
         internal static string ModuleCount(int count) => count + " 个模块";
         internal static string ToolCount(int count) => count + " 个工具";
