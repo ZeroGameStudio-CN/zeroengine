@@ -3,14 +3,14 @@ namespace ZeroEngine.Editor
     internal static class DashboardText
     {
         internal const string WindowTitle = "ZGS 工作台";
-        internal const string HeaderSubtitle = "从常用工作流进入任务，按需查找完整工具与资料。";
+        internal const string HeaderSubtitle = "从左侧工作区进入项目面板；说明和资料在帮助页查看。";
         internal const string Home = "首页";
-        internal const string HomeTooltip = "查看常用工作流，并在左侧进入项目工作区面板。";
+        internal const string HomeTooltip = "在左侧工作区切换项目面板。";
         internal const string System = "系统";
         internal const string SystemTooltip = "查看描述符健康状态、已安装包和项目适配器。";
         internal const string RefreshTooltip = "重新扫描模块描述符和项目适配器。";
-        internal const string SearchPlaceholder = "搜索工具、资料或诊断…";
-        internal const string SearchTooltip = "搜索中文名称、说明、使用方法、资料、旧入口关键词和技术标识。";
+        internal const string SearchPlaceholder = "筛选工作区面板…";
+        internal const string SearchTooltip = "筛选左侧分组和内嵌面板；支持中文名称、说明、用法和技术标识。";
         internal const string Clear = "清空";
         internal const string ClearTooltip = "清空当前搜索条件。";
         internal const string Context = "说明";

@@ -115,12 +115,13 @@ namespace ZeroEngine.Dashboard.Tests.Editor
             Assert.That(wide.SidebarWidth, Is.EqualTo(244f).Within(0.01f));
         }
 
-        [TestCase(559f, true)]
-        [TestCase(560f, false)]
-        [TestCase(980f, false)]
-        public void Dashboard_TopNavigationStacksOnlyAtNarrowWidths(float width, bool expected)
+        [TestCase(0, "", false)]
+        [TestCase(0, "数据", true)]
+        [TestCase(1, "数据", false)]
+        [TestCase(2, "数据", false)]
+        public void Dashboard_WorkspaceSearchIsLimitedToHomePage(int page, string search, bool expected)
         {
-            Assert.That(ZeroEngineDashboard.UsesStackedTopNavigation(width), Is.EqualTo(expected));
+            Assert.That(ZeroEngineDashboard.UsesWorkspaceSearch(page, search), Is.EqualTo(expected));
         }
 
         [Test]
