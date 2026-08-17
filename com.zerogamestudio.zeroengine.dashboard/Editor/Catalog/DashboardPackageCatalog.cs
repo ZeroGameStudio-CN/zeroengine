@@ -125,7 +125,7 @@ namespace ZeroEngine.Editor.Dashboard
             }
 
             DashboardInstalledPackage[] installed = (installedPackages ?? Array.Empty<DashboardInstalledPackage>()).ToArray();
-            foreach (DashboardInstalledPackage package in installed)
+            foreach (DashboardInstalledPackage package in installed.Where(package => package.IsDirectDependency))
             {
                 if (!TryGet(package.Name, out _) || string.IsNullOrWhiteSpace(package.PackageId))
                     continue;

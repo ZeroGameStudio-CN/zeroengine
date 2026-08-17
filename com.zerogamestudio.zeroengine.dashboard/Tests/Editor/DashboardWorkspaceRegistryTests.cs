@@ -264,6 +264,42 @@ namespace ZeroEngine.Dashboard.Tests.Editor
         }
 
         [Test]
+        public void PackageCatalog_InstallPlan_IgnoresTransitivePackagePins()
+        {
+            const string commit = "0123456789abcdef0123456789abcdef01234567";
+            const string repository = "https://github.com/ZeroGameStudio-CN/zeroengine.git";
+            string dashboardPackageId = repository +
+                                        "?path=com.zerogamestudio.zeroengine.dashboard#" +
+                                        commit;
+            var installed = new[]
+            {
+                new DashboardInstalledPackage(
+                    "com.zerogamestudio.zeroengine.dashboard",
+                    "4.5.3",
+                    "Packages/dashboard",
+                    packageId: dashboardPackageId,
+                    isDirectDependency: true),
+                new DashboardInstalledPackage(
+                    "com.zerogamestudio.zeroengine.data",
+                    "2.0.0",
+                    "Packages/data",
+                    packageId: repository + "?path=com.zerogamestudio.zeroengine.data#abcdef0123456789abcdef0123456789abcdef01",
+                    isDirectDependency: false)
+            };
+
+            Assert.That(
+                DashboardPackageCatalog.TryCreateInstallPlan(
+                    dashboardPackageId,
+                    "com.zerogamestudio.zeroengine.audio",
+                    installed,
+                    out DashboardPackageInstallPlan plan,
+                    out string reason),
+                Is.True,
+                reason);
+            Assert.That(plan.PackageUrls, Is.Not.Empty);
+        }
+
+        [Test]
         public void PackageCatalog_RemoveEligibility_ProtectsInfrastructureAndReverseDependencies()
         {
             var dashboard = new DashboardInstalledPackage(
