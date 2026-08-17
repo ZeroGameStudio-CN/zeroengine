@@ -789,7 +789,12 @@ namespace ZeroEngine.Editor
                 EditorGUILayout.Space(2f);
                 DrawWorkspaceSearchControls(sidebarWidth);
                 EditorGUILayout.Space(4f);
-                _workspaceNavigationScroll = EditorGUILayout.BeginScrollView(_workspaceNavigationScroll);
+                _workspaceNavigationScroll = EditorGUILayout.BeginScrollView(
+                    _workspaceNavigationScroll,
+                    false,
+                    ReservesWorkspaceNavigationScrollbar(),
+                    GUI.skin.horizontalScrollbar,
+                    GUI.skin.verticalScrollbar);
                 foreach (WorkspaceModuleView moduleView in moduleViews)
                 {
                     if (!DrawWorkspaceModuleHeader(moduleView.Module, moduleView.Panels.Length))
@@ -1037,6 +1042,11 @@ namespace ZeroEngine.Editor
         internal static bool UsesWorkspaceSearch(int page, string search)
         {
             return page == 0 && !string.IsNullOrWhiteSpace(search);
+        }
+
+        internal static bool ReservesWorkspaceNavigationScrollbar()
+        {
+            return true;
         }
 
         private bool IsWorkspacePanelAvailable(string fullId)

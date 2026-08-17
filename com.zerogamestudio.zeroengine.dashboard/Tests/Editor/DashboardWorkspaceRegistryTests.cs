@@ -125,6 +125,12 @@ namespace ZeroEngine.Dashboard.Tests.Editor
         }
 
         [Test]
+        public void Dashboard_WorkspaceNavigationAlwaysReservesScrollbarGutter()
+        {
+            Assert.That(ZeroEngineDashboard.ReservesWorkspaceNavigationScrollbar(), Is.True);
+        }
+
+        [Test]
         public void WorkspacePanelLayout_ReservesRightInsetAndAlignsSelectionBar()
         {
             Rect row = new Rect(10f, 20f, 300f, 28f);
