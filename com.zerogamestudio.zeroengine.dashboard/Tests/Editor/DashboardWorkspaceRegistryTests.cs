@@ -300,6 +300,20 @@ namespace ZeroEngine.Dashboard.Tests.Editor
         }
 
         [Test]
+        public void CatalogDiscovery_UsesRequestedManifestPinForDirectPackages()
+        {
+            const string packageName = "com.zerogamestudio.zeroengine.dashboard";
+            const string packageId = "https://github.com/ZeroGameStudio-CN/zeroengine.git?path=" +
+                                     packageName +
+                                     "#0123456789abcdef0123456789abcdef01234567";
+            IReadOnlyDictionary<string, string> packageIds = DashboardCatalogDiscovery.ParseRequestedPackageIds(
+                "{\"dependencies\":{\"" + packageName + "\":\"" + packageId + "\"}," +
+                "\"testables\":[\"" + packageName + "\"]}");
+
+            Assert.That(packageIds[packageName], Is.EqualTo(packageId));
+        }
+
+        [Test]
         public void PackageCatalog_RemoveEligibility_ProtectsInfrastructureAndReverseDependencies()
         {
             var dashboard = new DashboardInstalledPackage(

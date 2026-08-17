@@ -1,6 +1,6 @@
 # ZeroEngine Dashboard
 
-ZeroEngine Dashboard 4.6.0 是一个可选、仅限 Unity Editor 的简体中文工作台。它从已注册 UPM 包以及项目 `Assets/**/Editor/` 中读取 `ZeroEngineDashboardModule.json`，以左侧工作区呈现所有者明确声明的内嵌面板。
+ZeroEngine Dashboard 4.6.1 是一个可选、仅限 Unity Editor 的简体中文工作台。它从已注册 UPM 包以及项目 `Assets/**/Editor/` 中读取 `ZeroEngineDashboardModule.json`，以左侧工作区呈现所有者明确声明的内嵌面板。
 
 ## 特性
 
@@ -94,6 +94,10 @@ entry 可选 `usage` 只在帮助抽屉显示。module 可选 `panels` 数组声
 Dashboard 4.x 仍兼容外部 schema v1，并把它标记为“旧版入口”；第一方正式描述符必须使用 v2。v1 兼容将在首个 5.x 版本移除。
 
 ## 版本历史
+
+### 4.6.1
+
+- 系统页从项目 `Packages/manifest.json` 读取直接依赖的请求 Git pin，而非使用 Unity 的已解析显示标识；因此 Git 包的版本展示格式不会错误禁用安全安装入口。
 
 ### 4.6.0
 

@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Text;
+using System.Text.RegularExpressions;
 using UnityEditor;
 using UnityEngine;
 using PackageManagerPackageInfo = UnityEditor.PackageManager.PackageInfo;
@@ -38,11 +39,15 @@ namespace ZeroEngine.Editor.Dashboard
     internal static class DashboardCatalogDiscovery
     {
         internal const string DescriptorFileName = "ZeroEngineDashboardModule.json";
+        private static readonly Regex ManifestDependencyPattern = new Regex(
+            "\\\"(?<name>com\\.zerogamestudio\\.[^\\\"]+)\\\"\\s*:\\s*\\\"(?<value>[^\\\"]+)\\\"",
+            RegexOptions.Compiled);
 
         internal static DashboardCatalog Discover()
         {
             PackageManagerPackageInfo[] registeredPackages =
                 PackageManagerPackageInfo.GetAllRegisteredPackages() ?? Array.Empty<PackageManagerPackageInfo>();
+            IReadOnlyDictionary<string, string> requestedPackageIds = ReadRequestedPackageIds();
             var installedPackages = registeredPackages
                 .Where(package => package != null && !string.IsNullOrEmpty(package.name))
                 .Select(package => new DashboardInstalledPackage(
@@ -50,8 +55,8 @@ namespace ZeroEngine.Editor.Dashboard
                     package.version,
                     package.resolvedPath,
                     package.displayName,
-                    package.packageId,
-                    package.isDirectDependency,
+                    RequestedPackageId(package, requestedPackageIds),
+                    package.isDirectDependency || requestedPackageIds.ContainsKey(package.name),
                     (package.dependencies ?? Array.Empty<UnityEditor.PackageManager.DependencyInfo>())
                     .Where(dependency => !string.IsNullOrEmpty(dependency.name))
                     .Select(dependency => dependency.name)
@@ -87,6 +92,46 @@ namespace ZeroEngine.Editor.Dashboard
             }
 
             return DashboardCatalogBuilder.Build(sources, installedPackages);
+        }
+
+        private static string RequestedPackageId(
+            PackageManagerPackageInfo package,
+            IReadOnlyDictionary<string, string> requestedPackageIds)
+        {
+            if (package != null && requestedPackageIds.TryGetValue(package.name, out string packageId))
+                return packageId;
+            return package?.packageId ?? string.Empty;
+        }
+
+        private static IReadOnlyDictionary<string, string> ReadRequestedPackageIds()
+        {
+            try
+            {
+                DirectoryInfo projectDirectory = Directory.GetParent(Application.dataPath);
+                if (projectDirectory == null)
+                    return new Dictionary<string, string>(StringComparer.Ordinal);
+
+                string manifestPath = Path.Combine(projectDirectory.FullName, "Packages", "manifest.json");
+                string manifest = File.ReadAllText(manifestPath, Encoding.UTF8);
+                return ParseRequestedPackageIds(manifest);
+            }
+            catch (Exception)
+            {
+                return new Dictionary<string, string>(StringComparer.Ordinal);
+            }
+        }
+
+        internal static IReadOnlyDictionary<string, string> ParseRequestedPackageIds(string manifest)
+        {
+            var packageIds = new Dictionary<string, string>(StringComparer.Ordinal);
+            foreach (Match match in ManifestDependencyPattern.Matches(manifest ?? string.Empty))
+            {
+                string name = match.Groups["name"].Value;
+                string packageId = match.Groups["value"].Value;
+                if (!string.IsNullOrWhiteSpace(name) && !string.IsNullOrWhiteSpace(packageId))
+                    packageIds[name] = packageId;
+            }
+            return packageIds;
         }
 
         private static DashboardDescriptorSource ReadSource(
