@@ -92,6 +92,21 @@ namespace ZeroEngine.Dashboard.Tests.Editor
             Assert.That(typeof(IEditorWorkspaceNavigator).IsAssignableFrom(typeof(ZeroEngineDashboard)), Is.True);
         }
 
+        [Test]
+        public void Dashboard_NavigationKeepsOnlyWorkspaceAndSystemPages()
+        {
+            FieldInfo pageNamesField = typeof(ZeroEngineDashboard).GetField(
+                "PageNames",
+                BindingFlags.Static | BindingFlags.NonPublic);
+            Assert.That(pageNamesField, Is.Not.Null);
+
+            var pageNames = (GUIContent[])pageNamesField.GetValue(null);
+
+            Assert.That(pageNames, Has.Length.EqualTo(2));
+            Assert.That(pageNames[0].text, Is.EqualTo(DashboardText.Home));
+            Assert.That(pageNames[1].text, Is.EqualTo(DashboardText.System));
+        }
+
         [TestCase(240f)]
         [TestCase(320f)]
         [TestCase(500f)]
@@ -415,7 +430,7 @@ namespace ZeroEngine.Dashboard.Tests.Editor
             {
                 DashboardViewStateStore.Save(new DashboardViewState
                 {
-                    Page = 2,
+                    Page = 1,
                     Search = "数据",
                     SelectedPanelFullId = "pob.tools.data-manager/data-manager",
                     WorkspaceModuleOrder = new[]
@@ -441,7 +456,7 @@ namespace ZeroEngine.Dashboard.Tests.Editor
 
                 DashboardViewState state = DashboardViewStateStore.Load(prefix);
 
-                Assert.That(state.Page, Is.EqualTo(2));
+                Assert.That(state.Page, Is.EqualTo(1));
                 Assert.That(state.Search, Is.EqualTo("数据"));
                 Assert.That(state.SelectedPanelFullId, Is.EqualTo("pob.tools.data-manager/data-manager"));
                 Assert.That(state.WorkspaceModuleOrder, Is.EqualTo(new[]
@@ -468,7 +483,7 @@ namespace ZeroEngine.Dashboard.Tests.Editor
         [TestCase(0, 0)]
         [TestCase(1, 0)]
         [TestCase(2, 1)]
-        [TestCase(3, 2)]
+        [TestCase(3, 0)]
         public void ViewStateStore_MigratesLegacyFourPageNavigation(int legacyPage, int expectedPage)
         {
             string prefix = "ZGS.Dashboard.Tests." + Guid.NewGuid().ToString("N") + ".";
@@ -479,6 +494,25 @@ namespace ZeroEngine.Dashboard.Tests.Editor
                 DashboardViewState state = DashboardViewStateStore.Load(prefix);
 
                 Assert.That(state.Page, Is.EqualTo(expectedPage));
+            }
+            finally
+            {
+                DashboardViewStateStore.Delete(prefix);
+            }
+        }
+
+        [Test]
+        public void ViewStateStore_MigratesRemovedHelpPageToHome()
+        {
+            string prefix = "ZGS.Dashboard.Tests." + Guid.NewGuid().ToString("N") + ".";
+            try
+            {
+                UnityEditor.EditorPrefs.SetInt(prefix + "NavigationVersion", 2);
+                UnityEditor.EditorPrefs.SetInt(prefix + "Page", 2);
+
+                DashboardViewState state = DashboardViewStateStore.Load(prefix);
+
+                Assert.That(state.Page, Is.EqualTo(0));
             }
             finally
             {

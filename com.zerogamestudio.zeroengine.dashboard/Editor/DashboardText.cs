@@ -3,7 +3,7 @@ namespace ZeroEngine.Editor
     internal static class DashboardText
     {
         internal const string WindowTitle = "ZGS 工作台";
-        internal const string HeaderSubtitle = "从左侧工作区进入项目面板；说明和资料在帮助页查看。";
+        internal const string HeaderSubtitle = "从左侧工作区进入项目面板；按需查看当前面板的说明和资料。";
         internal const string Home = "首页";
         internal const string HomeTooltip = "在左侧工作区切换项目面板。";
         internal const string System = "系统";
@@ -59,10 +59,8 @@ namespace ZeroEngine.Editor
         internal const string WebsiteTooltip = "在浏览器中打开该模块的在线文档。";
         internal const string Details = "详情";
         internal const string DetailsTooltip = "显示模块、入口和 provider action 等技术详情。";
-        internal const string Help = "帮助";
-        internal const string HelpTooltip = "查看当前模块、工具或面板的用途、用法和技术详情。";
         internal const string Close = "关闭";
-        internal const string CloseHelpTooltip = "关闭帮助抽屉。";
+        internal const string CloseContextTooltip = "关闭当前面板的说明抽屉。";
         internal const string Open = "打开";
         internal const string Run = "运行";
         internal const string NoDeclaredTools = "当前没有已声明的模块工具。请安装带有效描述符的包，或添加项目适配器。";

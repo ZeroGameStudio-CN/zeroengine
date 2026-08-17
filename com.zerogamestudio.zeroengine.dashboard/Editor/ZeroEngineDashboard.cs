@@ -28,12 +28,13 @@ namespace ZeroEngine.Editor
         private const float WorkspacePanelVerticalInset = 4f;
         private const float WorkspaceSelectionBarWidth = 3f;
         private const float StableScrollbarVisibilityEpsilon = 0.5f;
+        private const float ContextDrawerWidth = 320f;
+        private const float CompactContextDrawerMaxHeight = 240f;
 
         private static readonly GUIContent[] PageNames =
         {
             new GUIContent(DashboardText.Home, DashboardText.HomeTooltip),
-            new GUIContent(DashboardText.System, DashboardText.SystemTooltip),
-            new GUIContent(DashboardText.Help, DashboardText.HelpTooltip)
+            new GUIContent(DashboardText.System, DashboardText.SystemTooltip)
         };
 
         private readonly Dictionary<string, DashboardDiagnostic> _runtimeDiagnostics =
@@ -230,8 +231,6 @@ namespace ZeroEngine.Editor
                 DeactivateWorkspacePanel();
                 SaveViewState();
             }
-            if (_page == 2)
-                RestoreHelpSelectionFromSelectedPanel();
             Repaint();
         }
 
@@ -290,19 +289,14 @@ namespace ZeroEngine.Editor
             }
             else
             {
-                switch (_page)
+                if (_page == 0)
                 {
-                    case 0:
-                        DrawHome();
-                        break;
-                    case 1:
-                        DeactivateWorkspacePanel();
-                        DrawSystem();
-                        break;
-                    default:
-                        DeactivateWorkspacePanel();
-                        DrawHelp();
-                        break;
+                    DrawHome();
+                }
+                else
+                {
+                    DeactivateWorkspacePanel();
+                    DrawSystem();
                 }
             }
         }
@@ -347,8 +341,6 @@ namespace ZeroEngine.Editor
 
             _page = nextPage;
             _showContext = false;
-            if (_page == 2)
-                RestoreHelpSelectionFromSelectedPanel();
             SaveViewState();
         }
 
@@ -444,11 +436,17 @@ namespace ZeroEngine.Editor
                 {
                     using (new EditorGUILayout.VerticalScope(GUILayout.ExpandWidth(true)))
                     {
-                        if (GUILayout.Button(
-                                new GUIContent(view.Surface.DisplayName, DashboardText.ContextTooltip),
-                                EditorStyles.boldLabel))
+                        using (new EditorGUILayout.HorizontalScope())
                         {
-                            OpenHelp(view.Module, view.Surface, null);
+                            GUILayout.Label(view.Surface.DisplayName, EditorStyles.boldLabel);
+                            GUILayout.FlexibleSpace();
+                            if (GUILayout.Button(
+                                    new GUIContent(DashboardText.Context, DashboardText.ContextTooltip),
+                                    EditorStyles.miniButton,
+                                    GUILayout.Width(48f)))
+                            {
+                                OpenContext(view.Module, view.Surface, null);
+                            }
                         }
                         using (new EditorGUILayout.HorizontalScope())
                         {
@@ -692,10 +690,10 @@ namespace ZeroEngine.Editor
             if (string.IsNullOrEmpty(_selectedPanelFullId) && _visibleWorkspacePanels.Length > 0)
                 SelectWorkspacePanel(_visibleWorkspacePanels[0].Panel.FullId);
             else if (!string.IsNullOrEmpty(_selectedPanelFullId) &&
-                     (_helpPanel == null || !string.Equals(_helpPanel.FullId, _selectedPanelFullId, StringComparison.Ordinal)))
+                      (_helpPanel == null || !string.Equals(_helpPanel.FullId, _selectedPanelFullId, StringComparison.Ordinal)))
             {
                 WorkspacePanelView view = _workspacePanelsById[_selectedPanelFullId];
-                ShowContext(view.Module, null, view.Panel);
+                SelectContext(view.Module, null, view.Panel, showDrawer: false);
             }
 
             DashboardWorkspaceSplitLayout splitLayout = CalculateWorkspaceSplitLayout(
@@ -720,14 +718,45 @@ namespace ZeroEngine.Editor
         {
             if (!string.IsNullOrEmpty(_selectedPanelFullId))
             {
-                DrawWorkspaceContent(modules);
+                DrawSelectedWorkspaceContent(modules);
                 return;
             }
 
             DeactivateWorkspacePanel();
+            if (ShouldShowContextDrawer())
+            {
+                DrawContextDrawer(
+                    GUILayout.ExpandWidth(true),
+                    GUILayout.MaxHeight(CompactContextDrawerMaxHeight));
+                EditorGUILayout.Space(EditorUiTokens.SpaceSm);
+            }
             EditorGUILayout.HelpBox(
                 HasWorkspaceSearch ? DashboardText.NoWorkspaceSearchResults : DashboardText.NoWorkspacePanels,
                 MessageType.Info);
+        }
+
+        private void DrawSelectedWorkspaceContent(IReadOnlyList<DashboardModule> modules)
+        {
+            if (UsesSideContextDrawer())
+            {
+                using (new EditorGUILayout.HorizontalScope(GUILayout.ExpandHeight(true)))
+                {
+                    using (new EditorGUILayout.VerticalScope(GUILayout.ExpandWidth(true), GUILayout.ExpandHeight(true)))
+                        DrawWorkspaceContent(modules);
+                    EditorGUILayout.Space(EditorUiTokens.SpaceSm);
+                    DrawContextDrawer(GUILayout.Width(ContextDrawerWidth), GUILayout.ExpandHeight(true));
+                }
+                return;
+            }
+
+            if (ShouldShowContextDrawer())
+            {
+                DrawContextDrawer(
+                    GUILayout.ExpandWidth(true),
+                    GUILayout.MaxHeight(CompactContextDrawerMaxHeight));
+                EditorGUILayout.Space(EditorUiTokens.SpaceSm);
+            }
+            DrawWorkspaceContent(modules);
         }
 
         private void DrawWorkspaceNavigation(
@@ -806,10 +835,7 @@ namespace ZeroEngine.Editor
                     foreach (WorkspacePanelView item in moduleView.Panels)
                     {
                         if (DrawWorkspacePanelTab(item.Panel))
-                        {
                             SelectWorkspacePanel(item.Panel.FullId);
-                            ShowContext(moduleView.Module, null, item.Panel);
-                        }
                     }
                     EditorGUILayout.Space(2f);
                 }
@@ -1303,11 +1329,20 @@ namespace ZeroEngine.Editor
             {
                 using (new EditorGUILayout.VerticalScope())
                 {
-                    if (GUILayout.Button(
-                            new GUIContent(descriptor.DisplayName, DashboardText.ContextTooltip),
-                            EditorUiStyles.SectionTitle))
+                    using (new EditorGUILayout.HorizontalScope())
                     {
-                        OpenHelp(module, null, descriptor);
+                        GUILayout.Label(descriptor.DisplayName, EditorUiStyles.SectionTitle);
+                        GUILayout.FlexibleSpace();
+                        bool compact = EditorUiGUILayout.ResponsiveMode(position.width) == EditorUiResponsiveMode.Compact;
+                        if (GUILayout.Button(
+                                compact
+                                    ? new GUIContent("?", DashboardText.ContextTooltip)
+                                    : new GUIContent(DashboardText.Context, DashboardText.ContextTooltip),
+                                EditorStyles.miniButton,
+                                GUILayout.Width(compact ? 24f : 48f)))
+                        {
+                            OpenContext(module, null, descriptor);
+                        }
                     }
                     EditorUiGUILayout.Chip(new GUIContent(module.DisplayName, module.Description));
                 }
@@ -1333,7 +1368,11 @@ namespace ZeroEngine.Editor
             {
                 EditorGUILayout.HelpBox(DashboardText.PanelLoadFailed, MessageType.Error);
                 if (GUILayout.Button(new GUIContent(DashboardText.GoToDiagnostics, DashboardText.GoToDiagnosticsTooltip)))
-                    _page = 2;
+                {
+                    _page = 1;
+                    _showContext = false;
+                    SaveViewState();
+                }
                 if (GUILayout.Button(new GUIContent(DashboardText.Retry, DashboardText.RetryTooltip)))
                 {
                     _failedWorkspacePanels.Remove(descriptor.FullId);
@@ -1369,6 +1408,8 @@ namespace ZeroEngine.Editor
                 float availableWidth = CalculateWorkspaceSplitLayout(
                     position.width,
                     _workspaceSidebarWidth).ContentWidth;
+                if (UsesSideContextDrawer())
+                    availableWidth = Mathf.Max(0f, availableWidth - ContextDrawerWidth - EditorUiTokens.SpaceSm);
                 bool fullWidth = UsesFullWidthWorkspaceLayout(_activePanel);
                 _activePanelContext.AvailableWidth = fullWidth
                     ? availableWidth
@@ -1518,7 +1559,7 @@ namespace ZeroEngine.Editor
                 SaveViewState();
                 return;
             }
-            ShowContext(module, null, panel);
+            SelectContext(module, null, panel, showDrawer: false);
             SaveViewState();
         }
 
@@ -1541,27 +1582,6 @@ namespace ZeroEngine.Editor
             SaveViewState();
             Repaint();
             return true;
-        }
-
-        private void RestoreHelpSelectionFromSelectedPanel()
-        {
-            if (HasContextSelection() || string.IsNullOrEmpty(_selectedPanelFullId))
-                return;
-
-            DashboardPanel panel = _catalog.VisibleWorkspaceModules
-                .SelectMany(module => module.Panels)
-                .FirstOrDefault(item => string.Equals(item.FullId, _selectedPanelFullId, StringComparison.Ordinal));
-            DashboardModule module = panel == null
-                ? null
-                : _catalog.Modules.FirstOrDefault(item =>
-                    string.Equals(item.ModuleId, panel.ModuleId, StringComparison.Ordinal));
-            if (panel == null || module == null)
-                return;
-
-            _helpModule = module;
-            _helpSurface = null;
-            _helpPanel = panel;
-            _showContext = true;
         }
 
         private void RestoreViewState()
@@ -1665,28 +1685,25 @@ namespace ZeroEngine.Editor
                 _runtimeDiagnostics.Remove(key);
         }
 
-        private void ShowContext(DashboardModule module, DashboardSurface surface, DashboardPanel panel)
+        private void SelectContext(
+            DashboardModule module,
+            DashboardSurface surface,
+            DashboardPanel panel,
+            bool showDrawer)
         {
             _helpModule = module;
             _helpSurface = surface;
             _helpPanel = panel;
-            _showContext = true;
+            _showContext = showDrawer;
             _showDeveloperInfo = false;
             _contextScroll = Vector2.zero;
             Repaint();
         }
 
-        private void OpenHelp(DashboardModule module, DashboardSurface surface, DashboardPanel panel)
+        private void OpenContext(DashboardModule module, DashboardSurface surface, DashboardPanel panel)
         {
-            ShowContext(module, surface, panel);
-            _page = 2;
+            SelectContext(module, surface, panel, showDrawer: true);
             SaveViewState();
-        }
-
-        private void DrawHelp()
-        {
-            using (new EditorGUILayout.VerticalScope(EditorUiStyles.Card, GUILayout.ExpandWidth(true), GUILayout.ExpandHeight(true)))
-                DrawContextContents(canClose: false);
         }
 
         private void ClearContext()
@@ -1703,29 +1720,21 @@ namespace ZeroEngine.Editor
             return _helpModule != null && (_helpSurface != null || _helpPanel != null);
         }
 
-        private void DrawContextOverlay()
-        {
-            EditorUiResponsiveMode mode = EditorUiGUILayout.ResponsiveMode(position.width);
-            if (mode == EditorUiResponsiveMode.Wide || !_showContext || !HasContextSelection())
-                return;
-
-            float width = mode == EditorUiResponsiveMode.Compact
-                ? Mathf.Max(300f, position.width - 16f)
-                : 320f;
-            var rect = new Rect(
-                Mathf.Max(8f, position.width - width - 8f),
-                92f,
-                width,
-                Mathf.Max(260f, position.height - 100f));
-            GUILayout.BeginArea(rect, GUIContent.none, EditorUiStyles.Card);
-            DrawContextContents(canClose: true);
-            GUILayout.EndArea();
-        }
-
         private void DrawContextDrawer(params GUILayoutOption[] options)
         {
             using (new EditorGUILayout.VerticalScope(EditorUiStyles.Card, options))
-                DrawContextContents(canClose: false);
+                DrawContextContents(canClose: true);
+        }
+
+        private bool ShouldShowContextDrawer()
+        {
+            return _showContext && HasContextSelection();
+        }
+
+        private bool UsesSideContextDrawer()
+        {
+            return ShouldShowContextDrawer() &&
+                   EditorUiGUILayout.ResponsiveMode(position.width) == EditorUiResponsiveMode.Wide;
         }
 
         private void DrawContextContents(bool canClose)
@@ -1735,7 +1744,7 @@ namespace ZeroEngine.Editor
                 GUILayout.Label(DashboardText.Context, EditorUiStyles.SectionTitle);
                 GUILayout.FlexibleSpace();
                 if (canClose && GUILayout.Button(
-                        new GUIContent(DashboardText.Close, DashboardText.CloseHelpTooltip),
+                        new GUIContent(DashboardText.Close, DashboardText.CloseContextTooltip),
                         GUILayout.Width(48f)))
                 {
                     _showContext = false;
@@ -2661,7 +2670,7 @@ namespace ZeroEngine.Editor
     internal static class DashboardViewStateStore
     {
         private const string DefaultPrefix = "ZGS.Workbench.";
-        private const int CurrentNavigationVersion = 2;
+        private const int CurrentNavigationVersion = 3;
 
         internal static DashboardViewState Load(string prefix = DefaultPrefix)
         {
@@ -2683,6 +2692,9 @@ namespace ZeroEngine.Editor
                     page = 2;
                 }
             }
+            if (navigationVersion < 3 && page >= 2)
+                page = 0;
+            page = Mathf.Clamp(page, 0, 1);
             return new DashboardViewState
             {
                 Page = page,
