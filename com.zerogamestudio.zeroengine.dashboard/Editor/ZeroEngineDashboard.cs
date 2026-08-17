@@ -789,7 +789,7 @@ namespace ZeroEngine.Editor
                 EditorGUILayout.Space(2f);
                 DrawWorkspaceSearchControls(sidebarWidth);
                 EditorGUILayout.Space(4f);
-                _workspaceNavigationScroll = EditorGUILayout.BeginScrollView(
+                _workspaceNavigationScroll = GUILayout.BeginScrollView(
                     _workspaceNavigationScroll,
                     false,
                     ReservesWorkspaceNavigationScrollbar(),
