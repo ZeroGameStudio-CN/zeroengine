@@ -1060,7 +1060,7 @@ namespace ZeroEngine.Editor
 
         private static Vector2 BeginStableVerticalScrollView(Vector2 scrollPosition)
         {
-            return EditorGUILayout.BeginScrollView(
+            return GUILayout.BeginScrollView(
                 scrollPosition,
                 false,
                 true,
