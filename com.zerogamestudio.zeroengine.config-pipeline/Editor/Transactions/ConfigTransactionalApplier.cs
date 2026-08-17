@@ -56,120 +56,132 @@ namespace ZeroGameStudio.ConfigPipeline.Editor
             }
 
             string root = ConfigPathGuard.NormalizeProjectRoot(projectRoot);
-            string operationRoot = Path.Combine(root, ".zgs-config");
+            string operationRoot = OperationRoot(root);
             string lockDirectory = Path.Combine(operationRoot, "locks");
             Directory.CreateDirectory(lockDirectory);
             string lockPath = Path.Combine(lockDirectory, "pipeline.lock");
-            using (var configLock = new FileStream(
-                       lockPath,
-                       FileMode.OpenOrCreate,
-                       FileAccess.ReadWrite,
-                       FileShare.None,
-                       1,
-                       FileOptions.DeleteOnClose))
+            using (var configLock = OpenLock(lockPath))
             {
-                RecoverPendingLocked(root);
-                RevalidatePlan(root, plan, currentPackageIdentity, regeneratedArtifacts);
-                List<ConfigPlanEntry> changes = plan.Entries
-                    .Where(entry => entry.Action != ConfigPlanAction.Unchanged)
-                    .ToList();
-                if (changes.Count == 0)
-                {
-                    if (!postCommitCheck())
-                    {
-                        throw new InvalidOperationException("Post-Apply Check failed for a current plan.");
-                    }
-
-                    return new ConfigApplyResult(plan.PlanId, 0);
-                }
-
-                string transactionDirectory = TransactionDirectory(root, plan.PlanId);
-                if (Directory.Exists(transactionDirectory))
-                {
-                    throw new InvalidOperationException(
-                        "Transaction directory still exists after recovery: " + plan.PlanId);
-                }
-
-                Directory.CreateDirectory(transactionDirectory);
-                string stageDirectory = Path.Combine(transactionDirectory, "stage");
-                string backupDirectory = Path.Combine(transactionDirectory, "backup");
-                Directory.CreateDirectory(stageDirectory);
-                Directory.CreateDirectory(backupDirectory);
-                var artifacts = regeneratedArtifacts.ToDictionary(
-                    artifact => ConfigPathGuard.NormalizeRelativePath(artifact.RelativePath),
-                    artifact => artifact,
-                    StringComparer.Ordinal);
-                var journalEntries = Prepare(
+                return ExecuteWithLegacyMigrationLock(
                     root,
-                    changes,
-                    artifacts,
-                    stageDirectory,
-                    backupDirectory);
-                WriteJournal(transactionDirectory, plan.PlanId, journalEntries);
-                if (fault == ConfigTransactionFault.AfterPrepared)
+                    () => ApplyLocked(
+                        root,
+                        plan,
+                        currentPackageIdentity,
+                        regeneratedArtifacts,
+                        postCommitCheck,
+                        fault));
+            }
+        }
+
+        private static ConfigApplyResult ApplyLocked(
+            string root,
+            ConfigPipelinePlan plan,
+            string currentPackageIdentity,
+            IReadOnlyList<ConfigArtifact> regeneratedArtifacts,
+            Func<bool> postCommitCheck,
+            ConfigTransactionFault fault)
+        {
+            RecoverPendingLocked(root);
+            RevalidatePlan(root, plan, currentPackageIdentity, regeneratedArtifacts);
+            List<ConfigPlanEntry> changes = plan.Entries
+                .Where(entry => entry.Action != ConfigPlanAction.Unchanged)
+                .ToList();
+            if (changes.Count == 0)
+            {
+                if (!postCommitCheck())
                 {
-                    throw new ConfigSimulatedCrashException("Simulated crash after transaction prepare.");
+                    throw new InvalidOperationException("Post-Apply Check failed for a current plan.");
                 }
 
-                bool leaveForRecovery = false;
-                try
+                return new ConfigApplyResult(plan.PlanId, 0);
+            }
+
+            string transactionDirectory = TransactionDirectory(root, plan.PlanId);
+            if (Directory.Exists(transactionDirectory))
+            {
+                throw new InvalidOperationException(
+                    "Transaction directory still exists after recovery: " + plan.PlanId);
+            }
+
+            Directory.CreateDirectory(transactionDirectory);
+            string stageDirectory = Path.Combine(transactionDirectory, "stage");
+            string backupDirectory = Path.Combine(transactionDirectory, "backup");
+            Directory.CreateDirectory(stageDirectory);
+            Directory.CreateDirectory(backupDirectory);
+            var artifacts = regeneratedArtifacts.ToDictionary(
+                artifact => ConfigPathGuard.NormalizeRelativePath(artifact.RelativePath),
+                artifact => artifact,
+                StringComparer.Ordinal);
+            var journalEntries = Prepare(
+                root,
+                changes,
+                artifacts,
+                stageDirectory,
+                backupDirectory);
+            WriteJournal(transactionDirectory, plan.PlanId, journalEntries);
+            if (fault == ConfigTransactionFault.AfterPrepared)
+            {
+                throw new ConfigSimulatedCrashException("Simulated crash after transaction prepare.");
+            }
+
+            bool leaveForRecovery = false;
+            try
+            {
+                int committed = 0;
+                foreach (JournalEntry entry in journalEntries)
                 {
-                    int committed = 0;
-                    foreach (JournalEntry entry in journalEntries)
+                    ApplyEntry(root, transactionDirectory, entry);
+                    committed++;
+                    if (fault == ConfigTransactionFault.AfterFirstCommit && committed == 1)
                     {
-                        ApplyEntry(root, transactionDirectory, entry);
-                        committed++;
-                        if (fault == ConfigTransactionFault.AfterFirstCommit && committed == 1)
-                        {
-                            leaveForRecovery = true;
-                            throw new ConfigSimulatedCrashException(
-                                "Simulated crash after first committed file.");
-                        }
+                        leaveForRecovery = true;
+                        throw new ConfigSimulatedCrashException(
+                            "Simulated crash after first committed file.");
                     }
-
-                    if (!postCommitCheck())
-                    {
-                        throw new InvalidOperationException("Post-Apply Check failed.");
-                    }
-
-                    DeleteTransactionDirectory(transactionDirectory, root);
-                    return new ConfigApplyResult(plan.PlanId, changes.Count);
                 }
-                catch
+
+                if (!postCommitCheck())
                 {
-                    if (!leaveForRecovery && fault != ConfigTransactionFault.AfterPrepared)
-                    {
-                        Rollback(root, transactionDirectory, journalEntries);
-                        DeleteTransactionDirectory(transactionDirectory, root);
-                    }
-
-                    throw;
+                    throw new InvalidOperationException("Post-Apply Check failed.");
                 }
+
+                DeleteTransactionDirectory(transactionDirectory, TransactionRoot(root));
+                return new ConfigApplyResult(plan.PlanId, changes.Count);
+            }
+            catch
+            {
+                if (!leaveForRecovery && fault != ConfigTransactionFault.AfterPrepared)
+                {
+                    Rollback(root, transactionDirectory, journalEntries);
+                    DeleteTransactionDirectory(transactionDirectory, TransactionRoot(root));
+                }
+
+                throw;
             }
         }
 
         public void RecoverPending(string projectRoot)
         {
             string root = ConfigPathGuard.NormalizeProjectRoot(projectRoot);
-            string operationRoot = Path.Combine(root, ".zgs-config");
+            string operationRoot = OperationRoot(root);
             string lockDirectory = Path.Combine(operationRoot, "locks");
             Directory.CreateDirectory(lockDirectory);
             string recoveryLockPath = Path.Combine(lockDirectory, "pipeline.lock");
-            using (var recoveryLock = new FileStream(
-                       recoveryLockPath,
-                       FileMode.OpenOrCreate,
-                       FileAccess.ReadWrite,
-                       FileShare.None,
-                       1,
-                       FileOptions.DeleteOnClose))
+            using (var recoveryLock = OpenLock(recoveryLockPath))
             {
-                RecoverPendingLocked(root);
+                ExecuteWithLegacyMigrationLock(root, () => RecoverPendingLocked(root));
             }
         }
 
         private static void RecoverPendingLocked(string projectRoot)
         {
-            string transactionRoot = Path.Combine(projectRoot, ".zgs-config", "transactions");
+            RecoverPendingAt(projectRoot, LegacyTransactionRoot(projectRoot));
+            RecoverPendingAt(projectRoot, TransactionRoot(projectRoot));
+        }
+
+        private static void RecoverPendingAt(string projectRoot, string transactionRoot)
+        {
             if (!Directory.Exists(transactionRoot))
             {
                 return;
@@ -182,13 +194,13 @@ namespace ZeroGameStudio.ConfigPipeline.Editor
                 string journalPath = Path.Combine(transactionDirectory, "journal.json");
                 if (!File.Exists(journalPath))
                 {
-                    DeleteTransactionDirectory(transactionDirectory, projectRoot);
+                    DeleteTransactionDirectory(transactionDirectory, transactionRoot);
                     continue;
                 }
 
                 IReadOnlyList<JournalEntry> entries = ReadJournal(journalPath);
                 Rollback(projectRoot, transactionDirectory, entries);
-                DeleteTransactionDirectory(transactionDirectory, projectRoot);
+                DeleteTransactionDirectory(transactionDirectory, transactionRoot);
             }
         }
 
@@ -499,17 +511,129 @@ namespace ZeroGameStudio.ConfigPipeline.Editor
 
         private static string TransactionDirectory(string projectRoot, string planId)
         {
-            return Path.Combine(projectRoot, ".zgs-config", "transactions", planId);
+            return Path.Combine(TransactionRoot(projectRoot), planId);
+        }
+
+        private static string OperationRoot(string projectRoot)
+        {
+            return Path.Combine(projectRoot, "Library", "ZeroEngine", "ConfigPipeline");
+        }
+
+        private static FileStream OpenLock(string lockPath)
+        {
+            return new FileStream(
+                lockPath,
+                FileMode.OpenOrCreate,
+                FileAccess.ReadWrite,
+                FileShare.None,
+                1,
+                FileOptions.DeleteOnClose);
+        }
+
+        private static void ExecuteWithLegacyMigrationLock(
+            string projectRoot,
+            Action operation)
+        {
+            FileStream legacyLock = TryAcquireLegacyLock(projectRoot);
+            try
+            {
+                operation();
+            }
+            finally
+            {
+                if (legacyLock != null)
+                {
+                    legacyLock.Dispose();
+                }
+
+                TryDeleteEmptyLegacyOperationRoot(projectRoot);
+            }
+        }
+
+        private static T ExecuteWithLegacyMigrationLock<T>(
+            string projectRoot,
+            Func<T> operation)
+        {
+            FileStream legacyLock = TryAcquireLegacyLock(projectRoot);
+            try
+            {
+                return operation();
+            }
+            finally
+            {
+                if (legacyLock != null)
+                {
+                    legacyLock.Dispose();
+                }
+
+                TryDeleteEmptyLegacyOperationRoot(projectRoot);
+            }
+        }
+
+        private static FileStream TryAcquireLegacyLock(string projectRoot)
+        {
+            string legacyOperationRoot = LegacyOperationRoot(projectRoot);
+            if (!Directory.Exists(legacyOperationRoot))
+            {
+                return null;
+            }
+
+            string legacyLockDirectory = Path.Combine(legacyOperationRoot, "locks");
+            Directory.CreateDirectory(legacyLockDirectory);
+            return OpenLock(Path.Combine(legacyLockDirectory, "pipeline.lock"));
+        }
+
+        private static string TransactionRoot(string projectRoot)
+        {
+            return Path.Combine(OperationRoot(projectRoot), "transactions");
+        }
+
+        private static string LegacyOperationRoot(string projectRoot)
+        {
+            return Path.Combine(projectRoot, ".zgs-config");
+        }
+
+        private static string LegacyTransactionRoot(string projectRoot)
+        {
+            return Path.Combine(LegacyOperationRoot(projectRoot), "transactions");
+        }
+
+        private static void TryDeleteEmptyLegacyOperationRoot(string projectRoot)
+        {
+            try
+            {
+                string legacyOperationRoot = LegacyOperationRoot(projectRoot);
+                TryDeleteEmptyDirectory(LegacyTransactionRoot(projectRoot));
+                TryDeleteEmptyDirectory(Path.Combine(legacyOperationRoot, "locks"));
+                TryDeleteEmptyDirectory(legacyOperationRoot);
+            }
+            catch (IOException)
+            {
+                // Another process may have recreated legacy state after releasing its lock.
+            }
+            catch (UnauthorizedAccessException)
+            {
+                // Cleanup is optional; preserve any state that cannot be inspected safely.
+            }
+        }
+
+        private static void TryDeleteEmptyDirectory(string directory)
+        {
+            if (!Directory.Exists(directory) || Directory.EnumerateFileSystemEntries(directory).Any())
+            {
+                return;
+            }
+
+            Directory.Delete(directory);
         }
 
         private static void DeleteTransactionDirectory(
             string transactionDirectory,
-            string projectRoot)
+            string transactionRoot)
         {
-            string expectedRoot = Path.Combine(
-                ConfigPathGuard.NormalizeProjectRoot(projectRoot),
-                ".zgs-config",
-                "transactions") + Path.DirectorySeparatorChar;
+            string expectedRoot = Path.GetFullPath(transactionRoot)
+                .TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar) +
+                Path.DirectorySeparatorChar;
             string resolved = Path.GetFullPath(transactionDirectory);
             if (!resolved.StartsWith(expectedRoot, StringComparison.OrdinalIgnoreCase))
             {

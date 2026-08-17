@@ -1,5 +1,13 @@
 # Changelog
 
+## 2.0.2
+
+- Store transaction locks, journals, staging, and backups under
+  `Library/ZeroEngine/ConfigPipeline` so they do not appear as project-root
+  private files. During migration, serialize against any existing legacy
+  `.zgs-config` lock, recover its pending transaction before a new operation,
+  and remove the obsolete root once it is empty.
+
 ## 2.0.1
 
 - Localized the Dashboard module label, description, and tooltip to Simplified Chinese without changing the menu route.

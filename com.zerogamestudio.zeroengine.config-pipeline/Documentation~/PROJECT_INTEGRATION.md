@@ -19,6 +19,16 @@ immutable `ConfigDocument` to the project's domain model/catalog.
 Apply catalog changes through `ConfigCatalogMaintenanceService`; new artifacts
 under `Assets/` and their new directories receive deterministic paired `.meta`
 artifacts transactionally.
+Transaction locks, journals, staging, and backups are kept under
+`Library/ZeroEngine/ConfigPipeline`, not in the project root. On upgrade, the
+pipeline obtains the legacy lock when a `.zgs-config` root exists, recovers any
+pending legacy transaction before beginning a new operation, then removes the
+legacy root only when it is empty. Fresh operations never create that root. Do
+not manually remove a non-empty legacy transaction directory until recovery has
+completed. The journal persists through normal Editor restarts, but clearing
+`Library/` discards unfinished transaction evidence; for the deterministic
+generated artifacts owned by this pipeline, re-plan and Apply after such a
+cleanup.
 Manifest `sourceHash` and `baseSourceHash` identify the canonical normalized
 source document used for semantic merge/conflict checks; they are not byte
 fingerprints of the XLSX container. Check detects workbook drift by reading and
@@ -40,14 +50,16 @@ Required command arguments are `--config-project-root`, `--config-profile`,
 ExportCandidate. Check is read-only and fails when artifacts are stale. Apply
 revalidates every baseline and commits the declared set transactionally. Compile
 is an Apply alias.
-Package identity is the immutable pipeline implementation identity included in
+Package identity is the immutable output-affecting pipeline identity included in
 the Plan: use `<package-name>@<version>` for a published package (for example,
 `com.zerogamestudio.zeroengine.config-pipeline@1.0.0`) and
 `<package-name>@<commit-or-frozen-content-hash>` for local or Git iteration.
 Keep it identical across Plan, Apply, and Check for one frozen package, and
-change it whenever the pipeline implementation changes so existing output is
-reported stale. ExportCandidate reads and compares existing authoring/runtime
-data but does not create a Plan or bind package identity into candidate workbook
+change it whenever Plan validation or generated-artifact behavior changes so
+existing output is reported stale. Editor-only operational changes, such as the
+transaction scratch location, do not by themselves require regenerating
+artifacts. ExportCandidate reads and compares existing authoring/runtime data
+but does not create a Plan or bind package identity into candidate workbook
 metadata, so that mode neither accepts identity as a safety guarantee nor
 requires the argument.
 ExportCandidate writes candidate `.xlsx` workbooks from current generated JSON;
@@ -85,7 +97,7 @@ To run the package's CoreContract tests from a consuming project, add
 project’s `Packages/manifest.json`. The test framework is a consumer test-only
 prerequisite and is intentionally not a runtime dependency of this package.
 Treat a zero-test result as failure even when the Unity process exits with code
-0. For package 1.0.0, run EditMode tests with NUnit category
-`ZGS.ConfigPipeline.CoreContract` and require exactly 59 discovered and passed
+0. For package 2.0.2, run EditMode tests with NUnit category
+`ZGS.ConfigPipeline.CoreContract` and require exactly 72 discovered and passed
 tests; update the documented expected count when the package test contract
 changes.
