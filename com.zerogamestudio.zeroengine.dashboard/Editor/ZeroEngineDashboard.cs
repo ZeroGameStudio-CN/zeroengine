@@ -457,9 +457,7 @@ namespace ZeroEngine.Editor
                             if (view.Entries.Any(entry => entry.IsLegacy))
                                 EditorUiGUILayout.Chip(new GUIContent(DashboardText.LegacyEntry, DashboardText.LegacyEntryTooltip));
                             if (view.DefaultEntry.Safety != DashboardEntrySafety.Navigation)
-                                EditorUiGUILayout.Chip(new GUIContent(
-                                    SafetyLabel(view.DefaultEntry.Safety),
-                                    SafetyTooltip(view.DefaultEntry.Safety)));
+                                DrawSafetyStatus(view.DefaultEntry.Safety);
                         }
                     }
 
@@ -1348,7 +1346,7 @@ namespace ZeroEngine.Editor
                 }
                 GUILayout.FlexibleSpace();
                 if (descriptor.Safety != DashboardEntrySafety.Navigation)
-                    EditorUiGUILayout.Chip(new GUIContent(SafetyLabel(descriptor.Safety), SafetyTooltip(descriptor.Safety)));
+                    DrawSafetyStatus(descriptor.Safety);
             }
             EditorGUILayout.Space(EditorUiTokens.SpaceSm);
 
@@ -1780,7 +1778,7 @@ namespace ZeroEngine.Editor
             EditorGUILayout.Space(EditorUiTokens.SpaceSm);
             GUILayout.Label(DashboardText.SafetyAndImpact, EditorStyles.miniBoldLabel);
             DashboardEntrySafety safety = _helpPanel?.Safety ?? _helpSurface?.DefaultEntry.Safety ?? DashboardEntrySafety.Navigation;
-            EditorUiGUILayout.Chip(new GUIContent(SafetyLabel(safety), SafetyTooltip(safety)));
+            DrawSafetyStatus(safety);
             GUILayout.Label(SafetyTooltip(safety), EditorStyles.wordWrappedMiniLabel);
 
             EditorGUILayout.Space(EditorUiTokens.SpaceSm);
@@ -2529,6 +2527,31 @@ namespace ZeroEngine.Editor
                 case DashboardEntrySafety.ProjectWrite: return DashboardText.ProjectWrite;
                 case DashboardEntrySafety.Destructive: return DashboardText.Destructive;
                 default: return DashboardText.Navigation;
+            }
+        }
+
+        private static void DrawSafetyStatus(DashboardEntrySafety safety)
+        {
+            Color previous = GUI.contentColor;
+            GUI.contentColor = SafetyColor(safety);
+            GUILayout.Label(SafetyStatusContent(safety), EditorStyles.miniBoldLabel);
+            GUI.contentColor = previous;
+        }
+
+        private static GUIContent SafetyStatusContent(DashboardEntrySafety safety)
+        {
+            return new GUIContent("● " + SafetyLabel(safety), SafetyTooltip(safety));
+        }
+
+        private static Color SafetyColor(DashboardEntrySafety safety)
+        {
+            EditorUiPalette palette = EditorUiPalette.Current;
+            switch (safety)
+            {
+                case DashboardEntrySafety.ReadOnly: return palette.MutedText;
+                case DashboardEntrySafety.ProjectWrite: return palette.Warning;
+                case DashboardEntrySafety.Destructive: return palette.Error;
+                default: return palette.Accent;
             }
         }
 
