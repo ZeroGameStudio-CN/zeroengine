@@ -4,9 +4,16 @@ Schema-first configuration pipeline for Unity 2022.3 projects. It keeps one
 authoring source, validates through a typed intermediate document, emits
 deterministic artifacts, and loads immutable runtime snapshots.
 
-Version 2.0.1 uses `com.zerogamestudio.zeroengine.editor-ui@1.3.0` for its Editor window and typed workbench action. Git URL consumers must directly pin both packages to the same ZeroEngine commit because Unity 2022.3 does not resolve same-repository sibling dependencies transitively.
+Version 2.0.2 uses `com.zerogamestudio.zeroengine.editor-ui@1.3.0` for its Editor window and typed workbench action. Git URL consumers must directly pin both packages to the same ZeroEngine commit because Unity 2022.3 does not resolve same-repository sibling dependencies transitively.
 
-Version 2.0.1 localizes the Dashboard module label, description, and tooltip to Simplified Chinese without changing the menu route.
+Version 2.0.2 stores transaction scratch state under
+`Library/ZeroEngine/ConfigPipeline`, keeping project-root private-file views
+clean while retaining crash recovery for pending legacy transactions. During
+upgrade it also honors an existing legacy operation lock, then removes the
+legacy root once recovery has left it empty; fresh operations never create it.
+
+Version 2.0.1 localizes the Dashboard module label, description, and tooltip to
+Simplified Chinese without changing the menu route.
 
 Start with `Documentation~/PROJECT_INTEGRATION.md`. The 1.0 contract, Excel
 authoring rules, CI commands, recovery behavior and AI maintenance workflow are

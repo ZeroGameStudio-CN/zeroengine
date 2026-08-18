@@ -6,8 +6,8 @@ consumer project's `Packages/manifest.json`, then run package CoreContract
 EditMode tests in Unity 2022.3.62f3. The test framework is a consumer test-only
 prerequisite, not a runtime package dependency. Fail CI unless the expected
 tests are discovered and all pass; Unity may exit with code 0 when zero tests
-run. For package 1.0.0, filter EditMode tests by NUnit category
-`ZGS.ConfigPipeline.CoreContract` and require exactly 59 discovered and passed
+run. For package 2.0.2, filter EditMode tests by NUnit category
+`ZGS.ConfigPipeline.CoreContract` and require exactly 72 discovered and passed
 tests; update this expected count with the package test contract. Run batch
 Check for every config set, build a Player, and verify Open XML
 assemblies are absent. Publish only a commit-pinned package for which package
@@ -25,5 +25,6 @@ with `success: true`. A missing result may be retried only after compilation has
 settled; never treat it as success.
 
 Never run Apply in CI. Preserve failed transaction directories as evidence; the
-next authorized Apply or explicit recovery acquires the same project lock and
-restores the complete previous output set before doing new work.
+next authorized Apply or explicit recovery acquires the project operation lock
+(and the legacy lock during migration) and restores the complete previous output
+set before doing new work.

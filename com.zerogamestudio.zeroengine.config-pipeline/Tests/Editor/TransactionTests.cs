@@ -73,7 +73,9 @@ namespace ZeroGameStudio.ConfigPipeline.Tests.Editor
                       !File.Exists(Absolute("Generated/delete.json")));
 
             Assert.That(result.ChangedFileCount, Is.EqualTo(3));
-            Assert.That(Directory.Exists(Path.Combine(root, ".zgs-config", "transactions", plan.PlanId)), Is.False);
+            Assert.That(Directory.Exists(OperationTransactionDirectory(plan.PlanId)), Is.False);
+            Assert.That(Directory.Exists(Path.Combine(root, "Library", "ZeroEngine", "ConfigPipeline", "locks")), Is.True);
+            Assert.That(Directory.Exists(Path.Combine(root, ".zgs-config")), Is.False);
         }
 
         [Test]
@@ -94,7 +96,7 @@ namespace ZeroGameStudio.ConfigPipeline.Tests.Editor
         }
 
         [Test]
-        public void RecoverPending_RestoresWholeSetAfterInterruptedCommit()
+        public void RecoverPending_RestoresWholeSetAfterInterruptedOperationCommit()
         {
             Write("Generated/a.json", "old-a");
             Write("Generated/b.json", "old-b");
@@ -115,7 +117,37 @@ namespace ZeroGameStudio.ConfigPipeline.Tests.Editor
             applier.RecoverPending(root);
             Assert.That(Read("Generated/a.json"), Is.EqualTo("old-a"));
             Assert.That(Read("Generated/b.json"), Is.EqualTo("old-b"));
-            Assert.That(Directory.Exists(Path.Combine(root, ".zgs-config", "transactions", plan.PlanId)), Is.False);
+            Assert.That(Directory.Exists(OperationTransactionDirectory(plan.PlanId)), Is.False);
+        }
+
+        [Test]
+        public void RecoverPending_RestoresWholeSetAfterInterruptedLegacyCommit()
+        {
+            Write("Generated/a.json", "old-a");
+            Write("Generated/b.json", "old-b");
+            IReadOnlyList<ConfigArtifact> artifacts = Artifacts(
+                ("Generated/a.json", "new-a"),
+                ("Generated/b.json", "new-b"));
+            ConfigPipelinePlan plan = Build(artifacts);
+            var applier = new ConfigTransactionalApplier();
+
+            Assert.Throws<ConfigSimulatedCrashException>(() => applier.Apply(
+                root,
+                plan,
+                "package@1",
+                artifacts,
+                () => true,
+                ConfigTransactionFault.AfterFirstCommit));
+
+            string legacyTransactionDirectory = LegacyTransactionDirectory(plan.PlanId);
+            Directory.CreateDirectory(Path.GetDirectoryName(legacyTransactionDirectory));
+            Directory.Move(OperationTransactionDirectory(plan.PlanId), legacyTransactionDirectory);
+
+            applier.RecoverPending(root);
+            Assert.That(Read("Generated/a.json"), Is.EqualTo("old-a"));
+            Assert.That(Read("Generated/b.json"), Is.EqualTo("old-b"));
+            Assert.That(Directory.Exists(legacyTransactionDirectory), Is.False);
+            Assert.That(Directory.Exists(LegacyOperationRoot()), Is.False);
         }
 
         [Test]
@@ -137,6 +169,7 @@ namespace ZeroGameStudio.ConfigPipeline.Tests.Editor
 
             applier.RecoverPending(root);
             Assert.That(Read("Generated/a.json"), Is.EqualTo("old-a"));
+            Assert.That(Directory.Exists(OperationTransactionDirectory(plan.PlanId)), Is.False);
         }
 
         [Test]
@@ -156,6 +189,31 @@ namespace ZeroGameStudio.ConfigPipeline.Tests.Editor
             }
 
             Assert.That(Read("Generated/a.json"), Is.EqualTo("old-a"));
+        }
+
+        [Test]
+        public void Apply_RejectsActiveLegacyPipelineLockAndCleansEmptyLegacyRoot()
+        {
+            Write("Generated/a.json", "old-a");
+            IReadOnlyList<ConfigArtifact> artifacts = Artifacts(("Generated/a.json", "new-a"));
+            ConfigPipelinePlan plan = Build(artifacts);
+            string legacyLockPath = LegacyPipelineLockPath();
+            Directory.CreateDirectory(Path.GetDirectoryName(legacyLockPath));
+
+            using (var legacyLock = new FileStream(
+                       legacyLockPath,
+                       FileMode.OpenOrCreate,
+                       FileAccess.ReadWrite,
+                       FileShare.None,
+                       1,
+                       FileOptions.DeleteOnClose))
+            {
+                Assert.Throws<IOException>(() => Apply(plan, artifacts, () => true));
+            }
+
+            Apply(plan, artifacts, () => true);
+            Assert.That(Read("Generated/a.json"), Is.EqualTo("new-a"));
+            Assert.That(Directory.Exists(LegacyOperationRoot()), Is.False);
         }
 
         [Test]
@@ -232,6 +290,26 @@ namespace ZeroGameStudio.ConfigPipeline.Tests.Editor
         private string Absolute(string relativePath)
         {
             return Path.Combine(root, relativePath.Replace('/', Path.DirectorySeparatorChar));
+        }
+
+        private string OperationTransactionDirectory(string planId)
+        {
+            return Path.Combine(root, "Library", "ZeroEngine", "ConfigPipeline", "transactions", planId);
+        }
+
+        private string LegacyTransactionDirectory(string planId)
+        {
+            return Path.Combine(LegacyOperationRoot(), "transactions", planId);
+        }
+
+        private string LegacyOperationRoot()
+        {
+            return Path.Combine(root, ".zgs-config");
+        }
+
+        private string LegacyPipelineLockPath()
+        {
+            return Path.Combine(LegacyOperationRoot(), "locks", "pipeline.lock");
         }
     }
 }
