@@ -133,6 +133,18 @@ namespace ZGS.DataToolkit.Editor.Tests
         }
 
         [Test]
+        public void BodyLayout_UsesCompactTabsOnlyBelowThreeColumnMinimumWidth()
+        {
+            var method = typeof(DataToolkitWindow).GetMethod(
+                "ShouldUseCompactBodyLayout",
+                BindingFlags.Static | BindingFlags.NonPublic);
+            Assert.NotNull(method);
+
+            Assert.IsFalse((bool)method.Invoke(null, new object[] { 650f }));
+            Assert.IsTrue((bool)method.Invoke(null, new object[] { 649f }));
+        }
+
+        [Test]
         public void EmbeddedView_IsHiddenAndWorkspacePanelIsPublic()
         {
             var createEmbedded = typeof(DataToolkitWindow).GetMethod(

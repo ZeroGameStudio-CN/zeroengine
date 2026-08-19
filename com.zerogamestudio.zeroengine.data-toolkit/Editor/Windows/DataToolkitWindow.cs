@@ -20,7 +20,6 @@ namespace ZGS.DataToolkit.Editor
         private const float HeaderRowHeight = 38f;
         private const float CompactHeaderHeight = 64f;
         private const float CompactHeaderWidth = 820f;
-        private const float CompactBodyWidth = 760f;
         private const float CompactBodyToolbarHeight = 26f;
         private const int CompactTypeView = 0;
         private const int CompactInspectorView = 1;
@@ -29,6 +28,7 @@ namespace ZGS.DataToolkit.Editor
         private const float HeaderBodySpacing = 4f;
         private const float HeaderActionSpacing = 6f;
         private const float SplitterWidth = 5f;
+        private const float CompactBodyWidth = MinColumnWidth * 2f + MinInspectorWidth + SplitterWidth * 2f;
         private const float RowHeight = 24f;
         private const long LargeAssetInspectorThresholdBytes = 512 * 1024;
         private const string SelectedTypePrefSuffix = "SelectedType";
@@ -498,7 +498,7 @@ namespace ZGS.DataToolkit.Editor
 
         private void DrawBodyLayout(Rect bodyRect)
         {
-            if (bodyRect.width < CompactBodyWidth)
+            if (ShouldUseCompactBodyLayout(bodyRect.width))
             {
                 DrawCompactBodyLayout(bodyRect);
                 return;
@@ -519,6 +519,11 @@ namespace ZGS.DataToolkit.Editor
                 context.Settings.PrefKey("AssetColumnWidth"),
                 bodyRect.width - typeColumnWidth - SplitterWidth * 2f - MinInspectorWidth);
             DrawSelectedAssetInspector(layoutRects.InspectorColumn);
+        }
+
+        private static bool ShouldUseCompactBodyLayout(float bodyWidth)
+        {
+            return bodyWidth < CompactBodyWidth;
         }
 
         private void DrawCompactBodyLayout(Rect bodyRect)
