@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
+using System.Text.RegularExpressions;
 using NUnit.Framework;
 using UnityEditor;
 using UnityEngine;
@@ -207,7 +208,9 @@ namespace ZGS.DataToolkit.Editor.Tests
         [Test]
         public void ToolbarProviderException_IsLoggedOnceAndProviderIsDisabled()
         {
-            LogAssert.ignoreFailingMessages = true;
+            LogAssert.Expect(
+                LogType.Exception,
+                new Regex(ThrowingToolbarProvider.ExceptionMessage));
             var provider = new ThrowingToolbarProvider();
             var profile = new DataToolkitProjectProfile(
                 CreateSettings(),
