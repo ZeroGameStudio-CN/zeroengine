@@ -140,8 +140,8 @@ namespace ZGS.DataToolkit.Editor.Tests
                 BindingFlags.Static | BindingFlags.NonPublic);
             Assert.NotNull(method);
 
-            Assert.IsFalse((bool)method.Invoke(null, new object[] { 650f }));
-            Assert.IsTrue((bool)method.Invoke(null, new object[] { 649f }));
+            Assert.IsFalse((bool)method.Invoke(null, new object[] { 560f }));
+            Assert.IsTrue((bool)method.Invoke(null, new object[] { 559f }));
         }
 
         [Test]
