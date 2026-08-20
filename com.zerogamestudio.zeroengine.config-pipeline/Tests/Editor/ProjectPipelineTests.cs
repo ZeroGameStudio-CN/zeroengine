@@ -62,6 +62,15 @@ namespace ZeroGameStudio.ConfigPipeline.Tests.Editor
         }
 
         [Test]
+        public void ConfigPipelineWindow_ImplementsWorkspaceEmbeddingAndState()
+        {
+            var interfaces = typeof(ConfigPipelineWindow).GetInterfaces();
+
+            Assert.That(interfaces.Any(type => type.FullName == "ZeroEngine.EditorUI.IEditorWorkspaceEmbeddedView"), Is.True);
+            Assert.That(interfaces.Any(type => type.FullName == "ZeroEngine.EditorUI.IEditorWorkspaceStatefulView"), Is.True);
+        }
+
+        [Test]
         public void PlanApplyCheck_MergesOwnedWorkbooksAndIsDeterministic()
         {
             var service = new ConfigPipelineService();

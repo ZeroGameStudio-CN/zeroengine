@@ -2,10 +2,11 @@ using System.Collections.Generic;
 using System.Linq;
 using UnityEditor;
 using UnityEngine;
+using ZeroEngine.EditorUI;
 
 namespace ZeroEngine.EditorTools
 {
-    public sealed class EditorToolWindow : EditorWindow
+    public sealed class EditorToolWindow : EditorWindow, IEditorWorkspaceEmbeddedView, IEditorWorkspaceStatefulView
     {
         private static readonly GUIContent ProjectLabel = new("项目", "选择当前项目注册的编辑器工具集合。");
         private static readonly GUIContent EmptyProfileMessage = new("没有已注册的编辑器工具项目。", "请确认项目侧已提供 EditorToolProjectProvider。");
@@ -32,6 +33,42 @@ namespace ZeroEngine.EditorTools
         }
 
         private void OnGUI()
+        {
+            DrawContent();
+        }
+
+        public void OnWorkspaceGUI(EditorWorkspacePanelContext context)
+        {
+            DrawContent();
+        }
+
+        public string CaptureWorkspaceState()
+        {
+            return JsonUtility.ToJson(new WorkspaceState
+            {
+                SelectedProfileIndex = _selectedProfileIndex,
+                ScrollPosition = _scrollPosition
+            });
+        }
+
+        public void RestoreWorkspaceState(string state)
+        {
+            if (string.IsNullOrWhiteSpace(state))
+            {
+                return;
+            }
+
+            var restored = JsonUtility.FromJson<WorkspaceState>(state);
+            if (restored == null)
+            {
+                return;
+            }
+
+            _selectedProfileIndex = Mathf.Max(0, restored.SelectedProfileIndex);
+            _scrollPosition = restored.ScrollPosition;
+        }
+
+        private void DrawContent()
         {
             var profiles = EditorToolProjectRegistry.GetProfiles();
             if (profiles.Count == 0)
@@ -63,6 +100,13 @@ namespace ZeroEngine.EditorTools
                 EditorGUILayout.Space(4);
                 EditorGUILayout.HelpBox(_lastResult, MessageType.None);
             }
+        }
+
+        [System.Serializable]
+        private sealed class WorkspaceState
+        {
+            public int SelectedProfileIndex;
+            public Vector2 ScrollPosition;
         }
 
         private void DrawPanels(IReadOnlyList<IEditorToolPanel> panels)

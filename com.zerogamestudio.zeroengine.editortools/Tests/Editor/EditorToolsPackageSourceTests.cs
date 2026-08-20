@@ -53,6 +53,15 @@ namespace ZeroEngine.EditorTools.Tests
             Assert.That(source, Does.Not.Contain("\"No editor tool project profile is registered.\""));
         }
 
+        [Test]
+        public void EditorToolWindow_ImplementsWorkspaceEmbeddingAndState()
+        {
+            var interfaces = typeof(EditorToolWindow).GetInterfaces();
+
+            Assert.That(interfaces.Any(type => type.FullName == "ZeroEngine.EditorUI.IEditorWorkspaceEmbeddedView"), Is.True);
+            Assert.That(interfaces.Any(type => type.FullName == "ZeroEngine.EditorUI.IEditorWorkspaceStatefulView"), Is.True);
+        }
+
         private static string FindPackageRoot()
         {
             var directory = new DirectoryInfo(Application.dataPath);

@@ -2,15 +2,16 @@ using System;
 using System.IO;
 using UnityEditor;
 using UnityEngine;
+using ZeroEngine.EditorUI;
 
 namespace ZeroGameStudio.ConfigPipeline.Editor
 {
     [ZeroEngine.EditorUI.EditorUiSurface]
-    public sealed class ConfigPipelineWindow : EditorWindow
+    public sealed class ConfigPipelineWindow : EditorWindow, IEditorWorkspaceEmbeddedView, IEditorWorkspaceStatefulView
     {
         private string profilePath = "Config/config-project.json";
         private string configSetId = string.Empty;
-        private string packageIdentity = "com.zerogamestudio.zeroengine.config-pipeline@1.0.0";
+        private string packageIdentity = "com.zerogamestudio.zeroengine.config-pipeline@2.0.2";
         private string status = "Not checked";
         private Vector2 scroll;
 
@@ -21,9 +22,52 @@ namespace ZeroGameStudio.ConfigPipeline.Editor
 
         private void OnGUI()
         {
-            ZeroEngine.EditorUI.EditorUiGUILayout.Header(
-                "Config Pipeline",
-                "Plan, validate, apply, and export project configuration");
+            DrawContent(true);
+        }
+
+        public void OnWorkspaceGUI(EditorWorkspacePanelContext context)
+        {
+            DrawContent(false);
+        }
+
+        public string CaptureWorkspaceState()
+        {
+            return JsonUtility.ToJson(new WorkspaceState
+            {
+                ProfilePath = profilePath,
+                ConfigSetId = configSetId,
+                PackageIdentity = packageIdentity,
+                Scroll = scroll
+            });
+        }
+
+        public void RestoreWorkspaceState(string state)
+        {
+            if (string.IsNullOrWhiteSpace(state))
+            {
+                return;
+            }
+
+            var restored = JsonUtility.FromJson<WorkspaceState>(state);
+            if (restored == null)
+            {
+                return;
+            }
+
+            profilePath = restored.ProfilePath ?? profilePath;
+            configSetId = restored.ConfigSetId ?? configSetId;
+            packageIdentity = restored.PackageIdentity ?? packageIdentity;
+            scroll = restored.Scroll;
+        }
+
+        private void DrawContent(bool drawHeader)
+        {
+            if (drawHeader)
+            {
+                EditorUiGUILayout.Header(
+                    "Config Pipeline",
+                    "Plan, validate, apply, and export project configuration");
+            }
             profilePath = EditorGUILayout.TextField("Profile", profilePath);
             configSetId = EditorGUILayout.TextField("Config Set", configSetId);
             packageIdentity = EditorGUILayout.TextField("Package Identity", packageIdentity);
@@ -46,6 +90,15 @@ namespace ZeroGameStudio.ConfigPipeline.Editor
             scroll = EditorGUILayout.BeginScrollView(scroll);
             EditorGUILayout.HelpBox(status, MessageType.Info);
             EditorGUILayout.EndScrollView();
+        }
+
+        [Serializable]
+        private sealed class WorkspaceState
+        {
+            public string ProfilePath;
+            public string ConfigSetId;
+            public string PackageIdentity;
+            public Vector2 Scroll;
         }
 
         private void Run(ConfigPipelineMode mode, string candidateDirectory = null, string scope = null)

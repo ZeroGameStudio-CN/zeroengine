@@ -2,6 +2,7 @@
     "name": "ZeroEngine.EditorTools.Editor",
     "rootNamespace": "ZeroEngine.EditorTools",
     "references": [
+        "ZeroEngine.EditorUI.Editor",
         "UnityEditor.TestRunner",
         "UnityEngine.TestRunner"
     ],
