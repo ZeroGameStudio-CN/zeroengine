@@ -16,6 +16,16 @@ namespace ZeroEngine.Quest
         [Tooltip("Fallback quest description for UI or designer notes.")]
         [TextArea(3, 5)] public string description;
 
+        [Tooltip("Legacy quest type retained for projects that still author simple objective templates.")]
+        public QuestType questType;
+
+        [Header("Completion Logic (Legacy)")]
+        [Tooltip("Legacy failure conditions retained for existing content migration.")]
+        public List<QuestEventConfig> failureConditions;
+
+        [Tooltip("Legacy completion conditions retained for existing content migration.")]
+        public List<QuestEventConfig> completionConditions;
+
         [Header("Conditions")]
         [Tooltip("Completion conditions. All visible and hidden conditions must be satisfied before the quest becomes Successful.")]
         [SerializeReference]
@@ -27,6 +37,15 @@ namespace ZeroEngine.Quest
         public List<QuestAcceptRequirement> AcceptRequirements = new List<QuestAcceptRequirement>();
 
         [Header("Rewards")]
+        [Tooltip("Legacy experience reward retained for existing content migration.")]
+        public int expReward;
+
+        [Tooltip("Legacy gold reward retained for existing content migration.")]
+        public int goldReward;
+
+        [Tooltip("Legacy item rewards retained for existing content migration.")]
+        public List<string> itemRewards;
+
         [Tooltip("Rewards granted when the quest is submitted or auto-submitted.")]
         [SerializeReference]
         public List<QuestReward> Rewards = new List<QuestReward>();
@@ -54,12 +73,37 @@ namespace ZeroEngine.Quest
         [Tooltip("Optional fallback completion dialogue text.")]
         [TextArea(3, 5)] public string completionDialogue;
 
+        public bool UsesNewConditionSystem => Conditions != null && Conditions.Count > 0;
+
+        public bool UsesNewRewardSystem => Rewards != null && Rewards.Count > 0;
+
         /// <summary>
         /// 获取所有奖励预览文本。
         /// </summary>
         public List<string> GetRewardPreviews()
         {
             var previews = new List<string>();
+
+            if (expReward > 0)
+            {
+                previews.Add($"经验值 +{expReward}");
+            }
+
+            if (goldReward > 0)
+            {
+                previews.Add($"金币 +{goldReward}");
+            }
+
+            if (itemRewards != null)
+            {
+                foreach (var itemId in itemRewards)
+                {
+                    if (!string.IsNullOrEmpty(itemId))
+                    {
+                        previews.Add(itemId);
+                    }
+                }
+            }
 
             if (Rewards == null) return previews;
 
@@ -71,5 +115,12 @@ namespace ZeroEngine.Quest
 
             return previews;
         }
+    }
+
+    [System.Serializable]
+    public class QuestEventConfig
+    {
+        public string targetName;
+        public int targetCount;
     }
 }

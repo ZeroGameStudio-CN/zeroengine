@@ -211,6 +211,21 @@ namespace ZeroEngine.Quest
             }
         }
 
+        public void UpdateQuestProgress(QuestType type, string targetName, int amount = 1)
+        {
+            if (string.IsNullOrWhiteSpace(targetName)) return;
+
+            amount = Mathf.Max(1, amount);
+            var eventType = type switch
+            {
+                QuestType.Collect => QuestEvents.ItemObtained,
+                QuestType.KillMonster => QuestEvents.EntityKilled,
+                QuestType.Dialogue => QuestEvents.Interacted,
+                _ => QuestEvents.Interacted
+            };
+            ProcessConditionEvent(eventType, new ConditionEventData(targetName, amount));
+        }
+
         private void CheckCompletion(QuestRuntimeData quest, QuestConfigSO config)
         {
             if (config.Conditions == null || config.Conditions.Count == 0) return;
@@ -421,6 +436,22 @@ namespace ZeroEngine.Quest
             return _conditionProgressBuffer;
         }
 
+        public QuestStateSnapshot GetQuestStateSnapshot(string questId)
+        {
+            var quest = FindActiveQuest(questId);
+            return quest != null
+                ? BuildSnapshot(quest)
+                : new QuestStateSnapshot(questId, GetQuestState(questId), Array.Empty<QuestObjectiveSnapshot>(), Array.Empty<string>());
+        }
+
+        public IReadOnlyList<QuestStateSnapshot> GetActiveQuestSnapshots()
+        {
+            var result = new List<QuestStateSnapshot>(_saveData.activeQuests.Count);
+            for (var i = 0; i < _saveData.activeQuests.Count; i++)
+                result.Add(BuildSnapshot(_saveData.activeQuests[i]));
+            return result;
+        }
+
         #endregion
 
         #region Helpers
@@ -533,6 +564,36 @@ namespace ZeroEngine.Quest
         public void LoadSaveData(QuestSystemSaveData data)
         {
             _saveData = data ?? new QuestSystemSaveData();
+        }
+
+        private QuestStateSnapshot BuildSnapshot(QuestRuntimeData quest)
+        {
+            if (quest == null) return default;
+
+            var config = GetConfig(quest.questId);
+            var objectives = new List<QuestObjectiveSnapshot>();
+            if (config?.Conditions != null)
+            {
+                foreach (var condition in config.Conditions)
+                {
+                    if (condition == null) continue;
+                    var key = condition.GetProgressKey();
+                    objectives.Add(new QuestObjectiveSnapshot(
+                        key,
+                        key,
+                        string.IsNullOrWhiteSpace(condition.Description) ? key : condition.Description,
+                        condition.GetCurrentProgress(quest),
+                        condition.GetTargetProgress(),
+                        condition.IsSatisfied(quest),
+                        condition.IsHidden));
+                }
+            }
+
+            return new QuestStateSnapshot(
+                quest.questId,
+                quest.state,
+                objectives,
+                config != null ? config.GetRewardPreviews() : Array.Empty<string>());
         }
 
 #if UNITY_EDITOR

@@ -1,7 +1,9 @@
 {
   "name": "ZeroEngine.World.Editor",
   "rootNamespace": "ZeroEngine.World.Editor",
-  "references": [],
+  "references": [
+    "ZeroEngine.World"
+  ],
   "includePlatforms": [
     "Editor"
   ],

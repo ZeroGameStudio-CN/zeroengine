@@ -220,7 +220,7 @@ namespace ZeroEngine.UI.Toast
 
             if (settings.ShowInterval > 0f)
             {
-                if (active.Count > 0 && unscaledTime < nextAllowedShowTime) return;
+                if (active.Count > 0 && nextAllowedShowTime - unscaledTime > 0.0001f) return;
                 ShowNow(queued.Dequeue(), unscaledTime);
                 return;
             }

@@ -33,12 +33,13 @@ namespace ZeroEngine.BuffSystem
 
         private int _currentStacks;
         private float _tickTimer;
-        private StatController _targetStats;
+        private IBuffStatTarget _targetStats;
+        private float? _durationOverride;
         
         // Refactored: Track type with modifier to allow removal
         private struct AppliedModifier
         {
-            public StatType Type;
+            public StatId StatId;
             public StatModifier Modifier;
         }
         private List<AppliedModifier> _appliedModifiers = new List<AppliedModifier>();
@@ -58,7 +59,7 @@ namespace ZeroEngine.BuffSystem
         /// </summary>
         /// <param name="data">Buff 配置数据</param>
         /// <param name="targetStats">目标属性控制器（用于应用修饰器）</param>
-        public BuffHandler(BuffData data, StatController targetStats)
+        public BuffHandler(BuffData data, IBuffStatTarget targetStats)
         {
             Data = data;
             _targetStats = targetStats;
@@ -134,11 +135,20 @@ namespace ZeroEngine.BuffSystem
         }
 
         /// <summary>
+        /// 按施放点覆盖本实例的持续时长，并立即刷新剩余时间。
+        /// </summary>
+        public void OverrideDuration(float duration)
+        {
+            _durationOverride = duration;
+            RemainingTime = duration;
+        }
+
+        /// <summary>
         /// 刷新持续时间 (v1.2.0+)
         /// </summary>
         public void RefreshDuration()
         {
-            RemainingTime = Data.Duration;
+            RemainingTime = _durationOverride ?? Data.Duration;
         }
 
         /// <summary>
@@ -157,6 +167,24 @@ namespace ZeroEngine.BuffSystem
         public void ForceExpire()
         {
             Expire();
+        }
+
+        /// <summary>
+        /// 从存档数据恢复剩余时长和层数，不触发堆叠生命周期副作用。
+        /// </summary>
+        public void RestoreState(float remainingTime, int stacks)
+        {
+            if (IsExpired) return;
+
+            if (stacks < 0)
+            {
+                Debug.LogWarning($"BuffHandler.RestoreState received negative stacks ({stacks}) for buff '{Data?.BuffId}'; clamping to 0.");
+            }
+
+            RemainingTime = remainingTime;
+            var oldStacks = _currentStacks;
+            _currentStacks = Mathf.Clamp(stacks, 0, Data.MaxStacks);
+            UpdateStatModifiers(oldStacks, _currentStacks);
         }
 
         private void HandleExpire()
@@ -199,11 +227,12 @@ namespace ZeroEngine.BuffSystem
                     foreach (var modConfig in Data.StatModifiers)
                     {
                         var mod = new StatModifier(modConfig.Value, modConfig.ModType, (int)modConfig.ModType, this);
-                        _targetStats.AddModifier(modConfig.StatType, mod);
+                        var statId = ResolveStatId(modConfig);
+                        _targetStats.AddModifier(statId, mod);
                         
                         _appliedModifiers.Add(new AppliedModifier 
                         { 
-                            Type = modConfig.StatType, 
+                            StatId = statId,
                             Modifier = mod 
                         });
                     }
@@ -224,7 +253,7 @@ namespace ZeroEngine.BuffSystem
                         var lastIndex = _appliedModifiers.Count - 1;
                         var entry = _appliedModifiers[lastIndex];
                         
-                        _targetStats.RemoveModifier(entry.Type, entry.Modifier);
+                        _targetStats.RemoveModifier(entry.StatId, entry.Modifier);
                         _appliedModifiers.RemoveAt(lastIndex);
                     }
                 }
@@ -240,9 +269,21 @@ namespace ZeroEngine.BuffSystem
 
             foreach (var entry in _appliedModifiers)
             {
-                _targetStats.RemoveModifier(entry.Type, entry.Modifier);
+                _targetStats.RemoveModifier(entry.StatId, entry.Modifier);
             }
             _appliedModifiers.Clear();
+        }
+
+        private static StatId ResolveStatId(BuffStatModifierConfig config)
+        {
+            if (!config.StatId.IsEmpty)
+            {
+                return config.StatId;
+            }
+
+            return config.StatType == StatType.None
+                ? new StatId(string.Empty)
+                : new StatId(config.StatType.ToString());
         }
     }
 }

@@ -52,6 +52,9 @@ namespace ZeroEngine.Dialog
         /// <summary>Fired when an external callback is triggered.</summary>
         public event Action<string, string> OnCallback;
 
+        /// <summary>Fired when a callback is parsed as a structured command.</summary>
+        public event Action<DialogCommand> OnCommand;
+
         /// <summary>Fired when a variable changes.</summary>
         public event Action<string, object, object> OnVariableChanged;
 
@@ -356,6 +359,12 @@ namespace ZeroEngine.Dialog
 
         private void HandleCallback(string callbackId, string parameter)
         {
+            if (DialogCommandParser.TryParse(callbackId, parameter, out var command))
+            {
+                OnCommand?.Invoke(command);
+                return;
+            }
+
             OnCallback?.Invoke(callbackId, parameter);
         }
 
