@@ -146,6 +146,19 @@ namespace ZGS.DataToolkit.Editor.Tests
         }
 
         [Test]
+        public void BodyLayout_UsesWideMediumAndCompactModesByAvailableWidth()
+        {
+            var method = typeof(DataToolkitWindow).GetMethod(
+                "ResolveBodyLayoutMode",
+                BindingFlags.Static | BindingFlags.NonPublic);
+            Assert.NotNull(method);
+
+            Assert.AreEqual(0, method.Invoke(null, new object[] { 980f }));
+            Assert.AreEqual(1, method.Invoke(null, new object[] { 760f }));
+            Assert.AreEqual(2, method.Invoke(null, new object[] { 549f }));
+        }
+
+        [Test]
         public void EmbeddedView_IsHiddenAndWorkspacePanelIsPublic()
         {
             var createEmbedded = typeof(DataToolkitWindow).GetMethod(

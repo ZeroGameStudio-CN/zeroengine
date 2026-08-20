@@ -29,6 +29,12 @@ namespace ZGS.DataToolkit.Editor
         private const float HeaderActionSpacing = 6f;
         private const float SplitterWidth = 5f;
         private const float CompactBodyWidth = MinColumnWidth * 2f + MinInspectorWidth + SplitterWidth * 2f;
+        private const float MediumBodyWidth = 760f;
+        private const float LayoutHysteresis = 24f;
+        private const float MediumBodyToolbarHeight = 26f;
+        private const int WideBodyLayout = 0;
+        private const int MediumBodyLayout = 1;
+        private const int CompactBodyLayout = 2;
         private const float RowHeight = 24f;
         private const long LargeAssetInspectorThresholdBytes = 512 * 1024;
         private const string SelectedTypePrefSuffix = "SelectedType";
@@ -76,6 +82,8 @@ namespace ZGS.DataToolkit.Editor
         private bool embeddedHost;
         private Action repaintRequested;
         private int compactBodyView;
+        private int bodyLayoutMode = WideBodyLayout;
+        private bool mediumInspectorView;
 
         private readonly struct SelectionSnapshot
         {
@@ -498,9 +506,16 @@ namespace ZGS.DataToolkit.Editor
 
         private void DrawBodyLayout(Rect bodyRect)
         {
-            if (ShouldUseCompactBodyLayout(bodyRect.width))
+            bodyLayoutMode = ResolveBodyLayoutModeWithHysteresis(bodyRect.width);
+            if (bodyLayoutMode == CompactBodyLayout)
             {
                 DrawCompactBodyLayout(bodyRect);
+                return;
+            }
+
+            if (bodyLayoutMode == MediumBodyLayout)
+            {
+                DrawMediumBodyLayout(bodyRect);
                 return;
             }
 
@@ -523,7 +538,91 @@ namespace ZGS.DataToolkit.Editor
 
         private static bool ShouldUseCompactBodyLayout(float bodyWidth)
         {
-            return bodyWidth < CompactBodyWidth;
+            return ResolveBodyLayoutMode(bodyWidth) == CompactBodyLayout;
+        }
+
+        private static int ResolveBodyLayoutMode(float bodyWidth)
+        {
+            if (bodyWidth < CompactBodyWidth)
+            {
+                return CompactBodyLayout;
+            }
+
+            return bodyWidth < MediumBodyWidth ? MediumBodyLayout : WideBodyLayout;
+        }
+
+        private int ResolveBodyLayoutModeWithHysteresis(float bodyWidth)
+        {
+            switch (bodyLayoutMode)
+            {
+                case WideBodyLayout:
+                    return bodyWidth < MediumBodyWidth - LayoutHysteresis
+                        ? ResolveBodyLayoutMode(bodyWidth)
+                        : WideBodyLayout;
+                case MediumBodyLayout:
+                    if (bodyWidth >= MediumBodyWidth + LayoutHysteresis)
+                    {
+                        return WideBodyLayout;
+                    }
+
+                    return bodyWidth < CompactBodyWidth - LayoutHysteresis
+                        ? CompactBodyLayout
+                        : MediumBodyLayout;
+                default:
+                    return bodyWidth >= CompactBodyWidth + LayoutHysteresis
+                        ? ResolveBodyLayoutMode(bodyWidth)
+                        : CompactBodyLayout;
+            }
+        }
+
+        private void DrawMediumBodyLayout(Rect bodyRect)
+        {
+            if (selectedAsset == null)
+            {
+                mediumInspectorView = false;
+            }
+
+            var typeWidth = Mathf.Clamp(
+                typeColumnWidth,
+                MinColumnWidth,
+                Mathf.Min(MaxColumnWidth, bodyRect.width - MinColumnWidth - SplitterWidth));
+            var typeRect = new Rect(bodyRect.x, bodyRect.y, typeWidth, bodyRect.height);
+            var splitterRect = new Rect(typeRect.xMax, bodyRect.y, SplitterWidth, bodyRect.height);
+            var rightRect = new Rect(
+                splitterRect.xMax,
+                bodyRect.y,
+                Mathf.Max(0f, bodyRect.width - typeWidth - SplitterWidth),
+                bodyRect.height);
+
+            DrawTypeColumn(typeRect);
+            DrawColumnResizeHandle(
+                splitterRect,
+                ref typeColumnWidth,
+                context.Settings.PrefKey("TypeColumnWidth"),
+                bodyRect.width - MinColumnWidth - SplitterWidth);
+
+            var toolbarRect = new Rect(rightRect.x, rightRect.y, rightRect.width, MediumBodyToolbarHeight);
+            var labels = new[]
+            {
+                new GUIContent(context.Settings.UiText.Assets, "选择当前数据类型下的资产。"),
+                new GUIContent(context.Settings.UiText.Inspector, "查看所选资产详情。")
+            };
+            var nextView = GUI.Toolbar(toolbarRect, mediumInspectorView ? 1 : 0, labels);
+            mediumInspectorView = nextView == 1 && selectedAsset != null;
+
+            var contentRect = new Rect(
+                rightRect.x,
+                toolbarRect.yMax + HeaderBodySpacing,
+                rightRect.width,
+                Mathf.Max(0f, rightRect.height - MediumBodyToolbarHeight - HeaderBodySpacing));
+            if (mediumInspectorView)
+            {
+                DrawSelectedAssetInspector(contentRect);
+            }
+            else
+            {
+                DrawAssetColumn(contentRect);
+            }
         }
 
         private void DrawCompactBodyLayout(Rect bodyRect)
