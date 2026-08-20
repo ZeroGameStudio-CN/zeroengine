@@ -108,54 +108,31 @@ namespace ZGS.DataToolkit.Editor.Tests
         }
 
         [Test]
-        public void CompactView_UsesAccessibleTypeAssetAndInspectorTabsAndPersistsChoice()
+        public void BodyLayout_PreservesThreeColumnsAndAddsHorizontalOverflowWhenNarrow()
         {
-            CreateTestAsset(OriginalAssetPath);
+            var contentWidthMethod = typeof(DataToolkitWindow).GetMethod(
+                "ResolveBodyContentWidth",
+                BindingFlags.Static | BindingFlags.NonPublic);
+            Assert.NotNull(contentWidthMethod);
+
+            Assert.AreEqual(550f, (float)contentWidthMethod.Invoke(null, new object[] { 400f }));
+            Assert.AreEqual(700f, (float)contentWidthMethod.Invoke(null, new object[] { 700f }));
+
             var window = Track(DataToolkitWindow.Open(CreateProfile()));
+            var layoutMethod = typeof(DataToolkitWindow).GetMethod(
+                "CalculateBodyLayoutRects",
+                BindingFlags.Instance | BindingFlags.NonPublic);
+            Assert.NotNull(layoutMethod);
 
-            InvokeWindowMethod(window, "SelectType", typeof(SelectedToolkitTestData));
-            Assert.AreEqual(2, GetWindowField(window, "compactBodyView"));
-            Assert.AreEqual(2, EditorPrefs.GetInt(EditorPrefsPrefix + "_CompactView", -1));
+            var layout = layoutMethod.Invoke(window, new object[] { new Rect(0f, 0f, 550f, 400f) });
+            var layoutType = layout.GetType();
+            var typeColumn = (Rect)layoutType.GetProperty("TypeColumn").GetValue(layout);
+            var assetColumn = (Rect)layoutType.GetProperty("AssetColumn").GetValue(layout);
+            var inspectorColumn = (Rect)layoutType.GetProperty("InspectorColumn").GetValue(layout);
 
-            InvokeWindowMethod(window, "SelectAssetByPath", OriginalAssetPath);
-
-            Assert.AreEqual(1, GetWindowField(window, "compactBodyView"));
-            Assert.AreEqual(1, EditorPrefs.GetInt(EditorPrefsPrefix + "_CompactView", -1));
-
-            InvokeWindowMethod(window, "SetCompactBodyView", 2);
-
-            Assert.AreEqual(2, GetWindowField(window, "compactBodyView"));
-            Assert.AreEqual(2, EditorPrefs.GetInt(EditorPrefsPrefix + "_CompactView", -1));
-
-            InvokeWindowMethod(window, "SetCompactBodyView", 0);
-
-            Assert.AreEqual(0, GetWindowField(window, "compactBodyView"));
-            Assert.AreEqual(0, EditorPrefs.GetInt(EditorPrefsPrefix + "_CompactView", -1));
-        }
-
-        [Test]
-        public void BodyLayout_UsesCompactTabsOnlyBelowThreeColumnMinimumWidth()
-        {
-            var method = typeof(DataToolkitWindow).GetMethod(
-                "ShouldUseCompactBodyLayout",
-                BindingFlags.Static | BindingFlags.NonPublic);
-            Assert.NotNull(method);
-
-            Assert.IsFalse((bool)method.Invoke(null, new object[] { 550f }));
-            Assert.IsTrue((bool)method.Invoke(null, new object[] { 549f }));
-        }
-
-        [Test]
-        public void BodyLayout_UsesWideMediumAndCompactModesByAvailableWidth()
-        {
-            var method = typeof(DataToolkitWindow).GetMethod(
-                "ResolveBodyLayoutMode",
-                BindingFlags.Static | BindingFlags.NonPublic);
-            Assert.NotNull(method);
-
-            Assert.AreEqual(0, method.Invoke(null, new object[] { 980f }));
-            Assert.AreEqual(1, method.Invoke(null, new object[] { 700f }));
-            Assert.AreEqual(2, method.Invoke(null, new object[] { 549f }));
+            Assert.AreEqual(150f, typeColumn.width);
+            Assert.AreEqual(150f, assetColumn.width);
+            Assert.AreEqual(240f, inspectorColumn.width);
         }
 
         [Test]
@@ -328,7 +305,6 @@ namespace ZGS.DataToolkit.Editor.Tests
             EditorPrefs.DeleteKey(EditorPrefsPrefix + "_AssetScrollY");
             EditorPrefs.DeleteKey(EditorPrefsPrefix + "_InspectorScrollX");
             EditorPrefs.DeleteKey(EditorPrefsPrefix + "_InspectorScrollY");
-            EditorPrefs.DeleteKey(EditorPrefsPrefix + "_CompactView");
         }
 
         private static object InvokeWindowMethod(DataToolkitWindow window, string methodName, params object[] arguments)
