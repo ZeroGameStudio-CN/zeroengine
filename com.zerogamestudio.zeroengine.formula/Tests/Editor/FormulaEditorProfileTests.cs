@@ -108,7 +108,6 @@ namespace ZeroEngine.Formula.Tests.Editor
             Assert.That(FormulaEditorLabels.StudioTooltip, Does.Contain("同一个窗口"));
             Assert.That(FormulaEditorLabels.EvaluateTooltip, Does.Contain("预览输入"));
             Assert.That(FormulaEditorLabels.PreviewCaseTooltip, Does.Contain("样例"));
-            Assert.That(FormulaEditorLabels.GenerateMissingCatalogEntriesTooltip, Does.Contain("保存"));
             Assert.That(FormulaEditorLabels.OpenWorkbenchTooltip, Does.Contain("当前公式中心"));
             Assert.AreEqual("全部", FormulaEditorLabels.FilterName(FormulaCatalogWindowFilter.All));
             Assert.AreEqual("错误", FormulaEditorLabels.FilterName(FormulaCatalogWindowFilter.Errors));
@@ -118,7 +117,7 @@ namespace ZeroEngine.Formula.Tests.Editor
             Assert.AreEqual("错误", FormulaEditorLabels.ScanSeverityName(FormulaAssetScanSeverity.Error));
             Assert.AreEqual("警告", FormulaEditorLabels.DiagnosticSeverityName(FormulaDiagnosticSeverity.Warning));
             Assert.AreEqual("无问题", FormulaEditorLabels.IssueSummary(0, 0, 0));
-            Assert.AreEqual("错误 2 / 警告 1 / 信息 3", FormulaEditorLabels.IssueSummary(2, 1, 3));
+            Assert.AreEqual("错误 2 / 提醒 1 / 信息 3", FormulaEditorLabels.IssueSummary(2, 1, 3));
         }
 
         [Test]

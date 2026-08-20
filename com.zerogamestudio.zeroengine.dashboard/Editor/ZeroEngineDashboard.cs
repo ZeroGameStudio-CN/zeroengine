@@ -450,12 +450,18 @@ namespace ZeroEngine.Editor
                         }
                         using (new EditorGUILayout.HorizontalScope())
                         {
-                            EditorUiGUILayout.Chip(new GUIContent(view.Module.DisplayName, view.Module.Description));
+                            DrawMetadataStatus(
+                                MetadataStatusContent(view.Module.DisplayName, view.Module.Description),
+                                AccentColor);
                             string owner = SurfaceContextLabel(view.Surface);
                             if (!string.IsNullOrEmpty(owner))
-                                EditorUiGUILayout.Chip(owner);
+                                DrawMetadataStatus(
+                                    MetadataStatusContent(owner, view.Surface.Description),
+                                    EditorUiPalette.Current.MutedText);
                             if (view.Entries.Any(entry => entry.IsLegacy))
-                                EditorUiGUILayout.Chip(new GUIContent(DashboardText.LegacyEntry, DashboardText.LegacyEntryTooltip));
+                                DrawMetadataStatus(
+                                    MetadataStatusContent(DashboardText.LegacyEntry, DashboardText.LegacyEntryTooltip),
+                                    WarningColor);
                             if (view.DefaultEntry.Safety != DashboardEntrySafety.Navigation)
                                 DrawSafetyStatus(view.DefaultEntry.Safety);
                         }
@@ -1323,28 +1329,27 @@ namespace ZeroEngine.Editor
             DashboardModule module = modules.First(item => string.Equals(item.ModuleId, descriptor.ModuleId, StringComparison.Ordinal));
 
             _workspaceContentScroll = BeginStableVerticalScrollView(_workspaceContentScroll);
-            using (new EditorGUILayout.HorizontalScope())
+            using (new EditorGUILayout.HorizontalScope(GUILayout.ExpandWidth(true)))
             {
-                using (new EditorGUILayout.VerticalScope())
-                {
-                    using (new EditorGUILayout.HorizontalScope())
-                    {
-                        GUILayout.Label(descriptor.DisplayName, EditorUiStyles.SectionTitle);
-                        GUILayout.FlexibleSpace();
-                        bool compact = EditorUiGUILayout.ResponsiveMode(position.width) == EditorUiResponsiveMode.Compact;
-                        if (GUILayout.Button(
-                                compact
-                                    ? new GUIContent("?", DashboardText.ContextTooltip)
-                                    : new GUIContent(DashboardText.Context, DashboardText.ContextTooltip),
-                                EditorStyles.miniButton,
-                                GUILayout.Width(compact ? 24f : 48f)))
-                        {
-                            OpenContext(module, null, descriptor);
-                        }
-                    }
-                    EditorUiGUILayout.Chip(new GUIContent(module.DisplayName, module.Description));
-                }
+                GUILayout.Label(descriptor.DisplayName, EditorUiStyles.SectionTitle);
                 GUILayout.FlexibleSpace();
+                bool compact = EditorUiGUILayout.ResponsiveMode(position.width) == EditorUiResponsiveMode.Compact;
+                if (GUILayout.Button(
+                        compact
+                            ? new GUIContent("?", DashboardText.ContextTooltip)
+                            : new GUIContent(DashboardText.Context, DashboardText.ContextTooltip),
+                        EditorStyles.miniButton,
+                        GUILayout.Width(compact ? 24f : 48f)))
+                {
+                    OpenContext(module, null, descriptor);
+                }
+            }
+            using (new EditorGUILayout.HorizontalScope(GUILayout.ExpandWidth(true)))
+            {
+                GUILayout.FlexibleSpace();
+                DrawMetadataStatus(
+                    MetadataStatusContent(module.DisplayName, module.Description),
+                    AccentColor);
                 if (descriptor.Safety != DashboardEntrySafety.Navigation)
                     DrawSafetyStatus(descriptor.Safety);
             }
@@ -1408,19 +1413,18 @@ namespace ZeroEngine.Editor
                     _workspaceSidebarWidth).ContentWidth;
                 if (UsesSideContextDrawer())
                     availableWidth = Mathf.Max(0f, availableWidth - ContextDrawerWidth - EditorUiTokens.SpaceSm);
-                bool fullWidth = UsesFullWidthWorkspaceLayout(_activePanel);
-                _activePanelContext.AvailableWidth = fullWidth
-                    ? availableWidth
-                    : Mathf.Min(EditorUiTokens.FormContentMaxWidth, availableWidth);
+                _activePanelContext.AvailableWidth = Mathf.Max(1f, availableWidth);
                 try
                 {
-                    if (fullWidth)
-                        _activePanel.OnGUI(_activePanelContext);
-                    else
-                    {
-                        using (EditorUiGUILayout.ConstrainedContent())
-                            _activePanel.OnGUI(_activePanelContext);
-                    }
+                    // Every embedded panel owns its internal grouping and list widths.
+                    // Keeping the host content full width prevents fixed-form panels from
+                    // leaving a large dead column and lets their responsive controls react
+                    // to the actual splitter width.
+                    _activePanel.OnGUI(_activePanelContext);
+                }
+                catch (UnityEngine.ExitGUIException)
+                {
+                    throw;
                 }
                 catch (Exception exception)
                 {
@@ -2532,15 +2536,25 @@ namespace ZeroEngine.Editor
 
         private static void DrawSafetyStatus(DashboardEntrySafety safety)
         {
-            Color previous = GUI.contentColor;
-            GUI.contentColor = SafetyColor(safety);
-            GUILayout.Label(SafetyStatusContent(safety), EditorStyles.miniBoldLabel);
-            GUI.contentColor = previous;
+            DrawMetadataStatus(SafetyStatusContent(safety), SafetyColor(safety));
         }
 
         private static GUIContent SafetyStatusContent(DashboardEntrySafety safety)
         {
-            return new GUIContent("● " + SafetyLabel(safety), SafetyTooltip(safety));
+            return MetadataStatusContent(SafetyLabel(safety), SafetyTooltip(safety));
+        }
+
+        private static void DrawMetadataStatus(GUIContent content, Color color)
+        {
+            Color previous = GUI.contentColor;
+            GUI.contentColor = color;
+            GUILayout.Label(content, EditorStyles.miniBoldLabel);
+            GUI.contentColor = previous;
+        }
+
+        private static GUIContent MetadataStatusContent(string label, string tooltip)
+        {
+            return new GUIContent("● " + label, tooltip);
         }
 
         private static Color SafetyColor(DashboardEntrySafety safety)

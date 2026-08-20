@@ -1,3 +1,5 @@
+using System;
+using System.Collections.Generic;
 using UnityEditor;
 using UnityEngine;
 
@@ -7,6 +9,12 @@ namespace ZeroEngine.Formula.Editor
     {
         Workbench,
         Catalog
+    }
+
+    internal enum FormulaPreviewFieldMode
+    {
+        Related,
+        All
     }
 
     [ZeroEngine.EditorUI.EditorUiSurface]
@@ -21,26 +29,33 @@ namespace ZeroEngine.Formula.Editor
         [SerializeField]
         private FormulaAsset formula;
         [SerializeField]
+        private List<FormulaAsset> previewFormulas = new();
+        [SerializeField]
         private FormulaStudioPage activePage = FormulaStudioPage.Workbench;
+        [SerializeField]
+        private string workspaceProfileId = string.Empty;
         [System.NonSerialized]
-        private FormulaEvaluationReport lastReport;
+        private FormulaEditorProfile workspaceProfile;
+        [SerializeField]
+        private int selectedScenarioIndex;
+        [SerializeField]
+        private string scenarioName = string.Empty;
+        [SerializeField]
+        private FormulaPreviewFieldMode previewFieldMode = FormulaPreviewFieldMode.Related;
         [System.NonSerialized]
-        private FormulaPreviewBatchReport lastBatchReport;
+        private List<FormulaEvaluationReport> formulaReports = new();
         [System.NonSerialized]
-        private FormulaCurvePreviewReport lastCurveReport;
+        private List<bool> formulaStepsExpanded = new();
         [System.NonSerialized]
-        private string lastBatchJson = string.Empty;
-        [System.NonSerialized]
-        private string lastBatchMarkdown = string.Empty;
-        private int curveInputIndex;
-        private float curveMin;
-        private float curveMax = 10f;
-        private int curveSamples = 11;
+        private Dictionary<string, bool> scenarioGroupsExpanded = new();
         private Vector2 scrollPosition;
         private readonly FormulaEditorPreviewState previewState = new();
-        private readonly FormulaWorkbenchSession session = new();
         [System.NonSerialized]
         private FormulaCatalogPane catalogPane;
+        [System.NonSerialized]
+        private List<FormulaPreviewScenario> savedScenarios = new();
+        [System.NonSerialized]
+        private string loadedScenarioProfileId = string.Empty;
 
         public static void OpenWithProfile(FormulaEditorProfile profile)
         {
@@ -61,6 +76,8 @@ namespace ZeroEngine.Formula.Editor
         {
             EnsureProfile(profile);
             var view = CreateInstance<FormulaWorkbenchWindow>();
+            view.workspaceProfileId = profile?.ProfileId ?? string.Empty;
+            view.workspaceProfile = profile;
             view.SetWorkspacePage(catalog);
             return view;
         }
@@ -74,8 +91,13 @@ namespace ZeroEngine.Formula.Editor
 
             var window = GetWindow<FormulaWorkbenchWindow>(FormulaEditorLabels.Studio);
             window.titleContent = new GUIContent(FormulaEditorLabels.Studio, FormulaEditorLabels.StudioTooltip);
+            window.workspaceProfileId = profile?.ProfileId ?? string.Empty;
+            window.workspaceProfile = profile;
             if (selectedFormula != null)
+            {
                 window.formula = selectedFormula;
+                window.SetPrimaryFormula(selectedFormula);
+            }
             window.activePage = page;
             if (page == FormulaStudioPage.Catalog)
                 window.EnsureCatalogPane(true);
@@ -106,11 +128,12 @@ namespace ZeroEngine.Formula.Editor
 
         private void OnEnable()
         {
-            lastReport = null;
-            lastBatchReport = null;
-            lastCurveReport = null;
-            lastBatchJson = string.Empty;
-            lastBatchMarkdown = string.Empty;
+            formulaReports = new List<FormulaEvaluationReport>();
+            formulaStepsExpanded = new List<bool>();
+            scenarioGroupsExpanded = new Dictionary<string, bool>();
+            savedScenarios = new List<FormulaPreviewScenario>();
+            loadedScenarioProfileId = string.Empty;
+            EnsurePrimaryFormulaSlot();
             titleContent = new GUIContent(FormulaEditorLabels.Studio, FormulaEditorLabels.StudioTooltip);
             if (activePage == FormulaStudioPage.Catalog)
                 EnsureCatalogPane(true);
@@ -135,7 +158,7 @@ namespace ZeroEngine.Formula.Editor
 
         private void DrawView()
         {
-            var profile = FormulaEditorProfileRegistry.ActiveProfile;
+            var profile = ResolveWorkspaceProfile();
             ZeroEngine.EditorUI.EditorUiGUILayout.Header(
                 FormulaEditorLabels.Studio,
                 string.IsNullOrEmpty(profile.DefaultSearchRoot)
@@ -150,43 +173,57 @@ namespace ZeroEngine.Formula.Editor
             if (activePage == FormulaStudioPage.Catalog)
             {
                 EnsureCatalogPane(previous != FormulaStudioPage.Catalog);
-                catalogPane.Draw(profile, SelectFormulaFromCatalog);
+                catalogPane.Draw(profile, SelectFormulaFromCatalog, Repaint);
                 return;
             }
 
             DrawWorkbench(profile);
         }
 
-        private void DrawWorkbench(FormulaEditorProfile profile)
+        private FormulaEditorProfile ResolveWorkspaceProfile()
         {
-            scrollPosition = EditorGUILayout.BeginScrollView(scrollPosition);
+            if (workspaceProfile != null
+                && string.Equals(workspaceProfile.ProfileId, workspaceProfileId, StringComparison.Ordinal))
+                return workspaceProfile;
 
-            FormulaEditorGUILayout.DrawSectionHeader(FormulaEditorLabels.Formula);
-            EditorGUILayout.BeginVertical(EditorStyles.helpBox);
-            formula = (FormulaAsset)EditorGUILayout.ObjectField(
-                new GUIContent(FormulaEditorLabels.Formula, FormulaEditorLabels.FormulaTooltip),
-                formula,
-                typeof(FormulaAsset),
-                false);
-            EditorGUILayout.EndVertical();
-
-            FormulaEditorGUILayout.DrawPreviewInputs(profile, previewState);
-            if (GUILayout.Button(new GUIContent(FormulaEditorLabels.Evaluate, FormulaEditorLabels.EvaluateTooltip)))
-                Evaluate(profile);
-
-            if (lastReport == null)
+            if (!string.IsNullOrEmpty(workspaceProfileId))
             {
-                FormulaEditorGUILayout.DrawReport(null);
-                DrawBatchPreview(profile);
-                DrawCurvePreview(profile);
-                EditorGUILayout.EndScrollView();
-                return;
+                foreach (var registeredProfile in FormulaEditorProfileRegistry.RegisteredProfiles)
+                {
+                    if (registeredProfile.ProfileId == workspaceProfileId)
+                    {
+                        workspaceProfile = registeredProfile;
+                        return registeredProfile;
+                    }
+                }
             }
 
-            FormulaEditorGUILayout.DrawReport(lastReport);
-            DrawBatchPreview(profile);
-            DrawCurvePreview(profile);
-            EditorGUILayout.EndScrollView();
+            return FormulaEditorProfileRegistry.ActiveProfile;
+        }
+
+        private void DrawWorkbench(FormulaEditorProfile profile)
+        {
+            float previousLabelWidth = EditorGUIUtility.labelWidth;
+            EditorGUIUtility.labelWidth = Mathf.Clamp(EditorGUIUtility.currentViewWidth * 0.32f, 96f, 180f);
+            scrollPosition = GUILayout.BeginScrollView(
+                scrollPosition,
+                false,
+                true,
+                GUIStyle.none,
+                GUI.skin.verticalScrollbar,
+                GUILayout.ExpandWidth(true));
+            try
+            {
+                using (new EditorGUILayout.VerticalScope(GUILayout.ExpandWidth(true), GUILayout.MinWidth(0f)))
+                {
+                    DrawPreviewWorkspace(profile);
+                }
+            }
+            finally
+            {
+                GUILayout.EndScrollView();
+                EditorGUIUtility.labelWidth = previousLabelWidth;
+            }
         }
 
         private void EnsureCatalogPane(bool refresh)
@@ -200,131 +237,514 @@ namespace ZeroEngine.Formula.Editor
         private void SelectFormulaFromCatalog(FormulaAsset selectedFormula)
         {
             formula = selectedFormula;
+            SetPrimaryFormula(selectedFormula);
             activePage = FormulaStudioPage.Workbench;
             scrollPosition = Vector2.zero;
             Repaint();
         }
 
-        private void Evaluate(FormulaEditorProfile profile)
+        private void DrawPreviewWorkspace(FormulaEditorProfile profile)
         {
-            _ = profile;
+            FormulaEditorGUILayout.DrawSectionHeader(
+                FormulaEditorLabels.Scenarios,
+                FormulaEditorLabels.ScenarioTooltip);
+            DrawScenarioWorkspace(profile);
 
-            if (!formula)
+            FormulaEditorGUILayout.DrawSectionHeader(
+                FormulaEditorLabels.PreviewFormulas,
+                FormulaEditorLabels.PreviewFormulasTooltip);
+            DrawFormulaCards(profile);
+        }
+
+        private void DrawScenarioWorkspace(FormulaEditorProfile profile)
+        {
+            EnsureSavedScenarios(profile);
+            var builtInCount = profile?.DefaultPreviewCases.Count ?? 0;
+            var options = new string[1 + builtInCount + savedScenarios.Count];
+            options[0] = FormulaEditorLabels.CurrentScenario;
+            for (var index = 0; index < builtInCount; index++)
+                options[index + 1] = FormulaEditorLabels.BuiltInScenarioPrefix + profile.DefaultPreviewCases[index].DisplayName;
+            for (var index = 0; index < savedScenarios.Count; index++)
+                options[index + 1 + builtInCount] = FormulaEditorLabels.SavedScenarioPrefix + savedScenarios[index].DisplayName;
+
+            EditorGUILayout.BeginVertical(EditorStyles.helpBox);
+            selectedScenarioIndex = Mathf.Clamp(selectedScenarioIndex, 0, options.Length - 1);
+            EditorGUI.BeginChangeCheck();
+            selectedScenarioIndex = EditorGUILayout.Popup(
+                new GUIContent(FormulaEditorLabels.Scenario, FormulaEditorLabels.ScenarioTooltip),
+                selectedScenarioIndex,
+                options,
+                GUILayout.ExpandWidth(true));
+            var modeLabels = new[]
             {
-                lastReport = new FormulaEvaluationReport(null, "<null>");
-                lastReport.SetResult(0f, false);
-                lastReport.AddDiagnostic(FormulaDiagnosticSeverity.Error, FormulaDiagnosticCode.NullFormula, "未选择公式。");
+                new GUIContent(FormulaEditorLabels.RelatedFields, FormulaEditorLabels.RelatedFieldsTooltip),
+                new GUIContent(FormulaEditorLabels.AllFields, FormulaEditorLabels.AllFieldsTooltip),
+            };
+            previewFieldMode = (FormulaPreviewFieldMode)GUILayout.Toolbar(
+                (int)previewFieldMode,
+                modeLabels,
+                GUILayout.Height(22f));
+            if (EditorGUI.EndChangeCheck())
+                InvalidateAllFormulaReports();
+
+            var fields = FormulaEditorPreview.CollectPreviewFields(
+                profile,
+                previewFormulas,
+                previewFieldMode == FormulaPreviewFieldMode.All);
+
+            if (selectedScenarioIndex == 0)
+            {
+                EditorGUI.BeginChangeCheck();
+                DrawScenarioFields(fields, null, true);
+                if (EditorGUI.EndChangeCheck())
+                    InvalidateAllFormulaReports();
+
+                scenarioName = EditorGUILayout.TextField(
+                    new GUIContent(FormulaEditorLabels.ScenarioName, FormulaEditorLabels.ScenarioNameTooltip),
+                    scenarioName);
+                using (new EditorGUILayout.HorizontalScope())
+                {
+                    if (GUILayout.Button(
+                            new GUIContent(
+                                FormulaEditorLabels.ResetPreviewInputs,
+                                FormulaEditorLabels.ResetPreviewInputsTooltip),
+                            GUILayout.ExpandWidth(true)))
+                    {
+                        previewState.ResetToDefaults(profile, fields);
+                        InvalidateAllFormulaReports();
+                    }
+
+                    using (new EditorGUI.DisabledScope(string.IsNullOrWhiteSpace(scenarioName)))
+                    {
+                        if (GUILayout.Button(
+                                new GUIContent(FormulaEditorLabels.SaveScenario, FormulaEditorLabels.SaveScenarioTooltip),
+                                GUILayout.ExpandWidth(true)))
+                            SaveCurrentScenario(profile, fields);
+                    }
+                }
+            }
+            else if (selectedScenarioIndex <= builtInCount)
+            {
+                DrawScenarioDetails(profile, profile.DefaultPreviewCases[selectedScenarioIndex - 1], fields, false, -1);
+            }
+            else
+            {
+                var savedIndex = selectedScenarioIndex - builtInCount - 1;
+                DrawScenarioDetails(profile, savedScenarios[savedIndex].CreatePreviewCase(), fields, true, savedIndex);
+            }
+            EditorGUILayout.EndVertical();
+        }
+
+        private void DrawScenarioDetails(
+            FormulaEditorProfile profile,
+            FormulaPreviewCase previewCase,
+            IReadOnlyList<FormulaPreviewFieldDescriptor> fields,
+            bool canDelete,
+            int savedIndex)
+        {
+            if (previewCase == null)
+                return;
+
+            EditorGUILayout.BeginVertical(EditorStyles.helpBox);
+            EditorGUILayout.LabelField(previewCase.DisplayName, EditorStyles.boldLabel);
+            if (!string.IsNullOrEmpty(previewCase.Description))
+                EditorGUILayout.LabelField(previewCase.Description, EditorStyles.wordWrappedMiniLabel);
+
+            DrawScenarioFields(fields, previewCase.Values, false);
+
+            if (canDelete && GUILayout.Button(
+                    new GUIContent(FormulaEditorLabels.DeleteScenario, FormulaEditorLabels.DeleteScenarioTooltip),
+                    GUILayout.ExpandWidth(true)))
+                DeleteSavedScenario(profile, savedIndex);
+            EditorGUILayout.EndVertical();
+        }
+
+        private void DrawScenarioFields(
+            IReadOnlyList<FormulaPreviewFieldDescriptor> fields,
+            FormulaPreviewValueSet readOnlyValues,
+            bool editable)
+        {
+            if (fields == null || fields.Count == 0)
+            {
+                EditorGUILayout.HelpBox(FormulaEditorLabels.NoRelatedFields, MessageType.Info);
                 return;
             }
 
-            FormulaEvaluator.TryEvaluate(
-                formula,
-                previewState.CreateContext(profile),
-                FormulaEditorPreview.CreateRegistry(profile),
-                out _,
-                out lastReport);
+            var groups = new Dictionary<string, List<FormulaPreviewFieldDescriptor>>(StringComparer.Ordinal);
+            foreach (var field in fields)
+            {
+                if (!groups.TryGetValue(field.Category, out var group))
+                {
+                    group = new List<FormulaPreviewFieldDescriptor>();
+                    groups.Add(field.Category, group);
+                }
+                group.Add(field);
+            }
+
+            foreach (var group in groups)
+            {
+                var groupKey = previewFieldMode + ":" + group.Key;
+                if (!scenarioGroupsExpanded.TryGetValue(groupKey, out var expanded))
+                    expanded = previewFieldMode == FormulaPreviewFieldMode.Related;
+                expanded = EditorGUILayout.Foldout(expanded, group.Key, true);
+                scenarioGroupsExpanded[groupKey] = expanded;
+                if (!expanded)
+                    continue;
+
+                EditorGUI.indentLevel++;
+                foreach (var field in group.Value)
+                {
+                    if (editable)
+                        DrawEditableScenarioField(field);
+                    else
+                        DrawReadOnlyScenarioField(field, readOnlyValues);
+                }
+                EditorGUI.indentLevel--;
+            }
         }
 
-        private void DrawBatchPreview(FormulaEditorProfile profile)
+        private void DrawEditableScenarioField(FormulaPreviewFieldDescriptor field)
         {
-            FormulaEditorGUILayout.DrawSectionHeader(FormulaEditorLabels.PreviewCases);
-
-            for (var index = 0; index < session.PreviewCaseAssets.Count; index++)
+            var content = new GUIContent(field.DisplayName, field.Description);
+            var value = previewState.GetValue(field);
+            var compact = IsCompactLayout();
+            if (compact)
+                EditorGUILayout.LabelField(content, EditorStyles.miniBoldLabel);
+            switch (field.Kind)
             {
-                EditorGUILayout.BeginHorizontal();
-                var asset = (FormulaPreviewCaseAsset)EditorGUILayout.ObjectField(
-                    new GUIContent("样例 " + (index + 1), FormulaEditorLabels.PreviewCaseTooltip),
-                    session.PreviewCaseAssets[index],
-                    typeof(FormulaPreviewCaseAsset),
-                    false);
-                session.SetPreviewCaseAssetAt(index, asset);
-                if (GUILayout.Button(
-                        new GUIContent("−", FormulaEditorLabels.RemovePreviewCaseTooltip),
-                        GUILayout.Width(24f)))
-                {
-                    session.RemovePreviewCaseAssetAt(index);
-                    EditorGUILayout.EndHorizontal();
+                case FormulaPreviewInputKind.Int:
+                    previewState.SetValue(field.Key, compact
+                        ? EditorGUILayout.IntField(Mathf.RoundToInt(value), GUILayout.ExpandWidth(true))
+                        : EditorGUILayout.IntField(content, Mathf.RoundToInt(value)));
                     break;
+                case FormulaPreviewInputKind.Bool:
+                    previewState.SetValue(field.Key, (compact
+                        ? EditorGUILayout.Toggle(value > 0.5f, GUILayout.ExpandWidth(true))
+                        : EditorGUILayout.Toggle(content, value > 0.5f)) ? 1f : 0f);
+                    break;
+                case FormulaPreviewInputKind.Float:
+                default:
+                    previewState.SetValue(field.Key, compact
+                        ? EditorGUILayout.FloatField(value, GUILayout.ExpandWidth(true))
+                        : EditorGUILayout.FloatField(content, value));
+                    break;
+            }
+        }
+
+        private static void DrawReadOnlyScenarioField(
+            FormulaPreviewFieldDescriptor field,
+            FormulaPreviewValueSet values)
+        {
+            var value = field.DefaultValue;
+            if (values != null && values.TryGetValue(field.Key, out var storedValue))
+                value = storedValue;
+            if (IsCompactLayout())
+            {
+                EditorGUILayout.LabelField(
+                    new GUIContent(field.DisplayName, field.Description),
+                    EditorStyles.miniBoldLabel);
+                EditorGUILayout.LabelField(value.ToString("0.###"));
+            }
+            else
+            {
+                EditorGUILayout.LabelField(
+                    new GUIContent(field.DisplayName, field.Description),
+                    new GUIContent(value.ToString("0.###")));
+            }
+        }
+
+        private void EnsureSavedScenarios(FormulaEditorProfile profile)
+        {
+            var profileId = profile?.ProfileId ?? string.Empty;
+            if (loadedScenarioProfileId == profileId && savedScenarios != null)
+                return;
+
+            savedScenarios = new List<FormulaPreviewScenario>(FormulaPreviewScenarioStore.Load(profileId));
+            loadedScenarioProfileId = profileId;
+            selectedScenarioIndex = 0;
+        }
+
+        private void SaveCurrentScenario(
+            FormulaEditorProfile profile,
+            IReadOnlyList<FormulaPreviewFieldDescriptor> fields)
+        {
+            EnsureSavedScenarios(profile);
+            savedScenarios.Add(new FormulaPreviewScenario(
+                "local-" + Guid.NewGuid().ToString("N"),
+                scenarioName.Trim(),
+                previewState.ToValueSet(profile, fields).Values));
+            FormulaPreviewScenarioStore.Save(profile?.ProfileId, savedScenarios);
+            scenarioName = string.Empty;
+            selectedScenarioIndex = 1 + (profile?.DefaultPreviewCases.Count ?? 0) + savedScenarios.Count - 1;
+            InvalidateAllFormulaReports();
+        }
+
+        private void DeleteSavedScenario(FormulaEditorProfile profile, int savedIndex)
+        {
+            if (savedIndex < 0 || savedIndex >= savedScenarios.Count)
+                return;
+
+            savedScenarios.RemoveAt(savedIndex);
+            FormulaPreviewScenarioStore.Save(profile?.ProfileId, savedScenarios);
+            selectedScenarioIndex = 0;
+            InvalidateAllFormulaReports();
+        }
+
+        private void DrawFormulaCards(FormulaEditorProfile profile)
+        {
+            EnsurePrimaryFormulaSlot();
+            EnsureFormulaReportSlots();
+            for (var index = 0; index < previewFormulas.Count; index++)
+            {
+                EditorGUILayout.BeginVertical(EditorStyles.helpBox);
+                if (IsCompactLayout())
+                    DrawFormulaCardStacked(index, profile);
+                else
+                    DrawFormulaCardWide(index, profile);
+                EditorGUILayout.EndVertical();
+            }
+
+            if (GUILayout.Button(
+                    new GUIContent(FormulaEditorLabels.AddFormula, FormulaEditorLabels.AddFormulaTooltip),
+                    GUILayout.ExpandWidth(true)))
+            {
+                previewFormulas.Add(null);
+                formulaReports.Add(null);
+                formulaStepsExpanded.Add(true);
+            }
+        }
+
+        private void DrawFormulaCardWide(int index, FormulaEditorProfile profile)
+        {
+            using (new EditorGUILayout.HorizontalScope())
+            {
+                using (new EditorGUILayout.VerticalScope(GUILayout.Width(
+                           Mathf.Clamp(EditorGUIUtility.currentViewWidth * 0.34f, 260f, 480f))))
+                    DrawFormulaControls(index, profile);
+                using (new EditorGUILayout.VerticalScope(GUILayout.ExpandWidth(true)))
+                    DrawFormulaReport(index);
+            }
+        }
+
+        private void DrawFormulaCardStacked(int index, FormulaEditorProfile profile)
+        {
+            DrawFormulaControls(index, profile);
+            EditorGUILayout.Space(2f);
+            DrawFormulaReport(index);
+        }
+
+        private void DrawFormulaControls(int index, FormulaEditorProfile profile)
+        {
+            var content = new GUIContent(
+                FormulaEditorLabels.Formula + " " + (index + 1),
+                FormulaEditorLabels.FormulaTooltip);
+            EditorGUI.BeginChangeCheck();
+            var selected = (FormulaAsset)EditorGUILayout.ObjectField(
+                content,
+                previewFormulas[index],
+                typeof(FormulaAsset),
+                false,
+                GUILayout.ExpandWidth(true));
+            if (EditorGUI.EndChangeCheck())
+            {
+                previewFormulas[index] = selected;
+                if (index == 0)
+                    formula = selected;
+                formulaReports[index] = null;
+            }
+
+            using (new EditorGUILayout.HorizontalScope())
+            {
+                using (new EditorGUI.DisabledScope(previewFormulas[index] == null))
+                {
+                    if (GUILayout.Button(
+                            new GUIContent(
+                                FormulaEditorLabels.EvaluatePreviewCases,
+                                FormulaEditorLabels.EvaluatePreviewCasesTooltip),
+                            GUILayout.ExpandWidth(true)))
+                        EvaluateFormula(index, profile);
                 }
 
-                EditorGUILayout.EndHorizontal();
+                if (previewFormulas.Count > 1 && GUILayout.Button(
+                        new GUIContent("−", FormulaEditorLabels.RemoveFormulaTooltip),
+                        GUILayout.Width(28f)))
+                {
+                    previewFormulas.RemoveAt(index);
+                    formulaReports.RemoveAt(index);
+                    formulaStepsExpanded.RemoveAt(index);
+                    EnsurePrimaryFormulaSlot();
+                    GUIUtility.ExitGUI();
+                }
             }
-
-            if (GUILayout.Button(new GUIContent(
-                    FormulaEditorLabels.AddPreviewCase,
-                    FormulaEditorLabels.AddPreviewCaseTooltip)))
-                session.AddPreviewCaseAssetSlot();
-
-            if (GUILayout.Button(new GUIContent(
-                    FormulaEditorLabels.EvaluatePreviewCases,
-                    FormulaEditorLabels.EvaluatePreviewCasesTooltip)))
-            {
-                lastBatchReport = session.EvaluateBatch(formula, profile, previewState.ToValueSet(profile));
-                lastBatchJson = session.ExportBatchJson(lastBatchReport);
-                lastBatchMarkdown = session.ExportBatchMarkdown(lastBatchReport);
-            }
-
-            if (lastBatchReport == null)
-                return;
-
-            FormulaEditorGUILayout.DrawSectionHeader(FormulaEditorLabels.PreviewReportJson);
-            EditorGUILayout.TextArea(lastBatchJson, GUILayout.MinHeight(48f));
-            FormulaEditorGUILayout.DrawSectionHeader(FormulaEditorLabels.PreviewReportMarkdown);
-            EditorGUILayout.TextArea(lastBatchMarkdown, GUILayout.MinHeight(64f));
         }
 
-        private void DrawCurvePreview(FormulaEditorProfile profile)
+        private void DrawFormulaReport(int index)
         {
-            if (profile == null || profile.PreviewInputs.Count == 0)
-                return;
-
-            FormulaEditorGUILayout.DrawSectionHeader(FormulaEditorLabels.CurvePreview);
-
-            curveInputIndex = Mathf.Clamp(curveInputIndex, 0, profile.PreviewInputs.Count - 1);
-            var inputNames = new string[profile.PreviewInputs.Count];
-            for (var index = 0; index < profile.PreviewInputs.Count; index++)
-                inputNames[index] = profile.PreviewInputs[index].DisplayName;
-
-            curveInputIndex = EditorGUILayout.Popup(
-                new GUIContent(FormulaEditorLabels.CurveInput, FormulaEditorLabels.CurveInputTooltip),
-                curveInputIndex,
-                inputNames);
-            EditorGUILayout.MinMaxSlider(
-                new GUIContent(FormulaEditorLabels.CurveRange, FormulaEditorLabels.CurveRangeTooltip),
-                ref curveMin,
-                ref curveMax,
-                -1000f,
-                1000f);
-            EditorGUILayout.LabelField(
-                new GUIContent(FormulaEditorLabels.CurveRange, FormulaEditorLabels.CurveRangeTooltip),
-                new GUIContent($"{curveMin:0.###} - {curveMax:0.###}"));
-            curveSamples = EditorGUILayout.IntSlider(
-                new GUIContent(FormulaEditorLabels.CurveSamples, FormulaEditorLabels.CurveSamplesTooltip),
-                curveSamples,
-                2,
-                64);
-
-            if (GUILayout.Button(new GUIContent(
-                    FormulaEditorLabels.BuildCurve,
-                    FormulaEditorLabels.BuildCurveTooltip)))
+            var report = formulaReports[index];
+            if (report == null)
             {
-                session.SetCurve(profile.PreviewInputs[curveInputIndex].Key, curveMin, curveMax, curveSamples);
-                lastCurveReport = session.BuildCurve(formula, profile, previewState.ToValueSet(profile));
+                EditorGUILayout.HelpBox(FormulaEditorLabels.PendingCalculation, MessageType.Info);
+                return;
             }
 
-            if (lastCurveReport == null)
-                return;
-
-            var keys = new Keyframe[lastCurveReport.Points.Count];
-            for (var index = 0; index < lastCurveReport.Points.Count; index++)
+            var messageType = report.HasErrors || !report.Succeeded
+                ? MessageType.Error
+                : report.HasWarnings
+                    ? MessageType.Warning
+                    : MessageType.Info;
+            EditorGUILayout.BeginVertical(EditorStyles.helpBox);
+            EditorGUILayout.LabelField(FormulaEditorLabels.CalculationResult, EditorStyles.boldLabel);
+            using (new EditorGUILayout.HorizontalScope())
             {
-                var point = lastCurveReport.Points[index];
-                keys[index] = new Keyframe(point.Input, point.Result);
+                EditorGUILayout.LabelField(
+                    $"{FormulaEditorLabels.Result}: {report.Result:0.###}",
+                    EditorStyles.boldLabel,
+                    GUILayout.ExpandWidth(true));
+                EditorGUILayout.LabelField(
+                    FormulaEditorLabels.EvaluationStatusName(report),
+                    EditorStyles.miniBoldLabel,
+                    GUILayout.Width(72f));
+            }
+            EditorGUILayout.EndVertical();
+
+            if (report.HasErrors || report.HasWarnings)
+                EditorGUILayout.HelpBox(
+                    FormulaEditorLabels.EvaluationStatusName(report),
+                    messageType);
+
+            foreach (var diagnostic in report.Diagnostics)
+            {
+                var diagnosticType = diagnostic.Severity == FormulaDiagnosticSeverity.Error
+                    ? MessageType.Error
+                    : diagnostic.Severity == FormulaDiagnosticSeverity.Warning
+                        ? MessageType.Warning
+                        : MessageType.Info;
+                EditorGUILayout.HelpBox(diagnostic.Message, diagnosticType);
             }
 
-            EditorGUILayout.CurveField(
-                new GUIContent(FormulaEditorLabels.CurvePreview, FormulaEditorLabels.BuildCurveTooltip),
-                new AnimationCurve(keys));
+            formulaStepsExpanded[index] = EditorGUILayout.Foldout(
+                formulaStepsExpanded[index],
+                $"{FormulaEditorLabels.CalculationSteps} ({report.Steps.Count})",
+                true);
+            if (!formulaStepsExpanded[index])
+                return;
+
+            if (report.Steps.Count == 0)
+            {
+                EditorGUILayout.LabelField(FormulaEditorLabels.NoStepTrace, EditorStyles.wordWrappedMiniLabel);
+                return;
+            }
+
+            foreach (var step in report.Steps)
+            {
+                var sourceLabel = string.IsNullOrEmpty(step.SourceLabel)
+                    ? FormulaEditorLabels.SourceTypeName(step.SourceType)
+                    : FormulaEditorGUILayout.ProviderDisplayName(step.SourceLabel);
+                EditorGUILayout.BeginVertical(EditorStyles.helpBox);
+                using (new EditorGUILayout.HorizontalScope())
+                {
+                    EditorGUILayout.LabelField(
+                        $"步骤 {step.StepIndex + 1}",
+                        EditorStyles.boldLabel,
+                        GUILayout.Width(72f));
+                    EditorGUILayout.LabelField(
+                        $"{FormulaEditorLabels.StepOutput}: {step.OutputValue:0.###}",
+                        EditorStyles.boldLabel,
+                        GUILayout.ExpandWidth(true));
+                }
+                EditorGUILayout.LabelField(
+                    $"{FormulaEditorLabels.StepInput}: {step.InputValue:0.###}  " +
+                    $"{FormulaEditorLabels.OperationName(step.Operation)}  {step.StepValue:0.###}  " +
+                    $"=  {FormulaEditorLabels.StepOutput}: {step.OutputValue:0.###}",
+                    EditorStyles.wordWrappedLabel);
+                EditorGUILayout.LabelField(
+                    $"{FormulaEditorLabels.Source}: {sourceLabel}",
+                    EditorStyles.miniLabel);
+                EditorGUILayout.EndVertical();
+            }
         }
+
+        private void EvaluateFormula(int index, FormulaEditorProfile profile)
+        {
+            var selectedFormula = previewFormulas[index];
+            if (selectedFormula == null)
+                return;
+
+            var previewCase = GetSelectedScenario(profile);
+            var batch = FormulaPreviewRunner.EvaluateCases(selectedFormula, profile, new[] { previewCase });
+            formulaReports[index] = batch.Results.Count == 0 ? null : batch.Results[0].Report;
+            formulaStepsExpanded[index] = true;
+        }
+
+        private FormulaPreviewCase GetSelectedScenario(FormulaEditorProfile profile)
+        {
+            EnsureSavedScenarios(profile);
+            var builtInCount = profile?.DefaultPreviewCases.Count ?? 0;
+            if (selectedScenarioIndex > 0 && selectedScenarioIndex <= builtInCount)
+                return profile.DefaultPreviewCases[selectedScenarioIndex - 1];
+
+            if (selectedScenarioIndex > builtInCount)
+            {
+                var savedIndex = selectedScenarioIndex - builtInCount - 1;
+                if (savedIndex >= 0 && savedIndex < savedScenarios.Count)
+                    return savedScenarios[savedIndex].CreatePreviewCase();
+            }
+
+            var fields = FormulaEditorPreview.CollectPreviewFields(profile, previewFormulas, true);
+            return new FormulaPreviewCase(
+                FormulaWorkbenchSession.CurrentPreviewCaseId,
+                FormulaEditorLabels.CurrentScenario,
+                previewState.ToValueSet(profile, fields),
+                string.Empty);
+        }
+
+        private void EnsureFormulaReportSlots()
+        {
+            formulaReports ??= new List<FormulaEvaluationReport>();
+            formulaStepsExpanded ??= new List<bool>();
+            while (formulaReports.Count < previewFormulas.Count)
+                formulaReports.Add(null);
+            while (formulaReports.Count > previewFormulas.Count)
+                formulaReports.RemoveAt(formulaReports.Count - 1);
+            while (formulaStepsExpanded.Count < previewFormulas.Count)
+                formulaStepsExpanded.Add(true);
+            while (formulaStepsExpanded.Count > previewFormulas.Count)
+                formulaStepsExpanded.RemoveAt(formulaStepsExpanded.Count - 1);
+        }
+
+        private void InvalidateAllFormulaReports()
+        {
+            EnsureFormulaReportSlots();
+            for (var index = 0; index < formulaReports.Count; index++)
+                formulaReports[index] = null;
+        }
+
+        private void EnsurePrimaryFormulaSlot()
+        {
+            if (previewFormulas == null)
+                previewFormulas = new List<FormulaAsset>();
+            if (previewFormulas.Count == 0)
+                previewFormulas.Add(formula);
+            else if (formula != null && previewFormulas[0] == null)
+                previewFormulas[0] = formula;
+            else if (previewFormulas[0] != null)
+                formula = previewFormulas[0];
+        }
+
+        private void SetPrimaryFormula(FormulaAsset selectedFormula)
+        {
+            EnsurePrimaryFormulaSlot();
+            previewFormulas[0] = selectedFormula;
+            formula = selectedFormula;
+            EnsureFormulaReportSlots();
+            formulaReports[0] = null;
+        }
+
+        private static bool IsCompactLayout()
+        {
+            return ZeroEngine.EditorUI.EditorUiGUILayout.ResponsiveMode(EditorGUIUtility.currentViewWidth) ==
+                   ZeroEngine.EditorUI.EditorUiResponsiveMode.Compact;
+        }
+
     }
 }

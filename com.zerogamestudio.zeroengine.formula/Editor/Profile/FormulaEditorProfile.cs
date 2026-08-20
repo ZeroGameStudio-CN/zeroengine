@@ -64,7 +64,8 @@ namespace ZeroEngine.Formula.Editor
             string description,
             float previewValue,
             IReadOnlyList<FormulaParameterDescriptor> parameters,
-            string previewInputKey = null)
+            string previewInputKey = null,
+            FormulaPreviewInputKind previewInputKind = FormulaPreviewInputKind.Float)
         {
             Id = id ?? string.Empty;
             DisplayName = displayName ?? string.Empty;
@@ -72,6 +73,7 @@ namespace ZeroEngine.Formula.Editor
             Description = description ?? string.Empty;
             PreviewValue = previewValue;
             PreviewInputKey = previewInputKey ?? string.Empty;
+            PreviewInputKind = previewInputKind;
             Parameters = parameters == null
                 ? Array.Empty<FormulaParameterDescriptor>()
                 : new List<FormulaParameterDescriptor>(parameters).AsReadOnly();
@@ -83,6 +85,7 @@ namespace ZeroEngine.Formula.Editor
         public string Description { get; }
         public float PreviewValue { get; }
         public string PreviewInputKey { get; }
+        public FormulaPreviewInputKind PreviewInputKind { get; }
         public IReadOnlyList<FormulaParameterDescriptor> Parameters { get; }
     }
 

@@ -61,32 +61,44 @@ namespace ZeroEngine.Formula.Editor
                 MessageType.Info);
         }
 
-        public static void DrawPreviewInputs(FormulaEditorProfile profile, FormulaEditorPreviewState state)
+        public static void DrawPreviewInputs(
+            FormulaEditorProfile profile,
+            FormulaEditorPreviewState state,
+            bool drawHeader = true,
+            bool drawContainer = true)
         {
             if (profile == null || state == null || profile.PreviewInputs.Count == 0)
                 return;
 
-            DrawSectionHeader(FormulaEditorLabels.PreviewInputs);
-            EditorGUILayout.BeginVertical(EditorStyles.helpBox);
+            if (drawHeader)
+                DrawSectionHeader(FormulaEditorLabels.PreviewInputs);
+            else
+                EditorGUILayout.LabelField(FormulaEditorLabels.PreviewInputs, EditorStyles.boldLabel);
+            if (drawContainer)
+                EditorGUILayout.BeginVertical(EditorStyles.helpBox);
+            bool compact = ZeroEngine.EditorUI.EditorUiGUILayout.ResponsiveMode(EditorGUIUtility.currentViewWidth) ==
+                           ZeroEngine.EditorUI.EditorUiResponsiveMode.Compact;
             foreach (var input in profile.PreviewInputs)
             {
                 var value = state.GetValue(input);
+                if (compact)
+                    EditorGUILayout.LabelField(new GUIContent(input.DisplayName, input.Description), EditorStyles.miniBoldLabel);
                 switch (input.Kind)
                 {
                     case FormulaPreviewInputKind.Int:
-                        state.SetValue(
-                            input.Key,
-                            EditorGUILayout.IntField(new GUIContent(input.DisplayName, input.Description), Mathf.RoundToInt(value)));
+                        state.SetValue(input.Key, compact
+                            ? EditorGUILayout.IntField(Mathf.RoundToInt(value), GUILayout.ExpandWidth(true))
+                            : EditorGUILayout.IntField(new GUIContent(input.DisplayName, input.Description), Mathf.RoundToInt(value)));
                         break;
                     case FormulaPreviewInputKind.Float:
-                        state.SetValue(
-                            input.Key,
-                            EditorGUILayout.FloatField(new GUIContent(input.DisplayName, input.Description), value));
+                        state.SetValue(input.Key, compact
+                            ? EditorGUILayout.FloatField(value, GUILayout.ExpandWidth(true))
+                            : EditorGUILayout.FloatField(new GUIContent(input.DisplayName, input.Description), value));
                         break;
                     case FormulaPreviewInputKind.Bool:
-                        state.SetValue(
-                            input.Key,
-                            EditorGUILayout.Toggle(new GUIContent(input.DisplayName, input.Description), value > 0.5f) ? 1f : 0f);
+                        state.SetValue(input.Key, compact
+                            ? (EditorGUILayout.Toggle(value > 0.5f) ? 1f : 0f)
+                            : (EditorGUILayout.Toggle(new GUIContent(input.DisplayName, input.Description), value > 0.5f) ? 1f : 0f));
                         break;
                 }
             }
@@ -100,12 +112,18 @@ namespace ZeroEngine.Formula.Editor
                     GUILayout.Width(120f)))
                 state.ResetToDefaults(profile);
             EditorGUILayout.EndHorizontal();
-            EditorGUILayout.EndVertical();
+            if (drawContainer)
+                EditorGUILayout.EndVertical();
         }
 
         public static void DrawReport(FormulaEvaluationReport report)
         {
-            DrawSectionHeader(FormulaEditorLabels.PreviewResult, FormulaEditorLabels.EvaluationStatusName(report));
+            DrawReport(report, FormulaEditorLabels.PreviewResult);
+        }
+
+        public static void DrawReport(FormulaEvaluationReport report, string title)
+        {
+            DrawSectionHeader(title, FormulaEditorLabels.EvaluationStatusName(report));
             if (report == null)
             {
                 EditorGUILayout.HelpBox(FormulaEditorLabels.PreviewNotRun, MessageType.Info);

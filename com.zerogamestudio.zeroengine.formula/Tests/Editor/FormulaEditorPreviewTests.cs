@@ -1,4 +1,5 @@
 using System;
+using System.Linq;
 using System.Reflection;
 using NUnit.Framework;
 using UnityEngine;
@@ -153,6 +154,95 @@ namespace ZeroEngine.Formula.Tests.Editor
 
             Assert.AreEqual(5f, values.TryGetValue("level", out var level) ? level : -1f);
             Assert.AreEqual(1.5f, values.TryGetValue("ratio", out var ratio) ? ratio : -1f);
+        }
+
+        [Test]
+        public void CollectPreviewFields_FindsNormalAndParameterizedNestedDependencies()
+        {
+            var root = ScriptableObject.CreateInstance<FormulaAsset>();
+            var nested = ScriptableObject.CreateInstance<FormulaAsset>();
+
+            try
+            {
+                SetFormulaAsset(nested, 0f, new[]
+                {
+                    FormulaStep.Create(
+                        FormulaOperationType.Add,
+                        FormulaValueSource.Provider("stat.current", FormulaParameter.Int("statType", 5))),
+                });
+                SetFormulaAsset(root, 0f, new[]
+                {
+                    FormulaStep.Create(FormulaOperationType.Add, FormulaValueSource.Provider("resource.coin")),
+                    FormulaStep.Create(FormulaOperationType.Add, FormulaValueSource.Nested(nested)),
+                });
+
+                var profile = new FormulaEditorProfile(
+                    "test",
+                    "测试公式",
+                    string.Empty,
+                    string.Empty,
+                    "测试公式",
+                    new[]
+                    {
+                        new FormulaProviderDescriptor(
+                            "resource.coin",
+                            "金币",
+                            "资源",
+                            "金币。",
+                            0f,
+                            Array.Empty<FormulaParameterDescriptor>(),
+                            "coin",
+                            FormulaPreviewInputKind.Int),
+                        new FormulaProviderDescriptor(
+                            "stat.current",
+                            "当前属性",
+                            "属性",
+                            "当前属性。",
+                            10f,
+                            new[]
+                            {
+                                new FormulaParameterDescriptor(
+                                    "statType",
+                                    "属性类型",
+                                    FormulaEditorParameterKind.Enum,
+                                    true,
+                                    "属性类型。"),
+                            }),
+                    },
+                    new[]
+                    {
+                        new FormulaPreviewInputDescriptor(
+                            "coin", "金币", FormulaPreviewInputKind.Int, 0f, "金币。"),
+                        new FormulaPreviewInputDescriptor(
+                            "level", "等级", FormulaPreviewInputKind.Int, 1f, "等级。"),
+                    });
+
+                var related = FormulaEditorPreview.CollectPreviewFields(profile, new[] { root }, false);
+                Assert.That(related.Select(field => field.Key), Does.Contain("coin"));
+                Assert.That(
+                    related.Select(field => field.Key),
+                    Does.Contain("provider:stat.current|statType=i:5"));
+                Assert.That(related.Select(field => field.Key), Does.Not.Contain("level"));
+                Assert.That(related.Single(field => field.Key == "coin").Category, Is.EqualTo("资源"));
+                Assert.That(
+                    related.Single(field => field.Key.StartsWith("provider:stat.current")).DisplayName,
+                    Does.Contain("属性类型=5"));
+
+                var all = FormulaEditorPreview.CollectPreviewFields(profile, new[] { root }, true);
+                Assert.That(all.Select(field => field.Key), Does.Contain("level"));
+
+                var state = new FormulaEditorPreviewState();
+                var scopedField = related.Single(field => field.Key.StartsWith("provider:stat.current"));
+                state.SetValue(scopedField.Key, 42f);
+                var values = state.ToValueSet(profile, related);
+                Assert.That(values.TryGetValue(scopedField.Key, out var scopedValue), Is.True);
+                Assert.That(scopedValue, Is.EqualTo(42f));
+            }
+            finally
+            {
+                UnityObject.DestroyImmediate(root);
+                UnityObject.DestroyImmediate(nested);
+            }
         }
 
         [Test]

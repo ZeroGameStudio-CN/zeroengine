@@ -46,6 +46,32 @@ namespace ZeroEngine.Formula.Editor
         [SerializeField] private FormulaResultRange expectedRange;
         [SerializeField] private string notes;
 
+        // Owner remains serialized for backwards compatibility with existing Catalog assets,
+        // but new catalog entries obtain ownership from Data Manager instead.
+        public FormulaCatalogEntry(
+            FormulaAsset formula,
+            string formulaGuid,
+            string title,
+            string purpose,
+            string unit,
+            IEnumerable<string> tags,
+            FormulaCatalogStatus status,
+            FormulaResultRange expectedRange,
+            string notes)
+            : this(
+                formula,
+                formulaGuid,
+                title,
+                purpose,
+                string.Empty,
+                unit,
+                tags,
+                status,
+                expectedRange,
+                notes)
+        {
+        }
+
         public FormulaCatalogEntry(
             FormulaAsset formula,
             string formulaGuid,

@@ -5,11 +5,51 @@ using System.Text;
 
 namespace ZeroEngine.Formula.Editor
 {
+    public sealed class FormulaPreviewFieldDescriptor
+    {
+        public FormulaPreviewFieldDescriptor(
+            string key,
+            string displayName,
+            string category,
+            string description,
+            FormulaPreviewInputKind kind,
+            float defaultValue)
+        {
+            Key = key ?? string.Empty;
+            DisplayName = displayName ?? string.Empty;
+            Category = string.IsNullOrWhiteSpace(category) ? FormulaEditorLabels.GeneralCategory : category;
+            Description = description ?? string.Empty;
+            Kind = kind;
+            DefaultValue = defaultValue;
+        }
+
+        public string Key { get; }
+        public string DisplayName { get; }
+        public string Category { get; }
+        public string Description { get; }
+        public FormulaPreviewInputKind Kind { get; }
+        public float DefaultValue { get; }
+    }
+
     public sealed class FormulaEditorPreviewState
     {
         private readonly Dictionary<string, float> values = new();
 
         public float GetValue(FormulaPreviewInputDescriptor descriptor)
+        {
+            if (descriptor == null)
+                return 0f;
+
+            if (!values.TryGetValue(descriptor.Key, out var value))
+            {
+                value = descriptor.DefaultValue;
+                values[descriptor.Key] = value;
+            }
+
+            return value;
+        }
+
+        public float GetValue(FormulaPreviewFieldDescriptor descriptor)
         {
             if (descriptor == null)
                 return 0f;
@@ -39,6 +79,21 @@ namespace ZeroEngine.Formula.Editor
                 values[input.Key] = input.DefaultValue;
         }
 
+        public void ResetToDefaults(
+            FormulaEditorProfile profile,
+            IReadOnlyList<FormulaPreviewFieldDescriptor> fields)
+        {
+            ResetToDefaults(profile);
+            if (fields == null)
+                return;
+
+            foreach (var field in fields)
+            {
+                if (field != null)
+                    values[field.Key] = field.DefaultValue;
+            }
+        }
+
         public FormulaDictionaryEvaluationContext CreateContext(FormulaEditorProfile profile)
         {
             return FormulaEditorPreview.CreateContext(profile, values);
@@ -46,12 +101,35 @@ namespace ZeroEngine.Formula.Editor
 
         public FormulaPreviewValueSet ToValueSet(FormulaEditorProfile profile)
         {
-            var previewValues = new List<FormulaPreviewValue>();
-            if (profile == null)
-                return new FormulaPreviewValueSet(previewValues);
+            return ToValueSet(profile, null);
+        }
 
-            foreach (var input in profile.PreviewInputs)
-                previewValues.Add(new FormulaPreviewValue(input.Key, GetValue(input)));
+        public FormulaPreviewValueSet ToValueSet(
+            FormulaEditorProfile profile,
+            IReadOnlyList<FormulaPreviewFieldDescriptor> fields)
+        {
+            var previewValues = new List<FormulaPreviewValue>();
+            var includedKeys = new HashSet<string>(StringComparer.Ordinal);
+
+            if (profile != null)
+            {
+                foreach (var input in profile.PreviewInputs)
+                {
+                    previewValues.Add(new FormulaPreviewValue(input.Key, GetValue(input)));
+                    includedKeys.Add(input.Key);
+                }
+            }
+
+            if (fields != null)
+            {
+                foreach (var field in fields)
+                {
+                    if (field == null || !includedKeys.Add(field.Key))
+                        continue;
+
+                    previewValues.Add(new FormulaPreviewValue(field.Key, GetValue(field)));
+                }
+            }
 
             return new FormulaPreviewValueSet(previewValues);
         }
@@ -142,6 +220,54 @@ namespace ZeroEngine.Formula.Editor
             return builder.ToString();
         }
 
+        public static IReadOnlyList<FormulaPreviewFieldDescriptor> CollectPreviewFields(
+            FormulaEditorProfile profile,
+            IEnumerable<FormulaAsset> formulas,
+            bool includeAllProfileInputs)
+        {
+            var fields = new List<FormulaPreviewFieldDescriptor>();
+            if (profile == null)
+                return fields;
+
+            var requiredInputKeys = new HashSet<string>(StringComparer.Ordinal);
+            var scopedFields = new Dictionary<string, FormulaPreviewFieldDescriptor>(StringComparer.Ordinal);
+            var visited = new HashSet<FormulaAsset>();
+            if (formulas != null)
+            {
+                foreach (var formula in formulas)
+                    CollectFormulaFields(formula, profile, requiredInputKeys, scopedFields, visited);
+            }
+
+            foreach (var input in profile.PreviewInputs)
+            {
+                if (!includeAllProfileInputs && !requiredInputKeys.Contains(input.Key))
+                    continue;
+
+                var category = FormulaEditorLabels.GeneralCategory;
+                foreach (var provider in profile.Providers)
+                {
+                    if (provider.PreviewInputKey == input.Key)
+                    {
+                        category = provider.Category;
+                        break;
+                    }
+                }
+
+                fields.Add(new FormulaPreviewFieldDescriptor(
+                    input.Key,
+                    input.DisplayName,
+                    category,
+                    input.Description,
+                    input.Kind,
+                    input.DefaultValue));
+            }
+
+            foreach (var field in scopedFields.Values)
+                fields.Add(field);
+
+            return fields.AsReadOnly();
+        }
+
         public static FormulaProviderRegistry CreateRegistry(FormulaEditorProfile profile)
         {
             if (profile == null || profile.Providers.Count == 0)
@@ -218,6 +344,109 @@ namespace ZeroEngine.Formula.Editor
                     default:
                         return false;
                 }
+            }
+        }
+
+        private static void CollectFormulaFields(
+            FormulaAsset formula,
+            FormulaEditorProfile profile,
+            ISet<string> requiredInputKeys,
+            IDictionary<string, FormulaPreviewFieldDescriptor> scopedFields,
+            ISet<FormulaAsset> visited)
+        {
+            if (formula == null || !visited.Add(formula))
+                return;
+
+            for (var index = 0; index < formula.StepCount; index++)
+            {
+                if (!formula.TryGetStep(index, out var step) || step?.Source == null)
+                    continue;
+
+                var source = step.Source;
+                if (source.SourceType == FormulaValueSourceType.NestedFormula)
+                {
+                    CollectFormulaFields(
+                        source.NestedFormula as FormulaAsset,
+                        profile,
+                        requiredInputKeys,
+                        scopedFields,
+                        visited);
+                    continue;
+                }
+
+                if (source.SourceType != FormulaValueSourceType.Provider
+                    || !profile.TryGetProvider(source.ProviderId, out var provider))
+                    continue;
+
+                if (!string.IsNullOrEmpty(provider.PreviewInputKey))
+                    requiredInputKeys.Add(provider.PreviewInputKey);
+
+                if (source.Parameters == null || source.Parameters.Count == 0)
+                    continue;
+
+                var key = GetProviderPreviewInputKey(source.ProviderId, source.Parameters);
+                if (scopedFields.ContainsKey(key))
+                    continue;
+
+                scopedFields.Add(key, new FormulaPreviewFieldDescriptor(
+                    key,
+                    BuildScopedFieldName(provider, source.Parameters),
+                    provider.Category,
+                    provider.Description,
+                    provider.PreviewInputKind,
+                    provider.PreviewValue));
+            }
+        }
+
+        private static string BuildScopedFieldName(
+            FormulaProviderDescriptor provider,
+            IReadOnlyList<FormulaParameter> parameters)
+        {
+            var parts = new List<string>();
+            foreach (var parameter in parameters)
+            {
+                if (parameter == null)
+                    continue;
+
+                FormulaParameterDescriptor descriptor = null;
+                foreach (var candidate in provider.Parameters)
+                {
+                    if (candidate.Key == parameter.Name)
+                    {
+                        descriptor = candidate;
+                        break;
+                    }
+                }
+
+                var label = descriptor?.DisplayName ?? parameter.Name;
+                parts.Add(label + "=" + FormatParameterValue(parameter, descriptor));
+            }
+
+            return parts.Count == 0
+                ? provider.DisplayName
+                : provider.DisplayName + " · " + string.Join("，", parts);
+        }
+
+        private static string FormatParameterValue(
+            FormulaParameter parameter,
+            FormulaParameterDescriptor descriptor)
+        {
+            switch (parameter.Type)
+            {
+                case FormulaParameterType.Int:
+                    if (descriptor?.EnumType != null)
+                        return Enum.GetName(descriptor.EnumType, parameter.IntValue)
+                               ?? parameter.IntValue.ToString(CultureInfo.InvariantCulture);
+                    return parameter.IntValue.ToString(CultureInfo.InvariantCulture);
+                case FormulaParameterType.Float:
+                    return parameter.FloatValue.ToString("0.###", CultureInfo.InvariantCulture);
+                case FormulaParameterType.Bool:
+                    return parameter.BoolValue ? "是" : "否";
+                case FormulaParameterType.Object:
+                    return parameter.ObjectValue == null ? "未指定" : parameter.ObjectValue.name;
+                case FormulaParameterType.String:
+                default:
+                    return parameter.StringValue ?? string.Empty;
             }
         }
 
