@@ -154,7 +154,7 @@ namespace ZGS.DataToolkit.Editor.Tests
             Assert.NotNull(method);
 
             Assert.AreEqual(0, method.Invoke(null, new object[] { 980f }));
-            Assert.AreEqual(1, method.Invoke(null, new object[] { 760f }));
+            Assert.AreEqual(1, method.Invoke(null, new object[] { 700f }));
             Assert.AreEqual(2, method.Invoke(null, new object[] { 549f }));
         }
 
