@@ -1,4 +1,6 @@
+using System;
 using System.IO;
+using System.Threading.Tasks;
 using NUnit.Framework;
 using UnityEngine;
 using ZeroEngine.UI;
@@ -64,20 +66,41 @@ namespace ZeroEngine.UI.Tests.Editor.Core
             var pauseValue = false;
             var logLevel = UIManagerLogLevel.None;
             var logMessage = string.Empty;
+            var preparedResourceKey = string.Empty;
+            var recordedResourceKey = string.Empty;
+            var recordedDuration = TimeSpan.Zero;
+            var recordedSucceeded = false;
             var hooks = new UIManagerHooks(
                 pause: paused => pauseValue = paused,
                 log: (level, message) =>
                 {
                     logLevel = level;
                     logMessage = message;
+                },
+                preparePrefabLoad: resourceKey =>
+                {
+                    preparedResourceKey = resourceKey;
+                    return Task.CompletedTask;
+                },
+                recordPrefabLoad: (resourceKey, duration, succeeded) =>
+                {
+                    recordedResourceKey = resourceKey;
+                    recordedDuration = duration;
+                    recordedSucceeded = succeeded;
                 });
 
             hooks.RequestPause(true);
             hooks.Log(UIManagerLogLevel.Warning, "hook message");
+            hooks.PreparePrefabLoadAsync("ui/main-menu").GetAwaiter().GetResult();
+            hooks.RecordPrefabLoad("ui/main-menu", TimeSpan.FromMilliseconds(25), true);
 
             Assert.That(pauseValue, Is.True);
             Assert.That(logLevel, Is.EqualTo(UIManagerLogLevel.Warning));
             Assert.That(logMessage, Is.EqualTo("hook message"));
+            Assert.That(preparedResourceKey, Is.EqualTo("ui/main-menu"));
+            Assert.That(recordedResourceKey, Is.EqualTo("ui/main-menu"));
+            Assert.That(recordedDuration, Is.EqualTo(TimeSpan.FromMilliseconds(25)));
+            Assert.That(recordedSucceeded, Is.True);
         }
 
         [Test]

@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Threading.Tasks;
 using UnityEngine;
 using ZeroEngine.Core;
+using Stopwatch = System.Diagnostics.Stopwatch;
 
 #if ZEROENGINE_ADDRESSABLES
 using UnityEngine.AddressableAssets;
@@ -814,51 +815,85 @@ namespace ZeroEngine.UI
             }
 
             AsyncOperationHandle<GameObject> handle = default;
+            var loadStartTimestamp = Stopwatch.GetTimestamp();
             var loadSucceeded = false;
             try
             {
-                handle = prefabRef.LoadAssetAsync<GameObject>();
-                await handle.Task;
-                if (_isDestroying)
+                try
                 {
-                    ReleaseAddressableHandleIfValid(handle);
-                    return null;
+                    if (_hooks is IUIManagerPrefabLoadHooks prefabLoadHooks)
+                    {
+                        await prefabLoadHooks.PreparePrefabLoadAsync(handleKey);
+                        if (_isDestroying)
+                        {
+                            return null;
+                        }
+
+                        existingPrefab = await TryGetPrefabFromExistingReferenceHandleAsync(prefabRef, handleKey);
+                        if (_isDestroying)
+                        {
+                            return null;
+                        }
+
+                        if (existingPrefab != null)
+                        {
+                            loadSucceeded = true;
+                            return existingPrefab;
+                        }
+                    }
+
+                    handle = prefabRef.LoadAssetAsync<GameObject>();
+                    await handle.Task;
+                    if (_isDestroying)
+                    {
+                        ReleaseAddressableHandleIfValid(handle);
+                        return null;
+                    }
+
+                    var loadOperationSucceeded = handle.Status == AsyncOperationStatus.Succeeded;
+                    var loadResultDecision = UIManagerPrefabLoadResultPolicy.Resolve(
+                        loadSucceeded: loadOperationSucceeded);
+                    if (loadResultDecision.CacheLoadedHandle)
+                    {
+                        _prefabHandles[handleKey] = handle;
+                    }
+
+                    if (loadResultDecision.MarkLoadSucceeded)
+                    {
+                        loadSucceeded = true;
+                    }
+
+                    if (loadResultDecision.UseLoadedPrefab)
+                    {
+                        return handle.Result;
+                    }
+                }
+                catch (Exception exception)
+                {
+                    LogUIManager(UIManagerLogPolicy.AddressablesLoadFailed(
+                        prefabRef.RuntimeKey.ToString(), exception.Message));
                 }
 
-                var loadOperationSucceeded = handle.Status == AsyncOperationStatus.Succeeded;
-                var loadResultDecision = UIManagerPrefabLoadResultPolicy.Resolve(
-                    loadSucceeded: loadOperationSucceeded);
-                if (loadResultDecision.CacheLoadedHandle)
+                LogUIManager(UIManagerLogPolicy.AddressablesLoadFailed(prefabRef.RuntimeKey.ToString()));
+                var failedHandleIsValid = handle.IsValid();
+                var failureReleaseDecision = UIManagerPrefabLoadFailureReleasePolicy.Resolve(
+                    handleIsValid: failedHandleIsValid);
+                if (failureReleaseDecision.ReleaseHandle)
                 {
-                    _prefabHandles[handleKey] = handle;
+                    Addressables.Release(handle);
                 }
 
-                if (loadResultDecision.MarkLoadSucceeded)
-                {
-                    loadSucceeded = true;
-                }
-
-                if (loadResultDecision.UseLoadedPrefab)
-                {
-                    return handle.Result;
-                }
+                return null;
             }
-            catch (Exception exception)
+            finally
             {
-                LogUIManager(UIManagerLogPolicy.AddressablesLoadFailed(
-                    prefabRef.RuntimeKey.ToString(), exception.Message));
+                if (_hooks is IUIManagerPrefabLoadHooks prefabLoadHooks)
+                {
+                    var elapsedTicks = Stopwatch.GetTimestamp() - loadStartTimestamp;
+                    var duration = TimeSpan.FromSeconds((double)elapsedTicks / Stopwatch.Frequency);
+                    prefabLoadHooks.RecordPrefabLoad(handleKey, duration, loadSucceeded);
+                }
             }
-
-            LogUIManager(UIManagerLogPolicy.AddressablesLoadFailed(prefabRef.RuntimeKey.ToString()));
-            var failedHandleIsValid = handle.IsValid();
-            var failureReleaseDecision = UIManagerPrefabLoadFailureReleasePolicy.Resolve(
-                handleIsValid: failedHandleIsValid);
-            if (failureReleaseDecision.ReleaseHandle)
-            {
-                Addressables.Release(handle);
-            }
-
-            return null;
         }
 
         private bool TryGetCachedPrefab(string handleKey, out GameObject prefab)
