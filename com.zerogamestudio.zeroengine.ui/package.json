@@ -1,6 +1,6 @@
 {
   "name": "com.zerogamestudio.zeroengine.ui",
-  "version": "2.0.2",
+  "version": "2.1.0",
   "displayName": "ZeroEngine.UI",
   "description": "Industrial-grade UI framework for ZeroEngine. Includes UIManager (layers, stacks, masks), UIViewBase (lifecycle, animations, focus), and optional MVVM framework.",
   "unity": "2022.3",

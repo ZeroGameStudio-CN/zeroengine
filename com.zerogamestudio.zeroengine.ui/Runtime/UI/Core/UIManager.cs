@@ -12,28 +12,13 @@ using UnityEngine.ResourceManagement.AsyncOperations;
 namespace ZeroEngine.UI
 {
     /// <summary>
-    /// UI管理器 - 工业级UI框架核心
-    ///
-    /// 特性:
-    /// 1. 多层级管理（Background/Main/Screen/Popup/Overlay/Top/System）
-    /// 2. 面板栈管理（支持入栈/出栈、暂停/恢复）
-    /// 3. 灵活的显示模式（Normal/HideOthers/Stack/Singleton）
-    /// 4. 可配置的动画系统
-    /// 5. 焦点管理（手柄/键盘导航支持）
-    /// 6. 遮罩管理
-    /// 7. 资源异步加载与缓存
+    /// 通用 UI 管理器：维护层级、窗口栈、遮罩、资源缓存和请求顺序。
+    /// 输入由宿主输入系统通过 TriggerCancelInput 或 TryHandleCancelInput 注入。
     /// </summary>
     public class UIManager : Singleton<UIManager>
     {
-        #region Static Cache - 静态缓存 (性能优化)
-
-        // 缓存所有 UILayer 值（避免每次 Enum.GetValues 分配）
         private static readonly UILayer[] AllLayers = (UILayer[])Enum.GetValues(typeof(UILayer));
-
-        // 缓存降序排列的 UILayer（用于 UpdateTopView）
         private static readonly UILayer[] LayersSortedDesc = CreateSortedLayersArray();
-
-        // 复用列表（用于 RemoveFromStack，避免每次分配 Stack）
         private static readonly List<UIViewBase> TempViewList = new(8);
 
         private static UILayer[] CreateSortedLayersArray()
@@ -43,35 +28,10 @@ namespace ZeroEngine.UI
             return layers;
         }
 
-        /// <summary>
-        /// 泛型类型名称缓存（避免 typeof(T).Name 重复分配）
-        /// </summary>
         private static class ViewNameCache<T> where T : UIViewBase
         {
             public static readonly string Name = typeof(T).Name;
         }
-
-        /// <summary>
-        /// 条件化日志输出（仅在 Editor 和 Development Build 中执行）
-        /// Release 构建中此方法调用会被编译器完全移除
-        /// </summary>
-        [System.Diagnostics.Conditional("UNITY_EDITOR")]
-        [System.Diagnostics.Conditional("DEVELOPMENT_BUILD")]
-        private static void LogDebug(string message)
-        {
-            Debug.Log(message);
-        }
-
-        [System.Diagnostics.Conditional("UNITY_EDITOR")]
-        [System.Diagnostics.Conditional("DEVELOPMENT_BUILD")]
-        private static void LogWarning(string message)
-        {
-            Debug.LogWarning(message);
-        }
-
-        #endregion
-
-        #region Fields
 
         [Header("Layer Containers")]
         [SerializeField] private Transform backgroundLayer;
@@ -86,134 +46,137 @@ namespace ZeroEngine.UI
         [SerializeField] private GameObject maskPrefab;
 
         [Header("Settings")]
-        [Tooltip("Enable ESC key to close top view")]
+        [Tooltip("Enable the host-triggered cancel request.")]
         [SerializeField] private bool enableESCClose = true;
 
-        // 所有已注册的视图配置
-        private Dictionary<string, UIViewConfig> _viewConfigs = new();
+        private readonly Dictionary<string, UIViewConfig> _viewConfigs = new();
+        private readonly Dictionary<string, UIViewBase> _viewInstances = new();
+        private readonly Dictionary<UILayer, Stack<UIViewBase>> _layerStacks = new();
+        private readonly Dictionary<UILayer, GameObject> _maskInstances = new();
+        private readonly Dictionary<UILayer, UIViewBase> _maskOwners = new();
 
-        // 已加载的视图实例
-        private Dictionary<string, UIViewBase> _viewInstances = new();
+#if ZEROENGINE_ADDRESSABLES
+        private readonly Dictionary<string, AsyncOperationHandle<GameObject>> _prefabHandles = new();
+        private readonly Dictionary<string, string> _viewHandleKeys = new();
+#endif
 
-        // 各层级的视图栈
-        private Dictionary<UILayer, Stack<UIViewBase>> _layerStacks = new();
-
-        // 遮罩实例池
-        private Dictionary<UILayer, GameObject> _maskInstances = new();
-
-        // 当前最顶层视图
+        private readonly Dictionary<string, PendingOpenRequest> _pendingOpenTasks = new();
+        private readonly Dictionary<string, PendingCloseRequest> _pendingCloseTasks = new();
+        private int _sessionViewGeneration;
+        private bool _isDestroying;
         private UIViewBase _topView;
+        private IUIManagerHooks _hooks;
 
-        // 事件
+        private sealed class PendingOpenRequest
+        {
+            public PendingOpenRequest(bool acceptsImplicitJoin, int sessionViewGeneration)
+            {
+                AcceptsImplicitJoin = acceptsImplicitJoin;
+                SessionViewGeneration = sessionViewGeneration;
+                Completion = new TaskCompletionSource<UIViewBase>(
+                    TaskCreationOptions.RunContinuationsAsynchronously);
+            }
+
+            public bool AcceptsImplicitJoin { get; }
+            public int SessionViewGeneration { get; }
+            public TaskCompletionSource<UIViewBase> Completion { get; }
+        }
+
+        private sealed class PendingCloseRequest
+        {
+            public TaskCompletionSource<bool> Completion { get; } =
+                new(TaskCreationOptions.RunContinuationsAsynchronously);
+        }
+
         public event Action<string> OnViewOpened;
         public event Action<string> OnViewClosed;
-
-        /// <summary>
-        /// ESC关闭请求事件（可由外部输入系统触发）
-        /// </summary>
         public event Action OnCancelInputRequested;
-
-        /// <summary>
-        /// 游戏暂停请求事件（当视图配置需要暂停游戏时触发）
-        /// </summary>
         public event Action<bool> OnPauseRequested;
 
-        #endregion
+        /// <summary>暂停和日志的项目无关集成 hook。</summary>
+        public IUIManagerHooks Hooks
+        {
+            get => _hooks;
+            set => _hooks = value;
+        }
 
-        #region Properties
+        public void SetHooks(IUIManagerHooks hooks)
+        {
+            Hooks = hooks;
+        }
 
-        /// <summary>
-        /// 是否有任何UI打开
-        /// </summary>
         public bool HasAnyViewOpen
         {
             get
             {
                 foreach (var stack in _layerStacks.Values)
                 {
-                    if (stack.Count > 0) return true;
+                    if (stack.Count > 0)
+                    {
+                        return true;
+                    }
                 }
+
                 return false;
             }
         }
 
-        /// <summary>
-        /// 当前打开的UI数量
-        /// </summary>
         public int OpenViewCount
         {
             get
             {
-                int count = 0;
+                var count = 0;
                 foreach (var stack in _layerStacks.Values)
                 {
                     count += stack.Count;
                 }
+
                 return count;
             }
         }
 
-        #endregion
-
-        #region Initialization
-
         protected override void Awake()
         {
             base.Awake();
+            if (Instance != this)
+            {
+                return;
+            }
+
             InitializeLayers();
         }
 
-        private void Update()
+        protected override void OnDestroy()
         {
-            // 处理ESC键关闭
-#if ENABLE_INPUT_SYSTEM
-            if (enableESCClose && UnityEngine.InputSystem.Keyboard.current != null
-                && UnityEngine.InputSystem.Keyboard.current.escapeKey.wasPressedThisFrame)
-            {
-                HandleCancelInput();
-            }
-#else
-            if (enableESCClose && Input.GetKeyDown(KeyCode.Escape))
-            {
-                HandleCancelInput();
-            }
-#endif
+            _isDestroying = true;
+            _sessionViewGeneration++;
+            CompletePendingRequests();
+            ReleasePrefabHandles();
+            base.OnDestroy();
         }
 
         private void InitializeLayers()
         {
-            // 初始化每个层级的栈（使用缓存数组，避免 Enum.GetValues 分配）
+            _layerStacks.Clear();
             foreach (var layer in AllLayers)
             {
                 _layerStacks[layer] = new Stack<UIViewBase>();
             }
 
-            // 确保 UIManager 自身有正确的 UI 组件
             EnsureRootCanvas();
-
-            // 如果没有设置层级容器，自动创建
-            if (backgroundLayer == null)
-                backgroundLayer = CreateLayerContainer("BackgroundLayer", (int)UILayer.Background);
-            if (mainLayer == null)
-                mainLayer = CreateLayerContainer("MainLayer", (int)UILayer.Main);
-            if (screenLayer == null)
-                screenLayer = CreateLayerContainer("ScreenLayer", (int)UILayer.Screen);
-            if (popupLayer == null)
-                popupLayer = CreateLayerContainer("PopupLayer", (int)UILayer.Popup);
-            if (overlayLayer == null)
-                overlayLayer = CreateLayerContainer("OverlayLayer", (int)UILayer.Overlay);
-            if (topLayer == null)
-                topLayer = CreateLayerContainer("TopLayer", (int)UILayer.Top);
-            if (systemLayer == null)
-                systemLayer = CreateLayerContainer("SystemLayer", (int)UILayer.System);
+            backgroundLayer ??= CreateLayerContainer("BackgroundLayer", (int)UILayer.Background);
+            mainLayer ??= CreateLayerContainer("MainLayer", (int)UILayer.Main);
+            screenLayer ??= CreateLayerContainer("ScreenLayer", (int)UILayer.Screen);
+            popupLayer ??= CreateLayerContainer("PopupLayer", (int)UILayer.Popup);
+            overlayLayer ??= CreateLayerContainer("OverlayLayer", (int)UILayer.Overlay);
+            topLayer ??= CreateLayerContainer("TopLayer", (int)UILayer.Top);
+            systemLayer ??= CreateLayerContainer("SystemLayer", (int)UILayer.System);
         }
 
         private Transform CreateLayerContainer(string name, int sortOrder)
         {
-            var go = new GameObject(name);
-            go.transform.SetParent(transform, false);
-
-            var rectTransform = go.AddComponent<RectTransform>();
+            var go = UIRuntimeObjectFactory.CreateFallbackObject(name, transform, typeof(RectTransform));
+            var rectTransform = go.GetComponent<RectTransform>();
             rectTransform.anchorMin = Vector2.zero;
             rectTransform.anchorMax = Vector2.one;
             rectTransform.sizeDelta = Vector2.zero;
@@ -222,312 +185,507 @@ namespace ZeroEngine.UI
             var canvas = go.AddComponent<Canvas>();
             canvas.overrideSorting = true;
             canvas.sortingOrder = sortOrder;
-
             go.AddComponent<UnityEngine.UI.GraphicRaycaster>();
-
             return go.transform;
         }
 
-        /// <summary>
-        /// 确保 UIManager 有根 Canvas 组件（自动创建）
-        /// </summary>
         private void EnsureRootCanvas()
         {
-            // 检查是否已有 Canvas
             var canvas = GetComponent<Canvas>();
             if (canvas == null)
             {
-                // 添加 RectTransform（Canvas 需要）
                 if (GetComponent<RectTransform>() == null)
                 {
                     gameObject.AddComponent<RectTransform>();
                 }
 
-                // 创建根 Canvas
                 canvas = gameObject.AddComponent<Canvas>();
                 canvas.renderMode = RenderMode.ScreenSpaceOverlay;
                 canvas.sortingOrder = 0;
 
-                // 添加 CanvasScaler（自适应分辨率）
                 var scaler = gameObject.AddComponent<UnityEngine.UI.CanvasScaler>();
                 scaler.uiScaleMode = UnityEngine.UI.CanvasScaler.ScaleMode.ScaleWithScreenSize;
                 scaler.referenceResolution = new Vector2(1920, 1080);
                 scaler.screenMatchMode = UnityEngine.UI.CanvasScaler.ScreenMatchMode.MatchWidthOrHeight;
                 scaler.matchWidthOrHeight = 0.5f;
-
-                // 添加 GraphicRaycaster（UI 交互需要）
                 gameObject.AddComponent<UnityEngine.UI.GraphicRaycaster>();
-
-                LogDebug("[UIManager] Auto-created root Canvas");
             }
 
-            // 设置 UI Layer
-            gameObject.layer = LayerMask.NameToLayer("UI");
+            var uiLayer = LayerMask.NameToLayer("UI");
+            if (uiLayer >= 0)
+            {
+                gameObject.layer = uiLayer;
+            }
         }
 
-        #endregion
+        #region Registration
 
-        #region Config Registration - 配置注册
-
-        /// <summary>
-        /// 注册视图配置
-        /// </summary>
         public void RegisterView(UIViewConfig config)
         {
-            if (string.IsNullOrEmpty(config.viewName))
+            if (config == null)
             {
-                Debug.LogError("[UIManager] View name is empty!");
+                LogUIManager(UIManagerLogPolicy.ViewNameEmpty());
                 return;
             }
 
-            if (_viewConfigs.ContainsKey(config.viewName))
+            var viewNameIsEmpty = string.IsNullOrEmpty(config.viewName);
+            var alreadyRegistered = !viewNameIsEmpty && _viewConfigs.ContainsKey(config.viewName);
+            var registrationDecision = UIManagerViewRegistrationPolicy.Resolve(
+                viewNameIsEmpty: viewNameIsEmpty,
+                alreadyRegistered: alreadyRegistered);
+
+            if (registrationDecision.LogViewNameEmpty)
             {
-                LogWarning($"[UIManager] View '{config.viewName}' already registered, overwriting...");
+                LogUIManager(UIManagerLogPolicy.ViewNameEmpty());
             }
 
-            _viewConfigs[config.viewName] = config;
+            if (registrationDecision.ReturnAfterEmptyName)
+            {
+                return;
+            }
+
+            if (registrationDecision.LogViewAlreadyRegistered)
+            {
+                LogUIManager(UIManagerLogPolicy.ViewAlreadyRegistered(config.viewName));
+            }
+
+            if (registrationDecision.StoreConfig)
+            {
+                _viewConfigs[config.viewName] = config;
+            }
         }
 
-        /// <summary>
-        /// 批量注册
-        /// </summary>
         public void RegisterViews(IEnumerable<UIViewConfig> configs)
         {
+            if (configs == null)
+            {
+                return;
+            }
+
             foreach (var config in configs)
             {
                 RegisterView(config);
             }
         }
 
-        /// <summary>
-        /// 注销视图配置
-        /// </summary>
         public void UnregisterView(string viewName)
         {
             _viewConfigs.Remove(viewName);
         }
 
-        /// <summary>
-        /// 从 Prefab 直接注册（无需配置文件）
-        /// </summary>
         public void RegisterViewFromPrefab(GameObject prefab, UIViewConfig config = null)
         {
+            if (prefab == null)
+            {
+                LogUIManager(UIManagerLogPolicy.ViewPrefabLoadFailed(string.Empty));
+                return;
+            }
+
             var view = prefab.GetComponent<UIViewBase>();
             if (view == null)
             {
-                Debug.LogError($"[UIManager] Prefab does not contain UIViewBase: {prefab.name}");
+                LogUIManager(UIManagerLogPolicy.ViewComponentNotFound(prefab.name));
                 return;
             }
 
             config ??= new UIViewConfig { viewName = view.ViewName };
             config.viewName = view.ViewName;
             config.prefab = prefab;
-
             RegisterView(config);
+        }
+
+        private void LogUIManager(UIManagerLogDecision decision)
+        {
+            if (!decision.ShouldLog)
+            {
+                return;
+            }
+
+            if (_hooks != null)
+            {
+                _hooks.Log(decision.Level, decision.Message);
+                return;
+            }
+
+            var message = $"[UIManager] {decision.Message}";
+            switch (decision.Level)
+            {
+                case UIManagerLogLevel.Error:
+                    Debug.LogError(message, this);
+                    break;
+                case UIManagerLogLevel.Warning:
+                    Debug.LogWarning(message, this);
+                    break;
+                case UIManagerLogLevel.Info:
+                    Debug.Log(message, this);
+                    break;
+            }
+        }
+
+        private void LogInfo(string message)
+        {
+            LogUIManager(UIManagerLogPolicy.Info(message));
+        }
+
+        private void RequestPause(bool pause)
+        {
+            OnPauseRequested?.Invoke(pause);
+            _hooks?.RequestPause(pause);
         }
 
         #endregion
 
-        #region Open/Close - 打开/关闭
+        #region Open and close
 
-        /// <summary>
-        /// 打开视图
-        /// </summary>
-        public async Task<UIViewBase> OpenAsync(string viewName, UIOpenArgs args = null)
+        public Task<UIViewBase> OpenAsync(string viewName, UIOpenArgs args = null)
         {
-            args ??= new UIOpenArgs();
+            return OpenAsync(viewName, args, _sessionViewGeneration);
+        }
 
-            // 检查配置
-            if (!_viewConfigs.TryGetValue(viewName, out var config))
+        private async Task<UIViewBase> OpenAsync(
+            string viewName,
+            UIOpenArgs args,
+            int requestSessionViewGeneration)
+        {
+            if (string.IsNullOrWhiteSpace(viewName) || _isDestroying)
             {
-                Debug.LogError($"[UIManager] View config not found: {viewName}");
                 return null;
             }
 
-            // 单例模式检查
-            if (config.showMode == UIShowMode.Singleton && _viewInstances.ContainsKey(viewName))
+            if (_pendingCloseTasks.TryGetValue(viewName, out var pendingClose))
             {
-                var existing = _viewInstances[viewName];
-                if (existing.IsVisible)
+                try
                 {
-                    LogWarning($"[UIManager] Singleton view '{viewName}' is already open");
-                    return existing;
+                    await pendingClose.Completion.Task;
+                }
+                catch
+                {
+                    // The next open still owns an independent recovery attempt.
+                }
+
+                return await OpenAsync(viewName, args, requestSessionViewGeneration);
+            }
+
+            var isImplicitRequest = args == null;
+            if (_pendingOpenTasks.TryGetValue(viewName, out var pendingRequest))
+            {
+                if (isImplicitRequest
+                    && pendingRequest.AcceptsImplicitJoin
+                    && pendingRequest.SessionViewGeneration == requestSessionViewGeneration)
+                {
+                    return await pendingRequest.Completion.Task;
+                }
+
+                try
+                {
+                    await pendingRequest.Completion.Task;
+                }
+                catch
+                {
+                    // Explicit arguments must get their own serialized attempt.
+                }
+
+                return await OpenAsync(viewName, args, requestSessionViewGeneration);
+            }
+
+            var currentRequest = new PendingOpenRequest(isImplicitRequest, requestSessionViewGeneration);
+            _pendingOpenTasks[viewName] = currentRequest;
+            _ = CompleteOpenAsync();
+            return await currentRequest.Completion.Task;
+
+            async Task CompleteOpenAsync()
+            {
+                try
+                {
+                    currentRequest.Completion.TrySetResult(await OpenCoreAsync());
+                }
+                catch (Exception exception)
+                {
+                    currentRequest.Completion.TrySetException(exception);
+                }
+                finally
+                {
+                    if (_pendingOpenTasks.TryGetValue(viewName, out var registeredRequest)
+                        && ReferenceEquals(registeredRequest, currentRequest))
+                    {
+                        _pendingOpenTasks.Remove(viewName);
+                    }
                 }
             }
 
-            // 获取或创建视图实例
-            var view = await GetOrCreateViewAsync(viewName, config);
-            if (view == null) return null;
-
-            // 处理显示模式
-            await HandleShowMode(view, config);
-
-            // 显示遮罩
-            if (config.showMask)
+            async Task<UIViewBase> OpenCoreAsync()
             {
-                ShowMask(config.layer, config.maskColor, config.maskClickClose ? () => Close(viewName) : null);
+                args ??= new UIOpenArgs();
+                if (!_viewConfigs.TryGetValue(viewName, out var config) || config == null)
+                {
+                    LogUIManager(UIManagerLogPolicy.ViewConfigNotFound(viewName));
+                    return null;
+                }
+
+                if (!CanContinueViewOperation(config, requestSessionViewGeneration))
+                {
+                    return null;
+                }
+
+                var isSingletonRequest = config.showMode == UIShowMode.Singleton;
+                if (isSingletonRequest && _viewInstances.TryGetValue(viewName, out var existing) && existing != null)
+                {
+                    var openRequestDecision = UIManagerOpenRequestPolicy.Resolve(
+                        config.showMode,
+                        hasExistingInstance: true,
+                        existingInstanceVisible: existing.IsVisible);
+                    if (openRequestDecision.ReturnExistingVisibleSingleton)
+                    {
+                        LogUIManager(UIManagerLogPolicy.SingletonViewAlreadyOpen(viewName));
+                        return existing;
+                    }
+                }
+
+                var view = await GetOrCreateViewAsync(viewName, config, requestSessionViewGeneration);
+                if (view == null)
+                {
+                    return null;
+                }
+
+                if (!CanContinueViewOperation(config, requestSessionViewGeneration))
+                {
+                    ReleaseSupersededOpen(viewName, view);
+                    return null;
+                }
+
+                await HandleShowMode(view, config);
+                if (!CanContinueViewOperation(config, requestSessionViewGeneration))
+                {
+                    ReleaseSupersededOpen(viewName, view);
+                    return null;
+                }
+
+                var modalSideEffectDecision = UIManagerModalSideEffectPolicy.Resolve(
+                    showMask: config.showMask,
+                    pauseGame: config.pauseGame);
+
+                if (modalSideEffectDecision.ShowMask)
+                {
+                    ShowMask(config.layer, config.maskColor, config.maskClickClose ? () => Close(view) : null, view);
+                }
+
+                if (modalSideEffectDecision.PauseGame)
+                {
+                    RequestPause(true);
+                }
+
+                await view.InternalOpenAsync(args);
+                if (view == null
+                    || !view.IsVisible
+                    || !CanContinueViewOperation(config, requestSessionViewGeneration))
+                {
+                    ReleaseSupersededOpen(viewName, view);
+                    return null;
+                }
+
+                if (!_layerStacks[config.layer].Contains(view))
+                {
+                    _layerStacks[config.layer].Push(view);
+                }
+
+                _topView = view;
+                OnViewOpened?.Invoke(viewName);
+                LogInfo($"Opened: {viewName}");
+                return view;
             }
-
-            // 请求暂停游戏
-            if (config.pauseGame)
-            {
-                OnPauseRequested?.Invoke(true);
-            }
-
-            // 打开视图
-            await view.InternalOpenAsync(args);
-
-            // 入栈
-            _layerStacks[config.layer].Push(view);
-            _topView = view;
-
-            OnViewOpened?.Invoke(viewName);
-            LogDebug($"[UIManager] Opened: {viewName}");
-
-            return view;
         }
 
-        /// <summary>
-        /// 打开视图（泛型版本）
-        /// </summary>
         public async Task<T> OpenAsync<T>(UIOpenArgs args = null) where T : UIViewBase
         {
-            var viewName = ViewNameCache<T>.Name;  // 使用缓存，避免重复分配
-            var view = await OpenAsync(viewName, args);
+            var view = await OpenAsync(ViewNameCache<T>.Name, args);
             return view as T;
         }
 
-        /// <summary>
-        /// 同步打开（不等待动画）
-        /// </summary>
         public void Open(string viewName, UIOpenArgs args = null)
         {
             _ = OpenAsync(viewName, args);
         }
 
-        /// <summary>
-        /// 同步打开（泛型）
-        /// </summary>
         public void Open<T>(UIOpenArgs args = null) where T : UIViewBase
         {
             _ = OpenAsync<T>(args);
         }
 
-        /// <summary>
-        /// 关闭视图
-        /// </summary>
         public async Task CloseAsync(string viewName, UICloseArgs args = null)
         {
-            args ??= new UICloseArgs();
+            await QueueCloseAsync(viewName, null, args);
+        }
 
-            if (!_viewInstances.TryGetValue(viewName, out var view))
+        public async Task CloseAsync(UIViewBase view, UICloseArgs args = null)
+        {
+            if (view != null)
             {
-                LogWarning($"[UIManager] View not found: {viewName}");
+                await QueueCloseAsync(view.ViewName, view, args);
+            }
+        }
+
+        private async Task QueueCloseAsync(string viewName, UIViewBase requestedView, UICloseArgs args)
+        {
+            if (string.IsNullOrWhiteSpace(viewName) || _isDestroying)
+            {
                 return;
             }
 
-            if (!view.IsVisible && !args.Force)
+            if (_pendingCloseTasks.TryGetValue(viewName, out var pendingRequest))
             {
+                await pendingRequest.Completion.Task;
                 return;
             }
 
-            var config = view.Config;
+            var currentRequest = new PendingCloseRequest();
+            _pendingCloseTasks[viewName] = currentRequest;
+            _ = CompleteCloseAsync();
+            await currentRequest.Completion.Task;
 
-            // 关闭视图
-            await view.InternalCloseAsync(args);
-
-            // 从栈中移除
-            RemoveFromStack(view, config.layer);
-
-            // 隐藏遮罩
-            if (config.showMask)
+            async Task CompleteCloseAsync()
             {
-                HideMask(config.layer);
-            }
-
-            // 恢复游戏
-            if (config.pauseGame)
-            {
-                OnPauseRequested?.Invoke(false);
-            }
-
-            // 处理关闭模式
-            await HandleCloseMode(view, config);
-
-            // 恢复上一个视图
-            ResumeTopView(config.layer);
-
-            OnViewClosed?.Invoke(viewName);
-            LogDebug($"[UIManager] Closed: {viewName}");
-        }
-
-        /// <summary>
-        /// 关闭视图（泛型版本）
-        /// </summary>
-        public async Task CloseAsync<T>(UICloseArgs args = null) where T : UIViewBase
-        {
-            await CloseAsync(ViewNameCache<T>.Name, args);
-        }
-
-        /// <summary>
-        /// 同步关闭
-        /// </summary>
-        public void Close(string viewName, UICloseArgs args = null)
-        {
-            _ = CloseAsync(viewName, args);
-        }
-
-        /// <summary>
-        /// 同步关闭（泛型）
-        /// </summary>
-        public void Close<T>(UICloseArgs args = null) where T : UIViewBase
-        {
-            _ = CloseAsync<T>(args);
-        }
-
-        /// <summary>
-        /// 关闭最顶层视图
-        /// </summary>
-        public void CloseTop()
-        {
-            if (_topView != null && _topView.Config.allowESCClose)
-            {
-                Close(_topView.ViewName);
-            }
-        }
-
-        /// <summary>
-        /// 关闭所有视图
-        /// </summary>
-        public async Task CloseAllAsync(UILayer? layer = null)
-        {
-            if (layer.HasValue)
-            {
-                // 关闭指定层级
-                var stack = _layerStacks[layer.Value];
-                while (stack.Count > 0)
+                try
                 {
-                    var view = stack.Peek();
-                    await CloseAsync(view.ViewName, UICloseArgs.Create());
-                }
-            }
-            else
-            {
-                // 关闭所有层级
-                foreach (var kvp in _layerStacks)
-                {
-                    while (kvp.Value.Count > 0)
+                    if (_pendingOpenTasks.TryGetValue(viewName, out var pendingOpen))
                     {
-                        var view = kvp.Value.Peek();
-                        await CloseAsync(view.ViewName, UICloseArgs.Create());
+                        try
+                        {
+                            await pendingOpen.Completion.Task;
+                        }
+                        catch
+                        {
+                            // Resolve the final registered instance even after a failed open.
+                        }
+                    }
+
+                    var targetView = requestedView;
+                    if (targetView == null && !_viewInstances.TryGetValue(viewName, out targetView))
+                    {
+                        LogUIManager(UIManagerLogPolicy.ViewNotFound(viewName));
+                        currentRequest.Completion.TrySetResult(true);
+                        return;
+                    }
+
+                    await CloseCoreAsync(targetView, args);
+                    currentRequest.Completion.TrySetResult(true);
+                }
+                catch (Exception exception)
+                {
+                    currentRequest.Completion.TrySetException(exception);
+                }
+                finally
+                {
+                    if (_pendingCloseTasks.TryGetValue(viewName, out var registeredRequest)
+                        && ReferenceEquals(registeredRequest, currentRequest))
+                    {
+                        _pendingCloseTasks.Remove(viewName);
                     }
                 }
             }
         }
 
-        /// <summary>
-        /// 关闭所有视图（同步）
-        /// </summary>
+        private async Task CloseCoreAsync(UIViewBase view, UICloseArgs args)
+        {
+            if (view == null)
+            {
+                return;
+            }
+
+            args ??= new UICloseArgs();
+            if (!view.IsVisible && view.State != UIViewState.Paused && !args.Force)
+            {
+                return;
+            }
+
+            var viewName = view.ViewName;
+            var config = view.Config;
+            if (config == null)
+            {
+                return;
+            }
+
+            var requestSessionViewGeneration = _sessionViewGeneration;
+            await view.InternalCloseAsync(args);
+            if (view == null || !CanContinueViewOperation(config, requestSessionViewGeneration))
+            {
+                return;
+            }
+
+            RemoveFromStack(view, config.layer);
+            var modalSideEffectDecision = UIManagerModalSideEffectPolicy.Resolve(
+                showMask: config.showMask,
+                pauseGame: config.pauseGame);
+            if (modalSideEffectDecision.HideMask)
+            {
+                RefreshMask(config.layer);
+            }
+
+            if (modalSideEffectDecision.ResumeGame)
+            {
+                RequestPause(false);
+            }
+
+            await HandleCloseMode(view, config);
+            ResumeTopView(config.layer);
+
+            OnViewClosed?.Invoke(viewName);
+            LogInfo($"Closed: {viewName}");
+        }
+
+        public async Task CloseAsync<T>(UICloseArgs args = null) where T : UIViewBase
+        {
+            await CloseAsync(ViewNameCache<T>.Name, args);
+        }
+
+        public void Close(string viewName, UICloseArgs args = null)
+        {
+            _ = CloseAsync(viewName, args);
+        }
+
+        public void Close(UIViewBase view, UICloseArgs args = null)
+        {
+            _ = CloseAsync(view, args);
+        }
+
+        public void Close<T>(UICloseArgs args = null) where T : UIViewBase
+        {
+            _ = CloseAsync<T>(args);
+        }
+
+        public void CloseTop()
+        {
+            var topView = _topView;
+            var closeTopDecision = UIManagerCloseTopPolicy.Resolve(
+                hasTopView: topView != null,
+                allowEscClose: topView != null && topView.Config != null && topView.Config.allowESCClose);
+            if (closeTopDecision.CloseTopView)
+            {
+                Close(topView);
+            }
+        }
+
+        public async Task CloseAllAsync(UILayer? layer = null)
+        {
+            if (layer.HasValue)
+            {
+                var stack = _layerStacks[layer.Value];
+                while (stack.Count > 0)
+                {
+                    await CloseAsync(stack.Peek(), UICloseArgs.Create());
+                }
+
+                return;
+            }
+
+            foreach (var pair in _layerStacks)
+            {
+                while (pair.Value.Count > 0)
+                {
+                    await CloseAsync(pair.Value.Peek(), UICloseArgs.Create());
+                }
+            }
+        }
+
         public void CloseAll(UILayer? layer = null)
         {
             _ = CloseAllAsync(layer);
@@ -535,105 +693,84 @@ namespace ZeroEngine.UI
 
         #endregion
 
-        #region View Management - 视图管理
+        #region View and prefab management
 
-        private async Task<UIViewBase> GetOrCreateViewAsync(string viewName, UIViewConfig config)
+        private async Task<UIViewBase> GetOrCreateViewAsync(
+            string viewName,
+            UIViewConfig config,
+            int requestSessionViewGeneration)
         {
-            // 检查缓存
             if (_viewInstances.TryGetValue(viewName, out var cachedView))
             {
-                return cachedView;
+                if (cachedView != null)
+                {
+                    return cachedView;
+                }
+
+                _viewInstances.Remove(viewName);
             }
 
-            // 加载资源
             var container = GetLayerContainer(config.layer);
             GameObject prefab = null;
 
 #if ZEROENGINE_ADDRESSABLES
-            // 优先使用 AssetReference (Addressables)
-            if (config.prefabReference != null && config.prefabReference.RuntimeKeyIsValid())
+            var hasPrefabReference = config.prefabReference != null;
+            var runtimeKeyIsValid = hasPrefabReference && config.prefabReference.RuntimeKeyIsValid();
+            var prefabReferenceDecision = UIManagerPrefabReferencePolicy.Resolve(
+                hasPrefabReference: hasPrefabReference,
+                runtimeKeyIsValid: runtimeKeyIsValid);
+            if (prefabReferenceDecision.LoadPrefab)
             {
+                _viewHandleKeys[viewName] = config.prefabReference.RuntimeKey.ToString();
                 prefab = await LoadViewPrefabAsync(config.prefabReference);
             }
-            else
 #endif
-            if (config.prefab != null)
+
+            if (prefab == null)
             {
-                // 使用直接引用的 Prefab
                 prefab = config.prefab;
             }
-            else if (!string.IsNullOrEmpty(config.resourcePath))
+
+            if (prefab == null && !string.IsNullOrEmpty(config.resourcePath))
             {
-                // 使用 Resources 加载
                 prefab = await LoadViewPrefabFromResourcesAsync(config.resourcePath);
             }
 
             if (prefab == null)
             {
-                Debug.LogError($"[UIManager] Failed to load view prefab for: {viewName}");
+                LogUIManager(UIManagerLogPolicy.ViewPrefabLoadFailed(viewName));
                 return null;
             }
 
-            // 实例化
-            var go = Instantiate(prefab, container);
-            go.name = viewName;
+            if (!CanContinueViewOperation(config, requestSessionViewGeneration))
+            {
+                ReleasePrefabHandleForView(viewName);
+                return null;
+            }
 
+            var go = CreateRuntimeGameObject(prefab, container);
+            go.name = viewName;
             var view = go.GetComponent<UIViewBase>();
             if (view == null)
             {
-                Debug.LogError($"[UIManager] View component not found on: {viewName}");
-                Destroy(go);
+                LogUIManager(UIManagerLogPolicy.ViewComponentNotFound(viewName));
+                DestroyRuntimeGameObject(go);
+                ReleasePrefabHandleForView(viewName);
                 return null;
             }
 
-            // 初始化
             view.InternalInit(config);
-
-            // 缓存
-            if (config.cache)
-            {
-                _viewInstances[viewName] = view;
-            }
-
+            _viewInstances[viewName] = view;
             return view;
         }
 
-#if ZEROENGINE_ADDRESSABLES
-        /// <summary>
-        /// 使用 Addressables AssetReference 加载 Prefab
-        /// </summary>
-        private async Task<GameObject> LoadViewPrefabAsync(AssetReferenceGameObject prefabRef)
-        {
-            if (prefabRef == null || !prefabRef.RuntimeKeyIsValid())
-                return null;
-
-            var handle = prefabRef.LoadAssetAsync<GameObject>();
-            await handle.Task;
-
-            if (handle.Status == AsyncOperationStatus.Succeeded)
-            {
-                return handle.Result;
-            }
-
-            Debug.LogError($"[UIManager] Addressables load failed for: {prefabRef.RuntimeKey}");
-            return null;
-        }
-#endif
-
-        /// <summary>
-        /// Resources 加载
-        /// </summary>
         private Task<GameObject> LoadViewPrefabFromResourcesAsync(string assetPath)
         {
-            var tcs = new TaskCompletionSource<GameObject>();
+            var completion = new TaskCompletionSource<GameObject>(
+                TaskCreationOptions.RunContinuationsAsynchronously);
             var request = Resources.LoadAsync<GameObject>(assetPath);
-
-            request.completed += (op) =>
-            {
-                tcs.TrySetResult(request.asset as GameObject);
-            };
-
-            return tcs.Task;
+            request.completed += _ => completion.TrySetResult(request.asset as GameObject);
+            return completion.Task;
         }
 
         private Transform GetLayerContainer(UILayer layer)
@@ -651,32 +788,337 @@ namespace ZeroEngine.UI
             };
         }
 
+#if ZEROENGINE_ADDRESSABLES
+        private async Task<GameObject> LoadViewPrefabAsync(AssetReferenceGameObject prefabRef)
+        {
+            var hasPrefabReference = prefabRef != null;
+            var runtimeKeyIsValid = hasPrefabReference && prefabRef.RuntimeKeyIsValid();
+            var prefabReferenceDecision = UIManagerPrefabReferencePolicy.Resolve(
+                hasPrefabReference: hasPrefabReference,
+                runtimeKeyIsValid: runtimeKeyIsValid);
+            if (!prefabReferenceDecision.LoadPrefab)
+            {
+                return null;
+            }
+
+            var handleKey = prefabRef.RuntimeKey.ToString();
+            if (TryGetCachedPrefab(handleKey, out var cachedPrefab))
+            {
+                return cachedPrefab;
+            }
+
+            var existingPrefab = await TryGetPrefabFromExistingReferenceHandleAsync(prefabRef, handleKey);
+            if (existingPrefab != null)
+            {
+                return existingPrefab;
+            }
+
+            AsyncOperationHandle<GameObject> handle = default;
+            var loadSucceeded = false;
+            try
+            {
+                handle = prefabRef.LoadAssetAsync<GameObject>();
+                await handle.Task;
+                if (_isDestroying)
+                {
+                    ReleaseAddressableHandleIfValid(handle);
+                    return null;
+                }
+
+                var loadOperationSucceeded = handle.Status == AsyncOperationStatus.Succeeded;
+                var loadResultDecision = UIManagerPrefabLoadResultPolicy.Resolve(
+                    loadSucceeded: loadOperationSucceeded);
+                if (loadResultDecision.CacheLoadedHandle)
+                {
+                    _prefabHandles[handleKey] = handle;
+                }
+
+                if (loadResultDecision.MarkLoadSucceeded)
+                {
+                    loadSucceeded = true;
+                }
+
+                if (loadResultDecision.UseLoadedPrefab)
+                {
+                    return handle.Result;
+                }
+            }
+            catch (Exception exception)
+            {
+                LogUIManager(UIManagerLogPolicy.AddressablesLoadFailed(
+                    prefabRef.RuntimeKey.ToString(), exception.Message));
+            }
+
+            LogUIManager(UIManagerLogPolicy.AddressablesLoadFailed(prefabRef.RuntimeKey.ToString()));
+            var failedHandleIsValid = handle.IsValid();
+            var failureReleaseDecision = UIManagerPrefabLoadFailureReleasePolicy.Resolve(
+                handleIsValid: failedHandleIsValid);
+            if (failureReleaseDecision.ReleaseHandle)
+            {
+                Addressables.Release(handle);
+            }
+
+            return null;
+        }
+
+        private bool TryGetCachedPrefab(string handleKey, out GameObject prefab)
+        {
+            prefab = null;
+            var hasHandle = _prefabHandles.TryGetValue(handleKey, out var cachedHandle);
+            var handleIsValid = hasHandle && cachedHandle.IsValid();
+            var loadSucceeded = handleIsValid && cachedHandle.Status == AsyncOperationStatus.Succeeded;
+            var cachedPrefab = loadSucceeded ? cachedHandle.Result : null;
+            var cacheDecision = UIManagerCachedPrefabPolicy.Resolve(
+                hasHandle: hasHandle,
+                handleIsValid: handleIsValid,
+                loadSucceeded: loadSucceeded,
+                hasPrefabResult: cachedPrefab != null);
+            if (!cacheDecision.UseCachedPrefab)
+            {
+                return false;
+            }
+
+            prefab = cachedPrefab;
+            return true;
+        }
+
+        private async Task<GameObject> TryGetPrefabFromExistingReferenceHandleAsync(
+            AssetReferenceGameObject prefabRef,
+            string handleKey)
+        {
+            var existingHandle = prefabRef.OperationHandle;
+            var handleIsValid = existingHandle.IsValid();
+            var existingHandleDecision = UIManagerExistingPrefabHandlePolicy.Resolve(
+                handleIsValid: handleIsValid,
+                loadSucceeded: false,
+                hasPrefabResult: false);
+            if (!existingHandleDecision.AwaitExistingHandle)
+            {
+                return null;
+            }
+
+            try
+            {
+                await existingHandle.Task;
+            }
+            catch
+            {
+                return null;
+            }
+
+            if (_isDestroying)
+            {
+                ReleaseAddressableHandleIfValid(existingHandle);
+                return null;
+            }
+
+            var loadSucceeded = existingHandle.Status == AsyncOperationStatus.Succeeded;
+            var existingPrefab = loadSucceeded ? existingHandle.Result as GameObject : null;
+            existingHandleDecision = UIManagerExistingPrefabHandlePolicy.Resolve(
+                handleIsValid: handleIsValid,
+                loadSucceeded: loadSucceeded,
+                hasPrefabResult: existingPrefab != null);
+            if (!existingHandleDecision.UseExistingPrefab)
+            {
+                return null;
+            }
+
+            _prefabHandles[handleKey] = existingHandle.Convert<GameObject>();
+            return existingPrefab;
+        }
+
+        private static void ReleaseAddressableHandleIfValid(AsyncOperationHandle handle)
+        {
+            var handleIsValid = handle.IsValid();
+            var releaseDecision = UIManagerPrefabHandlesReleasePolicy.Resolve(
+                handleIsValid: handleIsValid);
+            if (releaseDecision.ReleaseHandle)
+            {
+                Addressables.Release(handle);
+            }
+        }
+#endif
+
+        private void ReleasePrefabHandleForView(string viewName)
+        {
+#if ZEROENGINE_ADDRESSABLES
+            if (!_viewHandleKeys.TryGetValue(viewName, out var handleKey))
+            {
+                return;
+            }
+
+            var handleUsedByOtherView = IsPrefabHandleUsedByOtherView(viewName, handleKey);
+            var hasCachedHandle = _prefabHandles.TryGetValue(handleKey, out var handle);
+            var cachedHandleIsValid = hasCachedHandle && handle.IsValid();
+            var releaseDecision = UIManagerPrefabHandleReleasePolicy.Resolve(
+                hasViewHandleKey: true,
+                handleUsedByOtherView: handleUsedByOtherView,
+                hasCachedHandle: hasCachedHandle,
+                cachedHandleIsValid: cachedHandleIsValid);
+
+            if (releaseDecision.RemoveViewHandleKey)
+            {
+                _viewHandleKeys.Remove(viewName);
+            }
+
+            if (releaseDecision.RemoveCachedHandle)
+            {
+                _prefabHandles.Remove(handleKey);
+            }
+
+            if (releaseDecision.ReleaseCachedHandle)
+            {
+                Addressables.Release(handle);
+            }
+#endif
+        }
+
+#if ZEROENGINE_ADDRESSABLES
+        private bool IsPrefabHandleUsedByOtherView(string viewName, string handleKey)
+        {
+            foreach (var viewHandleKey in _viewHandleKeys)
+            {
+                if (viewHandleKey.Key != viewName && viewHandleKey.Value == handleKey)
+                {
+                    return true;
+                }
+            }
+
+            return false;
+        }
+#endif
+
+        private void ReleasePrefabHandles()
+        {
+#if ZEROENGINE_ADDRESSABLES
+            foreach (var handle in _prefabHandles.Values)
+            {
+                var handleIsValid = handle.IsValid();
+                var releaseDecision = UIManagerPrefabHandlesReleasePolicy.Resolve(
+                    handleIsValid: handleIsValid);
+                if (releaseDecision.ReleaseHandle)
+                {
+                    Addressables.Release(handle);
+                }
+            }
+
+            _prefabHandles.Clear();
+            _viewHandleKeys.Clear();
+#endif
+        }
+
+        public void ReleaseSessionViews()
+        {
+            _sessionViewGeneration++;
+            var viewNames = new List<string>(_viewInstances.Keys);
+            foreach (var viewName in viewNames)
+            {
+                if (!_viewInstances.TryGetValue(viewName, out var view) || view == null)
+                {
+                    continue;
+                }
+
+                var config = view.Config;
+                if (config == null)
+                {
+                    continue;
+                }
+
+                var releaseDecision = UIManagerSessionViewReleasePolicy.Resolve(
+                    hasView: true,
+                    isResident: config.lifetime == UIViewLifetime.Resident,
+                    showMask: config.showMask);
+                if (!releaseDecision.ReleaseView)
+                {
+                    continue;
+                }
+
+                if (releaseDecision.RemoveInstance)
+                {
+                    _viewInstances.Remove(viewName);
+                }
+
+                if (releaseDecision.RemoveFromStack)
+                {
+                    RemoveFromStack(view, config.layer);
+                }
+
+                if (releaseDecision.HideMask)
+                {
+                    RefreshMask(config.layer);
+                }
+
+                if (releaseDecision.DestroyInstance)
+                {
+                    DestroyViewInstance(view);
+                }
+
+                if (releaseDecision.ReleasePrefabHandle)
+                {
+                    ReleasePrefabHandleForView(viewName);
+                }
+            }
+
+            UpdateTopView();
+        }
+
+        private bool CanContinueViewOperation(UIViewConfig config, int requestSessionViewGeneration)
+        {
+            return !_isDestroying
+                && config != null
+                && (config.lifetime == UIViewLifetime.Resident
+                    || requestSessionViewGeneration == _sessionViewGeneration);
+        }
+
+        private void ReleaseSupersededOpen(string viewName, UIViewBase view)
+        {
+            if (_viewInstances.TryGetValue(viewName, out var registeredView)
+                && ReferenceEquals(registeredView, view))
+            {
+                _viewInstances.Remove(viewName);
+                if (view != null)
+                {
+                    DestroyViewInstance(view);
+                }
+            }
+
+            if (view != null && view.Config != null)
+            {
+                if (view.Config.showMask)
+                {
+                    RefreshMask(view.Config.layer);
+                }
+
+                if (view.Config.pauseGame)
+                {
+                    RequestPause(false);
+                }
+            }
+
+            ReleasePrefabHandleForView(viewName);
+        }
+
         private async Task HandleShowMode(UIViewBase view, UIViewConfig config)
         {
-            switch (config.showMode)
+            var decision = UIManagerShowActionPolicy.Resolve(config.showMode);
+            if (decision.PauseVisibleLayerSiblings)
             {
-                case UIShowMode.HideOthers:
-                    // 隐藏同层其他视图
-                    foreach (var v in _layerStacks[config.layer])
+                foreach (var sibling in _layerStacks[config.layer])
+                {
+                    if (sibling != view && sibling != null && sibling.IsVisible)
                     {
-                        if (v != view && v.IsVisible)
-                        {
-                            v.InternalPause();
-                        }
+                        sibling.InternalPause();
                     }
-                    break;
+                }
+            }
 
-                case UIShowMode.Stack:
-                    // 暂停栈顶视图
-                    if (_layerStacks[config.layer].Count > 0)
-                    {
-                        var top = _layerStacks[config.layer].Peek();
-                        if (top != view)
-                        {
-                            top.InternalPause();
-                        }
-                    }
-                    break;
+            if (decision.PauseTopView && _layerStacks[config.layer].Count > 0)
+            {
+                var top = _layerStacks[config.layer].Peek();
+                if (top != view && top != null)
+                {
+                    top.InternalPause();
+                }
             }
 
             await Task.CompletedTask;
@@ -684,60 +1126,85 @@ namespace ZeroEngine.UI
 
         private async Task HandleCloseMode(UIViewBase view, UIViewConfig config)
         {
-            switch (config.closeMode)
+            var decision = UIManagerCloseActionPolicy.Resolve(
+                config.lifetime,
+                config.closeMode);
+
+            if (decision.RemoveInstance
+                && _viewInstances.TryGetValue(view.ViewName, out var registeredView)
+                && ReferenceEquals(registeredView, view))
             {
-                case UICloseMode.Hide:
-                    // 保留实例，只隐藏
-                    break;
+                _viewInstances.Remove(view.ViewName);
+            }
 
-                case UICloseMode.Destroy:
-                    // 销毁实例
-                    _viewInstances.Remove(view.ViewName);
-                    Destroy(view.gameObject);
-                    break;
+            if (decision.ReleasePrefabHandle)
+            {
+                ReleasePrefabHandleForView(view.ViewName);
+            }
 
-                case UICloseMode.Pool:
-                    // 回池（需要实现对象池）
-                    view.gameObject.SetActive(false);
-                    break;
+            if (decision.DestroyInstance)
+            {
+                DestroyViewInstance(view);
+            }
+
+            if (decision.DeactivateInstance && view != null)
+            {
+                view.gameObject.SetActive(false);
             }
 
             await Task.CompletedTask;
         }
 
+        private static void DestroyViewInstance(UIViewBase view)
+        {
+            if (view != null)
+            {
+                UnityEngine.Object.Destroy(view.gameObject);
+            }
+        }
+
+        private static void DestroyRuntimeGameObject(GameObject target)
+        {
+            if (target != null)
+            {
+                UnityEngine.Object.Destroy(target);
+            }
+        }
+
+        private static GameObject CreateRuntimeGameObject(GameObject prefab, Transform parent)
+        {
+            return UIRuntimeObjectFactory.CreateChild(prefab, parent);
+        }
+
         private void RemoveFromStack(UIViewBase view, UILayer layer)
         {
-            var stack = _layerStacks[layer];
+            if (!_layerStacks.TryGetValue(layer, out var stack))
+            {
+                return;
+            }
 
-            // 使用静态复用列表，避免每次分配临时 Stack
             TempViewList.Clear();
-
-            // 收集需要保留的视图
             while (stack.Count > 0)
             {
-                var v = stack.Pop();
-                if (v != view)
+                var current = stack.Pop();
+                if (current != view)
                 {
-                    TempViewList.Add(v);
+                    TempViewList.Add(current);
                 }
             }
 
-            // 逆序压回栈（保持原顺序）
-            for (int i = TempViewList.Count - 1; i >= 0; i--)
+            for (var index = TempViewList.Count - 1; index >= 0; index--)
             {
-                stack.Push(TempViewList[i]);
+                stack.Push(TempViewList[index]);
             }
 
-            // 更新顶层视图
             UpdateTopView();
         }
 
         private void UpdateTopView()
         {
             _topView = null;
-
-            // 使用预排序的缓存数组，从高到低遍历层级（零 GC 分配）
-            foreach (var layer in LayersSortedDesc)
+            foreach (var layer in UIManagerLayerTraversalPolicy.GetTopViewSearchOrder())
             {
                 if (_layerStacks.TryGetValue(layer, out var stack) && stack.Count > 0)
                 {
@@ -749,143 +1216,221 @@ namespace ZeroEngine.UI
 
         private void ResumeTopView(UILayer layer)
         {
-            if (_layerStacks[layer].Count > 0)
+            if (_layerStacks.TryGetValue(layer, out var stack) && stack.Count > 0)
             {
-                var top = _layerStacks[layer].Peek();
-                top.InternalResume();
+                stack.Peek()?.InternalResume();
             }
+
+            UpdateTopView();
         }
 
         #endregion
 
-        #region Mask - 遮罩管理
+        #region Masks
 
-        private void ShowMask(UILayer layer, Color color, Action onClick)
+        private void ShowMask(UILayer layer, Color color, Action onClick, UIViewBase ownerView)
         {
-            if (maskPrefab == null) return;
-
-            if (!_maskInstances.TryGetValue(layer, out var mask))
+            var hasMaskPrefab = maskPrefab != null;
+            GameObject mask = null;
+            var hasExistingMask = hasMaskPrefab
+                && _maskInstances.TryGetValue(layer, out mask)
+                && mask != null;
+            var createDecision = UIManagerMaskActionPolicy.Resolve(
+                hasMaskPrefab: hasMaskPrefab,
+                hasExistingMask: hasExistingMask,
+                hasImage: false,
+                hasButton: false,
+                hasClickAction: onClick != null);
+            if (!createDecision.UseMask)
             {
-                mask = Instantiate(maskPrefab, GetLayerContainer(layer));
+                return;
+            }
+
+            if (createDecision.CreateMask)
+            {
+                mask = CreateRuntimeGameObject(maskPrefab, GetLayerContainer(layer));
                 _maskInstances[layer] = mask;
             }
 
-            mask.transform.SetAsLastSibling();
-            mask.transform.SetSiblingIndex(mask.transform.GetSiblingIndex() - 1); // 在视图下方
-
             var image = mask.GetComponent<UnityEngine.UI.Image>();
-            if (image != null) image.color = color;
-
             var button = mask.GetComponent<UnityEngine.UI.Button>();
-            if (button != null)
+            var actionDecision = UIManagerMaskActionPolicy.Resolve(
+                hasMaskPrefab,
+                hasExistingMask: true,
+                hasImage: image != null,
+                hasButton: button != null,
+                hasClickAction: onClick != null);
+
+            if (actionDecision.PositionMask)
             {
-                button.onClick.RemoveAllListeners();
-                if (onClick != null) button.onClick.AddListener(() => onClick());
+                mask.transform.SetAsLastSibling();
+                if (ownerView != null
+                    && ownerView.transform.parent == mask.transform.parent)
+                {
+                    mask.transform.SetSiblingIndex(ownerView.transform.GetSiblingIndex());
+                }
+                else
+                {
+                    mask.transform.SetSiblingIndex(mask.transform.GetSiblingIndex() - 1);
+                }
             }
 
-            mask.SetActive(true);
+            if (actionDecision.ApplyColor)
+            {
+                image.color = color;
+            }
+
+            if (actionDecision.ClearClickListeners)
+            {
+                button.onClick.RemoveAllListeners();
+            }
+
+            if (actionDecision.AddClickListener)
+            {
+                button.onClick.AddListener(() => onClick());
+            }
+
+            if (actionDecision.ActivateMask)
+            {
+                mask.SetActive(true);
+            }
+
+            _maskOwners[layer] = ownerView;
         }
 
         private void HideMask(UILayer layer)
         {
-            if (_maskInstances.TryGetValue(layer, out var mask))
+            if (_maskInstances.TryGetValue(layer, out var mask) && mask != null)
             {
                 mask.SetActive(false);
             }
+
+            _maskOwners.Remove(layer);
+        }
+
+        private void RefreshMask(UILayer layer)
+        {
+            if (_layerStacks.TryGetValue(layer, out var stack))
+            {
+                foreach (var view in stack)
+                {
+                    if (view == null
+                        || view.Config == null
+                        || !view.Config.showMask
+                        || (view.State != UIViewState.Opening
+                            && view.State != UIViewState.Opened
+                            && view.State != UIViewState.Paused))
+                    {
+                        continue;
+                    }
+
+                    ShowMask(
+                        layer,
+                        view.Config.maskColor,
+                        view.Config.maskClickClose ? () => Close(view) : null,
+                        view);
+                    return;
+                }
+            }
+
+            HideMask(layer);
+        }
+
+        public UIViewBase GetMaskOwner(UILayer layer)
+        {
+            return _maskOwners.TryGetValue(layer, out var owner) ? owner : null;
         }
 
         #endregion
 
-        #region Query - 查询
+        #region Queries and input
 
-        /// <summary>
-        /// 获取视图实例
-        /// </summary>
         public T GetView<T>() where T : UIViewBase
         {
-            if (_viewInstances.TryGetValue(ViewNameCache<T>.Name, out var view))
-            {
-                return view as T;
-            }
-            return null;
+            return _viewInstances.TryGetValue(ViewNameCache<T>.Name, out var view) ? view as T : null;
         }
 
-        /// <summary>
-        /// 获取视图实例
-        /// </summary>
         public UIViewBase GetView(string viewName)
         {
-            if (_viewInstances.TryGetValue(viewName, out var view))
-            {
-                return view;
-            }
-            return null;
+            return _viewInstances.TryGetValue(viewName, out var view) ? view : null;
         }
 
-        /// <summary>
-        /// 检查视图是否打开
-        /// </summary>
         public bool IsOpen(string viewName)
         {
-            if (_viewInstances.TryGetValue(viewName, out var view))
-            {
-                return view.IsVisible;
-            }
-            return false;
+            return _viewInstances.TryGetValue(viewName, out var view) && view != null && view.IsVisible;
         }
 
-        /// <summary>
-        /// 检查视图是否打开（泛型）
-        /// </summary>
         public bool IsOpen<T>() where T : UIViewBase
         {
             return IsOpen(ViewNameCache<T>.Name);
         }
 
-        /// <summary>
-        /// 获取最顶层视图
-        /// </summary>
         public UIViewBase GetTopView() => _topView;
 
-        /// <summary>
-        /// 获取指定层级的栈顶视图
-        /// </summary>
         public UIViewBase GetTopView(UILayer layer)
         {
-            if (_layerStacks.TryGetValue(layer, out var stack) && stack.Count > 0)
-            {
-                return stack.Peek();
-            }
-            return null;
+            return _layerStacks.TryGetValue(layer, out var stack) && stack.Count > 0 ? stack.Peek() : null;
         }
 
-        /// <summary>
-        /// 获取指定层级的所有视图
-        /// </summary>
         public IEnumerable<UIViewBase> GetViewsInLayer(UILayer layer)
         {
-            if (_layerStacks.TryGetValue(layer, out var stack))
-            {
-                return stack;
-            }
-            return Array.Empty<UIViewBase>();
+            return _layerStacks.TryGetValue(layer, out var stack) ? stack : Array.Empty<UIViewBase>();
         }
 
-        #endregion
+        public bool TryHandleCancelInput()
+        {
+            if (_topView == null)
+            {
+                UpdateTopView();
+            }
 
-        #region Input Handling - 输入处理
+            var topView = _topView;
+            var topViewConsumedInput = topView != null && topView.TryHandleCancelInput();
+            var cancelInputDecision = UIManagerCancelInputPolicy.Resolve(
+                hasTopView: topView != null,
+                topViewConsumedInput: topViewConsumedInput,
+                allowEscClose: topView != null && topView.Config != null && topView.Config.allowESCClose);
+            if (cancelInputDecision.CloseTopView)
+            {
+                CloseTop();
+            }
+
+            return cancelInputDecision.ConsumeInput;
+        }
+
+        public void ToggleView(string viewName)
+        {
+            if (string.IsNullOrWhiteSpace(viewName))
+            {
+                return;
+            }
+
+            var isOpen = IsOpen(viewName);
+            var toggleDecision = UIManagerViewTogglePolicy.Resolve(isOpen);
+            if (toggleDecision.CloseView)
+            {
+                Close(viewName);
+                return;
+            }
+
+            if (toggleDecision.OpenView)
+            {
+                Open(viewName);
+            }
+        }
 
         private void HandleCancelInput()
         {
-            // 通知外部
+            if (!enableESCClose)
+            {
+                return;
+            }
+
             OnCancelInputRequested?.Invoke();
-            // ESC键关闭顶层
-            CloseTop();
+            TryHandleCancelInput();
         }
 
-        /// <summary>
-        /// 外部触发取消输入（用于自定义输入系统）
-        /// </summary>
+        /// <summary>由宿主输入系统调用；UIManager 不读取旧输入 API。</summary>
         public void TriggerCancelInput()
         {
             HandleCancelInput();
@@ -893,51 +1438,64 @@ namespace ZeroEngine.UI
 
         #endregion
 
-        #region Preload - 预加载
+        #region Preload and session cleanup
 
-        /// <summary>
-        /// 预加载视图（不显示）
-        /// </summary>
         public async Task PreloadAsync(string viewName)
         {
-            if (!_viewConfigs.TryGetValue(viewName, out var config))
+            if (!_viewConfigs.TryGetValue(viewName, out var config) || config == null)
             {
-                LogWarning($"[UIManager] View config not found for preload: {viewName}");
+                LogUIManager(UIManagerLogPolicy.ViewConfigNotFound(viewName));
                 return;
             }
 
             if (_viewInstances.ContainsKey(viewName))
             {
-                return; // 已加载
+                return;
             }
 
-            var view = await GetOrCreateViewAsync(viewName, config);
+            var view = await GetOrCreateViewAsync(viewName, config, _sessionViewGeneration);
             if (view != null)
             {
                 view.gameObject.SetActive(false);
-                LogDebug($"[UIManager] Preloaded: {viewName}");
+                LogInfo($"Preloaded: {viewName}");
             }
         }
 
-        /// <summary>
-        /// 预加载视图（泛型）
-        /// </summary>
         public async Task PreloadAsync<T>() where T : UIViewBase
         {
             await PreloadAsync(ViewNameCache<T>.Name);
         }
 
-        /// <summary>
-        /// 批量预加载
-        /// </summary>
         public async Task PreloadAsync(params string[] viewNames)
         {
-            var tasks = new List<Task>();
+            if (viewNames == null || viewNames.Length == 0)
+            {
+                return;
+            }
+
+            var tasks = new List<Task>(viewNames.Length);
             foreach (var viewName in viewNames)
             {
                 tasks.Add(PreloadAsync(viewName));
             }
+
             await Task.WhenAll(tasks);
+        }
+
+        private void CompletePendingRequests()
+        {
+            foreach (var request in _pendingOpenTasks.Values)
+            {
+                request.Completion.TrySetResult(null);
+            }
+
+            foreach (var request in _pendingCloseTasks.Values)
+            {
+                request.Completion.TrySetResult(true);
+            }
+
+            _pendingOpenTasks.Clear();
+            _pendingCloseTasks.Clear();
         }
 
         #endregion

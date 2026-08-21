@@ -30,7 +30,7 @@ UI/
 
 ### Core (v1.6.0+)
 
-工业级 UI 管理框架，从 Project5 整合并适配。
+工业级、项目无关的 UI 管理框架。
 
 **特性**:
 - 7 层级系统: Background/Main/Screen/Popup/Overlay/Top/System
@@ -39,10 +39,12 @@ UI/
 - 3 种关闭模式: Hide/Destroy/Pool
 - 内置动画系统: Fade/Scale/SlideLeft/SlideRight/SlideTop/SlideBottom/Custom
 - 遮罩管理 (可配置颜色/点击关闭)
-- ESC 键关闭 (可禁用)
+- 取消输入由宿主通过 TriggerCancelInput 或 TryHandleCancelInput 显式转发
 - 焦点管理 (手柄/键盘导航支持)
 - 资源异步加载 (Addressables 可选)
 - 预加载 API
+- session/resident/evictable 生命周期与 generation 清理
+- IUIManagerHooks 注入暂停和日志实现
 
 ### MVVM
 
