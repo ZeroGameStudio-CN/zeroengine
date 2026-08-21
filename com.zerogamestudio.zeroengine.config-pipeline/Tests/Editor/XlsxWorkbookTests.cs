@@ -390,6 +390,101 @@ namespace ZeroGameStudio.ConfigPipeline.Tests
         }
 
         [Test]
+        public void Template_LabelsNonRuntimeHeadersWithoutChangingMachineHeaders()
+        {
+            const string schemaJson =
+                "{\"$id\":\"zgs.sample.authoring-headers\",\"x-zgs-schema-version\":1," +
+                "\"type\":\"object\",\"additionalProperties\":false,\"required\":[\"parents\"]," +
+                "\"properties\":{\"parents\":{\"type\":\"array\",\"x-zgs-sheet\":\"Parents\"," +
+                "\"items\":{\"type\":\"object\",\"additionalProperties\":false," +
+                "\"required\":[\"id\",\"children\"],\"properties\":{" +
+                "\"id\":{\"type\":\"string\",\"title\":\"ID\",\"x-zgs-primary-key\":true}," +
+                "\"authoringName\":{\"type\":\"string\",\"title\":\"策划名称\"," +
+                "\"x-zgs-authoring-only\":true}," +
+                "\"children\":{\"type\":\"array\",\"x-zgs-sheet\":\"Children\"," +
+                "\"x-zgs-parent-key\":\"parentId\",\"x-zgs-order-field\":\"order\"," +
+                "\"items\":{\"type\":\"object\",\"additionalProperties\":false," +
+                "\"required\":[\"id\",\"order\",\"value\"],\"properties\":{" +
+                "\"id\":{\"type\":\"string\",\"title\":\"ID\",\"x-zgs-primary-key\":true}," +
+                "\"order\":{\"type\":\"integer\",\"title\":\"顺序\"," +
+                "\"x-zgs-number-type\":\"int32\"}," +
+                "\"value\":{\"type\":\"string\",\"title\":\"值\"}}}}}}}}}";
+            ConfigSchema schema = ConfigSchemaParser.Parse(Encoding.UTF8.GetBytes(schemaJson));
+            var source = new ConfigDocument(
+                "authoring-headers",
+                schema.SchemaId,
+                schema.SchemaVersion,
+                new ConfigObjectNode(new[]
+                {
+                    new ConfigProperty("parents", new ConfigArrayNode(new ConfigNode[]
+                    {
+                        new ConfigObjectNode(new[]
+                        {
+                            new ConfigProperty("id", new ConfigStringNode("parent-a")),
+                            new ConfigProperty("authoringName", new ConfigStringNode("策划可读名称")),
+                            new ConfigProperty("children", new ConfigArrayNode(new ConfigNode[]
+                            {
+                                new ConfigObjectNode(new[]
+                                {
+                                    new ConfigProperty("id", new ConfigStringNode("child-a")),
+                                    new ConfigProperty("order", new ConfigIntegerNode(1)),
+                                    new ConfigProperty("value", new ConfigStringNode("value-a"))
+                                })
+                            }))
+                        })
+                    }))
+                }));
+
+            using (var stream = new MemoryStream())
+            {
+                new XlsxConfigWorkbookWriter().WriteTemplate(
+                    stream,
+                    schema,
+                    "authoring-headers",
+                    source);
+                stream.Position = 0;
+                using (SpreadsheetDocument workbook = SpreadsheetDocument.Open(stream, false))
+                {
+                    Assert.That(new OpenXmlValidator().Validate(workbook), Is.Empty);
+                    Sheet[] sheets = workbook.WorkbookPart.Workbook.Sheets.Elements<Sheet>().ToArray();
+                    WorksheetPart navigationPart = (WorksheetPart)workbook.WorkbookPart.GetPartById(
+                        sheets.Single(sheet => sheet.Name.Value == XlsxConfigWorkbookWriter.NavigationSheetName)
+                            .Id.Value);
+                    Row legendRow = navigationPart.Worksheet.GetFirstChild<SheetData>()
+                        .Elements<Row>()
+                        .Single(row => row.RowIndex.Value == 3U);
+                    Assert.That(legendRow.Elements<Cell>().Single().InnerText, Does.Contain("不会进入运行时 JSON / DTO"));
+
+                    WorksheetPart parentsPart = (WorksheetPart)workbook.WorkbookPart.GetPartById(
+                        sheets.Single(sheet => sheet.Name.Value == "Parents").Id.Value);
+                    Row[] parentRows = parentsPart.Worksheet.GetFirstChild<SheetData>()
+                        .Elements<Row>()
+                        .Take(3)
+                        .ToArray();
+                    Assert.That(parentRows[0].Elements<Cell>().Select(cell => cell.InnerText),
+                        Is.EqualTo(new[] { "id", "authoringName" }));
+                    Assert.That(parentRows[1].Elements<Cell>().ElementAt(1).InnerText,
+                        Is.EqualTo("策划名称（仅策划，不导出）"));
+                    Assert.That(parentRows[2].Elements<Cell>().ElementAt(1).InnerText,
+                        Is.EqualTo("策划可读名称"));
+
+                    WorksheetPart childrenPart = (WorksheetPart)workbook.WorkbookPart.GetPartById(
+                        sheets.Single(sheet => sheet.Name.Value == "Children").Id.Value);
+                    Row[] childRows = childrenPart.Worksheet.GetFirstChild<SheetData>()
+                        .Elements<Row>()
+                        .Take(2)
+                        .ToArray();
+                    Assert.That(childRows[0].Elements<Cell>().Select(cell => cell.InnerText),
+                        Is.EqualTo(new[] { "parentId", "id", "order", "value" }));
+                    Assert.That(childRows[1].Elements<Cell>().First().InnerText,
+                        Does.Contain("parentId（关联键，不导出）"));
+                    Assert.That(childRows[1].Elements<Cell>().ElementAt(2).InnerText,
+                        Is.EqualTo("＊ 顺序"));
+                }
+            }
+        }
+
+        [Test]
         public void ChildTable_RoundTripsParentKeyAndExplicitOrder()
         {
             const string nestedSchemaJson =

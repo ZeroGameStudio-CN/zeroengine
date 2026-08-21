@@ -1,5 +1,11 @@
 # Changelog
 
+## 2.0.3
+
+- Label authoring-only and child parent-key columns as non-exported in visible
+  Excel headers and the navigation legend while preserving hidden machine
+  headers and workbook round-trip behavior.
+
 ## 2.0.2
 
 - Store transaction locks, journals, staging, and backups under

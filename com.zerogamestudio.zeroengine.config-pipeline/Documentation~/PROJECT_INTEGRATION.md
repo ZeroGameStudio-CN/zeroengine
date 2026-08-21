@@ -45,9 +45,9 @@ file. After synchronous process exit, require a newly created, parseable
 an absent result is failure and may be retried only after Unity finishes compiling.
 Required command arguments are `--config-project-root`, `--config-profile`,
 `--config-set`, `--config-result-output` and
-`--config-mode Plan|Check|Apply|Compile|ExportCandidate|UpgradeCandidate`.
+`--config-mode Plan|Check|Apply|Compile|ExportCandidate|UpgradeCandidate|RefreshCandidate`.
 `--config-package-identity` is additionally required for every mode except
-ExportCandidate. Check is read-only and fails when artifacts are stale. Apply
+ExportCandidate and RefreshCandidate. Check is read-only and fails when artifacts are stale. Apply
 revalidates every baseline and commits the declared set transactionally. Compile
 is an Apply alias.
 Package identity is the immutable output-affecting pipeline identity included in
@@ -62,6 +62,12 @@ artifacts. ExportCandidate reads and compares existing authoring/runtime data
 but does not create a Plan or bind package identity into candidate workbook
 metadata, so that mode neither accepts identity as a safety guarantee nor
 requires the argument.
+RefreshCandidate rewrites the current workbook structure from the current Schema
+while retaining all current workbook data. It additionally requires an empty
+`--config-candidate-output` directory, publishes the whole candidate set
+atomically, records the combined source hash, and never changes official source
+workbooks. Promote only candidates whose source hash still matches the reviewed
+source set; use the exact official filenames when replacing the declared sources.
 ExportCandidate writes candidate `.xlsx` workbooks from current generated JSON;
 it does not emit JSON. It additionally requires `--config-candidate-output` and
 `--config-target-scope shared|client|server`; choose the scope of the generated
@@ -97,7 +103,7 @@ To run the package's CoreContract tests from a consuming project, add
 project’s `Packages/manifest.json`. The test framework is a consumer test-only
 prerequisite and is intentionally not a runtime dependency of this package.
 Treat a zero-test result as failure even when the Unity process exits with code
-0. For package 2.0.2, run EditMode tests with NUnit category
-`ZGS.ConfigPipeline.CoreContract` and require exactly 72 discovered and passed
+0. For package 2.0.3, run EditMode tests with NUnit category
+`ZGS.ConfigPipeline.CoreContract` and require exactly 73 discovered and passed
 tests; update the documented expected count when the package test contract
 changes.

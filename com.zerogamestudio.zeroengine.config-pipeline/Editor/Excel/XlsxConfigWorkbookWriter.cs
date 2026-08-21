@@ -25,6 +25,8 @@ namespace ZeroGameStudio.ConfigPipeline.Editor
         private const uint BusinessHeaderStyle = 7U;
         private const uint BusinessHeaderLinkStyle = 8U;
         private const int MaximumTableColumnNameLength = 255;
+        private const string AuthoringOnlyHeaderSuffix = "（仅策划，不导出）";
+        private const string ParentKeyHeaderSuffix = "（关联键，不导出）";
 
         public void WriteTemplate(
             Stream destination,
@@ -609,6 +611,19 @@ namespace ZeroGameStudio.ConfigPipeline.Editor
             subtitleRow.Append(subtitleCell);
             sheetData.Append(subtitleRow);
 
+            var legendRow = new Row
+            {
+                RowIndex = 3U,
+                Height = 24D,
+                CustomHeight = true
+            };
+            Cell legendCell = TextCell(
+                "说明：标注“仅策划，不导出”或“关联键，不导出”的列不会进入运行时 JSON / DTO。",
+                NavigationSubtitleStyle);
+            legendCell.CellReference = "A3";
+            legendRow.Append(legendCell);
+            sheetData.Append(legendRow);
+
             var headerRow = new Row
             {
                 RowIndex = 4U,
@@ -677,9 +692,10 @@ namespace ZeroGameStudio.ConfigPipeline.Editor
             worksheet.Append(
                 new MergeCells(
                     new MergeCell { Reference = "A1:D1" },
-                    new MergeCell { Reference = "A2:D2" })
+                    new MergeCell { Reference = "A2:D2" },
+                    new MergeCell { Reference = "A3:D3" })
                 {
-                    Count = 2U
+                    Count = 3U
                 });
             worksheet.Append(hyperlinks);
             worksheetPart.Worksheet = worksheet;
@@ -758,6 +774,15 @@ namespace ZeroGameStudio.ConfigPipeline.Editor
                     : table.Fields[columnIndex - (table.Parent == null ? 0 : 1)];
                 string fieldName = parentColumn ? table.ArraySchema.ParentKey : field.Name;
                 string fieldTitle = parentColumn ? table.ArraySchema.ParentKey : field.Schema.Title ?? field.Name;
+                if (parentColumn)
+                {
+                    fieldTitle += ParentKeyHeaderSuffix;
+                }
+                else if (field.Schema.AuthoringOnly)
+                {
+                    fieldTitle += AuthoringOnlyHeaderSuffix;
+                }
+
                 if (parentColumn || field.Required)
                 {
                     fieldTitle = "＊ " + fieldTitle;

@@ -24,3 +24,9 @@ when old-data meaning, destructive migration, content identity or business behav
 cannot be determined objectively. Apply is forbidden when the plan baseline or
 allowed path set changed. Record request, package identity, hashes, plan ID, diff,
 tests and rollback evidence.
+
+For a same-Schema workbook presentation refresh, run `RefreshCandidate` into a
+new empty candidate directory. Verify its reported source hash, round-trip data,
+and workbook structure before explicitly replacing the declared source files.
+The refresh command never overwrites official workbooks and rejects a non-empty
+candidate directory.
