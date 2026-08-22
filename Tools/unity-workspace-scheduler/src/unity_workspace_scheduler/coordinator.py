@@ -147,7 +147,22 @@ class WorkspaceCoordinator:
             "write": tuple(row["value"] for row in rows if row["scope_type"] == "write"),
             "resource": tuple(row["value"] for row in rows if row["scope_type"] == "resource"),
             "parked_for": tuple(row["value"] for row in rows if row["scope_type"] == "parked_for"),
+            "priority": tuple(row["value"] for row in rows if row["scope_type"] == "priority"),
         }
+
+    @staticmethod
+    def _claim_priority(claim: sqlite3.Row, scopes: dict[str, tuple[str, ...]]) -> str:
+        priorities = scopes["priority"]
+        if not priorities:
+            return "normal"
+        if claim["kind"] != "freeze" or priorities != ("urgent",):
+            raise StateError("Claim priority state is invalid.")
+        return "urgent"
+
+    @staticmethod
+    def _claim_sort_key(claim: sqlite3.Row, scopes: dict[str, tuple[str, ...]]) -> tuple[int, int]:
+        rank = 0 if WorkspaceCoordinator._claim_priority(claim, scopes) == "urgent" else 1
+        return rank, claim["queue_order"]
 
     @staticmethod
     def _resume_parked_for_freezes(
@@ -181,33 +196,52 @@ class WorkspaceCoordinator:
     def _task_drain_request(
         connection: sqlite3.Connection, workspace_id: str, task_id: str
     ) -> dict[str, Any] | None:
-        freeze = connection.execute(
-            "SELECT id, queue_order FROM claims WHERE workspace_id = ? "
-            "AND task_id != ? AND kind = 'freeze' AND state = 'queued' "
-            "ORDER BY queue_order LIMIT 1",
+        freezes = connection.execute(
+            "SELECT * FROM claims WHERE workspace_id = ? "
+            "AND task_id != ? AND kind = 'freeze' AND state = 'queued'",
             (workspace_id, task_id),
-        ).fetchone()
-        if freeze is None:
+        ).fetchall()
+        if not freezes:
             return None
-        blocking_claim = connection.execute(
-            "SELECT 1 FROM claims WHERE workspace_id = ? AND task_id = ? "
-            "AND (state = 'active' OR (state = 'queued' AND queue_order < ?)) LIMIT 1",
-            (workspace_id, task_id, freeze["queue_order"]),
-        ).fetchone()
-        if blocking_claim is None:
-            return None
-        unsafe_claim = connection.execute(
-            "SELECT 1 FROM claims "
-            "LEFT JOIN claim_scopes ON claim_scopes.claim_id = claims.id "
-            "WHERE claims.workspace_id = ? AND claims.task_id = ? "
-            "AND claims.state IN ('queued', 'active') "
-            "AND (claims.kind = 'freeze' OR claim_scopes.scope_type = 'resource') LIMIT 1",
+        freeze_scopes = {
+            freeze["id"]: WorkspaceCoordinator._claim_scopes(connection, freeze["id"])
+            for freeze in freezes
+        }
+        freeze = min(
+            freezes,
+            key=lambda candidate: WorkspaceCoordinator._claim_sort_key(
+                candidate, freeze_scopes[candidate["id"]]
+            ),
+        )
+        freeze_key = WorkspaceCoordinator._claim_sort_key(freeze, freeze_scopes[freeze["id"]])
+        owned_claims = connection.execute(
+            "SELECT * FROM claims WHERE workspace_id = ? AND task_id = ? "
+            "AND state IN ('queued', 'active')",
             (workspace_id, task_id),
-        ).fetchone()
+        ).fetchall()
+        blocking_claims = [
+            claim
+            for claim in owned_claims
+            if (
+                claim["state"] == "active"
+                or WorkspaceCoordinator._claim_sort_key(
+                    claim, WorkspaceCoordinator._claim_scopes(connection, claim["id"])
+                )
+                < freeze_key
+            )
+        ]
+        if not blocking_claims:
+            return None
+        unsafe_claim = any(
+            claim["kind"] == "freeze"
+            or WorkspaceCoordinator._claim_scopes(connection, claim["id"])["resource"]
+            for claim in blocking_claims
+        )
         return {
             "freeze_id": freeze["id"],
             "queue_order": freeze["queue_order"],
-            "park_ready": unsafe_claim is None,
+            "priority": WorkspaceCoordinator._claim_priority(freeze, freeze_scopes[freeze["id"]]),
+            "park_ready": not unsafe_claim,
         }
 
     @staticmethod
@@ -244,14 +278,25 @@ class WorkspaceCoordinator:
             claim["id"]: WorkspaceCoordinator._claim_scopes(connection, claim["id"])
             for claim in active
         }
-        queued = connection.execute(
-            "SELECT * FROM claims WHERE workspace_id = ? AND state = 'queued' ORDER BY queue_order",
-            (workspace_id,),
-        ).fetchall()
+        queued = list(
+            connection.execute(
+                "SELECT * FROM claims WHERE workspace_id = ? AND state = 'queued'",
+                (workspace_id,),
+            ).fetchall()
+        )
+        queued_scopes = {
+            claim["id"]: WorkspaceCoordinator._claim_scopes(connection, claim["id"])
+            for claim in queued
+        }
+        queued.sort(
+            key=lambda claim: WorkspaceCoordinator._claim_sort_key(
+                claim, queued_scopes[claim["id"]]
+            )
+        )
         blocked_earlier: list[sqlite3.Row] = []
         blocked_scopes: dict[str, dict[str, tuple[str, ...]]] = {}
         for candidate in queued:
-            candidate_scopes = WorkspaceCoordinator._claim_scopes(connection, candidate["id"])
+            candidate_scopes = queued_scopes[candidate["id"]]
             if candidate["kind"] == "freeze":
                 other_active = [
                     claim for claim in active if claim["task_id"] != candidate["task_id"]
@@ -377,6 +422,7 @@ class WorkspaceCoordinator:
             "queue_order": claim["queue_order"],
             "writes": list(scopes["write"]),
             "resources": list(scopes["resource"]),
+            "priority": WorkspaceCoordinator._claim_priority(claim, scopes),
             "parked_for": scopes["parked_for"][0] if scopes["parked_for"] else None,
             "created_at": claim["created_at"],
             "granted_at": claim["granted_at"],
@@ -636,6 +682,7 @@ class WorkspaceCoordinator:
         writes: Sequence[str] = (),
         resources: Sequence[str] = (),
         freeze: bool = False,
+        priority: str = "normal",
         wait_seconds: float = 0.0,
         keep_queued: bool = False,
     ) -> dict[str, Any]:
@@ -646,6 +693,10 @@ class WorkspaceCoordinator:
             raise UsageError("A freeze claim cannot include write or resource scopes.")
         if not freeze and not normalized_writes and not normalized_resources:
             raise UsageError("A claim needs at least one write path or resource.")
+        if priority not in {"normal", "urgent"}:
+            raise UsageError("Claim priority must be normal or urgent.")
+        if not freeze and priority != "normal":
+            raise UsageError("Urgent priority is only supported for freeze claims.")
         if wait_seconds < 0:
             raise UsageError("Claim wait must not be negative.")
         now = time.time()
@@ -688,6 +739,12 @@ class WorkspaceCoordinator:
                 "INSERT INTO claim_scopes(claim_id, scope_type, value) VALUES(?, 'resource', ?)",
                 ((claim_id, value) for value in normalized_resources),
             )
+            if priority == "urgent":
+                connection.execute(
+                    "INSERT INTO claim_scopes(claim_id, scope_type, value) "
+                    "VALUES(?, 'priority', 'urgent')",
+                    (claim_id,),
+                )
             self._touch(connection, registered["id"])
             self._schedule_workspace(connection, registered["id"], now)
             claim = connection.execute("SELECT * FROM claims WHERE id = ?", (claim_id,)).fetchone()
@@ -791,8 +848,17 @@ class WorkspaceCoordinator:
                         "Task has no open claims to park.",
                         details={"reason": "task-claimless"},
                     )
+                target_scopes = self._claim_scopes(connection, target_freeze["id"])
+                target_key = self._claim_sort_key(target_freeze, target_scopes)
+                parked_claims = [
+                    claim
+                    for claim in owned
+                    if claim["state"] == "active"
+                    or self._claim_sort_key(claim, self._claim_scopes(connection, claim["id"]))
+                    < target_key
+                ]
                 unsafe: list[dict[str, Any]] = []
-                for claim in owned:
+                for claim in parked_claims:
                     scopes = self._claim_scopes(connection, claim["id"])
                     if claim["kind"] == "freeze" or scopes["resource"]:
                         unsafe.append(
@@ -808,7 +874,6 @@ class WorkspaceCoordinator:
                         details={"reason": "task-holds-unsafe-claims", "claims": unsafe},
                     )
                 freeze_id = target_freeze["id"]
-                parked_claims = owned
                 claim_ids = [claim["id"] for claim in parked_claims]
                 placeholders = ", ".join("?" for _ in claim_ids)
                 connection.execute(

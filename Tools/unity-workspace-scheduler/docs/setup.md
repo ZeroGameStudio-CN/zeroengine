@@ -26,11 +26,22 @@ unity-scheduler task park --workspace <root> --token-file <path> [--wait <second
 unity-scheduler claim acquire --workspace <root> --token-file <path> [--write <path>]... [--resource <name>]... [--wait <seconds>] [--keep-queued]
 unity-scheduler claim assert --workspace <root> --token-file <path> [--write <path>]... [--resource <name>]... [--freeze]
 unity-scheduler claim release --workspace <root> --token-file <path> --claim-id <id>
-unity-scheduler freeze acquire --workspace <root> --token-file <path> [--wait <seconds>] [--keep-queued]
+unity-scheduler freeze acquire --workspace <root> --token-file <path> [--priority normal|urgent] [--wait <seconds>] [--keep-queued]
 unity-scheduler task release --workspace <root> --token-file <path> --result completed|failed|outcome-unknown [--note <text>]
 ```
 
-Write paths are normalized inside the registered root; absolute paths outside it are rejected. Ancestor/descendant paths conflict, and an asset path conflicts with its `.meta` partner. Resource names are opaque workspace-local locks. Conflicting claims queue FIFO; non-conflicting claims can run together. A queued freeze is a fair barrier and becomes exclusive after earlier owners leave.
+Write paths are normalized inside the registered root; absolute paths outside it are rejected. Ancestor/descendant paths conflict, and an asset path conflicts with its `.meta` partner. Resource names are opaque workspace-local locks. Conflicting claims queue FIFO; non-conflicting claims can run together. A queued normal freeze is a fair barrier and becomes exclusive after earlier owners leave.
+
+Only a freeze may use `--priority urgent`. An urgent freeze passes all queued normal claims and
+normal freezes, while urgent freezes remain FIFO by their original queue order. Priority never
+preempts an active claim and never bypasses an unknown-outcome fence. Public claim JSON always
+reports `priority` as `normal` or `urgent`; the urgent marker is stored in the existing schema-1
+claim-scope table, so scheduler state remains backward compatible.
+
+Version 1.1 clients do not understand urgent ordering. During a 1.2 upgrade, stop launching
+scheduler commands, let any already-running command exit, replace the machine-wide executable,
+verify version 1.2, and only then enable callers that may request urgent freezes. Do not run 1.1
+and 1.2 processes against the same state directory while an urgent freeze exists.
 
 An external queued freeze is also a cooperative drain request for tasks whose earlier claims block
 that freeze; claimless tasks and tasks with only later queued claims are not signalled. Before its
