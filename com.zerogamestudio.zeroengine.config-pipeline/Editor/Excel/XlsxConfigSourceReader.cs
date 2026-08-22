@@ -97,21 +97,29 @@ namespace ZeroGameStudio.ConfigPipeline.Editor
                 RejectUnsafeParts(workbookPart);
                 EnforceExpandedLimit(workbookPart);
                 List<TableDefinition> tables = DiscoverTables();
-                ValidateSheets(workbookPart, tables);
                 Dictionary<string, string> metadata = ReadMetadata(workbookPart);
-                ValidateMetadata(metadata, context);
+                int workbookFormatVersion = ValidateMetadata(metadata, context);
+                Dictionary<TableDefinition, TableLocation> tableLocations =
+                    LocateTables(workbookPart, tables);
+                if (workbookFormatVersion == 1)
+                {
+                    ValidateSheets(workbookPart, tables);
+                }
+                else
+                {
+                    ValidateGroupedSheets(workbookPart, tableLocations.Values);
+                }
 
                 var sourceMap = new List<XlsxSourceMapEntry>();
                 var rowsByTable = new Dictionary<TableDefinition, List<ReadRow>>();
                 foreach (TableDefinition table in tables)
                 {
-                    Sheet sheet = FindSheet(workbookPart, table.SheetName);
-                    WorksheetPart worksheetPart =
-                        (WorksheetPart)workbookPart.GetPartById(sheet.Id.Value);
+                    TableLocation location = tableLocations[table];
                     List<ReadRow> rows = ReadTable(
                         workbookPart,
-                        worksheetPart,
+                        location.WorksheetPart,
                         table,
+                        location,
                         context.ConfigSetId,
                         workbookName,
                         sourceMap);
@@ -321,6 +329,209 @@ namespace ZeroGameStudio.ConfigPipeline.Editor
             }
         }
 
+        private Dictionary<TableDefinition, TableLocation> LocateTables(
+            WorkbookPart workbookPart,
+            IReadOnlyList<TableDefinition> tables)
+        {
+            var expected = new Dictionary<string, TableDefinition>(StringComparer.Ordinal);
+            for (int index = 0; index < tables.Count; index++)
+            {
+                expected.Add(
+                    XlsxConfigWorkbookWriter.BusinessTableName(tables[index].SheetName, (uint)index + 1U),
+                    tables[index]);
+            }
+
+            var locations = new Dictionary<TableDefinition, TableLocation>();
+            foreach (WorksheetPart worksheetPart in workbookPart.WorksheetParts)
+            {
+                string relationshipId = workbookPart.GetIdOfPart(worksheetPart);
+                Sheet sheet = workbookPart.Workbook.Sheets.Elements<Sheet>()
+                    .Single(value => string.Equals(value.Id?.Value, relationshipId, StringComparison.Ordinal));
+                foreach (TableDefinitionPart tablePart in worksheetPart.TableDefinitionParts)
+                {
+                    Table excelTable = tablePart.Table ?? throw new XlsxConfigException(
+                        "XLSX_TABLE_DEFINITION_INVALID",
+                        "Workbook contains an invalid Excel table definition.");
+                    string name = excelTable.Name?.Value ?? excelTable.DisplayName?.Value;
+                    if (string.IsNullOrEmpty(name) || !expected.TryGetValue(name, out TableDefinition table))
+                    {
+                        throw new XlsxConfigException(
+                            "XLSX_UNKNOWN_TABLE",
+                            "Workbook contains an unknown Excel table '" + (name ?? string.Empty) + "'.");
+                    }
+
+                    if (locations.ContainsKey(table))
+                    {
+                        throw new XlsxConfigException(
+                            "XLSX_TABLE_DUPLICATE",
+                            "Workbook contains duplicate Excel table '" + name + "'.");
+                    }
+
+                    ParseRange(
+                        excelTable.Reference?.Value,
+                        out int firstColumn,
+                        out uint headerRow,
+                        out int lastColumn,
+                        out uint lastRow);
+                    if (headerRow < 2U || lastRow <= headerRow ||
+                        lastColumn - firstColumn + 1 != table.ColumnCount ||
+                        excelTable.TableColumns?.Count?.Value != (uint)table.ColumnCount)
+                    {
+                        throw new XlsxConfigException(
+                            "XLSX_TABLE_RANGE_INVALID",
+                            "Excel table '" + name + "' does not match the Schema shape.");
+                    }
+
+                    locations.Add(table, new TableLocation(
+                        worksheetPart,
+                        sheet.Name.Value,
+                        firstColumn,
+                        lastColumn,
+                        headerRow,
+                        lastRow));
+                }
+            }
+
+            if (locations.Count != tables.Count)
+            {
+                throw new XlsxConfigException(
+                    "XLSX_TABLE_MISSING",
+                    "Workbook is missing one or more declared Excel tables.");
+            }
+
+            return locations;
+        }
+
+        private void ValidateGroupedSheets(
+            WorkbookPart workbookPart,
+            IEnumerable<TableLocation> locations)
+        {
+            List<Sheet> sheets = workbookPart.Workbook.Sheets?.Elements<Sheet>().ToList() ??
+                                 new List<Sheet>();
+            int optionalSheetCount = sheets.Count(
+                sheet => OptionalInternalSheets.Contains(sheet.Name.Value));
+            int quotaSheetCount = sheets.Count - (optionalSheetCount == 1 ? 1 : 0);
+            if (quotaSheetCount > limits.MaximumWorksheetCount)
+            {
+                throw new XlsxConfigException(
+                    "XLSX_SHEET_LIMIT",
+                    "Workbook exceeds the worksheet-count limit.");
+            }
+
+            var names = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            var dataSheets = new HashSet<string>(
+                locations.Select(location => location.WorksheetName),
+                StringComparer.Ordinal);
+            var requiredInternal = new HashSet<string>(RequiredInternalSheets, StringComparer.Ordinal);
+            foreach (Sheet sheet in sheets)
+            {
+                string name = sheet.Name?.Value ?? string.Empty;
+                if (!names.Add(name))
+                {
+                    throw new XlsxConfigException(
+                        "XLSX_UNKNOWN_SHEET",
+                        "Workbook contains duplicate Sheet '" + name + "'.");
+                }
+
+                if (RequiredInternalSheets.Contains(name))
+                {
+                    requiredInternal.Remove(name);
+                    if (sheet.State == null || sheet.State.Value != SheetStateValues.VeryHidden)
+                    {
+                        throw new XlsxConfigException(
+                            "XLSX_INTERNAL_SHEET_VISIBLE",
+                            "Internal Sheet '" + name + "' must remain very hidden.");
+                    }
+
+                    continue;
+                }
+
+                if (OptionalInternalSheets.Contains(name))
+                {
+                    continue;
+                }
+
+                if (!dataSheets.Contains(name))
+                {
+                    throw new XlsxConfigException(
+                        "XLSX_UNKNOWN_SHEET",
+                        "Workbook contains unknown Sheet '" + name + "'.");
+                }
+
+                if (sheet.State != null && sheet.State.Value != SheetStateValues.Visible)
+                {
+                    throw new XlsxConfigException(
+                        "XLSX_DATA_SHEET_HIDDEN",
+                        "Authoring Sheets cannot be hidden.");
+                }
+            }
+
+            if (requiredInternal.Count != 0 || dataSheets.Except(names, StringComparer.Ordinal).Any())
+            {
+                throw new XlsxConfigException(
+                    "XLSX_SHEET_MISSING",
+                    "Workbook is missing one or more declared/internal Sheets.");
+            }
+
+            Sheet firstSheet = sheets.FirstOrDefault();
+            if (firstSheet == null ||
+                !string.Equals(firstSheet.Name.Value, "_zgs_schema", StringComparison.Ordinal))
+            {
+                throw new XlsxConfigException(
+                    "XLSX_SCHEMA_SHEET_ORDER",
+                    "_zgs_schema must be the first worksheet.");
+            }
+        }
+
+        private static void ParseRange(
+            string reference,
+            out int firstColumn,
+            out uint firstRow,
+            out int lastColumn,
+            out uint lastRow)
+        {
+            string[] parts = (reference ?? string.Empty).Split(':');
+            if (parts.Length != 2)
+            {
+                throw new XlsxConfigException(
+                    "XLSX_TABLE_RANGE_INVALID",
+                    "Excel table range is invalid.");
+            }
+
+            ParseCoordinate(parts[0], out firstColumn, out firstRow);
+            ParseCoordinate(parts[1], out lastColumn, out lastRow);
+            if (firstColumn > lastColumn || firstRow > lastRow)
+            {
+                throw new XlsxConfigException(
+                    "XLSX_TABLE_RANGE_INVALID",
+                    "Excel table range is invalid.");
+            }
+        }
+
+        private static void ParseCoordinate(string reference, out int column, out uint row)
+        {
+            string value = (reference ?? string.Empty).Replace("$", string.Empty);
+            int split = 0;
+            while (split < value.Length && char.IsLetter(value[split]))
+            {
+                split++;
+            }
+
+            if (split == 0 || split == value.Length ||
+                !uint.TryParse(
+                    value.Substring(split),
+                    NumberStyles.None,
+                    CultureInfo.InvariantCulture,
+                    out row) || row == 0U)
+            {
+                throw new XlsxConfigException(
+                    "XLSX_TABLE_RANGE_INVALID",
+                    "Excel table range is invalid.");
+            }
+
+            column = ParseColumn(value.Substring(0, split));
+        }
+
         private static Dictionary<string, string> ReadMetadata(WorkbookPart workbookPart)
         {
             Sheet sheet = FindSheet(workbookPart, "_zgs_meta");
@@ -350,14 +561,19 @@ namespace ZeroGameStudio.ConfigPipeline.Editor
             return metadata;
         }
 
-        private void ValidateMetadata(
+        private int ValidateMetadata(
             IReadOnlyDictionary<string, string> metadata,
             ConfigReadContext context)
         {
-            RequireMetadata(
-                metadata,
-                "toolFormatVersion",
-                XlsxConfigWorkbookWriter.WorkbookFormatVersion.ToString(CultureInfo.InvariantCulture));
+            if (!metadata.TryGetValue("toolFormatVersion", out string formatText) ||
+                !int.TryParse(formatText, NumberStyles.None, CultureInfo.InvariantCulture, out int formatVersion) ||
+                formatVersion < 1 || formatVersion > XlsxConfigWorkbookWriter.WorkbookFormatVersion)
+            {
+                throw new XlsxConfigException(
+                    "XLSX_META_MISMATCH",
+                    "Workbook metadata 'toolFormatVersion' is not supported.");
+            }
+
             RequireMetadata(metadata, "schemaId", schema.SchemaId);
             RequireMetadata(
                 metadata,
@@ -380,12 +596,15 @@ namespace ZeroGameStudio.ConfigPipeline.Editor
                     "XLSX_CONTEXT_SCHEMA_MISMATCH",
                     "Read context does not match the selected schema.");
             }
+
+            return formatVersion;
         }
 
         private List<ReadRow> ReadTable(
             WorkbookPart workbookPart,
             WorksheetPart worksheetPart,
             TableDefinition table,
+            TableLocation location,
             string configSetId,
             string workbookName,
             List<XlsxSourceMapEntry> sourceMap)
@@ -395,25 +614,34 @@ namespace ZeroGameStudio.ConfigPipeline.Editor
                                       "XLSX_SHEET_DATA_MISSING",
                                       "Sheet '" + table.SheetName + "' has no data.");
             List<Row> rows = sheetData.Elements<Row>().ToList();
-            if (rows.Count < 2)
+            Row machineHeader = rows.SingleOrDefault(
+                row => row.RowIndex.HasValue && row.RowIndex.Value == location.HeaderRow - 1U);
+            if (machineHeader == null)
             {
                 throw new XlsxConfigException(
                     "XLSX_HEADER_MISSING",
                     "Sheet '" + table.SheetName + "' is missing machine/title rows.");
             }
 
-            ValidateHeader(workbookPart, rows[0], table);
+            ValidateHeader(workbookPart, machineHeader, table, location.FirstColumnIndex);
             var readRows = new List<ReadRow>();
-            foreach (Row row in rows.Skip(2))
+            foreach (Row row in rows.Where(
+                         value => value.RowIndex.HasValue &&
+                                  value.RowIndex.Value > location.HeaderRow &&
+                                  value.RowIndex.Value <= location.LastRow))
             {
-                if (row.RowIndex.HasValue && row.RowIndex.Value - 2 > limits.MaximumRowsPerSheet)
+                if (row.RowIndex.Value - location.HeaderRow > limits.MaximumRowsPerSheet)
                 {
                     throw new XlsxConfigException(
                         "XLSX_ROW_LIMIT",
                         "Sheet '" + table.SheetName + "' exceeds the data-row limit.");
                 }
 
-                Dictionary<int, Cell> cells = IndexCells(row);
+                Dictionary<int, Cell> allCells = IndexCells(row);
+                Dictionary<int, Cell> cells = allCells
+                    .Where(pair => pair.Key >= location.FirstColumnIndex &&
+                                   pair.Key <= location.LastColumnIndex)
+                    .ToDictionary(pair => pair.Key, pair => pair.Value);
                 if (cells.Values.Any(cell => cell.CellFormula != null))
                 {
                     throw new XlsxConfigException(
@@ -421,7 +649,7 @@ namespace ZeroGameStudio.ConfigPipeline.Editor
                         "Formulas are forbidden in data sheets.");
                 }
 
-                if (cells.Keys.Any(column => column > table.ColumnCount))
+                if (location.LastColumnIndex - location.FirstColumnIndex + 1 != table.ColumnCount)
                 {
                     throw new XlsxConfigException(
                         "XLSX_UNKNOWN_COLUMN",
@@ -434,7 +662,7 @@ namespace ZeroGameStudio.ConfigPipeline.Editor
                 string parentKey = null;
                 if (table.Parent != null)
                 {
-                    cells.TryGetValue(1, out Cell parentCell);
+                    cells.TryGetValue(location.FirstColumnIndex, out Cell parentCell);
                     string parentText = parentCell == null
                         ? string.Empty
                         : ReadCellText(workbookPart, parentCell);
@@ -451,7 +679,8 @@ namespace ZeroGameStudio.ConfigPipeline.Editor
 
                 for (int columnIndex = 0; columnIndex < table.Fields.Count; columnIndex++)
                 {
-                    int physicalColumn = columnIndex + table.FieldColumnOffset;
+                    int physicalColumn = location.FirstColumnIndex + columnIndex +
+                                         table.FieldColumnOffset - 1;
                     cells.TryGetValue(physicalColumn, out Cell cell);
                     string text = cell == null ? string.Empty : ReadCellText(workbookPart, cell);
                     if (string.IsNullOrEmpty(text))
@@ -491,7 +720,9 @@ namespace ZeroGameStudio.ConfigPipeline.Editor
                             ReadOrderValue(objectNode, table.ArraySchema.OrderField),
                             checked((int)(row.RowIndex?.Value ?? (uint)(readRows.Count + 3))),
                             presentColumns,
-                            parentKey));
+                            parentKey,
+                            location.FirstColumnIndex,
+                            location.WorksheetName));
                 }
             }
 
@@ -624,9 +855,9 @@ namespace ZeroGameStudio.ConfigPipeline.Editor
                     sourceMap.Add(new XlsxSourceMapEntry(
                         rowPath + "/" + table.Fields[columnIndex].PointerPath,
                         workbookName,
-                        table.SheetName,
+                        row.WorksheetName,
                         row.SourceRow,
-                        columnIndex + table.FieldColumnOffset));
+                        row.FirstColumnIndex + columnIndex + table.FieldColumnOffset - 1));
                 }
 
                 foreach (KeyValuePair<TableDefinition, List<ReadRow>> child in row.ChildRows)
@@ -644,10 +875,15 @@ namespace ZeroGameStudio.ConfigPipeline.Editor
         private static void ValidateHeader(
             WorkbookPart workbookPart,
             Row machineHeader,
-            TableDefinition table)
+            TableDefinition table,
+            int firstColumnIndex)
         {
             Dictionary<int, Cell> cells = IndexCells(machineHeader);
-            if (cells.Count != table.ColumnCount)
+            Dictionary<int, Cell> tableCells = cells
+                .Where(pair => pair.Key >= firstColumnIndex &&
+                               pair.Key < firstColumnIndex + table.ColumnCount)
+                .ToDictionary(pair => pair.Key, pair => pair.Value);
+            if (tableCells.Count != table.ColumnCount)
             {
                 throw new XlsxConfigException(
                     "XLSX_HEADER_COUNT",
@@ -656,7 +892,7 @@ namespace ZeroGameStudio.ConfigPipeline.Editor
 
             for (int index = 0; index < table.ColumnCount; index++)
             {
-                if (!cells.TryGetValue(index + 1, out Cell cell))
+                if (!tableCells.TryGetValue(firstColumnIndex + index, out Cell cell))
                 {
                     throw new XlsxConfigException(
                         "XLSX_HEADER_COUNT",
@@ -974,6 +1210,32 @@ namespace ZeroGameStudio.ConfigPipeline.Editor
             public int ColumnCount => Fields.Count + (Parent == null ? 0 : 1);
         }
 
+        private sealed class TableLocation
+        {
+            public TableLocation(
+                WorksheetPart worksheetPart,
+                string worksheetName,
+                int firstColumnIndex,
+                int lastColumnIndex,
+                uint headerRow,
+                uint lastRow)
+            {
+                WorksheetPart = worksheetPart;
+                WorksheetName = worksheetName;
+                FirstColumnIndex = firstColumnIndex;
+                LastColumnIndex = lastColumnIndex;
+                HeaderRow = headerRow;
+                LastRow = lastRow;
+            }
+
+            public WorksheetPart WorksheetPart { get; }
+            public string WorksheetName { get; }
+            public int FirstColumnIndex { get; }
+            public int LastColumnIndex { get; }
+            public uint HeaderRow { get; }
+            public uint LastRow { get; }
+        }
+
         private sealed class FieldDefinition
         {
             public FieldDefinition(string name, ConfigSchemaNode schema)
@@ -999,7 +1261,9 @@ namespace ZeroGameStudio.ConfigPipeline.Editor
                 long? order,
                 int sourceRow,
                 IReadOnlyList<int> presentColumns,
-                string parentKey)
+                string parentKey,
+                int firstColumnIndex,
+                string worksheetName = null)
             {
                 Value = value;
                 PrimaryKey = primaryKey;
@@ -1007,6 +1271,8 @@ namespace ZeroGameStudio.ConfigPipeline.Editor
                 SourceRow = sourceRow;
                 PresentColumns = presentColumns;
                 ParentKey = parentKey;
+                FirstColumnIndex = firstColumnIndex;
+                WorksheetName = worksheetName;
                 ChildRows = new Dictionary<TableDefinition, List<ReadRow>>();
             }
 
@@ -1021,6 +1287,10 @@ namespace ZeroGameStudio.ConfigPipeline.Editor
             public IReadOnlyList<int> PresentColumns { get; }
 
             public string ParentKey { get; }
+
+            public int FirstColumnIndex { get; }
+
+            public string WorksheetName { get; }
 
             public Dictionary<TableDefinition, List<ReadRow>> ChildRows { get; }
         }

@@ -62,6 +62,52 @@ namespace ZeroGameStudio.ConfigPipeline.Tests.Editor
         }
 
         [Test]
+        public void Profile_ParsesAuthoringSheetGroups()
+        {
+            string json = ProfileJson().Replace(
+                "{\"path\":\"Config/items.xlsx\",\"tables\":[\"items\"]}",
+                "{\"path\":\"Config/items.xlsx\",\"tables\":[\"items\"]," +
+                "\"authoringSheets\":[{\"name\":\"Item\",\"tables\":[\"items\"]}]}");
+
+            ConfigProjectProfile profile = ConfigProjectProfileParser.Parse(Utf8(json));
+            ConfigWorkbookProfile workbook = profile.GetConfigSet("sample").Workbooks[0];
+            Assert.That(workbook.AuthoringSheets, Has.Count.EqualTo(1));
+            Assert.That(workbook.AuthoringSheets[0].Name, Is.EqualTo("Item"));
+            Assert.That(workbook.AuthoringSheets[0].Tables, Is.EqualTo(new[] { "items" }));
+        }
+
+        [Test]
+        public void Profile_RejectsAuthoringSheetThatDoesNotCoverWorkbookTables()
+        {
+            string json = ProfileJson().Replace(
+                "{\"path\":\"Config/items.xlsx\",\"tables\":[\"items\"]}",
+                "{\"path\":\"Config/items.xlsx\",\"tables\":[\"items\"]," +
+                "\"authoringSheets\":[{\"name\":\"Item\",\"tables\":[\"groups\"]}]}");
+
+            Assert.Throws<InvalidDataException>(() => ConfigProjectProfileParser.Parse(Utf8(json)));
+        }
+
+        [Test]
+        public void Plan_RejectsSchemaRootThatIsNotRegisteredToAWorkbook()
+        {
+            string json = ProfileJson().Replace(
+                ",{\"path\":\"Config/groups.xlsx\",\"tables\":[\"groups\"]}",
+                string.Empty);
+            File.WriteAllBytes(
+                Path.Combine(root, "Config", "config-project.json"),
+                Utf8(json));
+
+            InvalidDataException exception = Assert.Throws<InvalidDataException>(() =>
+                new ConfigPipelineService().Plan(
+                    root,
+                    "Config/config-project.json",
+                    "sample",
+                    "package@1"));
+            Assert.That(exception.Message, Does.Contain("CONFIG_WORKBOOK_OWNERSHIP_INCOMPLETE"));
+            Assert.That(exception.Message, Does.Contain("groups"));
+        }
+
+        [Test]
         public void PlanApplyCheck_MergesOwnedWorkbooksAndIsDeterministic()
         {
             var service = new ConfigPipelineService();

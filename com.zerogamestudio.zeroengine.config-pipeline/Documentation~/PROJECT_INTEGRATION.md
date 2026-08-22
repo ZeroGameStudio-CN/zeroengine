@@ -4,6 +4,32 @@ Add the package and `com.unity.nuget.newtonsoft-json`, then create
 `Config/config-project.json`. Each config set declares its Schema, Excel source,
 one owner workbook per top-level table, generated DTO namespace/path, and target
 JSON, Manifest, source-map and optional Workshop Schema paths.
+The union of workbook `tables` must exactly cover every top-level Schema array
+that declares `x-zgs-sheet`; Plan, template generation and candidate refresh fail
+closed when a root table is unregistered. Create a new workbook by declaring its
+path and ownership in `config-project.json` first, then generate it through
+`WriteTemplates` or `RefreshCandidate`. A standalone XLSX file is not a registered
+configuration source and must not be created as an intermediate workflow state.
+
+An optional workbook `authoringSheets` array groups owned root tables into the
+designer-visible Sheet names. Every owned root must occur exactly once. Root and
+child tables in one group are placed as separate Excel tables on that worksheet;
+the reader restores the original normalized JSON arrays by Excel table identity.
+For example:
+
+```json
+{
+  "path": "Config/items.xlsx",
+  "tables": ["items", "itemTypes", "itemTags"],
+  "authoringSheets": [
+    { "name": "Item", "tables": ["items"] },
+    { "name": "Config", "tables": ["itemTypes", "itemTags"] }
+  ]
+}
+```
+
+Omit `authoringSheets` to retain the compatible one-physical-table-per-Sheet
+layout and visible navigation worksheet.
 For a brand-new config set with no workbook metadata yet, call
 `ConfigPipelineService.WriteTemplates(projectRoot, profilePath, configSetId,
 candidateOutputDirectory)` from project Editor automation. It reads the declared
@@ -103,7 +129,7 @@ To run the package's CoreContract tests from a consuming project, add
 project’s `Packages/manifest.json`. The test framework is a consumer test-only
 prerequisite and is intentionally not a runtime dependency of this package.
 Treat a zero-test result as failure even when the Unity process exits with code
-0. For package 2.0.3, run EditMode tests with NUnit category
-`ZGS.ConfigPipeline.CoreContract` and require exactly 73 discovered and passed
+0. For package 2.1.0, run EditMode tests with NUnit category
+`ZGS.ConfigPipeline.CoreContract` and require exactly 77 discovered and passed
 tests; update the documented expected count when the package test contract
 changes.

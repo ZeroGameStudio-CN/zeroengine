@@ -541,6 +541,92 @@ namespace ZeroGameStudio.ConfigPipeline.Tests
         }
 
         [Test]
+        public void AuthoringSheets_GroupRootAndChildTablesOnOneVisibleWorksheet()
+        {
+            const string nestedSchemaJson =
+                "{\"$id\":\"zgs.sample.grouped\",\"x-zgs-schema-version\":1," +
+                "\"type\":\"object\",\"additionalProperties\":false,\"required\":[\"parents\"]," +
+                "\"properties\":{\"parents\":{\"type\":\"array\",\"x-zgs-sheet\":\"Parents\"," +
+                "\"items\":{\"type\":\"object\",\"additionalProperties\":false," +
+                "\"required\":[\"id\",\"children\"],\"properties\":{" +
+                "\"id\":{\"type\":\"string\",\"x-zgs-primary-key\":true}," +
+                "\"children\":{\"type\":\"array\",\"x-zgs-sheet\":\"Children\"," +
+                "\"x-zgs-parent-key\":\"parentId\",\"x-zgs-order-field\":\"order\"," +
+                "\"items\":{\"type\":\"object\",\"additionalProperties\":false," +
+                "\"required\":[\"id\",\"order\",\"value\"],\"properties\":{" +
+                "\"id\":{\"type\":\"string\",\"x-zgs-primary-key\":true}," +
+                "\"order\":{\"type\":\"integer\",\"x-zgs-number-type\":\"int32\"}," +
+                "\"value\":{\"type\":\"string\"}}}}}}}}}";
+            ConfigSchema schema = ConfigSchemaParser.Parse(Encoding.UTF8.GetBytes(nestedSchemaJson));
+            var source = new ConfigDocument(
+                "grouped",
+                schema.SchemaId,
+                schema.SchemaVersion,
+                new ConfigObjectNode(new[]
+                {
+                    new ConfigProperty("parents", new ConfigArrayNode(new ConfigNode[]
+                    {
+                        new ConfigObjectNode(new[]
+                        {
+                            new ConfigProperty("id", new ConfigStringNode("parent-a")),
+                            new ConfigProperty("children", new ConfigArrayNode(new ConfigNode[]
+                            {
+                                new ConfigObjectNode(new[]
+                                {
+                                    new ConfigProperty("id", new ConfigStringNode("child-a")),
+                                    new ConfigProperty("order", new ConfigIntegerNode(1)),
+                                    new ConfigProperty("value", new ConfigStringNode("value-a"))
+                                })
+                            }))
+                        })
+                    }))
+                }));
+
+            using (var stream = new MemoryStream())
+            {
+                new XlsxConfigWorkbookWriter().WriteTemplate(
+                    stream,
+                    schema,
+                    "grouped",
+                    source,
+                    null,
+                    new[] { "parents" },
+                    new[]
+                    {
+                        new ConfigAuthoringSheetProfile("Authoring", new[] { "parents" })
+                    });
+                stream.Position = 0;
+                using (SpreadsheetDocument workbook = SpreadsheetDocument.Open(stream, false))
+                {
+                    Assert.That(new OpenXmlValidator().Validate(workbook), Is.Empty);
+                    Sheet[] visible = workbook.WorkbookPart.Workbook.Sheets.Elements<Sheet>()
+                        .Where(sheet => sheet.State == null || sheet.State.Value == SheetStateValues.Visible)
+                        .ToArray();
+                    Assert.That(visible.Select(sheet => sheet.Name.Value), Is.EqualTo(new[] { "Authoring" }));
+                    WorksheetPart part = (WorksheetPart)workbook.WorkbookPart.GetPartById(visible[0].Id.Value);
+                    Assert.That(
+                        part.TableDefinitionParts.Select(value => value.Table.Reference.Value),
+                        Is.EqualTo(new[] { "A2:A3", "C2:F3" }));
+                    Assert.That(part.Worksheet.GetFirstChild<TableParts>().Count.Value, Is.EqualTo(2U));
+                }
+
+                stream.Position = 0;
+                XlsxReadResult read = new XlsxConfigSourceReader(
+                    schema,
+                    null,
+                    new[] { "parents" }).ReadWithSourceMap(
+                    stream,
+                    new ConfigReadContext("grouped", schema.SchemaId, schema.SchemaVersion),
+                    "grouped.xlsx");
+                Assert.That(
+                    CanonicalJsonWriter.WriteText(read.Document.Root),
+                    Is.EqualTo(CanonicalJsonWriter.WriteText(source.Root)));
+                Assert.That(read.SourceMap.All(value => value.Sheet == "Authoring"), Is.True);
+                Assert.That(read.SourceMap.Any(value => value.Column >= 3), Is.True);
+            }
+        }
+
+        [Test]
         public void OneToOneObject_UsesFlattenedColumnsAndRestoresObject()
         {
             const string schemaJson =

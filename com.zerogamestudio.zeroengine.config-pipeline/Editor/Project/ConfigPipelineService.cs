@@ -228,6 +228,7 @@ namespace ZeroGameStudio.ConfigPipeline.Editor
             ConfigSetProfile set = profile.GetConfigSet(configSetId);
             ConfigSchema schema = ConfigSchemaParser.Parse(File.ReadAllBytes(
                 ConfigPathGuard.ResolveInside(root, set.SchemaPath)));
+            ValidateWorkbookOwnership(set, schema);
             Directory.CreateDirectory(outputDirectory);
             foreach (ConfigWorkbookProfile workbook in set.Workbooks)
             {
@@ -240,7 +241,8 @@ namespace ZeroGameStudio.ConfigPipeline.Editor
                         configSetId,
                         null,
                         null,
-                        workbook.Tables);
+                        workbook.Tables,
+                        workbook.AuthoringSheets);
                 }
             }
         }
@@ -313,7 +315,8 @@ namespace ZeroGameStudio.ConfigPipeline.Editor
                             configSetId,
                             source.Document,
                             sourceHash,
-                            workbook.Tables);
+                            workbook.Tables,
+                            workbook.AuthoringSheets);
                     }
                 }
 
@@ -444,7 +447,8 @@ namespace ZeroGameStudio.ConfigPipeline.Editor
                         configSetId,
                         candidateDocument,
                         jsonSourceHash,
-                        workbook.Tables);
+                        workbook.Tables,
+                        workbook.AuthoringSheets);
                 }
             }
 
@@ -472,6 +476,7 @@ namespace ZeroGameStudio.ConfigPipeline.Editor
                 ConfigPathGuard.ResolveInside(root, currentSet.SchemaPath)));
             ConfigSchema nextSchema = ConfigSchemaParser.Parse(File.ReadAllBytes(
                 ConfigPathGuard.ResolveInside(root, nextSet.SchemaPath)));
+            ValidateWorkbookOwnership(nextSet, nextSchema);
             if (!string.Equals(currentSchema.SchemaId, nextSchema.SchemaId, StringComparison.Ordinal))
             {
                 throw new InvalidOperationException("Schema upgrade cannot change the schema ID.");
@@ -547,7 +552,8 @@ namespace ZeroGameStudio.ConfigPipeline.Editor
                         configSetId,
                         upgraded,
                         sourceHash,
-                        workbook.Tables);
+                        workbook.Tables,
+                        workbook.AuthoringSheets);
                 }
             }
 
@@ -671,6 +677,7 @@ namespace ZeroGameStudio.ConfigPipeline.Editor
             Func<ConfigWorkbookProfile, string> pathResolver,
             Func<ConfigWorkbookProfile, string> workbookNameResolver)
         {
+            ValidateWorkbookOwnership(set, schema);
             var properties = new Dictionary<string, ConfigNode>(StringComparer.Ordinal);
             var sourceMap = new List<XlsxSourceMapEntry>();
             foreach (ConfigWorkbookProfile workbook in set.Workbooks)
@@ -717,6 +724,30 @@ namespace ZeroGameStudio.ConfigPipeline.Editor
                 new ConfigDocument(set.ConfigSetId, schema.SchemaId, schema.SchemaVersion, new ConfigObjectNode(ordered)),
                 string.Empty,
                 sourceMap);
+        }
+
+        private static void ValidateWorkbookOwnership(
+            ConfigSetProfile set,
+            ConfigSchema schema)
+        {
+            var declared = new HashSet<string>(
+                set.Workbooks.SelectMany(workbook => workbook.Tables),
+                StringComparer.Ordinal);
+            var required = new HashSet<string>(
+                schema.Root.Properties
+                    .Where(property => property.Schema.Type == ConfigSchemaType.Array &&
+                                       !string.IsNullOrEmpty(property.Schema.Sheet) &&
+                                       property.Schema.Items?.Type == ConfigSchemaType.Object)
+                    .Select(property => property.Name),
+                StringComparer.Ordinal);
+            if (!declared.SetEquals(required))
+            {
+                string missing = string.Join(",", required.Except(declared).OrderBy(value => value));
+                string unknown = string.Join(",", declared.Except(required).OrderBy(value => value));
+                throw new InvalidDataException(
+                    "CONFIG_WORKBOOK_OWNERSHIP_INCOMPLETE missing=[" + missing +
+                    "] unknown=[" + unknown + "]");
+            }
         }
 
         private static void ValidateAssets(

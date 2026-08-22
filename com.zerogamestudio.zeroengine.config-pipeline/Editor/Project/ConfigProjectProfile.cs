@@ -55,13 +55,31 @@ namespace ZeroGameStudio.ConfigPipeline.Editor
 
     public sealed class ConfigWorkbookProfile
     {
-        internal ConfigWorkbookProfile(string path, IEnumerable<string> tables)
+        internal ConfigWorkbookProfile(
+            string path,
+            IEnumerable<string> tables,
+            IEnumerable<ConfigAuthoringSheetProfile> authoringSheets)
         {
             Path = path;
             Tables = new List<string>(tables).AsReadOnly();
+            AuthoringSheets = new List<ConfigAuthoringSheetProfile>(
+                authoringSheets ?? Array.Empty<ConfigAuthoringSheetProfile>()).AsReadOnly();
         }
 
         public string Path { get; }
+        public IReadOnlyList<string> Tables { get; }
+        public IReadOnlyList<ConfigAuthoringSheetProfile> AuthoringSheets { get; }
+    }
+
+    public sealed class ConfigAuthoringSheetProfile
+    {
+        internal ConfigAuthoringSheetProfile(string name, IEnumerable<string> tables)
+        {
+            Name = name;
+            Tables = new List<string>(tables).AsReadOnly();
+        }
+
+        public string Name { get; }
         public IReadOnlyList<string> Tables { get; }
     }
 
@@ -94,7 +112,8 @@ namespace ZeroGameStudio.ConfigPipeline.Editor
         private static readonly HashSet<string> SetKeys = Keys(
             "configSetId", "authoringSource", "schema", "workbooks",
             "generatedNamespace", "rootClassName", "codePath", "targets");
-        private static readonly HashSet<string> WorkbookKeys = Keys("path", "tables");
+        private static readonly HashSet<string> WorkbookKeys = Keys("path", "tables", "authoringSheets");
+        private static readonly HashSet<string> AuthoringSheetKeys = Keys("name", "tables");
         private static readonly HashSet<string> TargetKeys = Keys(
             "scope", "json", "manifest", "sourceMap", "workshopSchema");
 
@@ -127,10 +146,16 @@ namespace ZeroGameStudio.ConfigPipeline.Editor
 
                 var workbooks = new List<ConfigWorkbookProfile>();
                 var tableOwners = new HashSet<string>(StringComparer.Ordinal);
+                var workbookPaths = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
                 foreach (ConfigNode workbookNode in RequireArray(set, "workbooks", id).Items)
                 {
                     ConfigObjectNode workbook = RequireObject(workbookNode, id + ".workbooks[]", WorkbookKeys);
                     string path = NormalizePath(RequireString(workbook, "path", id));
+                    if (!workbookPaths.Add(path))
+                    {
+                        throw new InvalidDataException("Duplicate workbook path: " + path);
+                    }
+
                     var tables = ReadStrings(RequireArray(workbook, "tables", id), id + ".tables");
                     if (tables.Count == 0)
                     {
@@ -145,7 +170,9 @@ namespace ZeroGameStudio.ConfigPipeline.Editor
                         }
                     }
 
-                    workbooks.Add(new ConfigWorkbookProfile(path, tables));
+                    IReadOnlyList<ConfigAuthoringSheetProfile> authoringSheets =
+                        ReadAuthoringSheets(workbook, tables, id + ".workbooks[]");
+                    workbooks.Add(new ConfigWorkbookProfile(path, tables, authoringSheets));
                 }
 
                 var targets = new List<ConfigTargetProfile>();
@@ -249,6 +276,71 @@ namespace ZeroGameStudio.ConfigPipeline.Editor
             }
 
             return result;
+        }
+
+        private static IReadOnlyList<ConfigAuthoringSheetProfile> ReadAuthoringSheets(
+            ConfigObjectNode workbook,
+            IReadOnlyList<string> workbookTables,
+            string path)
+        {
+            if (!workbook.TryGetValue("authoringSheets", out ConfigNode node))
+            {
+                return Array.Empty<ConfigAuthoringSheetProfile>();
+            }
+
+            if (!(node is ConfigArrayNode array) || array.Items.Count == 0)
+            {
+                throw new InvalidDataException(path + ".authoringSheets must be a non-empty array.");
+            }
+
+            var sheets = new List<ConfigAuthoringSheetProfile>();
+            var names = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            var assignedTables = new HashSet<string>(StringComparer.Ordinal);
+            foreach (ConfigNode sheetNode in array.Items)
+            {
+                ConfigObjectNode sheet = RequireObject(
+                    sheetNode,
+                    path + ".authoringSheets[]",
+                    AuthoringSheetKeys);
+                string name = RequireString(sheet, "name", path + ".authoringSheets[]");
+                ValidateWorksheetName(name, path + ".authoringSheets[].name");
+                if (!names.Add(name))
+                {
+                    throw new InvalidDataException("Duplicate authoring Sheet name: " + name);
+                }
+
+                IReadOnlyList<string> tables = ReadStrings(
+                    RequireArray(sheet, "tables", path + ".authoringSheets[]"),
+                    path + ".authoringSheets[].tables");
+                foreach (string table in tables)
+                {
+                    if (!workbookTables.Contains(table) || !assignedTables.Add(table))
+                    {
+                        throw new InvalidDataException(
+                            "Authoring Sheet tables must each belong to the workbook exactly once: " + table);
+                    }
+                }
+
+                sheets.Add(new ConfigAuthoringSheetProfile(name, tables));
+            }
+
+            if (!assignedTables.SetEquals(workbookTables))
+            {
+                throw new InvalidDataException(
+                    "authoringSheets must assign every workbook table exactly once.");
+            }
+
+            return sheets;
+        }
+
+        private static void ValidateWorksheetName(string value, string path)
+        {
+            if (value.Length > 31 || value.IndexOfAny(new[] { '[', ']', ':', '*', '?', '/', '\\' }) >= 0 ||
+                value.StartsWith("_zgs_", StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(value, XlsxConfigWorkbookWriter.NavigationSheetName, StringComparison.OrdinalIgnoreCase))
+            {
+                throw new InvalidDataException(path + " is not a valid authoring Sheet name.");
+            }
         }
 
         private static string OptionalPath(ConfigObjectNode value, string property)

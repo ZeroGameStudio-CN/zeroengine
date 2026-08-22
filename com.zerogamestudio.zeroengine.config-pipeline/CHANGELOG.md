@@ -1,5 +1,15 @@
 # Changelog
 
+## 2.1.0
+
+- Add optional workbook `authoringSheets` groups so several normalized root and
+  child Excel tables can share one designer-visible worksheet without changing
+  JSON structure or source-map precision.
+- Reject config sets whose Schema root tables are missing from workbook
+  ownership, preventing orphan workbooks that never appear in the Configurator.
+- Read workbook data by deterministic Excel table identity and retain support
+  for existing one-table-per-Sheet workbooks.
+
 ## 2.0.3
 
 - Label authoring-only and child parent-key columns as non-exported in visible
