@@ -83,10 +83,10 @@ namespace ZeroEngine.Localization
         {
             var op = LocalizationSettings.StringDatabase.GetLocalizedStringAsync(tableName, entryName);
             if (op.IsDone)
-                return op.Result;
-            
-            // Fallback for sync call (may block)
-            return op.WaitForCompletion();
+                return string.IsNullOrEmpty(op.Result) ? MissingKeyFormatter.Format(entryName) : op.Result;
+
+            // The legacy synchronous API remains non-blocking for frame safety.
+            return MissingKeyFormatter.Format(entryName);
         }
 
         /// <summary>
@@ -96,9 +96,9 @@ namespace ZeroEngine.Localization
         {
             var op = LocalizationSettings.StringDatabase.GetLocalizedStringAsync(tableName, entryName, args);
             if (op.IsDone)
-                return op.Result;
-            
-            return op.WaitForCompletion();
+                return string.IsNullOrEmpty(op.Result) ? MissingKeyFormatter.Format(entryName) : op.Result;
+
+            return MissingKeyFormatter.Format(entryName);
         }
 
         /// <summary>
@@ -111,9 +111,11 @@ namespace ZeroEngine.Localization
             
             var op = localizedString.GetLocalizedStringAsync();
             if (op.IsDone)
-                return op.Result;
-            
-            return op.WaitForCompletion();
+                return string.IsNullOrEmpty(op.Result)
+                    ? MissingKeyFormatter.Format(localizedString.TableEntryReference.Key)
+                    : op.Result;
+
+            return MissingKeyFormatter.Format(localizedString.TableEntryReference.Key);
         }
 
 #else

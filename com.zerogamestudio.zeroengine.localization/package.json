@@ -1,8 +1,8 @@
 {
   "name": "com.zerogamestudio.zeroengine.localization",
-  "version": "2.0.0",
+  "version": "2.1.0",
   "displayName": "ZeroEngine.Localization",
-  "description": "Localization support for ZeroEngine. Multi-language text management and font switching.",
+  "description": "Provider-agnostic async localization, deterministic locale fallback, structured formatting diagnostics, and generic font routing for ZeroEngine.",
   "unity": "2022.3",
   "unityRelease": "0f1",
   "dependencies": {

@@ -82,7 +82,7 @@ namespace ZeroEngine.Localization
         /// - 空翻译返回 [key]
         /// </summary>
         /// <param name="ls">LocalizedString 引用</param>
-        /// <param name="allowBlocking">是否允许阻塞等待（默认 false）</param>
+        /// <param name="allowBlocking">保留旧签名；当前实现始终不阻塞</param>
         /// <returns>本地化文本或 key 占位符</returns>
         public static string GetSafe(this LocalizedString ls, bool allowBlocking = false)
         {
@@ -103,19 +103,6 @@ namespace ZeroEngine.Localization
             // 非阻塞模式：未完成时返回 key
             if (!op.IsDone)
             {
-                if (allowBlocking)
-                {
-                    try
-                    {
-                        string blocked = op.WaitForCompletion();
-                        return string.IsNullOrEmpty(blocked) ? GetFormattedKey(key) : blocked;
-                    }
-                    catch (Exception e)
-                    {
-                        Debug.LogWarning($"[Localization] WaitForCompletion failed: {e.Message}");
-                        return GetFormattedKey(key);
-                    }
-                }
                 return GetFormattedKey(key);
             }
 
@@ -165,21 +152,12 @@ namespace ZeroEngine.Localization
             if (DebugMode)
                 return GetFormattedKey(key);
 
-            // 带参数版本通常用于 UI 初始化，允许阻塞
+            // 参数化版本也保持非阻塞，异步服务负责初始化后获取文本。
             var op = ls.GetLocalizedStringAsync(args);
 
             if (!op.IsDone)
             {
-                try
-                {
-                    string blocked = op.WaitForCompletion();
-                    return string.IsNullOrEmpty(blocked) ? GetFormattedKey(key) : blocked;
-                }
-                catch (Exception e)
-                {
-                    Debug.LogWarning($"[Localization] WaitForCompletion failed: {e.Message}");
-                    return GetFormattedKey(key);
-                }
+                return GetFormattedKey(key);
             }
 
             string result = op.Result;
