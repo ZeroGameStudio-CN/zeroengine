@@ -114,7 +114,7 @@ $expectedPackages = [ordered]@{
     'com.zerogamestudio.zeroengine.feedback' = '1.0.2'
     'com.zerogamestudio.zeroengine.modsystem' = '0.3.0'
     'com.zerogamestudio.zeroengine.tce' = '0.2.1'
-    'com.zerogamestudio.zeroengine.ui' = '2.0.2'
+    'com.zerogamestudio.zeroengine.ui' = '2.2.0'
 }
 
 $editorUiRoot = Join-Path $RepoRoot 'com.zerogamestudio.zeroengine.editor-ui'
