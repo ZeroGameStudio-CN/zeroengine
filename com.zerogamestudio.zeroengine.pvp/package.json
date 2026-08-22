@@ -1,13 +1,12 @@
 {
   "name": "com.zerogamestudio.zeroengine.pvp",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "displayName": "ZeroEngine.PvP",
   "description": "Asynchronous PvP framework with team snapshots, matchmaking, and ranking systems.",
   "unity": "2022.3",
   "unityRelease": "0f1",
   "dependencies": {
-    "com.zerogamestudio.zeroengine.core": "2.0.0",
-    "com.zerogamestudio.zeroengine.autobattle": "1.0.0"
+    "com.zerogamestudio.zeroengine.core": "2.0.0"
   },
   "keywords": [
     "zeroengine",

@@ -1,65 +1,41 @@
 # ZeroEngine.AutoBattle
 
-自动战斗框架，为战棋/策略类游戏提供格子战斗系统。
+无引擎依赖的自动战斗内核，为回合制战术游戏提供整数格遍历与确定性决策选择。
 
-## 功能特性
+## 公共能力
 
-- **格子系统** (`Grid/`)
-  - `GridBoard` - 棋盘管理，支持任意尺寸
-  - `GridCell` - 单个格子，支持地形效果
-  - `IBattleUnit` - 战斗单位接口
+- `TacticalGridPosition`：整数坐标和值语义。
+- `TacticalGrid`：阻挡/占用状态、固定顺序的 BFS 可达范围和 row-major 攻击范围。
+- `TacticalDecisionPlanner`：按 stable actor order 枚举、过滤和排序动作，并在无合法攻击时执行移动评分回退。
+- `TacticalGridTraversalScratch`、`TacticalDecisionScratch<TActor, TPayload>`：由调用方持有并可复用的 scratch buffer。
 
-- **战斗系统** (`Battle/`)
-  - `AutoBattleManager` - 自动战斗流程控制
-  - `BattleUnitBase` - 战斗单位基类
-
-- **技能系统** (`Skill/`)
-  - `SkillData` - 技能数据基类
-  - `SkillSlotManager` - 技能槽位管理
-
-- **AI系统** (`AI/`)
-  - `UnitAIConfig` - 单位AI配置（目标选择、技能策略等）
-
-- **阵型系统** (`Formation/`)
-  - `FormationData` - 阵型数据
-  - `FormationSlot` - 阵型槽位
+planner 只处理调用方提供的值类型快照与策略，不读取 Unity scene、ScriptableObject、全局随机状态或项目专属战斗类型。
 
 ## 依赖
 
-- `com.zerogamestudio.zeroengine.core` >= 2.0.0
-- `com.zerogamestudio.zeroengine.combat` >= 2.0.0
-- `com.zerogamestudio.zeroengine.data` >= 2.0.0
-- `com.zerogamestudio.zeroengine.ai` >= 2.0.0
+此包没有 ZeroEngine 或 Unity 运行时依赖，runtime assembly 设置为 `noEngineReferences=true`。
 
-## 快速开始
+## 示例
 
 ```csharp
-// 创建战斗管理器（5x5 棋盘）
-var battleManager = new AutoBattleManager(5, 5);
+var grid = new TacticalGrid(12, 12);
+var gridScratch = new TacticalGridTraversalScratch();
+var reachable = new List<TacticalGridPosition>();
+grid.CollectReachable(new TacticalGridPosition(2, 2), 3, reachable, gridScratch);
 
-// 进入准备阶段
-battleManager.EnterPreparation();
-
-// 添加单位
-battleManager.AddPlayerUnit(playerUnit, new Vector2Int(0, 2));
-battleManager.AddEnemyUnit(enemyUnit, new Vector2Int(4, 2));
-
-// 开始战斗
-battleManager.StartBattle();
-
-// 每帧更新
-void Update()
-{
-    battleManager.Tick(Time.deltaTime);
-}
+var plannerScratch = new TacticalDecisionScratch<MyActor, MyPayload>();
+var result = TacticalDecisionPlanner.Decide(
+    grid,
+    actor,
+    actors,
+    moveBudget: 3,
+    policy,
+    plannerScratch);
 ```
 
 ## 版本历史
 
-### 1.0.0
-- 初始版本
-- 格子棋盘系统
-- 自动战斗流程
-- 技能槽位系统
-- AI配置系统
-- 阵型系统
+### 2.0.0
+
+- 删除依赖 Unity/ZeroEngine 的 v1 自动战斗、单位、技能、阵型和 AI 配置原型。
+- 新增 headless tactical grid 与确定性 decision planner 公共合同。

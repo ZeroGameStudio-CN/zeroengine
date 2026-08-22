@@ -2,8 +2,7 @@
     "name": "ZeroEngine.PvP",
     "rootNamespace": "ZeroEngine.PvP",
     "references": [
-        "ZeroEngine.Core",
-        "ZeroEngine.AutoBattle"
+        "ZeroEngine.Core"
     ],
     "includePlatforms": [],
     "excludePlatforms": [],

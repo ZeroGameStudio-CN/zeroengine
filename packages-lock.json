@@ -493,12 +493,7 @@
       "version": "file:com.zerogamestudio.zeroengine.autobattle",
       "depth": 0,
       "source": "embedded",
-      "dependencies": {
-        "com.zerogamestudio.zeroengine.core": "2.0.0",
-        "com.zerogamestudio.zeroengine.combat": "2.0.0",
-        "com.zerogamestudio.zeroengine.data": "2.0.0",
-        "com.zerogamestudio.zeroengine.ai": "2.0.0"
-      }
+      "dependencies": {}
     },
     "com.zerogamestudio.zeroengine.character": {
       "version": "file:com.zerogamestudio.zeroengine.character",
@@ -616,8 +611,7 @@
       "depth": 0,
       "source": "embedded",
       "dependencies": {
-        "com.zerogamestudio.zeroengine.core": "2.0.0",
-        "com.zerogamestudio.zeroengine.autobattle": "1.0.0"
+        "com.zerogamestudio.zeroengine.core": "2.0.0"
       }
     },
     "com.zerogamestudio.zeroengine.rpg": {

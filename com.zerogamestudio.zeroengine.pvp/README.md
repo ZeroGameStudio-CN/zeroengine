@@ -19,7 +19,6 @@
 ## 依赖
 
 - `com.zerogamestudio.zeroengine.core` >= 2.0.0
-- `com.zerogamestudio.zeroengine.autobattle` >= 1.0.0
 
 ## 快速开始
 
@@ -76,6 +75,9 @@ rankingData.RecordAttack(won: true, scoreChange: 30);
 | Master | 5000+ |
 
 ## 版本历史
+
+### 1.0.1
+- 删除未使用的 AutoBattle 假依赖。
 
 ### 1.0.0
 - 初始版本

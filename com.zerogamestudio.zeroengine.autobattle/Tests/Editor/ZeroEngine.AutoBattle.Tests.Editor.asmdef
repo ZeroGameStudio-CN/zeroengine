@@ -1,0 +1,24 @@
+{
+  "name": "ZeroEngine.AutoBattle.Tests.Editor",
+  "rootNamespace": "ZeroEngine.AutoBattle.Tests",
+  "references": [
+    "ZeroEngine.AutoBattle",
+    "UnityEngine.TestRunner",
+    "UnityEditor.TestRunner"
+  ],
+  "includePlatforms": [
+    "Editor"
+  ],
+  "excludePlatforms": [],
+  "allowUnsafeCode": false,
+  "overrideReferences": true,
+  "precompiledReferences": [
+    "nunit.framework.dll"
+  ],
+  "autoReferenced": false,
+  "defineConstraints": [
+    "UNITY_INCLUDE_TESTS"
+  ],
+  "versionDefines": [],
+  "noEngineReferences": false
+}

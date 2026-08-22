@@ -1,12 +1,7 @@
 {
     "name": "ZeroEngine.AutoBattle",
     "rootNamespace": "ZeroEngine.AutoBattle",
-    "references": [
-        "ZeroEngine.Core",
-        "ZeroEngine.Combat",
-        "ZeroEngine.Data",
-        "ZeroEngine.AI"
-    ],
+    "references": [],
     "includePlatforms": [],
     "excludePlatforms": [],
     "allowUnsafeCode": false,
@@ -15,5 +10,5 @@
     "autoReferenced": true,
     "defineConstraints": [],
     "versionDefines": [],
-    "noEngineReferences": false
+    "noEngineReferences": true
 }
