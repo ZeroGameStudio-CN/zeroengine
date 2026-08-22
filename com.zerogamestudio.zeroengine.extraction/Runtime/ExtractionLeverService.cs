@@ -55,11 +55,16 @@ namespace POB.Extraction
     {
         public string PointId;
         public int EffectiveOpenAtElapsedSeconds;
+        public int OpenedAtElapsedSeconds = -1;
 
-        public ExtractionPointRuntimeState(string pointId, int effectiveOpenAtElapsedSeconds)
+        public ExtractionPointRuntimeState(
+            string pointId,
+            int effectiveOpenAtElapsedSeconds,
+            int openedAtElapsedSeconds = -1)
         {
             PointId = pointId;
             EffectiveOpenAtElapsedSeconds = effectiveOpenAtElapsedSeconds;
+            OpenedAtElapsedSeconds = openedAtElapsedSeconds;
         }
     }
 

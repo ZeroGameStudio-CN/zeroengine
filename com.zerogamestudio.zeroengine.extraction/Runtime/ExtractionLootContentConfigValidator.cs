@@ -43,8 +43,19 @@ namespace POB.Extraction
                 return report;
             }
 
-            if (!HasAnyContentConfiguration(config))
+            bool hasContentConfiguration = HasAnyContentConfiguration(config);
+            bool hasMechanicsConfiguration = HasAnyMechanicsConfiguration(config);
+            if (!hasContentConfiguration && !hasMechanicsConfiguration)
                 return report;
+
+            // Mechanic-only fixtures (and future config bundles that split
+            // content from map mechanics) must still fail closed without
+            // inventing the legacy loot-table lists.
+            if (!hasContentConfiguration)
+            {
+                ValidateMechanics(config, report);
+                return report;
+            }
 
             if (!HasRequiredLists(config, report))
                 return report;
@@ -68,6 +79,7 @@ namespace POB.Extraction
                 return report;
 
             ValidateProfileCapacityAndAvailability(profiles, regions, spawns, containers, tables, items, report);
+            ValidateMechanics(config, report);
             return report;
         }
 
@@ -92,6 +104,18 @@ namespace POB.Extraction
             }
 
             return false;
+        }
+
+        private static bool HasAnyMechanicsConfiguration(ExtractionPlayableConfig config)
+        {
+            if (config == null) return false;
+            return HasEntries(config.ExtractionPoints)
+                || HasEntries(config.EnemySpawnPoints)
+                || HasEntries(config.EnemyPointCandidates)
+                || HasEntries(config.GateDefinitions)
+                || HasEntries(config.KeyDoorDefinitions)
+                || HasEntries(config.ReinforcementProfiles)
+                || HasEntries(config.RaidDifficultyRules);
         }
 
         private static bool HasRequiredLists(
@@ -317,6 +341,8 @@ namespace POB.Extraction
                     report.AddError($"容器生成点 '{spawn.SpawnId}' 的 ChancePerRaid 出现率必须在 (0, 1] 内。");
                 else if (spawn.Always && Math.Abs(spawn.Chance - 1f) > 0.0001f)
                     report.AddError($"固定容器生成点 '{spawn.SpawnId}' 的出现率必须为 1。");
+                if (!Enum.IsDefined(typeof(ExtractionLootPointKind), spawn.PointKind))
+                    report.AddError($"容器生成点 '{spawn.SpawnId}' 的 pointKind 无效。");
 
                 if (spawn.Candidates == null || spawn.Candidates.Count == 0)
                 {
@@ -327,13 +353,19 @@ namespace POB.Extraction
                     var candidateIds = new HashSet<string>();
                     foreach (var candidate in spawn.Candidates)
                     {
-                        if (candidate == null || IsBlank(candidate.ContainerTypeId) || candidate.Weight <= 0)
+                        if (candidate == null || !candidate.IsValid)
                         {
                             report.AddError($"容器生成点 '{spawn.SpawnId}' 包含无效候选或非正权重。");
                             continue;
                         }
-                        if (!candidateIds.Add(candidate.ContainerTypeId))
-                            report.AddError($"容器生成点 '{spawn.SpawnId}' 重复引用候选容器 '{candidate.ContainerTypeId}'。");
+                        string candidateKey = candidate.ContainerTypeId
+                            + "|"
+                            + candidate.DifficultyLevel;
+                        if (!candidateIds.Add(candidateKey))
+                        {
+                            report.AddError(
+                                $"容器生成点 '{spawn.SpawnId}' 在难度 {candidate.DifficultyLevel} 重复引用候选容器 '{candidate.ContainerTypeId}'。");
+                        }
                     }
                 }
 
@@ -344,6 +376,284 @@ namespace POB.Extraction
             }
 
             return result;
+        }
+
+        private static void ValidateMechanics(
+            ExtractionPlayableConfig config,
+            ExtractionLootContentValidationReport report)
+        {
+            var mapIds = CollectMapIds(config);
+            var enemyPointIds = ValidateEnemySpawnPoints(config, mapIds, report);
+            ValidateExtractionPoints(config, report);
+            ValidatePointCandidates(config, enemyPointIds, report);
+            ValidateGates(config, mapIds, report);
+            ValidateKeyDoors(config, mapIds, report);
+            ValidateReinforcementProfiles(config, report);
+        }
+
+        private static HashSet<string> CollectMapIds(ExtractionPlayableConfig config)
+        {
+            var mapIds = new HashSet<string>();
+            if (config.Maps == null) return mapIds;
+            foreach (var map in config.Maps)
+                if (map != null && !IsBlank(map.MapId)) mapIds.Add(map.MapId);
+            return mapIds;
+        }
+
+        private static HashSet<string> ValidateEnemySpawnPoints(
+            ExtractionPlayableConfig config,
+            HashSet<string> mapIds,
+            ExtractionLootContentValidationReport report)
+        {
+            var pointIds = new HashSet<string>();
+            var keys = new HashSet<string>();
+            if (config.EnemySpawnPoints == null) return pointIds;
+
+            foreach (var point in config.EnemySpawnPoints)
+            {
+                if (point == null || !point.IsValid)
+                {
+                    report.AddError("敌人/BOSS 点位为空或字段无效。");
+                    continue;
+                }
+                if (!mapIds.Contains(point.MapId))
+                    report.AddError($"敌人/BOSS 点位 '{point.PointId}' 引用了不存在的地图 '{point.MapId}'。");
+
+                string key = point.MapId + "|" + point.PointId + "|" + (int)point.PointKind;
+                if (!keys.Add(key))
+                    report.AddError($"敌人/BOSS 点位 '{point.MapId}/{point.PointId}' 的 pointKind 重复。");
+                pointIds.Add(point.PointId);
+            }
+
+            return pointIds;
+        }
+
+        private static void ValidateExtractionPoints(
+            ExtractionPlayableConfig config,
+            ExtractionLootContentValidationReport report)
+        {
+            if (config.ExtractionPoints == null) return;
+            var keys = new HashSet<string>();
+            foreach (var point in config.ExtractionPoints)
+            {
+                if (point == null || !point.IsValid)
+                {
+                    report.AddError("撤离点为空或字段无效。");
+                    continue;
+                }
+
+                string key = (point.MapId ?? string.Empty) + "|" + point.PointId;
+                if (!keys.Add(key))
+                    report.AddError($"撤离点 '{point.MapId}/{point.PointId}' 重复。");
+
+                switch (point.Mode)
+                {
+                    case ExtractionPointMode.Normal:
+                    case ExtractionPointMode.Random:
+                        if (point.TimedWindowSeconds != 0
+                            || point.RequiredGateCount != 0
+                            || point.OpenDurationSeconds != 0
+                            || point.RequiredItemQuantity != 0)
+                        {
+                            report.AddError($"撤离点 '{point.PointId}' 的 {point.Mode} 模式包含不适用的时长、闸点或献祭字段。");
+                        }
+                        break;
+                    case ExtractionPointMode.Timed:
+                        if (point.TimedWindowSeconds <= 0
+                            || point.RequiredGateCount != 0
+                            || point.OpenDurationSeconds != 0
+                            || point.RequiredItemQuantity != 0)
+                        {
+                            report.AddError($"限时撤离点 '{point.PointId}' 必须只配置正的 TimedWindowSeconds。");
+                        }
+                        break;
+                    case ExtractionPointMode.Gate:
+                        if (point.RequiredGateCount <= 0
+                            || point.TimedWindowSeconds != 0
+                            || point.OpenDurationSeconds != 0
+                            || point.RequiredItemQuantity != 0)
+                        {
+                            report.AddError($"闸点撤离点 '{point.PointId}' 必须配置正的 RequiredGateCount，且不得配置献祭/窗口字段。");
+                        }
+                        break;
+                    case ExtractionPointMode.Boss:
+                        if (point.OpenDurationSeconds <= 0
+                            || IsBlank(point.RequiredRaidFlagId)
+                            || point.TimedWindowSeconds != 0
+                            || point.RequiredGateCount != 0
+                            || point.RequiredItemQuantity != 0)
+                        {
+                            report.AddError($"BOSS 撤离点 '{point.PointId}' 必须配置正的 OpenDurationSeconds 与 RequiredRaidFlagId。");
+                        }
+                        break;
+                    case ExtractionPointMode.Sacrifice:
+                        if (point.OpenDurationSeconds <= 0
+                            || point.RequiredItemQuantity <= 0
+                            || point.ConsumeRequiredItemOnExtraction
+                            || point.TimedWindowSeconds != 0
+                            || point.RequiredGateCount != 0)
+                        {
+                            report.AddError($"献祭撤离点 '{point.PointId}' 必须配置正数量、合法品阶和正的 OpenDurationSeconds，并在开启时原子消耗。");
+                        }
+                        break;
+                    default:
+                        report.AddError($"撤离点 '{point.PointId}' 的模式值无效。");
+                        break;
+                }
+            }
+        }
+
+        private static void ValidatePointCandidates(
+            ExtractionPlayableConfig config,
+            HashSet<string> enemyPointIds,
+            ExtractionLootContentValidationReport report)
+        {
+            var enemyKeys = new HashSet<string>();
+            if (config.EnemyPointCandidates != null)
+            {
+                foreach (var candidate in config.EnemyPointCandidates)
+                {
+                    if (candidate == null || !candidate.IsValid)
+                    {
+                        report.AddError("敌人点位候选为空或字段无效。");
+                        continue;
+                    }
+                    if (!enemyPointIds.Contains(candidate.PointId))
+                        report.AddError($"敌人点位候选 '{candidate.PointId}' 引用了不存在的敌人/BOSS 点位。");
+                    string key = candidate.PointId + "|" + candidate.DifficultyLevel + "|" + candidate.ContentId;
+                    if (!enemyKeys.Add(key))
+                        report.AddError($"敌人点位候选 '{candidate.PointId}' 在难度 {candidate.DifficultyLevel} 重复引用 '{candidate.ContentId}'。");
+                }
+            }
+
+        }
+
+        private static void ValidateGates(
+            ExtractionPlayableConfig config,
+            HashSet<string> mapIds,
+            ExtractionLootContentValidationReport report)
+        {
+            var spawnIds = new HashSet<string>();
+            if (config.ContainerSpawns != null)
+            {
+                foreach (var spawn in config.ContainerSpawns)
+                    if (spawn != null && !IsBlank(spawn.SpawnId)) spawnIds.Add(spawn.SpawnId);
+            }
+            var encounterIds = new HashSet<string>();
+            if (config.HostileExplorerEncounters != null)
+            {
+                foreach (var encounter in config.HostileExplorerEncounters)
+                    if (encounter != null && !IsBlank(encounter.EncounterId)) encounterIds.Add(encounter.EncounterId);
+            }
+
+            var keys = new HashSet<string>();
+            if (config.GateDefinitions == null) return;
+            foreach (var gate in config.GateDefinitions)
+            {
+                if (gate == null || !gate.IsValid)
+                {
+                    report.AddError("闸点定义为空或字段/模式约束无效。");
+                    continue;
+                }
+                if (!mapIds.Contains(gate.MapId))
+                    report.AddError($"闸点 '{gate.GateId}' 引用了不存在的地图 '{gate.MapId}'。");
+                if (!keys.Add(gate.MapId + "|" + gate.GateId))
+                    report.AddError($"闸点 '{gate.MapId}/{gate.GateId}' 重复。");
+                if (gate.Mode == ExtractionGateMode.Capture && !encounterIds.Contains(gate.EnemyProfileId))
+                    report.AddError($"Capture 闸点 '{gate.GateId}' 引用了不存在的敌人 profile '{gate.EnemyProfileId}'。");
+
+                var rewardIds = new HashSet<string>();
+                foreach (var spawnId in gate.RewardContainerSpawnIds)
+                {
+                    if (IsBlank(spawnId) || !rewardIds.Add(spawnId))
+                        report.AddError($"闸点 '{gate.GateId}' 的奖励容器生成点引用为空或重复。");
+                    else if (!spawnIds.Contains(spawnId))
+                        report.AddError($"闸点 '{gate.GateId}' 引用了不存在的奖励容器生成点 '{spawnId}'。");
+                }
+            }
+        }
+
+        private static void ValidateKeyDoors(
+            ExtractionPlayableConfig config,
+            HashSet<string> mapIds,
+            ExtractionLootContentValidationReport report)
+        {
+            var locks = new HashSet<string>();
+            if (config.LockDefinitions != null)
+            {
+                foreach (var lockDefinition in config.LockDefinitions)
+                {
+                    if (lockDefinition != null
+                        && !IsBlank(lockDefinition.LockId)
+                        && !IsBlank(lockDefinition.MapId))
+                    {
+                        locks.Add(lockDefinition.MapId + "|" + lockDefinition.LockId);
+                    }
+                }
+            }
+
+            var keys = new HashSet<string>();
+            if (config.KeyDoorDefinitions == null) return;
+            foreach (var door in config.KeyDoorDefinitions)
+            {
+                if (door == null || !door.IsValid)
+                {
+                    report.AddError("钥匙门定义为空或字段无效。");
+                    continue;
+                }
+                if (!mapIds.Contains(door.MapId))
+                    report.AddError($"钥匙门 '{door.DoorId}' 引用了不存在的地图 '{door.MapId}'。");
+                if (!locks.Contains(door.MapId + "|" + door.LockDefinitionId))
+                    report.AddError($"钥匙门 '{door.DoorId}' 引用了不存在的锁定义 '{door.LockDefinitionId}'。");
+                if (!keys.Add(door.MapId + "|" + door.DoorId))
+                    report.AddError($"钥匙门 '{door.MapId}/{door.DoorId}' 重复。");
+            }
+        }
+
+        private static void ValidateReinforcementProfiles(
+            ExtractionPlayableConfig config,
+            ExtractionLootContentValidationReport report)
+        {
+            var profiles = new HashSet<string>();
+            var encounterIds = new HashSet<string>();
+            if (config.HostileExplorerEncounters != null)
+            {
+                foreach (var encounter in config.HostileExplorerEncounters)
+                    if (encounter != null && !IsBlank(encounter.EncounterId))
+                        encounterIds.Add(encounter.EncounterId);
+            }
+            if (config.ReinforcementProfiles != null)
+            {
+                foreach (var profile in config.ReinforcementProfiles)
+                {
+                    if (profile == null || !profile.IsValid)
+                    {
+                        report.AddError("Raid 强化 profile 为空或倍率无效。");
+                        continue;
+                    }
+                    if (!profiles.Add(profile.ProfileId))
+                        report.AddError($"Raid 强化 profile ID '{profile.ProfileId}' 重复。");
+                }
+            }
+
+            var rules = new HashSet<int>();
+            if (config.RaidDifficultyRules == null) return;
+            foreach (var rule in config.RaidDifficultyRules)
+            {
+                if (rule == null || !rule.IsValid)
+                {
+                    report.AddError("Raid 难度时间线规则为空或阈值无效。");
+                    continue;
+                }
+                if (!profiles.Contains(rule.FirstProfileId))
+                    report.AddError($"Raid 难度 {rule.DifficultyLevel} 引用了不存在的第一层强化 profile '{rule.FirstProfileId}'。");
+                if (!profiles.Contains(rule.SecondProfileId))
+                    report.AddError($"Raid 难度 {rule.DifficultyLevel} 引用了不存在的第二层强化 profile '{rule.SecondProfileId}'。");
+                if (!encounterIds.Contains(rule.OvertimeEntityId))
+                    report.AddError($"Raid 难度 {rule.DifficultyLevel} 引用了不存在的 Overtime 敌人 '{rule.OvertimeEntityId}'。");
+                if (!rules.Add(rule.DifficultyLevel))
+                    report.AddError($"Raid 难度 {rule.DifficultyLevel} 的时间线规则重复。");
+            }
         }
 
         private static void ValidateMapReferences(
@@ -447,6 +757,12 @@ namespace POB.Extraction
                              || !region.AllowedContainerTypeIds.Contains(candidate.ContainerTypeId))
                     {
                         report.AddError($"容器生成点 '{spawn.SpawnId}' 的候选容器 '{candidate.ContainerTypeId}' 不在区域允许集合内。");
+                    }
+                    else if (spawn.PointKind == ExtractionLootPointKind.Special
+                             && !containers[candidate.ContainerTypeId].IsSpecial)
+                    {
+                        report.AddError(
+                            $"特殊容器生成点 '{spawn.SpawnId}' 只能引用 IsSpecial 容器 '{candidate.ContainerTypeId}'。");
                     }
                 }
             }

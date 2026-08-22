@@ -24,6 +24,16 @@ namespace POB.Extraction
             return GetElapsedSeconds(session, currentUnixSeconds) >= deadline;
         }
 
+        // Timeline consumers can distinguish the zero-second boundary from
+        // the legacy fail-for-timeout result. This additive query never changes
+        // ShouldFailForTimeout's existing behavior.
+        public static bool IsOvertime(ExtractionRaidSession session, long currentUnixSeconds)
+        {
+            if (session == null || session.DurationSeconds <= 0) return false;
+            return session.Content?.IsOvertime == true
+                || GetElapsedSeconds(session, currentUnixSeconds) >= GetEffectiveDurationSeconds(session);
+        }
+
         public static bool CanStartExtraction(
             ExtractionRaidSession session,
             ExtractionPointDefinition point,
@@ -31,7 +41,8 @@ namespace POB.Extraction
             bool hasEmergencyOverride)
         {
             if (session == null || point == null || !point.IsValid) return false;
-            if (ShouldFailForTimeout(session, currentUnixSeconds)) return false;
+            if (session.Content?.IsOvertime != true
+                && ShouldFailForTimeout(session, currentUnixSeconds)) return false;
 
             long elapsed = GetElapsedSeconds(session, currentUnixSeconds);
             if (point.SingleUse && session.Content.UsedExtractionPointIds.Contains(point.PointId)) return false;
@@ -50,7 +61,9 @@ namespace POB.Extraction
             long currentUnixSeconds,
             bool hasEmergencyOverride)
         {
-            if (ShouldFailForTimeout(session, currentUnixSeconds)) return false;
+            if (session == null || point == null || !point.IsValid) return false;
+            if (session.Content?.IsOvertime != true
+                && ShouldFailForTimeout(session, currentUnixSeconds)) return false;
             if (!CanStartExtraction(session, point, channelStartedAtUnixSeconds, hasEmergencyOverride)) return false;
 
             long channelElapsed = currentUnixSeconds - channelStartedAtUnixSeconds;

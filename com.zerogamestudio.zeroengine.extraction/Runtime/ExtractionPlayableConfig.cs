@@ -11,6 +11,8 @@ namespace POB.Extraction
         public ExtractionCharacterConfig Character = new();
         public List<ExtractionMapDefinition> Maps = new();
         public List<ExtractionPointDefinition> ExtractionPoints = new();
+        public List<ExtractionEnemySpawnPointDefinition> EnemySpawnPoints = new();
+        public List<ExtractionPointDifficultyCandidate> EnemyPointCandidates = new();
         public List<ExtractionItemDefinition> ItemDefinitions = new();
         public List<ExtractionLootTableDefinition> LootTables = new();
         public List<ExtractionSafeDefinition> SafeDefinitions = new();
@@ -38,6 +40,10 @@ namespace POB.Extraction
         public List<ExtractionLockDefinition> LockDefinitions = new();
         public List<ExtractionLeverDefinition> LeverDefinitions = new();
         public List<ExtractionWeaponGrowthDefinition> WeaponGrowthDefinitions = new();
+        public List<ExtractionGateDefinition> GateDefinitions = new();
+        public List<ExtractionKeyDoorDefinition> KeyDoorDefinitions = new();
+        public List<ExtractionRaidReinforcementProfileDefinition> ReinforcementProfiles = new();
+        public List<ExtractionRaidDifficultyRuleDefinition> RaidDifficultyRules = new();
 
         // M2 SW.2：负重容量(总重达到此值=100%负重)+档位表；容量默认 0(=不参与负重系统，
         // TrySelectTier 对 capacity<=0 直接返回 false)，向后兼容不配负重的旧配置/mod。
@@ -110,6 +116,129 @@ namespace POB.Extraction
             }
 
             point = null;
+            return false;
+        }
+
+        public bool TryGetEnemyPointCandidates(
+            string pointId,
+            int difficultyLevel,
+            List<ExtractionPointDifficultyCandidate> results)
+        {
+            return TryGetPointCandidates(EnemyPointCandidates, pointId, difficultyLevel, results);
+        }
+
+        public bool TryGetEnemySpawnPoint(
+            string pointId,
+            string mapId,
+            out ExtractionEnemySpawnPointDefinition definition)
+        {
+            if (EnemySpawnPoints != null)
+            {
+                foreach (var candidate in EnemySpawnPoints)
+                {
+                    if (candidate == null || !candidate.IsValid || candidate.PointId != pointId)
+                        continue;
+                    if (!string.IsNullOrEmpty(mapId) && candidate.MapId != mapId) continue;
+                    definition = candidate;
+                    return true;
+                }
+            }
+
+            definition = null;
+            return false;
+        }
+
+        public bool TryGetGateDefinition(string gateId, out ExtractionGateDefinition definition)
+        {
+            return TryGetGateDefinition(gateId, string.Empty, out definition);
+        }
+
+        public bool TryGetGateDefinition(
+            string gateId,
+            string mapId,
+            out ExtractionGateDefinition definition)
+        {
+            if (GateDefinitions != null)
+            {
+                foreach (var candidate in GateDefinitions)
+                {
+                    if (candidate == null || !candidate.IsValid || candidate.GateId != gateId)
+                        continue;
+                    if (!string.IsNullOrEmpty(mapId) && candidate.MapId != mapId) continue;
+                    definition = candidate;
+                    return true;
+                }
+            }
+
+            definition = null;
+            return false;
+        }
+
+        public bool TryGetKeyDoorDefinition(string doorId, out ExtractionKeyDoorDefinition definition)
+        {
+            return TryGetKeyDoorDefinition(doorId, string.Empty, out definition);
+        }
+
+        public bool TryGetKeyDoorDefinition(
+            string doorId,
+            string mapId,
+            out ExtractionKeyDoorDefinition definition)
+        {
+            if (KeyDoorDefinitions != null)
+            {
+                foreach (var candidate in KeyDoorDefinitions)
+                {
+                    if (candidate == null || !candidate.IsValid || candidate.DoorId != doorId)
+                        continue;
+                    if (!string.IsNullOrEmpty(mapId) && candidate.MapId != mapId) continue;
+                    definition = candidate;
+                    return true;
+                }
+            }
+
+            definition = null;
+            return false;
+        }
+
+        public bool TryGetReinforcementProfile(
+            string profileId,
+            out ExtractionRaidReinforcementProfileDefinition definition)
+        {
+            if (ReinforcementProfiles != null)
+            {
+                foreach (var candidate in ReinforcementProfiles)
+                {
+                    if (candidate != null && candidate.IsValid && candidate.ProfileId == profileId)
+                    {
+                        definition = candidate;
+                        return true;
+                    }
+                }
+            }
+
+            definition = null;
+            return false;
+        }
+
+        public bool TryGetRaidDifficultyRule(
+            int difficultyLevel,
+            out ExtractionRaidDifficultyRuleDefinition definition)
+        {
+            if (RaidDifficultyRules != null)
+            {
+                foreach (var candidate in RaidDifficultyRules)
+                {
+                    if (candidate != null
+                        && candidate.IsValid
+                        && candidate.DifficultyLevel == difficultyLevel)
+                    {
+                        definition = candidate;
+                        return true;
+                    }
+                }
+            }
+
+            definition = null;
             return false;
         }
 
@@ -210,6 +339,28 @@ namespace POB.Extraction
             }
 
             results.Add(point);
+        }
+
+        private static bool TryGetPointCandidates(
+            List<ExtractionPointDifficultyCandidate> source,
+            string pointId,
+            int difficultyLevel,
+            List<ExtractionPointDifficultyCandidate> results)
+        {
+            if (results == null) return false;
+            results.Clear();
+            if (source == null || string.IsNullOrEmpty(pointId) || difficultyLevel < 0)
+                return false;
+
+            foreach (var candidate in source)
+            {
+                if (candidate == null || !candidate.IsValid) continue;
+                if (candidate.PointId != pointId || candidate.DifficultyLevel != difficultyLevel)
+                    continue;
+                results.Add(candidate);
+            }
+
+            return results.Count > 0;
         }
 
         private static bool ContainsLootTable(
