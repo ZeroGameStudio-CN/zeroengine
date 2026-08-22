@@ -1,0 +1,21 @@
+{
+    "name": "ZeroEngine.Persistence.Tests.Editor",
+    "rootNamespace": "ZeroEngine.Persistence.Tests",
+    "references": [
+        "ZeroEngine.Persistence"
+    ],
+    "includePlatforms": [
+        "Editor"
+    ],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": true,
+    "defineConstraints": [],
+    "versionDefines": [],
+    "optionalUnityReferences": [
+        "TestAssemblies"
+    ],
+    "noEngineReferences": false
+}

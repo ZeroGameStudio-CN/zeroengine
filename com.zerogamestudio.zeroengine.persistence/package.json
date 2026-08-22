@@ -1,8 +1,8 @@
 {
     "name": "com.zerogamestudio.zeroengine.persistence",
-    "version": "2.0.0",
+    "version": "2.1.0",
     "displayName": "ZeroEngine.Persistence",
-    "description": "Persistence systems for ZeroEngine. Includes multi-slot Save System with screenshot support, ISaveable interface, and Settings System for audio/graphics/language preferences.",
+    "description": "Backend-independent save-slot orchestration, stable participant adapters, atomic multi-file promotion and safe screenshot policy for ZeroEngine. Legacy Save and Settings APIs remain available for compatibility.",
     "unity": "2022.3",
     "unityRelease": "0f1",
     "dependencies": {

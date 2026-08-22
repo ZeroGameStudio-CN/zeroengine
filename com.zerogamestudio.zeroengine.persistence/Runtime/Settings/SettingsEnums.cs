@@ -5,6 +5,7 @@ using UnityEngine;
 namespace ZeroEngine.Settings
 {
     /// <summary>设置分类</summary>
+    [Obsolete("ZeroEngine.Settings is retained for compatibility. Use ZeroEngine.PlayerSettings.", false)]
     public enum SettingCategory
     {
         General,        // 通用
@@ -19,6 +20,7 @@ namespace ZeroEngine.Settings
     }
 
     /// <summary>设置值类型</summary>
+    [Obsolete("ZeroEngine.Settings is retained for compatibility. Use ZeroEngine.PlayerSettings.", false)]
     public enum SettingValueType
     {
         Bool,           // 开关
@@ -33,6 +35,7 @@ namespace ZeroEngine.Settings
     }
 
     /// <summary>设置事件类型</summary>
+    [Obsolete("ZeroEngine.Settings is retained for compatibility. Use ZeroEngine.PlayerSettings.", false)]
     public enum SettingsEventType
     {
         ValueChanged,
@@ -44,6 +47,7 @@ namespace ZeroEngine.Settings
 
     /// <summary>设置项定义</summary>
     [Serializable]
+    [Obsolete("ZeroEngine.Settings is retained for compatibility. Use ZeroEngine.PlayerSettings.", false)]
     public class SettingDefinition
     {
         [Header("基础")]
@@ -76,6 +80,7 @@ namespace ZeroEngine.Settings
 
     /// <summary>设置选项 (用于枚举类型)</summary>
     [Serializable]
+    [Obsolete("ZeroEngine.Settings is retained for compatibility. Use ZeroEngine.PlayerSettings.", false)]
     public class SettingOption
     {
         public string Value;
@@ -86,6 +91,7 @@ namespace ZeroEngine.Settings
 
     /// <summary>按键绑定</summary>
     [Serializable]
+    [Obsolete("ZeroEngine.Settings is retained for compatibility. Use ZeroEngine.PlayerSettings.", false)]
     public class KeyBindingData
     {
         public string ActionId;
@@ -126,6 +132,7 @@ namespace ZeroEngine.Settings
 
     /// <summary>分辨率数据</summary>
     [Serializable]
+    [Obsolete("ZeroEngine.Settings is retained for compatibility. Use ZeroEngine.PlayerSettings.", false)]
     public class ResolutionData
     {
         public int Width;
@@ -154,6 +161,7 @@ namespace ZeroEngine.Settings
 
     /// <summary>设置值包装</summary>
     [Serializable]
+    [Obsolete("ZeroEngine.Settings is retained for compatibility. Use ZeroEngine.PlayerSettings.", false)]
     public class SettingValue
     {
         public string Key;
@@ -170,6 +178,7 @@ namespace ZeroEngine.Settings
     }
 
     /// <summary>设置事件参数</summary>
+    [Obsolete("ZeroEngine.Settings is retained for compatibility. Use ZeroEngine.PlayerSettings.", false)]
     public class SettingsEventArgs
     {
         public SettingsEventType Type { get; private set; }
@@ -195,6 +204,7 @@ namespace ZeroEngine.Settings
     }
 
     /// <summary>预设图形设置</summary>
+    [Obsolete("ZeroEngine.Settings is retained for compatibility. Use ZeroEngine.PlayerSettings.", false)]
     public static class GraphicsPresets
     {
         public static readonly Dictionary<string, Dictionary<string, string>> Presets = new()
