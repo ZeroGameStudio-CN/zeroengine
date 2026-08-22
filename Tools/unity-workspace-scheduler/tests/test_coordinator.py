@@ -9,7 +9,7 @@ from pathlib import Path
 import pytest
 
 from unity_workspace_scheduler.coordinator import WorkspaceCoordinator
-from unity_workspace_scheduler.errors import AuthorizationError, BusyError, StateError
+from unity_workspace_scheduler.errors import AuthorizationError, BusyError, StateError, UsageError
 from unity_workspace_scheduler.state import open_database, resolve_state_paths
 
 
@@ -78,6 +78,173 @@ def test_freeze_is_fair_barrier(scheduler: WorkspaceCoordinator, workspace: Path
     assert promoted["state"] == "active"
 
 
+def test_urgent_freeze_overtakes_queued_normal_work_but_not_active_work(
+    scheduler: WorkspaceCoordinator, workspace: Path
+) -> None:
+    _, owner_token = start(scheduler, workspace, "owner")
+    _, normal_token = start(scheduler, workspace, "normal")
+    _, urgent_token = start(scheduler, workspace, "urgent")
+
+    owned = scheduler.acquire_claim(workspace, owner_token, writes=("Assets/Hero.prefab",))
+    normal = scheduler.acquire_claim(workspace, normal_token, writes=("Assets/Hero.prefab",))
+    urgent = scheduler.acquire_claim(workspace, urgent_token, freeze=True, priority="urgent")
+
+    assert owned["state"] == "active"
+    assert normal["state"] == "queued"
+    assert urgent["state"] == "queued"
+    assert urgent["priority"] == "urgent"
+    assert scheduler.heartbeat(workspace, owner_token)["drain_requested"] == {
+        "freeze_id": urgent["id"],
+        "queue_order": urgent["queue_order"],
+        "priority": "urgent",
+        "park_ready": True,
+    }
+
+    scheduler.park_task(workspace, owner_token)
+    status = scheduler.status(workspace)
+    by_id = {claim["id"]: claim for claim in status["claims"]}
+    assert by_id[urgent["id"]]["state"] == "active"
+    assert by_id[normal["id"]]["state"] == "queued"
+
+
+def test_urgent_freezes_remain_fifo_with_each_other(
+    scheduler: WorkspaceCoordinator, workspace: Path
+) -> None:
+    _, owner_token = start(scheduler, workspace, "owner")
+    _, first_token = start(scheduler, workspace, "urgent-first")
+    _, second_token = start(scheduler, workspace, "urgent-second")
+
+    scheduler.acquire_claim(workspace, owner_token, writes=("Assets/Hero.prefab",))
+    first = scheduler.acquire_claim(workspace, first_token, freeze=True, priority="urgent")
+    second = scheduler.acquire_claim(workspace, second_token, freeze=True, priority="urgent")
+
+    scheduler.park_task(workspace, owner_token)
+    status = scheduler.status(workspace)
+    by_id = {claim["id"]: claim for claim in status["claims"]}
+    assert by_id[first["id"]]["state"] == "active"
+    assert by_id[second["id"]]["state"] == "queued"
+
+    scheduler.release_claim(workspace, first_token, str(first["id"]))
+    status = scheduler.status(workspace)
+    by_id = {claim["id"]: claim for claim in status["claims"]}
+    assert by_id[second["id"]]["state"] == "active"
+
+
+def test_urgent_freeze_overtakes_a_queued_normal_freeze(
+    scheduler: WorkspaceCoordinator, workspace: Path
+) -> None:
+    _, owner_token = start(scheduler, workspace, "owner")
+    _, normal_token = start(scheduler, workspace, "normal-freeze")
+    _, urgent_token = start(scheduler, workspace, "urgent-freeze")
+
+    scheduler.acquire_claim(workspace, owner_token, writes=("Assets/Hero.prefab",))
+    normal = scheduler.acquire_claim(workspace, normal_token, freeze=True)
+    urgent = scheduler.acquire_claim(workspace, urgent_token, freeze=True, priority="urgent")
+
+    scheduler.park_task(workspace, owner_token)
+    status = scheduler.status(workspace)
+    by_id = {claim["id"]: claim for claim in status["claims"]}
+    assert by_id[urgent["id"]]["state"] == "active"
+    assert by_id[normal["id"]]["state"] == "queued"
+
+
+@pytest.mark.parametrize("active_kind", ["resource", "freeze"])
+def test_urgent_freeze_does_not_preempt_active_resource_or_freeze(
+    scheduler: WorkspaceCoordinator, workspace: Path, active_kind: str
+) -> None:
+    _, owner_token = start(scheduler, workspace, "owner")
+    _, urgent_token = start(scheduler, workspace, "urgent")
+
+    if active_kind == "resource":
+        active = scheduler.acquire_claim(workspace, owner_token, resources=("exclusive-tool",))
+    else:
+        active = scheduler.acquire_claim(workspace, owner_token, freeze=True)
+    urgent = scheduler.acquire_claim(workspace, urgent_token, freeze=True, priority="urgent")
+
+    assert active["state"] == "active"
+    assert urgent["state"] == "queued"
+    drain = scheduler.heartbeat(workspace, owner_token)["drain_requested"]
+    assert drain["freeze_id"] == urgent["id"]
+    assert drain["park_ready"] is False
+
+
+def test_urgent_drain_ignores_normal_resource_queued_behind_it(
+    scheduler: WorkspaceCoordinator, workspace: Path
+) -> None:
+    _, owner_token = start(scheduler, workspace, "owner")
+    _, urgent_token = start(scheduler, workspace, "urgent")
+
+    owned = scheduler.acquire_claim(workspace, owner_token, writes=("Assets/Hero.prefab",))
+    urgent = scheduler.acquire_claim(workspace, urgent_token, freeze=True, priority="urgent")
+    later_resource = scheduler.acquire_claim(workspace, owner_token, resources=("exclusive-tool",))
+
+    assert later_resource["state"] == "queued"
+    assert scheduler.heartbeat(workspace, owner_token)["drain_requested"]["park_ready"] is True
+    parked = scheduler.park_task(workspace, owner_token)
+    assert parked["claim_ids"] == [owned["id"]]
+    status = scheduler.status(workspace)
+    by_id = {claim["id"]: claim for claim in status["claims"]}
+    assert by_id[urgent["id"]]["state"] == "active"
+    assert by_id[later_resource["id"]]["state"] == "queued"
+
+
+def test_urgent_priority_is_rejected_for_non_freeze_claims(
+    scheduler: WorkspaceCoordinator, workspace: Path
+) -> None:
+    _, token = start(scheduler, workspace, "owner")
+    with pytest.raises(UsageError):
+        scheduler.acquire_claim(
+            workspace,
+            token,
+            writes=("Assets/Hero.prefab",),
+            priority="urgent",
+        )
+
+
+def test_schema_one_state_without_priority_scope_accepts_urgent_freeze(
+    scheduler: WorkspaceCoordinator, workspace: Path
+) -> None:
+    _, blocker_token = start(scheduler, workspace, "blocker")
+    _, normal_token = start(scheduler, workspace, "normal")
+    blocker = scheduler.acquire_claim(workspace, blocker_token, resources=("exclusive-tool",))
+    normal = scheduler.acquire_claim(workspace, normal_token, resources=("exclusive-tool",))
+    with open_database(scheduler.paths) as connection:
+        schema = connection.execute(
+            "SELECT value FROM scheduler_meta WHERE key = 'schema_version'"
+        ).fetchone()
+        priority_scopes = connection.execute(
+            "SELECT value FROM claim_scopes WHERE claim_id = ? AND scope_type = 'priority'",
+            (normal["id"],),
+        ).fetchall()
+    assert schema["value"] == "1"
+    assert priority_scopes == []
+
+    reopened = WorkspaceCoordinator(scheduler.paths)
+    _, urgent_token = start(reopened, workspace, "urgent")
+    urgent = reopened.acquire_claim(workspace, urgent_token, freeze=True, priority="urgent")
+    reopened.release_claim(workspace, blocker_token, str(blocker["id"]))
+    status = reopened.status(workspace)
+    by_id = {claim["id"]: claim for claim in status["claims"]}
+    assert by_id[normal["id"]]["priority"] == "normal"
+    assert by_id[normal["id"]]["state"] == "queued"
+    assert by_id[urgent["id"]]["state"] == "active"
+
+
+def test_invalid_priority_scope_fails_closed(
+    scheduler: WorkspaceCoordinator, workspace: Path
+) -> None:
+    _, token = start(scheduler, workspace, "owner")
+    claim = scheduler.acquire_claim(workspace, token, writes=("Assets/Hero.prefab",))
+    with open_database(scheduler.paths) as connection:
+        connection.execute(
+            "INSERT INTO claim_scopes(claim_id, scope_type, value) VALUES(?, 'priority', 'urgent')",
+            (claim["id"],),
+        )
+
+    with pytest.raises(StateError):
+        scheduler.status(workspace)
+
+
 def test_park_drains_freeze_and_restores_original_fifo(
     scheduler: WorkspaceCoordinator, workspace: Path
 ) -> None:
@@ -97,6 +264,7 @@ def test_park_drains_freeze_and_restores_original_fifo(
         "reason": "freeze-drain-requested",
         "freeze_id": freeze["id"],
         "queue_order": freeze["queue_order"],
+        "priority": "normal",
         "park_ready": True,
     }
 
@@ -132,6 +300,7 @@ def test_park_refuses_unsafe_claims_and_requires_a_freeze(
     assert heartbeat["drain_requested"] == {
         "freeze_id": freeze["id"],
         "queue_order": freeze["queue_order"],
+        "priority": "normal",
         "park_ready": False,
     }
     with pytest.raises(BusyError) as unsafe:
@@ -160,6 +329,7 @@ def test_drain_targets_only_blockers_and_reports_queued_unsafe_claims(
     assert drain == {
         "freeze_id": freeze["id"],
         "queue_order": freeze["queue_order"],
+        "priority": "normal",
         "park_ready": False,
     }
     assert "drain_requested" not in scheduler.heartbeat(workspace, claimless_token)
@@ -307,6 +477,7 @@ def test_expired_owner_blocks_until_evidence_recovery(
     scheduler: WorkspaceCoordinator, workspace: Path
 ) -> None:
     task, token = start(scheduler, workspace, "expiring")
+    _, urgent_token = start(scheduler, workspace, "urgent")
     scheduler.acquire_claim(workspace, token, resources=("unity-live",))
     with open_database(scheduler.paths) as connection:
         connection.execute(
@@ -316,9 +487,13 @@ def test_expired_owner_blocks_until_evidence_recovery(
 
     status = scheduler.status(workspace)
     assert status["blocked"] is True
-    assert status["tasks"][0]["state"] == "outcome_unknown"
+    expired = next(task_item for task_item in status["tasks"] if task_item["id"] == task["id"])
+    assert expired["state"] == "outcome_unknown"
     with pytest.raises(BusyError):
         start(scheduler, workspace, "blocked")
+
+    with pytest.raises(BusyError):
+        scheduler.acquire_claim(workspace, urgent_token, freeze=True, priority="urgent")
 
     recovered = scheduler.resolve_unknown(
         workspace,

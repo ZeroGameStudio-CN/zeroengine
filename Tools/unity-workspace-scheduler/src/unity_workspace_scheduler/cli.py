@@ -130,6 +130,7 @@ def build_parser() -> SchedulerArgumentParser:
     _token_argument(freeze_acquire)
     freeze_acquire.add_argument("--wait", type=float, default=0.0)
     freeze_acquire.add_argument("--keep-queued", action="store_true")
+    freeze_acquire.add_argument("--priority", choices=("normal", "urgent"), default="normal")
     freeze_acquire.set_defaults(handler=_freeze_acquire)
 
     recovery = groups.add_parser("recovery", help="Resolve unknown task outcomes.")
@@ -241,6 +242,7 @@ def _freeze_acquire(
         args.workspace,
         token,
         freeze=True,
+        priority=args.priority,
         wait_seconds=args.wait,
         keep_queued=args.keep_queued,
     )

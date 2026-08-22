@@ -1,6 +1,6 @@
 # Unity Workspace Scheduler
 
-`unity-scheduler` is a machine-local control plane for agents and tools that share Unity workspaces. It coordinates task lifetime, write paths, named resources, FIFO queues, cooperative maintenance draining, exclusive freezes, and fail-closed recovery.
+`unity-scheduler` is a machine-local control plane for agents and tools that share Unity workspaces. It coordinates task lifetime, write paths, named resources, FIFO queues, cooperative maintenance draining, exclusive freezes, urgent maintenance barriers, and fail-closed recovery.
 
 It does not start or inspect Unity, run tests, call MCP, inspect version control, or install anything into a Unity project. The package has no runtime dependencies. Callers use only the command's JSON process protocol; they must not import its Python package or depend on its installation layout.
 
@@ -32,5 +32,9 @@ When a queued freeze requests workspace maintenance, an owner at a safe point ca
 `task park`. Its path-only claims stop authorizing writes, the freeze proceeds, and the same
 claim IDs automatically return to the FIFO queue when the freeze closes. Resource and freeze
 claims are never parked or stolen.
+
+An explicitly urgent maintenance operation can request
+`freeze acquire --priority urgent`. It passes queued normal work, remains FIFO with other urgent
+freezes, and never preempts active work or an unknown-outcome fence.
 
 See [Setup and protocol](docs/setup.md) for the complete command contract and recovery rules.

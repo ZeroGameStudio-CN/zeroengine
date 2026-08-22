@@ -78,6 +78,7 @@ def test_cli_task_flow_uses_private_token_file_and_json_contract(tmp_path: Path,
     )
     claim = read_output(capsys)
     assert claim["result"]["granted"] is True
+    assert claim["result"]["priority"] == "normal"
 
     assert (
         run(
@@ -186,6 +187,65 @@ def test_cli_task_park_drains_and_automatically_restores_claims(tmp_path: Path, 
     status = invoke("workspace", "status", "--workspace", str(workspace))["result"]
     restored = next(claim for claim in status["claims"] if claim["id"] == owned["id"])
     assert restored["state"] == "active"
+
+
+def test_cli_accepts_urgent_priority_only_on_freeze(tmp_path: Path, capsys) -> None:
+    state = tmp_path / "state"
+    workspace = tmp_path / "workspace"
+    token_file = tmp_path / "urgent.token"
+    workspace.mkdir()
+
+    def invoke(*arguments: str) -> dict[str, object]:
+        assert run(["--state-dir", str(state), *arguments]) == 0
+        return read_output(capsys)
+
+    invoke("workspace", "register", "--workspace", str(workspace))
+    invoke(
+        "task",
+        "start",
+        "--workspace",
+        str(workspace),
+        "--owner",
+        "urgent",
+        "--summary",
+        "Urgent barrier",
+        "--token-file",
+        str(token_file),
+    )
+    freeze = invoke(
+        "freeze",
+        "acquire",
+        "--workspace",
+        str(workspace),
+        "--priority",
+        "urgent",
+        "--token-file",
+        str(token_file),
+    )["result"]
+
+    assert freeze["kind"] == "freeze"
+    assert freeze["priority"] == "urgent"
+    assert freeze["state"] == "active"
+
+    rejected = run(
+        [
+            "--state-dir",
+            str(state),
+            "claim",
+            "acquire",
+            "--workspace",
+            str(workspace),
+            "--write",
+            "Assets/Hero.prefab",
+            "--priority",
+            "urgent",
+            "--token-file",
+            str(token_file),
+        ]
+    )
+    error = read_output(capsys)
+    assert rejected == 2
+    assert error["code"] == "usage-error"
 
 
 def _subprocess_json(arguments: list[str], env: dict[str, str]) -> dict[str, object]:

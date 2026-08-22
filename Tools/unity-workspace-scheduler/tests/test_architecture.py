@@ -3,13 +3,17 @@ from __future__ import annotations
 import tomllib
 from pathlib import Path
 
+from unity_workspace_scheduler.state import SCHEMA_VERSION
+
 ROOT = Path(__file__).resolve().parents[1]
 
 
 def test_distribution_has_no_runtime_dependencies() -> None:
     project = tomllib.loads((ROOT / "pyproject.toml").read_text(encoding="utf-8"))
+    assert project["project"]["version"] == "1.2.0"
     assert project["project"]["dependencies"] == []
     assert set(project["project"]["scripts"]) == {"unity-scheduler"}
+    assert SCHEMA_VERSION == 1
 
 
 def test_source_has_no_legacy_or_executor_implementation() -> None:
