@@ -184,20 +184,8 @@ namespace ZeroEngine.AI.NPCSchedule
         {
             if (_useGameTime)
             {
-                // 从 TimeManager 获取游戏时间
-#if ZEROENGINE_ENVIRONMENT
-                if (EnvironmentSystem.TimeManager.Instance != null)
-                {
-                    _currentHour = EnvironmentSystem.TimeManager.Instance.CurrentHour;
-                    // 可以从 CalendarManager 获取日期和季节
-                }
-                else
-                {
-                    GetTimeFromBlackboard();
-                }
-#else
+                // 消费项目通过黑板提供游戏时间，AI 包不反向依赖世界系统。
                 GetTimeFromBlackboard();
-#endif
             }
             else
             {
