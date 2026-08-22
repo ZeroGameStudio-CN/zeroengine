@@ -51,6 +51,7 @@ namespace ZeroEngine.EditorTools.Tests
             Assert.That(source, Does.Not.Contain("\"Commands\""));
             Assert.That(source, Does.Not.Contain("\"Test Runner\""));
             Assert.That(source, Does.Not.Contain("\"No editor tool project profile is registered.\""));
+            Assert.That(source, Does.Not.Contain("[MenuItem("), "Editor Tools is embedded in the unified Dashboard and must not restore a standalone top-level menu.");
         }
 
         [Test]

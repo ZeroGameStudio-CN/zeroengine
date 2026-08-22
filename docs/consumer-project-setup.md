@@ -38,10 +38,11 @@ you are deliberately testing a split. If Unity reports a missing
 same commit.
 
 Editor-facing packages do not transitively resolve sibling Git packages in
-Unity 2022.3. Dashboard 3.1 and Formula 0.5 consumers must therefore declare
-`com.zerogamestudio.zeroengine.editor-ui` 1.1 directly at the same tested
-commit. Legacy ZeroEngine 2.1 consumers must also declare Dashboard 3.1 at that
-commit; never mix these package versions across different Git revisions.
+Unity 2022.3. Dashboard 4.6.2 and Formula 0.6.0 consumers must therefore declare
+`com.zerogamestudio.zeroengine.editor-ui` 1.4.0 directly at the same tested
+commit. Legacy ZeroEngine 2.1.1 consumers declare editor-ui 1.3.0 directly;
+Dashboard remains optional. Never mix these package versions across different
+Git revisions.
 
 ## Upgrade Flow
 

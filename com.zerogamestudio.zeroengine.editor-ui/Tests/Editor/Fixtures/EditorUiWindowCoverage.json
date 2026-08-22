@@ -20,7 +20,7 @@
       "typeName": "ZeroGameStudio.ConfigPipeline.Editor.ConfigPipelineWindow",
       "technology": "imgui",
       "migrationStatus": "migrated",
-      "integrationMethod": "OnGUI",
+      "integrationMethod": "OnGUI / OnWorkspaceGUI / DrawContent",
       "exceptions": []
     },
     {

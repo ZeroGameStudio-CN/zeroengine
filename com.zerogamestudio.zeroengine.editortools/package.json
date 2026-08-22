@@ -1,6 +1,6 @@
 {
     "name": "com.zerogamestudio.zeroengine.editortools",
-    "version": "1.0.0",
+    "version": "1.0.1",
     "displayName": "ZeroEngine Editor Tools",
     "description": "Reusable ZeroEngine editor tooling framework for project profiles, tool hubs, generators, validators, and test runner tasks.",
     "unity": "2022.3",

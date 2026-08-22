@@ -38,7 +38,7 @@ ZeroEngine Dashboard 4.6.2 是一个可选、仅限 Unity Editor 的简体中文
 }
 ```
 
-Unity 2022.3 不会为 Git URL 包自动解析同仓 editor-ui；两项必须直接 pin 到同一提交。4.5.0 要求 editor-ui 1.4.0。
+Unity 2022.3 不会为 Git URL 包自动解析同仓 editor-ui；两项必须直接 pin 到同一提交。4.6.2 要求 editor-ui 1.4.0。
 
 本地 `file:` 依赖只用于临时联调，不应进入共享分支。
 

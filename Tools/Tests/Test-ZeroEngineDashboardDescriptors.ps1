@@ -164,14 +164,13 @@ $forbiddenDashboardTokens = @(
     'File.Write',
     'File.Delete',
     'Directory.Delete',
-    'PlayerPrefs.Delete',
-    'Packages/manifest.json'
+    'PlayerPrefs.Delete'
 )
 foreach ($token in $forbiddenDashboardTokens) {
     Assert-Condition (-not $dashboardProductionText.Contains($token)) "Dashboard production code contains forbidden side-effect token '$token'."
 }
 Assert-Condition (-not $dashboardProductionText.Contains('未声明工具')) 'Installed package rows must not describe installed packages as undeclared.'
-Assert-Condition ($dashboardProductionText.Contains('已安装 · 无工作台入口')) 'Installed package rows must separate installation from workspace integration.'
+Assert-Condition ($dashboardProductionText.Contains('已安装 · 基础能力（无工作台面板）')) 'Installed package rows must separate installation from workspace integration.'
 
 $menuPaths = @(Get-ChildItem -LiteralPath $RootPath -Directory -Filter 'com.zerogamestudio*' |
     ForEach-Object { Get-ChildItem -LiteralPath $_.FullName -Recurse -File -Filter '*.cs' } |

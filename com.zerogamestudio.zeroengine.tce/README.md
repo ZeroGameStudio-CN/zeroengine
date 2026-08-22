@@ -22,7 +22,7 @@ This package is synchronous. Delayed trigger scheduling belongs in a project sch
 
 Use the package through Unity Package Manager as a package under:
 
-Version 0.2.1 also requires a direct Git pin for `com.zerogamestudio.zeroengine.editor-ui@1.0.0` at the same ZeroEngine commit. It localizes Dashboard labels, tooltips, and the write confirmation to Simplified Chinese without changing menu paths. Unity 2022.3 does not resolve same-repository sibling packages transitively.
+Version 0.2.1 also requires a direct Git pin for `com.zerogamestudio.zeroengine.editor-ui@1.3.0` at the same ZeroEngine commit. It localizes Dashboard labels, tooltips, and the write confirmation to Simplified Chinese without changing menu paths. Unity 2022.3 does not resolve same-repository sibling packages transitively.
 
 ```text
 Packages/com.zerogamestudio.zeroengine.tce

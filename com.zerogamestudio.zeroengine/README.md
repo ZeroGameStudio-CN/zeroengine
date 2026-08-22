@@ -103,8 +103,8 @@ ZeroEngine 是一个模块化的 Unity 游戏开发框架，提供常用游戏�
 
 ## 使用方式
 1. 在消费项目的 `Packages/manifest.json` 中通过 Git UPM URL 引用需要的 ZeroEngine 包，并 pin 到测试过的 commit。
-   2.1.1 的 Dashboard 元数据要求同时 pin `com.zerogamestudio.zeroengine.dashboard@3.1.1` 与 `com.zerogamestudio.zeroengine.editor-ui@1.1.1` 到同一 commit；Git UPM 不会传递解析同仓 sibling package。
-2. 若需要控制面板，添加 `com.zerogamestudio.zeroengine.dashboard` 后通过菜单 **ZeroEngine -> Dashboard** 打开。
+   2.1.1 的 Editor 元数据要求同时 pin `com.zerogamestudio.zeroengine.editor-ui@1.3.0` 到同一 commit；Git UPM 不会传递解析同仓 sibling package。Dashboard 是可选包，不再是 Legacy ZeroEngine 的依赖。
+2. 若需要控制面板，添加 `com.zerogamestudio.zeroengine.dashboard@4.6.2` 与其要求的 `com.zerogamestudio.zeroengine.editor-ui@1.4.0`，然后通过菜单 **ZGS -> 工作台** 打开。
 3. 各模块单例在需要时自动初始化。
 
 标准接入和升级流程见根目录的 [Consumer Project Setup](../docs/consumer-project-setup.md)。不要将 `ZeroEngine` 文件夹复制到消费项目中作为正式接入方式。

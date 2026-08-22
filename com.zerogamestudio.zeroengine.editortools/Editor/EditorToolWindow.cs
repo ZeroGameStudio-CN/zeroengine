@@ -19,7 +19,6 @@ namespace ZeroEngine.EditorTools
         private Vector2 _scrollPosition;
         private string _lastResult;
 
-        [MenuItem("ZGS/Editor Tools")]
         public static void ShowWindow()
         {
             EditorToolProjectRegistry.RefreshFromProviders();
