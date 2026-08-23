@@ -29,6 +29,7 @@ namespace ZeroEngine.Dialog.Providers
         public DialogGraphProvider(DialogGraphSO graph)
         {
             _graph = graph ?? throw new ArgumentNullException(nameof(graph));
+            _context = new DialogGraphContext(_graph);
         }
 
         public DialogGraphProvider(DialogGraphSO graph, DialogVariables sharedVariables)

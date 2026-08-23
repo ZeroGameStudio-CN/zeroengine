@@ -118,11 +118,16 @@ namespace ZeroEngine.Save
 
         protected override void OnApplicationQuit()
         {
-            base.OnApplicationQuit();
             if (_config.EnableAutoSave && (_config.AutoSaveTriggers & AutoSaveTrigger.OnPause) != 0)
             {
-                AutoSave();
+                var saveManager = FindFirstObjectByType<SaveManager>(FindObjectsInactive.Include);
+                if (saveManager != null)
+                {
+                    AutoSave();
+                }
             }
+
+            base.OnApplicationQuit();
         }
 
         #endregion

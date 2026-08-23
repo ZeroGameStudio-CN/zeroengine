@@ -1,6 +1,6 @@
 {
   "name": "com.zerogamestudio.zeroengine.rpg",
-  "version": "2.3.0",
+  "version": "2.3.1",
   "displayName": "ZeroEngine.RPG",
   "description": "Turn-based RPG systems for ZeroEngine. Includes TurnBased framework (Speed/ATB/CTB/ActionPoint variants), Boost Points system (Octopath-style BP), and Shield Break system (weakness/shield mechanics).",
   "unity": "2022.3",

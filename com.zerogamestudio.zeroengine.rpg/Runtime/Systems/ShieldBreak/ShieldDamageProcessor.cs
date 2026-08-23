@@ -1,5 +1,6 @@
 using UnityEngine;
 using ZeroEngine.Combat;
+using ZeroEngine.Utils;
 
 namespace ZeroEngine.RPG.Systems
 {
@@ -40,7 +41,7 @@ namespace ZeroEngine.RPG.Systems
                 if (isWeakness)
                 {
                     multiplier *= ShieldConstants.WEAKNESS_DAMAGE_MULTIPLIER;
-                    Debug.Log($"[ShieldDamageProcessor] 命中弱点 {attackType.GetDisplayName()}! x{ShieldConstants.WEAKNESS_DAMAGE_MULTIPLIER:F2}");
+                    DebugUtils.Log($"[ShieldDamageProcessor] 命中弱点 {attackType.GetDisplayName()}! x{ShieldConstants.WEAKNESS_DAMAGE_MULTIPLIER:F2}");
                 }
             }
 
@@ -48,14 +49,14 @@ namespace ZeroEngine.RPG.Systems
             if (isBroken)
             {
                 multiplier *= ShieldConstants.BREAK_DAMAGE_MULTIPLIER;
-                Debug.Log($"[ShieldDamageProcessor] 目标处于破盾状态! x{ShieldConstants.BREAK_DAMAGE_MULTIPLIER:F2}");
+                DebugUtils.Log($"[ShieldDamageProcessor] 目标处于破盾状态! x{ShieldConstants.BREAK_DAMAGE_MULTIPLIER:F2}");
             }
 
             // 应用伤害加成
             if (multiplier > 1f)
             {
                 float newDamage = damage.BaseDamage * multiplier;
-                Debug.Log($"[ShieldDamageProcessor] 伤害加成: {damage.BaseDamage:F1} x {multiplier:F2} = {newDamage:F1}");
+                DebugUtils.Log($"[ShieldDamageProcessor] 伤害加成: {damage.BaseDamage:F1} x {multiplier:F2} = {newDamage:F1}");
 
                 // 更新 ShieldData 记录
                 if (shieldData != null)

@@ -1,6 +1,6 @@
 {
     "name": "com.zerogamestudio.zeroengine.persistence",
-    "version": "2.1.0",
+    "version": "2.1.1",
     "displayName": "ZeroEngine.Persistence",
     "description": "Backend-independent save-slot orchestration, stable participant adapters, atomic multi-file promotion and safe screenshot policy for ZeroEngine. Legacy Save and Settings APIs remain available for compatibility.",
     "unity": "2022.3",
