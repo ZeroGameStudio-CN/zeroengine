@@ -97,6 +97,62 @@ namespace ZeroEngine.Quest.Tests.Editor
         }
 
         [Test]
+        public void QuestManager_ProcessConditionEvent_AutoSubmitsEveryMatchingActiveQuest()
+        {
+            const string locationId = "shared_location";
+            var firstQuest = CreateReachQuest("first_reach_quest", locationId, true);
+            var secondQuest = CreateReachQuest("second_reach_quest", locationId, true);
+            var managerObject = new GameObject("QuestManager_AutoSubmitSnapshot_Test");
+            var manager = managerObject.AddComponent<QuestManager>();
+            manager.RegisterConfig(firstQuest);
+            manager.RegisterConfig(secondQuest);
+
+            Assert.True(manager.AcceptQuest(firstQuest.questId));
+            Assert.True(manager.AcceptQuest(secondQuest.questId));
+
+            manager.ProcessConditionEvent(
+                QuestEvents.LocationReached,
+                new ConditionEventData(locationId, 1));
+
+            Assert.AreEqual(QuestState.TheEnd, manager.GetQuestState(firstQuest.questId));
+            Assert.AreEqual(QuestState.TheEnd, manager.GetQuestState(secondQuest.questId));
+            Assert.AreEqual(1, manager.GetQuestCompletionCount(firstQuest.questId));
+            Assert.AreEqual(1, manager.GetQuestCompletionCount(secondQuest.questId));
+            Assert.IsEmpty(manager.GetActiveQuests());
+
+            Object.DestroyImmediate(managerObject);
+            Object.DestroyImmediate(firstQuest);
+            Object.DestroyImmediate(secondQuest);
+        }
+
+        [Test]
+        public void QuestManager_ProcessConditionEvent_DoesNotApplyEventToQuestAcceptedDuringBroadcast()
+        {
+            const string locationId = "shared_location";
+            var initialQuest = CreateReachQuest("initial_reach_quest", locationId, false);
+            var acceptedDuringBroadcast = CreateReachQuest("late_reach_quest", locationId, true);
+            var managerObject = new GameObject("QuestManager_BroadcastBoundary_Test");
+            var manager = managerObject.AddComponent<QuestManager>();
+            manager.RegisterConfig(initialQuest);
+            manager.RegisterConfig(acceptedDuringBroadcast);
+            Assert.True(manager.AcceptQuest(initialQuest.questId));
+
+            manager.OnConditionProgress += (_, _) => manager.AcceptQuest(acceptedDuringBroadcast.questId);
+
+            manager.ProcessConditionEvent(
+                QuestEvents.LocationReached,
+                new ConditionEventData(locationId, 1));
+
+            Assert.AreEqual(QuestState.Successful, manager.GetQuestState(initialQuest.questId));
+            Assert.AreEqual(QuestState.Active, manager.GetQuestState(acceptedDuringBroadcast.questId));
+            Assert.AreEqual(0, manager.GetQuestCompletionCount(acceptedDuringBroadcast.questId));
+
+            Object.DestroyImmediate(managerObject);
+            Object.DestroyImmediate(initialQuest);
+            Object.DestroyImmediate(acceptedDuringBroadcast);
+        }
+
+        [Test]
         public void DialogQuestCondition_EmptyQuestIdPasses()
         {
             var condition = new DialogQuestCondition();
@@ -189,6 +245,18 @@ namespace ZeroEngine.Quest.Tests.Editor
         private sealed class FakeConfigSource : IQuestConfigSource
         {
             public IReadOnlyList<QuestConfigSO> LoadConfigs() => new List<QuestConfigSO>();
+        }
+
+        private static QuestConfigSO CreateReachQuest(string questId, string locationId, bool autoSubmit)
+        {
+            var quest = ScriptableObject.CreateInstance<QuestConfigSO>();
+            quest.questId = questId;
+            quest.autoSubmit = autoSubmit;
+            quest.Conditions = new List<QuestCondition>
+            {
+                new ReachCondition { LocationId = locationId }
+            };
+            return quest;
         }
 
         private static void DestroyExistingQuestManagers()

@@ -180,10 +180,11 @@ namespace ZeroEngine.Quest
         /// </summary>
         public void ProcessConditionEvent(string eventType, ConditionEventData data)
         {
-            for (int i = 0; i < _saveData.activeQuests.Count; i++)
+            var activeQuestSnapshot = new List<QuestRuntimeData>(_saveData.activeQuests);
+            for (int i = 0; i < activeQuestSnapshot.Count; i++)
             {
-                var quest = _saveData.activeQuests[i];
-                if (quest.state != QuestState.Active) continue;
+                var quest = activeQuestSnapshot[i];
+                if (!_saveData.activeQuests.Contains(quest) || quest.state != QuestState.Active) continue;
 
                 var config = GetConfig(quest.questId);
                 if (config == null || config.Conditions == null || config.Conditions.Count == 0) continue;
