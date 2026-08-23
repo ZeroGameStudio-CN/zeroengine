@@ -44,7 +44,10 @@ namespace POB.Extraction
             }
 
             if (!HasAnyContentConfiguration(config))
+            {
+                ValidateRaidRules(config, report);
                 return report;
+            }
 
             if (!HasRequiredLists(config, report))
                 return report;
@@ -68,7 +71,145 @@ namespace POB.Extraction
                 return report;
 
             ValidateProfileCapacityAndAvailability(profiles, regions, spawns, containers, tables, items, report);
+            ValidateRaidRules(config, report);
             return report;
+        }
+
+        private static void ValidateRaidRules(
+            ExtractionPlayableConfig config,
+            ExtractionLootContentValidationReport report)
+        {
+            bool hasRules = HasEntries(config.RaidRuleProfiles)
+                || HasEntries(config.RaidPhaseRules)
+                || HasEntries(config.RaidEffects);
+            if (!hasRules)
+            {
+                foreach (var map in config.Maps)
+                {
+                    if (map != null && !string.IsNullOrEmpty(map.RaidRuleProfileId))
+                    {
+                        hasRules = true;
+                        break;
+                    }
+                }
+            }
+            if (!hasRules) return;
+
+            var profiles = new Dictionary<string, ExtractionRaidRuleProfileDefinition>();
+            foreach (var profile in config.RaidRuleProfiles)
+            {
+                if (profile == null || !profile.IsValid)
+                {
+                    report.AddError("Raid 规则 Profile 无效。");
+                    continue;
+                }
+                if (!profiles.TryAdd(profile.ProfileId, profile))
+                    report.AddError($"Raid 规则 Profile ID 重复：'{profile.ProfileId}'。");
+            }
+
+            var effects = new Dictionary<string, ExtractionRaidEffectDefinition>();
+            foreach (var effect in config.RaidEffects)
+            {
+                if (effect == null || !effect.IsValid || !IsRaidEffectShapeValid(effect))
+                {
+                    report.AddError($"RaidEffect '{effect?.EffectId}' 的类型、目标或数值无效。");
+                    continue;
+                }
+                if (!effects.TryAdd(effect.EffectId, effect))
+                    report.AddError($"RaidEffect ID 重复：'{effect.EffectId}'。");
+            }
+
+            var ruleIds = new HashSet<string>();
+            foreach (var rule in config.RaidPhaseRules)
+            {
+                if (rule == null || !rule.IsValid)
+                {
+                    report.AddError("Raid 阶段规则无效。");
+                    continue;
+                }
+                if (!ruleIds.Add(rule.RuleId))
+                    report.AddError($"Raid 阶段规则 ID 重复：'{rule.RuleId}'。");
+                if (!profiles.TryGetValue(rule.ProfileId, out var profile))
+                    report.AddError($"Raid 阶段规则 '{rule.RuleId}' 引用了不存在的 Profile '{rule.ProfileId}'。");
+                else if (rule.RemainingSeconds > profile.DurationSeconds)
+                    report.AddError($"Raid 阶段规则 '{rule.RuleId}' 的剩余秒数超过 Profile 时长。");
+                if (!effects.ContainsKey(rule.EffectId))
+                    report.AddError($"Raid 阶段规则 '{rule.RuleId}' 引用了不存在的 Effect '{rule.EffectId}'。");
+            }
+
+            foreach (var map in config.Maps)
+            {
+                if (map == null || !map.IsValid) continue;
+                if (!string.IsNullOrEmpty(map.RaidRuleProfileId)
+                    && !profiles.ContainsKey(map.RaidRuleProfileId))
+                {
+                    report.AddError($"地图 '{map.MapId}' 引用了不存在的 raidRuleProfileId '{map.RaidRuleProfileId}'。");
+                }
+            }
+
+            var encounters = new HashSet<string>();
+            foreach (var encounter in config.HostileExplorerEncounters)
+            {
+                if (encounter == null || !encounter.IsValid) continue;
+                encounters.Add(encounter.EncounterId);
+            }
+            var containerSpawns = new HashSet<string>();
+            foreach (var spawn in config.ContainerSpawns)
+                if (spawn != null && !string.IsNullOrEmpty(spawn.SpawnId)) containerSpawns.Add(spawn.SpawnId);
+            var pointIds = new HashSet<string>();
+            foreach (var point in config.ExtractionPoints)
+            {
+                if (point == null || !point.IsValid)
+                    report.AddError($"撤离点 '{point?.PointId}' 的模式字段无效。");
+                else pointIds.Add(point.PointId);
+            }
+
+            foreach (var effect in effects.Values)
+            {
+                if (effect.EffectType == ExtractionRaidEffectType.SpawnEncounter
+                    && !encounters.Contains(effect.TargetId))
+                    report.AddError($"RaidEffect '{effect.EffectId}' 引用了不存在的 Encounter '{effect.TargetId}'。");
+                if (effect.EffectType == ExtractionRaidEffectType.SpawnContainer
+                    && !containerSpawns.Contains(effect.TargetId))
+                    report.AddError($"RaidEffect '{effect.EffectId}' 引用了不存在的 ContainerSpawn '{effect.TargetId}'。");
+                if (effect.EffectType == ExtractionRaidEffectType.AdvanceExtractionPointSeconds
+                    && !pointIds.Contains(effect.TargetId))
+                    report.AddError($"RaidEffect '{effect.EffectId}' 引用了不存在的撤离点 '{effect.TargetId}'。");
+            }
+
+            foreach (var gate in config.LeverDefinitions)
+            {
+                if (gate == null || gate.ChannelSeconds <= 0) continue;
+                if (!gate.IsGateConfigurationValid)
+                    report.AddError($"Gate '{gate.LeverId}' 的模式字段无效。");
+                if (gate.Mode == ExtractionGateMode.Capture
+                    && !encounters.Contains(gate.CaptureEncounterId))
+                    report.AddError($"Gate '{gate.LeverId}' 引用了不存在的 Capture Encounter '{gate.CaptureEncounterId}'。");
+                foreach (var effectId in gate.EffectIds)
+                    if (!effects.ContainsKey(effectId))
+                        report.AddError($"Gate '{gate.LeverId}' 引用了不存在的 Effect '{effectId}'。");
+            }
+        }
+
+        private static bool IsRaidEffectShapeValid(ExtractionRaidEffectDefinition effect)
+        {
+            switch (effect.EffectType)
+            {
+                case ExtractionRaidEffectType.EnemyStatMultiplier:
+                    return !IsBlank(effect.TargetId) && effect.Amount > 0f;
+                case ExtractionRaidEffectType.SpawnEncounter:
+                case ExtractionRaidEffectType.SpawnContainer:
+                case ExtractionRaidEffectType.SetRaidFlag:
+                case ExtractionRaidEffectType.UnlockBonusContainerGroup:
+                    return !IsBlank(effect.TargetId);
+                case ExtractionRaidEffectType.ExtendRaidDeadlineSeconds:
+                case ExtractionRaidEffectType.AddThreatLevel:
+                    return IsBlank(effect.TargetId) && effect.Amount > 0f;
+                case ExtractionRaidEffectType.AdvanceExtractionPointSeconds:
+                    return !IsBlank(effect.TargetId) && effect.Amount > 0f;
+                default:
+                    return false;
+            }
         }
 
         public static bool HasAnyContentConfiguration(ExtractionPlayableConfig config)

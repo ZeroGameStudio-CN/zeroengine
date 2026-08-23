@@ -20,8 +20,22 @@ namespace POB.Extraction
         public static bool ShouldFailForTimeout(ExtractionRaidSession session, long currentUnixSeconds, int graceSeconds = 0)
         {
             if (session == null || session.DurationSeconds <= 0) return false;
+            // Profile-driven raids transition to Overtime at zero. Timeout is
+            // retained only for legacy sessions without a frozen rule snapshot.
+            if (session.RuleSnapshot != null) return false;
             long deadline = (long)GetEffectiveDurationSeconds(session) + Math.Max(0, graceSeconds);
             return GetElapsedSeconds(session, currentUnixSeconds) >= deadline;
+        }
+
+        // Timeline consumers can distinguish the zero-second boundary from
+        // the legacy fail-for-timeout result. This additive query never changes
+        // ShouldFailForTimeout's existing behavior.
+        public static bool IsOvertime(ExtractionRaidSession session, long currentUnixSeconds)
+        {
+            if (session == null || session.DurationSeconds <= 0) return false;
+            return session.Content?.Phase == ExtractionRaidPhase.Overtime
+                || session.Content?.IsOvertime == true
+                || GetElapsedSeconds(session, currentUnixSeconds) >= GetEffectiveDurationSeconds(session);
         }
 
         public static bool CanStartExtraction(
@@ -31,7 +45,9 @@ namespace POB.Extraction
             bool hasEmergencyOverride)
         {
             if (session == null || point == null || !point.IsValid) return false;
-            if (ShouldFailForTimeout(session, currentUnixSeconds)) return false;
+            if (session.Content?.Phase != ExtractionRaidPhase.Overtime
+                && session.Content?.IsOvertime != true
+                && ShouldFailForTimeout(session, currentUnixSeconds)) return false;
 
             long elapsed = GetElapsedSeconds(session, currentUnixSeconds);
             if (point.SingleUse && session.Content.UsedExtractionPointIds.Contains(point.PointId)) return false;
@@ -50,7 +66,10 @@ namespace POB.Extraction
             long currentUnixSeconds,
             bool hasEmergencyOverride)
         {
-            if (ShouldFailForTimeout(session, currentUnixSeconds)) return false;
+            if (session == null || point == null || !point.IsValid) return false;
+            if (session.Content?.Phase != ExtractionRaidPhase.Overtime
+                && session.Content?.IsOvertime != true
+                && ShouldFailForTimeout(session, currentUnixSeconds)) return false;
             if (!CanStartExtraction(session, point, channelStartedAtUnixSeconds, hasEmergencyOverride)) return false;
 
             long channelElapsed = currentUnixSeconds - channelStartedAtUnixSeconds;
