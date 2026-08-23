@@ -41,12 +41,56 @@ namespace POB.Extraction
         public bool SingleUse = true;
         public string DisplayName;
         public string Description;
+        public ExtractionGateMode Mode = ExtractionGateMode.Hold;
+        public int ChannelSeconds;
+        public int RequiredItemQuantity;
+        public ExtractionItemRarity RequiredItemRarity;
+        public string CaptureEncounterId;
+        public int EnemySpawnIntervalSeconds;
+        public List<string> EffectIds = new();
+
+        // Compatibility input for pre-profile JSON and Workshop data. Formal Excel
+        // authoring uses EffectIds and the shared RaidEffects table.
         public List<ExtractionLeverEffectDefinition> Effects = new();
 
         public ExtractionLeverDefinition(string leverId, string mapId)
         {
             LeverId = leverId;
             MapId = mapId;
+        }
+
+        public bool IsGateConfigurationValid
+        {
+            get
+            {
+                if (string.IsNullOrEmpty(LeverId)
+                    || string.IsNullOrEmpty(MapId)
+                    || ChannelSeconds <= 0
+                    || RequiredItemQuantity < 0
+                    || !Enum.IsDefined(typeof(ExtractionGateMode), Mode)
+                    || !Enum.IsDefined(typeof(ExtractionItemRarity), RequiredItemRarity))
+                {
+                    return false;
+                }
+
+                switch (Mode)
+                {
+                    case ExtractionGateMode.Capture:
+                        return RequiredItemQuantity == 0
+                            && !string.IsNullOrEmpty(CaptureEncounterId)
+                            && EnemySpawnIntervalSeconds > 0;
+                    case ExtractionGateMode.Sacrifice:
+                        return RequiredItemQuantity > 0
+                            && string.IsNullOrEmpty(CaptureEncounterId)
+                            && EnemySpawnIntervalSeconds == 0;
+                    case ExtractionGateMode.Hold:
+                        return RequiredItemQuantity == 0
+                            && string.IsNullOrEmpty(CaptureEncounterId)
+                            && EnemySpawnIntervalSeconds == 0;
+                    default:
+                        return false;
+                }
+            }
         }
     }
 
@@ -55,11 +99,16 @@ namespace POB.Extraction
     {
         public string PointId;
         public int EffectiveOpenAtElapsedSeconds;
+        public int OpenedAtElapsedSeconds = -1;
 
-        public ExtractionPointRuntimeState(string pointId, int effectiveOpenAtElapsedSeconds)
+        public ExtractionPointRuntimeState(
+            string pointId,
+            int effectiveOpenAtElapsedSeconds,
+            int openedAtElapsedSeconds = -1)
         {
             PointId = pointId;
             EffectiveOpenAtElapsedSeconds = effectiveOpenAtElapsedSeconds;
+            OpenedAtElapsedSeconds = openedAtElapsedSeconds;
         }
     }
 

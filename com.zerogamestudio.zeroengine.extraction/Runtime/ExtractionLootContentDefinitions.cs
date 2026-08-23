@@ -179,6 +179,7 @@ namespace POB.Extraction
         public int MinimumContentCount;
         public int MaximumContentCount;
         public float SearchTimeMultiplier;
+        public bool IsSpecial;
         public List<string> LootTableIds = new();
 
         public ExtractionContainerDefinition(
@@ -201,12 +202,27 @@ namespace POB.Extraction
     {
         public string ContainerTypeId;
         public int Weight;
+        public int DifficultyLevel;
 
         public ExtractionWeightedContainerCandidate(string containerTypeId, int weight)
         {
             ContainerTypeId = containerTypeId;
             Weight = weight;
         }
+
+        public ExtractionWeightedContainerCandidate(
+            string containerTypeId,
+            int weight,
+            int difficultyLevel)
+            : this(containerTypeId, weight)
+        {
+            DifficultyLevel = difficultyLevel;
+        }
+
+        public bool IsValid =>
+            !string.IsNullOrEmpty(ContainerTypeId)
+            && DifficultyLevel >= 0
+            && Weight > 0;
     }
 
     [Serializable]
@@ -219,19 +235,22 @@ namespace POB.Extraction
         public bool ChancePerRaid;
         public float Chance;
         public string BonusGroupId;
+        public ExtractionLootPointKind PointKind = ExtractionLootPointKind.Normal;
 
         public ExtractionContainerSpawnDefinition(
             string spawnId,
             string regionId,
             bool always,
             bool chancePerRaid,
-            float chance)
+            float chance,
+            ExtractionLootPointKind pointKind = ExtractionLootPointKind.Normal)
         {
             SpawnId = spawnId;
             RegionId = regionId;
             Always = always;
             ChancePerRaid = chancePerRaid;
             Chance = chance;
+            PointKind = pointKind;
         }
     }
 

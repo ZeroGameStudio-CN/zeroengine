@@ -13,6 +13,9 @@ namespace POB.Extraction
         public string LootTableId;
         public int MinThreatLevel;
         public int Weight;
+        public string SpawnPointId;
+        public int DifficultyLevel;
+        public bool IsBoss;
 
         public bool IsValid =>
             !string.IsNullOrEmpty(EncounterId)
@@ -20,6 +23,7 @@ namespace POB.Extraction
             && !string.IsNullOrEmpty(ActorKey)
             && !string.IsNullOrEmpty(LootTableId)
             && MinThreatLevel >= 0
+            && DifficultyLevel >= 0
             && Weight > 0;
 
         public ExtractionHostileExplorerDefinition(
