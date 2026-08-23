@@ -737,15 +737,15 @@ namespace ZeroEngine.UI
                 prefab = await LoadViewPrefabFromResourcesAsync(config.resourcePath);
             }
 
-            if (prefab == null)
-            {
-                LogUIManager(UIManagerLogPolicy.ViewPrefabLoadFailed(viewName));
-                return null;
-            }
-
             if (!CanContinueViewOperation(config, requestSessionViewGeneration))
             {
                 ReleasePrefabHandleForView(viewName);
+                return null;
+            }
+
+            if (prefab == null)
+            {
+                LogUIManager(UIManagerLogPolicy.ViewPrefabLoadFailed(viewName));
                 return null;
             }
 

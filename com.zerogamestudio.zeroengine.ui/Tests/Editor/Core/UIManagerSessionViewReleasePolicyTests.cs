@@ -124,6 +124,22 @@ namespace ZeroEngine.UI.Tests.Editor.Core
             Assert.That(policySource, Does.Not.Contain("Addressables"));
         }
 
+        [Test]
+        [Category("Boundary")]
+        public void UIManager_GetOrCreateViewAsync_InvalidatedRequestDoesNotLogPrefabLoadFailure()
+        {
+            var managerSource = File.ReadAllText(AssetPath("Runtime", "UI", "Core", "UIManager.cs"));
+            var getOrCreateView = SourceTextRegionExtractor.ExtractMethodRegion(
+                managerSource,
+                "private async Task<UIViewBase> GetOrCreateViewAsync(");
+
+            AssertOrder(
+                getOrCreateView,
+                "if (!CanContinueViewOperation(config, requestSessionViewGeneration))",
+                "LogUIManager(UIManagerLogPolicy.ViewPrefabLoadFailed(viewName));",
+                "An invalidated prefab request must exit before an expected teardown result is logged as a load failure.");
+        }
+
         private static void AssertAllCleanupFalse(UIManagerSessionViewReleaseDecision decision)
         {
             Assert.That(decision.ReleaseView, Is.False);
