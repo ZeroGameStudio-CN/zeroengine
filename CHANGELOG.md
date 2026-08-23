@@ -10,6 +10,14 @@ tracked in each package's `package.json`.
 - Added MIT licensing.
 - Normalized package repository metadata for UPM Git dependencies.
 
+## com.zerogamestudio.zeroengine.narrative 2.0.2
+
+- Snapshot active quest runtimes at condition-event boundaries so auto-submit removal cannot skip adjacent quests and newly accepted quests cannot consume an earlier broadcast.
+
+## com.zerogamestudio.zeroengine.ui 2.2.1
+
+- Suppress prefab-load failure diagnostics for asynchronous view requests invalidated by manager or session teardown.
+
 ## com.zerogamestudio.zeroengine.core 2.2.0
 
 - Add injectable log channels, immutable entries, level filtering, and the Unity log sink while preserving the existing `ZeroLog` API and format.
