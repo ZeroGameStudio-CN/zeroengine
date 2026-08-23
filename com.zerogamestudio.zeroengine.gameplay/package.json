@@ -1,6 +1,6 @@
 {
     "name": "com.zerogamestudio.zeroengine.gameplay",
-    "version": "2.0.0",
+    "version": "2.0.1",
     "displayName": "ZeroEngine.Gameplay",
     "description": "Gameplay mechanics for ZeroEngine. Includes Interaction System, Tutorial System (sequences, steps), and Command Pattern (undo/redo).",
     "unity": "2022.3",
