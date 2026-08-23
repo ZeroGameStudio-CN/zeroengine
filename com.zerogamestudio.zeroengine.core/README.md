@@ -3,7 +3,7 @@
 ZeroEngine 框架的核心基础设施包。
 
 ## 版本
-- **当前版本**: 2.0.0
+- **当前版本**: 2.1.0
 - **最小 Unity**: 2022.3 LTS
 
 ## 包含模块
@@ -14,6 +14,7 @@ ZeroEngine 框架的核心基础设施包。
 - `PersistentSingleton<T>` - 跨场景持久单例
 - `EventManager` - 事件总线系统
 - `GameEvents` - 预定义事件常量
+- `ServiceRegistry` - 类型化服务注册；SubsystemRegistration 时自动清除旧场景实例
 
 ### Pool (对象池)
 - `PoolManager` - 对象池管理器 (PersistentSingleton)
