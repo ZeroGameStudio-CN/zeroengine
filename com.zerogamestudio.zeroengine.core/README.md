@@ -3,7 +3,7 @@
 ZeroEngine 框架的核心基础设施包。
 
 ## 版本
-- **当前版本**: 2.1.0
+- **当前版本**: 2.2.0
 - **最小 Unity**: 2022.3 LTS
 
 ## 包含模块
@@ -23,6 +23,7 @@ ZeroEngine 框架的核心基础设施包。
 
 ### Utils (工具)
 - `ZeroLog` - 统一日志系统
+- `ZeroLogChannel` - 可注入 sink、等级过滤和结构化 entry 的实例日志通道
 - `DebugUtils` - 条件编译调试工具
 - `DateUtils` - 时间戳/格式化工具
 - `ZeroEase` - 缓动枚举 (DOTween 解耦)

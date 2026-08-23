@@ -10,6 +10,10 @@ tracked in each package's `package.json`.
 - Added MIT licensing.
 - Normalized package repository metadata for UPM Git dependencies.
 
+## com.zerogamestudio.zeroengine.core 2.2.0
+
+- Add injectable log channels, immutable entries, level filtering, and the Unity log sink while preserving the existing `ZeroLog` API and format.
+
 ## com.zerogamestudio.zeroengine.core 2.1.0
 
 - Reset registered services during Unity subsystem registration so stale scene instances cannot survive Play Mode entry when Domain Reload is disabled.
