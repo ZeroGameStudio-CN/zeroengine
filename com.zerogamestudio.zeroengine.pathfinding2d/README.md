@@ -4,7 +4,7 @@
 
 ## 版本
 
-- **当前版本**: 1.3.0
+- **当前版本**: 1.7.0
 - **依赖**: ZeroEngine.Core >= 1.0.0
 
 ## 概述
@@ -22,6 +22,8 @@
 - **空间索引加速** (v1.1.0+)：使用 SpatialGrid2D 将节点查询从 O(n) 优化到 O(k)
 - **同平台快速路径** (v1.1.0+)：起终点在同一平台时跳过 A*，直接生成 Walk 指令
 - **路径验证与回退** (v1.1.0+)：检测路径过期/目标移动/偏离，A* 失败时返回部分路径
+- **不可变搜索快照** (v1.7.0+)：一次事务只发布一个图修订，异步结果可可靠拒绝旧图回调
+- **可替换搜索后端** (v1.7.0+)：默认 managed 二叉堆实现，无任何商业插件依赖；消费者可在自己的叶子程序集注入后端
 
 ## 核心组件
 
@@ -32,6 +34,12 @@
 ```csharp
 // 生成平台图
 platformGraphGenerator.GeneratePlatformGraph();
+
+// 需要在基础图之后继续增加 Jump/Fall/DropThrough 时，用一次事务原子发布
+platformGraphGenerator.BeginBuild();
+platformGraphGenerator.GeneratePlatformGraph();
+jumpLinkCalculator.GenerateJumpLinks();
+var snapshot = platformGraphGenerator.CommitBuild();
 
 // 查找最近节点（使用空间索引加速）(v1.1.0+)
 var node = platformGraphGenerator.FindNearestNode(position, maxDistance);
@@ -85,6 +93,12 @@ var result = pathfinder.ValidatePath(currentPos, targetPos);
 
 // 自动重新寻路 (v1.1.0+)
 bool repathed = pathfinder.TryAutoRevalidate(currentPos, targetPos);
+
+// 新的非写入式查询不会改变 CurrentPath；由角色在安全边界显式提交
+var submission = pathfinder.SubmitPathQuery(
+    new PlatformPathRequest(start, end, forceRequest: true));
+if (submission.Kind == PlatformSearchSubmissionKind.Immediate)
+    pathfinder.TryCommitPathQueryResult(submission.ImmediateResult);
 ```
 
 ### MoveCommand

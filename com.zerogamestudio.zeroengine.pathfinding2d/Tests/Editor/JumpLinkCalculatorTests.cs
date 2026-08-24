@@ -51,6 +51,44 @@ namespace ZeroEngine.Pathfinding2D.Tests.Editor
         }
 
         [Test]
+        public void GenerateJumpLinks_CompositeEdgeRoundingWithinTolerance_KeepsReachableJump()
+        {
+            var host = new GameObject("CompositeEdgeRoundingJumpHost");
+            var upper = CreatePlatform("RoundedUpper", GroundLayer, new Vector2(15.4995f, 11f), new Vector2(30.999f, 0.2f));
+            var middle = CreatePlatform("RoundedMiddle", GroundLayer, new Vector2(51.0005f, 5f), new Vector2(27.999f, 0.2f));
+
+            try
+            {
+                var graph = CreateGraph(host, groundMask: 1 << GroundLayer, oneWayMask: 0);
+                graph.Config.ScanCenter = new Vector2(32.5f, 6f);
+                graph.Config.ScanSize = new Vector2(80f, 18f);
+                graph.Config.NodeSpacing = 1.5f;
+                graph.Config.EdgeInset = 0.3f;
+                graph.GeneratePlatformGraph();
+
+                var calculator = host.AddComponent<JumpLinkCalculator>();
+                calculator.Config.GravityScale = 5f;
+                calculator.Config.MaxJumpVelocity = 20f;
+                calculator.Config.MaxJumpHeight = 6f;
+                calculator.Config.MaxHorizontalDistance = 6f;
+                calculator.Config.AirJumpCount = 1;
+                calculator.Config.AirJumpVelocity = 20f;
+                calculator.Config.TrajectoryCheckRadius = 0.4f;
+                calculator.GenerateJumpLinks();
+
+                Assert.IsTrue(
+                    HasJumpLink(graph, middle.GetComponent<Collider2D>(), upper.GetComponent<Collider2D>()),
+                    "Sub-centimeter CompositeCollider edge rounding must not remove a physically reachable boundary jump.");
+            }
+            finally
+            {
+                Object.DestroyImmediate(host);
+                Object.DestroyImmediate(upper);
+                Object.DestroyImmediate(middle);
+            }
+        }
+
+        [Test]
         public void GenerateJumpLinks_OneWayBetweenEndpoints_DoesNotBlockDirectJump()
         {
             var host = new GameObject("OneWayDoesNotBlockJumpHost");

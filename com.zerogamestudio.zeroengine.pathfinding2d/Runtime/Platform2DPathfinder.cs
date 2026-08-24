@@ -106,6 +106,12 @@ namespace ZeroEngine.Pathfinding2D
         public PlatformPathFailureReason LastFailureReason { get; private set; }
 
         private float lastPathRequestTime = -999f;
+        private readonly ManagedPlatformPathSearchBackend managedSearchBackend = new ManagedPlatformPathSearchBackend();
+        private IPlatformPathSearchBackend searchBackend;
+        private PlatformPathSearchHandle pendingSearchHandle;
+        private long nextSearchRequestRevision;
+        private long latestSubmittedRequestRevision;
+        private long nextRouteBatchRevision;
 
         private void Awake()
         {
@@ -113,6 +119,21 @@ namespace ZeroEngine.Pathfinding2D
             {
                 graphGenerator = FindObjectOfType<PlatformGraphGenerator>();
             }
+
+            EnsureSearchBackend();
+            PrepareSearchBackend();
+        }
+
+        private void OnDisable()
+        {
+            CancelPendingPathQuery();
+        }
+
+        private void OnDestroy()
+        {
+            CancelPendingPathQuery();
+            DisposeSearchBackend(searchBackend);
+            searchBackend = null;
         }
 
         /// <summary>
@@ -120,7 +141,878 @@ namespace ZeroEngine.Pathfinding2D
         /// </summary>
         public void SetGraphGenerator(PlatformGraphGenerator generator)
         {
+            CancelPendingPathQuery();
             graphGenerator = generator;
+            PrepareSearchBackend();
+        }
+
+        public IPlatformPathSearchBackend SearchBackend
+        {
+            get
+            {
+                EnsureSearchBackend();
+                return searchBackend;
+            }
+        }
+
+        /// <summary>
+        /// Selects a runtime-only search backend. Passing null restores the package-owned managed backend.
+        /// Existing serialized fields and synchronous APIs are unaffected.
+        /// </summary>
+        public void SetSearchBackend(IPlatformPathSearchBackend backend)
+        {
+            IPlatformPathSearchBackend nextBackend = backend ?? managedSearchBackend;
+            if (object.ReferenceEquals(searchBackend, nextBackend))
+            {
+                PrepareSearchBackend();
+                return;
+            }
+
+            CancelPendingPathQuery();
+            IPlatformPathSearchBackend previousBackend = searchBackend;
+            searchBackend = nextBackend;
+            DisposeSearchBackend(previousBackend);
+            PrepareSearchBackend();
+        }
+
+        public PlatformSearchGraphPreparation PrepareSearchBackend()
+        {
+            EnsureSearchBackend();
+            PlatformSearchGraphSnapshot snapshot = graphGenerator != null
+                ? graphGenerator.SearchSnapshot
+                : null;
+            return snapshot != null
+                ? searchBackend.PrepareGraph(snapshot)
+                : PlatformSearchGraphPreparation.Failed(null, PlatformSearchFailureReason.GraphUnavailable);
+        }
+
+        /// <summary>
+        /// Submits a backend-neutral semantic path query without changing CurrentPath.
+        /// Pending callbacks are delivered only by the selected backend after this method returns.
+        /// </summary>
+        public PlatformPathQuerySubmission SubmitPathQuery(
+            PlatformPathRequest request,
+            System.Action<PlatformPathQueryResult> completed = null)
+        {
+            EnsureSearchBackend();
+            pendingSearchHandle?.Cancel();
+            pendingSearchHandle = null;
+
+            long requestRevision = ++nextSearchRequestRevision;
+            latestSubmittedRequestRevision = requestRevision;
+            PlatformPathfindingDiagnostics.Increment(PlatformPathfindingCounterKind.RequestSubmitted);
+
+            if (!request.ForceRequest && Time.time - lastPathRequestTime < config.PathRequestInterval)
+            {
+                PlatformPathResult throttled = PlatformPathResult.Failed(
+                    PlatformPathFailureReason.Throttled,
+                    request.Start,
+                    request.Target,
+                    request.Target,
+                    CurrentPath,
+                    requestStarted: false);
+                PlatformPathfindingDiagnostics.RecordPathResult(throttled);
+                return PlatformPathQuerySubmission.Rejected(CreatePathQueryResult(requestRevision, throttled));
+            }
+
+            if (graphGenerator == null)
+            {
+                PlatformPathResult missingGraph = PlatformPathResult.Failed(
+                    PlatformPathFailureReason.MissingGraphGenerator,
+                    request.Start,
+                    request.Target,
+                    request.Target,
+                    requestStarted: false);
+                PlatformPathfindingDiagnostics.RecordPathResult(missingGraph);
+                return PlatformPathQuerySubmission.Rejected(CreatePathQueryResult(requestRevision, missingGraph));
+            }
+
+            if (!graphGenerator.IsGenerated)
+            {
+                Platform2DPath notFound = Platform2DPath.NotFound(request.Start, request.Target);
+                PlatformPathResult graphNotGenerated = PlatformPathResult.Failed(
+                    PlatformPathFailureReason.GraphNotGenerated,
+                    request.Start,
+                    request.Target,
+                    request.Target,
+                    notFound,
+                    requestStarted: false);
+                PlatformPathfindingDiagnostics.RecordPathResult(graphNotGenerated);
+                return PlatformPathQuerySubmission.Rejected(CreatePathQueryResult(requestRevision, graphNotGenerated));
+            }
+
+            PlatformSearchGraphSnapshot snapshot = graphGenerator.SearchSnapshot;
+            if (snapshot == null)
+            {
+                PlatformPathResult unavailable = PlatformPathResult.Failed(
+                    PlatformPathFailureReason.BackendUnavailable,
+                    request.Start,
+                    request.Target,
+                    request.Target,
+                    CurrentPath,
+                    requestStarted: false);
+                PlatformPathfindingDiagnostics.RecordPathResult(unavailable);
+                return PlatformPathQuerySubmission.Rejected(CreatePathQueryResult(requestRevision, unavailable));
+            }
+
+            lastPathRequestTime = Time.time;
+            Vector3 resolvedTarget = request.Target;
+            if (request.ProjectTargetToGround)
+            {
+                resolvedTarget = PlatformTargetProjection.ProjectTargetToGround(
+                    request.Target,
+                    graphGenerator.Config.AllPlatformLayers,
+                    request.ProjectionDistance);
+            }
+
+            if (Vector2.Distance(request.Start, resolvedTarget) <= config.ArriveDistance)
+            {
+                Platform2DPath arrived = Platform2DPath.Arrived(request.Start, resolvedTarget);
+                ApplyRouteDiagnostics(arrived, commandsValidated: true);
+                PlatformPathResult arrivedResult = PlatformPathResult.Succeeded(
+                    request.Start,
+                    request.Target,
+                    resolvedTarget,
+                    arrived,
+                    null);
+                PlatformPathfindingDiagnostics.RecordPathResult(arrivedResult);
+                return PlatformPathQuerySubmission.Immediate(CreatePathQueryResult(requestRevision, arrivedResult));
+            }
+
+            Platform2DPath samePlatformPath = TryCreateSamePlatformPath(request.Start, resolvedTarget);
+            if (samePlatformPath != null)
+            {
+                ApplyRouteDiagnostics(samePlatformPath, commandsValidated: true);
+                PlatformPathResult samePlatformResult = PlatformPathResult.Succeeded(
+                    request.Start,
+                    request.Target,
+                    resolvedTarget,
+                    samePlatformPath,
+                    samePlatformPath.GetCurrentCommand());
+                PlatformPathfindingDiagnostics.RecordPathResult(samePlatformResult);
+                return PlatformPathQuerySubmission.Immediate(CreatePathQueryResult(requestRevision, samePlatformResult));
+            }
+
+            Collider2D endPlatform = DetectPlatformBelow(resolvedTarget);
+            PlatformNodeData? startNode = ResolveStartNode(request.Start);
+            PlatformNodeData? endNode = graphGenerator.FindNearestNodeOnPlatform(
+                resolvedTarget,
+                endPlatform,
+                config.MaxNodeSearchRadius);
+            if (!startNode.HasValue)
+            {
+                PlatformPathResult noStart = PlatformPathResult.Failed(
+                    PlatformPathFailureReason.StartNodeNotFound,
+                    request.Start,
+                    request.Target,
+                    resolvedTarget,
+                    Platform2DPath.NotFound(request.Start, resolvedTarget));
+                PlatformPathfindingDiagnostics.RecordPathResult(noStart);
+                return PlatformPathQuerySubmission.Immediate(CreatePathQueryResult(requestRevision, noStart));
+            }
+
+            if (!endNode.HasValue)
+            {
+                PlatformPathResult noEnd = PlatformPathResult.Failed(
+                    PlatformPathFailureReason.EndNodeNotFound,
+                    request.Start,
+                    request.Target,
+                    resolvedTarget,
+                    Platform2DPath.NotFound(request.Start, resolvedTarget));
+                PlatformPathfindingDiagnostics.RecordPathResult(noEnd);
+                return PlatformPathQuerySubmission.Immediate(CreatePathQueryResult(requestRevision, noEnd));
+            }
+
+            List<PlatformNodeData> candidates = BuildTargetNodeCandidates(endNode.Value, resolvedTarget);
+            var targetNodeIds = new int[candidates.Count];
+            for (int i = 0; i < candidates.Count; i++)
+                targetNodeIds[i] = candidates[i].NodeId;
+
+            bool targetIsElevated = resolvedTarget.y >
+                                    startNode.Value.Position.y + config.WalkCommandVerticalTolerance;
+            var costContext = new PlatformPathSearchCostContext(
+                targetIsElevated,
+                startNode.Value.Position.y,
+                config.WalkCommandVerticalTolerance);
+            var searchRequest = new PlatformSearchRequest(
+                requestRevision,
+                snapshot,
+                startNode.Value.NodeId,
+                targetNodeIds,
+                costContext,
+                request.ShouldAllowPartialPath(config.AllowPartialPath));
+
+            if (!searchBackend.IsGraphReady(snapshot.GraphIdentity, snapshot.GraphRevision))
+            {
+                PlatformSearchGraphPreparation preparation = searchBackend.PrepareGraph(snapshot);
+                if (preparation.Kind != PlatformSearchGraphPreparationKind.Ready)
+                {
+                    PlatformPathResult unavailable = PlatformPathResult.Failed(
+                        PlatformPathFailureReason.BackendUnavailable,
+                        request.Start,
+                        request.Target,
+                        resolvedTarget,
+                        CurrentPath,
+                        requestStarted: false);
+                    PlatformPathfindingDiagnostics.RecordPathResult(unavailable);
+                    return PlatformPathQuerySubmission.Rejected(CreatePathQueryResult(requestRevision, unavailable));
+                }
+            }
+
+            PlatformSearchSubmission backendSubmission = searchBackend.Submit(
+                searchRequest,
+                searchResult =>
+                {
+                    PlatformPathQueryResult queryResult = ConvertSearchResult(
+                        requestRevision,
+                        request,
+                        resolvedTarget,
+                        startNode.Value,
+                        searchResult);
+                    if (pendingSearchHandle != null &&
+                        pendingSearchHandle.RequestRevision == searchResult.RequestRevision)
+                    {
+                        pendingSearchHandle = null;
+                    }
+                    completed?.Invoke(queryResult);
+                });
+
+            switch (backendSubmission.Kind)
+            {
+                case PlatformSearchSubmissionKind.Immediate:
+                {
+                    PlatformPathQueryResult queryResult = ConvertSearchResult(
+                        requestRevision,
+                        request,
+                        resolvedTarget,
+                        startNode.Value,
+                        backendSubmission.ImmediateResult);
+                    return PlatformPathQuerySubmission.Immediate(queryResult);
+                }
+                case PlatformSearchSubmissionKind.Pending:
+                    pendingSearchHandle = backendSubmission.Handle;
+                    return PlatformPathQuerySubmission.Pending(backendSubmission.Handle);
+                default:
+                {
+                    PlatformPathQueryResult queryResult = ConvertSearchResult(
+                        requestRevision,
+                        request,
+                        resolvedTarget,
+                        startNode.Value,
+                        backendSubmission.ImmediateResult);
+                    return PlatformPathQuerySubmission.Rejected(queryResult);
+                }
+            }
+        }
+
+        /// <summary>
+        /// Commits a completed query only when it still belongs to the latest request, graph and backend.
+        /// The caller chooses the gameplay-safe commit boundary.
+        /// </summary>
+        public bool TryCommitPathQueryResult(PlatformPathQueryResult queryResult)
+        {
+            if (queryResult == null ||
+                graphGenerator == null ||
+                !graphGenerator.IsGenerated ||
+                graphGenerator.IsBuildInProgress ||
+                graphGenerator.SearchSnapshot == null)
+                return false;
+
+            EnsureSearchBackend();
+            if (queryResult.RequestRevision != latestSubmittedRequestRevision ||
+                queryResult.GraphIdentity != graphGenerator.GraphIdentity ||
+                queryResult.GraphRevision != graphGenerator.GraphRevision ||
+                queryResult.BackendId != searchBackend.BackendId ||
+                queryResult.BackendRevision != searchBackend.BackendRevision)
+            {
+                return false;
+            }
+
+            Platform2DPath committedPath = queryResult.PathResult.CompletionKind ==
+                                           PlatformPathCompletionKind.Failed
+                ? null
+                : queryResult.PathResult.Path;
+            CommitPathState(
+                committedPath,
+                queryResult.PathResult.FailureReason,
+                mutateCurrentPath: true);
+            return true;
+        }
+
+        public bool CancelPendingPathQuery()
+        {
+            PlatformPathSearchHandle handle = pendingSearchHandle;
+            pendingSearchHandle = null;
+            if (handle == null)
+                return false;
+
+            latestSubmittedRequestRevision = ++nextSearchRequestRevision;
+            return handle.Cancel();
+        }
+
+        private void EnsureSearchBackend()
+        {
+            if (searchBackend == null)
+                searchBackend = managedSearchBackend;
+        }
+
+        private static void DisposeSearchBackend(IPlatformPathSearchBackend backend)
+        {
+            if (backend is System.IDisposable disposable)
+                disposable.Dispose();
+        }
+
+        private PlatformPathQueryResult CreatePathQueryResult(
+            long requestRevision,
+            PlatformPathResult pathResult,
+            long expandedNodes = 0,
+            long openSetPeak = 0)
+        {
+            PlatformSearchGraphSnapshot snapshot = graphGenerator != null
+                ? graphGenerator.SearchSnapshot
+                : null;
+            return new PlatformPathQueryResult(
+                requestRevision,
+                snapshot?.GraphIdentity ?? 0,
+                snapshot?.GraphRevision ?? 0,
+                searchBackend?.BackendId ?? string.Empty,
+                searchBackend?.BackendRevision ?? 0,
+                pathResult,
+                expandedNodes,
+                openSetPeak);
+        }
+
+        private PlatformPathQueryResult ConvertSearchResult(
+            long expectedRequestRevision,
+            PlatformPathRequest request,
+            Vector3 resolvedTarget,
+            PlatformNodeData startNode,
+            PlatformSearchResult searchResult)
+        {
+            if (searchResult == null)
+            {
+                PlatformPathResult fault = PlatformPathResult.Failed(
+                    PlatformPathFailureReason.BackendFault,
+                    request.Start,
+                    request.Target,
+                    resolvedTarget,
+                    CurrentPath);
+                PlatformPathfindingDiagnostics.RecordPathResult(fault);
+                return CreatePathQueryResult(expectedRequestRevision, fault);
+            }
+
+            PlatformSearchGraphSnapshot snapshot = graphGenerator != null
+                ? graphGenerator.SearchSnapshot
+                : null;
+            if (snapshot == null ||
+                searchResult.GraphIdentity != snapshot.GraphIdentity ||
+                searchResult.GraphRevision != snapshot.GraphRevision ||
+                searchResult.RequestRevision != expectedRequestRevision ||
+                expectedRequestRevision != latestSubmittedRequestRevision)
+            {
+                PlatformPathResult stale = PlatformPathResult.Failed(
+                    PlatformPathFailureReason.StaleResult,
+                    request.Start,
+                    request.Target,
+                    resolvedTarget,
+                    CurrentPath);
+                PlatformPathfindingDiagnostics.RecordPathResult(stale);
+                return new PlatformPathQueryResult(
+                    searchResult.RequestRevision,
+                    searchResult.GraphIdentity,
+                    searchResult.GraphRevision,
+                    searchResult.BackendId,
+                    searchResult.BackendRevision,
+                    stale,
+                    searchResult.ExpandedNodes,
+                    searchResult.OpenSetPeak);
+            }
+
+            if (searchResult.FailureReason != PlatformSearchFailureReason.None)
+            {
+                PlatformPathResult failed = PlatformPathResult.Failed(
+                    MapSearchFailure(searchResult.FailureReason, request),
+                    request.Start,
+                    request.Target,
+                    resolvedTarget,
+                    Platform2DPath.NotFound(request.Start, resolvedTarget));
+                PlatformPathfindingDiagnostics.RecordPathResult(failed);
+                return CreatePathQueryResult(
+                    searchResult.RequestRevision,
+                    failed,
+                    searchResult.ExpandedNodes,
+                    searchResult.OpenSetPeak);
+            }
+
+            Platform2DPath bestPath = null;
+            float bestScore = float.PositiveInfinity;
+            bool hasPartial = false;
+            PlatformSearchTargetResult firstPartial = default;
+            for (int i = 0; i < searchResult.TargetCount; i++)
+            {
+                PlatformSearchTargetResult targetResult = searchResult.GetTarget(i);
+                if (!targetResult.Found)
+                    continue;
+
+                if (targetResult.IsPartial)
+                {
+                    if (!hasPartial)
+                    {
+                        firstPartial = targetResult;
+                        hasPartial = true;
+                    }
+                    continue;
+                }
+
+                Platform2DPath candidatePath = ReconstructSearchPath(
+                    snapshot,
+                    searchResult.GraphRevision,
+                    startNode.NodeId,
+                    targetResult,
+                    request.Start,
+                    resolvedTarget);
+                if (candidatePath == null || candidatePath.Status != PathStatus.Valid ||
+                    IsInvalidElevatedPath(candidatePath, request.Start, resolvedTarget) ||
+                    !ValidatePathCommands(candidatePath, out _))
+                {
+                    continue;
+                }
+
+                float score = ScoreTargetPath(candidatePath, resolvedTarget);
+                if (score < bestScore)
+                {
+                    bestScore = score;
+                    bestPath = candidatePath;
+                }
+            }
+
+            PlatformPathResult pathResult;
+            if (bestPath != null)
+            {
+                ApplyRouteDiagnostics(bestPath, commandsValidated: true);
+                pathResult = PlatformPathResult.Succeeded(
+                    request.Start,
+                    request.Target,
+                    bestPath.EndPosition,
+                    bestPath,
+                    bestPath.GetCurrentCommand());
+            }
+            else if (hasPartial && request.ShouldAllowPartialPath(config.AllowPartialPath) &&
+                     snapshot.TryGetNodeIndex(firstPartial.ResolvedNodeId, out int partialNodeIndex))
+            {
+                Vector3 partialEnd = snapshot.GetNode(partialNodeIndex).Position;
+                Platform2DPath partialPath = ReconstructSearchPath(
+                    snapshot,
+                    searchResult.GraphRevision,
+                    startNode.NodeId,
+                    firstPartial,
+                    request.Start,
+                    partialEnd);
+                partialPath = ToPartialPath(partialPath);
+                if (partialPath != null &&
+                    !IsBadElevatedPartialPath(partialPath, request.Start, resolvedTarget) &&
+                    ValidatePathCommands(partialPath, out _))
+                {
+                    ApplyRouteDiagnostics(partialPath, commandsValidated: true);
+                    pathResult = PlatformPathResult.Partial(
+                        PlatformPathFailureReason.PartialPath,
+                        request.Start,
+                        request.Target,
+                        partialPath.EndPosition,
+                        partialPath,
+                        partialPath.GetCurrentCommand());
+                }
+                else
+                {
+                    pathResult = PlatformPathResult.Failed(
+                        PlatformPathFailureReason.PartialPathUnavailable,
+                        request.Start,
+                        request.Target,
+                        resolvedTarget,
+                        Platform2DPath.NotFound(request.Start, resolvedTarget));
+                }
+            }
+            else
+            {
+                pathResult = PlatformPathResult.Failed(
+                    request.ShouldAllowPartialPath(config.AllowPartialPath)
+                        ? PlatformPathFailureReason.PartialPathUnavailable
+                        : PlatformPathFailureReason.PathNotFound,
+                    request.Start,
+                    request.Target,
+                    resolvedTarget,
+                    Platform2DPath.NotFound(request.Start, resolvedTarget));
+            }
+
+            PlatformPathfindingDiagnostics.RecordPathResult(pathResult);
+            return new PlatformPathQueryResult(
+                searchResult.RequestRevision,
+                searchResult.GraphIdentity,
+                searchResult.GraphRevision,
+                searchResult.BackendId,
+                searchResult.BackendRevision,
+                pathResult,
+                searchResult.ExpandedNodes,
+                searchResult.OpenSetPeak);
+        }
+
+        private Platform2DPath ReconstructSearchPath(
+            PlatformSearchGraphSnapshot snapshot,
+            long graphRevision,
+            int sourceNodeId,
+            PlatformSearchTargetResult targetResult,
+            Vector3 actualStart,
+            Vector3 actualEnd)
+        {
+            var cameFrom = new Dictionary<int, int>(targetResult.LinkCount);
+            var cameFromLink = new Dictionary<int, PlatformLinkData>(targetResult.LinkCount);
+            int currentNodeId = sourceNodeId;
+            for (int i = 0; i < targetResult.LinkCount; i++)
+            {
+                int linkId = targetResult.GetLinkId(i);
+                if ((uint)linkId >= (uint)snapshot.LinkCount ||
+                    !graphGenerator.TryGetCommittedLink(graphRevision, linkId, out PlatformLinkData binding) ||
+                    binding.FromNodeId != currentNodeId)
+                {
+                    return Platform2DPath.NotFound(actualStart, actualEnd);
+                }
+
+                PlatformSearchLink searchLink = snapshot.GetLink(linkId);
+                if (searchLink.FromNodeId != binding.FromNodeId ||
+                    searchLink.ToNodeId != binding.ToNodeId)
+                {
+                    return Platform2DPath.NotFound(actualStart, actualEnd);
+                }
+
+                cameFrom[binding.ToNodeId] = binding.FromNodeId;
+                cameFromLink[binding.ToNodeId] = binding;
+                currentNodeId = binding.ToNodeId;
+            }
+
+            if (currentNodeId != targetResult.ResolvedNodeId)
+                return Platform2DPath.NotFound(actualStart, actualEnd);
+
+            return ReconstructPath(
+                cameFrom,
+                cameFromLink,
+                currentNodeId,
+                actualStart,
+                actualEnd);
+        }
+
+        private PlatformPathFailureReason MapSearchFailure(
+            PlatformSearchFailureReason failureReason,
+            PlatformPathRequest request)
+        {
+            switch (failureReason)
+            {
+                case PlatformSearchFailureReason.StartNodeNotFound:
+                    return PlatformPathFailureReason.StartNodeNotFound;
+                case PlatformSearchFailureReason.TargetNodeNotFound:
+                    return PlatformPathFailureReason.EndNodeNotFound;
+                case PlatformSearchFailureReason.NoPath:
+                    return request.ShouldAllowPartialPath(config.AllowPartialPath)
+                        ? PlatformPathFailureReason.PartialPathUnavailable
+                        : PlatformPathFailureReason.PathNotFound;
+                case PlatformSearchFailureReason.Cancelled:
+                    return PlatformPathFailureReason.Cancelled;
+                case PlatformSearchFailureReason.Timeout:
+                    return PlatformPathFailureReason.BackendTimeout;
+                case PlatformSearchFailureReason.StaleGraph:
+                    return PlatformPathFailureReason.StaleResult;
+                case PlatformSearchFailureReason.BackendFault:
+                    return PlatformPathFailureReason.BackendFault;
+                default:
+                    return PlatformPathFailureReason.BackendUnavailable;
+            }
+        }
+
+        private void ApplyRouteBatchGroupResult(
+            PlatformSearchGraphSnapshot snapshot,
+            PlatformNodeData startNode,
+            RouteBatchGroup group,
+            PlatformSearchResult searchResult,
+            PlatformRouteQueryResult[] results,
+            bool[] resultAssigned)
+        {
+            bool stale = searchResult == null ||
+                         searchResult.GraphIdentity != snapshot.GraphIdentity ||
+                         searchResult.GraphRevision != snapshot.GraphRevision ||
+                         graphGenerator == null ||
+                         graphGenerator.SearchSnapshot != snapshot;
+            if (stale || searchResult.FailureReason != PlatformSearchFailureReason.None)
+            {
+                PlatformPathFailureReason reason = stale
+                    ? PlatformPathFailureReason.StaleResult
+                    : MapRouteSearchFailure(searchResult.FailureReason, group.AllowPartialPath);
+                for (int itemIndex = 0; itemIndex < group.Items.Count; itemIndex++)
+                {
+                    RouteBatchItem item = group.Items[itemIndex];
+                    results[item.QueryIndex] = PlatformRouteQueryResult.Failed(
+                        reason,
+                        item.ResolvedTarget,
+                        $"RouteBatchSearchFailure={reason}");
+                    resultAssigned[item.QueryIndex] = true;
+                }
+                return;
+            }
+
+            for (int itemIndex = 0; itemIndex < group.Items.Count; itemIndex++)
+            {
+                RouteBatchItem item = group.Items[itemIndex];
+                Platform2DPath bestPath = null;
+                float bestScore = float.PositiveInfinity;
+                bool hasPartial = false;
+                PlatformSearchTargetResult firstPartial = default;
+                int targetEnd = item.TargetStart + item.TargetCount;
+                if (item.TargetStart < 0 || targetEnd > searchResult.TargetCount)
+                {
+                    results[item.QueryIndex] = PlatformRouteQueryResult.Failed(
+                        PlatformPathFailureReason.BackendFault,
+                        item.ResolvedTarget,
+                        "RouteBatchTargetCountMismatch");
+                    resultAssigned[item.QueryIndex] = true;
+                    continue;
+                }
+
+                for (int targetIndex = item.TargetStart; targetIndex < targetEnd; targetIndex++)
+                {
+                    PlatformSearchTargetResult targetResult = searchResult.GetTarget(targetIndex);
+                    if (!targetResult.Found)
+                        continue;
+                    if (targetResult.IsPartial)
+                    {
+                        if (!hasPartial)
+                        {
+                            firstPartial = targetResult;
+                            hasPartial = true;
+                        }
+                        continue;
+                    }
+
+                    Platform2DPath candidatePath = ReconstructSearchPath(
+                        snapshot,
+                        searchResult.GraphRevision,
+                        startNode.NodeId,
+                        targetResult,
+                        item.Query.StartPosition,
+                        item.ResolvedTarget);
+                    if (candidatePath == null || candidatePath.Status != PathStatus.Valid ||
+                        IsInvalidElevatedPath(candidatePath, item.Query.StartPosition, item.ResolvedTarget) ||
+                        !ValidatePathCommands(candidatePath, out _))
+                    {
+                        continue;
+                    }
+
+                    float score = ScoreTargetPath(candidatePath, item.ResolvedTarget);
+                    if (score < bestScore)
+                    {
+                        bestScore = score;
+                        bestPath = candidatePath;
+                    }
+                }
+
+                if (bestPath != null)
+                {
+                    ApplyRouteDiagnostics(bestPath, commandsValidated: true);
+                    PlatformPathResult pathResult = PlatformPathResult.Succeeded(
+                        item.Query.StartPosition,
+                        item.Query.TargetPosition,
+                        bestPath.EndPosition,
+                        bestPath,
+                        bestPath.GetCurrentCommand());
+                    PlatformRouteCost cost = CalculateRouteCost(bestPath);
+                    results[item.QueryIndex] = new PlatformRouteQueryResult(
+                        true,
+                        bestPath.CompletionKind,
+                        PlatformPathFailureReason.None,
+                        cost,
+                        bestPath.EndPosition,
+                        bestPath,
+                        BuildRouteDebugSummary(pathResult, cost));
+                    resultAssigned[item.QueryIndex] = true;
+                    continue;
+                }
+
+                if (hasPartial && group.AllowPartialPath &&
+                    snapshot.TryGetNodeIndex(firstPartial.ResolvedNodeId, out int partialNodeIndex))
+                {
+                    Vector3 partialEnd = snapshot.GetNode(partialNodeIndex).Position;
+                    Platform2DPath partialPath = ReconstructSearchPath(
+                        snapshot,
+                        searchResult.GraphRevision,
+                        startNode.NodeId,
+                        firstPartial,
+                        item.Query.StartPosition,
+                        partialEnd);
+                    partialPath = ToPartialPath(partialPath);
+                    if (partialPath != null &&
+                        !IsBadElevatedPartialPath(partialPath, item.Query.StartPosition, item.ResolvedTarget) &&
+                        ValidatePathCommands(partialPath, out _))
+                    {
+                        ApplyRouteDiagnostics(partialPath, commandsValidated: true);
+                        PlatformPathResult partialResult = PlatformPathResult.Partial(
+                            PlatformPathFailureReason.PartialPath,
+                            item.Query.StartPosition,
+                            item.Query.TargetPosition,
+                            partialPath.EndPosition,
+                            partialPath,
+                            partialPath.GetCurrentCommand());
+                        PlatformRouteCost partialCost = CalculateRouteCost(partialPath);
+                        results[item.QueryIndex] = new PlatformRouteQueryResult(
+                            false,
+                            PlatformPathCompletionKind.Partial,
+                            PlatformPathFailureReason.PartialPath,
+                            partialCost,
+                            partialPath.EndPosition,
+                            partialPath,
+                            BuildRouteDebugSummary(partialResult, partialCost));
+                        resultAssigned[item.QueryIndex] = true;
+                        continue;
+                    }
+                }
+
+                PlatformPathFailureReason unavailableReason = group.AllowPartialPath
+                    ? PlatformPathFailureReason.PartialPathUnavailable
+                    : PlatformPathFailureReason.PathNotFound;
+                results[item.QueryIndex] = PlatformRouteQueryResult.Failed(
+                    unavailableReason,
+                    item.ResolvedTarget,
+                    $"RouteBatchSearchFailure={unavailableReason}");
+                resultAssigned[item.QueryIndex] = true;
+            }
+        }
+
+        private PlatformRouteBatchResult CreateRouteBatchResult(
+            long batchRevision,
+            PlatformSearchGraphSnapshot snapshot,
+            PlatformRouteQueryResult[] results)
+        {
+            return new PlatformRouteBatchResult(
+                batchRevision,
+                snapshot?.GraphIdentity ?? 0,
+                snapshot?.GraphRevision ?? 0,
+                searchBackend?.BackendId ?? string.Empty,
+                searchBackend?.BackendRevision ?? 0,
+                results);
+        }
+
+        private PlatformRouteBatchResult CreateFailedRouteBatch(
+            long batchRevision,
+            PlatformRouteBatchQuery batch,
+            PlatformPathFailureReason reason,
+            string summary)
+        {
+            int count = batch?.Count ?? 0;
+            var results = new PlatformRouteQueryResult[count];
+            for (int i = 0; i < count; i++)
+            {
+                PlatformRouteQuery query = batch.GetQuery(i);
+                results[i] = PlatformRouteQueryResult.Failed(reason, query.TargetPosition, summary);
+            }
+
+            return CreateRouteBatchResult(
+                batchRevision,
+                graphGenerator != null ? graphGenerator.SearchSnapshot : null,
+                results);
+        }
+
+        private static PlatformPathFailureReason MapRouteSearchFailure(
+            PlatformSearchFailureReason reason,
+            bool allowPartialPath)
+        {
+            switch (reason)
+            {
+                case PlatformSearchFailureReason.NoPath:
+                    return allowPartialPath
+                        ? PlatformPathFailureReason.PartialPathUnavailable
+                        : PlatformPathFailureReason.PathNotFound;
+                case PlatformSearchFailureReason.Cancelled:
+                    return PlatformPathFailureReason.Cancelled;
+                case PlatformSearchFailureReason.Timeout:
+                    return PlatformPathFailureReason.BackendTimeout;
+                case PlatformSearchFailureReason.StaleGraph:
+                    return PlatformPathFailureReason.StaleResult;
+                case PlatformSearchFailureReason.BackendFault:
+                    return PlatformPathFailureReason.BackendFault;
+                case PlatformSearchFailureReason.StartNodeNotFound:
+                    return PlatformPathFailureReason.StartNodeNotFound;
+                case PlatformSearchFailureReason.TargetNodeNotFound:
+                    return PlatformPathFailureReason.EndNodeNotFound;
+                default:
+                    return PlatformPathFailureReason.BackendUnavailable;
+            }
+        }
+
+        private readonly struct RouteBatchGroupKey : System.IEquatable<RouteBatchGroupKey>
+        {
+            private readonly PlatformPathSearchCostContext costContext;
+            private readonly bool allowPartialPath;
+
+            public RouteBatchGroupKey(
+                PlatformPathSearchCostContext costContext,
+                bool allowPartialPath)
+            {
+                this.costContext = costContext;
+                this.allowPartialPath = allowPartialPath;
+            }
+
+            public bool Equals(RouteBatchGroupKey other)
+            {
+                return allowPartialPath == other.allowPartialPath && costContext.Equals(other.costContext);
+            }
+
+            public override bool Equals(object obj)
+            {
+                return obj is RouteBatchGroupKey other && Equals(other);
+            }
+
+            public override int GetHashCode()
+            {
+                unchecked
+                {
+                    return (costContext.GetHashCode() * 397) ^ (allowPartialPath ? 1 : 0);
+                }
+            }
+        }
+
+        private sealed class RouteBatchGroup
+        {
+            public readonly PlatformPathSearchCostContext CostContext;
+            public readonly bool AllowPartialPath;
+            public readonly List<int> TargetNodeIds = new List<int>();
+            public readonly List<RouteBatchItem> Items = new List<RouteBatchItem>();
+
+            public RouteBatchGroup(
+                PlatformPathSearchCostContext costContext,
+                bool allowPartialPath)
+            {
+                CostContext = costContext;
+                AllowPartialPath = allowPartialPath;
+            }
+        }
+
+        private readonly struct RouteBatchItem
+        {
+            public readonly int QueryIndex;
+            public readonly PlatformRouteQuery Query;
+            public readonly Vector3 ResolvedTarget;
+            public readonly int TargetStart;
+            public readonly int TargetCount;
+
+            public RouteBatchItem(
+                int queryIndex,
+                PlatformRouteQuery query,
+                Vector3 resolvedTarget,
+                int targetStart,
+                int targetCount)
+            {
+                QueryIndex = queryIndex;
+                Query = query;
+                ResolvedTarget = resolvedTarget;
+                TargetStart = targetStart;
+                TargetCount = targetCount;
+            }
         }
 
         /// <summary>
@@ -140,38 +1032,293 @@ namespace ZeroEngine.Pathfinding2D
         /// </summary>
         public bool TryRequestPath(PlatformPathRequest request, out PlatformPathResult result)
         {
-            return TryCreatePathResult(request, mutateCurrentPath: true, out result);
+            PlatformPathfindingDiagnostics.Increment(PlatformPathfindingCounterKind.RequestSubmitted);
+            using (PlatformPathfindingDiagnostics.Measure(PlatformPathfindingMetricKind.PathRequest))
+            {
+                bool success = TryCreatePathResult(request, mutateCurrentPath: true, out result);
+                PlatformPathfindingDiagnostics.RecordPathResult(result);
+                return success;
+            }
         }
 
         public bool TryEvaluateRoute(PlatformRouteQuery query, out PlatformRouteQueryResult result)
         {
-            var request = new PlatformPathRequest(
-                query.StartPosition,
-                query.TargetPosition,
-                forceRequest: true,
-                projectTargetToGround: query.ProjectTargetToGround,
-                allowPartialPathOverride: query.AllowPartialPath);
-
-            bool success = TryCreatePathResult(request, mutateCurrentPath: false, out var pathResult);
-            if (!success || !pathResult.Success || pathResult.Path == null)
+            PlatformPathfindingDiagnostics.Increment(PlatformPathfindingCounterKind.RequestSubmitted);
+            using (PlatformPathfindingDiagnostics.Measure(PlatformPathfindingMetricKind.RouteEvaluation))
             {
-                result = PlatformRouteQueryResult.Failed(
+                var request = new PlatformPathRequest(
+                    query.StartPosition,
+                    query.TargetPosition,
+                    forceRequest: true,
+                    projectTargetToGround: query.ProjectTargetToGround,
+                    allowPartialPathOverride: query.AllowPartialPath);
+
+                bool success = TryCreatePathResult(request, mutateCurrentPath: false, out var pathResult);
+                PlatformPathfindingDiagnostics.RecordPathResult(pathResult);
+                if (!success || !pathResult.Success || pathResult.Path == null)
+                {
+                    result = PlatformRouteQueryResult.Failed(
+                        pathResult.FailureReason,
+                        pathResult.ResolvedTarget,
+                        BuildRouteDebugSummary(pathResult, PlatformRouteCost.Unreachable));
+                    return false;
+                }
+
+                var cost = CalculateRouteCost(pathResult.Path);
+                result = new PlatformRouteQueryResult(
+                    true,
+                    pathResult.CompletionKind,
                     pathResult.FailureReason,
+                    cost,
                     pathResult.ResolvedTarget,
-                    BuildRouteDebugSummary(pathResult, PlatformRouteCost.Unreachable));
-                return false;
+                    pathResult.Path,
+                    BuildRouteDebugSummary(pathResult, cost));
+                return true;
+            }
+        }
+
+        /// <summary>
+        /// Evaluates compatible same-source routes through backend multi-target search without changing CurrentPath.
+        /// Queries with different search-cost contexts are separated into independent backend groups.
+        /// </summary>
+        public PlatformRouteBatchSubmission SubmitRouteBatch(
+            PlatformRouteBatchQuery batch,
+            System.Action<PlatformRouteBatchResult> completed = null)
+        {
+            EnsureSearchBackend();
+            long batchRevision = ++nextRouteBatchRevision;
+            if (batch == null || batch.Count == 0)
+                return PlatformRouteBatchSubmission.Rejected(CreateFailedRouteBatch(
+                    batchRevision,
+                    batch,
+                    PlatformPathFailureReason.InvalidCommand,
+                    "EmptyRouteBatch"));
+
+            PlatformPathfindingDiagnostics.Add(
+                PlatformPathfindingCounterKind.RequestSubmitted,
+                batch.Count);
+
+            PlatformSearchGraphSnapshot snapshot = graphGenerator != null
+                ? graphGenerator.SearchSnapshot
+                : null;
+            if (graphGenerator == null || !graphGenerator.IsGenerated || snapshot == null)
+            {
+                return PlatformRouteBatchSubmission.Rejected(CreateFailedRouteBatch(
+                    batchRevision,
+                    batch,
+                    graphGenerator == null
+                        ? PlatformPathFailureReason.MissingGraphGenerator
+                        : PlatformPathFailureReason.GraphNotGenerated,
+                    "RouteBatchGraphUnavailable"));
             }
 
-            var cost = CalculateRouteCost(pathResult.Path);
-            result = new PlatformRouteQueryResult(
-                true,
-                pathResult.CompletionKind,
-                pathResult.FailureReason,
-                cost,
-                pathResult.ResolvedTarget,
-                pathResult.Path,
-                BuildRouteDebugSummary(pathResult, cost));
-            return true;
+            PlatformRouteQuery firstQuery = batch.GetQuery(0);
+            PlatformNodeData? startNode = ResolveStartNode(firstQuery.StartPosition);
+            if (!startNode.HasValue)
+            {
+                return PlatformRouteBatchSubmission.Immediate(CreateFailedRouteBatch(
+                    batchRevision,
+                    batch,
+                    PlatformPathFailureReason.StartNodeNotFound,
+                    "RouteBatchStartNodeNotFound"));
+            }
+
+            var routeResults = new PlatformRouteQueryResult[batch.Count];
+            var resultAssigned = new bool[batch.Count];
+            var groups = new Dictionary<RouteBatchGroupKey, RouteBatchGroup>();
+            for (int queryIndex = 0; queryIndex < batch.Count; queryIndex++)
+            {
+                PlatformRouteQuery query = batch.GetQuery(queryIndex);
+                if (Vector2.Distance(query.StartPosition, firstQuery.StartPosition) > 0.001f)
+                {
+                    routeResults[queryIndex] = PlatformRouteQueryResult.Failed(
+                        PlatformPathFailureReason.InvalidCommand,
+                        query.TargetPosition,
+                        "RouteBatchRequiresSameSource");
+                    resultAssigned[queryIndex] = true;
+                    continue;
+                }
+
+                Vector3 resolvedTarget = query.ProjectTargetToGround
+                    ? PlatformTargetProjection.ProjectTargetToGround(
+                        query.TargetPosition,
+                        graphGenerator.Config.AllPlatformLayers,
+                        1.5f)
+                    : query.TargetPosition;
+
+                if (Vector2.Distance(query.StartPosition, resolvedTarget) <= config.ArriveDistance)
+                {
+                    Platform2DPath arrived = Platform2DPath.Arrived(query.StartPosition, resolvedTarget);
+                    ApplyRouteDiagnostics(arrived, commandsValidated: true);
+                    PlatformPathResult arrivedPathResult = PlatformPathResult.Succeeded(
+                        query.StartPosition,
+                        query.TargetPosition,
+                        resolvedTarget,
+                        arrived,
+                        null);
+                    PlatformRouteCost arrivedCost = CalculateRouteCost(arrived);
+                    routeResults[queryIndex] = new PlatformRouteQueryResult(
+                        true,
+                        arrived.CompletionKind,
+                        PlatformPathFailureReason.None,
+                        arrivedCost,
+                        resolvedTarget,
+                        arrived,
+                        BuildRouteDebugSummary(arrivedPathResult, arrivedCost));
+                    resultAssigned[queryIndex] = true;
+                    continue;
+                }
+
+                Platform2DPath samePlatformPath = TryCreateSamePlatformPath(query.StartPosition, resolvedTarget);
+                if (samePlatformPath != null)
+                {
+                    ApplyRouteDiagnostics(samePlatformPath, commandsValidated: true);
+                    PlatformPathResult samePathResult = PlatformPathResult.Succeeded(
+                        query.StartPosition,
+                        query.TargetPosition,
+                        resolvedTarget,
+                        samePlatformPath,
+                        samePlatformPath.GetCurrentCommand());
+                    PlatformRouteCost sameCost = CalculateRouteCost(samePlatformPath);
+                    routeResults[queryIndex] = new PlatformRouteQueryResult(
+                        true,
+                        samePlatformPath.CompletionKind,
+                        PlatformPathFailureReason.None,
+                        sameCost,
+                        resolvedTarget,
+                        samePlatformPath,
+                        BuildRouteDebugSummary(samePathResult, sameCost));
+                    resultAssigned[queryIndex] = true;
+                    continue;
+                }
+
+                Collider2D endPlatform = DetectPlatformBelow(resolvedTarget);
+                PlatformNodeData? endNode = graphGenerator.FindNearestNodeOnPlatform(
+                    resolvedTarget,
+                    endPlatform,
+                    config.MaxNodeSearchRadius);
+                if (!endNode.HasValue)
+                {
+                    routeResults[queryIndex] = PlatformRouteQueryResult.Failed(
+                        PlatformPathFailureReason.EndNodeNotFound,
+                        resolvedTarget,
+                        "RouteBatchEndNodeNotFound");
+                    resultAssigned[queryIndex] = true;
+                    continue;
+                }
+
+                bool targetIsElevated = resolvedTarget.y >
+                                        startNode.Value.Position.y + config.WalkCommandVerticalTolerance;
+                var costContext = new PlatformPathSearchCostContext(
+                    targetIsElevated,
+                    startNode.Value.Position.y,
+                    config.WalkCommandVerticalTolerance);
+                var key = new RouteBatchGroupKey(costContext, query.AllowPartialPath);
+                if (!groups.TryGetValue(key, out RouteBatchGroup group))
+                {
+                    group = new RouteBatchGroup(costContext, query.AllowPartialPath);
+                    groups.Add(key, group);
+                }
+
+                List<PlatformNodeData> candidates = BuildTargetNodeCandidates(endNode.Value, resolvedTarget);
+                int targetStart = group.TargetNodeIds.Count;
+                for (int i = 0; i < candidates.Count; i++)
+                    group.TargetNodeIds.Add(candidates[i].NodeId);
+                group.Items.Add(new RouteBatchItem(
+                    queryIndex,
+                    query,
+                    resolvedTarget,
+                    targetStart,
+                    candidates.Count));
+            }
+
+            if (groups.Count == 0)
+            {
+                return PlatformRouteBatchSubmission.Immediate(CreateRouteBatchResult(
+                    batchRevision,
+                    snapshot,
+                    routeResults));
+            }
+
+            if (!searchBackend.IsGraphReady(snapshot.GraphIdentity, snapshot.GraphRevision))
+            {
+                PlatformSearchGraphPreparation preparation = searchBackend.PrepareGraph(snapshot);
+                if (preparation.Kind != PlatformSearchGraphPreparationKind.Ready)
+                {
+                    return PlatformRouteBatchSubmission.Rejected(CreateFailedRouteBatch(
+                        batchRevision,
+                        batch,
+                        PlatformPathFailureReason.BackendUnavailable,
+                        "RouteBatchBackendUnavailable"));
+                }
+            }
+
+            int pendingCount = 0;
+            var childHandles = new List<PlatformPathSearchHandle>(groups.Count);
+            PlatformPathSearchHandle aggregateHandle = null;
+            foreach (RouteBatchGroup group in groups.Values)
+            {
+                RouteBatchGroup callbackGroup = group;
+                var request = new PlatformSearchRequest(
+                    batchRevision,
+                    snapshot,
+                    startNode.Value.NodeId,
+                    group.TargetNodeIds.ToArray(),
+                    group.CostContext,
+                    group.AllowPartialPath);
+                PlatformSearchSubmission submission = searchBackend.Submit(
+                    request,
+                    searchResult =>
+                    {
+                        ApplyRouteBatchGroupResult(
+                            snapshot,
+                            startNode.Value,
+                            callbackGroup,
+                            searchResult,
+                            routeResults,
+                            resultAssigned);
+                        pendingCount--;
+                        if (pendingCount == 0 && aggregateHandle != null && aggregateHandle.TryComplete())
+                        {
+                            completed?.Invoke(CreateRouteBatchResult(
+                                batchRevision,
+                                snapshot,
+                                routeResults));
+                        }
+                    });
+
+                if (submission.Kind == PlatformSearchSubmissionKind.Pending)
+                {
+                    pendingCount++;
+                    childHandles.Add(submission.Handle);
+                }
+                else
+                {
+                    ApplyRouteBatchGroupResult(
+                        snapshot,
+                        startNode.Value,
+                        group,
+                        submission.ImmediateResult,
+                        routeResults,
+                        resultAssigned);
+                }
+            }
+
+            if (pendingCount == 0)
+            {
+                return PlatformRouteBatchSubmission.Immediate(CreateRouteBatchResult(
+                    batchRevision,
+                    snapshot,
+                    routeResults));
+            }
+
+            aggregateHandle = new PlatformPathSearchHandle(batchRevision);
+            aggregateHandle.SetCancelAction(() =>
+            {
+                for (int i = 0; i < childHandles.Count; i++)
+                    childHandles[i]?.Cancel();
+            });
+            return PlatformRouteBatchSubmission.Pending(aggregateHandle);
         }
 
         private bool TryCreatePathResult(PlatformPathRequest request, bool mutateCurrentPath, out PlatformPathResult result)
@@ -621,6 +1768,8 @@ namespace ZeroEngine.Pathfinding2D
         private Platform2DPath TryCreatePartialPath(Vector3 start, Vector3 end,
             PlatformNodeData? startNode, PlatformNodeData? endNode)
         {
+            PlatformPathfindingDiagnostics.Increment(PlatformPathfindingCounterKind.PartialFallbackAttempts);
+
             // 如果只是终点找不到节点，走到最近的可达位置
             if (startNode.HasValue && !endNode.HasValue)
             {
@@ -644,6 +1793,8 @@ namespace ZeroEngine.Pathfinding2D
         private Platform2DPath TryFindPartialPath(PlatformNodeData startNode, PlatformNodeData endNode,
             Vector3 actualStart, Vector3 actualEnd)
         {
+            PlatformPathfindingDiagnostics.Increment(PlatformPathfindingCounterKind.PartialFallbackAttempts);
+
             // 找到离终点最近的可达节点
             var closestReachable = FindClosestReachableNode(startNode, endNode);
 
@@ -711,8 +1862,9 @@ namespace ZeroEngine.Pathfinding2D
         {
             Platform2DPath bestPath = null;
             float bestScore = float.MaxValue;
+            var candidates = BuildTargetNodeCandidates(nearestEndNode, actualEnd);
 
-            foreach (var candidate in BuildTargetNodeCandidates(nearestEndNode, actualEnd))
+            foreach (var candidate in candidates)
             {
                 var path = FindPath(startNode, candidate, actualStart, actualEnd);
                 if (path.Status != PathStatus.Valid)
@@ -732,6 +1884,9 @@ namespace ZeroEngine.Pathfinding2D
                 }
             }
 
+            PlatformPathfindingDiagnostics.Add(
+                PlatformPathfindingCounterKind.CandidateTargetsEvaluated,
+                candidates.Count);
             return bestPath ?? Platform2DPath.NotFound(actualStart, actualEnd);
         }
 
@@ -852,6 +2007,7 @@ namespace ZeroEngine.Pathfinding2D
         /// </summary>
         private PlatformNodeData? FindClosestReachableNode(PlatformNodeData startNode, PlatformNodeData endNode)
         {
+            PlatformPathfindingDiagnostics.Increment(PlatformPathfindingCounterKind.ReachableFallbackAttempts);
             var nodes = graphGenerator.Nodes;
 
             // 使用 BFS 找到所有可达节点
@@ -1043,6 +2199,7 @@ namespace ZeroEngine.Pathfinding2D
         /// </summary>
         public void ClearPath()
         {
+            CancelPendingPathQuery();
             CurrentPath = null;
         }
 
@@ -1117,6 +2274,49 @@ namespace ZeroEngine.Pathfinding2D
         /// </summary>
         private Platform2DPath FindPath(PlatformNodeData startNode, PlatformNodeData endNode, Vector3 actualStart, Vector3 actualEnd)
         {
+            bool captureDiagnostics = PlatformPathfindingDiagnostics.IsCapturing;
+            if (captureDiagnostics)
+                PlatformPathfindingDiagnostics.Increment(PlatformPathfindingCounterKind.FindPathCalls);
+
+            long expandedNodes = captureDiagnostics ? 0 : -1;
+            long openSetPeak = captureDiagnostics ? 1 : 0;
+            using (PlatformPathfindingDiagnostics.Measure(PlatformPathfindingMetricKind.FindPath))
+            {
+                try
+                {
+                    return FindPathCore(
+                        startNode,
+                        endNode,
+                        actualStart,
+                        actualEnd,
+                        captureDiagnostics,
+                        ref expandedNodes,
+                        ref openSetPeak);
+                }
+                finally
+                {
+                    if (captureDiagnostics)
+                    {
+                        PlatformPathfindingDiagnostics.Add(
+                            PlatformPathfindingCounterKind.ExpandedNodes,
+                            expandedNodes);
+                        PlatformPathfindingDiagnostics.RecordMaximum(
+                            PlatformPathfindingCounterKind.OpenSetPeak,
+                            openSetPeak);
+                    }
+                }
+            }
+        }
+
+        private Platform2DPath FindPathCore(
+            PlatformNodeData startNode,
+            PlatformNodeData endNode,
+            Vector3 actualStart,
+            Vector3 actualEnd,
+            bool captureDiagnostics,
+            ref long expandedNodes,
+            ref long openSetPeak)
+        {
             var nodes = graphGenerator.Nodes;
             var nodeCount = nodes.Count;
             bool targetIsElevated = actualEnd.y > startNode.Position.y + config.WalkCommandVerticalTolerance;
@@ -1143,6 +2343,8 @@ namespace ZeroEngine.Pathfinding2D
                 // 到达终点
                 if (current == endNode.NodeId)
                 {
+                    if (captureDiagnostics)
+                        expandedNodes = closedSet.Count + 1;
                     return ReconstructPath(cameFrom, cameFromLink, current, actualStart, actualEnd);
                 }
 
@@ -1174,12 +2376,16 @@ namespace ZeroEngine.Pathfinding2D
                         if (!openSet.Contains(link.ToNodeId))
                         {
                             openSet.Add(link.ToNodeId);
+                            if (captureDiagnostics && openSet.Count > openSetPeak)
+                                openSetPeak = openSet.Count;
                         }
                     }
                 }
             }
 
             // 找不到路径
+            if (captureDiagnostics)
+                expandedNodes = closedSet.Count;
             return Platform2DPath.NotFound(actualStart, actualEnd);
         }
 

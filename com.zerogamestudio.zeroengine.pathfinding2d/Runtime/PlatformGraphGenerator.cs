@@ -2,7 +2,9 @@
 // 平台图生成器
 // 扫描场景中的平台碰撞体，生成用于寻路的节点网络
 
+using System;
 using System.Collections.Generic;
+using System.Threading;
 using UnityEngine;
 #if ODIN_INSPECTOR
 using Sirenix.OdinInspector;
@@ -78,6 +80,9 @@ namespace ZeroEngine.Pathfinding2D
     /// </summary>
     public class PlatformGraphGenerator : MonoBehaviour
     {
+        private const int SearchCostPolicyRevision = PlatformPathSearchCostContext.CurrentPolicyRevision;
+        private static long nextGraphIdentity;
+
         [SerializeField]
         private PlatformGraphConfig config = new PlatformGraphConfig();
 
@@ -108,8 +113,33 @@ namespace ZeroEngine.Pathfinding2D
         /// <summary>空间索引</summary>
         public SpatialGrid2D SpatialGrid { get; private set; }
 
+        /// <summary>当前生成器实例的运行时搜索图身份。</summary>
+        public long GraphIdentity
+        {
+            get
+            {
+                EnsureGraphIdentity();
+                return graphIdentity;
+            }
+        }
+
+        /// <summary>最近一次成功提交的不可变搜索图修订号。</summary>
+        public long GraphRevision => graphRevision;
+
+        /// <summary>最近一次成功提交的不可变搜索快照。</summary>
+        public PlatformSearchGraphSnapshot SearchSnapshot => committedSearchSnapshot;
+
+        public bool IsBuildInProgress => buildInProgress;
+
+        public bool HasCommittedSearchSnapshot => committedSearchSnapshot != null;
+
         private int nextNodeId = 0;
         private int nextSurfaceGroupId = 0;
+        private long graphIdentity;
+        private long graphRevision;
+        private bool buildInProgress;
+        private PlatformSearchGraphSnapshot committedSearchSnapshot;
+        private PlatformLinkData[] committedLinkBindings = Array.Empty<PlatformLinkData>();
         private readonly Dictionary<int, PlatformSurfaceSegment> surfaceSegmentsById = new Dictionary<int, PlatformSurfaceSegment>();
 
         // 缓存所有边缘数据，用于全局转换节点生成
@@ -124,6 +154,174 @@ namespace ZeroEngine.Pathfinding2D
         /// 生成平台图
         /// </summary>
         public void GeneratePlatformGraph()
+        {
+            bool ownsTransaction = !buildInProgress;
+            if (ownsTransaction)
+                BeginBuild();
+
+            using (PlatformPathfindingDiagnostics.Measure(PlatformPathfindingMetricKind.GraphBuild))
+            {
+                try
+                {
+                    GeneratePlatformGraphCore();
+                    if (ownsTransaction && !TryCommitBuild(out _, out string error))
+                        throw new InvalidOperationException(error);
+                }
+                catch
+                {
+                    if (ownsTransaction && buildInProgress)
+                        CancelBuild();
+                    throw;
+                }
+                finally
+                {
+                    PlatformPathfindingDiagnostics.Add(
+                        PlatformPathfindingCounterKind.GraphNodes,
+                        Nodes.Count);
+                    PlatformPathfindingDiagnostics.Add(
+                        PlatformPathfindingCounterKind.GraphLinks,
+                        Links.Count);
+                }
+            }
+        }
+
+        /// <summary>
+        /// Reuses another compatible generator's platform scan and base walk topology.
+        /// Profile-specific jump/fall/drop links are intentionally excluded and must be generated afterwards.
+        /// </summary>
+        public void GeneratePlatformGraphFromBase(PlatformGraphGenerator source)
+        {
+            if (source == null)
+                throw new ArgumentNullException(nameof(source));
+            if (!source.IsGenerated)
+                throw new InvalidOperationException("The source platform graph has not been generated.");
+            if (source.Config.GroundLayer.value != config.GroundLayer.value ||
+                source.Config.OneWayPlatformLayer.value != config.OneWayPlatformLayer.value ||
+                source.Config.ScanCenter != config.ScanCenter ||
+                source.Config.ScanSize != config.ScanSize)
+            {
+                throw new InvalidOperationException(
+                    "Base platform graphs can only be shared by profiles with the same scan and platform layers.");
+            }
+
+            bool ownsTransaction = !buildInProgress;
+            if (ownsTransaction)
+                BeginBuild();
+
+            using (PlatformPathfindingDiagnostics.Measure(PlatformPathfindingMetricKind.GraphBuild))
+            {
+                try
+                {
+                    CopyBaseGraphCore(source);
+                    if (ownsTransaction && !TryCommitBuild(out _, out string error))
+                        throw new InvalidOperationException(error);
+                }
+                catch
+                {
+                    if (ownsTransaction && buildInProgress)
+                        CancelBuild();
+                    throw;
+                }
+                finally
+                {
+                    PlatformPathfindingDiagnostics.Add(
+                        PlatformPathfindingCounterKind.GraphNodes,
+                        Nodes.Count);
+                    PlatformPathfindingDiagnostics.Add(
+                        PlatformPathfindingCounterKind.GraphLinks,
+                        Links.Count);
+                }
+            }
+        }
+
+        /// <summary>
+        /// Starts an atomic search-snapshot build. Mutable legacy collections remain available,
+        /// while search backends continue to observe the previously committed snapshot.
+        /// </summary>
+        public void BeginBuild()
+        {
+            if (buildInProgress)
+                throw new InvalidOperationException("A platform graph build transaction is already active.");
+
+            EnsureGraphIdentity();
+            buildInProgress = true;
+        }
+
+        /// <summary>
+        /// Commits the current mutable graph as one immutable search snapshot and advances one revision.
+        /// </summary>
+        public bool TryCommitBuild(out PlatformSearchGraphSnapshot snapshot, out string error)
+        {
+            snapshot = null;
+            error = null;
+            if (!buildInProgress)
+            {
+                error = "No platform graph build transaction is active.";
+                return false;
+            }
+
+            if (!IsGenerated)
+            {
+                error = "The mutable platform graph has not completed generation.";
+                return false;
+            }
+
+            BuildAdjacencyList();
+            long nextRevision = graphRevision + 1;
+            if (!PlatformSearchGraphSnapshot.TryCreate(
+                    GraphIdentity,
+                    nextRevision,
+                    SearchCostPolicyRevision,
+                    Nodes,
+                    Links,
+                    out snapshot,
+                    out error))
+            {
+                return false;
+            }
+
+            committedLinkBindings = Links.ToArray();
+            committedSearchSnapshot = snapshot;
+            graphRevision = nextRevision;
+            buildInProgress = false;
+            return true;
+        }
+
+        public PlatformSearchGraphSnapshot CommitBuild()
+        {
+            if (!TryCommitBuild(out PlatformSearchGraphSnapshot snapshot, out string error))
+                throw new InvalidOperationException(error);
+
+            return snapshot;
+        }
+
+        /// <summary>
+        /// Ends a failed build without publishing partially generated data to search backends.
+        /// The legacy mutable collections are not rolled back.
+        /// </summary>
+        public void CancelBuild()
+        {
+            buildInProgress = false;
+        }
+
+        public bool TryGetCommittedLink(
+            long expectedGraphRevision,
+            int linkId,
+            out PlatformLinkData link)
+        {
+            if (committedSearchSnapshot != null &&
+                graphRevision == expectedGraphRevision &&
+                (uint)linkId < (uint)committedLinkBindings.Length)
+            {
+                link = committedLinkBindings[linkId];
+                return true;
+            }
+
+            link = default;
+            return false;
+        }
+
+        private void GeneratePlatformGraphCore()
         {
             ClearGraph();
             _allEdgesCache.Clear();  // 清空边缘缓存
@@ -154,11 +352,65 @@ namespace ZeroEngine.Pathfinding2D
                 Debug.Log($"[PlatformGraphGenerator] 生成完成: {Nodes.Count} 节点, {Links.Count} 链接, 空间索引: {SpatialGrid.GetDebugInfo()}");
         }
 
+        private void CopyBaseGraphCore(PlatformGraphGenerator source)
+        {
+            ClearGraph();
+            _allEdgesCache.Clear();
+
+            for (int i = 0; i < source.Nodes.Count; i++)
+            {
+                PlatformNodeData node = source.Nodes[i];
+                Nodes.Add(node);
+                NodeIdToIndex.Add(node.NodeId, i);
+            }
+
+            for (int i = 0; i < source.Links.Count; i++)
+            {
+                PlatformLinkData link = source.Links[i];
+                if (link.LinkType == PlatformLinkType.Walk)
+                    Links.Add(link);
+            }
+
+            for (int i = 0; i < source.SurfaceSegments.Count; i++)
+            {
+                PlatformSurfaceSegment original = source.SurfaceSegments[i];
+                var clone = new PlatformSurfaceSegment
+                {
+                    GroupId = original.GroupId,
+                    Collider = original.Collider,
+                    Left = original.Left,
+                    Right = original.Right,
+                    Y = original.Y,
+                    IsOneWay = original.IsOneWay,
+                    LeftNodeId = original.LeftNodeId,
+                    RightNodeId = original.RightNodeId
+                };
+                clone.NodeIds.AddRange(original.NodeIds);
+                SurfaceSegments.Add(clone);
+                surfaceSegmentsById.Add(clone.GroupId, clone);
+            }
+
+            nextNodeId = source.nextNodeId;
+            nextSurfaceGroupId = source.nextSurfaceGroupId;
+            BuildAdjacencyList();
+            SpatialGrid = new SpatialGrid2D(config.SpatialGridCellSize);
+            SpatialGrid.Build(Nodes);
+            IsGenerated = true;
+            LastGenerateTime = Time.time;
+        }
+
         /// <summary>
         /// 清除现有图数据
         /// </summary>
         public void ClearGraph()
         {
+            if (!buildInProgress && committedSearchSnapshot != null)
+            {
+                graphRevision++;
+                committedSearchSnapshot = null;
+                committedLinkBindings = Array.Empty<PlatformLinkData>();
+            }
+
             Nodes.Clear();
             NodeIdToIndex.Clear();
             Links.Clear();
@@ -170,6 +422,14 @@ namespace ZeroEngine.Pathfinding2D
             SpatialGrid?.Clear();
             SpatialGrid = null;
             nextSurfaceGroupId = 0;
+        }
+
+        private void EnsureGraphIdentity()
+        {
+            if (graphIdentity != 0)
+                return;
+
+            graphIdentity = Interlocked.Increment(ref nextGraphIdentity);
         }
 
         /// <summary>

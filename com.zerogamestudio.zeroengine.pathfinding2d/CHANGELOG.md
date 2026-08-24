@@ -2,6 +2,18 @@
 
 All notable changes to this package will be documented in this file.
 
+## [1.7.0] - 2026-08-24
+
+### Added
+- Added atomic `BeginBuild` / `CommitBuild` search snapshots with stable graph revisions and snapshot-local `LinkId` bindings.
+- Added the backend-neutral `IPlatformPathSearchBackend` contract, cancellable handles, multi-target requests, and immutable search results.
+- Added the deterministic binary-heap `ManagedPlatformPathSearchBackend` as the package default and reference oracle.
+- Added non-mutating semantic path submission and revision-checked commit APIs on `Platform2DPathfinder`.
+
+### Changed
+- Removed the unused commercial A* package version define; ZeroEngine remains independent of vendor assemblies and source.
+- Added default-off backend-neutral diagnostics for search, route evaluation, graph generation, and jump-link generation.
+
 ## [1.6.17] - 2026-05-08
 
 ### Added
