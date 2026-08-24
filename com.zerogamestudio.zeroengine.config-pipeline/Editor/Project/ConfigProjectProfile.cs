@@ -26,6 +26,7 @@ namespace ZeroGameStudio.ConfigPipeline.Editor
         internal ConfigSetProfile(
             string configSetId,
             string authoringSource,
+            string authoringWorkbookFormat,
             string schemaPath,
             IEnumerable<ConfigWorkbookProfile> workbooks,
             string generatedNamespace,
@@ -35,6 +36,7 @@ namespace ZeroGameStudio.ConfigPipeline.Editor
         {
             ConfigSetId = configSetId;
             AuthoringSource = authoringSource;
+            AuthoringWorkbookFormat = authoringWorkbookFormat;
             SchemaPath = schemaPath;
             Workbooks = new List<ConfigWorkbookProfile>(workbooks).AsReadOnly();
             GeneratedNamespace = generatedNamespace;
@@ -45,6 +47,9 @@ namespace ZeroGameStudio.ConfigPipeline.Editor
 
         public string ConfigSetId { get; }
         public string AuthoringSource { get; }
+        public string AuthoringWorkbookFormat { get; }
+        public bool UsesMacroEnabledWorkbooks =>
+            string.Equals(AuthoringWorkbookFormat, "xlsm", StringComparison.Ordinal);
         public string SchemaPath { get; }
         public IReadOnlyList<ConfigWorkbookProfile> Workbooks { get; }
         public string GeneratedNamespace { get; }
@@ -110,7 +115,7 @@ namespace ZeroGameStudio.ConfigPipeline.Editor
     {
         private static readonly HashSet<string> RootKeys = Keys("formatVersion", "configSets");
         private static readonly HashSet<string> SetKeys = Keys(
-            "configSetId", "authoringSource", "schema", "workbooks",
+            "configSetId", "authoringSource", "authoringWorkbookFormat", "schema", "workbooks",
             "generatedNamespace", "rootClassName", "codePath", "targets");
         private static readonly HashSet<string> WorkbookKeys = Keys("path", "tables", "authoringSheets");
         private static readonly HashSet<string> AuthoringSheetKeys = Keys("name", "tables");
@@ -144,6 +149,17 @@ namespace ZeroGameStudio.ConfigPipeline.Editor
                     throw new InvalidDataException("Only authoringSource 'excel' is supported.");
                 }
 
+                string authoringWorkbookFormat = OptionalString(
+                    set,
+                    "authoringWorkbookFormat",
+                    "xlsx",
+                    id);
+                if (authoringWorkbookFormat != "xlsx" && authoringWorkbookFormat != "xlsm")
+                {
+                    throw new InvalidDataException(
+                        id + ".authoringWorkbookFormat must be 'xlsx' or 'xlsm'.");
+                }
+
                 var workbooks = new List<ConfigWorkbookProfile>();
                 var tableOwners = new HashSet<string>(StringComparer.Ordinal);
                 var workbookPaths = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
@@ -151,6 +167,16 @@ namespace ZeroGameStudio.ConfigPipeline.Editor
                 {
                     ConfigObjectNode workbook = RequireObject(workbookNode, id + ".workbooks[]", WorkbookKeys);
                     string path = NormalizePath(RequireString(workbook, "path", id));
+                    string expectedExtension = "." + authoringWorkbookFormat;
+                    if (!string.Equals(
+                            Path.GetExtension(path),
+                            expectedExtension,
+                            StringComparison.OrdinalIgnoreCase))
+                    {
+                        throw new InvalidDataException(
+                            id + ".workbooks[].path must use '" + expectedExtension +
+                            "' when authoringWorkbookFormat is '" + authoringWorkbookFormat + "'.");
+                    }
                     if (!workbookPaths.Add(path))
                     {
                         throw new InvalidDataException("Duplicate workbook path: " + path);
@@ -201,6 +227,7 @@ namespace ZeroGameStudio.ConfigPipeline.Editor
                 sets.Add(new ConfigSetProfile(
                     id,
                     authoringSource,
+                    authoringWorkbookFormat,
                     NormalizePath(RequireString(set, "schema", id)),
                     workbooks,
                     RequireString(set, "generatedNamespace", id),
@@ -249,6 +276,25 @@ namespace ZeroGameStudio.ConfigPipeline.Editor
             }
 
             return text.Value;
+        }
+
+        private static string OptionalString(
+            ConfigObjectNode value,
+            string property,
+            string defaultValue,
+            string path)
+        {
+            if (!value.TryGetValue(property, out ConfigNode node))
+            {
+                return defaultValue;
+            }
+
+            if (!(node is ConfigStringNode text) || string.IsNullOrWhiteSpace(text.Value))
+            {
+                throw new InvalidDataException(path + "." + property + " must be a non-empty string.");
+            }
+
+            return text.Value.ToLowerInvariant();
         }
 
         private static long RequireInteger(ConfigObjectNode value, string property, string path)

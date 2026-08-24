@@ -37,6 +37,27 @@ namespace ZeroGameStudio.ConfigPipeline.Editor
             IEnumerable<string> ownedRootProperties = null,
             IEnumerable<ConfigAuthoringSheetProfile> authoringSheets = null)
         {
+            WriteTemplate(
+                destination,
+                schema,
+                configSetId,
+                document,
+                workbookBaseHash,
+                ownedRootProperties,
+                authoringSheets,
+                false);
+        }
+
+        public void WriteTemplate(
+            Stream destination,
+            ConfigSchema schema,
+            string configSetId,
+            ConfigDocument document,
+            string workbookBaseHash,
+            IEnumerable<string> ownedRootProperties,
+            IEnumerable<ConfigAuthoringSheetProfile> authoringSheets,
+            bool macroEnabled)
+        {
             if (destination == null)
             {
                 throw new ArgumentNullException(nameof(destination));
@@ -61,7 +82,9 @@ namespace ZeroGameStudio.ConfigPipeline.Editor
             using (SpreadsheetDocument workbook =
                    SpreadsheetDocument.Create(
                        destination,
-                       SpreadsheetDocumentType.Workbook,
+                       macroEnabled
+                           ? SpreadsheetDocumentType.MacroEnabledWorkbook
+                           : SpreadsheetDocumentType.Workbook,
                        true))
             {
                 WorkbookPart workbookPart = workbook.AddWorkbookPart();
@@ -482,7 +505,9 @@ namespace ZeroGameStudio.ConfigPipeline.Editor
             WorksheetPart worksheetPart = workbookPart.AddNewPart<WorksheetPart>();
             var sheetData = new SheetData();
             worksheetPart.Worksheet = new Worksheet(sheetData);
+            uint rowIndex = 1U;
             sheetData.Append(RowOf(
+                rowIndex++,
                 "Sheet",
                 "Field",
                 "Title",
@@ -499,6 +524,7 @@ namespace ZeroGameStudio.ConfigPipeline.Editor
                 {
                     ConfigSchemaNode fieldSchema = field.Schema;
                     sheetData.Append(RowOf(
+                        rowIndex++,
                         table.SheetName,
                         field.Name,
                         fieldSchema.Title ?? field.Name,
@@ -541,12 +567,12 @@ namespace ZeroGameStudio.ConfigPipeline.Editor
             WorksheetPart worksheetPart = workbookPart.AddNewPart<WorksheetPart>();
             worksheetPart.Worksheet = new Worksheet(
                 new SheetData(
-                    RowOf("toolFormatVersion", WorkbookFormatVersion.ToString(CultureInfo.InvariantCulture)),
-                    RowOf("schemaId", schema.SchemaId),
-                    RowOf("schemaVersion", schema.SchemaVersion.ToString(CultureInfo.InvariantCulture)),
-                    RowOf("schemaHash", schema.SchemaHash),
-                    RowOf("configSetId", configSetId),
-                    RowOf("workbookBaseHash", workbookBaseHash)),
+                    RowOf(1U, "toolFormatVersion", WorkbookFormatVersion.ToString(CultureInfo.InvariantCulture)),
+                    RowOf(2U, "schemaId", schema.SchemaId),
+                    RowOf(3U, "schemaVersion", schema.SchemaVersion.ToString(CultureInfo.InvariantCulture)),
+                    RowOf(4U, "schemaHash", schema.SchemaHash),
+                    RowOf(5U, "configSetId", configSetId),
+                    RowOf(6U, "workbookBaseHash", workbookBaseHash)),
                 new SheetProtection
                 {
                     Sheet = true,
@@ -572,7 +598,7 @@ namespace ZeroGameStudio.ConfigPipeline.Editor
             WorksheetPart worksheetPart = workbookPart.AddNewPart<WorksheetPart>();
             var sheetData = new SheetData();
             worksheetPart.Worksheet = new Worksheet(sheetData);
-            int rowIndex = 1;
+            uint rowIndex = 1U;
             var definedNames = new DefinedNames();
             foreach (TableDefinition table in tables)
             {
@@ -583,10 +609,10 @@ namespace ZeroGameStudio.ConfigPipeline.Editor
                         continue;
                     }
 
-                    int firstRow = rowIndex;
+                    uint firstRow = rowIndex;
                     foreach (ConfigNode enumValue in field.Schema.EnumValues)
                     {
-                        sheetData.Append(RowOf(ScalarText(enumValue)));
+                        sheetData.Append(RowOf(rowIndex, ScalarText(enumValue)));
                         rowIndex++;
                     }
 
@@ -594,7 +620,10 @@ namespace ZeroGameStudio.ConfigPipeline.Editor
                     definedNames.Append(new DefinedName
                     {
                         Name = rangeName,
-                        Text = "'_zgs_lists'!$A$" + firstRow + ":$A$" + (rowIndex - 1)
+                        Text = "'_zgs_lists'!$A$" +
+                               firstRow.ToString(CultureInfo.InvariantCulture) +
+                               ":$A$" +
+                               (rowIndex - 1U).ToString(CultureInfo.InvariantCulture)
                     });
                 }
             }
@@ -1509,12 +1538,15 @@ namespace ZeroGameStudio.ConfigPipeline.Editor
             return string.IsNullOrEmpty(field.Schema.Description) ? 22D : 28D;
         }
 
-        private static Row RowOf(params string[] values)
+        private static Row RowOf(uint rowIndex, params string[] values)
         {
-            var row = new Row();
-            foreach (string value in values)
+            var row = new Row { RowIndex = rowIndex };
+            for (int index = 0; index < values.Length; index++)
             {
-                row.Append(TextCell(value, 0));
+                Cell cell = TextCell(values[index], 0);
+                cell.CellReference = ColumnName(index + 1) +
+                    rowIndex.ToString(CultureInfo.InvariantCulture);
+                row.Append(cell);
             }
 
             return row;

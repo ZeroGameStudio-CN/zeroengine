@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 
 namespace ZeroGameStudio.ConfigPipeline.Editor
 {
@@ -22,6 +23,7 @@ namespace ZeroGameStudio.ConfigPipeline.Editor
         {
             if (node is ConfigObjectNode configObject)
             {
+                HashSet<string> excludedProperties = ExcludedPropertyNames(configObject);
                 var properties = new List<ConfigProperty>();
                 foreach (ConfigProperty property in configObject.Properties)
                 {
@@ -32,6 +34,18 @@ namespace ZeroGameStudio.ConfigPipeline.Editor
 
                     if (relaxRequired && property.Name == "required")
                     {
+                        continue;
+                    }
+
+                    if (property.Name == "required" &&
+                        property.Value is ConfigArrayNode required &&
+                        excludedProperties.Count != 0)
+                    {
+                        properties.Add(new ConfigProperty(
+                            property.Name,
+                            new ConfigArrayNode(required.Items.Where(item =>
+                                !(item is ConfigStringNode name) ||
+                                !excludedProperties.Contains(name.Value)))));
                         continue;
                     }
 
@@ -65,6 +79,27 @@ namespace ZeroGameStudio.ConfigPipeline.Editor
             }
 
             return node;
+        }
+
+        private static HashSet<string> ExcludedPropertyNames(ConfigObjectNode schemaNode)
+        {
+            var result = new HashSet<string>(StringComparer.Ordinal);
+            if (!schemaNode.TryGetValue("properties", out ConfigNode propertiesNode) ||
+                !(propertiesNode is ConfigObjectNode properties))
+            {
+                return result;
+            }
+
+            foreach (ConfigProperty property in properties.Properties)
+            {
+                if (property.Value is ConfigObjectNode fieldSchema &&
+                    IsExcludedField(fieldSchema))
+                {
+                    result.Add(property.Name);
+                }
+            }
+
+            return result;
         }
 
         private static bool IsExcludedField(ConfigObjectNode fieldSchema)

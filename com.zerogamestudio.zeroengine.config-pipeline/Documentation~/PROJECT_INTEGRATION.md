@@ -2,13 +2,14 @@
 
 Add the package and `com.unity.nuget.newtonsoft-json`, then create
 `Config/config-project.json`. Each config set declares its Schema, Excel source,
-one owner workbook per top-level table, generated DTO namespace/path, and target
+optional `authoringWorkbookFormat` (`xlsx` or `xlsm`; omitted means `xlsx`), one owner
+workbook per top-level table, generated DTO namespace/path, and target
 JSON, Manifest, source-map and optional Workshop Schema paths.
 The union of workbook `tables` must exactly cover every top-level Schema array
 that declares `x-zgs-sheet`; Plan, template generation and candidate refresh fail
 closed when a root table is unregistered. Create a new workbook by declaring its
 path and ownership in `config-project.json` first, then generate it through
-`WriteTemplates` or `RefreshCandidate`. A standalone XLSX file is not a registered
+`WriteTemplates` or `RefreshCandidate`. A standalone XLSX/XLSM file is not a registered
 configuration source and must not be created as an intermediate workflow state.
 
 An optional workbook `authoringSheets` array groups owned root tables into the
@@ -88,13 +89,15 @@ artifacts. ExportCandidate reads and compares existing authoring/runtime data
 but does not create a Plan or bind package identity into candidate workbook
 metadata, so that mode neither accepts identity as a safety guarantee nor
 requires the argument.
-RefreshCandidate rewrites the current workbook structure from the current Schema
-while retaining all current workbook data. It additionally requires an empty
+RefreshCandidate refreshes only the pipeline-owned table ranges in a source
+package copy while retaining all current workbook data and authoring parts. It
+additionally requires an empty
 `--config-candidate-output` directory, publishes the whole candidate set
 atomically, records the combined source hash, and never changes official source
 workbooks. Promote only candidates whose source hash still matches the reviewed
 source set; use the exact official filenames when replacing the declared sources.
-ExportCandidate writes candidate `.xlsx` workbooks from current generated JSON;
+ExportCandidate writes candidate workbooks from current generated JSON using the
+configured `.xlsx` or `.xlsm` extension;
 it does not emit JSON. It additionally requires `--config-candidate-output` and
 `--config-target-scope shared|client|server`; choose the scope of the generated
 artifact being exported. Relative candidate-output paths resolve from the Unity
@@ -102,9 +105,10 @@ project root; absolute paths are accepted when the candidate should live outside
 the project. Candidate workbook metadata remains bound to the selected
 config-set ID; adopt and apply it under that same ID, or deliberately create a
 new config set and regenerate its workbooks instead of relabeling the candidate.
-Candidate files are named `<source-stem>.candidate.xlsx`; after review, rename
-each accepted file to the exact workbook filename declared by the target profile
-when promoting it into the official authoring location.
+Candidate files are named `<source-stem>.candidate.<extension>`; after review,
+rename each accepted file to the exact workbook filename declared by the target
+profile when promoting it into the official authoring location. In `.xlsm` mode,
+VBA is retained byte-for-byte and never executed by the pipeline.
 
 For a Schema version change, first require the current profile to pass Check.
 Keep it unchanged, create a next-version profile that points to the next Schema
@@ -130,6 +134,6 @@ project’s `Packages/manifest.json`. The test framework is a consumer test-only
 prerequisite and is intentionally not a runtime dependency of this package.
 Treat a zero-test result as failure even when the Unity process exits with code
 0. For package 2.1.0, run EditMode tests with NUnit category
-`ZGS.ConfigPipeline.CoreContract` and require exactly 77 discovered and passed
+`ZGS.ConfigPipeline.CoreContract` and require exactly 197 discovered and passed
 tests; update the documented expected count when the package test contract
 changes.

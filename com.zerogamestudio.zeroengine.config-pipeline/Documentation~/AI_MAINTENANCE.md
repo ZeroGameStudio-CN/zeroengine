@@ -30,3 +30,12 @@ new empty candidate directory. Verify its reported source hash, round-trip data,
 and workbook structure before explicitly replacing the declared source files.
 The refresh command never overwrites official workbooks and rejects a non-empty
 candidate directory.
+
+Long-lived designer config sets should declare `"authoringWorkbookFormat": "xlsm"`
+and use .xlsm for every owned workbook. The pipeline never executes VBA.
+Candidate modes update a source-package copy whenever a source workbook maps
+unambiguously to the target, retaining VBA, worksheet code names, defined names,
+and designer-owned cells outside pipeline-owned table ranges. A schema-upgrade
+target with no current workbook or managed-table overlap is created as a fresh
+template. Promote a reviewed candidate only to the exact declared filename; do
+not maintain a parallel .xlsx fallback.

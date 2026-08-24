@@ -16,5 +16,26 @@ for primary keys, references, content IDs and localization keys. Child records g
 in their own Excel table with parent ID, explicit order and child ID; the table may
 share its visible Sheet with its root table when `authoringSheets` declares that
 group. Do not add columns or tables, rename Sheets, edit internal Sheets, use
-formulas/macros/links, or place JSON in a cell. Save the workbook and ask the AI
+formulas, external links, or place JSON in a cell. Project-authoring workbooks
+may use the declared .xlsm format. Macros are never executed by the pipeline;
+they are explicit designer helpers only and must not change internal sheets or
+the generated JSON contract. ActiveX, OLE/embedded packages, queries and
+external data connections are rejected. Save the workbook and ask the AI
 maintainer to run Plan, Check and Apply.
+
+For a long-lived project profile, set `"authoringWorkbookFormat": "xlsm"` and give
+every declared workbook the .xlsm extension. The setting is per config set, not
+per workbook, so a set cannot silently mix .xlsx and .xlsm. Omitting it retains
+the backwards-compatible .xlsx default. Refresh and JSON export candidates, plus
+Schema upgrade targets with an unambiguous current-workbook mapping, use the same
+extension and start from a byte-for-byte copy of the source package; VBA,
+worksheet code names, defined names and designer-owned cells outside pipeline
+table ranges are retained. A Schema upgrade target with no current workbook or
+managed-table overlap is created as a fresh template.
+
+Schema upgrade candidates may add business Sheets and add, rename, or detach
+managed tables when the target layout is empty and unambiguous. Detaching a
+table preserves its former cells as recovery evidence but removes the Excel
+table relationship so they no longer enter configuration data. Removing an
+entire existing business Sheet fails closed and requires an explicit workbook
+migration because that Sheet may contain designer-owned assets or VBA bindings.

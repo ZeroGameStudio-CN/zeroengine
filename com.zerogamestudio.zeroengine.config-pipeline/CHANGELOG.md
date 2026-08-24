@@ -2,6 +2,15 @@
 
 ## 2.1.0
 
+- Add config-set-wide `.xlsm` authoring, validate macro package structure, and
+  preserve VBA plus designer-owned workbook affordances across every candidate
+  export without executing macros; reject ActiveX, OLE, queries and external
+  data connections.
+- Preserve authoring assets while safely adding, renaming or detaching managed
+  tables during Schema upgrade; ambiguous layouts and whole-Sheet removal fail
+  closed.
+- Report workbook, Sheet, row, and safe column locations for import errors,
+  including dangling child rows left after a parent record is deleted.
 - Add optional workbook `authoringSheets` groups so several normalized root and
   child Excel tables can share one designer-visible worksheet without changing
   JSON structure or source-map precision.

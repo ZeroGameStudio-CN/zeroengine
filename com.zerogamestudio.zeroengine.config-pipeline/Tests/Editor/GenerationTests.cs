@@ -91,6 +91,32 @@ namespace ZeroGameStudio.ConfigPipeline.Tests
             Assert.That(projected, Does.Contain("\"additionalProperties\": false"));
         }
 
+        [Test]
+        public void WorkshopProjection_RemovesExcludedFieldsFromRequired()
+        {
+            string schemaJson = SchemaJson.Replace(
+                "\"required\":[\"id\",\"value\"]",
+                "\"required\":[\"id\",\"value\",\"note\",\"serverOnly\"]");
+            ConfigSchema schema = ConfigSchemaParser.Parse(Encoding.UTF8.GetBytes(schemaJson));
+
+            ConfigObjectNode projected = WorkshopSchemaProjector.Project(schema, false);
+            var rootProperties = (ConfigObjectNode)projected.Properties.Single(
+                property => property.Name == "properties").Value;
+            var itemsArray = (ConfigObjectNode)rootProperties.Properties.Single(
+                property => property.Name == "items").Value;
+            var itemSchema = (ConfigObjectNode)itemsArray.Properties.Single(
+                property => property.Name == "items").Value;
+            var required = (ConfigArrayNode)itemSchema.Properties.Single(
+                property => property.Name == "required").Value;
+            string serialized = CanonicalJsonWriter.WriteText(projected);
+
+            Assert.That(
+                required.Items.Cast<ConfigStringNode>().Select(value => value.Value),
+                Is.EqualTo(new[] { "id", "value" }));
+            Assert.That(serialized, Does.Not.Contain("\"note\""));
+            Assert.That(serialized, Does.Not.Contain("\"serverOnly\""));
+        }
+
         private static ConfigArtifactGenerationOptions Options()
         {
             return new ConfigArtifactGenerationOptions
