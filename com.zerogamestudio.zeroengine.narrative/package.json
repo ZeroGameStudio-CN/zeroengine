@@ -1,6 +1,6 @@
 {
     "name": "com.zerogamestudio.zeroengine.narrative",
-    "version": "2.0.2",
+    "version": "2.1.0",
     "displayName": "ZeroEngine.Narrative",
     "description": "Narrative and content systems for ZeroEngine. Includes Dialog System (node graph, branching, conditions), Quest System (objectives, rewards), and Achievement System (counters, Steam integration).",
     "unity": "2022.3",

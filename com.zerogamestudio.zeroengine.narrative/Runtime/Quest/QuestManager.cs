@@ -7,11 +7,25 @@ using ZeroEngine.Utils;
 
 namespace ZeroEngine.Quest
 {
+    public readonly struct QuestCompletionTransition
+    {
+        public QuestCompletionTransition(long sequence, string questId)
+        {
+            Sequence = sequence;
+            QuestId = questId;
+        }
+
+        public long Sequence { get; }
+
+        public string QuestId { get; }
+    }
+
     public class QuestManager : Singleton<QuestManager>, ISaveable
     {
         private QuestSystemSaveData _saveData = new QuestSystemSaveData();
         private Dictionary<string, QuestConfigSO> _questConfigs = new Dictionary<string, QuestConfigSO>();
         private SaveSlotManager _registeredSaveSlotManager;
+        private long _completionTransitionSequence;
 
         #region Events
 
@@ -24,6 +38,14 @@ namespace ZeroEngine.Quest
         /// 单个条件完成时触发。
         /// </summary>
         public event Action<string, QuestCondition> OnConditionCompleted;
+
+        /// <summary>
+        /// Raised once for each Active-to-Successful transition owned by this manager instance.
+        /// This channel is independent from the legacy static EventManager lifecycle.
+        /// </summary>
+        public event Action<QuestCompletionTransition> OnQuestCompletionTransition;
+
+        public long CompletionTransitionSequence => _completionTransitionSequence;
 
         #endregion
 
@@ -247,8 +269,14 @@ namespace ZeroEngine.Quest
 
         private void CompleteQuest(QuestRuntimeData quest, QuestConfigSO config)
         {
+            if (quest == null || quest.state != QuestState.Active) return;
+
             quest.state = QuestState.Successful;
+            var transition = new QuestCompletionTransition(
+                ++_completionTransitionSequence,
+                quest.questId);
             ZeroLog.Info(ZeroLog.Modules.Quest, $"Quest '{quest.questId}' Conditions Met!");
+            OnQuestCompletionTransition?.Invoke(transition);
             EventManager.Trigger(GameEvents.QuestCompleted, quest.questId);
 
             if (config.autoSubmit)

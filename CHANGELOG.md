@@ -10,6 +10,10 @@ tracked in each package's `package.json`.
 - Added MIT licensing.
 - Normalized package repository metadata for UPM Git dependencies.
 
+## com.zerogamestudio.zeroengine.narrative 2.1.0
+
+- Add an instance-owned, sequenced quest completion transition event that survives legacy `EventManager.Clear()` while preserving the legacy completion event.
+
 ## com.zerogamestudio.zeroengine.narrative 2.0.2
 
 - Snapshot active quest runtimes at condition-event boundaries so auto-submit removal cannot skip adjacent quests and newly accepted quests cannot consume an earlier broadcast.

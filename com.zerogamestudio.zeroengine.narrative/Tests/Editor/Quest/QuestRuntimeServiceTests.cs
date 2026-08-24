@@ -1,6 +1,7 @@
 using System.Collections.Generic;
 using NUnit.Framework;
 using UnityEngine;
+using ZeroEngine.Core;
 using ZeroEngine.Dialog;
 using Object = UnityEngine.Object;
 
@@ -12,6 +13,7 @@ namespace ZeroEngine.Quest.Tests.Editor
         public void SetUp()
         {
             DestroyExistingQuestManagers();
+            EventManager.Clear();
             QuestServiceRegistry.ResetForTests();
         }
 
@@ -19,6 +21,7 @@ namespace ZeroEngine.Quest.Tests.Editor
         public void TearDown()
         {
             DestroyExistingQuestManagers();
+            EventManager.Clear();
         }
 
         [Test]
@@ -150,6 +153,67 @@ namespace ZeroEngine.Quest.Tests.Editor
             Object.DestroyImmediate(managerObject);
             Object.DestroyImmediate(initialQuest);
             Object.DestroyImmediate(acceptedDuringBroadcast);
+        }
+
+        [Test]
+        public void QuestManager_CompletionTransition_SurvivesLegacyEventManagerClear()
+        {
+            var quest = CreateReachQuest("clear_safe_completion", "clear_safe_location", true);
+            var managerObject = new GameObject("QuestManager_ClearSafeCompletion_Test");
+            var manager = managerObject.AddComponent<QuestManager>();
+            manager.RegisterConfig(quest);
+            Assert.True(manager.AcceptQuest(quest.questId));
+
+            var transitions = new List<QuestCompletionTransition>();
+            manager.OnQuestCompletionTransition += transitions.Add;
+            EventManager.Clear();
+
+            manager.ProcessConditionEvent(
+                QuestEvents.LocationReached,
+                new ConditionEventData("clear_safe_location", 1));
+            manager.ProcessConditionEvent(
+                QuestEvents.LocationReached,
+                new ConditionEventData("clear_safe_location", 1));
+
+            Assert.AreEqual(1, transitions.Count);
+            Assert.AreEqual(1, transitions[0].Sequence);
+            Assert.AreEqual(quest.questId, transitions[0].QuestId);
+            Assert.AreEqual(1, manager.CompletionTransitionSequence);
+            Assert.AreEqual(QuestState.TheEnd, manager.GetQuestState(quest.questId));
+            Assert.AreEqual(1, manager.GetQuestCompletionCount(quest.questId));
+
+            Object.DestroyImmediate(managerObject);
+            Object.DestroyImmediate(quest);
+        }
+
+        [Test]
+        public void QuestManager_CompletionTransition_PreservesLegacyQuestCompletedEvent()
+        {
+            var quest = CreateReachQuest("legacy_completion", "legacy_location", false);
+            var managerObject = new GameObject("QuestManager_LegacyCompletion_Test");
+            var manager = managerObject.AddComponent<QuestManager>();
+            manager.RegisterConfig(quest);
+            Assert.True(manager.AcceptQuest(quest.questId));
+
+            var transitionCount = 0;
+            var legacyCount = 0;
+            manager.OnQuestCompletionTransition += _ => transitionCount++;
+            EventManager.Subscribe<string>(GameEvents.QuestCompleted, completedQuestId =>
+            {
+                if (completedQuestId == quest.questId)
+                    legacyCount++;
+            });
+
+            manager.ProcessConditionEvent(
+                QuestEvents.LocationReached,
+                new ConditionEventData("legacy_location", 1));
+
+            Assert.AreEqual(1, transitionCount);
+            Assert.AreEqual(1, legacyCount);
+            Assert.AreEqual(QuestState.Successful, manager.GetQuestState(quest.questId));
+
+            Object.DestroyImmediate(managerObject);
+            Object.DestroyImmediate(quest);
         }
 
         [Test]
