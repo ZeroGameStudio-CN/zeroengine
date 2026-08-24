@@ -787,10 +787,12 @@ namespace ZeroEngine.Dashboard.Tests.Editor
                 Assert.Ignore("Runs only in the synthetic package-removal lane.");
             }
 
-            ZeroEngineDashboard window = UnityEngine.ScriptableObject.CreateInstance<ZeroEngineDashboard>();
-            DashboardCatalog initialCatalog = GetWindowCatalog(window);
-            Assert.IsTrue(initialCatalog.Modules.Any(module => module.ModuleId == RemovalFixturePackageName));
-
+            DashboardCatalogSession.Invalidate();
+            DashboardCatalog initialCatalog = DashboardCatalogDiscovery.Discover();
+            Assert.IsTrue(
+                initialCatalog.Modules.Any(module => module.ModuleId == RemovalFixturePackageName),
+                "Initial Dashboard discovery did not include the removal fixture. Diagnostics: " +
+                string.Join(" | ", initialCatalog.Diagnostics.Select(item => item.Code + ": " + item.Message)));
             bool observedRemovalEvent = false;
             void OnRegisteredPackages(PackageRegistrationEventArgs args)
             {
@@ -812,13 +814,12 @@ namespace ZeroEngine.Dashboard.Tests.Editor
                     yield return null;
                 Assert.IsTrue(observedRemovalEvent, "registeredPackages did not report the removal.");
 
-                DashboardCatalog refreshedCatalog = GetWindowCatalog(window);
+                DashboardCatalog refreshedCatalog = DashboardCatalogDiscovery.Discover();
                 Assert.IsFalse(refreshedCatalog.Modules.Any(module => module.ModuleId == RemovalFixturePackageName));
             }
             finally
             {
                 UnityEditor.PackageManager.Events.registeredPackages -= OnRegisteredPackages;
-                UnityEngine.Object.DestroyImmediate(window);
             }
         }
 

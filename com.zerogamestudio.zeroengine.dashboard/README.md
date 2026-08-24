@@ -1,6 +1,6 @@
 # ZeroEngine Dashboard
 
-ZeroEngine Dashboard 4.6.2 是一个可选、仅限 Unity Editor 的简体中文工作台。它从已注册 UPM 包以及项目 `Assets/**/Editor/` 中读取 `ZeroEngineDashboardModule.json`，以左侧工作区呈现所有者明确声明的内嵌面板。
+ZeroEngine Dashboard 4.7.0 是一个可选、仅限 Unity Editor 的简体中文工作台。它从已注册 UPM 包以及项目 `Assets/**/Editor/` 中读取 `ZeroEngineDashboardModule.json`，以左侧工作区呈现所有者明确声明的内嵌面板。
 
 ## 特性
 
@@ -11,7 +11,8 @@ ZeroEngine Dashboard 4.6.2 是一个可选、仅限 Unity Editor 的简体中文
 - `project-write` 与 `destructive` 命令执行前要求明确确认。
 - 项目适配入口可通过 `mountModuleId` 挂到已安装的通用模块，不产生独立项目 Tab。
 - 可选 `section` 将大型模块拆成可读分区；共享 `surfaceId` 可把同一宿主窗口的兼容入口合并为一行多动作。
-- 首页/系统/帮助三页采用自适应布局：首页左侧工作区是项目面板的唯一日常入口；不再显示“首页总览”或“全部工具”列表。
+- 首页/系统两页采用自适应布局：首页左侧工作区是项目面板的唯一日常入口；不再显示“首页总览”或“全部工具”列表。
+- typed workspace route 可携带 owner subroute 和来源功能；Dashboard 只负责切换既有面板、转交 deep link、保存返回上下文，不解释项目业务语义。
 - 首页恢复上次有效面板；首次进入或已移除的面板会按左侧排序激活第一个可用面板。action-only 描述符保留原 Provider 或菜单兼容路径，不会被重新包装成日常工具列表。
 - 搜索位于左侧工作区标题下方，只筛选分组和内嵌面板；匹配分组会临时展开，清空后恢复原折叠状态。
 - 说明、使用方法、安全影响和技术来源进入 tooltip 或独立帮助页，不占用工作面板正文。
@@ -38,7 +39,7 @@ ZeroEngine Dashboard 4.6.2 是一个可选、仅限 Unity Editor 的简体中文
 }
 ```
 
-Unity 2022.3 不会为 Git URL 包自动解析同仓 editor-ui；两项必须直接 pin 到同一提交。4.6.2 要求 editor-ui 1.4.0。
+Unity 2022.3 不会为 Git URL 包自动解析同仓 editor-ui；两项必须直接 pin 到同一提交。4.7.0 要求 editor-ui 1.5.0。
 
 本地 `file:` 依赖只用于临时联调，不应进入共享分支。
 
@@ -94,6 +95,15 @@ entry 可选 `usage` 只在帮助抽屉显示。module 可选 `panels` 数组声
 Dashboard 4.x 仍兼容外部 schema v1，并把它标记为“旧版入口”；第一方正式描述符必须使用 v2。v1 兼容将在首个 5.x 版本移除。
 
 ## 版本历史
+
+### 4.7.0
+
+- 接入 editor-ui 1.5.0 typed workspace route：支持 owner deep link、来源面包屑、返回来源功能和 Domain reload 后的来源状态恢复。
+- route 失败保持在当前工作台并显示明确原因；手动选择其他面板会清除旧来源上下文。
+
+### 4.6.3
+
+- 将可选 Project Atlas 1.0.0 加入官方包目录；Atlas 继续通过既有 schema v2 panel/provider 合同接入，Dashboard 不读取项目图谱语义。
 
 ### 4.6.2
 

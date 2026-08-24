@@ -78,6 +78,7 @@ namespace ZeroEngine.Editor.Dashboard
             new DashboardKnownPackage("com.zerogamestudio.zeroengine.particle-catalog", "粒子库", "粒子目录、检索、分类与推荐契约。", false, true),
             new DashboardKnownPackage("com.zerogamestudio.zeroengine.pathfinding2d", "二维寻路", "平台图、跳跃连接与 A* 路线计算。", false, true, "com.zerogamestudio.zeroengine.core"),
             new DashboardKnownPackage("com.zerogamestudio.zeroengine.persistence", "存档与持久化", "多存档、截图、设置与保存接口。", false, true, "com.zerogamestudio.zeroengine.core"),
+            new DashboardKnownPackage("com.zerogamestudio.zeroengine.project-atlas", "项目功能", "按消费项目的功能语言导航到对应说明和配置入口。", true, true, EditorUiPackageName),
             new DashboardKnownPackage("com.zerogamestudio.zeroengine.pvp", "异步 PvP", "队伍快照、匹配与排行框架。", false, true, "com.zerogamestudio.zeroengine.core"),
             new DashboardKnownPackage("com.zerogamestudio.zeroengine.rpg", "回合 RPG", "ATB、行动点、破防与回合战斗系统。", false, true, "com.zerogamestudio.zeroengine.core", "com.zerogamestudio.zeroengine.data", "com.zerogamestudio.zeroengine.combat"),
             new DashboardKnownPackage("com.zerogamestudio.zeroengine.settings", "玩家设置", "事务化、版本化的游戏设置。", false, true, "com.zerogamestudio.zeroengine.core", "com.zerogamestudio.zeroengine.persistence", "com.zerogamestudio.zeroengine.audio", "com.zerogamestudio.zeroengine.input", "com.zerogamestudio.zeroengine.localization"),
