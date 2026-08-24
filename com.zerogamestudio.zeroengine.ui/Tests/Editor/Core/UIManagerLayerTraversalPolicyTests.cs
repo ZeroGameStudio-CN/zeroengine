@@ -73,6 +73,33 @@ namespace ZeroEngine.UI.Tests.Editor.Core
             Assert.That(policySource, Does.Not.Contain("UnityEngine"));
         }
 
+        [Test]
+        [Category("Boundary")]
+        public void UIManager_GetLayerContainer_RepairsMissingRuntimeLayerHierarchyBeforeUse()
+        {
+            var managerSource = File.ReadAllText(AssetPath("Runtime", "UI", "Core", "UIManager.cs"));
+            var initializeLayers = SourceTextRegionExtractor.ExtractMethodRegion(
+                managerSource,
+                "private void InitializeLayers()");
+            var ensureLayerContainers = SourceTextRegionExtractor.ExtractMethodRegion(
+                managerSource,
+                "private void EnsureLayerContainers()");
+            var getLayerContainer = SourceTextRegionExtractor.ExtractMethodRegion(
+                managerSource,
+                "private Transform GetLayerContainer(UILayer layer)");
+
+            Assert.That(initializeLayers, Does.Contain("EnsureLayerContainers();"));
+            Assert.That(ensureLayerContainers, Does.Contain("EnsureRootCanvas();"));
+            Assert.That(ensureLayerContainers, Does.Contain("if (screenLayer == null)"));
+            Assert.That(ensureLayerContainers, Does.Contain("screenLayer = CreateLayerContainer"));
+            Assert.That(getLayerContainer, Does.Contain("EnsureLayerContainers();"));
+            AssertOrder(
+                getLayerContainer,
+                "EnsureLayerContainers();",
+                "return layer switch",
+                "A view must not resolve a layer parent before missing runtime containers are repaired.");
+        }
+
         private static void AssertOrder(string source, string first, string second, string message)
         {
             var firstIndex = source.IndexOf(first, System.StringComparison.Ordinal);

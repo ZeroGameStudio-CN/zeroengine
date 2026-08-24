@@ -164,14 +164,46 @@ namespace ZeroEngine.UI
                 _layerStacks[layer] = new Stack<UIViewBase>();
             }
 
+            EnsureLayerContainers();
+        }
+
+        private void EnsureLayerContainers()
+        {
             EnsureRootCanvas();
-            backgroundLayer ??= CreateLayerContainer("BackgroundLayer", (int)UILayer.Background);
-            mainLayer ??= CreateLayerContainer("MainLayer", (int)UILayer.Main);
-            screenLayer ??= CreateLayerContainer("ScreenLayer", (int)UILayer.Screen);
-            popupLayer ??= CreateLayerContainer("PopupLayer", (int)UILayer.Popup);
-            overlayLayer ??= CreateLayerContainer("OverlayLayer", (int)UILayer.Overlay);
-            topLayer ??= CreateLayerContainer("TopLayer", (int)UILayer.Top);
-            systemLayer ??= CreateLayerContainer("SystemLayer", (int)UILayer.System);
+            if (backgroundLayer == null)
+            {
+                backgroundLayer = CreateLayerContainer("BackgroundLayer", (int)UILayer.Background);
+            }
+
+            if (mainLayer == null)
+            {
+                mainLayer = CreateLayerContainer("MainLayer", (int)UILayer.Main);
+            }
+
+            if (screenLayer == null)
+            {
+                screenLayer = CreateLayerContainer("ScreenLayer", (int)UILayer.Screen);
+            }
+
+            if (popupLayer == null)
+            {
+                popupLayer = CreateLayerContainer("PopupLayer", (int)UILayer.Popup);
+            }
+
+            if (overlayLayer == null)
+            {
+                overlayLayer = CreateLayerContainer("OverlayLayer", (int)UILayer.Overlay);
+            }
+
+            if (topLayer == null)
+            {
+                topLayer = CreateLayerContainer("TopLayer", (int)UILayer.Top);
+            }
+
+            if (systemLayer == null)
+            {
+                systemLayer = CreateLayerContainer("SystemLayer", (int)UILayer.System);
+            }
         }
 
         private Transform CreateLayerContainer(string name, int sortOrder)
@@ -776,6 +808,7 @@ namespace ZeroEngine.UI
 
         private Transform GetLayerContainer(UILayer layer)
         {
+            EnsureLayerContainers();
             return layer switch
             {
                 UILayer.Background => backgroundLayer,
