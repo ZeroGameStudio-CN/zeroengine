@@ -12,6 +12,11 @@ namespace ZeroEngine.Pathfinding2D
         PathNotFound,
         PartialPath,
         PartialPathUnavailable,
-        InvalidCommand
+        InvalidCommand,
+        BackendUnavailable,
+        BackendTimeout,
+        BackendFault,
+        StaleResult,
+        Cancelled
     }
 }

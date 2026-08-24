@@ -76,6 +76,7 @@ namespace ZeroEngine.Pathfinding2D
     public class JumpLinkCalculator : MonoBehaviour
     {
         private const float DefaultGravity = 9.81f;
+        private const float HorizontalDistanceTolerance = 0.05f;
 
         [SerializeField]
         private JumpLinkConfig config = new JumpLinkConfig();
@@ -91,6 +92,38 @@ namespace ZeroEngine.Pathfinding2D
         /// </summary>
         public void GenerateJumpLinks()
         {
+            int jumpLinksCreated = 0;
+            int fallLinksCreated = 0;
+            int dropLinksCreated = 0;
+            using (PlatformPathfindingDiagnostics.Measure(PlatformPathfindingMetricKind.JumpLinkBuild))
+            {
+                try
+                {
+                    GenerateJumpLinksCore(
+                        ref jumpLinksCreated,
+                        ref fallLinksCreated,
+                        ref dropLinksCreated);
+                }
+                finally
+                {
+                    PlatformPathfindingDiagnostics.Add(
+                        PlatformPathfindingCounterKind.JumpLinksCreated,
+                        jumpLinksCreated);
+                    PlatformPathfindingDiagnostics.Add(
+                        PlatformPathfindingCounterKind.FallLinksCreated,
+                        fallLinksCreated);
+                    PlatformPathfindingDiagnostics.Add(
+                        PlatformPathfindingCounterKind.DropLinksCreated,
+                        dropLinksCreated);
+                }
+            }
+        }
+
+        private void GenerateJumpLinksCore(
+            ref int jumpLinksCreated,
+            ref int fallLinksCreated,
+            ref int dropLinksCreated)
+        {
             if (graphGenerator == null)
             {
                 graphGenerator = GetComponent<PlatformGraphGenerator>();
@@ -105,10 +138,6 @@ namespace ZeroEngine.Pathfinding2D
             var nodes = graphGenerator.Nodes;
             LayerMask obstacleLayer = graphGenerator.Config.ObstacleLayer;
             LayerMask trajectoryBlockerLayer = graphGenerator.Config.GroundLayer | graphGenerator.Config.ObstacleLayer;
-
-            int jumpLinksCreated = 0;
-            int fallLinksCreated = 0;
-            int dropLinksCreated = 0;
 
             // 诊断计数器
             int jumpAttempts = 0;
@@ -203,7 +232,7 @@ namespace ZeroEngine.Pathfinding2D
                         // 允许垂直跳跃：水平距离小但高度差足够大时不过滤
                         if (horizontalDist < config.MinLinkDistance && Mathf.Abs(verticalDist) < 1f) continue;
 
-                        if (horizontalDist <= config.MaxHorizontalDistance)
+                        if (horizontalDist <= config.MaxHorizontalDistance + HorizontalDistanceTolerance)
                         {
                             jumpAttempts++;
                             if (TryCreateJumpLink(fromNode, toNode, trajectoryBlockerLayer, out string failReason))

@@ -11,12 +11,6 @@
     "precompiledReferences": [],
     "autoReferenced": true,
     "defineConstraints": [],
-    "versionDefines": [
-        {
-            "name": "com.arongranberg.astar",
-            "expression": "4.0.0",
-            "define": "ASTAR_PATHFINDING_PROJECT"
-        }
-    ],
+    "versionDefines": [],
     "noEngineReferences": false
 }
