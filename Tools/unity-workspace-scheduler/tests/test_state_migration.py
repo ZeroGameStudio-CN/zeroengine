@@ -399,16 +399,25 @@ def test_windows_token_file_not_found_after_open_is_not_treated_as_missing(
     assert events == ["close"]
 
 
+@pytest.mark.parametrize(
+    "owner_sid",
+    (
+        "S-1-5-21-111111111-222222222-333333333-1001",
+        "S-1-5-18",
+        "S-1-5-32-544",
+    ),
+)
 def test_windows_maintenance_acl_accepts_the_complete_private_allowlist(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
+    owner_sid: str,
 ) -> None:
     current_sid = "S-1-5-21-111111111-222222222-333333333-1001"
     monkeypatch.setattr(
         state_module,
         "_windows_maintenance_acl_snapshot",
         lambda _path: (
-            current_sid,
+            owner_sid,
             current_sid,
             [
                 (state_module._WINDOWS_ACCESS_ALLOWED_ACE_TYPE, 1, current_sid),
@@ -565,6 +574,30 @@ def test_windows_token_location_rejects_an_arbitrary_parent(
         state_module._validate_windows_token_location(tmp_path / "untrusted" / "owner.token")
 
 
+@pytest.mark.skipif(state_module.os.name != "nt", reason="Windows short-path behavior only")
+def test_windows_token_location_canonicalizes_a_short_temp_alias(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    canonical_temp = tmp_path / "runneradmin" / "AppData" / "Local" / "Temp"
+    canonical_temp.mkdir(parents=True)
+    alias_temp = tmp_path / "RUNNER~1" / "AppData" / "Local" / "Temp"
+    alias_path = alias_temp / "router" / "owner.token"
+    canonical_path = canonical_temp / "router" / "owner.token"
+    original_resolve = Path.resolve
+
+    def resolve_alias(path: Path, strict: bool = False) -> Path:
+        if path == alias_temp:
+            return canonical_temp
+        if path == alias_path:
+            return canonical_path
+        return original_resolve(path, strict=strict)
+
+    monkeypatch.setattr(state_module.tempfile, "gettempdir", lambda: str(alias_temp))
+    monkeypatch.setattr(Path, "resolve", resolve_alias)
+
+    assert state_module.canonical_token_file_path(alias_path) == canonical_path
+
+
 def test_windows_token_location_rejects_a_reparse_escape(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -628,8 +661,36 @@ def test_windows_token_acl_rejects_every_unapproved_principal_and_removes_file(
     assert not token_file.exists()
 
 
+@pytest.mark.parametrize(
+    "owner_sid",
+    (
+        "S-1-5-21-111111111-222222222-333333333-1001",
+        "S-1-5-18",
+        "S-1-5-32-544",
+    ),
+)
 @pytest.mark.skipif(state_module.os.name != "nt", reason="Windows ACL behavior only")
-def test_windows_token_acl_owner_rights_requires_current_owner(
+def test_windows_token_acl_accepts_trusted_owner(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, owner_sid: str
+) -> None:
+    current_sid = "S-1-5-21-111111111-222222222-333333333-1001"
+    monkeypatch.setattr(
+        state_module,
+        "_windows_token_acl_snapshot",
+        lambda _descriptor: (
+            owner_sid,
+            current_sid,
+            [
+                (state_module._WINDOWS_ACCESS_ALLOWED_ACE_TYPE, 1, current_sid),
+            ],
+        ),
+    )
+
+    state_module._verify_windows_token_acl(123)
+
+
+@pytest.mark.skipif(state_module.os.name != "nt", reason="Windows ACL behavior only")
+def test_windows_token_acl_owner_rights_requires_trusted_owner(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     current_sid = "S-1-5-21-111111111-222222222-333333333-1001"

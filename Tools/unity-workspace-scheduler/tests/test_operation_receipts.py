@@ -145,6 +145,57 @@ def start(
     )
 
 
+@pytest.mark.skipif(state_module.os.name != "nt", reason="Windows short-path behavior only")
+def test_direct_task_lifecycle_canonicalizes_short_temp_alias(
+    registered: tuple[WorkspaceCoordinator, Path],
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    coordinator, workspace = registered
+    canonical_temp = tmp_path / "runneradmin" / "AppData" / "Local" / "Temp"
+    canonical_temp.mkdir(parents=True)
+    alias_temp = tmp_path / "RUNNER~1" / "AppData" / "Local" / "Temp"
+    alias_path = alias_temp / "router" / "owner.token"
+    canonical_path = canonical_temp / "router" / "owner.token"
+    original_resolve = Path.resolve
+
+    def resolve_alias(path: Path, strict: bool = False) -> Path:
+        if path == alias_temp:
+            return canonical_temp
+        if path == alias_path:
+            return canonical_path
+        return original_resolve(path, strict=strict)
+
+    monkeypatch.setattr(state_module.tempfile, "gettempdir", lambda: str(alias_temp))
+    monkeypatch.setattr(Path, "resolve", resolve_alias)
+
+    task, token = coordinator.start_task(
+        workspace,
+        "alias-owner",
+        "short path identity",
+        operation_id=operation_id(),
+        token_file_path=str(alias_path),
+        token="alias-owner-secret",
+    )
+    with open_database(coordinator.paths) as connection:
+        stored = connection.execute(
+            "SELECT token_file_path, token_file_identity FROM tasks WHERE id = ?",
+            (task["id"],),
+        ).fetchone()
+    assert stored is not None
+    assert stored["token_file_path"] == str(canonical_path)
+    assert stored["token_file_identity"] == str(canonical_path).casefold()
+
+    release = coordinator.release_task(
+        workspace,
+        token,
+        operation_id=operation_id(),
+        result="completed",
+        token_cleanup_path=str(alias_path),
+    )
+    assert release["operation"]["replayed"] is False
+
+
 def resolved_pending_claim(
     coordinator: WorkspaceCoordinator,
     workspace: Path,
@@ -2485,12 +2536,30 @@ def test_terminal_lifecycle_replay_rejects_malformed_lineage_json(
 def test_terminal_lifecycle_replay_deleted_token_exact_lineage_for_all_actions(
     tmp_path: Path,
     action: str,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     workspace = tmp_path / action.replace(".", "-")
     workspace.mkdir()
     coordinator = WorkspaceCoordinator(resolve_state_paths(tmp_path / f"{action}-state"))
     coordinator.register(workspace, operation_id=operation_id())
-    token_root = Path(tempfile.gettempdir()) / f"unity-scheduler-replay-{uuid.uuid4().hex}"
+    if os.name == "nt":
+        canonical_temp = tmp_path / "runneradmin" / "AppData" / "Local" / "Temp"
+        canonical_temp.mkdir(parents=True)
+        alias_temp = tmp_path / "RUNNER~1" / "AppData" / "Local" / "Temp"
+        token_root = alias_temp / f"unity-scheduler-replay-{uuid.uuid4().hex}"
+        original_resolve = Path.resolve
+
+        def resolve_alias(path: Path, strict: bool = False) -> Path:
+            try:
+                relative = path.relative_to(alias_temp)
+            except ValueError:
+                return original_resolve(path, strict=strict)
+            return canonical_temp / relative
+
+        monkeypatch.setattr(state_module.tempfile, "gettempdir", lambda: str(alias_temp))
+        monkeypatch.setattr(Path, "resolve", resolve_alias)
+    else:
+        token_root = Path(tempfile.gettempdir()) / f"unity-scheduler-replay-{uuid.uuid4().hex}"
     token_root.mkdir()
     token_path = token_root / "owner.token"
     blocker_path = token_root / "blocker.token"
