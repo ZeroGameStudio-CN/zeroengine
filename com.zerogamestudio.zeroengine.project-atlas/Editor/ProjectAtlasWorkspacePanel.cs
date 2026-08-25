@@ -32,7 +32,6 @@ namespace ZeroEngine.ProjectAtlas
         private const float MinDetailColumnWidth = 320f;
         private const float SplitterWidth = 5f;
         private const float FeatureRowHeight = 34f;
-        private const float FeatureStatusWidth = 76f;
         private const float ThreeColumnMinContentWidth =
             MinDomainColumnWidth + MinFeatureColumnWidth + MinDetailColumnWidth + SplitterWidth * 2f;
         private const string DomainColumnWidthStateKey = StatePrefix + "DomainColumnWidth";
@@ -380,67 +379,15 @@ namespace ZeroEngine.ProjectAtlas
             EnsureFeatureSelection(features);
             foreach (ProjectFeature feature in features)
             {
-                if (DrawFeatureRow(
-                        feature.DisplayName,
-                        ConfigurationStatus(feature),
-                        feature.Summary,
-                        feature.Id == _selectedFeatureId))
+                if (EditorUiGUILayout.SelectionButton(
+                        new GUIContent(feature.DisplayName, feature.Summary),
+                        feature.Id == _selectedFeatureId,
+                        GUILayout.ExpandWidth(true),
+                        GUILayout.Height(FeatureRowHeight)))
                 {
                     SelectFeature(feature.Id);
                 }
             }
-        }
-
-        private static bool DrawFeatureRow(string title, string status, string tooltip, bool selected)
-        {
-            Rect rect = GUILayoutUtility.GetRect(1f, FeatureRowHeight, GUILayout.ExpandWidth(true));
-            bool nextSelected = GUI.Toggle(
-                rect,
-                selected,
-                new GUIContent(string.Empty, tooltip),
-                EditorStyles.miniButton);
-            Event currentEvent = Event.current;
-
-            if (currentEvent.type == EventType.Repaint)
-            {
-                var titleStyle = new GUIStyle(EditorStyles.label)
-                {
-                    alignment = TextAnchor.MiddleLeft,
-                    clipping = TextClipping.Clip
-                };
-                titleStyle.normal.textColor = selected ? Color.white : EditorStyles.label.normal.textColor;
-                GUI.Label(BuildFeatureRowTitleRect(rect), title, titleStyle);
-
-                var statusStyle = new GUIStyle(EditorStyles.miniLabel)
-                {
-                    alignment = TextAnchor.MiddleRight,
-                    clipping = TextClipping.Clip
-                };
-                statusStyle.normal.textColor = selected
-                    ? new Color(0.9f, 0.95f, 1f, 1f)
-                    : EditorStyles.miniLabel.normal.textColor;
-                GUI.Label(BuildFeatureRowStatusRect(rect), status, statusStyle);
-            }
-
-            return nextSelected != selected;
-        }
-
-        private static Rect BuildFeatureRowTitleRect(Rect rect)
-        {
-            return new Rect(
-                rect.x + 8f,
-                rect.y + 2f,
-                Mathf.Max(0f, rect.width - FeatureStatusWidth - 18f),
-                rect.height - 4f);
-        }
-
-        private static Rect BuildFeatureRowStatusRect(Rect rect)
-        {
-            return new Rect(
-                rect.xMax - FeatureStatusWidth - 8f,
-                rect.y + 2f,
-                FeatureStatusWidth,
-                rect.height - 4f);
         }
 
         private void DrawSelectedFeature(EditorWorkspacePanelContext context, ProjectFeature[] visibleFeatures)

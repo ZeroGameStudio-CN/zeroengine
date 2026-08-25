@@ -113,7 +113,7 @@ $expectedPackages = [ordered]@{
     'com.zerogamestudio.zeroengine.formula' = '0.6.0'
     'com.zerogamestudio.zeroengine.feedback' = '1.0.2'
     'com.zerogamestudio.zeroengine.modsystem' = '0.3.0'
-    'com.zerogamestudio.zeroengine.project-atlas' = '1.1.3'
+    'com.zerogamestudio.zeroengine.project-atlas' = '1.1.4'
     'com.zerogamestudio.zeroengine.tce' = '0.2.1'
     'com.zerogamestudio.zeroengine.ui' = '2.2.1'
 }
@@ -188,8 +188,10 @@ foreach ($packageName in $expectedPackages.Keys) {
 $projectAtlasPanelSource = Get-Content -Raw -LiteralPath (
     Join-Path $RepoRoot 'com.zerogamestudio.zeroengine.project-atlas/Editor/ProjectAtlasWorkspacePanel.cs')
 Assert-Contract (
-    [regex]::IsMatch($projectAtlasPanelSource, '(?s)GUI\.Toggle\s*\(.*?EditorStyles\.miniButton')) `
-    'Project Atlas feature rows must retain visible button chrome.'
+    [regex]::IsMatch($projectAtlasPanelSource, '(?s)DrawFeatureButtons.*?EditorUiGUILayout\.SelectionButton')) `
+    'Project Atlas feature rows must use the standard centered selection button.'
+Assert-Contract (-not $projectAtlasPanelSource.Contains('DrawFeatureRow')) `
+    'Project Atlas feature buttons must not regress to split overlay labels.'
 Assert-Contract (-not $projectAtlasPanelSource.Contains('GUIStyle.none')) `
     'Project Atlas feature rows must not regress to invisible click targets.'
 
