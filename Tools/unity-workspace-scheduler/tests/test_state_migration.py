@@ -399,16 +399,25 @@ def test_windows_token_file_not_found_after_open_is_not_treated_as_missing(
     assert events == ["close"]
 
 
+@pytest.mark.parametrize(
+    "owner_sid",
+    (
+        "S-1-5-21-111111111-222222222-333333333-1001",
+        "S-1-5-18",
+        "S-1-5-32-544",
+    ),
+)
 def test_windows_maintenance_acl_accepts_the_complete_private_allowlist(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
+    owner_sid: str,
 ) -> None:
     current_sid = "S-1-5-21-111111111-222222222-333333333-1001"
     monkeypatch.setattr(
         state_module,
         "_windows_maintenance_acl_snapshot",
         lambda _path: (
-            current_sid,
+            owner_sid,
             current_sid,
             [
                 (state_module._WINDOWS_ACCESS_ALLOWED_ACE_TYPE, 1, current_sid),
@@ -628,8 +637,36 @@ def test_windows_token_acl_rejects_every_unapproved_principal_and_removes_file(
     assert not token_file.exists()
 
 
+@pytest.mark.parametrize(
+    "owner_sid",
+    (
+        "S-1-5-21-111111111-222222222-333333333-1001",
+        "S-1-5-18",
+        "S-1-5-32-544",
+    ),
+)
 @pytest.mark.skipif(state_module.os.name != "nt", reason="Windows ACL behavior only")
-def test_windows_token_acl_owner_rights_requires_current_owner(
+def test_windows_token_acl_accepts_trusted_owner(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, owner_sid: str
+) -> None:
+    current_sid = "S-1-5-21-111111111-222222222-333333333-1001"
+    monkeypatch.setattr(
+        state_module,
+        "_windows_token_acl_snapshot",
+        lambda _descriptor: (
+            owner_sid,
+            current_sid,
+            [
+                (state_module._WINDOWS_ACCESS_ALLOWED_ACE_TYPE, 1, current_sid),
+            ],
+        ),
+    )
+
+    state_module._verify_windows_token_acl(123)
+
+
+@pytest.mark.skipif(state_module.os.name != "nt", reason="Windows ACL behavior only")
+def test_windows_token_acl_owner_rights_requires_trusted_owner(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     current_sid = "S-1-5-21-111111111-222222222-333333333-1001"

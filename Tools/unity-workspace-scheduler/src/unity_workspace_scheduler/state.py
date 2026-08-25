@@ -1169,7 +1169,9 @@ def _windows_token_acl_snapshot(descriptor: int) -> tuple[str, str, list[tuple[i
 
 def _verify_windows_token_acl(descriptor: int) -> None:
     owner_sid, current_sid, entries = _windows_token_acl_snapshot(descriptor)
-    if owner_sid != current_sid:
+    owner_sid = owner_sid.upper()
+    current_sid = current_sid.upper()
+    if owner_sid not in {current_sid, *_WINDOWS_ALLOWED_TOKEN_SIDS}:
         raise OSError("Windows token file is not owned by the current identity.")
     allowed_sids = set(_WINDOWS_ALLOWED_TOKEN_SIDS)
     allowed_sids.add(current_sid)
@@ -1284,7 +1286,7 @@ def _verify_windows_maintenance_acl(path: Path) -> None:
     owner_sid, current_sid, entries = _windows_maintenance_acl_snapshot(path)
     owner_sid = owner_sid.upper()
     current_sid = current_sid.upper()
-    if owner_sid != current_sid:
+    if owner_sid not in {current_sid, *_WINDOWS_ALLOWED_TOKEN_SIDS}:
         raise OSError("Windows maintenance path is not owned by the current identity.")
     allowed_sids = {
         current_sid,
