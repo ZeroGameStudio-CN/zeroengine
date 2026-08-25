@@ -32,6 +32,26 @@ namespace ZeroGameStudio.ConfigPipeline.Tests
             "\"enabled\":{\"type\":\"boolean\",\"title\":\"启用\",\"default\":true}" +
             "}}}}}";
 
+        private const string CompositeSchemaJson =
+            "{" +
+            "\"$id\":\"zgs.sample.composite-xlsx\"," +
+            "\"x-zgs-schema-version\":1," +
+            "\"type\":\"object\"," +
+            "\"additionalProperties\":false," +
+            "\"required\":[\"aliases\"]," +
+            "\"properties\":{" +
+            "\"aliases\":{" +
+            "\"type\":\"array\",\"x-zgs-sheet\":\"Aliases\",\"uniqueItems\":true," +
+            "\"items\":{" +
+            "\"type\":\"object\",\"additionalProperties\":false," +
+            "\"required\":[\"domain\",\"kind\",\"legacyId\",\"canonicalId\"]," +
+            "\"properties\":{" +
+            "\"domain\":{\"type\":\"string\",\"x-zgs-primary-key\":true}," +
+            "\"kind\":{\"type\":\"string\",\"x-zgs-primary-key\":true}," +
+            "\"legacyId\":{\"type\":\"string\",\"x-zgs-primary-key\":true}," +
+            "\"canonicalId\":{\"type\":\"string\"}" +
+            "}}}}}";
+
         [Test]
         public void TemplateAndReader_RoundTripTypedDocument()
         {
@@ -57,6 +77,93 @@ namespace ZeroGameStudio.ConfigPipeline.Tests
                     Is.EqualTo(CanonicalJsonWriter.WriteText(source.Root)));
                 Assert.That(read.SourceMap, Has.Count.EqualTo(4));
             }
+        }
+
+        [Test]
+        public void CompositePrimaryKey_RoundTripsRepeatedComponentsInTupleOrder()
+        {
+            ConfigSchema schema = ConfigSchemaParser.Parse(Encoding.UTF8.GetBytes(CompositeSchemaJson));
+            ConfigDocument source = CompositeDocument(reverseRows: true, omitLegacyId: false);
+            using (var stream = new MemoryStream())
+            {
+                new XlsxConfigWorkbookWriter().WriteTemplate(
+                    stream,
+                    schema,
+                    "composite.xlsx",
+                    source);
+                stream.Position = 0;
+
+                ConfigDocument read = new XlsxConfigSourceReader(schema).Read(
+                    stream,
+                    new ConfigReadContext(
+                        "composite.xlsx",
+                        schema.SchemaId,
+                        schema.SchemaVersion));
+
+                Assert.That(read.Root.TryGetValue("aliases", out ConfigNode aliasesNode), Is.True);
+                ConfigArrayNode aliases = aliasesNode as ConfigArrayNode;
+                Assert.That(aliases, Is.Not.Null);
+                Assert.That(aliases.Items, Has.Count.EqualTo(2));
+                Assert.That(ReadString(aliases.Items[0], "legacyId"), Is.EqualTo("legacy.a"));
+                Assert.That(ReadString(aliases.Items[1], "legacyId"), Is.EqualTo("legacy.b"));
+            }
+        }
+
+        [Test]
+        public void CompositePrimaryKey_MissingComponent_IsRejectedByReader()
+        {
+            ConfigSchema schema = ConfigSchemaParser.Parse(Encoding.UTF8.GetBytes(CompositeSchemaJson));
+            ConfigDocument source = CompositeDocument(reverseRows: false, omitLegacyId: true);
+            using (var stream = new MemoryStream())
+            {
+                new XlsxConfigWorkbookWriter().WriteTemplate(
+                    stream,
+                    schema,
+                    "composite.xlsx",
+                    source);
+                stream.Position = 0;
+
+                XlsxConfigException exception = Assert.Throws<XlsxConfigException>(() =>
+                    new XlsxConfigSourceReader(schema).Read(
+                        stream,
+                        new ConfigReadContext(
+                            "composite.xlsx",
+                            schema.SchemaId,
+                            schema.SchemaVersion)));
+
+                Assert.That(exception.Code, Is.EqualTo("XLSX_PRIMARY_KEY_MISSING"));
+                Assert.That(exception.Message, Does.Contain("legacyId"));
+            }
+        }
+
+        [Test]
+        public void CompositePrimaryKey_ParentWithChildTable_IsRejectedUntilTupleJoinIsDeclared()
+        {
+            const string nestedCompositeSchemaJson =
+                "{\"$id\":\"zgs.sample.composite-parent\",\"x-zgs-schema-version\":1," +
+                "\"type\":\"object\",\"additionalProperties\":false,\"required\":[\"parents\"]," +
+                "\"properties\":{\"parents\":{\"type\":\"array\",\"x-zgs-sheet\":\"Parents\"," +
+                "\"items\":{\"type\":\"object\",\"additionalProperties\":false," +
+                "\"required\":[\"domain\",\"id\",\"children\"],\"properties\":{" +
+                "\"domain\":{\"type\":\"string\",\"x-zgs-primary-key\":true}," +
+                "\"id\":{\"type\":\"string\",\"x-zgs-primary-key\":true}," +
+                "\"children\":{\"type\":\"array\",\"x-zgs-sheet\":\"Children\"," +
+                "\"x-zgs-parent-key\":\"parentId\",\"x-zgs-order-field\":\"order\"," +
+                "\"items\":{\"type\":\"object\",\"additionalProperties\":false," +
+                "\"required\":[\"id\",\"order\"],\"properties\":{" +
+                "\"id\":{\"type\":\"string\",\"x-zgs-primary-key\":true}," +
+                "\"order\":{\"type\":\"integer\",\"x-zgs-number-type\":\"int32\"}" +
+                "}}}}}}}}";
+            ConfigSchema schema = ConfigSchemaParser.Parse(
+                Encoding.UTF8.GetBytes(nestedCompositeSchemaJson));
+
+            InvalidOperationException exception = Assert.Throws<InvalidOperationException>(() =>
+                new XlsxConfigWorkbookWriter().WriteTemplate(
+                    new MemoryStream(),
+                    schema,
+                    "composite-parent.xlsx"));
+
+            Assert.That(exception.Message, Does.Contain("exactly one primary key"));
         }
 
         [Test]
@@ -661,6 +768,50 @@ namespace ZeroGameStudio.ConfigPipeline.Tests
                 {
                     new ConfigProperty("items", new ConfigArrayNode(Array.Empty<ConfigNode>()))
                 }));
+        }
+
+        private static ConfigDocument CompositeDocument(bool reverseRows, bool omitLegacyId)
+        {
+            ConfigObjectNode first = CompositeAlias("legacy.a", "item.a", omitLegacyId);
+            ConfigObjectNode second = CompositeAlias("legacy.b", "item.b", omitLegacyId: false);
+            ConfigNode[] rows = reverseRows
+                ? new ConfigNode[] { second, first }
+                : new ConfigNode[] { first, second };
+            return new ConfigDocument(
+                "composite.xlsx",
+                "zgs.sample.composite-xlsx",
+                1,
+                new ConfigObjectNode(new[]
+                {
+                    new ConfigProperty("aliases", new ConfigArrayNode(rows))
+                }));
+        }
+
+        private static ConfigObjectNode CompositeAlias(
+            string legacyId,
+            string canonicalId,
+            bool omitLegacyId)
+        {
+            var properties = new System.Collections.Generic.List<ConfigProperty>
+            {
+                new ConfigProperty("domain", new ConfigStringNode("item")),
+                new ConfigProperty("kind", new ConfigStringNode("id"))
+            };
+            if (!omitLegacyId)
+            {
+                properties.Add(new ConfigProperty("legacyId", new ConfigStringNode(legacyId)));
+            }
+
+            properties.Add(new ConfigProperty("canonicalId", new ConfigStringNode(canonicalId)));
+            return new ConfigObjectNode(properties);
+        }
+
+        private static string ReadString(ConfigNode row, string propertyName)
+        {
+            ConfigObjectNode objectNode = row as ConfigObjectNode;
+            Assert.That(objectNode, Is.Not.Null);
+            Assert.That(objectNode.TryGetValue(propertyName, out ConfigNode value), Is.True);
+            return ((ConfigStringNode)value).Value;
         }
     }
 }

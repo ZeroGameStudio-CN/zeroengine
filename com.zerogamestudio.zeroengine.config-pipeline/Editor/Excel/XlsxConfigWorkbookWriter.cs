@@ -153,10 +153,21 @@ namespace ZeroGameStudio.ConfigPipeline.Editor
 
             var fields = new List<FieldDefinition>();
             AddScalarFields(arraySchema.Items, string.Empty, true, fields);
-            FieldDefinition primaryKey = fields.SingleOrDefault(field => field.Schema.PrimaryKey);
-            if (primaryKey == null || fields.Count(field => field.Schema.PrimaryKey) != 1)
+            List<FieldDefinition> primaryKeys = fields
+                .Where(field => field.Schema.PrimaryKey)
+                .ToList();
+            if (primaryKeys.Count == 0 ||
+                primaryKeys.Any(primaryKey =>
+                    primaryKey.Schema.Type != ConfigSchemaType.String || primaryKey.Name.Contains(".")))
             {
-                throw new InvalidOperationException("Every table requires exactly one primary key.");
+                throw new InvalidOperationException(
+                    "Every table requires one or more top-level string primary keys.");
+            }
+
+            if (parent != null && parent.PrimaryKeys.Count != 1)
+            {
+                throw new InvalidOperationException(
+                    "Child tables currently require a parent table with exactly one primary key.");
             }
 
             if (parent != null &&
@@ -175,7 +186,7 @@ namespace ZeroGameStudio.ConfigPipeline.Editor
                 arraySchema.Sheet,
                 arraySchema,
                 fields,
-                primaryKey,
+                primaryKeys,
                 parent);
             tables.Add(table);
             foreach (ConfigSchemaProperty child in arraySchema.Items.Properties
@@ -1294,7 +1305,7 @@ namespace ZeroGameStudio.ConfigPipeline.Editor
             foreach (TableRow parentRow in FindRows(document, table.Parent))
             {
                 if (!parentRow.Value.TryGetValue(
-                        table.Parent.PrimaryKey.Name,
+                        table.Parent.PrimaryKeys[0].Name,
                         out ConfigNode parentKeyNode) ||
                     !(parentKeyNode is ConfigStringNode parentKey))
                 {
@@ -1426,7 +1437,7 @@ namespace ZeroGameStudio.ConfigPipeline.Editor
                 string sheetName,
                 ConfigSchemaNode arraySchema,
                 IReadOnlyList<FieldDefinition> fields,
-                FieldDefinition primaryKey,
+                IReadOnlyList<FieldDefinition> primaryKeys,
                 TableDefinition parent)
             {
                 RootPropertyName = rootPropertyName;
@@ -1434,7 +1445,7 @@ namespace ZeroGameStudio.ConfigPipeline.Editor
                 SheetName = sheetName;
                 ArraySchema = arraySchema;
                 Fields = fields;
-                PrimaryKey = primaryKey;
+                PrimaryKeys = primaryKeys;
                 Parent = parent;
             }
 
@@ -1450,7 +1461,7 @@ namespace ZeroGameStudio.ConfigPipeline.Editor
 
             public ConfigSchemaNode ArraySchema { get; }
 
-            public FieldDefinition PrimaryKey { get; }
+            public IReadOnlyList<FieldDefinition> PrimaryKeys { get; }
 
             public TableDefinition Parent { get; }
 

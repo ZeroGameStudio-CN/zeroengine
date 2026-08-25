@@ -1,5 +1,18 @@
 # Changelog
 
+## 2.1.0
+
+- Allow flat XLSX tables to declare an ordered composite identity with multiple
+  top-level string `x-zgs-primary-key` fields. Reader ordering and runtime
+  duplicate validation use the complete tuple, so repeated individual
+  components remain valid.
+- Continue to require one parent identity column for child-sheet joins. A table
+  with a composite identity cannot own child sheets until an explicit tuple
+  parent-column schema is introduced; writer and reader fail closed instead of
+  inventing a synthetic key.
+- Keep `x-zgs-ref` targets limited to a single-field primary key. References to
+  one component of a composite identity are rejected as ambiguous.
+
 ## 2.0.2
 
 - Store transaction locks, journals, staging, and backups under

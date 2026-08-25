@@ -203,13 +203,23 @@ namespace ZeroGameStudio.ConfigPipeline.Editor
                 throw new XlsxConfigException("XLSX_COLUMN_LIMIT", "Sheet exceeds the declared-column limit.");
             }
 
-            FieldDefinition primaryKey = fields.SingleOrDefault(field => field.Schema.PrimaryKey);
-            if (primaryKey == null || fields.Count(field => field.Schema.PrimaryKey) != 1 ||
-                primaryKey.Schema.Type != ConfigSchemaType.String || primaryKey.Name.Contains("."))
+            List<FieldDefinition> primaryKeys = fields
+                .Where(field => field.Schema.PrimaryKey)
+                .ToList();
+            if (primaryKeys.Count == 0 ||
+                primaryKeys.Any(primaryKey =>
+                    primaryKey.Schema.Type != ConfigSchemaType.String || primaryKey.Name.Contains(".")))
             {
                 throw new XlsxConfigException(
                     "XLSX_PRIMARY_KEY_REQUIRED",
-                    "Each table requires exactly one string primary key.");
+                    "Each table requires one or more top-level string primary keys.");
+            }
+
+            if (parent != null && parent.PrimaryKeys.Count != 1)
+            {
+                throw new XlsxConfigException(
+                    "XLSX_COMPOSITE_PARENT_KEY_UNSUPPORTED",
+                    "Child tables currently require a parent table with exactly one primary key.");
             }
 
             if (parent != null &&
@@ -229,7 +239,7 @@ namespace ZeroGameStudio.ConfigPipeline.Editor
                 array.Sheet,
                 array,
                 fields,
-                primaryKey,
+                primaryKeys,
                 parent);
             tables.Add(table);
             foreach (ConfigSchemaProperty child in array.Items.Properties
@@ -441,7 +451,7 @@ namespace ZeroGameStudio.ConfigPipeline.Editor
                     if (!string.IsNullOrEmpty(parentText))
                     {
                         ConfigNode parsedParent = ParseCell(
-                            table.Parent.PrimaryKey.Schema,
+                            table.Parent.PrimaryKeys[0].Schema,
                             parentCell,
                             parentText);
                         parentKey = ((ConfigStringNode)parsedParent).Value;
@@ -473,21 +483,12 @@ namespace ZeroGameStudio.ConfigPipeline.Editor
                         string.Empty,
                         table.Fields,
                         values);
-                    if (!objectNode.TryGetValue(
-                            table.PrimaryKey.Name,
-                            out ConfigNode keyNode) ||
-                        !(keyNode is ConfigStringNode key))
-                    {
-                        throw new XlsxConfigException(
-                            "XLSX_PRIMARY_KEY_MISSING",
-                            "Every non-empty row requires primary key '" +
-                            table.PrimaryKey.Name + "'.");
-                    }
+                    IReadOnlyList<string> primaryKeyValues = ReadPrimaryKeyValues(table, objectNode);
 
                     readRows.Add(
                         new ReadRow(
                             objectNode,
-                            key.Value,
+                            primaryKeyValues,
                             ReadOrderValue(objectNode, table.ArraySchema.OrderField),
                             checked((int)(row.RowIndex?.Value ?? (uint)(readRows.Count + 3))),
                             presentColumns,
@@ -500,7 +501,7 @@ namespace ZeroGameStudio.ConfigPipeline.Editor
                 int order = Nullable.Compare(left.Order, right.Order);
                 return order != 0
                     ? order
-                    : string.CompareOrdinal(left.PrimaryKey, right.PrimaryKey);
+                    : ComparePrimaryKeyValues(left.PrimaryKeyValues, right.PrimaryKeyValues);
             });
             if (table.Parent != null && readRows.Any(row => string.IsNullOrEmpty(row.ParentKey)))
             {
@@ -928,6 +929,57 @@ namespace ZeroGameStudio.ConfigPipeline.Editor
             return integer.Value;
         }
 
+        private static IReadOnlyList<string> ReadPrimaryKeyValues(
+            TableDefinition table,
+            ConfigObjectNode row)
+        {
+            var values = new string[table.PrimaryKeys.Count];
+            for (int index = 0; index < table.PrimaryKeys.Count; index++)
+            {
+                FieldDefinition primaryKey = table.PrimaryKeys[index];
+                if (!row.TryGetValue(primaryKey.Name, out ConfigNode keyNode) ||
+                    !(keyNode is ConfigStringNode key))
+                {
+                    throw new XlsxConfigException(
+                        "XLSX_PRIMARY_KEY_MISSING",
+                        "Every non-empty row requires primary key component '" +
+                        primaryKey.Name + "'.");
+                }
+
+                values[index] = key.Value;
+            }
+
+            return values;
+        }
+
+        private static int ComparePrimaryKeyValues(
+            IReadOnlyList<string> left,
+            IReadOnlyList<string> right)
+        {
+            int count = Math.Min(left.Count, right.Count);
+            for (int index = 0; index < count; index++)
+            {
+                int comparison = string.CompareOrdinal(left[index], right[index]);
+                if (comparison != 0)
+                {
+                    return comparison;
+                }
+            }
+
+            return left.Count.CompareTo(right.Count);
+        }
+
+        private static string CreatePrimaryKeyIdentity(IReadOnlyList<string> values)
+        {
+            if (values.Count == 1)
+            {
+                return values[0];
+            }
+
+            return string.Concat(values.Select(value =>
+                value.Length.ToString(CultureInfo.InvariantCulture) + ":" + value));
+        }
+
         private static string EscapePointer(string value)
         {
             return value.Replace("~", "~0").Replace("/", "~1");
@@ -941,7 +993,7 @@ namespace ZeroGameStudio.ConfigPipeline.Editor
                 string sheetName,
                 ConfigSchemaNode arraySchema,
                 IReadOnlyList<FieldDefinition> fields,
-                FieldDefinition primaryKey,
+                IReadOnlyList<FieldDefinition> primaryKeys,
                 TableDefinition parent)
             {
                 RootPropertyName = rootPropertyName;
@@ -949,7 +1001,7 @@ namespace ZeroGameStudio.ConfigPipeline.Editor
                 SheetName = sheetName;
                 ArraySchema = arraySchema;
                 Fields = fields;
-                PrimaryKey = primaryKey;
+                PrimaryKeys = primaryKeys;
                 Parent = parent;
             }
 
@@ -963,7 +1015,7 @@ namespace ZeroGameStudio.ConfigPipeline.Editor
 
             public IReadOnlyList<FieldDefinition> Fields { get; }
 
-            public FieldDefinition PrimaryKey { get; }
+            public IReadOnlyList<FieldDefinition> PrimaryKeys { get; }
 
             public TableDefinition Parent { get; }
 
@@ -995,14 +1047,15 @@ namespace ZeroGameStudio.ConfigPipeline.Editor
         {
             public ReadRow(
                 ConfigObjectNode value,
-                string primaryKey,
+                IReadOnlyList<string> primaryKeyValues,
                 long? order,
                 int sourceRow,
                 IReadOnlyList<int> presentColumns,
                 string parentKey)
             {
                 Value = value;
-                PrimaryKey = primaryKey;
+                PrimaryKeyValues = primaryKeyValues;
+                PrimaryKey = CreatePrimaryKeyIdentity(primaryKeyValues);
                 Order = order;
                 SourceRow = sourceRow;
                 PresentColumns = presentColumns;
@@ -1013,6 +1066,8 @@ namespace ZeroGameStudio.ConfigPipeline.Editor
             public ConfigObjectNode Value { get; set; }
 
             public string PrimaryKey { get; }
+
+            public IReadOnlyList<string> PrimaryKeyValues { get; }
 
             public long? Order { get; }
 
