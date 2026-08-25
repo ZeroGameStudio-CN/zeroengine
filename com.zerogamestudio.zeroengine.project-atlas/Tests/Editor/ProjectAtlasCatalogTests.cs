@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Reflection;
 using NUnit.Framework;
 using ZeroEngine.EditorUI;
 
@@ -310,6 +311,36 @@ namespace ZeroEngine.ProjectAtlas.Tests
 
             Assert.That(panel, Is.InstanceOf<IEditorWorkspaceFullWidthPanel>());
             Assert.That(provider.CreatePanel("unknown"), Is.Null);
+            panel.Dispose();
+        }
+
+        [Test]
+        public void WorkspacePanel_NarrowWidth_PreservesThreeColumnsWithoutDropdownNavigation()
+        {
+            var provider = new ProjectAtlasWorkspacePanelProvider();
+            IEditorWorkspacePanel panel = provider.CreatePanel("project-atlas");
+            Type panelType = panel.GetType();
+            MethodInfo resolveBodyContentWidth = panelType.GetMethod(
+                "ResolveBodyContentWidth",
+                BindingFlags.Static | BindingFlags.NonPublic);
+
+            Assert.That(resolveBodyContentWidth, Is.Not.Null);
+            Assert.That(
+                (float)resolveBodyContentWidth.Invoke(null, new object[] { 420f }),
+                Is.GreaterThan(420f),
+                "窄窗口应通过横向滚动保留三栏，而不是折叠为下拉。");
+            Assert.That(
+                (float)resolveBodyContentWidth.Invoke(null, new object[] { 1440f }),
+                Is.EqualTo(1440f));
+            Assert.That(
+                panelType.GetMethod("DrawCompact", BindingFlags.Instance | BindingFlags.NonPublic),
+                Is.Null,
+                "项目领域与功能导航不得恢复为紧凑下拉模式。");
+            Assert.That(
+                panelType.GetMethod("DrawFeaturePicker", BindingFlags.Instance | BindingFlags.NonPublic),
+                Is.Null,
+                "功能导航不得恢复为 Popup picker。");
+
             panel.Dispose();
         }
 

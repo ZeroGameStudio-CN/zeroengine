@@ -24,6 +24,35 @@ namespace ZeroEngine.ProjectAtlas
         IEditorWorkspaceRouteReceiver
     {
         private const string StatePrefix = "ZeroEngine.ProjectAtlas.FeatureWorkspace.";
+        private const float DefaultDomainColumnWidth = 190f;
+        private const float DefaultFeatureColumnWidth = 280f;
+        private const float MinDomainColumnWidth = 160f;
+        private const float MinFeatureColumnWidth = 220f;
+        private const float MaxNavigationColumnWidth = 520f;
+        private const float MinDetailColumnWidth = 320f;
+        private const float SplitterWidth = 5f;
+        private const float ThreeColumnMinContentWidth =
+            MinDomainColumnWidth + MinFeatureColumnWidth + MinDetailColumnWidth + SplitterWidth * 2f;
+        private const string DomainColumnWidthStateKey = StatePrefix + "DomainColumnWidth";
+        private const string FeatureColumnWidthStateKey = StatePrefix + "FeatureColumnWidth";
+
+        private readonly struct BodyLayoutRects
+        {
+            public BodyLayoutRects(Rect domainColumn, Rect domainSplitter, Rect featureColumn, Rect featureSplitter, Rect detailColumn)
+            {
+                DomainColumn = domainColumn;
+                DomainSplitter = domainSplitter;
+                FeatureColumn = featureColumn;
+                FeatureSplitter = featureSplitter;
+                DetailColumn = detailColumn;
+            }
+
+            public Rect DomainColumn { get; }
+            public Rect DomainSplitter { get; }
+            public Rect FeatureColumn { get; }
+            public Rect FeatureSplitter { get; }
+            public Rect DetailColumn { get; }
+        }
 
         private ProjectFeatureCatalog _catalog;
         private string _selectedDomainId = string.Empty;
@@ -35,6 +64,10 @@ namespace ZeroEngine.ProjectAtlas
         private Vector2 _domainScroll;
         private Vector2 _featureScroll;
         private Vector2 _detailScroll;
+        private Vector2 _bodyHorizontalScroll;
+        private float _domainColumnWidth = DefaultDomainColumnWidth;
+        private float _featureColumnWidth = DefaultFeatureColumnWidth;
+        private string _activeResizeKey;
 
         public float RefreshInterval => 0f;
 
@@ -79,10 +112,7 @@ namespace ZeroEngine.ProjectAtlas
                 return;
             }
 
-            if (EditorUiGUILayout.ResponsiveMode(context.AvailableWidth) == EditorUiResponsiveMode.Compact)
-                DrawCompact(context, domains);
-            else
-                DrawWide(context, domains);
+            DrawBodyLayout(context, domains);
             DrawHumanDiagnostics();
         }
 
@@ -156,78 +186,180 @@ namespace ZeroEngine.ProjectAtlas
             EditorGUILayout.Space(6f);
         }
 
-        private void DrawCompact(EditorWorkspacePanelContext context, ProjectFeatureDomain[] domains)
+        private void DrawBodyLayout(EditorWorkspacePanelContext context, ProjectFeatureDomain[] domains)
         {
-            string[] labels = domains.Select(domain => domain.DisplayName).ToArray();
-            int domainIndex = Math.Max(0, Array.FindIndex(domains, domain => domain.Id == _selectedDomainId));
-            int nextDomain = EditorGUILayout.Popup("项目领域", domainIndex, labels);
-            if (nextDomain != domainIndex)
-                SelectDomain(domains[nextDomain].Id);
-
-            ProjectFeature[] features = VisibleFeatures(domains[nextDomain]).ToArray();
-            DrawFeaturePicker(features);
-            _detailScroll = EditorGUILayout.BeginScrollView(_detailScroll);
-            DrawSelectedFeature(context, features);
-            EditorGUILayout.EndScrollView();
-        }
-
-        private void DrawWide(EditorWorkspacePanelContext context, ProjectFeatureDomain[] domains)
-        {
-            using (new EditorGUILayout.HorizontalScope())
+            float height = Mathf.Max(440f, context.Owner.position.height - 240f);
+            Rect bodyRect = GUILayoutUtility.GetRect(
+                Mathf.Max(0f, context.AvailableWidth),
+                height,
+                GUILayout.ExpandWidth(true),
+                GUILayout.Height(height));
+            float contentWidth = ResolveBodyContentWidth(bodyRect.width);
+            if (contentWidth <= bodyRect.width)
             {
-                using (new EditorGUILayout.VerticalScope(GUILayout.Width(Mathf.Clamp(context.AvailableWidth * 0.18f, 170f, 240f))))
-                {
-                    _domainScroll = EditorGUILayout.BeginScrollView(_domainScroll);
-                    foreach (ProjectFeatureDomain domain in domains)
-                    {
-                        if (EditorUiGUILayout.SelectionButton(
-                                new GUIContent(domain.DisplayName, domain.Summary),
-                                domain.Id == _selectedDomainId,
-                                GUILayout.ExpandWidth(true),
-                                GUILayout.Height(34f)))
-                        {
-                            SelectDomain(domain.Id);
-                        }
-                    }
-                    EditorGUILayout.EndScrollView();
-                }
-
-                GUILayout.Space(8f);
-                ProjectFeatureDomain selectedDomain = domains.First(domain => domain.Id == _selectedDomainId);
-                ProjectFeature[] features = VisibleFeatures(selectedDomain).ToArray();
-                using (new EditorGUILayout.VerticalScope(GUILayout.Width(Mathf.Clamp(context.AvailableWidth * 0.28f, 230f, 360f))))
-                {
-                    EditorUiGUILayout.SectionHeader(selectedDomain.DisplayName);
-                    EditorGUILayout.LabelField(selectedDomain.Summary, EditorStyles.wordWrappedMiniLabel);
-                    EditorGUILayout.Space(4f);
-                    _featureScroll = EditorGUILayout.BeginScrollView(_featureScroll);
-                    DrawFeatureButtons(features);
-                    EditorGUILayout.EndScrollView();
-                }
-
-                GUILayout.Space(8f);
-                using (new EditorGUILayout.VerticalScope(GUILayout.ExpandWidth(true)))
-                {
-                    _detailScroll = EditorGUILayout.BeginScrollView(_detailScroll);
-                    DrawSelectedFeature(context, features);
-                    EditorGUILayout.EndScrollView();
-                }
-            }
-        }
-
-        private void DrawFeaturePicker(ProjectFeature[] features)
-        {
-            if (features.Length == 0)
-            {
-                EditorUiGUILayout.EmptyState("这个领域没有符合筛选的功能。");
+                DrawThreeColumnBodyLayout(context, bodyRect, domains);
                 return;
             }
-            EnsureFeatureSelection(features);
-            string[] labels = features.Select(feature => feature.DisplayName).ToArray();
-            int featureIndex = Math.Max(0, Array.FindIndex(features, feature => feature.Id == _selectedFeatureId));
-            int nextFeature = EditorGUILayout.Popup("功能", featureIndex, labels);
-            if (nextFeature != featureIndex)
-                SelectFeature(features[nextFeature].Id);
+
+            var contentRect = new Rect(0f, 0f, contentWidth, bodyRect.height);
+            _bodyHorizontalScroll = GUI.BeginScrollView(
+                bodyRect,
+                _bodyHorizontalScroll,
+                contentRect,
+                false,
+                false);
+            DrawThreeColumnBodyLayout(context, contentRect, domains);
+            GUI.EndScrollView();
+        }
+
+        private static float ResolveBodyContentWidth(float bodyWidth)
+        {
+            return Mathf.Max(bodyWidth, ThreeColumnMinContentWidth);
+        }
+
+        private void DrawThreeColumnBodyLayout(
+            EditorWorkspacePanelContext context,
+            Rect bodyRect,
+            ProjectFeatureDomain[] domains)
+        {
+            BodyLayoutRects layoutRects = CalculateBodyLayoutRects(bodyRect);
+            DrawDomainColumn(layoutRects.DomainColumn, domains);
+            DrawColumnResizeHandle(
+                context,
+                layoutRects.DomainSplitter,
+                ref _domainColumnWidth,
+                DomainColumnWidthStateKey,
+                MinDomainColumnWidth,
+                bodyRect.width - _featureColumnWidth - SplitterWidth * 2f - MinDetailColumnWidth);
+
+            ProjectFeatureDomain selectedDomain = domains.First(domain => domain.Id == _selectedDomainId);
+            ProjectFeature[] features = VisibleFeatures(selectedDomain).ToArray();
+            DrawFeatureColumn(layoutRects.FeatureColumn, selectedDomain, features);
+            DrawColumnResizeHandle(
+                context,
+                layoutRects.FeatureSplitter,
+                ref _featureColumnWidth,
+                FeatureColumnWidthStateKey,
+                MinFeatureColumnWidth,
+                bodyRect.width - _domainColumnWidth - SplitterWidth * 2f - MinDetailColumnWidth);
+            DrawDetailColumn(context, layoutRects.DetailColumn, features);
+        }
+
+        private BodyLayoutRects CalculateBodyLayoutRects(Rect bodyRect)
+        {
+            float maxDomainWidth = Mathf.Max(
+                MinDomainColumnWidth,
+                bodyRect.width - _featureColumnWidth - SplitterWidth * 2f - MinDetailColumnWidth);
+            float resolvedDomainWidth = Mathf.Clamp(
+                _domainColumnWidth,
+                MinDomainColumnWidth,
+                Mathf.Min(MaxNavigationColumnWidth, maxDomainWidth));
+            float maxFeatureWidth = Mathf.Max(
+                MinFeatureColumnWidth,
+                bodyRect.width - resolvedDomainWidth - SplitterWidth * 2f - MinDetailColumnWidth);
+            float resolvedFeatureWidth = Mathf.Clamp(
+                _featureColumnWidth,
+                MinFeatureColumnWidth,
+                Mathf.Min(MaxNavigationColumnWidth, maxFeatureWidth));
+            float detailWidth = Mathf.Max(
+                0f,
+                bodyRect.width - resolvedDomainWidth - resolvedFeatureWidth - SplitterWidth * 2f);
+
+            var domainColumn = new Rect(bodyRect.x, bodyRect.y, resolvedDomainWidth, bodyRect.height);
+            var domainSplitter = new Rect(domainColumn.xMax, bodyRect.y, SplitterWidth, bodyRect.height);
+            var featureColumn = new Rect(domainSplitter.xMax, bodyRect.y, resolvedFeatureWidth, bodyRect.height);
+            var featureSplitter = new Rect(featureColumn.xMax, bodyRect.y, SplitterWidth, bodyRect.height);
+            var detailColumn = new Rect(featureSplitter.xMax, bodyRect.y, detailWidth, bodyRect.height);
+            return new BodyLayoutRects(domainColumn, domainSplitter, featureColumn, featureSplitter, detailColumn);
+        }
+
+        private void DrawDomainColumn(Rect rect, ProjectFeatureDomain[] domains)
+        {
+            GUILayout.BeginArea(rect);
+            using (new EditorGUILayout.VerticalScope(EditorStyles.helpBox, GUILayout.ExpandWidth(true), GUILayout.ExpandHeight(true)))
+            {
+                EditorGUILayout.LabelField("项目领域", EditorStyles.boldLabel);
+                EditorGUILayout.LabelField("按项目工作分类", EditorStyles.wordWrappedMiniLabel);
+                EditorGUILayout.Space(4f);
+                _domainScroll = EditorGUILayout.BeginScrollView(_domainScroll);
+                foreach (ProjectFeatureDomain domain in domains)
+                {
+                    if (EditorUiGUILayout.SelectionButton(
+                            new GUIContent(domain.DisplayName, domain.Summary),
+                            domain.Id == _selectedDomainId,
+                            GUILayout.ExpandWidth(true),
+                            GUILayout.Height(34f)))
+                    {
+                        SelectDomain(domain.Id);
+                    }
+                }
+                EditorGUILayout.EndScrollView();
+            }
+            GUILayout.EndArea();
+        }
+
+        private void DrawFeatureColumn(Rect rect, ProjectFeatureDomain selectedDomain, ProjectFeature[] features)
+        {
+            GUILayout.BeginArea(rect);
+            using (new EditorGUILayout.VerticalScope(EditorStyles.helpBox, GUILayout.ExpandWidth(true), GUILayout.ExpandHeight(true)))
+            {
+                EditorGUILayout.LabelField(selectedDomain.DisplayName, EditorStyles.boldLabel);
+                EditorGUILayout.LabelField(selectedDomain.Summary, EditorStyles.wordWrappedMiniLabel);
+                EditorGUILayout.Space(4f);
+                _featureScroll = EditorGUILayout.BeginScrollView(_featureScroll);
+                DrawFeatureButtons(features);
+                EditorGUILayout.EndScrollView();
+            }
+            GUILayout.EndArea();
+        }
+
+        private void DrawDetailColumn(EditorWorkspacePanelContext context, Rect rect, ProjectFeature[] features)
+        {
+            GUILayout.BeginArea(rect);
+            using (new EditorGUILayout.VerticalScope(EditorStyles.helpBox, GUILayout.ExpandWidth(true), GUILayout.ExpandHeight(true)))
+            {
+                EditorGUILayout.LabelField("功能详情与入口", EditorStyles.boldLabel);
+                _detailScroll = EditorGUILayout.BeginScrollView(_detailScroll);
+                DrawSelectedFeature(context, features);
+                EditorGUILayout.EndScrollView();
+            }
+            GUILayout.EndArea();
+        }
+
+        private void DrawColumnResizeHandle(
+            EditorWorkspacePanelContext context,
+            Rect rect,
+            ref float width,
+            string prefsKey,
+            float minWidth,
+            float maxWidthByLayout)
+        {
+            EditorGUI.DrawRect(
+                new Rect(rect.x + 2f, rect.y, 1f, rect.height),
+                new Color(0.28f, 0.28f, 0.28f, 1f));
+            EditorGUIUtility.AddCursorRect(rect, MouseCursor.ResizeHorizontal);
+
+            Event currentEvent = Event.current;
+            if (currentEvent.type == EventType.MouseDown && rect.Contains(currentEvent.mousePosition))
+            {
+                _activeResizeKey = prefsKey;
+                currentEvent.Use();
+            }
+
+            if (_activeResizeKey == prefsKey && currentEvent.type == EventType.MouseDrag)
+            {
+                float maxWidth = Mathf.Max(minWidth, Mathf.Min(MaxNavigationColumnWidth, maxWidthByLayout));
+                width = Mathf.Clamp(width + currentEvent.delta.x, minWidth, maxWidth);
+                context.RequestRepaint();
+                currentEvent.Use();
+            }
+
+            if (_activeResizeKey == prefsKey && currentEvent.rawType == EventType.MouseUp)
+            {
+                _activeResizeKey = null;
+                EditorPrefs.SetFloat(prefsKey, Mathf.Clamp(width, minWidth, MaxNavigationColumnWidth));
+                currentEvent.Use();
+            }
         }
 
         private void DrawFeatureButtons(ProjectFeature[] features)
@@ -437,6 +569,15 @@ namespace ZeroEngine.ProjectAtlas
             _domainScroll = LoadVector("DomainScroll");
             _featureScroll = LoadVector("FeatureScroll");
             _detailScroll = LoadVector("DetailScroll");
+            _bodyHorizontalScroll = LoadVector("BodyHorizontalScroll");
+            _domainColumnWidth = Mathf.Clamp(
+                EditorPrefs.GetFloat(DomainColumnWidthStateKey, DefaultDomainColumnWidth),
+                MinDomainColumnWidth,
+                MaxNavigationColumnWidth);
+            _featureColumnWidth = Mathf.Clamp(
+                EditorPrefs.GetFloat(FeatureColumnWidthStateKey, DefaultFeatureColumnWidth),
+                MinFeatureColumnWidth,
+                MaxNavigationColumnWidth);
         }
 
         private void SaveState()
@@ -448,6 +589,13 @@ namespace ZeroEngine.ProjectAtlas
             SaveVector("DomainScroll", _domainScroll);
             SaveVector("FeatureScroll", _featureScroll);
             SaveVector("DetailScroll", _detailScroll);
+            SaveVector("BodyHorizontalScroll", _bodyHorizontalScroll);
+            EditorPrefs.SetFloat(
+                DomainColumnWidthStateKey,
+                Mathf.Clamp(_domainColumnWidth, MinDomainColumnWidth, MaxNavigationColumnWidth));
+            EditorPrefs.SetFloat(
+                FeatureColumnWidthStateKey,
+                Mathf.Clamp(_featureColumnWidth, MinFeatureColumnWidth, MaxNavigationColumnWidth));
         }
 
         private static Vector2 LoadVector(string key)

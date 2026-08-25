@@ -113,7 +113,7 @@ $expectedPackages = [ordered]@{
     'com.zerogamestudio.zeroengine.formula' = '0.6.0'
     'com.zerogamestudio.zeroengine.feedback' = '1.0.2'
     'com.zerogamestudio.zeroengine.modsystem' = '0.3.0'
-    'com.zerogamestudio.zeroengine.project-atlas' = '1.1.0'
+    'com.zerogamestudio.zeroengine.project-atlas' = '1.1.1'
     'com.zerogamestudio.zeroengine.tce' = '0.2.1'
     'com.zerogamestudio.zeroengine.ui' = '2.2.1'
 }

@@ -1,10 +1,11 @@
 # 项目功能工作台：面向项目人员的功能导航与配置直达
 
-- 状态：Implemented（As-Built 与终审完成；正式 Git / pin / POB SCM 收尾已授权并执行中）
-- 最后更新：2026-08-24
-- 已检查基线：Project Atlas `1.1.0`、Dashboard `4.7.0`、editor-ui `1.5.0`、P5 当前功能目录与 15 个项目面板
+- 状态：Implemented（2026-08-25 DataManager 式三栏修订已实现并通过自动验证；新版本正式 Git / pin / SCM 收尾待执行）
+- 最后更新：2026-08-25
+- 已检查基线：ZeroEngine commit `4797ab9f6309e1b0fa32741dcf6df0801425d82f`；Project Atlas `1.1.0`、Dashboard `4.7.0`、editor-ui `1.5.0`、Data Toolkit `2.1.1` 的三栏数据管理布局、P5 当前功能目录与 15 个项目面板
 - 设计批准：Approved；用户于 2026-08-24 回复“自审修订spec好了就开干”
 - 执行授权：Authorized；范围为本 Spec 的本地实现、迁移、自审与验证
+- 本轮布局批准：Approved；用户于 2026-08-25 确认采用 DataManager 相同布局结构，并明确指出下拉导航不直观
 - 终端操作授权：Authorized；2026-08-24 用户要求完成 ZE Git commit / push、P5 / POB 正式 pin 与 POB Packages 两文件 Plastic checkin
 - 关系：本 Spec 覆盖并替代《ZeroEngine Project Atlas：跨项目系统图谱与程序 / Agent 路由》中“同一图谱三种 UI 视图”和“项目图谱面板信息架构”的产品设计；原 Spec 的技术目录、覆盖门、生成文档、Agent 合同、唯一 `ZGS/工作台` 入口和安全边界继续有效。
 
@@ -118,23 +119,22 @@ Dashboard 选择已有 owner panel
 
 ### 默认布局
 
-标准 / 宽窗口：
+所有窗口宽度使用同一套 DataManager 式三栏导航；标准 / 宽窗口直接铺满可用宽度：
 
 ```text
-┌──────────────────────────────────────────────────────────────┐
-│ 项目功能    [搜索功能或工作内容]     [我的岗位：全部 ▼]       │
-├──────────────┬───────────────────────────────────────────────┤
-│ 角色         │ 角色与成长                                   │
-│ 世界与地图   │                                               │
-│ 战斗         │ [角色档案与队伍] [属性与装备] [武学与技能]     │
-│ 任务与叙事   │ [经脉成长]       [敌人与 AI]                  │
-│ 物品与经济   │                                               │
-│ UI 与表现    │ 选中功能后：用途 / 可以做什么 / 入口状态       │
-│ 进度与发行   │ [打开配置] [预览效果] [运行检查] [查看说明]    │
-└──────────────┴───────────────────────────────────────────────┘
+┌──────────────────────────────────────────────────────────────────────┐
+│ 项目功能    [搜索功能或工作内容]     [我的岗位：全部 ▼]       [刷新] │
+├──────────────┬──────────────────────┬────────────────────────────────┤
+│ 项目领域     │ 具体功能             │ 功能详情与入口                 │
+│ 角色与成长   │ 角色档案与队伍       │ 用途、适用岗位、配置状态       │
+│ 世界与地图   │ 属性与装备           │ 可以做什么                     │
+│ 战斗         │ 武学与技能           │ [打开配置] [预览] [检查] [说明]│
+│ 任务与叙事   │ 经脉成长             │                                │
+│ ……           │ 敌人与 AI            │                                │
+└──────────────┴──────────────────────┴────────────────────────────────┘
 ```
 
-紧凑窗口把领域侧栏改为顶部选择器，功能卡与详情改为单列；不隐藏主要动作。详情内可使用“功能概览 / 配置与内容 / 检查与预览”三个任务页签，这些页签属于同一个功能详情，不是程序 / Agent 视图。
+三栏均有明确边框、固定标题、独立滚动和稳定选中态；领域列与功能列之间可拖动调整宽度，并通过 EditorPrefs 恢复。紧凑窗口不再把领域或功能折叠为下拉，也不切换成另一套信息结构；当可用宽度小于三栏最小宽度时，主体使用横向滚动完整保留三栏和主要动作。Project Atlas 复用 DataManager 的布局结构和交互习惯，但不依赖 Data Toolkit 包，数据与 typed route 所有权仍在 Project Atlas。
 
 ### 搜索与岗位筛选
 
@@ -276,6 +276,7 @@ Dashboard 实现 route navigator、返回上下文和 EditorPrefs 状态保存�
 - 打开项目功能、选择领域、切换功能、执行 navigation、返回历史均不得产生 Plastic pending。
 - 固定界面文案使用简体中文；状态不能仅用颜色；键盘可到达搜索、领域、功能、页签和主要动作。
 - 长中文和禁用原因自动换行；技术 ID 不挤占普通布局。
+- 420 / 760 / 960 / 1440 point 均保持“领域 → 功能 → 详情与入口”可见结构；不得以 Popup / 下拉替代领域或功能导航。
 - 项目功能数据不得包含个人姓名、凭据、绝对路径或生产配置值。
 
 ## 精确影响范围
@@ -361,7 +362,7 @@ POB 使用自己的领域名称和 route provider，通过同一 schema、面板
 10. 目标 panel 的 project-write / destructive 确认保持原强度，功能目录不能覆盖其安全等级。
 11. 技术 Project Atlas coverage / freshness、Dashboard、editor-ui、P5 菜单唯一性和现有项目面板测试均不回退。
 12. POB 在不复制 P5 功能和不向 ZE 加项目特判的情况下通过同一 feature / route 合同。
-13. 响应式与人工场景验证证明项目人员能从功能语言直达角色、地图、叙事和经济配置，普通 UI 不泄漏技术分类。
+13. 420 / 760 / 960 / 1440 point 均使用 DataManager 式三栏；窄窗口通过横向滚动保持领域、功能、详情与主要动作可达，不出现领域或功能下拉。响应式与人工场景验证证明项目人员能从功能语言直达角色、地图、叙事和经济配置，普通 UI 不泄漏技术分类。
 14. 实现后本 Spec 更新为 As-Built，记录实际 routes、deep links、测试、视觉证据、发布 / pin / SCM 状态和剩余人工验收。
 
 ## 显式需求映射
@@ -378,6 +379,9 @@ POB 使用自己的领域名称和 route provider，通过同一 schema、面板
 
 ## As-Built（2026-08-24）
 
+- 2026-08-25 布局修订：Project Atlas 已升为 `1.1.1`；`ProjectAtlasWorkspacePanel` 已统一为 DataManager 式三栏，领域、功能、详情分别使用有边框的独立滚动区；两条分隔线可拖动并通过 EditorPrefs 恢复。原 `DrawCompact` / `DrawFeaturePicker` 下拉路径已删除，420 point 等窄宽度改用主体横向滚动保留三栏。
+- 本轮新增精确回归 `WorkspacePanel_NarrowWidth_PreservesThreeColumnsWithoutDropdownNavigation`，在 Router 注册的临时 Unity `6000.3.10f1` 工程中 `1/1` 通过；完整 `ZeroEngine.ProjectAtlas.Tests.Editor` 为 `35/35` 通过，CLI 退出码 0、Unity log 无编译或基础设施错误。证据分别位于 `C:\Users\2025\AppData\Local\Temp\ZGSAgentTestResults\ProjectAtlasThreeColumnExact-20260825-01` 与 `C:\Users\2025\AppData\Local\Temp\ZGSAgentTestResults\ProjectAtlasThreeColumnAssembly-20260825-01`。
+- 验证期间 P5 仅把 Project Atlas 临时切到本地源码；验证后 manifest / lock 已逐字段恢复到正式 Git commit `4797ab9f6309e1b0fa32741dcf6df0801425d82f`，没有遗留本机 `file:`。本轮布局尚未形成新的 Git commit，P5 / POB 因而尚未 pin 到本轮代码。
 - editor-ui 已提供 typed `EditorWorkspaceRoute`、来源上下文、route navigator / receiver 与 action 工厂；Dashboard 已承载 panel 切换、可选 deep link、来源面包屑、返回项目功能、状态恢复和未知 route fail-closed。
 - Project Atlas `1.1.0` 已新增严格的人类功能目录 loader / validator / route provider 合同；工作台面板仅显示岗位、领域、功能、能力、配置状态和工作动作，不再展示程序集、包、Agent 合同与技术图谱。
 - P5 已落地 7 个领域、34 个功能、33 个唯一动作 route；世界编制 owner 支持 `world-structure`、`area-scenes`、`map-navigation` 三个 deep link；技术索引由受控 CLI 命令 `p5_project_atlas_generate_index` 生成。
@@ -386,7 +390,7 @@ POB 使用自己的领域名称和 route provider，通过同一 schema、面板
 - P5 人工场景已验证项目人员视图、角色 / 世界功能、世界 deep link、来源面包屑和返回原功能。用户随后要求只用 CLI，因此后续验证未再操作界面。
 - POB 路由编译于 18:17:57 得到 `Tundra build success`、程序集重载完成且无编译错误；随后增强后的精确测试在 Uloop `run-tests` 等待 185 秒后超时，且没有生成新的 TestResults XML，已按路由协议恢复为基础设施失败，不能声明该轮 Unity 测试通过。此前较弱版本的功能目录精确用例已有 1/1 通过证据，但不能代替增强用例。
 - 终审补充修复了三个以上 provider 重复声明同一 routeId 时第三个声明可能重新进入目录的问题；重复 ID 现在永久隔离，任意数量重复声明均 fail closed，新增用例已包含在功能目录 `12/12` 中。
-- 当前 P5 / POB 为本地 `file:` 包 pin，正好对应本次已测 ZE worktree；本次正式收尾必须把二者原子切到同一已推送 Git commit，不允许交付 `file:`。
+- 上轮正式收尾已把 P5 / POB 的 Project Atlas、Dashboard 与 editor-ui 恢复到 commit `4797ab9f6309e1b0fa32741dcf6df0801425d82f`；POB 对应 Project Atlas pin 已进入 Plastic `cs:17000`。本轮三栏修订发布时仍必须把消费端原子切到同一新 commit，不允许交付 `file:`。
 
 ## 自审与推荐结论
 

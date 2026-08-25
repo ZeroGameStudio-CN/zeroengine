@@ -1,6 +1,6 @@
 {
   "name": "com.zerogamestudio.zeroengine.project-atlas",
-  "version": "1.1.0",
+  "version": "1.1.1",
   "displayName": "ZeroEngine Project Atlas",
   "description": "跨项目的人类功能导航，以及独立的技术目录、覆盖与文档投影合同。",
   "unity": "2022.3",
