@@ -4,6 +4,7 @@ using System.IO;
 using System.Linq;
 using System.Reflection;
 using NUnit.Framework;
+using UnityEngine;
 using ZeroEngine.EditorUI;
 
 namespace ZeroEngine.ProjectAtlas.Tests
@@ -340,6 +341,26 @@ namespace ZeroEngine.ProjectAtlas.Tests
                 panelType.GetMethod("DrawFeaturePicker", BindingFlags.Instance | BindingFlags.NonPublic),
                 Is.Null,
                 "功能导航不得恢复为 Popup picker。");
+            Assert.That(
+                panelType.GetMethod("DrawHeader", BindingFlags.Instance | BindingFlags.NonPublic),
+                Is.Null,
+                "工作台宿主已经显示面板名称，内容区不得再重复绘制“项目功能”标题。");
+
+            MethodInfo buildTitleRect = panelType.GetMethod(
+                "BuildFeatureRowTitleRect",
+                BindingFlags.Static | BindingFlags.NonPublic);
+            MethodInfo buildStatusRect = panelType.GetMethod(
+                "BuildFeatureRowStatusRect",
+                BindingFlags.Static | BindingFlags.NonPublic);
+            Assert.That(buildTitleRect, Is.Not.Null);
+            Assert.That(buildStatusRect, Is.Not.Null);
+
+            var rowRect = new Rect(0f, 0f, 220f, 34f);
+            var titleRect = (Rect)buildTitleRect.Invoke(null, new object[] { rowRect });
+            var statusRect = (Rect)buildStatusRect.Invoke(null, new object[] { rowRect });
+            Assert.That(titleRect.xMax, Is.LessThanOrEqualTo(statusRect.xMin));
+            Assert.That(titleRect.y, Is.EqualTo(statusRect.y));
+            Assert.That(titleRect.height, Is.EqualTo(statusRect.height));
 
             panel.Dispose();
         }

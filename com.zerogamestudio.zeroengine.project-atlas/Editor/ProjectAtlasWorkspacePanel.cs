@@ -31,6 +31,8 @@ namespace ZeroEngine.ProjectAtlas
         private const float MaxNavigationColumnWidth = 520f;
         private const float MinDetailColumnWidth = 320f;
         private const float SplitterWidth = 5f;
+        private const float FeatureRowHeight = 34f;
+        private const float FeatureStatusWidth = 76f;
         private const float ThreeColumnMinContentWidth =
             MinDomainColumnWidth + MinFeatureColumnWidth + MinDetailColumnWidth + SplitterWidth * 2f;
         private const string DomainColumnWidthStateKey = StatePrefix + "DomainColumnWidth";
@@ -93,7 +95,7 @@ namespace ZeroEngine.ProjectAtlas
             if (_catalog == null)
                 Reload();
 
-            DrawHeader(context);
+            DrawPanelIntro(context);
             if (!string.IsNullOrEmpty(_operationMessage))
                 EditorGUILayout.HelpBox(_operationMessage, _operationMessageType);
             if (_catalog == null || _catalog.Domains.Count == 0)
@@ -136,20 +138,26 @@ namespace ZeroEngine.ProjectAtlas
             SaveState();
         }
 
-        private void DrawHeader(EditorWorkspacePanelContext context)
+        private void DrawPanelIntro(EditorWorkspacePanelContext context)
         {
-            EditorUiGUILayout.CompactHeader(
-                "项目功能",
-                "按角色、地图、战斗、任务等项目工作查找配置、预览与检查入口。",
-                null,
-                () => context.DrawAction(new EditorWorkspaceAction(
+            using (new EditorGUILayout.HorizontalScope())
+            {
+                EditorGUILayout.LabelField(
+                    "按领域和功能查找项目配置、预览与检查入口。",
+                    EditorStyles.wordWrappedMiniLabel);
+                GUILayout.FlexibleSpace();
+                context.DrawAction(new EditorWorkspaceAction(
                     new GUIContent("刷新", "重新读取项目功能目录；不会修改项目内容。"),
                     () =>
                     {
                         Reload();
                         context.RequestRepaint();
                     },
-                    EditorWorkspaceActionSafety.ReadOnly)));
+                    EditorWorkspaceActionSafety.ReadOnly),
+                    GUILayout.Width(52f),
+                    GUILayout.Height(22f));
+            }
+            EditorGUILayout.Space(4f);
         }
 
         private void DrawSearchAndAudience()
@@ -278,8 +286,8 @@ namespace ZeroEngine.ProjectAtlas
             GUILayout.BeginArea(rect);
             using (new EditorGUILayout.VerticalScope(EditorStyles.helpBox, GUILayout.ExpandWidth(true), GUILayout.ExpandHeight(true)))
             {
-                EditorGUILayout.LabelField("项目领域", EditorStyles.boldLabel);
-                EditorGUILayout.LabelField("按项目工作分类", EditorStyles.wordWrappedMiniLabel);
+                EditorGUILayout.LabelField("工作领域", EditorStyles.boldLabel);
+                EditorGUILayout.LabelField("先选择要处理的项目领域", EditorStyles.wordWrappedMiniLabel);
                 EditorGUILayout.Space(4f);
                 _domainScroll = EditorGUILayout.BeginScrollView(_domainScroll);
                 foreach (ProjectFeatureDomain domain in domains)
@@ -318,7 +326,7 @@ namespace ZeroEngine.ProjectAtlas
             GUILayout.BeginArea(rect);
             using (new EditorGUILayout.VerticalScope(EditorStyles.helpBox, GUILayout.ExpandWidth(true), GUILayout.ExpandHeight(true)))
             {
-                EditorGUILayout.LabelField("功能详情与入口", EditorStyles.boldLabel);
+                EditorGUILayout.LabelField("功能说明与入口", EditorStyles.boldLabel);
                 _detailScroll = EditorGUILayout.BeginScrollView(_detailScroll);
                 DrawSelectedFeature(context, features);
                 EditorGUILayout.EndScrollView();
@@ -372,16 +380,68 @@ namespace ZeroEngine.ProjectAtlas
             EnsureFeatureSelection(features);
             foreach (ProjectFeature feature in features)
             {
-                string status = ConfigurationStatus(feature);
-                if (EditorUiGUILayout.SelectionButton(
-                        new GUIContent(feature.DisplayName + "\n" + status, feature.Summary),
-                        feature.Id == _selectedFeatureId,
-                        GUILayout.ExpandWidth(true),
-                        GUILayout.Height(48f)))
+                if (DrawFeatureRow(
+                        feature.DisplayName,
+                        ConfigurationStatus(feature),
+                        feature.Summary,
+                        feature.Id == _selectedFeatureId))
                 {
                     SelectFeature(feature.Id);
                 }
             }
+        }
+
+        private static bool DrawFeatureRow(string title, string status, string tooltip, bool selected)
+        {
+            Rect rect = GUILayoutUtility.GetRect(1f, FeatureRowHeight, GUILayout.ExpandWidth(true));
+            Event currentEvent = Event.current;
+            bool hovered = rect.Contains(currentEvent.mousePosition);
+
+            if (currentEvent.type == EventType.Repaint)
+            {
+                if (selected)
+                    EditorGUI.DrawRect(rect, new Color(0.24f, 0.42f, 0.72f, 0.35f));
+                else if (hovered)
+                    EditorGUI.DrawRect(rect, new Color(1f, 1f, 1f, 0.06f));
+
+                var titleStyle = new GUIStyle(EditorStyles.label)
+                {
+                    alignment = TextAnchor.MiddleLeft,
+                    clipping = TextClipping.Clip
+                };
+                titleStyle.normal.textColor = selected ? Color.white : EditorStyles.label.normal.textColor;
+                GUI.Label(BuildFeatureRowTitleRect(rect), title, titleStyle);
+
+                var statusStyle = new GUIStyle(EditorStyles.miniLabel)
+                {
+                    alignment = TextAnchor.MiddleRight,
+                    clipping = TextClipping.Clip
+                };
+                statusStyle.normal.textColor = selected
+                    ? new Color(0.9f, 0.95f, 1f, 1f)
+                    : EditorStyles.miniLabel.normal.textColor;
+                GUI.Label(BuildFeatureRowStatusRect(rect), status, statusStyle);
+            }
+
+            return GUI.Button(rect, new GUIContent(string.Empty, tooltip), GUIStyle.none);
+        }
+
+        private static Rect BuildFeatureRowTitleRect(Rect rect)
+        {
+            return new Rect(
+                rect.x + 8f,
+                rect.y + 2f,
+                Mathf.Max(0f, rect.width - FeatureStatusWidth - 18f),
+                rect.height - 4f);
+        }
+
+        private static Rect BuildFeatureRowStatusRect(Rect rect)
+        {
+            return new Rect(
+                rect.xMax - FeatureStatusWidth - 8f,
+                rect.y + 2f,
+                FeatureStatusWidth,
+                rect.height - 4f);
         }
 
         private void DrawSelectedFeature(EditorWorkspacePanelContext context, ProjectFeature[] visibleFeatures)
@@ -394,21 +454,20 @@ namespace ZeroEngine.ProjectAtlas
             }
 
             EditorUiGUILayout.Header(feature.DisplayName, feature.Summary, null);
-            using (new EditorGUILayout.HorizontalScope())
-            {
-                EditorUiGUILayout.Chip(ConfigurationStatus(feature));
-                foreach (string audience in feature.AudienceTags)
-                    EditorUiGUILayout.Chip(audience);
-            }
+            EditorUiGUILayout.Chip(ConfigurationStatus(feature));
+            if (feature.AudienceTags.Count > 0)
+                EditorGUILayout.LabelField(
+                    "适用岗位：" + string.Join("、", feature.AudienceTags),
+                    EditorStyles.wordWrappedMiniLabel);
             EditorGUILayout.Space(6f);
 
-            using (EditorUiGUILayout.Section("可以做什么"))
+            using (EditorUiGUILayout.Section("可完成的工作"))
             {
                 foreach (string capability in feature.Capabilities)
                     EditorGUILayout.LabelField("• " + capability, EditorStyles.wordWrappedLabel);
             }
 
-            using (EditorUiGUILayout.Section("配置与入口"))
+            using (EditorUiGUILayout.Section("直接入口"))
             {
                 if (feature.ConfigurationMode == ProjectFeatureConfigurationMode.None)
                     EditorGUILayout.HelpBox(feature.ConfigurationReason, MessageType.Info);
@@ -517,8 +576,8 @@ namespace ZeroEngine.ProjectAtlas
             switch (feature.ConfigurationMode)
             {
                 case ProjectFeatureConfigurationMode.Configurable: return "可配置";
-                case ProjectFeatureConfigurationMode.ReadOnly: return "仅查看 / 检查";
-                default: return "暂无日常配置";
+                case ProjectFeatureConfigurationMode.ReadOnly: return "仅查看";
+                default: return "无配置入口";
             }
         }
 

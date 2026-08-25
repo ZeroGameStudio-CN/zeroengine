@@ -1,6 +1,6 @@
 # 项目功能工作台：面向项目人员的功能导航与配置直达
 
-- 状态：Implemented（2026-08-25 DataManager 式三栏修订已实现并通过自动验证；新版本正式 Git / pin / SCM 收尾待执行）
+- 状态：Implemented（2026-08-25 DataManager 式三栏已实现；截图验收发现的叠字、裁切和重复标题已纳入 1.1.2 可读性修订）
 - 最后更新：2026-08-25
 - 已检查基线：ZeroEngine commit `4797ab9f6309e1b0fa32741dcf6df0801425d82f`；Project Atlas `1.1.0`、Dashboard `4.7.0`、editor-ui `1.5.0`、Data Toolkit `2.1.1` 的三栏数据管理布局、P5 当前功能目录与 15 个项目面板
 - 设计批准：Approved；用户于 2026-08-24 回复“自审修订spec好了就开干”
@@ -379,9 +379,10 @@ POB 使用自己的领域名称和 route provider，通过同一 schema、面板
 
 ## As-Built（2026-08-24）
 
+- 2026-08-25 截图验收修订：Project Atlas 升为 `1.1.2`。功能列表改用与 DataManager 一致的单行可选项，功能名左对齐、配置状态右对齐并保留整行选中态；详情区岗位改为可换行说明，移除工作台宿主下重复的“项目功能”标题，栏目文案收敛为“工作领域 / 功能说明与入口 / 可完成的工作 / 直接入口”。新增矩形回归证明最小功能列宽下标题与状态互不重叠；P5 正式 Unity Editor 内本地源码验收精确回归 `1/1`、完整 Project Atlas 测试 `35/35` 通过。
 - 2026-08-25 布局修订：Project Atlas 已升为 `1.1.1`；`ProjectAtlasWorkspacePanel` 已统一为 DataManager 式三栏，领域、功能、详情分别使用有边框的独立滚动区；两条分隔线可拖动并通过 EditorPrefs 恢复。原 `DrawCompact` / `DrawFeaturePicker` 下拉路径已删除，420 point 等窄宽度改用主体横向滚动保留三栏。
 - 本轮新增精确回归 `WorkspacePanel_NarrowWidth_PreservesThreeColumnsWithoutDropdownNavigation`，在 Router 注册的临时 Unity `6000.3.10f1` 工程中 `1/1` 通过；完整 `ZeroEngine.ProjectAtlas.Tests.Editor` 为 `35/35` 通过，CLI 退出码 0、Unity log 无编译或基础设施错误。证据分别位于 `C:\Users\2025\AppData\Local\Temp\ZGSAgentTestResults\ProjectAtlasThreeColumnExact-20260825-01` 与 `C:\Users\2025\AppData\Local\Temp\ZGSAgentTestResults\ProjectAtlasThreeColumnAssembly-20260825-01`。
-- 验证期间 P5 仅把 Project Atlas 临时切到本地源码；验证后 manifest / lock 已逐字段恢复到正式 Git commit `4797ab9f6309e1b0fa32741dcf6df0801425d82f`，没有遗留本机 `file:`。本轮布局尚未形成新的 Git commit，P5 / POB 因而尚未 pin 到本轮代码。
+- 三栏首版已形成正式 Git commit `a46a9c6df0f55300f46443dae44e0777055d1eec`，P5 的 Project Atlas、Dashboard 与 editor-ui 已原子 pin 到该 commit 并完成 Unity 验收；POB 按用户要求暂不变更，仍保留 `4797ab9f6309e1b0fa32741dcf6df0801425d82f`，等待 P5 人工验收后再同步。
 - editor-ui 已提供 typed `EditorWorkspaceRoute`、来源上下文、route navigator / receiver 与 action 工厂；Dashboard 已承载 panel 切换、可选 deep link、来源面包屑、返回项目功能、状态恢复和未知 route fail-closed。
 - Project Atlas `1.1.0` 已新增严格的人类功能目录 loader / validator / route provider 合同；工作台面板仅显示岗位、领域、功能、能力、配置状态和工作动作，不再展示程序集、包、Agent 合同与技术图谱。
 - P5 已落地 7 个领域、34 个功能、33 个唯一动作 route；世界编制 owner 支持 `world-structure`、`area-scenes`、`map-navigation` 三个 deep link；技术索引由受控 CLI 命令 `p5_project_atlas_generate_index` 生成。
@@ -390,7 +391,7 @@ POB 使用自己的领域名称和 route provider，通过同一 schema、面板
 - P5 人工场景已验证项目人员视图、角色 / 世界功能、世界 deep link、来源面包屑和返回原功能。用户随后要求只用 CLI，因此后续验证未再操作界面。
 - POB 路由编译于 18:17:57 得到 `Tundra build success`、程序集重载完成且无编译错误；随后增强后的精确测试在 Uloop `run-tests` 等待 185 秒后超时，且没有生成新的 TestResults XML，已按路由协议恢复为基础设施失败，不能声明该轮 Unity 测试通过。此前较弱版本的功能目录精确用例已有 1/1 通过证据，但不能代替增强用例。
 - 终审补充修复了三个以上 provider 重复声明同一 routeId 时第三个声明可能重新进入目录的问题；重复 ID 现在永久隔离，任意数量重复声明均 fail closed，新增用例已包含在功能目录 `12/12` 中。
-- 上轮正式收尾已把 P5 / POB 的 Project Atlas、Dashboard 与 editor-ui 恢复到 commit `4797ab9f6309e1b0fa32741dcf6df0801425d82f`；POB 对应 Project Atlas pin 已进入 Plastic `cs:17000`。本轮三栏修订发布时仍必须把消费端原子切到同一新 commit，不允许交付 `file:`。
+- POB 对应旧版 Project Atlas pin 已进入 Plastic `cs:17000`。后续同步必须在 POB 内把 Project Atlas、Dashboard 与 editor-ui 原子切到同一正式 commit，不允许交付本机 `file:`；当前 1.1.2 修订仅先更新 P5。
 
 ## 自审与推荐结论
 
