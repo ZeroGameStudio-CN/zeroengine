@@ -48,9 +48,31 @@ namespace ZeroGameStudio.ConfigPipeline.Editor
             ConfigDocument document = null,
             string workbookBaseHash = null,
             IEnumerable<string> ownedRootProperties = null,
-            IEnumerable<ConfigAuthoringSheetProfile> authoringSheets = null,
-            IReadOnlyDictionary<string, IReadOnlyList<string>> protectedRecordIds = null,
-            bool authoringOperationsEnabled = false)
+            IEnumerable<ConfigAuthoringSheetProfile> authoringSheets = null)
+        {
+            WriteTemplate(
+                destination,
+                schema,
+                configSetId,
+                document,
+                workbookBaseHash,
+                ownedRootProperties,
+                authoringSheets,
+                false,
+                null,
+                false);
+        }
+
+        public void WriteTemplate(
+            Stream destination,
+            ConfigSchema schema,
+            string configSetId,
+            ConfigDocument document,
+            string workbookBaseHash,
+            IEnumerable<string> ownedRootProperties,
+            IEnumerable<ConfigAuthoringSheetProfile> authoringSheets,
+            IReadOnlyDictionary<string, IReadOnlyList<string>> protectedRecordIds,
+            bool authoringOperationsEnabled)
         {
             WriteTemplate(
                 destination,
@@ -73,9 +95,32 @@ namespace ZeroGameStudio.ConfigPipeline.Editor
             string workbookBaseHash,
             IEnumerable<string> ownedRootProperties,
             IEnumerable<ConfigAuthoringSheetProfile> authoringSheets,
+            bool macroEnabled)
+        {
+            WriteTemplate(
+                destination,
+                schema,
+                configSetId,
+                document,
+                workbookBaseHash,
+                ownedRootProperties,
+                authoringSheets,
+                macroEnabled,
+                null,
+                false);
+        }
+
+        public void WriteTemplate(
+            Stream destination,
+            ConfigSchema schema,
+            string configSetId,
+            ConfigDocument document,
+            string workbookBaseHash,
+            IEnumerable<string> ownedRootProperties,
+            IEnumerable<ConfigAuthoringSheetProfile> authoringSheets,
             bool macroEnabled,
-            IReadOnlyDictionary<string, IReadOnlyList<string>> protectedRecordIds = null,
-            bool authoringOperationsEnabled = false)
+            IReadOnlyDictionary<string, IReadOnlyList<string>> protectedRecordIds,
+            bool authoringOperationsEnabled)
         {
             if (destination == null)
             {
