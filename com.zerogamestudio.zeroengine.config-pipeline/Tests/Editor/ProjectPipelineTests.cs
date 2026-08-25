@@ -47,7 +47,7 @@ namespace ZeroGameStudio.ConfigPipeline.Tests.Editor
         [TearDown]
         public void TearDown()
         {
-            ConfigMaintenanceRegistry.ClearForTests();
+            ConfigMaintenanceRegistry.ClearConfigSetForTests("sample");
             if (Directory.Exists(root))
             {
                 Directory.Delete(root, true);
@@ -62,6 +62,29 @@ namespace ZeroGameStudio.ConfigPipeline.Tests.Editor
                 "[\"items\"]");
 
             Assert.Throws<InvalidDataException>(() => ConfigProjectProfileParser.Parse(Utf8(json)));
+        }
+
+        [Test]
+        public void RegistryTestCleanup_PreservesOtherConfigSets()
+        {
+            string hostConfigSetId = "test.host." + Guid.NewGuid().ToString("N");
+            var hostEditor = new FakeCatalogEditor();
+            ConfigMaintenanceRegistry.RegisterCatalogEditor(hostConfigSetId, hostEditor);
+            ConfigMaintenanceRegistry.RegisterCatalogEditor("sample", new FakeCatalogEditor());
+
+            try
+            {
+                ConfigMaintenanceRegistry.ClearConfigSetForTests("sample");
+
+                Assert.That(
+                    ConfigMaintenanceRegistry.GetCatalogEditor(hostConfigSetId),
+                    Is.SameAs(hostEditor));
+                Assert.That(ConfigMaintenanceRegistry.GetCatalogEditor("sample"), Is.Null);
+            }
+            finally
+            {
+                ConfigMaintenanceRegistry.ClearConfigSetForTests(hostConfigSetId);
+            }
         }
 
         [Test]

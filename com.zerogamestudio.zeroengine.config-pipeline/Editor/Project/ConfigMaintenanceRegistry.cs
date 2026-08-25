@@ -141,12 +141,12 @@ namespace ZeroGameStudio.ConfigPipeline.Editor
                 : Array.Empty<IConfigMigration>();
         }
 
-        internal static void ClearForTests()
+        internal static void ClearConfigSetForTests(string configSetId)
         {
-            Validators.Clear();
-            AssetResolvers.Clear();
-            CatalogEditors.Clear();
-            Migrations.Clear();
+            Validators.Remove(configSetId);
+            AssetResolvers.Remove(configSetId);
+            CatalogEditors.Remove(configSetId);
+            Migrations.Remove(configSetId);
         }
     }
 }

@@ -154,6 +154,6 @@ project’s `Packages/manifest.json`. The test framework is a consumer test-only
 prerequisite and is intentionally not a runtime dependency of this package.
 Treat a zero-test result as failure even when the Unity process exits with code
 0. For package 2.1.0, run EditMode tests with NUnit category
-`ZGS.ConfigPipeline.CoreContract` and require exactly 199 discovered and passed
+`ZGS.ConfigPipeline.CoreContract` and require exactly 200 discovered and passed
 tests; update the documented expected count when the package test contract
 changes.
