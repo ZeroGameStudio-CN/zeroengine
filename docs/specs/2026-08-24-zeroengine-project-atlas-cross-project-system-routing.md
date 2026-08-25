@@ -566,7 +566,7 @@ Live Editor 通过 `ZGS > 工作台 > 项目图谱` 抽验：三种视图可切�
 
 ### 实际落地
 
-- 新增 Editor-only `com.zerogamestudio.zeroengine.project-atlas`，当前版本 `1.1.5`，直接依赖 editor-ui `1.5.0` 与 Newtonsoft.Json `3.2.1`；实现严格技术目录、覆盖与 Markdown 投影，以及独立的人类功能目录与 typed route 合同。
+- 新增 Editor-only `com.zerogamestudio.zeroengine.project-atlas`，当前版本 `1.1.6`，直接依赖 editor-ui `1.5.0` 与 Newtonsoft.Json `3.2.1`；实现严格技术目录、覆盖与 Markdown 投影，以及独立的人类功能目录与 typed route 合同。
 - Dashboard 从 `4.6.2` 增量到 `4.7.0`，官方目录、工作流和静态合同纳入 Project Atlas，并增加来源上下文、返回入口和 owner deep link 宿主；既有 provider 生命周期未改变。
 - P5 已接入六个领域碎片、项目 resolver / coverage provider、只读 Dev Scenario ID 查询、根 Agent 合同、生成索引和永久覆盖 / 新鲜度测试。
 - P5 新增 Editor-only `ZGS.Editor.CommandRouting`，将原有 134 个项目 `MenuItem` 注册迁移为 typed command catalog，并在工作台新增 full-width“命令中心”；Formula / TCE 两个项目内包的 5 个残留入口也由 P5 adapter 接回同一目录。原执行方法、校验方法和内部字符串调用均保留，但不再向 Unity 顶栏注册子菜单。
@@ -576,7 +576,7 @@ Live Editor 通过 `ZGS > 工作台 > 项目图谱` 抽验：三种视图可切�
 
 ### 验证证据
 
-- ZE Project Atlas 1.1.5：`35/35` 通过，其中功能目录 `12/12`、技术目录与响应式布局 `23/23`；Dashboard route registry `41/41`、editor-ui route contract `12/12` 通过；Dashboard descriptors `9`、Editor UI 静态合同 `descriptors=31 / coverage=33 / modules=31` 通过。
+- ZE Project Atlas 1.1.6：包级回归包含功能目录 `12/12`、技术目录、响应式布局和局部坐标防叠绘 `23/23`；Dashboard route registry `41/41`、editor-ui route contract `12/12` 通过；Dashboard descriptors `9`、Editor UI 静态合同 `descriptors=31 / coverage=33 / modules=31` 通过。
 - Dashboard 必需 lane：dashboard-only `129 total / 128 passed / 1 existing ignored`，with-modules `375/375` 通过；结果位于 `C:\Users\2025\AppData\Local\Temp\zeroengine-dashboard-results-45fc63b9f6c84b39bde608b4377e5c6f`。额外 modules-only 探索 lane 曾挂起并被停止，它不是本 Spec 的必需 lane。
 - P5 永久 `P5ProjectAtlasCoverageTests`：原始 XML lane `3/3` 通过，结果位于 `C:\Users\2025\AppData\Local\Temp\ZGSAgentTestResults\P5\ProjectAtlasFinal`，结果 XML 与 Unity log 均无失败 / 编译错误；脱敏修复后又通过 live 精准生成 `1/1`，并将三个永久测试逐项各执行 `1/1`、全部通过。当前共享 Console 仍保留另一并行全量回归产生的预期错误日志，因此未据此声明最终 Console 0 error。
 - P5 菜单收口后 live scripts refresh / compile 为 `completed`、`failed=false`、`errors=[]`；`P5DashboardIntegrationTests` `18/18` 通过，其中包含 typed catalog 零诊断、源码禁用旧入口、provider 全覆盖和已加载 `ZGS` 根菜单唯一性。官方 Unity `menu` 实际枚举只返回一个 `ZGS` 项，即 `ZGS/工作台`，并已成功执行该入口打开工作台。
@@ -593,6 +593,7 @@ Live Editor 通过 `ZGS > 工作台 > 项目图谱` 抽验：三种视图可切�
 
 ### 实现自审修订
 
+- 修复三栏把 GUILayout 分配的宿主坐标再次作为 BeginArea 坐标使用、导致内容跳回顶部并覆盖标题 / 说明 / 搜索栏的问题；现在与 Data Manager 一致，先进入保留区域的 GUI group，再以局部零点布局三栏。
 - 将三栏导航的硬最小宽度改为按可用空间等比收缩；420 point 不再为了显示完整长标题强制撑宽，按钮和栏头使用省略号并保留完整 Tooltip，极窄窗口仍保留三栏和横向兜底。
 - 修复 active / experimental lifecycle 仅靠前后空白绕过 program / agent 必填门的问题，并新增永久负向回归测试。
 - 用第二个真实项目的严格加载暴露并修正重复 Dashboard JSON 字段，避免宽松解析器“最后值覆盖”掩盖结构漂移。

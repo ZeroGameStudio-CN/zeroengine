@@ -202,22 +202,36 @@ namespace ZeroEngine.ProjectAtlas
                 height,
                 GUILayout.ExpandWidth(true),
                 GUILayout.Height(height));
-            float contentWidth = ResolveBodyContentWidth(bodyRect.width);
-            if (contentWidth <= bodyRect.width)
+            GUI.BeginGroup(bodyRect);
+            try
             {
-                DrawThreeColumnBodyLayout(context, bodyRect, domains);
-                return;
-            }
+                Rect localBodyRect = CreateLocalBodyRect(bodyRect);
+                float contentWidth = ResolveBodyContentWidth(localBodyRect.width);
+                if (contentWidth <= localBodyRect.width)
+                {
+                    DrawThreeColumnBodyLayout(context, localBodyRect, domains);
+                    return;
+                }
 
-            var contentRect = new Rect(0f, 0f, contentWidth, bodyRect.height);
-            _bodyHorizontalScroll = GUI.BeginScrollView(
-                bodyRect,
-                _bodyHorizontalScroll,
-                contentRect,
-                false,
-                false);
-            DrawThreeColumnBodyLayout(context, contentRect, domains);
-            GUI.EndScrollView();
+                var contentRect = new Rect(0f, 0f, contentWidth, localBodyRect.height);
+                _bodyHorizontalScroll = GUI.BeginScrollView(
+                    localBodyRect,
+                    _bodyHorizontalScroll,
+                    contentRect,
+                    false,
+                    false);
+                DrawThreeColumnBodyLayout(context, contentRect, domains);
+                GUI.EndScrollView();
+            }
+            finally
+            {
+                GUI.EndGroup();
+            }
+        }
+
+        private static Rect CreateLocalBodyRect(Rect bodyRect)
+        {
+            return new Rect(0f, 0f, bodyRect.width, bodyRect.height);
         }
 
         private static float ResolveBodyContentWidth(float bodyWidth)

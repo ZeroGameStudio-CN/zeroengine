@@ -328,6 +328,9 @@ namespace ZeroEngine.ProjectAtlas.Tests
             MethodInfo calculateBodyLayoutRects = panelType.GetMethod(
                 "CalculateBodyLayoutRects",
                 BindingFlags.Instance | BindingFlags.NonPublic);
+            MethodInfo createLocalBodyRect = panelType.GetMethod(
+                "CreateLocalBodyRect",
+                BindingFlags.Static | BindingFlags.NonPublic);
             MethodInfo elideLabel = panelType.GetMethod(
                 "ElideLabel",
                 BindingFlags.Static | BindingFlags.NonPublic);
@@ -340,6 +343,14 @@ namespace ZeroEngine.ProjectAtlas.Tests
             Assert.That(
                 (float)resolveBodyContentWidth.Invoke(null, new object[] { 1440f }),
                 Is.EqualTo(1440f));
+
+            Assert.That(createLocalBodyRect, Is.Not.Null);
+            Rect localBodyRect = (Rect)createLocalBodyRect.Invoke(
+                null,
+                new object[] { new Rect(37f, 123f, 420f, 600f) });
+            Assert.That(localBodyRect.position, Is.EqualTo(Vector2.zero),
+                "三栏必须在 GUILayout 已占位的 body group 内使用局部坐标，避免覆盖标题、说明和搜索栏。");
+            Assert.That(localBodyRect.size, Is.EqualTo(new Vector2(420f, 600f)));
 
             Assert.That(calculateBodyLayoutRects, Is.Not.Null);
             panelType.GetField("_domainColumnWidth", BindingFlags.Instance | BindingFlags.NonPublic)
