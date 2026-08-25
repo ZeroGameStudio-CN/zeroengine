@@ -17,6 +17,7 @@ import unity_workspace_scheduler.coordinator as coordinator_module
 import unity_workspace_scheduler.state as state_module
 from unity_workspace_scheduler.cli import _emit, build_parser
 from unity_workspace_scheduler.cli import run as _cli_run
+from unity_workspace_scheduler.coordinator import WorkspaceCoordinator
 from unity_workspace_scheduler.errors import UsageError
 from unity_workspace_scheduler.state import open_database, resolve_state_paths
 
@@ -292,6 +293,65 @@ def test_cli_heartbeat_omits_ttl_by_default() -> None:
     )
 
     assert args.ttl is None
+
+
+def test_cli_maintenance_history_is_read_only_and_uses_bounded_limit(
+    tmp_path: Path, capsys
+) -> None:
+    state = tmp_path / "state"
+    workspace = tmp_path / "workspace"
+    workspace.mkdir()
+    coordinator = WorkspaceCoordinator(resolve_state_paths(state))
+    coordinator.register(workspace)
+    task, token = coordinator.start_task(workspace, "owner", "work")
+    coordinator.release_task(workspace, token, result="failed", note="known")
+    capsys.readouterr()
+
+    assert (
+        run(
+            [
+                "--state-dir",
+                str(state),
+                "maintenance",
+                "history",
+                "--workspace",
+                str(workspace),
+                "--limit",
+                "1",
+            ]
+        )
+        == 0
+    )
+    payload = read_output(capsys)
+    assert payload["result"]["limit"] == 1
+    assert payload["result"]["task_history"][0]["id"] == task["id"]
+    assert "token_file_path" not in json.dumps(payload, sort_keys=True)
+
+
+def test_cli_maintenance_history_rejects_out_of_range_limit(tmp_path: Path, capsys) -> None:
+    state = tmp_path / "state"
+    workspace = tmp_path / "workspace"
+    workspace.mkdir()
+    WorkspaceCoordinator(resolve_state_paths(state)).register(workspace)
+    capsys.readouterr()
+
+    assert (
+        run(
+            [
+                "--state-dir",
+                str(state),
+                "maintenance",
+                "history",
+                "--workspace",
+                str(workspace),
+                "--limit",
+                "0",
+            ]
+        )
+        != 0
+    )
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["code"] == "usage-error"
 
 
 def test_cli_mutation_requires_operation_id() -> None:

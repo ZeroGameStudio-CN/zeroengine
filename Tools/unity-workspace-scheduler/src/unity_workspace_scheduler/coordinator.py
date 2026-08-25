@@ -3836,6 +3836,83 @@ class WorkspaceCoordinator:
             }
             return result
 
+    def maintenance_history(self, workspace: Path | str, *, limit: int = 20) -> dict[str, Any]:
+        """Read bounded operational evidence without maintenance or lease renewal."""
+
+        if type(limit) is not int or not 1 <= limit <= 100:
+            raise UsageError("Maintenance history limit must be between 1 and 100.")
+        root = canonical_workspace(workspace)
+        connection = open_database(self.paths)
+        try:
+            registered = self._workspace(connection, root)
+            tasks = connection.execute(
+                "SELECT * FROM tasks WHERE workspace_id = ? "
+                "AND state IN ('completed', 'failed', 'expired', 'outcome_unknown') "
+                "ORDER BY COALESCE(finished_at, heartbeat_at, created_at) DESC, id DESC "
+                "LIMIT ?",
+                (registered["id"], limit),
+            ).fetchall()
+            recovery_events = connection.execute(
+                "SELECT id, task_id, resolution, evidence, created_at "
+                "FROM recovery_events WHERE workspace_id = ? "
+                "ORDER BY created_at DESC, id DESC LIMIT ?",
+                (registered["id"], limit),
+            ).fetchall()
+            cleanup_jobs = connection.execute(
+                "SELECT task_id, reason, created_at, completed_at, last_attempt_at, "
+                "attempt_count FROM token_cleanup_jobs WHERE workspace_id = ? "
+                "ORDER BY created_at DESC, task_id DESC LIMIT ?",
+                (registered["id"], limit),
+            ).fetchall()
+            receipt_summary = connection.execute(
+                "SELECT "
+                "SUM(CASE WHEN finalized_at IS NULL THEN 1 ELSE 0 END) AS pending, "
+                "SUM(CASE WHEN finalized_at IS NOT NULL AND delivered_at IS NULL "
+                "THEN 1 ELSE 0 END) AS finalized_undelivered, "
+                "SUM(CASE WHEN token_cleanup_path IS NOT NULL THEN 1 ELSE 0 END) "
+                "AS cleanup_pending "
+                "FROM operation_receipts WHERE workspace_id = ?",
+                (registered["id"],),
+            ).fetchone()
+            assert receipt_summary is not None
+            return {
+                "schema_version": SCHEMA_VERSION,
+                "workspace": {
+                    "id": registered["id"],
+                    "root": registered["root"],
+                },
+                "limit": limit,
+                "task_history": [self._public_task(task) for task in tasks],
+                "recovery_events": [
+                    {
+                        "id": event["id"],
+                        "task_id": event["task_id"],
+                        "resolution": event["resolution"],
+                        "evidence": event["evidence"],
+                        "created_at": event["created_at"],
+                    }
+                    for event in recovery_events
+                ],
+                "receipt_summary": {
+                    "pending": int(receipt_summary["pending"] or 0),
+                    "finalized_undelivered": int(receipt_summary["finalized_undelivered"] or 0),
+                    "cleanup_pending": int(receipt_summary["cleanup_pending"] or 0),
+                },
+                "token_cleanup_jobs": [
+                    {
+                        "task_id": job["task_id"],
+                        "reason": job["reason"],
+                        "created_at": job["created_at"],
+                        "completed_at": job["completed_at"],
+                        "last_attempt_at": job["last_attempt_at"],
+                        "attempt_count": job["attempt_count"],
+                    }
+                    for job in cleanup_jobs
+                ],
+            }
+        finally:
+            connection.close()
+
     def identify_task(self, workspace: Path | str, token: str) -> dict[str, Any]:
         """Identify one open task without maintenance, scheduling, or lease renewal."""
 
