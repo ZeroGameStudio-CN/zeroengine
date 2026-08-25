@@ -113,7 +113,7 @@ $expectedPackages = [ordered]@{
     'com.zerogamestudio.zeroengine.formula' = '0.6.0'
     'com.zerogamestudio.zeroengine.feedback' = '1.0.2'
     'com.zerogamestudio.zeroengine.modsystem' = '0.3.0'
-    'com.zerogamestudio.zeroengine.project-atlas' = '1.1.2'
+    'com.zerogamestudio.zeroengine.project-atlas' = '1.1.3'
     'com.zerogamestudio.zeroengine.tce' = '0.2.1'
     'com.zerogamestudio.zeroengine.ui' = '2.2.1'
 }
@@ -184,6 +184,14 @@ foreach ($packageName in $expectedPackages.Keys) {
     $asmdef = Read-Json (Join-Path $packageRoot $asmdefs[$packageName])
     Assert-Contract ($asmdef.references -contains 'ZeroEngine.EditorUI.Editor') "$packageName Editor asmdef must explicitly reference editor-ui."
 }
+
+$projectAtlasPanelSource = Get-Content -Raw -LiteralPath (
+    Join-Path $RepoRoot 'com.zerogamestudio.zeroengine.project-atlas/Editor/ProjectAtlasWorkspacePanel.cs')
+Assert-Contract (
+    [regex]::IsMatch($projectAtlasPanelSource, '(?s)GUI\.Toggle\s*\(.*?EditorStyles\.miniButton')) `
+    'Project Atlas feature rows must retain visible button chrome.'
+Assert-Contract (-not $projectAtlasPanelSource.Contains('GUIStyle.none')) `
+    'Project Atlas feature rows must not regress to invisible click targets.'
 
 $legacyPackage = Read-Json (Join-Path $RepoRoot 'com.zerogamestudio.zeroengine/package.json')
 Assert-Contract ($null -eq $legacyPackage.dependencies.'com.zerogamestudio.zeroengine.dashboard') 'Legacy ZeroEngine must not depend on Dashboard.'

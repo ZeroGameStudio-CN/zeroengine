@@ -394,16 +394,15 @@ namespace ZeroEngine.ProjectAtlas
         private static bool DrawFeatureRow(string title, string status, string tooltip, bool selected)
         {
             Rect rect = GUILayoutUtility.GetRect(1f, FeatureRowHeight, GUILayout.ExpandWidth(true));
+            bool nextSelected = GUI.Toggle(
+                rect,
+                selected,
+                new GUIContent(string.Empty, tooltip),
+                EditorStyles.miniButton);
             Event currentEvent = Event.current;
-            bool hovered = rect.Contains(currentEvent.mousePosition);
 
             if (currentEvent.type == EventType.Repaint)
             {
-                if (selected)
-                    EditorGUI.DrawRect(rect, new Color(0.24f, 0.42f, 0.72f, 0.35f));
-                else if (hovered)
-                    EditorGUI.DrawRect(rect, new Color(1f, 1f, 1f, 0.06f));
-
                 var titleStyle = new GUIStyle(EditorStyles.label)
                 {
                     alignment = TextAnchor.MiddleLeft,
@@ -423,7 +422,7 @@ namespace ZeroEngine.ProjectAtlas
                 GUI.Label(BuildFeatureRowStatusRect(rect), status, statusStyle);
             }
 
-            return GUI.Button(rect, new GUIContent(string.Empty, tooltip), GUIStyle.none);
+            return nextSelected != selected;
         }
 
         private static Rect BuildFeatureRowTitleRect(Rect rect)

@@ -1,6 +1,6 @@
 # 项目功能工作台：面向项目人员的功能导航与配置直达
 
-- 状态：Implemented（2026-08-25 DataManager 式三栏已实现；截图验收发现的叠字、裁切和重复标题已纳入 1.1.2 可读性修订）
+- 状态：Implemented（2026-08-25 DataManager 式三栏已实现；截图验收发现的叠字、裁切、重复标题和按钮感不足已纳入 1.1.3 可读性修订）
 - 最后更新：2026-08-25
 - 已检查基线：ZeroEngine commit `4797ab9f6309e1b0fa32741dcf6df0801425d82f`；Project Atlas `1.1.0`、Dashboard `4.7.0`、editor-ui `1.5.0`、Data Toolkit `2.1.1` 的三栏数据管理布局、P5 当前功能目录与 15 个项目面板
 - 设计批准：Approved；用户于 2026-08-24 回复“自审修订spec好了就开干”
@@ -379,6 +379,7 @@ POB 使用自己的领域名称和 route provider，通过同一 schema、面板
 
 ## As-Built（2026-08-24）
 
+- 2026-08-25 按钮感修订：Project Atlas 升为 `1.1.3`。功能行不再照搬 DataManager 的无边框列表选中行，而是在保留名称 / 状态左右分列的同时使用 Unity `miniButton` toggle 底板，恢复常态边框、悬停和持续选中反馈；DataManager 继续使用适合数据列表语义的扁平选中行。
 - 2026-08-25 截图验收修订：Project Atlas 升为 `1.1.2`。功能列表改用与 DataManager 一致的单行可选项，功能名左对齐、配置状态右对齐并保留整行选中态；详情区岗位改为可换行说明，移除工作台宿主下重复的“项目功能”标题，栏目文案收敛为“工作领域 / 功能说明与入口 / 可完成的工作 / 直接入口”。新增矩形回归证明最小功能列宽下标题与状态互不重叠；P5 正式 Unity Editor 内本地源码验收精确回归 `1/1`、完整 Project Atlas 测试 `35/35` 通过。
 - 2026-08-25 布局修订：Project Atlas 已升为 `1.1.1`；`ProjectAtlasWorkspacePanel` 已统一为 DataManager 式三栏，领域、功能、详情分别使用有边框的独立滚动区；两条分隔线可拖动并通过 EditorPrefs 恢复。原 `DrawCompact` / `DrawFeaturePicker` 下拉路径已删除，420 point 等窄宽度改用主体横向滚动保留三栏。
 - 本轮新增精确回归 `WorkspacePanel_NarrowWidth_PreservesThreeColumnsWithoutDropdownNavigation`，在 Router 注册的临时 Unity `6000.3.10f1` 工程中 `1/1` 通过；完整 `ZeroEngine.ProjectAtlas.Tests.Editor` 为 `35/35` 通过，CLI 退出码 0、Unity log 无编译或基础设施错误。证据分别位于 `C:\Users\2025\AppData\Local\Temp\ZGSAgentTestResults\ProjectAtlasThreeColumnExact-20260825-01` 与 `C:\Users\2025\AppData\Local\Temp\ZGSAgentTestResults\ProjectAtlasThreeColumnAssembly-20260825-01`。
