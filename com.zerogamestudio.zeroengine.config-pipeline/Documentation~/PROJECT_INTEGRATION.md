@@ -12,6 +12,26 @@ path and ownership in `config-project.json` first, then generate it through
 `WriteTemplates` or `RefreshCandidate`. A standalone XLSX/XLSM file is not a registered
 configuration source and must not be created as an intermediate workflow state.
 
+Set `"authoringOperationsVersion": 1` once on a long-lived `.xlsm` config set to
+give every current and future declared business Sheet the shared action bar,
+three-row freeze, accidental-row-deletion protection, shortcuts and generated
+help contract. Do not configure operations per Sheet. A workbook may additionally
+declare critical root rows without adding a business column:
+
+```json
+{
+  "path": "Config/items.xlsm",
+  "tables": ["items"],
+  "protectedRecordIds": { "items": ["starter-item"] }
+}
+```
+
+`protectedRecordIds` keys must be root tables owned by that workbook. Attach the
+reviewed generic VBA through `Editor/Excel/AuthoringVba~/InstallAuthoringVba.ps1`
+when a formal workbook is first created or migrated; candidate refresh then
+preserves it. Missing desktop-Excel/VBProject authorization is a release blocker,
+not permission to change Trust Center settings or ship inert action cells.
+
 An optional workbook `authoringSheets` array groups owned root tables into the
 designer-visible Sheet names. Every owned root must occur exactly once. Root and
 child tables in one group are placed as separate Excel tables on that worksheet;
@@ -134,6 +154,6 @@ project’s `Packages/manifest.json`. The test framework is a consumer test-only
 prerequisite and is intentionally not a runtime dependency of this package.
 Treat a zero-test result as failure even when the Unity process exits with code
 0. For package 2.1.0, run EditMode tests with NUnit category
-`ZGS.ConfigPipeline.CoreContract` and require exactly 197 discovered and passed
+`ZGS.ConfigPipeline.CoreContract` and require exactly 198 discovered and passed
 tests; update the documented expected count when the package test contract
 changes.

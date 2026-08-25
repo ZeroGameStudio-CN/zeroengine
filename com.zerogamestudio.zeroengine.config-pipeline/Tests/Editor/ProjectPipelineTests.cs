@@ -88,13 +88,20 @@ namespace ZeroGameStudio.ConfigPipeline.Tests.Editor
             string json = ProfileJson()
                 .Replace(
                     "\"authoringSource\":\"excel\",",
-                    "\"authoringSource\":\"excel\",\"authoringWorkbookFormat\":\"xlsm\",")
-                .Replace(".xlsx", ".xlsm");
+                    "\"authoringSource\":\"excel\",\"authoringWorkbookFormat\":\"xlsm\"," +
+                    "\"authoringOperationsVersion\":1,")
+                .Replace(".xlsx", ".xlsm")
+                .Replace(
+                    "{\"path\":\"Config/items.xlsm\",\"tables\":[\"items\"]}",
+                    "{\"path\":\"Config/items.xlsm\",\"tables\":[\"items\"]," +
+                    "\"protectedRecordIds\":{\"items\":[\"starter-item\"]}}");
 
             ConfigSetProfile set = ConfigProjectProfileParser.Parse(Utf8(json))
                 .GetConfigSet("sample");
             Assert.That(set.AuthoringWorkbookFormat, Is.EqualTo("xlsm"));
             Assert.That(set.UsesMacroEnabledWorkbooks, Is.True);
+            Assert.That(set.AuthoringOperationsVersion, Is.EqualTo(1));
+            Assert.That(set.UsesAuthoringOperations, Is.True);
             Assert.That(set.Workbooks.All(value => value.Path.EndsWith(".xlsm")), Is.True);
 
             Assert.Throws<InvalidDataException>(() =>
@@ -119,7 +126,52 @@ namespace ZeroGameStudio.ConfigPipeline.Tests.Editor
                     workbook.DocumentType,
                     Is.EqualTo(SpreadsheetDocumentType.MacroEnabledWorkbook));
                 Assert.That(workbook.WorkbookPart.VbaProjectPart, Is.Null);
+                WorksheetPart items = GetWorksheetPart(workbook, "Items");
+                Row[] rows = items.Worksheet.GetFirstChild<SheetData>().Elements<Row>().ToArray();
+                Assert.That(rows[0].RowIndex.Value, Is.EqualTo(1U));
+                Cell[] actionCells = rows[0].Elements<Cell>().Take(6).ToArray();
+                Assert.That(
+                    actionCells.Select(value => value.InnerText),
+                    Is.EqualTo(new[] { "新增", "复制", "安全删除", "编辑关系", "技术区", "帮助" }));
+                Assert.That(actionCells.All(value => value.CellFormula == null), Is.True);
+                Assert.That(
+                    actionCells.All(value => value.DataType?.Value == CellValues.InlineString),
+                    Is.True);
+                Assert.That(rows[1].Hidden.Value, Is.True);
+                Assert.That(rows[2].RowIndex.Value, Is.EqualTo(3U));
+                Pane pane = items.Worksheet.GetFirstChild<SheetViews>()
+                    .Elements<SheetView>().Single().GetFirstChild<Pane>();
+                Assert.That(pane.VerticalSplit.Value, Is.EqualTo(3D));
+                Assert.That(pane.TopLeftCell.Value, Is.EqualTo("A4"));
+                Assert.That(items.Worksheet.GetFirstChild<SheetProtection>(), Is.Not.Null);
+                DefinedName[] names = workbook.WorkbookPart.Workbook
+                    .GetFirstChild<DefinedNames>().Elements<DefinedName>().ToArray();
+                Assert.That(names.Count(value => value.Name.Value.StartsWith("ZGS_ACTION_Items_")),
+                    Is.EqualTo(6));
+                Assert.That(
+                    names.Single(value => value.Name.Value == "ZGS_META_VERSION").Text,
+                    Is.EqualTo("\"1\""));
+                Assert.That(names.Any(value => value.Name.Value == "ZGS_META_TABLE_1"), Is.True);
+                Assert.That(names.Any(value => value.Name.Value == "ZGS_META_PROTECTED_1_1"),
+                    Is.True);
             }
+        }
+
+        [Test]
+        public void Profile_ParsesProtectedRecordIdsAndRejectsForeignTables()
+        {
+            string json = ProfileJson().Replace(
+                "{\"path\":\"Config/items.xlsx\",\"tables\":[\"items\"]}",
+                "{\"path\":\"Config/items.xlsx\",\"tables\":[\"items\"]," +
+                "\"protectedRecordIds\":{\"items\":[\"starter-item\"]}}");
+
+            ConfigWorkbookProfile workbook = ConfigProjectProfileParser.Parse(Utf8(json))
+                .GetConfigSet("sample").Workbooks[0];
+            Assert.That(workbook.ProtectedRecordIds["items"], Is.EqualTo(new[] { "starter-item" }));
+            Assert.Throws<InvalidDataException>(() =>
+                ConfigProjectProfileParser.Parse(Utf8(json.Replace(
+                    "\"items\":[\"starter-item\"]",
+                    "\"groups\":[\"starter-item\"]"))));
         }
 
         [Test]
@@ -1741,6 +1793,15 @@ namespace ZeroGameStudio.ConfigPipeline.Tests.Editor
             {
                 File.Delete(manifest);
             }
+        }
+
+        private static WorksheetPart GetWorksheetPart(
+            SpreadsheetDocument workbook,
+            string sheetName)
+        {
+            Sheet sheet = workbook.WorkbookPart.Workbook.Sheets.Elements<Sheet>()
+                .Single(value => value.Name.Value == sheetName);
+            return (WorksheetPart)workbook.WorkbookPart.GetPartById(sheet.Id.Value);
         }
 
         private static string ProfileJson()

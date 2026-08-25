@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Text;
 using DocumentFormat.OpenXml;
 using DocumentFormat.OpenXml.Packaging;
 using DocumentFormat.OpenXml.Spreadsheet;
@@ -24,7 +25,10 @@ namespace ZeroGameStudio.ConfigPipeline.Editor
                 "_zgs_lists",
                 XlsxConfigWorkbookWriter.NavigationSheetName
             };
-        private const string PipelineEnumDefinedNamePrefix = "ZGS_ENUM_";
+        private static readonly string[] PipelineDefinedNamePrefixes =
+        {
+            "ZGS_ENUM_", "ZGS_ACTION_", "ZGS_META_"
+        };
 
         public static void WriteCandidate(
             string sourcePath,
@@ -35,7 +39,9 @@ namespace ZeroGameStudio.ConfigPipeline.Editor
             string workbookBaseHash,
             IEnumerable<string> ownedRootProperties,
             IEnumerable<ConfigAuthoringSheetProfile> authoringSheets,
-            bool macroEnabled)
+            bool macroEnabled,
+            IReadOnlyDictionary<string, IReadOnlyList<string>> protectedRecordIds = null,
+            bool authoringOperationsEnabled = false)
         {
             if (string.IsNullOrWhiteSpace(sourcePath))
             {
@@ -96,7 +102,9 @@ namespace ZeroGameStudio.ConfigPipeline.Editor
                         workbookBaseHash,
                         ownedRootProperties,
                         authoringSheets,
-                        macroEnabled);
+                        macroEnabled,
+                        protectedRecordIds,
+                        authoringOperationsEnabled);
                     template.Position = 0;
 
                     using (SpreadsheetDocument sourceWorkbook =
@@ -192,7 +200,7 @@ namespace ZeroGameStudio.ConfigPipeline.Editor
             AuthoringFidelitySnapshot fidelity = AuthoringFidelitySnapshot.Capture(
                 sourcePart,
                 generatedPart);
-            ValidateGeneratedStyleIndexes(sourcePart, generatedPart);
+            RemapGeneratedStyleIndexes(sourcePart, generatedPart);
 
             Dictionary<string, WorksheetPart> sourceSheets = WorksheetMap(sourcePart);
             Dictionary<string, WorksheetPart> generatedSheets = WorksheetMap(generatedPart);
@@ -235,6 +243,20 @@ namespace ZeroGameStudio.ConfigPipeline.Editor
                     sourceSheet.Worksheet = replacement;
                     sourceSheet.Worksheet.Save();
                     continue;
+                }
+
+                if (HasAuthoringActions(generatedPart, generatedSheet.Key))
+                {
+                    ReplaceManagedCells(
+                        sourceSheet,
+                        generatedSheet.Value,
+                        1,
+                        1U,
+                        6,
+                        1U,
+                        1U,
+                        1U,
+                        0);
                 }
 
                 MergeManagedTables(sourcePart, sourceSheet, generatedSheet.Value);
@@ -500,7 +522,7 @@ namespace ZeroGameStudio.ConfigPipeline.Editor
                 WorkbookPart generatedPart)
             {
                 var generatedDefinedNames = new HashSet<string>(StringComparer.Ordinal);
-                var generatedEnumNames = new HashSet<string>(StringComparer.Ordinal);
+                var generatedPipelineNames = new HashSet<string>(StringComparer.Ordinal);
                 DefinedNames generatedNames =
                     generatedPart.Workbook.GetFirstChild<DefinedNames>();
                 if (generatedNames != null)
@@ -508,11 +530,9 @@ namespace ZeroGameStudio.ConfigPipeline.Editor
                     foreach (DefinedName name in generatedNames.Elements<DefinedName>())
                     {
                         generatedDefinedNames.Add(DefinedNameKey(name));
-                        if (name.Name?.Value?.StartsWith(
-                                PipelineEnumDefinedNamePrefix,
-                                StringComparison.Ordinal) == true)
+                        if (IsPipelineDefinedName(name.Name?.Value))
                         {
-                            generatedEnumNames.Add(name.Name.Value);
+                            generatedPipelineNames.Add(name.Name.Value);
                         }
                     }
                 }
@@ -524,12 +544,9 @@ namespace ZeroGameStudio.ConfigPipeline.Editor
                     foreach (DefinedName name in sourceNames.Elements<DefinedName>())
                     {
                         string key = DefinedNameKey(name);
-                        bool stalePipelineEnum = name.Name?.Value?.StartsWith(
-                                                     PipelineEnumDefinedNamePrefix,
-                                                     StringComparison.Ordinal) == true &&
-                                                 !generatedEnumNames.Contains(
-                                                     name.Name.Value);
-                        if (!generatedDefinedNames.Contains(key) && !stalePipelineEnum)
+                        bool stalePipelineName = IsPipelineDefinedName(name.Name?.Value) &&
+                                                 !generatedPipelineNames.Contains(name.Name.Value);
+                        if (!generatedDefinedNames.Contains(key) && !stalePipelineName)
                         {
                             names.Add(key, name.OuterXml);
                         }
@@ -549,12 +566,16 @@ namespace ZeroGameStudio.ConfigPipeline.Editor
                     List<ManagedRange> managedRanges = entry.Value.TableDefinitionParts
                         .Select(part => ManagedRange.FromTable(part.Table))
                         .ToList();
+                    bool generatedHasAuthoringActions =
+                        HasAuthoringActions(generatedPart, entry.Key);
                     foreach (Cell cell in entry.Value.Worksheet.Descendants<Cell>())
                     {
                         string reference = cell.CellReference?.Value;
                         int column = ColumnOf(reference);
                         uint row = RowOf(reference);
-                        if (managedRanges.Any(range => range.Contains(column, row)))
+                        if (managedRanges.Any(range => range.Contains(column, row)) ||
+                            (generatedHasAuthoringActions && row == 1U &&
+                             column >= 1 && column <= 6))
                         {
                             continue;
                         }
@@ -636,6 +657,22 @@ namespace ZeroGameStudio.ConfigPipeline.Editor
                     }
                 }
             }
+        }
+
+        private static bool HasAuthoringActions(
+            WorkbookPart workbookPart,
+            string sheetName)
+        {
+            DefinedNames names = workbookPart.Workbook.GetFirstChild<DefinedNames>();
+            if (names == null)
+            {
+                return false;
+            }
+
+            string prefix = "'" + (sheetName ?? string.Empty).Replace("'", "''") + "'!$";
+            return names.Elements<DefinedName>().Count(name =>
+                name.Name?.Value?.StartsWith("ZGS_ACTION_", StringComparison.Ordinal) == true &&
+                name.Text?.StartsWith(prefix, StringComparison.Ordinal) == true) == 6;
         }
 
         private sealed class ManagedTableState
@@ -974,9 +1011,7 @@ namespace ZeroGameStudio.ConfigPipeline.Editor
             foreach (DefinedName definedName in definedNames.Elements<DefinedName>())
             {
                 string name = definedName.Name?.Value ?? string.Empty;
-                if (name.StartsWith(
-                        PipelineEnumDefinedNamePrefix,
-                        StringComparison.Ordinal) ||
+                if (IsPipelineDefinedName(name) ||
                     name.StartsWith("_xlnm.", StringComparison.OrdinalIgnoreCase))
                 {
                     continue;
@@ -1882,48 +1917,294 @@ namespace ZeroGameStudio.ConfigPipeline.Editor
             }
         }
 
-        private static void ValidateGeneratedStyleIndexes(
+        private static void RemapGeneratedStyleIndexes(
             WorkbookPart sourcePart,
             WorkbookPart generatedPart)
         {
-            CellFormats sourceFormats = sourcePart.WorkbookStylesPart?
-                .Stylesheet?.CellFormats;
-            CellFormats generatedFormats = generatedPart.WorkbookStylesPart?
-                .Stylesheet?.CellFormats;
-            if (sourceFormats == null || generatedFormats == null)
+            Stylesheet sourceStyles = sourcePart.WorkbookStylesPart?.Stylesheet;
+            Stylesheet generatedStyles = generatedPart.WorkbookStylesPart?.Stylesheet;
+            if (sourceStyles?.Fonts == null ||
+                sourceStyles.Fills == null ||
+                sourceStyles.Borders == null ||
+                sourceStyles.CellStyleFormats == null ||
+                sourceStyles.CellFormats == null ||
+                generatedStyles?.Fonts == null ||
+                generatedStyles.Fills == null ||
+                generatedStyles.Borders == null ||
+                generatedStyles.CellStyleFormats == null ||
+                generatedStyles.CellFormats == null)
             {
                 throw new InvalidDataException(
                     "CONFIG_WORKBOOK_STYLE_INDEX_FIDELITY_FAILED");
             }
 
-            List<CellFormat> source = sourceFormats.Elements<CellFormat>().ToList();
-            List<CellFormat> generated = generatedFormats.Elements<CellFormat>().ToList();
+            uint[] fontMap = MergeIndexedStyleElements<Font>(
+                sourceStyles.Fonts,
+                generatedStyles.Fonts);
+            uint[] fillMap = MergeIndexedStyleElements<Fill>(
+                sourceStyles.Fills,
+                generatedStyles.Fills);
+            uint[] borderMap = MergeIndexedStyleElements<Border>(
+                sourceStyles.Borders,
+                generatedStyles.Borders);
+
+            List<CellFormat> generatedStyleFormats = generatedStyles.CellStyleFormats
+                .Elements<CellFormat>().ToList();
+            if (generatedStyleFormats.Count != 1 ||
+                !sourceStyles.CellStyleFormats.Elements<CellFormat>().Any())
+            {
+                throw new InvalidDataException(
+                    "CONFIG_WORKBOOK_STYLE_INDEX_FIDELITY_FAILED: cellStyleXfs");
+            }
+            uint[] styleFormatMap = { 0U };
+
+            List<CellFormat> generatedFormats = generatedStyles.CellFormats
+                .Elements<CellFormat>().ToList();
+            var formatMap = new uint[generatedFormats.Count];
+            for (int index = 0; index < generatedFormats.Count; index++)
+            {
+                CellFormat format = (CellFormat)generatedFormats[index].CloneNode(true);
+                RemapStyleDependencies(
+                    sourceStyles,
+                    generatedStyles,
+                    format,
+                    fontMap,
+                    fillMap,
+                    borderMap);
+                uint generatedStyleFormat = generatedFormats[index].FormatId?.Value ?? 0U;
+                if (generatedStyleFormat >= styleFormatMap.Length)
+                {
+                    throw new InvalidDataException(
+                        "CONFIG_WORKBOOK_STYLE_INDEX_FIDELITY_FAILED: xfId=" +
+                        generatedStyleFormat);
+                }
+
+                format.FormatId = styleFormatMap[generatedStyleFormat];
+                formatMap[index] = FindOrAppendStyleElement(
+                    sourceStyles.CellFormats,
+                    format);
+            }
+            SetStyleCollectionCount(sourceStyles.CellFormats);
+
             var usedStyleIndexes = new HashSet<uint>(
                 generatedPart.WorksheetParts
                     .SelectMany(sheet => sheet.Worksheet.Descendants<Cell>())
                     .Select(cell => cell.StyleIndex?.Value ?? 0U));
             foreach (uint index in usedStyleIndexes)
             {
-                if (index >= source.Count ||
-                    index >= generated.Count ||
-                    !string.Equals(
-                        StyleIdentity(source[(int)index]),
-                        StyleIdentity(generated[(int)index]),
-                        StringComparison.Ordinal))
+                if (index >= formatMap.Length)
                 {
                     throw new InvalidDataException(
                         "CONFIG_WORKBOOK_STYLE_INDEX_FIDELITY_FAILED: " + index);
                 }
             }
+
+            foreach (Cell cell in generatedPart.WorksheetParts
+                         .SelectMany(sheet => sheet.Worksheet.Descendants<Cell>()))
+            {
+                uint generatedIndex = cell.StyleIndex?.Value ?? 0U;
+                uint sourceIndex = formatMap[generatedIndex];
+                if (cell.StyleIndex != null || sourceIndex != 0U)
+                {
+                    cell.StyleIndex = sourceIndex;
+                }
+            }
+
+            sourcePart.WorkbookStylesPart.Stylesheet.Save();
         }
 
-        private static string StyleIdentity(CellFormat format)
+        private static uint[] MergeIndexedStyleElements<T>(
+            OpenXmlCompositeElement source,
+            OpenXmlCompositeElement generated)
+            where T : OpenXmlElement
         {
-            return (format.NumberFormatId?.Value ?? 0U) + ":" +
-                   (format.FontId?.Value ?? 0U) + ":" +
-                   (format.FillId?.Value ?? 0U) + ":" +
-                   (format.BorderId?.Value ?? 0U) + ":" +
-                   (format.FormatId?.Value ?? 0U);
+            List<T> generatedElements = generated.Elements<T>().ToList();
+            var result = new uint[generatedElements.Count];
+            for (int index = 0; index < generatedElements.Count; index++)
+            {
+                result[index] = FindOrAppendStyleElement(
+                    source,
+                    (T)generatedElements[index].CloneNode(true));
+            }
+
+            SetStyleCollectionCount(source);
+            return result;
+        }
+
+        private static uint FindOrAppendStyleElement<T>(
+            OpenXmlCompositeElement source,
+            T candidate)
+            where T : OpenXmlElement
+        {
+            string identity = StyleElementIdentity(candidate);
+            List<T> existing = source.Elements<T>().ToList();
+            for (int index = 0; index < existing.Count; index++)
+            {
+                if (string.Equals(
+                        StyleElementIdentity(existing[index]),
+                        identity,
+                        StringComparison.Ordinal))
+                {
+                    return (uint)index;
+                }
+            }
+
+            source.Append(candidate);
+            return (uint)existing.Count;
+        }
+
+        private static void RemapStyleDependencies(
+            Stylesheet sourceStyles,
+            Stylesheet generatedStyles,
+            CellFormat format,
+            IReadOnlyList<uint> fontMap,
+            IReadOnlyList<uint> fillMap,
+            IReadOnlyList<uint> borderMap)
+        {
+            if (format.FontId != null)
+            {
+                format.FontId = MappedStyleIndex(format.FontId.Value, fontMap, "font");
+            }
+            if (format.FillId != null)
+            {
+                format.FillId = MappedStyleIndex(format.FillId.Value, fillMap, "fill");
+            }
+            if (format.BorderId != null)
+            {
+                format.BorderId = MappedStyleIndex(format.BorderId.Value, borderMap, "border");
+            }
+            if (format.NumberFormatId != null)
+            {
+                format.NumberFormatId = MergeNumberFormat(
+                    sourceStyles,
+                    generatedStyles,
+                    format.NumberFormatId.Value);
+            }
+        }
+
+        private static uint MappedStyleIndex(
+            uint generatedIndex,
+            IReadOnlyList<uint> map,
+            string kind)
+        {
+            if (generatedIndex >= map.Count)
+            {
+                throw new InvalidDataException(
+                    "CONFIG_WORKBOOK_STYLE_INDEX_FIDELITY_FAILED: " + kind + "=" +
+                    generatedIndex);
+            }
+
+            return map[(int)generatedIndex];
+        }
+
+        private static uint MergeNumberFormat(
+            Stylesheet sourceStyles,
+            Stylesheet generatedStyles,
+            uint generatedId)
+        {
+            if (generatedId < 164U)
+            {
+                return generatedId;
+            }
+
+            NumberingFormat generated = generatedStyles.NumberingFormats?
+                .Elements<NumberingFormat>()
+                .SingleOrDefault(value => value.NumberFormatId?.Value == generatedId);
+            if (generated?.FormatCode?.Value == null)
+            {
+                throw new InvalidDataException(
+                    "CONFIG_WORKBOOK_STYLE_INDEX_FIDELITY_FAILED: numFmt=" + generatedId);
+            }
+
+            NumberingFormats sourceFormats = sourceStyles.NumberingFormats;
+            if (sourceFormats == null)
+            {
+                sourceFormats = new NumberingFormats();
+                sourceStyles.InsertAt(sourceFormats, 0);
+            }
+
+            NumberingFormat existing = sourceFormats.Elements<NumberingFormat>()
+                .FirstOrDefault(value => string.Equals(
+                    value.FormatCode?.Value,
+                    generated.FormatCode.Value,
+                    StringComparison.Ordinal));
+            if (existing?.NumberFormatId != null)
+            {
+                return existing.NumberFormatId.Value;
+            }
+
+            var used = new HashSet<uint>(sourceFormats.Elements<NumberingFormat>()
+                .Where(value => value.NumberFormatId != null)
+                .Select(value => value.NumberFormatId.Value));
+            uint nextId = 164U;
+            while (used.Contains(nextId))
+            {
+                nextId++;
+            }
+
+            var appended = (NumberingFormat)generated.CloneNode(true);
+            appended.NumberFormatId = nextId;
+            sourceFormats.Append(appended);
+            sourceFormats.Count = (uint)sourceFormats.ChildElements.Count;
+            return nextId;
+        }
+
+        private static void SetStyleCollectionCount(OpenXmlCompositeElement collection)
+        {
+            uint count = (uint)collection.ChildElements.Count;
+            switch (collection)
+            {
+                case Fonts fonts:
+                    fonts.Count = count;
+                    break;
+                case Fills fills:
+                    fills.Count = count;
+                    break;
+                case Borders borders:
+                    borders.Count = count;
+                    break;
+                case CellStyleFormats styleFormats:
+                    styleFormats.Count = count;
+                    break;
+                case CellFormats cellFormats:
+                    cellFormats.Count = count;
+                    break;
+            }
+        }
+
+        private static string StyleElementIdentity(OpenXmlElement element)
+        {
+            var builder = new StringBuilder();
+            AppendStyleElementIdentity(builder, element);
+            return builder.ToString();
+        }
+
+        private static void AppendStyleElementIdentity(
+            StringBuilder builder,
+            OpenXmlElement element)
+        {
+            builder.Append('<').Append(element.LocalName);
+            foreach (OpenXmlAttribute attribute in element.GetAttributes()
+                         .OrderBy(value => value.NamespaceUri, StringComparer.Ordinal)
+                         .ThenBy(value => value.LocalName, StringComparer.Ordinal))
+            {
+                builder.Append('|')
+                    .Append(attribute.NamespaceUri)
+                    .Append(':')
+                    .Append(attribute.LocalName)
+                    .Append('=')
+                    .Append(attribute.Value);
+            }
+            builder.Append('>');
+            foreach (OpenXmlElement child in element.ChildElements)
+            {
+                AppendStyleElementIdentity(builder, child);
+            }
+            if (!element.HasChildren && !string.IsNullOrEmpty(element.InnerText))
+            {
+                builder.Append(element.InnerText);
+            }
+            builder.Append("</").Append(element.LocalName).Append('>');
         }
 
         private static string DefinedNameKey(DefinedName name)
@@ -2209,22 +2490,17 @@ namespace ZeroGameStudio.ConfigPipeline.Editor
         {
             DefinedNames generatedNames = generatedPart.Workbook.GetFirstChild<DefinedNames>();
             DefinedNames sourceNames = sourcePart.Workbook.GetFirstChild<DefinedNames>();
-            var generatedEnumNames = new HashSet<string>(
+            var generatedPipelineNames = new HashSet<string>(
                 (generatedNames?.Elements<DefinedName>() ??
                  Enumerable.Empty<DefinedName>())
                 .Select(name => name.Name?.Value)
-                .Where(name => name?.StartsWith(
-                    PipelineEnumDefinedNamePrefix,
-                    StringComparison.Ordinal) == true),
+                .Where(IsPipelineDefinedName),
                 StringComparer.Ordinal);
             if (sourceNames != null)
             {
                 foreach (DefinedName stale in sourceNames.Elements<DefinedName>()
-                             .Where(name => name.Name?.Value?.StartsWith(
-                                                PipelineEnumDefinedNamePrefix,
-                                                StringComparison.Ordinal) == true &&
-                                            !generatedEnumNames.Contains(
-                                                name.Name.Value))
+                             .Where(name => IsPipelineDefinedName(name.Name?.Value) &&
+                                            !generatedPipelineNames.Contains(name.Name.Value))
                              .ToList())
                 {
                     stale.Remove();
@@ -2265,6 +2541,13 @@ namespace ZeroGameStudio.ConfigPipeline.Editor
                     sourceName.LocalSheetId = generatedName.LocalSheetId;
                 }
             }
+        }
+
+        private static bool IsPipelineDefinedName(string name)
+        {
+            return !string.IsNullOrEmpty(name) &&
+                   PipelineDefinedNamePrefixes.Any(prefix =>
+                       name.StartsWith(prefix, StringComparison.Ordinal));
         }
 
         private static string RangeReference(

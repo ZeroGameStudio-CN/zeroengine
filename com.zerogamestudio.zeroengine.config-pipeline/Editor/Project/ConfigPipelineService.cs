@@ -244,7 +244,9 @@ namespace ZeroGameStudio.ConfigPipeline.Editor
                         null,
                         workbook.Tables,
                         workbook.AuthoringSheets,
-                        set.UsesMacroEnabledWorkbooks);
+                        set.UsesMacroEnabledWorkbooks,
+                        workbook.ProtectedRecordIds,
+                        set.UsesAuthoringOperations);
                 }
             }
         }
@@ -314,7 +316,9 @@ namespace ZeroGameStudio.ConfigPipeline.Editor
                         sourceHash,
                         workbook.Tables,
                         workbook.AuthoringSheets,
-                        set.UsesMacroEnabledWorkbooks);
+                        set.UsesMacroEnabledWorkbooks,
+                        workbook.ProtectedRecordIds,
+                        set.UsesAuthoringOperations);
                 }
 
                 XlsxReadResult roundTrip = ReadWorkbooks(
@@ -487,7 +491,9 @@ namespace ZeroGameStudio.ConfigPipeline.Editor
                         jsonSourceHash,
                         workbook.Tables,
                         workbook.AuthoringSheets,
-                        set.UsesMacroEnabledWorkbooks);
+                        set.UsesMacroEnabledWorkbooks,
+                        workbook.ProtectedRecordIds,
+                        set.UsesAuthoringOperations);
                 }
 
                 XlsxReadResult roundTrip = ReadWorkbooks(
@@ -660,7 +666,9 @@ namespace ZeroGameStudio.ConfigPipeline.Editor
                             sourceHash,
                             workbook.Tables,
                             workbook.AuthoringSheets,
-                            nextSet.UsesMacroEnabledWorkbooks);
+                            nextSet.UsesMacroEnabledWorkbooks,
+                            workbook.ProtectedRecordIds,
+                            nextSet.UsesAuthoringOperations);
                     }
                     else
                     {
@@ -674,7 +682,9 @@ namespace ZeroGameStudio.ConfigPipeline.Editor
                                 sourceHash,
                                 workbook.Tables,
                                 workbook.AuthoringSheets,
-                                nextSet.UsesMacroEnabledWorkbooks);
+                                nextSet.UsesMacroEnabledWorkbooks,
+                                workbook.ProtectedRecordIds,
+                                nextSet.UsesAuthoringOperations);
                         }
                     }
                 }

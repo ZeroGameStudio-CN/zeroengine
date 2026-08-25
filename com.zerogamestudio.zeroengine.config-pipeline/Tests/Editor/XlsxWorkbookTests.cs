@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Security.Cryptography;
@@ -1167,6 +1168,115 @@ namespace ZeroGameStudio.ConfigPipeline.Tests
         }
 
         [Test]
+        public void SourcePreservingWriterRefreshesPipelineOwnedActionCells()
+        {
+            ConfigSchema schema = Schema();
+            string sourcePath = TemporaryWorkbookPath("action-label-source");
+            string candidatePath = TemporaryWorkbookPath("action-label-candidate");
+            try
+            {
+                using (FileStream stream = File.Create(sourcePath))
+                {
+                    new XlsxConfigWorkbookWriter().WriteTemplate(
+                        stream,
+                        schema,
+                        "sample.xlsx",
+                        Document(),
+                        null,
+                        null,
+                        null,
+                        true,
+                        null,
+                        true);
+                }
+
+                using (SpreadsheetDocument source = SpreadsheetDocument.Open(sourcePath, true))
+                {
+                    WorksheetPart sheet = GetWorksheetPart(source, "Items");
+                    Row actionRow = sheet.Worksheet.GetFirstChild<SheetData>()
+                        .Elements<Row>()
+                        .Single(value => value.RowIndex.Value == 1U);
+                    string[] legacyLabels =
+                    {
+                        "＋ 新增（Ctrl+Shift+N）",
+                        "复制（Ctrl+Shift+C）",
+                        "安全删除（Ctrl+Shift+D）",
+                        "编辑关系（Ctrl+Shift+R）",
+                        "技术区（Ctrl+Shift+T）",
+                        "？ 帮助（Ctrl+Shift+H）"
+                    };
+                    Cell[] actionCells = actionRow.Elements<Cell>().Take(6).ToArray();
+                    for (int index = 0; index < actionCells.Length; index++)
+                    {
+                        actionCells[index].RemoveAllChildren();
+                        actionCells[index].DataType = CellValues.InlineString;
+                        actionCells[index].InlineString =
+                            new InlineString(new Text(legacyLabels[index]));
+                    }
+
+                    actionRow.Append(new Cell
+                    {
+                        CellReference = "Z1",
+                        DataType = CellValues.InlineString,
+                        InlineString = new InlineString(new Text("designer-owned"))
+                    });
+                    sheet.Worksheet.Save();
+                }
+
+                XlsxConfigWorkbookSourcePreservingWriter.WriteCandidate(
+                    sourcePath,
+                    candidatePath,
+                    schema,
+                    "sample.xlsx",
+                    Document(),
+                    "source-hash",
+                    new[] { "items" },
+                    null,
+                    true,
+                    null,
+                    true);
+
+                using (SpreadsheetDocument candidate =
+                       SpreadsheetDocument.Open(candidatePath, false))
+                {
+                    WorksheetPart sheet = GetWorksheetPart(candidate, "Items");
+                    Cell[] cells = sheet.Worksheet.GetFirstChild<SheetData>()
+                        .Elements<Row>()
+                        .Single(value => value.RowIndex.Value == 1U)
+                        .Elements<Cell>()
+                        .ToArray();
+                    Cell[] actionCells = cells.Take(6).ToArray();
+                    Assert.That(
+                        actionCells.Select(value => value.InnerText),
+                        Is.EqualTo(new[]
+                        {
+                            "新增", "复制", "安全删除", "编辑关系", "技术区", "帮助"
+                        }));
+                    Assert.That(actionCells.All(value => value.CellFormula == null), Is.True);
+                    Assert.That(
+                        actionCells.All(value => value.DataType?.Value == CellValues.InlineString),
+                        Is.True);
+                    Assert.That(
+                        cells.Single(value => value.CellReference.Value == "Z1").InnerText,
+                        Is.EqualTo("designer-owned"));
+                    Assert.That(new OpenXmlValidator().Validate(candidate), Is.Empty);
+                }
+            }
+            finally
+            {
+                if (File.Exists(sourcePath))
+                {
+                    File.Delete(sourcePath);
+                }
+
+                if (File.Exists(candidatePath))
+                {
+                    File.Delete(candidatePath);
+                }
+            }
+        }
+
+        [Test]
         public void SourcePreservingWriterRetainsMacroAndDesignerCells()
         {
             ConfigSchema schema = Schema();
@@ -1208,6 +1318,29 @@ namespace ZeroGameStudio.ConfigPipeline.Tests
                         "Items");
                     CellFormats cellFormats = workbook.WorkbookPart.WorkbookStylesPart
                         .Stylesheet.CellFormats;
+                    uint[] excelOrder = { 0U, 1U, 4U, 5U, 6U, 7U, 8U, 9U, 2U, 3U };
+                    List<CellFormat> pipelineFormats = cellFormats.Elements<CellFormat>()
+                        .Select(value => (CellFormat)value.CloneNode(true))
+                        .ToList();
+                    var excelStyleIndexes = new Dictionary<uint, uint>();
+                    cellFormats.RemoveAllChildren();
+                    for (uint index = 0; index < excelOrder.Length; index++)
+                    {
+                        uint originalIndex = excelOrder[index];
+                        cellFormats.Append(pipelineFormats[(int)originalIndex]);
+                        excelStyleIndexes.Add(originalIndex, index);
+                    }
+                    foreach (Cell cell in workbook.WorkbookPart.WorksheetParts
+                                 .SelectMany(value => value.Worksheet.Descendants<Cell>()))
+                    {
+                        uint originalIndex = cell.StyleIndex?.Value ?? 0U;
+                        uint excelIndex = excelStyleIndexes[originalIndex];
+                        if (cell.StyleIndex != null || excelIndex != 0U)
+                        {
+                            cell.StyleIndex = excelIndex;
+                        }
+                    }
+
                     designerStyleIndex = (uint)cellFormats.ChildElements.Count;
                     cellFormats.Append(new CellFormat(
                         new Alignment { Horizontal = HorizontalAlignmentValues.Center })

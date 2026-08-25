@@ -27,6 +27,7 @@ namespace ZeroGameStudio.ConfigPipeline.Editor
             string configSetId,
             string authoringSource,
             string authoringWorkbookFormat,
+            int authoringOperationsVersion,
             string schemaPath,
             IEnumerable<ConfigWorkbookProfile> workbooks,
             string generatedNamespace,
@@ -37,6 +38,7 @@ namespace ZeroGameStudio.ConfigPipeline.Editor
             ConfigSetId = configSetId;
             AuthoringSource = authoringSource;
             AuthoringWorkbookFormat = authoringWorkbookFormat;
+            AuthoringOperationsVersion = authoringOperationsVersion;
             SchemaPath = schemaPath;
             Workbooks = new List<ConfigWorkbookProfile>(workbooks).AsReadOnly();
             GeneratedNamespace = generatedNamespace;
@@ -50,6 +52,8 @@ namespace ZeroGameStudio.ConfigPipeline.Editor
         public string AuthoringWorkbookFormat { get; }
         public bool UsesMacroEnabledWorkbooks =>
             string.Equals(AuthoringWorkbookFormat, "xlsm", StringComparison.Ordinal);
+        public int AuthoringOperationsVersion { get; }
+        public bool UsesAuthoringOperations => AuthoringOperationsVersion > 0;
         public string SchemaPath { get; }
         public IReadOnlyList<ConfigWorkbookProfile> Workbooks { get; }
         public string GeneratedNamespace { get; }
@@ -63,17 +67,24 @@ namespace ZeroGameStudio.ConfigPipeline.Editor
         internal ConfigWorkbookProfile(
             string path,
             IEnumerable<string> tables,
-            IEnumerable<ConfigAuthoringSheetProfile> authoringSheets)
+            IEnumerable<ConfigAuthoringSheetProfile> authoringSheets,
+            IReadOnlyDictionary<string, IReadOnlyList<string>> protectedRecordIds)
         {
             Path = path;
             Tables = new List<string>(tables).AsReadOnly();
             AuthoringSheets = new List<ConfigAuthoringSheetProfile>(
                 authoringSheets ?? Array.Empty<ConfigAuthoringSheetProfile>()).AsReadOnly();
+            ProtectedRecordIds = new ReadOnlyDictionary<string, IReadOnlyList<string>>(
+                new Dictionary<string, IReadOnlyList<string>>(
+                    protectedRecordIds ??
+                    new Dictionary<string, IReadOnlyList<string>>(StringComparer.Ordinal),
+                    StringComparer.Ordinal));
         }
 
         public string Path { get; }
         public IReadOnlyList<string> Tables { get; }
         public IReadOnlyList<ConfigAuthoringSheetProfile> AuthoringSheets { get; }
+        public IReadOnlyDictionary<string, IReadOnlyList<string>> ProtectedRecordIds { get; }
     }
 
     public sealed class ConfigAuthoringSheetProfile
@@ -115,9 +126,11 @@ namespace ZeroGameStudio.ConfigPipeline.Editor
     {
         private static readonly HashSet<string> RootKeys = Keys("formatVersion", "configSets");
         private static readonly HashSet<string> SetKeys = Keys(
-            "configSetId", "authoringSource", "authoringWorkbookFormat", "schema", "workbooks",
+            "configSetId", "authoringSource", "authoringWorkbookFormat", "authoringOperationsVersion",
+            "schema", "workbooks",
             "generatedNamespace", "rootClassName", "codePath", "targets");
-        private static readonly HashSet<string> WorkbookKeys = Keys("path", "tables", "authoringSheets");
+        private static readonly HashSet<string> WorkbookKeys = Keys(
+            "path", "tables", "authoringSheets", "protectedRecordIds");
         private static readonly HashSet<string> AuthoringSheetKeys = Keys("name", "tables");
         private static readonly HashSet<string> TargetKeys = Keys(
             "scope", "json", "manifest", "sourceMap", "workshopSchema");
@@ -160,6 +173,22 @@ namespace ZeroGameStudio.ConfigPipeline.Editor
                         id + ".authoringWorkbookFormat must be 'xlsx' or 'xlsm'.");
                 }
 
+                int authoringOperationsVersion = checked((int)OptionalInteger(
+                    set,
+                    "authoringOperationsVersion",
+                    0,
+                    id));
+                if (authoringOperationsVersion < 0 || authoringOperationsVersion > 1)
+                {
+                    throw new InvalidDataException(
+                        id + ".authoringOperationsVersion must be 0 or 1.");
+                }
+                if (authoringOperationsVersion > 0 && authoringWorkbookFormat != "xlsm")
+                {
+                    throw new InvalidDataException(
+                        id + ".authoringOperationsVersion requires authoringWorkbookFormat 'xlsm'.");
+                }
+
                 var workbooks = new List<ConfigWorkbookProfile>();
                 var tableOwners = new HashSet<string>(StringComparer.Ordinal);
                 var workbookPaths = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
@@ -198,7 +227,13 @@ namespace ZeroGameStudio.ConfigPipeline.Editor
 
                     IReadOnlyList<ConfigAuthoringSheetProfile> authoringSheets =
                         ReadAuthoringSheets(workbook, tables, id + ".workbooks[]");
-                    workbooks.Add(new ConfigWorkbookProfile(path, tables, authoringSheets));
+                    IReadOnlyDictionary<string, IReadOnlyList<string>> protectedRecordIds =
+                        ReadProtectedRecordIds(workbook, tables, id + ".workbooks[]");
+                    workbooks.Add(new ConfigWorkbookProfile(
+                        path,
+                        tables,
+                        authoringSheets,
+                        protectedRecordIds));
                 }
 
                 var targets = new List<ConfigTargetProfile>();
@@ -228,6 +263,7 @@ namespace ZeroGameStudio.ConfigPipeline.Editor
                     id,
                     authoringSource,
                     authoringWorkbookFormat,
+                    authoringOperationsVersion,
                     NormalizePath(RequireString(set, "schema", id)),
                     workbooks,
                     RequireString(set, "generatedNamespace", id),
@@ -307,6 +343,25 @@ namespace ZeroGameStudio.ConfigPipeline.Editor
             return integer.Value;
         }
 
+        private static long OptionalInteger(
+            ConfigObjectNode value,
+            string property,
+            long defaultValue,
+            string path)
+        {
+            if (!value.TryGetValue(property, out ConfigNode node))
+            {
+                return defaultValue;
+            }
+
+            if (!(node is ConfigIntegerNode integer))
+            {
+                throw new InvalidDataException(path + "." + property + " must be an integer.");
+            }
+
+            return integer.Value;
+        }
+
         private static IReadOnlyList<string> ReadStrings(ConfigArrayNode values, string path)
         {
             var result = new List<string>();
@@ -377,6 +432,53 @@ namespace ZeroGameStudio.ConfigPipeline.Editor
             }
 
             return sheets;
+        }
+
+        private static IReadOnlyDictionary<string, IReadOnlyList<string>> ReadProtectedRecordIds(
+            ConfigObjectNode workbook,
+            IReadOnlyList<string> workbookTables,
+            string path)
+        {
+            var result = new Dictionary<string, IReadOnlyList<string>>(StringComparer.Ordinal);
+            if (!workbook.TryGetValue("protectedRecordIds", out ConfigNode node))
+            {
+                return new ReadOnlyDictionary<string, IReadOnlyList<string>>(result);
+            }
+
+            if (!(node is ConfigObjectNode values))
+            {
+                throw new InvalidDataException(path + ".protectedRecordIds must be an object.");
+            }
+
+            foreach (ConfigProperty property in values.Properties)
+            {
+                if (!workbookTables.Contains(property.Name))
+                {
+                    throw new InvalidDataException(
+                        path + ".protectedRecordIds contains a table not owned by the workbook: " +
+                        property.Name);
+                }
+
+                if (!(property.Value is ConfigArrayNode ids))
+                {
+                    throw new InvalidDataException(
+                        path + ".protectedRecordIds." + property.Name + " must be an array.");
+                }
+
+                IReadOnlyList<string> protectedIds = ReadStrings(
+                    ids,
+                    path + ".protectedRecordIds." + property.Name);
+                if (protectedIds.Count == 0)
+                {
+                    throw new InvalidDataException(
+                        path + ".protectedRecordIds." + property.Name +
+                        " must contain at least one record ID.");
+                }
+
+                result.Add(property.Name, protectedIds);
+            }
+
+            return new ReadOnlyDictionary<string, IReadOnlyList<string>>(result);
         }
 
         private static void ValidateWorksheetName(string value, string path)
