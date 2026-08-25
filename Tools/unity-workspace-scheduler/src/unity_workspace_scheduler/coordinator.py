@@ -5296,9 +5296,12 @@ class WorkspaceCoordinator:
         if not isinstance(summary, str) or not summary.strip():
             raise UsageError("Task summary cannot be empty.")
         _validate_ttl(ttl_seconds)
-        canonical_token_path = (
-            _canonical_token_file_path(token_file_path) if token_file_path is not None else None
-        )
+        if token_file_path is None:
+            canonical_token_path = None
+        elif os.name == "nt":
+            canonical_token_path = str(canonical_token_file_path(Path(token_file_path)))
+        else:
+            canonical_token_path = _canonical_token_file_path(token_file_path)
         secret = token or secrets.token_urlsafe(32)
         secret_hash = _token_hash(secret)
         identifier = _workspace_id(root)

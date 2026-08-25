@@ -574,6 +574,30 @@ def test_windows_token_location_rejects_an_arbitrary_parent(
         state_module._validate_windows_token_location(tmp_path / "untrusted" / "owner.token")
 
 
+@pytest.mark.skipif(state_module.os.name != "nt", reason="Windows short-path behavior only")
+def test_windows_token_location_canonicalizes_a_short_temp_alias(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    canonical_temp = tmp_path / "runneradmin" / "AppData" / "Local" / "Temp"
+    canonical_temp.mkdir(parents=True)
+    alias_temp = tmp_path / "RUNNER~1" / "AppData" / "Local" / "Temp"
+    alias_path = alias_temp / "router" / "owner.token"
+    canonical_path = canonical_temp / "router" / "owner.token"
+    original_resolve = Path.resolve
+
+    def resolve_alias(path: Path, strict: bool = False) -> Path:
+        if path == alias_temp:
+            return canonical_temp
+        if path == alias_path:
+            return canonical_path
+        return original_resolve(path, strict=strict)
+
+    monkeypatch.setattr(state_module.tempfile, "gettempdir", lambda: str(alias_temp))
+    monkeypatch.setattr(Path, "resolve", resolve_alias)
+
+    assert state_module.canonical_token_file_path(alias_path) == canonical_path
+
+
 def test_windows_token_location_rejects_a_reparse_escape(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

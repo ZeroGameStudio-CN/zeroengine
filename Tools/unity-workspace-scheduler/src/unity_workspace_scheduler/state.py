@@ -995,8 +995,7 @@ def _run_icacls_readonly(path: Path, identity: str, *arguments: str) -> subproce
 def _validate_windows_token_location(path: Path) -> None:
     try:
         user_temp = Path(tempfile.gettempdir()).resolve(strict=True)
-        path.absolute().relative_to(user_temp)
-        path.resolve().relative_to(user_temp)
+        path.resolve(strict=False).relative_to(user_temp)
     except (OSError, RuntimeError, ValueError) as exc:
         raise OSError(
             "Windows task token files must be inside the current-user temporary directory."
