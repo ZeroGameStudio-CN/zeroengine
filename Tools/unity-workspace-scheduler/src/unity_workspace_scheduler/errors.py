@@ -32,6 +32,11 @@ class AuthorizationError(SchedulerError):
     exit_code = 4
 
 
+class ClaimAuthorizationError(SchedulerError):
+    code = "claim-not-owned"
+    exit_code = 4
+
+
 class StateError(SchedulerError):
     code = "workspace-state-invalid"
     exit_code = 5
