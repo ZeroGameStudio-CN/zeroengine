@@ -2536,12 +2536,30 @@ def test_terminal_lifecycle_replay_rejects_malformed_lineage_json(
 def test_terminal_lifecycle_replay_deleted_token_exact_lineage_for_all_actions(
     tmp_path: Path,
     action: str,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     workspace = tmp_path / action.replace(".", "-")
     workspace.mkdir()
     coordinator = WorkspaceCoordinator(resolve_state_paths(tmp_path / f"{action}-state"))
     coordinator.register(workspace, operation_id=operation_id())
-    token_root = Path(tempfile.gettempdir()) / f"unity-scheduler-replay-{uuid.uuid4().hex}"
+    if os.name == "nt":
+        canonical_temp = tmp_path / "runneradmin" / "AppData" / "Local" / "Temp"
+        canonical_temp.mkdir(parents=True)
+        alias_temp = tmp_path / "RUNNER~1" / "AppData" / "Local" / "Temp"
+        token_root = alias_temp / f"unity-scheduler-replay-{uuid.uuid4().hex}"
+        original_resolve = Path.resolve
+
+        def resolve_alias(path: Path, strict: bool = False) -> Path:
+            try:
+                relative = path.relative_to(alias_temp)
+            except ValueError:
+                return original_resolve(path, strict=strict)
+            return canonical_temp / relative
+
+        monkeypatch.setattr(state_module.tempfile, "gettempdir", lambda: str(alias_temp))
+        monkeypatch.setattr(Path, "resolve", resolve_alias)
+    else:
+        token_root = Path(tempfile.gettempdir()) / f"unity-scheduler-replay-{uuid.uuid4().hex}"
     token_root.mkdir()
     token_path = token_root / "owner.token"
     blocker_path = token_root / "blocker.token"

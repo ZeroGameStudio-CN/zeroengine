@@ -159,6 +159,12 @@ def _canonical_token_file_path(path: str) -> str:
     return path
 
 
+def _canonical_lifecycle_replay_token_path(path: str) -> str:
+    if os.name == "nt" and not os.path.lexists(path):
+        return str(canonical_token_file_path(Path(path)))
+    return _canonical_token_file_path(path)
+
+
 def _token_path_identity(path: str) -> str:
     normalized = os.path.normcase(os.path.normpath(path))
     return normalized.casefold() if os.name == "nt" else normalized
@@ -3929,7 +3935,7 @@ class WorkspaceCoordinator:
             )
         root = canonical_workspace(workspace)
         validated_id = validate_operation_id(operation_id)
-        canonical_token_path = _canonical_token_file_path(token_file_path)
+        canonical_token_path = _canonical_lifecycle_replay_token_path(token_file_path)
         if action == "task.heartbeat":
             if note is not None and not isinstance(note, str):
                 raise UsageError("Task heartbeat note must be text.")
@@ -4002,7 +4008,7 @@ class WorkspaceCoordinator:
             if result in {"completed", "failed"}:
                 if token_cleanup_path is None:
                     token_cleanup_path = canonical_token_path
-                canonical_cleanup_path = _canonical_token_file_path(token_cleanup_path)
+                canonical_cleanup_path = _canonical_lifecycle_replay_token_path(token_cleanup_path)
                 if _token_path_identity(canonical_cleanup_path) != _token_path_identity(
                     canonical_token_path
                 ):
@@ -4026,7 +4032,7 @@ class WorkspaceCoordinator:
         parameters_json = canonical_json(parameters)
         identifier = _workspace_id(root)
         with task_token_path_lock(self.paths, Path(canonical_token_path)):
-            locked_token_path = _canonical_token_file_path(canonical_token_path)
+            locked_token_path = _canonical_lifecycle_replay_token_path(canonical_token_path)
             if _token_path_identity(locked_token_path) != _token_path_identity(
                 canonical_token_path
             ):
