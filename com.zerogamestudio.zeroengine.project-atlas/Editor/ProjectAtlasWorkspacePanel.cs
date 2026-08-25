@@ -24,18 +24,19 @@ namespace ZeroEngine.ProjectAtlas
         IEditorWorkspaceRouteReceiver
     {
         private const string StatePrefix = "ZeroEngine.ProjectAtlas.FeatureWorkspace.";
-        private const float DefaultDomainColumnWidth = 190f;
-        private const float DefaultFeatureColumnWidth = 280f;
-        private const float MinDomainColumnWidth = 160f;
-        private const float MinFeatureColumnWidth = 220f;
-        private const float MaxNavigationColumnWidth = 520f;
-        private const float MinDetailColumnWidth = 320f;
+        private const float DefaultDomainColumnWidth = 160f;
+        private const float DefaultFeatureColumnWidth = 220f;
+        private const float MinDomainColumnWidth = 90f;
+        private const float MinFeatureColumnWidth = 120f;
+        private const float MaxNavigationColumnWidth = 420f;
+        private const float MinDetailColumnWidth = 180f;
         private const float SplitterWidth = 5f;
         private const float FeatureRowHeight = 34f;
+        private const float ButtonHorizontalChromeWidth = 28f;
         private const float ThreeColumnMinContentWidth =
             MinDomainColumnWidth + MinFeatureColumnWidth + MinDetailColumnWidth + SplitterWidth * 2f;
-        private const string DomainColumnWidthStateKey = StatePrefix + "DomainColumnWidth";
-        private const string FeatureColumnWidthStateKey = StatePrefix + "FeatureColumnWidth";
+        private const string DomainColumnWidthStateKey = StatePrefix + "DomainColumnWidth.Responsive";
+        private const string FeatureColumnWidthStateKey = StatePrefix + "FeatureColumnWidth.Responsive";
 
         private readonly struct BodyLayoutRects
         {
@@ -237,7 +238,7 @@ namespace ZeroEngine.ProjectAtlas
                 ref _domainColumnWidth,
                 DomainColumnWidthStateKey,
                 MinDomainColumnWidth,
-                bodyRect.width - _featureColumnWidth - SplitterWidth * 2f - MinDetailColumnWidth);
+                bodyRect.width - layoutRects.FeatureColumn.width - SplitterWidth * 2f - MinDetailColumnWidth);
 
             ProjectFeatureDomain selectedDomain = domains.First(domain => domain.Id == _selectedDomainId);
             ProjectFeature[] features = VisibleFeatures(selectedDomain).ToArray();
@@ -248,26 +249,38 @@ namespace ZeroEngine.ProjectAtlas
                 ref _featureColumnWidth,
                 FeatureColumnWidthStateKey,
                 MinFeatureColumnWidth,
-                bodyRect.width - _domainColumnWidth - SplitterWidth * 2f - MinDetailColumnWidth);
+                bodyRect.width - layoutRects.DomainColumn.width - SplitterWidth * 2f - MinDetailColumnWidth);
             DrawDetailColumn(context, layoutRects.DetailColumn, features);
         }
 
         private BodyLayoutRects CalculateBodyLayoutRects(Rect bodyRect)
         {
-            float maxDomainWidth = Mathf.Max(
-                MinDomainColumnWidth,
-                bodyRect.width - _featureColumnWidth - SplitterWidth * 2f - MinDetailColumnWidth);
             float resolvedDomainWidth = Mathf.Clamp(
                 _domainColumnWidth,
                 MinDomainColumnWidth,
-                Mathf.Min(MaxNavigationColumnWidth, maxDomainWidth));
-            float maxFeatureWidth = Mathf.Max(
-                MinFeatureColumnWidth,
-                bodyRect.width - resolvedDomainWidth - SplitterWidth * 2f - MinDetailColumnWidth);
+                MaxNavigationColumnWidth);
             float resolvedFeatureWidth = Mathf.Clamp(
                 _featureColumnWidth,
                 MinFeatureColumnWidth,
-                Mathf.Min(MaxNavigationColumnWidth, maxFeatureWidth));
+                MaxNavigationColumnWidth);
+            float navigationBudget = Mathf.Max(
+                MinDomainColumnWidth + MinFeatureColumnWidth,
+                bodyRect.width - SplitterWidth * 2f - MinDetailColumnWidth);
+            float desiredNavigationWidth = resolvedDomainWidth + resolvedFeatureWidth;
+            if (desiredNavigationWidth > navigationBudget)
+            {
+                float domainExtra = resolvedDomainWidth - MinDomainColumnWidth;
+                float featureExtra = resolvedFeatureWidth - MinFeatureColumnWidth;
+                float extraWidth = domainExtra + featureExtra;
+                float availableExtraWidth = Mathf.Max(
+                    0f,
+                    navigationBudget - MinDomainColumnWidth - MinFeatureColumnWidth);
+                float scale = extraWidth > 0f
+                    ? Mathf.Clamp01(availableExtraWidth / extraWidth)
+                    : 0f;
+                resolvedDomainWidth = MinDomainColumnWidth + domainExtra * scale;
+                resolvedFeatureWidth = MinFeatureColumnWidth + featureExtra * scale;
+            }
             float detailWidth = Mathf.Max(
                 0f,
                 bodyRect.width - resolvedDomainWidth - resolvedFeatureWidth - SplitterWidth * 2f);
@@ -286,14 +299,19 @@ namespace ZeroEngine.ProjectAtlas
             using (new EditorGUILayout.VerticalScope(EditorStyles.helpBox, GUILayout.ExpandWidth(true), GUILayout.ExpandHeight(true)))
             {
                 EditorGUILayout.LabelField("工作领域", EditorStyles.boldLabel);
-                EditorGUILayout.LabelField("先选择要处理的项目领域", EditorStyles.wordWrappedMiniLabel);
+                DrawElidedLabel("先选择要处理的项目领域", EditorStyles.miniLabel);
                 EditorGUILayout.Space(4f);
                 _domainScroll = EditorGUILayout.BeginScrollView(_domainScroll);
                 foreach (ProjectFeatureDomain domain in domains)
                 {
+                    bool selected = domain.Id == _selectedDomainId;
                     if (EditorUiGUILayout.SelectionButton(
-                            new GUIContent(domain.DisplayName, domain.Summary),
-                            domain.Id == _selectedDomainId,
+                            CreateElidedContent(
+                                domain.DisplayName,
+                                domain.Summary,
+                                selected ? EditorStyles.miniButtonMid : EditorStyles.miniButton,
+                                rect.width - ButtonHorizontalChromeWidth),
+                            selected,
                             GUILayout.ExpandWidth(true),
                             GUILayout.Height(34f)))
                     {
@@ -310,11 +328,11 @@ namespace ZeroEngine.ProjectAtlas
             GUILayout.BeginArea(rect);
             using (new EditorGUILayout.VerticalScope(EditorStyles.helpBox, GUILayout.ExpandWidth(true), GUILayout.ExpandHeight(true)))
             {
-                EditorGUILayout.LabelField(selectedDomain.DisplayName, EditorStyles.boldLabel);
-                EditorGUILayout.LabelField(selectedDomain.Summary, EditorStyles.wordWrappedMiniLabel);
+                DrawElidedLabel(selectedDomain.DisplayName, EditorStyles.boldLabel);
+                DrawElidedLabel(selectedDomain.Summary, EditorStyles.miniLabel);
                 EditorGUILayout.Space(4f);
                 _featureScroll = EditorGUILayout.BeginScrollView(_featureScroll);
-                DrawFeatureButtons(features);
+                DrawFeatureButtons(features, rect.width - ButtonHorizontalChromeWidth);
                 EditorGUILayout.EndScrollView();
             }
             GUILayout.EndArea();
@@ -369,7 +387,7 @@ namespace ZeroEngine.ProjectAtlas
             }
         }
 
-        private void DrawFeatureButtons(ProjectFeature[] features)
+        private void DrawFeatureButtons(ProjectFeature[] features, float textWidth)
         {
             if (features.Length == 0)
             {
@@ -379,15 +397,66 @@ namespace ZeroEngine.ProjectAtlas
             EnsureFeatureSelection(features);
             foreach (ProjectFeature feature in features)
             {
+                bool selected = feature.Id == _selectedFeatureId;
                 if (EditorUiGUILayout.SelectionButton(
-                        new GUIContent(feature.DisplayName, feature.Summary),
-                        feature.Id == _selectedFeatureId,
+                        CreateElidedContent(
+                            feature.DisplayName,
+                            feature.Summary,
+                            selected ? EditorStyles.miniButtonMid : EditorStyles.miniButton,
+                            textWidth),
+                        selected,
                         GUILayout.ExpandWidth(true),
                         GUILayout.Height(FeatureRowHeight)))
                 {
                     SelectFeature(feature.Id);
                 }
             }
+        }
+
+        private static void DrawElidedLabel(string text, GUIStyle style)
+        {
+            Rect rect = GUILayoutUtility.GetRect(
+                GUIContent.none,
+                style,
+                GUILayout.ExpandWidth(true),
+                GUILayout.Height(EditorGUIUtility.singleLineHeight));
+            GUI.Label(rect, new GUIContent(ElideLabel(text, style, rect.width), text), style);
+        }
+
+        private static GUIContent CreateElidedContent(
+            string text,
+            string summary,
+            GUIStyle style,
+            float maxWidth)
+        {
+            string tooltip = string.IsNullOrWhiteSpace(summary)
+                ? text
+                : text + "\n\n" + summary;
+            return new GUIContent(ElideLabel(text, style, maxWidth), tooltip);
+        }
+
+        private static string ElideLabel(string text, GUIStyle style, float maxWidth)
+        {
+            if (string.IsNullOrEmpty(text) || style == null)
+                return text ?? string.Empty;
+            if (maxWidth <= 0f)
+                return string.Empty;
+            if (style.CalcSize(new GUIContent(text)).x <= maxWidth)
+                return text;
+
+            const string ellipsis = "…";
+            int low = 0;
+            int high = text.Length;
+            while (low < high)
+            {
+                int length = (low + high + 1) / 2;
+                string candidate = text.Substring(0, length) + ellipsis;
+                if (style.CalcSize(new GUIContent(candidate)).x <= maxWidth)
+                    low = length;
+                else
+                    high = length - 1;
+            }
+            return text.Substring(0, low) + ellipsis;
         }
 
         private void DrawSelectedFeature(EditorWorkspacePanelContext context, ProjectFeature[] visibleFeatures)

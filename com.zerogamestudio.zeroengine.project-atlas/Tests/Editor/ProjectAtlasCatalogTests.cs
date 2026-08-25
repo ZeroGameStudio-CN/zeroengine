@@ -4,6 +4,7 @@ using System.IO;
 using System.Linq;
 using System.Reflection;
 using NUnit.Framework;
+using UnityEditor;
 using UnityEngine;
 using ZeroEngine.EditorUI;
 
@@ -316,7 +317,7 @@ namespace ZeroEngine.ProjectAtlas.Tests
         }
 
         [Test]
-        public void WorkspacePanel_NarrowWidth_PreservesThreeColumnsWithoutDropdownNavigation()
+        public void WorkspacePanel_NarrowWidth_ShrinksThreeColumnsAndElidesLongLabels()
         {
             var provider = new ProjectAtlasWorkspacePanelProvider();
             IEditorWorkspacePanel panel = provider.CreatePanel("project-atlas");
@@ -324,15 +325,46 @@ namespace ZeroEngine.ProjectAtlas.Tests
             MethodInfo resolveBodyContentWidth = panelType.GetMethod(
                 "ResolveBodyContentWidth",
                 BindingFlags.Static | BindingFlags.NonPublic);
+            MethodInfo calculateBodyLayoutRects = panelType.GetMethod(
+                "CalculateBodyLayoutRects",
+                BindingFlags.Instance | BindingFlags.NonPublic);
+            MethodInfo elideLabel = panelType.GetMethod(
+                "ElideLabel",
+                BindingFlags.Static | BindingFlags.NonPublic);
 
             Assert.That(resolveBodyContentWidth, Is.Not.Null);
             Assert.That(
                 (float)resolveBodyContentWidth.Invoke(null, new object[] { 420f }),
-                Is.GreaterThan(420f),
-                "窄窗口应通过横向滚动保留三栏，而不是折叠为下拉。");
+                Is.EqualTo(420f),
+                "420 point 窗口应直接收缩三栏，不应为了完整标题强制横向滚动。");
             Assert.That(
                 (float)resolveBodyContentWidth.Invoke(null, new object[] { 1440f }),
                 Is.EqualTo(1440f));
+
+            Assert.That(calculateBodyLayoutRects, Is.Not.Null);
+            panelType.GetField("_domainColumnWidth", BindingFlags.Instance | BindingFlags.NonPublic)
+                ?.SetValue(panel, 300f);
+            panelType.GetField("_featureColumnWidth", BindingFlags.Instance | BindingFlags.NonPublic)
+                ?.SetValue(panel, 420f);
+            object layoutRects = calculateBodyLayoutRects.Invoke(
+                panel,
+                new object[] { new Rect(0f, 0f, 420f, 600f) });
+            Type layoutType = layoutRects.GetType();
+            Rect domainRect = (Rect)layoutType.GetProperty("DomainColumn")?.GetValue(layoutRects);
+            Rect featureRect = (Rect)layoutType.GetProperty("FeatureColumn")?.GetValue(layoutRects);
+            Rect detailRect = (Rect)layoutType.GetProperty("DetailColumn")?.GetValue(layoutRects);
+            Assert.That(domainRect.width, Is.LessThan(300f));
+            Assert.That(featureRect.width, Is.LessThan(420f));
+            Assert.That(detailRect.width, Is.GreaterThanOrEqualTo(180f));
+            Assert.That(detailRect.xMax, Is.EqualTo(420f).Within(0.01f));
+
+            Assert.That(elideLabel, Is.Not.Null);
+            const string longLabel = "地图导航与小地图配置入口";
+            string elided = (string)elideLabel.Invoke(
+                null,
+                new object[] { longLabel, EditorStyles.miniButton, 72f });
+            Assert.That(elided, Is.Not.EqualTo(longLabel));
+            Assert.That(elided, Does.EndWith("…"));
             Assert.That(
                 panelType.GetMethod("DrawCompact", BindingFlags.Instance | BindingFlags.NonPublic),
                 Is.Null,
