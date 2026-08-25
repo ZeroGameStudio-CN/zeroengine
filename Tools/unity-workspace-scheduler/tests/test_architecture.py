@@ -12,7 +12,7 @@ ROOT = Path(__file__).resolve().parents[1]
 
 def test_distribution_has_no_runtime_dependencies() -> None:
     project = tomllib.loads((ROOT / "pyproject.toml").read_text(encoding="utf-8"))
-    assert project["project"]["version"] == "1.4.0"
+    assert project["project"]["version"] == "1.4.1"
     assert project["project"]["dependencies"] == []
     assert set(project["project"]["scripts"]) == {"unity-scheduler"}
     assert SCHEMA_VERSION == 3
@@ -131,5 +131,5 @@ def test_upgrade_runbook_uses_an_absolute_staged_candidate_before_canonical_inst
     scheduler_install = setup.index("Then install canonical Scheduler")
 
     assert staged_version < staged_backup < router_install < scheduler_install
-    assert "require the parsed version to equal exactly `1.4.0`" in normalized_setup
+    assert "require the parsed version to equal exactly `1.4.1`" in normalized_setup
     assert "unity-scheduler --state-dir <current-state-dir> state backup" not in setup

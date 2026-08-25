@@ -187,6 +187,15 @@ def build_parser() -> SchedulerArgumentParser:
     resolve.add_argument("--evidence", required=True)
     resolve.set_defaults(handler=_recovery_resolve)
 
+    maintenance = groups.add_parser(
+        "maintenance", help="Inspect bounded scheduler maintenance history."
+    )
+    maintenance_commands = maintenance.add_subparsers(dest="command", required=True)
+    history = maintenance_commands.add_parser("history")
+    _workspace_argument(history)
+    history.add_argument("--limit", type=int, default=20)
+    history.set_defaults(handler=_maintenance_history)
+
     identify = task_commands.add_parser("identify")
     _workspace_argument(identify)
     _token_argument(identify)
@@ -268,6 +277,15 @@ def _workspace_list(
 ) -> tuple[str, dict[str, Any]]:
     del args
     return "Workspace registrations listed.", coordinator.list_workspaces()
+
+
+def _maintenance_history(
+    coordinator: WorkspaceCoordinator, args: argparse.Namespace
+) -> tuple[str, dict[str, Any]]:
+    return "Workspace maintenance history inspected.", coordinator.maintenance_history(
+        args.workspace,
+        limit=args.limit,
+    )
 
 
 def _task_start(
@@ -695,6 +713,7 @@ def run(argv: Sequence[str] | None = None) -> int:
             not in {
                 _receipt_ack,
                 _task_identify,
+                _maintenance_history,
                 _state_backup,
                 _state_restore,
                 _workspace_status,

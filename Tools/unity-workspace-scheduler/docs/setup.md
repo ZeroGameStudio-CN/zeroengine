@@ -37,6 +37,17 @@ unity-scheduler workspace unregister --workspace <absolute-root> --operation-id 
 
 Registration is machine-local and writes nothing into the workspace. Unregistered or moved paths fail closed. Unregister refuses any active/unknown task or open claim.
 
+## Maintenance history
+
+```text
+unity-scheduler maintenance history --workspace <absolute-root> [--limit <1..100>]
+```
+
+This Router-private observation is a bounded read-only projection over retained task,
+recovery-event, operation-receipt, and token-cleanup state. It does not run maintenance,
+heartbeat a task, create a receipt, or expose token paths, token hashes, receipt parameters,
+or owner credentials. The default limit is 20 and the maximum is 100.
+
 ## Tasks and claims
 
 ```text
@@ -170,7 +181,7 @@ staged_scheduler="$stage_root/bin/unity-scheduler"
 Keep `$stagedScheduler` or `$staged_scheduler` as the exact
 `<absolute-staged-1.4-executable>` for every later staged command. The isolated uv environment
 variables must not remain set during the canonical install; require the parsed version to equal
-exactly `1.4.0`:
+exactly `1.4.1`:
 
 ```text
 <absolute-staged-1.4-executable> --version
@@ -194,7 +205,7 @@ These staged invocations are limited to `--version`, `state backup`, and `state 
 not open the database through the scheduling path or migrate schema 1 or 2. After the backup and
 `--for-migration` verification succeed, install the canonical Router version that requires 1.4
 first, so it fails closed while canonical Scheduler is still older. Then install canonical Scheduler
-1.4, require canonical `unity-scheduler --version` to report version `1.4.0`, run the
+1.4, require canonical `unity-scheduler --version` to report version `1.4.1`, run the
 `workspace list` maintenance read-back, exact-workspace status read-backs, and Router protocol
 canary, and only then reopen Router admission.
 

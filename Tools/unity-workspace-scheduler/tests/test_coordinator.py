@@ -101,6 +101,86 @@ def test_resource_identity_is_casefolded_across_platforms(
     assert status_claim["resources"] == ["unity-live"]
 
 
+def test_maintenance_history_is_bounded_sanitized_and_read_only(
+    scheduler: WorkspaceCoordinator, workspace: Path
+) -> None:
+    failed_task, failed_token = start(scheduler, workspace, "failed-owner")
+    scheduler.release_task(workspace, failed_token, result="failed", note="known failure")
+
+    unknown_task, unknown_token = start(scheduler, workspace, "unknown-owner")
+    scheduler.acquire_claim(workspace, unknown_token, resources=("unity-live",))
+    scheduler.release_task(
+        workspace,
+        unknown_token,
+        result="outcome-unknown",
+        note="response lost",
+    )
+    scheduler.resolve_unknown(
+        workspace,
+        str(unknown_task["id"]),
+        resolution="failed",
+        evidence="matching test artifact sha256=abc",
+    )
+
+    with open_database(scheduler.paths) as connection:
+        before = tuple(
+            tuple(row)
+            for table in (
+                "workspaces",
+                "tasks",
+                "claims",
+                "recovery_events",
+                "operation_receipts",
+                "token_cleanup_jobs",
+            )
+            for row in connection.execute(f'SELECT * FROM "{table}" ORDER BY 1').fetchall()
+        )
+
+    history = scheduler.maintenance_history(workspace, limit=1)
+
+    with open_database(scheduler.paths) as connection:
+        after = tuple(
+            tuple(row)
+            for table in (
+                "workspaces",
+                "tasks",
+                "claims",
+                "recovery_events",
+                "operation_receipts",
+                "token_cleanup_jobs",
+            )
+            for row in connection.execute(f'SELECT * FROM "{table}" ORDER BY 1').fetchall()
+        )
+
+    assert before == after
+    assert history["limit"] == 1
+    assert len(history["task_history"]) == 1
+    assert history["task_history"][0]["id"] == unknown_task["id"]
+    assert history["recovery_events"] == [
+        {
+            "id": history["recovery_events"][0]["id"],
+            "task_id": unknown_task["id"],
+            "resolution": "failed",
+            "evidence": "matching test artifact sha256=abc",
+            "created_at": history["recovery_events"][0]["created_at"],
+        }
+    ]
+    assert history["receipt_summary"]["finalized_undelivered"] > 0
+    serialized = json.dumps(history, sort_keys=True)
+    assert "token_file_path" not in serialized
+    assert "token_hash" not in serialized
+    assert "parameters_json" not in serialized
+    assert str(failed_task["id"]) not in {item["id"] for item in history["task_history"]}
+
+
+@pytest.mark.parametrize("limit", [0, 101, True, 1.5])
+def test_maintenance_history_rejects_invalid_limits(
+    scheduler: WorkspaceCoordinator, workspace: Path, limit: object
+) -> None:
+    with pytest.raises(UsageError):
+        scheduler.maintenance_history(workspace, limit=limit)  # type: ignore[arg-type]
+
+
 def test_freeze_is_fair_barrier(scheduler: WorkspaceCoordinator, workspace: Path) -> None:
     _, first_token = start(scheduler, workspace, "first")
     _, freeze_token = start(scheduler, workspace, "freeze")

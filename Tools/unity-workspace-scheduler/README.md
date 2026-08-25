@@ -101,6 +101,11 @@ task-start history with a physical token remains protected until exact token cle
 Recovery appends a separate terminal resolution proof without rewriting the historical result.
 Retired receipts are bounded history rather than replay-required work.
 
+Version 1.4.1 adds the read-only `maintenance history` protocol view. It projects the
+existing bounded task, recovery-event, receipt, and token-cleanup records without
+running maintenance, renewing a task, creating a receipt, or exposing token paths and
+hashes. Normal callers access it only through `unity-workspace-router`.
+
 A heartbeat without `--ttl` preserves that task's configured lease duration; an explicit `--ttl`
 replaces it. Named resources conflict even between claims from the same task, so one owner cannot
 accidentally dispatch two concurrent executors against `unity-live`. Non-conflicting resources and
