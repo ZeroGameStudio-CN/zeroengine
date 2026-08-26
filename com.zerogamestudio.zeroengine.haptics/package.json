@@ -1,0 +1,24 @@
+{
+  "name": "com.zerogamestudio.zeroengine.haptics",
+  "version": "1.0.0",
+  "displayName": "ZeroEngine Haptics",
+  "description": "Platform-agnostic haptic response resolution and bounded pulse arbitration.",
+  "unity": "2022.3",
+  "unityRelease": "0f1",
+  "keywords": [
+    "zeroengine",
+    "haptics",
+    "rumble",
+    "gamepad"
+  ],
+  "author": {
+    "name": "ZeroGameStudio",
+    "url": "https://github.com/ZeroGameStudio-CN"
+  },
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/ZeroGameStudio-CN/zeroengine.git",
+    "directory": "com.zerogamestudio.zeroengine.haptics"
+  }
+}
