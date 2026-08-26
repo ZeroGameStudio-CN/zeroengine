@@ -1292,7 +1292,17 @@ namespace ZeroGameStudio.ConfigPipeline.Editor
             switch (value.Kind)
             {
                 case ConfigNodeKind.String:
-                    return TextCell(((ConfigStringNode)value).Value, styleIndex);
+                    string text = ((ConfigStringNode)value).Value;
+                    if (text.Length == 0)
+                    {
+                        text = "@empty";
+                    }
+                    else if (text.StartsWith("@", StringComparison.Ordinal))
+                    {
+                        text = "@" + text;
+                    }
+
+                    return TextCell(text, styleIndex);
                 case ConfigNodeKind.Boolean:
                     return new Cell
                     {
@@ -1320,7 +1330,7 @@ namespace ZeroGameStudio.ConfigPipeline.Editor
                         StyleIndex = styleIndex
                     };
                 case ConfigNodeKind.Null:
-                    return new Cell { StyleIndex = styleIndex };
+                    return TextCell("@clear", styleIndex);
                 default:
                     throw new NotSupportedException("Workbook cells only support scalar values.");
             }

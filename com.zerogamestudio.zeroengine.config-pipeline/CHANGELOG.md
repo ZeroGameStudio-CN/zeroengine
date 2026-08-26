@@ -1,5 +1,19 @@
 # Changelog
 
+## 2.2.0
+
+- Add single-layer typed preset contracts. Schema-declared instance tables can
+  inherit compatible scalar/object fields from one typed preset, while child
+  collections require explicit `Inherit` or whole-list `Replace` semantics.
+- Flatten preset values during generation; missing, cross-type, chained, and
+  implicit collection-merge cases fail closed. Runtime artifacts contain no
+  inheritance resolver.
+- Add nullable scalar authoring and the reserved Excel values `@empty` and
+  `@clear`; literal strings beginning with `@` use `@@` escaping.
+- Upgrade generated source maps to format 2 and record every final leaf or
+  empty collection as `Schema`, `Preset`, or `Instance`, with schema and source
+  paths plus the original workbook location when available.
+
 ## 2.1.1
 
 - Generate byte-identical XLSX packages for identical schema, source document,

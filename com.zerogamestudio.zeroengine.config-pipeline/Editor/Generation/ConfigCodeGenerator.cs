@@ -91,16 +91,20 @@ namespace ZeroGameStudio.ConfigPipeline.Editor
             string suggestedName,
             List<ClassDefinition> definitions)
         {
+            string typeName;
             switch (schema.Type)
             {
                 case ConfigSchemaType.Boolean:
-                    return "bool";
+                    typeName = "bool";
+                    break;
                 case ConfigSchemaType.String:
                     return "string";
                 case ConfigSchemaType.Integer:
-                    return schema.IntegerType == ConfigIntegerType.Int32 ? "int" : "long";
+                    typeName = schema.IntegerType == ConfigIntegerType.Int32 ? "int" : "long";
+                    break;
                 case ConfigSchemaType.Number:
-                    return schema.NumberType == ConfigNumberType.Float32 ? "float" : "double";
+                    typeName = schema.NumberType == ConfigNumberType.Float32 ? "float" : "double";
+                    break;
                 case ConfigSchemaType.Object:
                     return BuildObjectDefinition(schema, suggestedName + "Dto", definitions);
                 case ConfigSchemaType.Array:
@@ -110,6 +114,8 @@ namespace ZeroGameStudio.ConfigPipeline.Editor
                 default:
                     throw new ArgumentOutOfRangeException();
             }
+
+            return schema.Nullable ? typeName + "?" : typeName;
         }
 
         private static string ToIdentifier(string value, bool pascalCase)

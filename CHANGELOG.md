@@ -10,6 +10,11 @@ tracked in each package's `package.json`.
 - Added MIT licensing.
 - Normalized package repository metadata for UPM Git dependencies.
 
+## com.zerogamestudio.zeroengine.config-pipeline 2.2.0
+
+- Add generation-time typed presets, explicit collection replacement,
+  nullable/empty Excel tokens, and complete per-field source provenance.
+
 ## com.zerogamestudio.zeroengine.narrative 2.1.0
 
 - Add an instance-owned, sequenced quest completion transition event that survives legacy `EventManager.Clear()` while preserving the legacy completion event.

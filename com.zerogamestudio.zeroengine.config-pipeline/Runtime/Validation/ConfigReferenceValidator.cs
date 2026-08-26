@@ -90,10 +90,13 @@ namespace ZeroGameStudio.ConfigPipeline
             {
                 if (dataNode is ConfigStringNode referenceValue)
                 {
-                    references.Add(new ReferenceValue(
-                        schemaNode.ReferencePath,
-                        referenceValue.Value,
-                        dataPath));
+                    if (referenceValue.Value.Length != 0 || string.IsNullOrEmpty(schemaNode.PresetType))
+                    {
+                        references.Add(new ReferenceValue(
+                            schemaNode.ReferencePath,
+                            referenceValue.Value,
+                            dataPath));
+                    }
                 }
                 else
                 {

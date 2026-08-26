@@ -73,13 +73,18 @@ namespace ZeroGameStudio.ConfigPipeline.Editor
             string schemaAbsolute = ConfigPathGuard.ResolveInside(root, set.SchemaPath);
             ConfigSchema schema = ConfigSchemaParser.Parse(File.ReadAllBytes(schemaAbsolute));
             XlsxReadResult source = ReadWorkbooks(root, set, schema);
-            var diagnostics = new List<ConfigDiagnostic>();
+            ConfigPresetResolutionResult presetResolution = ConfigPresetResolver.Resolve(
+                source.Document,
+                schema,
+                source.SourceMap);
+            var diagnostics = new List<ConfigDiagnostic>(presetResolution.Diagnostics);
+            ThrowIfErrors(diagnostics);
             var artifacts = new List<ConfigArtifact>();
             bool writeCode = true;
             foreach (ConfigTargetProfile target in set.Targets)
             {
                 ConfigNormalizationResult normalized = ConfigSchemaNormalizer.Normalize(
-                    source.Document,
+                    presetResolution.Document,
                     schema,
                     target.Scope);
                 diagnostics.AddRange(normalized.Diagnostics);
@@ -121,7 +126,7 @@ namespace ZeroGameStudio.ConfigPipeline.Editor
                         GeneratedNamespace = set.GeneratedNamespace,
                         RootClassName = set.RootClassName
                     },
-                    source.SourceMap).Write(
+                    presetResolution.SourceMap).Write(
                         normalized.Document,
                         new ConfigWriteContext(target.Scope, root)));
                 writeCode = false;
@@ -358,8 +363,17 @@ namespace ZeroGameStudio.ConfigPipeline.Editor
             ConfigSchema schema = ConfigSchemaParser.Parse(File.ReadAllBytes(
                 ConfigPathGuard.ResolveInside(root, set.SchemaPath)));
             XlsxReadResult workbookSource = ReadWorkbooks(root, set, schema);
-            ConfigNormalizationResult normalizedWorkbook = ConfigSchemaNormalizer.Normalize(
+            ConfigPresetResolutionResult presetResolution = ConfigPresetResolver.Resolve(
                 workbookSource.Document,
+                schema,
+                workbookSource.SourceMap);
+            if (!presetResolution.IsValid)
+            {
+                throw new ConfigPipelineValidationException(presetResolution.Diagnostics);
+            }
+
+            ConfigNormalizationResult normalizedWorkbook = ConfigSchemaNormalizer.Normalize(
+                presetResolution.Document,
                 schema,
                 targetScope);
             if (!normalizedWorkbook.IsValid)
@@ -497,10 +511,16 @@ namespace ZeroGameStudio.ConfigPipeline.Editor
                     source.Root)
                 : new ConfigMigrationRegistry(migrations).Migrate(source, nextSchema.SchemaVersion);
             var diagnostics = new List<ConfigDiagnostic>();
+            ConfigPresetResolutionResult presetResolution = ConfigPresetResolver.Resolve(
+                upgraded,
+                nextSchema,
+                Array.Empty<XlsxSourceMapEntry>());
+            diagnostics.AddRange(presetResolution.Diagnostics);
+            ThrowIfErrors(diagnostics);
             foreach (ConfigTargetProfile target in nextSet.Targets)
             {
                 ConfigNormalizationResult normalized = ConfigSchemaNormalizer.Normalize(
-                    upgraded,
+                    presetResolution.Document,
                     nextSchema,
                     target.Scope);
                 diagnostics.AddRange(normalized.Diagnostics);

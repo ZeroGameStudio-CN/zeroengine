@@ -44,7 +44,12 @@ namespace ZeroGameStudio.ConfigPipeline
                 "x-zgs-scope",
                 "x-zgs-unit",
                 "x-zgs-group",
-                "x-zgs-authoring-only"
+                "x-zgs-authoring-only",
+                "x-zgs-nullable",
+                "x-zgs-preset-type",
+                "x-zgs-preset-source",
+                "x-zgs-preset-ref-field",
+                "x-zgs-override-mode-field"
             };
 
         public static ConfigSchema Parse(byte[] utf8Schema)
@@ -81,6 +86,8 @@ namespace ZeroGameStudio.ConfigPipeline
             {
                 throw new ConfigSchemaException("SCHEMA_ROOT_TYPE_INVALID", "$", "Schema root type must be object.");
             }
+
+            ValidatePresetContracts(schemaRoot);
 
             return new ConfigSchema(
                 schemaId,
@@ -163,6 +170,7 @@ namespace ZeroGameStudio.ConfigPipeline
                 ? ParseScope(RequireString(scopeToken, path + "/x-zgs-scope"), path)
                 : inheritedScope;
             bool authoringOnly = OptionalBoolean(source, "x-zgs-authoring-only", false, path);
+            bool nullable = OptionalBoolean(source, "x-zgs-nullable", false, path);
             bool primaryKey = OptionalBoolean(source, "x-zgs-primary-key", false, path);
             bool localizationKey = OptionalBoolean(source, "x-zgs-localization-key", false, path);
             string referencePath = OptionalString(source, "x-zgs-ref", path);
@@ -170,17 +178,29 @@ namespace ZeroGameStudio.ConfigPipeline
             string parentKey = OptionalString(source, "x-zgs-parent-key", path);
             string orderField = OptionalString(source, "x-zgs-order-field", path);
             string assetType = OptionalString(source, "x-zgs-asset-type", path);
+            string presetType = OptionalString(source, "x-zgs-preset-type", path);
+            string presetSource = OptionalString(source, "x-zgs-preset-source", path);
+            string presetReferenceField = OptionalString(source, "x-zgs-preset-ref-field", path);
+            string collectionOverrideModeField = OptionalString(
+                source,
+                "x-zgs-override-mode-field",
+                path);
             ValidateAnnotationApplicability(
                 source,
                 type,
                 path,
+                nullable,
                 primaryKey,
                 localizationKey,
                 referencePath,
                 sheet,
                 parentKey,
                 orderField,
-                assetType);
+                assetType,
+                presetType,
+                presetSource,
+                presetReferenceField,
+                collectionOverrideModeField);
 
             var properties = new List<ConfigSchemaProperty>();
             var required = new List<string>();
@@ -359,21 +379,71 @@ namespace ZeroGameStudio.ConfigPipeline
                 OptionalString(source, "title", path),
                 OptionalString(source, "description", path),
                 OptionalString(source, "x-zgs-unit", path),
-                OptionalString(source, "x-zgs-group", path));
+                OptionalString(source, "x-zgs-group", path),
+                nullable,
+                presetType,
+                presetSource,
+                presetReferenceField,
+                collectionOverrideModeField);
         }
 
         private static void ValidateAnnotationApplicability(
             JObject source,
             ConfigSchemaType type,
             string path,
+            bool nullable,
             bool primaryKey,
             bool localizationKey,
             string referencePath,
             string sheet,
             string parentKey,
             string orderField,
-            string assetType)
+            string assetType,
+            string presetType,
+            string presetSource,
+            string presetReferenceField,
+            string collectionOverrideModeField)
         {
+            if (nullable && (type == ConfigSchemaType.Object || type == ConfigSchemaType.Array))
+            {
+                throw new ConfigSchemaException(
+                    "SCHEMA_NULLABLE_INVALID",
+                    path,
+                    "x-zgs-nullable is only supported on scalar fields.");
+            }
+
+            if (presetType != null && type != ConfigSchemaType.Array && type != ConfigSchemaType.String)
+            {
+                throw new ConfigSchemaException(
+                    "SCHEMA_PRESET_TYPE_INVALID",
+                    path,
+                    "x-zgs-preset-type is only valid on preset arrays and typed string references.");
+            }
+
+            if ((presetSource != null || presetReferenceField != null) && type != ConfigSchemaType.Array)
+            {
+                throw new ConfigSchemaException(
+                    "SCHEMA_PRESET_SOURCE_INVALID",
+                    path,
+                    "x-zgs-preset-source and x-zgs-preset-ref-field require an array field.");
+            }
+
+            if ((presetSource == null) != (presetReferenceField == null))
+            {
+                throw new ConfigSchemaException(
+                    "SCHEMA_PRESET_SOURCE_INCOMPLETE",
+                    path,
+                    "Preset source and reference field must be declared together.");
+            }
+
+            if (collectionOverrideModeField != null && type != ConfigSchemaType.Array)
+            {
+                throw new ConfigSchemaException(
+                    "SCHEMA_OVERRIDE_MODE_INVALID",
+                    path,
+                    "x-zgs-override-mode-field requires an array field.");
+            }
+
             if ((primaryKey ||
                  localizationKey ||
                  referencePath != null ||
@@ -431,6 +501,256 @@ namespace ZeroGameStudio.ConfigPipeline
                     "SCHEMA_OBJECT_KEYWORD_INVALID",
                     path,
                     "Object keywords require an object field.");
+            }
+        }
+
+        private static void ValidatePresetContracts(ConfigSchemaNode root)
+        {
+            var roots = root.Properties.ToDictionary(
+                property => property.Name,
+                property => property.Schema,
+                StringComparer.Ordinal);
+            foreach (ConfigSchemaProperty rootProperty in root.Properties)
+            {
+                ConfigSchemaNode array = rootProperty.Schema;
+                string path = "$/properties/" + rootProperty.Name;
+                if (array.PresetType != null)
+                {
+                    RequirePresetArray(array, path);
+                }
+
+                if (array.PresetSource != null)
+                {
+                    ValidatePresetInstanceArray(array, path, roots);
+                }
+
+                ValidateTypedPresetReferences(array, path, roots, array.PresetType != null);
+            }
+        }
+
+        private static void ValidatePresetInstanceArray(
+            ConfigSchemaNode instanceArray,
+            string path,
+            IReadOnlyDictionary<string, ConfigSchemaNode> roots)
+        {
+            RequirePresetArray(instanceArray, path);
+            const string prefix = "#/properties/";
+            if (!instanceArray.PresetSource.StartsWith(prefix, StringComparison.Ordinal) ||
+                instanceArray.PresetSource.Substring(prefix.Length).IndexOf('/') >= 0)
+            {
+                throw new ConfigSchemaException(
+                    "SCHEMA_PRESET_SOURCE_PATH_INVALID",
+                    path,
+                    "Preset sources must name one top-level array as #/properties/<name>.");
+            }
+
+            string sourceName = instanceArray.PresetSource.Substring(prefix.Length);
+            if (!roots.TryGetValue(sourceName, out ConfigSchemaNode presetArray) ||
+                string.IsNullOrEmpty(presetArray.PresetType))
+            {
+                throw new ConfigSchemaException(
+                    "SCHEMA_PRESET_SOURCE_MISSING",
+                    path,
+                    "Preset source must resolve to an array declaring x-zgs-preset-type.");
+            }
+
+            RequirePresetArray(presetArray, "$/properties/" + sourceName);
+            if (presetArray.PresetSource != null)
+            {
+                throw new ConfigSchemaException(
+                    "SCHEMA_PRESET_CHAIN_FORBIDDEN",
+                    path,
+                    "Preset sources cannot inherit from another preset source.");
+            }
+
+            ConfigSchemaProperty reference = instanceArray.Items.Properties.SingleOrDefault(
+                property => property.Name == instanceArray.PresetReferenceField);
+            ConfigSchemaProperty primaryKey = presetArray.Items.Properties.SingleOrDefault(
+                property => property.Schema.PrimaryKey);
+            string expectedReference = instanceArray.PresetSource +
+                                       "/items/properties/" +
+                                       primaryKey.Name;
+            if (reference == null ||
+                reference.Schema.Type != ConfigSchemaType.String ||
+                !string.Equals(reference.Schema.PresetType, presetArray.PresetType, StringComparison.Ordinal) ||
+                !string.Equals(reference.Schema.ReferencePath, expectedReference, StringComparison.Ordinal))
+            {
+                throw new ConfigSchemaException(
+                    "SCHEMA_PRESET_REFERENCE_INVALID",
+                    path,
+                    "Preset reference field must be a typed x-zgs-ref to the source primary key.");
+            }
+
+            foreach (ConfigSchemaProperty instanceProperty in instanceArray.Items.Properties)
+            {
+                ConfigSchemaProperty presetProperty = presetArray.Items.Properties.SingleOrDefault(
+                    property => property.Name == instanceProperty.Name);
+                if (presetProperty == null || instanceProperty.Name == instanceArray.PresetReferenceField)
+                {
+                    continue;
+                }
+
+                if (!ArePresetTypesCompatible(instanceProperty.Schema, presetProperty.Schema))
+                {
+                    throw new ConfigSchemaException(
+                        "SCHEMA_PRESET_FIELD_TYPE_MISMATCH",
+                        path + "/items/properties/" + instanceProperty.Name,
+                        "Instance and preset fields must have compatible schema types.");
+                }
+
+                if (instanceProperty.Schema.Type == ConfigSchemaType.Array)
+                {
+                    ValidateOverrideModeField(
+                        instanceArray.Items,
+                        instanceProperty.Schema,
+                        path + "/items/properties/" + instanceProperty.Name);
+                }
+            }
+        }
+
+        private static void ValidateTypedPresetReferences(
+            ConfigSchemaNode node,
+            string path,
+            IReadOnlyDictionary<string, ConfigSchemaNode> roots,
+            bool insidePreset)
+        {
+            if (node.Type == ConfigSchemaType.String && node.PresetType != null)
+            {
+                if (insidePreset)
+                {
+                    throw new ConfigSchemaException(
+                        "SCHEMA_PRESET_CHAIN_FORBIDDEN",
+                        path,
+                        "Preset definitions cannot reference another typed preset.");
+                }
+
+                const string prefix = "#/properties/";
+                const string suffix = "/items/properties/";
+                if (string.IsNullOrEmpty(node.ReferencePath) ||
+                    !node.ReferencePath.StartsWith(prefix, StringComparison.Ordinal))
+                {
+                    throw new ConfigSchemaException(
+                        "SCHEMA_PRESET_REFERENCE_INVALID",
+                        path,
+                        "Typed preset references require x-zgs-ref.");
+                }
+
+                int suffixIndex = node.ReferencePath.IndexOf(suffix, prefix.Length, StringComparison.Ordinal);
+                string sourceName = suffixIndex < 0
+                    ? string.Empty
+                    : node.ReferencePath.Substring(prefix.Length, suffixIndex - prefix.Length);
+                if (!roots.TryGetValue(sourceName, out ConfigSchemaNode source) ||
+                    !string.Equals(source.PresetType, node.PresetType, StringComparison.Ordinal))
+                {
+                    throw new ConfigSchemaException(
+                        "SCHEMA_PRESET_REFERENCE_TYPE_MISMATCH",
+                        path,
+                        "Typed preset reference and target must declare the same x-zgs-preset-type.");
+                }
+            }
+
+            foreach (ConfigSchemaProperty property in node.Properties)
+            {
+                ValidateTypedPresetReferences(
+                    property.Schema,
+                    path + "/properties/" + property.Name,
+                    roots,
+                    insidePreset);
+            }
+
+            if (node.Items != null)
+            {
+                ValidateTypedPresetReferences(node.Items, path + "/items", roots, insidePreset);
+            }
+        }
+
+        private static void RequirePresetArray(ConfigSchemaNode array, string path)
+        {
+            if (array.Type != ConfigSchemaType.Array || array.Items?.Type != ConfigSchemaType.Object)
+            {
+                throw new ConfigSchemaException(
+                    "SCHEMA_PRESET_ARRAY_INVALID",
+                    path,
+                    "Preset declarations require an array of objects.");
+            }
+
+            ConfigSchemaProperty[] primaryKeys = array.Items.Properties
+                .Where(property => property.Schema.PrimaryKey)
+                .ToArray();
+            if (primaryKeys.Length != 1 || primaryKeys[0].Schema.Type != ConfigSchemaType.String)
+            {
+                throw new ConfigSchemaException(
+                    "SCHEMA_PRESET_PRIMARY_KEY_INVALID",
+                    path,
+                    "Preset arrays require exactly one string primary key.");
+            }
+        }
+
+        private static bool ArePresetTypesCompatible(ConfigSchemaNode instance, ConfigSchemaNode preset)
+        {
+            if (instance.Type != preset.Type || instance.Nullable != preset.Nullable)
+            {
+                return false;
+            }
+
+            if (instance.Type == ConfigSchemaType.Array)
+            {
+                return ArePresetTypesCompatible(instance.Items, preset.Items);
+            }
+
+            if (instance.Type != ConfigSchemaType.Object)
+            {
+                return true;
+            }
+
+            foreach (ConfigSchemaProperty property in instance.Properties)
+            {
+                ConfigSchemaProperty presetProperty = preset.Properties.SingleOrDefault(
+                    value => value.Name == property.Name);
+                if (presetProperty != null &&
+                    !ArePresetTypesCompatible(property.Schema, presetProperty.Schema))
+                {
+                    return false;
+                }
+            }
+
+            return true;
+        }
+
+        private static void ValidateOverrideModeField(
+            ConfigSchemaNode containingObject,
+            ConfigSchemaNode collection,
+            string path)
+        {
+            if (string.IsNullOrEmpty(collection.CollectionOverrideModeField))
+            {
+                throw new ConfigSchemaException(
+                    "SCHEMA_OVERRIDE_MODE_REQUIRED",
+                    path,
+                    "Shared preset collections require x-zgs-override-mode-field.");
+            }
+
+            ConfigSchemaProperty mode = containingObject.Properties.SingleOrDefault(
+                property => property.Name == collection.CollectionOverrideModeField);
+            if (mode == null || mode.Schema.Type != ConfigSchemaType.String)
+            {
+                throw new ConfigSchemaException(
+                    "SCHEMA_OVERRIDE_MODE_INVALID",
+                    path,
+                    "Collection override mode must name a sibling string field.");
+            }
+
+            string[] values = mode.Schema.EnumValues
+                .OfType<ConfigStringNode>()
+                .Select(value => value.Value)
+                .OrderBy(value => value, StringComparer.Ordinal)
+                .ToArray();
+            if (!values.SequenceEqual(new[] { "Inherit", "Replace" }))
+            {
+                throw new ConfigSchemaException(
+                    "SCHEMA_OVERRIDE_MODE_ENUM_INVALID",
+                    path,
+                    "Collection override mode enum must contain exactly Inherit and Replace.");
             }
         }
 

@@ -682,6 +682,18 @@ namespace ZeroGameStudio.ConfigPipeline.Editor
             Cell cell,
             string text)
         {
+            if (string.Equals(text, "@clear", StringComparison.Ordinal))
+            {
+                if (!schema.Nullable)
+                {
+                    throw new XlsxConfigException(
+                        "XLSX_CLEAR_NOT_NULLABLE",
+                        "@clear requires x-zgs-nullable:true.");
+                }
+
+                return ConfigNullNode.Instance;
+            }
+
             switch (schema.Type)
             {
                 case ConfigSchemaType.String:
@@ -693,6 +705,23 @@ namespace ZeroGameStudio.ConfigPipeline.Editor
                         throw new XlsxConfigException(
                             "XLSX_STRING_CELL_REQUIRED",
                             "String fields require an explicit string cell.");
+                    }
+
+                    if (string.Equals(text, "@empty", StringComparison.Ordinal))
+                    {
+                        return new ConfigStringNode(string.Empty);
+                    }
+
+                    if (text.StartsWith("@@", StringComparison.Ordinal))
+                    {
+                        return new ConfigStringNode(text.Substring(1));
+                    }
+
+                    if (text.StartsWith("@", StringComparison.Ordinal))
+                    {
+                        throw new XlsxConfigException(
+                            "XLSX_STRING_TOKEN_UNESCAPED",
+                            "String literals beginning with @ must escape it as @@.");
                     }
 
                     return new ConfigStringNode(text);

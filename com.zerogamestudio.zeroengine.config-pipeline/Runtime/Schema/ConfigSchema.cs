@@ -89,7 +89,12 @@ namespace ZeroGameStudio.ConfigPipeline
             string title,
             string description,
             string unit,
-            string group)
+            string group,
+            bool nullable,
+            string presetType,
+            string presetSource,
+            string presetReferenceField,
+            string collectionOverrideModeField)
         {
             Type = type;
             this.properties = new List<ConfigSchemaProperty>(
@@ -124,6 +129,11 @@ namespace ZeroGameStudio.ConfigPipeline
             Description = description;
             Unit = unit;
             Group = group;
+            Nullable = nullable;
+            PresetType = presetType;
+            PresetSource = presetSource;
+            PresetReferenceField = presetReferenceField;
+            CollectionOverrideModeField = collectionOverrideModeField;
         }
 
         public ConfigSchemaType Type { get; }
@@ -181,6 +191,16 @@ namespace ZeroGameStudio.ConfigPipeline
         public string Unit { get; }
 
         public string Group { get; }
+
+        public bool Nullable { get; }
+
+        public string PresetType { get; }
+
+        public string PresetSource { get; }
+
+        public string PresetReferenceField { get; }
+
+        public string CollectionOverrideModeField { get; }
 
         public bool IsRequired(string propertyName)
         {

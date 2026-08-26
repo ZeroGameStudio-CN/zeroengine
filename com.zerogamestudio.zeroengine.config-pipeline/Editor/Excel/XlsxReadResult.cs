@@ -4,6 +4,13 @@ using System.Collections.ObjectModel;
 
 namespace ZeroGameStudio.ConfigPipeline.Editor
 {
+    public enum ConfigValueSourceKind
+    {
+        Schema,
+        Preset,
+        Instance
+    }
+
     public sealed class XlsxSourceMapEntry
     {
         public XlsxSourceMapEntry(
@@ -12,12 +19,36 @@ namespace ZeroGameStudio.ConfigPipeline.Editor
             string sheet,
             int row,
             int column)
+            : this(
+                jsonPath,
+                workbook,
+                sheet,
+                row,
+                column,
+                ConfigValueSourceKind.Instance,
+                jsonPath,
+                null)
+        {
+        }
+
+        public XlsxSourceMapEntry(
+            string jsonPath,
+            string workbook,
+            string sheet,
+            int row,
+            int column,
+            ConfigValueSourceKind sourceKind,
+            string sourceJsonPath,
+            string schemaPath)
         {
             JsonPath = jsonPath;
             Workbook = workbook;
             Sheet = sheet;
             Row = row;
             Column = column;
+            SourceKind = sourceKind;
+            SourceJsonPath = sourceJsonPath;
+            SchemaPath = schemaPath;
         }
 
         public string JsonPath { get; }
@@ -29,6 +60,12 @@ namespace ZeroGameStudio.ConfigPipeline.Editor
         public int Row { get; }
 
         public int Column { get; }
+
+        public ConfigValueSourceKind SourceKind { get; }
+
+        public string SourceJsonPath { get; }
+
+        public string SchemaPath { get; }
     }
 
     public sealed class XlsxReadResult

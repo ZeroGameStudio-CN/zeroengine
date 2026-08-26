@@ -4,6 +4,10 @@ Schema-first configuration pipeline for Unity 2022.3 projects. It keeps one
 authoring source, validates through a typed intermediate document, emits
 deterministic artifacts, and loads immutable runtime snapshots.
 
+Version 2.2.0 adds generation-time typed preset inheritance, explicit whole-list
+replacement, nullable/empty Excel authoring tokens, and complete per-field
+`Schema`/`Preset`/`Instance` provenance. Generated runtime JSON is fully flat.
+
 Version 2.1.1 makes generated XLSX packages byte-identical for identical inputs,
 including stable Open XML relationship IDs, ZIP entry order, and timestamps.
 
