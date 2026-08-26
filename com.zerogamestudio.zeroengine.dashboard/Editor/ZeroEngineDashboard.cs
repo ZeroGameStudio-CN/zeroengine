@@ -12,7 +12,7 @@ using ZeroEngine.EditorUI;
 namespace ZeroEngine.Editor
 {
     [EditorUiSurface]
-    public sealed class ZeroEngineDashboard : EditorWindow, IEditorWorkspaceNavigator
+    public sealed class ZeroEngineDashboard : EditorWindow, IEditorWorkspaceNavigator, IEditorWorkspaceRouteNavigator
     {
         private const string WorkspaceModuleDragDataKey = "ZGS.Workbench.WorkspaceModule";
         private const string WorkspacePanelDragDataKey = "ZGS.Workbench.WorkspacePanel";
@@ -103,6 +103,9 @@ namespace ZeroEngine.Editor
         private string _workspaceDropTargetId = string.Empty;
         private bool _workspaceDropBefore;
         private readonly HashSet<string> _failedWorkspacePanels = new HashSet<string>(StringComparer.Ordinal);
+        private EditorWorkspaceRoute _pendingWorkspaceRoute;
+        private EditorWorkspaceRouteSource _workspaceRouteSource;
+        private string _workspaceRouteMessage = string.Empty;
 
         [MenuItem("ZGS/工作台")]
         public static void ShowWindow()
@@ -230,6 +233,14 @@ namespace ZeroEngine.Editor
                 _selectedPanelFullId = string.Empty;
                 DeactivateWorkspacePanel();
                 SaveViewState();
+            }
+            if (_workspaceRouteSource != null)
+            {
+                string sourceFullId = _workspaceRouteSource.ModuleId + "/" + _workspaceRouteSource.PanelId;
+                bool sourceExists = _catalog.VisibleWorkspaceModules.SelectMany(module => module.Panels)
+                    .Any(panel => string.Equals(panel.FullId, sourceFullId, StringComparison.Ordinal));
+                if (!sourceExists || string.Equals(_selectedPanelFullId, sourceFullId, StringComparison.Ordinal))
+                    _workspaceRouteSource = null;
             }
             Repaint();
         }
@@ -1329,6 +1340,7 @@ namespace ZeroEngine.Editor
             DashboardModule module = modules.First(item => string.Equals(item.ModuleId, descriptor.ModuleId, StringComparison.Ordinal));
 
             _workspaceContentScroll = BeginStableVerticalScrollView(_workspaceContentScroll);
+            DrawWorkspaceRouteContext();
             using (new EditorGUILayout.HorizontalScope(GUILayout.ExpandWidth(true)))
             {
                 GUILayout.Label(descriptor.DisplayName, EditorUiStyles.SectionTitle);
@@ -1354,6 +1366,9 @@ namespace ZeroEngine.Editor
                     DrawSafetyStatus(descriptor.Safety);
             }
             EditorGUILayout.Space(EditorUiTokens.SpaceSm);
+
+            if (!string.IsNullOrEmpty(_workspaceRouteMessage))
+                EditorGUILayout.HelpBox(_workspaceRouteMessage, MessageType.Warning);
 
             if (!IsAvailable(descriptor))
             {
@@ -1408,6 +1423,7 @@ namespace ZeroEngine.Editor
 
             if (EnsureActiveWorkspacePanel(descriptor))
             {
+                ApplyPendingWorkspaceRoute();
                 float availableWidth = CalculateWorkspaceSplitLayout(
                     position.width,
                     _workspaceSidebarWidth).ContentWidth;
@@ -1432,6 +1448,52 @@ namespace ZeroEngine.Editor
                 }
             }
             EndStableVerticalScrollView(ref _workspaceContentScrollHasVerticalOverflow);
+        }
+
+        private void DrawWorkspaceRouteContext()
+        {
+            if (_workspaceRouteSource == null)
+                return;
+
+            using (new EditorGUILayout.HorizontalScope(EditorStyles.helpBox))
+            {
+                GUILayout.Label("来源：" + _workspaceRouteSource.DisplayName, EditorStyles.wordWrappedMiniLabel);
+                GUILayout.FlexibleSpace();
+                if (GUILayout.Button("返回项目功能", EditorStyles.miniButton, GUILayout.Width(92f)))
+                {
+                    var returnRoute = new EditorWorkspaceRoute(
+                        _workspaceRouteSource.ModuleId,
+                        _workspaceRouteSource.PanelId,
+                        _workspaceRouteSource.SubrouteId);
+                    _workspaceRouteSource = null;
+                    _workspaceRouteMessage = string.Empty;
+                    TryShowWorkspaceRouteInternal(returnRoute);
+                    GUIUtility.ExitGUI();
+                }
+            }
+            EditorGUILayout.Space(EditorUiTokens.SpaceXs);
+        }
+
+        private void ApplyPendingWorkspaceRoute()
+        {
+            EditorWorkspaceRoute route = _pendingWorkspaceRoute;
+            if (route == null || _activePanelDescriptor == null ||
+                !string.Equals(route.FullId, _activePanelDescriptor.FullId, StringComparison.Ordinal))
+            {
+                return;
+            }
+
+            _pendingWorkspaceRoute = null;
+            _workspaceRouteMessage = string.Empty;
+            if (string.IsNullOrWhiteSpace(route.SubrouteId))
+                return;
+            if (_activePanel is IEditorWorkspaceRouteReceiver receiver &&
+                receiver.TryApplyWorkspaceRoute(route.SubrouteId))
+            {
+                return;
+            }
+
+            _workspaceRouteMessage = "已打开配置工具，但未能定位到具体分类。";
         }
 
         private static bool UsesFullWidthWorkspaceLayout(IEditorWorkspacePanel panel)
@@ -1540,11 +1602,20 @@ namespace ZeroEngine.Editor
             return true;
         }
 
-        private void SelectWorkspacePanel(string fullId)
+        private void SelectWorkspacePanel(string fullId, bool preserveRouteContext = false)
         {
             _deferRestoredPanelActivation = false;
+            if (!preserveRouteContext)
+            {
+                _pendingWorkspaceRoute = null;
+                _workspaceRouteSource = null;
+                _workspaceRouteMessage = string.Empty;
+            }
             if (string.Equals(_selectedPanelFullId, fullId, StringComparison.Ordinal))
+            {
+                SaveViewState();
                 return;
+            }
             _selectedPanelFullId = fullId ?? string.Empty;
             _workspaceContentScroll = Vector2.zero;
             DeactivateWorkspacePanel();
@@ -1570,6 +1641,11 @@ namespace ZeroEngine.Editor
             return TryShowWorkspaceInternal(moduleId, panelId);
         }
 
+        bool IEditorWorkspaceRouteNavigator.TryShowWorkspace(EditorWorkspaceRoute route)
+        {
+            return TryShowWorkspaceRouteInternal(route);
+        }
+
         private bool TryShowWorkspaceInternal(string moduleId, string panelId)
         {
             string fullId = (moduleId ?? string.Empty) + "/" + (panelId ?? string.Empty);
@@ -1581,6 +1657,26 @@ namespace ZeroEngine.Editor
 
             _page = 0;
             SelectWorkspacePanel(fullId);
+            SaveViewState();
+            Repaint();
+            return true;
+        }
+
+        private bool TryShowWorkspaceRouteInternal(EditorWorkspaceRoute route)
+        {
+            if (route == null)
+                return false;
+            bool exists = _catalog.VisibleWorkspaceModules
+                .SelectMany(module => module.Panels)
+                .Any(panel => string.Equals(panel.FullId, route.FullId, StringComparison.Ordinal));
+            if (!exists)
+                return false;
+
+            _page = 0;
+            _pendingWorkspaceRoute = route;
+            _workspaceRouteSource = route.Source;
+            _workspaceRouteMessage = string.Empty;
+            SelectWorkspacePanel(route.FullId, preserveRouteContext: true);
             SaveViewState();
             Repaint();
             return true;
@@ -1606,6 +1702,16 @@ namespace ZeroEngine.Editor
             _workspaceNavigationScroll = state.WorkspaceNavigationScroll;
             _workspaceContentScroll = state.WorkspaceContentScroll;
             _contextScroll = state.ContextScroll;
+            if (!string.IsNullOrEmpty(state.RouteSourceModuleId) &&
+                !string.IsNullOrEmpty(state.RouteSourcePanelId) &&
+                !string.IsNullOrEmpty(state.RouteSourceDisplayName))
+            {
+                _workspaceRouteSource = new EditorWorkspaceRouteSource(
+                    state.RouteSourceModuleId,
+                    state.RouteSourcePanelId,
+                    state.RouteSourceSubrouteId,
+                    state.RouteSourceDisplayName);
+            }
         }
 
         private void SaveViewState()
@@ -1624,7 +1730,11 @@ namespace ZeroEngine.Editor
                 SystemScroll = _systemScroll,
                 WorkspaceNavigationScroll = _workspaceNavigationScroll,
                 WorkspaceContentScroll = _workspaceContentScroll,
-                ContextScroll = _contextScroll
+                ContextScroll = _contextScroll,
+                RouteSourceModuleId = _workspaceRouteSource?.ModuleId ?? string.Empty,
+                RouteSourcePanelId = _workspaceRouteSource?.PanelId ?? string.Empty,
+                RouteSourceSubrouteId = _workspaceRouteSource?.SubrouteId ?? string.Empty,
+                RouteSourceDisplayName = _workspaceRouteSource?.DisplayName ?? string.Empty
             });
         }
 
@@ -2702,6 +2812,10 @@ namespace ZeroEngine.Editor
         internal Vector2 WorkspaceNavigationScroll;
         internal Vector2 WorkspaceContentScroll;
         internal Vector2 ContextScroll;
+        internal string RouteSourceModuleId = string.Empty;
+        internal string RouteSourcePanelId = string.Empty;
+        internal string RouteSourceSubrouteId = string.Empty;
+        internal string RouteSourceDisplayName = string.Empty;
     }
 
     internal static class DashboardViewStateStore
@@ -2746,7 +2860,11 @@ namespace ZeroEngine.Editor
                 SystemScroll = LoadVector(prefix + "SystemScroll"),
                 WorkspaceNavigationScroll = LoadVector(prefix + "WorkspaceNavigationScroll"),
                 WorkspaceContentScroll = LoadVector(prefix + "WorkspaceContentScroll"),
-                ContextScroll = LoadVector(prefix + "ContextScroll")
+                ContextScroll = LoadVector(prefix + "ContextScroll"),
+                RouteSourceModuleId = EditorPrefs.GetString(prefix + "RouteSourceModuleId", string.Empty),
+                RouteSourcePanelId = EditorPrefs.GetString(prefix + "RouteSourcePanelId", string.Empty),
+                RouteSourceSubrouteId = EditorPrefs.GetString(prefix + "RouteSourceSubrouteId", string.Empty),
+                RouteSourceDisplayName = EditorPrefs.GetString(prefix + "RouteSourceDisplayName", string.Empty)
             };
         }
 
@@ -2760,6 +2878,10 @@ namespace ZeroEngine.Editor
             EditorPrefs.SetString(prefix + "Search", state.Search ?? string.Empty);
             DeleteAllToolsState(prefix);
             EditorPrefs.SetString(prefix + "SelectedPanel", state.SelectedPanelFullId ?? string.Empty);
+            EditorPrefs.SetString(prefix + "RouteSourceModuleId", state.RouteSourceModuleId ?? string.Empty);
+            EditorPrefs.SetString(prefix + "RouteSourcePanelId", state.RouteSourcePanelId ?? string.Empty);
+            EditorPrefs.SetString(prefix + "RouteSourceSubrouteId", state.RouteSourceSubrouteId ?? string.Empty);
+            EditorPrefs.SetString(prefix + "RouteSourceDisplayName", state.RouteSourceDisplayName ?? string.Empty);
             EditorPrefs.SetString(
                 prefix + "WorkspaceModuleOrder",
                 string.Join("\n", state.WorkspaceModuleOrder ?? Array.Empty<string>()));
@@ -2783,7 +2905,8 @@ namespace ZeroEngine.Editor
             {
                 "NavigationVersion", "Page", "Search", "SelectedPanel",
                 "WorkspaceModuleOrder", "WorkspacePanelOrder", "CollapsedWorkspaceModuleIds",
-                "WorkspaceSidebarWidth"
+                "WorkspaceSidebarWidth", "RouteSourceModuleId", "RouteSourcePanelId",
+                "RouteSourceSubrouteId", "RouteSourceDisplayName"
             };
             foreach (string key in scalarKeys)
                 EditorPrefs.DeleteKey(prefix + key);

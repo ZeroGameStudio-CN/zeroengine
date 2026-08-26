@@ -77,6 +77,7 @@ jobs:
               dashboard-with-modules)
                 [[ "$package_name" == "com.zerogamestudio.zeroengine.dashboard" ||
                    "$package_name" == "com.zerogamestudio.zeroengine.editor-ui" ||
+                   "$package_name" == "com.zerogamestudio.zeroengine.project-atlas" ||
                    "$package_name" == "com.zerogamestudio.zeroengine.core" ||
                    "$package_name" == "com.zerogamestudio.zeroengine.ui" ||
                    "$package_name" == "com.zerogamestudio.analytics" ]]

@@ -108,19 +108,20 @@ $expectedPackages = [ordered]@{
     'com.zerogamestudio.analytics' = '2.0.1'
     'com.zerogamestudio.zeroengine' = '2.1.1'
     'com.zerogamestudio.zeroengine.config-pipeline' = '2.0.2'
-    'com.zerogamestudio.zeroengine.dashboard' = '4.6.2'
+    'com.zerogamestudio.zeroengine.dashboard' = '4.7.0'
     'com.zerogamestudio.zeroengine.data-toolkit' = '2.1.1'
     'com.zerogamestudio.zeroengine.formula' = '0.6.0'
     'com.zerogamestudio.zeroengine.feedback' = '1.0.2'
     'com.zerogamestudio.zeroengine.modsystem' = '0.3.0'
+    'com.zerogamestudio.zeroengine.project-atlas' = '1.1.6'
     'com.zerogamestudio.zeroengine.tce' = '0.2.1'
-    'com.zerogamestudio.zeroengine.ui' = '2.2.0'
+    'com.zerogamestudio.zeroengine.ui' = '2.2.1'
 }
 
 $editorUiRoot = Join-Path $RepoRoot 'com.zerogamestudio.zeroengine.editor-ui'
 $editorUiPackage = Read-Json (Join-Path $editorUiRoot 'package.json')
 Assert-Contract ($editorUiPackage.name -eq 'com.zerogamestudio.zeroengine.editor-ui') 'Unexpected editor-ui package name.'
-Assert-Contract ($editorUiPackage.version -eq '1.4.0') 'editor-ui must be version 1.4.0.'
+Assert-Contract ($editorUiPackage.version -eq '1.5.0') 'editor-ui must be version 1.5.0.'
 Assert-Contract ($editorUiPackage.unity -eq '2022.3') 'editor-ui must target Unity 2022.3.'
 Assert-Contract ($null -eq $editorUiPackage.dependencies -or @($editorUiPackage.dependencies.psobject.Properties).Count -eq 0) 'editor-ui production package must not declare dependencies.'
 
@@ -150,6 +151,7 @@ $asmdefs = [ordered]@{
     'com.zerogamestudio.zeroengine.formula' = 'Editor/ZeroEngine.Formula.Editor.asmdef'
     'com.zerogamestudio.zeroengine.feedback' = 'Editor/ZeroEngine.Feedback.Editor.asmdef'
     'com.zerogamestudio.zeroengine.modsystem' = 'Editor/Legacy/ZeroEngine.ModSystem.Editor.asmdef'
+    'com.zerogamestudio.zeroengine.project-atlas' = 'Editor/ZeroEngine.ProjectAtlas.Editor.asmdef'
     'com.zerogamestudio.zeroengine.tce' = 'Editor/ZeroEngine.TCE.Editor.asmdef'
     'com.zerogamestudio.zeroengine.ui' = 'Editor/ZeroEngine.UI.Editor.asmdef'
 }
@@ -158,11 +160,12 @@ $expectedEditorUiDependencies = @{
     'com.zerogamestudio.analytics' = '1.3.0'
     'com.zerogamestudio.zeroengine' = '1.3.0'
     'com.zerogamestudio.zeroengine.config-pipeline' = '1.3.0'
-    'com.zerogamestudio.zeroengine.dashboard' = '1.4.0'
+    'com.zerogamestudio.zeroengine.dashboard' = '1.5.0'
     'com.zerogamestudio.zeroengine.data-toolkit' = '1.4.0'
     'com.zerogamestudio.zeroengine.feedback' = '1.3.0'
     'com.zerogamestudio.zeroengine.formula' = '1.4.0'
     'com.zerogamestudio.zeroengine.modsystem' = '1.3.0'
+    'com.zerogamestudio.zeroengine.project-atlas' = '1.5.0'
     'com.zerogamestudio.zeroengine.tce' = '1.3.0'
     'com.zerogamestudio.zeroengine.ui' = '1.3.0'
 }
@@ -181,6 +184,16 @@ foreach ($packageName in $expectedPackages.Keys) {
     $asmdef = Read-Json (Join-Path $packageRoot $asmdefs[$packageName])
     Assert-Contract ($asmdef.references -contains 'ZeroEngine.EditorUI.Editor') "$packageName Editor asmdef must explicitly reference editor-ui."
 }
+
+$projectAtlasPanelSource = Get-Content -Raw -LiteralPath (
+    Join-Path $RepoRoot 'com.zerogamestudio.zeroengine.project-atlas/Editor/ProjectAtlasWorkspacePanel.cs')
+Assert-Contract (
+    [regex]::IsMatch($projectAtlasPanelSource, '(?s)DrawFeatureButtons.*?EditorUiGUILayout\.SelectionButton')) `
+    'Project Atlas feature rows must use the standard centered selection button.'
+Assert-Contract (-not $projectAtlasPanelSource.Contains('DrawFeatureRow')) `
+    'Project Atlas feature buttons must not regress to split overlay labels.'
+Assert-Contract (-not $projectAtlasPanelSource.Contains('GUIStyle.none')) `
+    'Project Atlas feature rows must not regress to invisible click targets.'
 
 $legacyPackage = Read-Json (Join-Path $RepoRoot 'com.zerogamestudio.zeroengine/package.json')
 Assert-Contract ($null -eq $legacyPackage.dependencies.'com.zerogamestudio.zeroengine.dashboard') 'Legacy ZeroEngine must not depend on Dashboard.'

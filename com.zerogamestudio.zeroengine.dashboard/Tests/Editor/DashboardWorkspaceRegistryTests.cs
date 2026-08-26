@@ -90,6 +90,7 @@ namespace ZeroEngine.Dashboard.Tests.Editor
         public void Dashboard_ImplementsTypedWorkspaceNavigation()
         {
             Assert.That(typeof(IEditorWorkspaceNavigator).IsAssignableFrom(typeof(ZeroEngineDashboard)), Is.True);
+            Assert.That(typeof(IEditorWorkspaceRouteNavigator).IsAssignableFrom(typeof(ZeroEngineDashboard)), Is.True);
         }
 
         [Test]
@@ -451,7 +452,11 @@ namespace ZeroEngine.Dashboard.Tests.Editor
                     SystemScroll = new Vector2(5f, 6f),
                     WorkspaceNavigationScroll = new Vector2(7f, 8f),
                     WorkspaceContentScroll = new Vector2(9f, 10f),
-                    ContextScroll = new Vector2(11f, 12f)
+                    ContextScroll = new Vector2(11f, 12f),
+                    RouteSourceModuleId = "com.zerogamestudio.zeroengine.project-atlas",
+                    RouteSourcePanelId = "project-atlas",
+                    RouteSourceSubrouteId = "characters",
+                    RouteSourceDisplayName = "角色 > 角色档案"
                 }, prefix);
 
                 DashboardViewState state = DashboardViewStateStore.Load(prefix);
@@ -473,6 +478,10 @@ namespace ZeroEngine.Dashboard.Tests.Editor
                 Assert.That(state.WorkspaceSidebarWidth, Is.EqualTo(286f));
                 Assert.That(state.WorkspaceContentScroll, Is.EqualTo(new Vector2(9f, 10f)));
                 Assert.That(state.ContextScroll, Is.EqualTo(new Vector2(11f, 12f)));
+                Assert.That(state.RouteSourceModuleId, Is.EqualTo("com.zerogamestudio.zeroengine.project-atlas"));
+                Assert.That(state.RouteSourcePanelId, Is.EqualTo("project-atlas"));
+                Assert.That(state.RouteSourceSubrouteId, Is.EqualTo("characters"));
+                Assert.That(state.RouteSourceDisplayName, Is.EqualTo("角色 > 角色档案"));
             }
             finally
             {

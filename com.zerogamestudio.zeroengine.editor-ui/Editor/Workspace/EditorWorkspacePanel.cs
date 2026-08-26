@@ -40,6 +40,73 @@ namespace ZeroEngine.EditorUI
         bool TryShowWorkspace(string moduleId, string panelId);
     }
 
+    public sealed class EditorWorkspaceRouteSource
+    {
+        public EditorWorkspaceRouteSource(
+            string moduleId,
+            string panelId,
+            string subrouteId,
+            string displayName)
+        {
+            ModuleId = RequireId(moduleId, nameof(moduleId));
+            PanelId = RequireId(panelId, nameof(panelId));
+            SubrouteId = subrouteId ?? string.Empty;
+            DisplayName = string.IsNullOrWhiteSpace(displayName)
+                ? throw new ArgumentException("Route source display name is required.", nameof(displayName))
+                : displayName.Trim();
+        }
+
+        public string ModuleId { get; }
+        public string PanelId { get; }
+        public string SubrouteId { get; }
+        public string DisplayName { get; }
+
+        private static string RequireId(string value, string parameterName)
+        {
+            return string.IsNullOrWhiteSpace(value)
+                ? throw new ArgumentException("Workspace route IDs are required.", parameterName)
+                : value.Trim();
+        }
+    }
+
+    public sealed class EditorWorkspaceRoute
+    {
+        public EditorWorkspaceRoute(
+            string moduleId,
+            string panelId,
+            string subrouteId = null,
+            EditorWorkspaceRouteSource source = null)
+        {
+            ModuleId = RequireId(moduleId, nameof(moduleId));
+            PanelId = RequireId(panelId, nameof(panelId));
+            SubrouteId = subrouteId ?? string.Empty;
+            Source = source;
+        }
+
+        public string ModuleId { get; }
+        public string PanelId { get; }
+        public string SubrouteId { get; }
+        public EditorWorkspaceRouteSource Source { get; }
+        public string FullId => ModuleId + "/" + PanelId;
+
+        private static string RequireId(string value, string parameterName)
+        {
+            return string.IsNullOrWhiteSpace(value)
+                ? throw new ArgumentException("Workspace route IDs are required.", parameterName)
+                : value.Trim();
+        }
+    }
+
+    public interface IEditorWorkspaceRouteNavigator
+    {
+        bool TryShowWorkspace(EditorWorkspaceRoute route);
+    }
+
+    public interface IEditorWorkspaceRouteReceiver
+    {
+        bool TryApplyWorkspaceRoute(string subrouteId);
+    }
+
     public interface IEditorWorkspacePanel : IDisposable
     {
         float RefreshInterval { get; }
@@ -83,11 +150,35 @@ namespace ZeroEngine.EditorUI
                     "工作台面板当前不可用：" + displayName + "。");
             });
         }
+
+        public static IEditorToolAction CreateRouteAction(EditorWorkspaceRoute route, string displayName)
+        {
+            if (route == null)
+                throw new ArgumentNullException(nameof(route));
+            if (string.IsNullOrWhiteSpace(displayName))
+                throw new ArgumentException("Route display name is required.", nameof(displayName));
+
+            return new DelegateEditorToolAction(context =>
+            {
+                if (context?.Owner is IEditorWorkspaceRouteNavigator navigator &&
+                    navigator.TryShowWorkspace(route))
+                {
+                    return new EditorToolActionResult(
+                        EditorToolActionStatus.Succeeded,
+                        "已切换到工作台：" + displayName.Trim() + "。");
+                }
+
+                return new EditorToolActionResult(
+                    EditorToolActionStatus.Failed,
+                    "工作台入口当前不可用：" + displayName.Trim() + "。");
+            });
+        }
     }
 
     public sealed class EditorWindowWorkspacePanel<TWindow> :
         IEditorWorkspacePanel,
-        IEditorWorkspaceFullWidthPanel
+        IEditorWorkspaceFullWidthPanel,
+        IEditorWorkspaceRouteReceiver
         where TWindow : EditorWindow, IEditorWorkspaceEmbeddedView
     {
         private const string StateKeyPrefix = "ZeroEngine.EditorUI.WorkspaceWindow.";
@@ -161,6 +252,14 @@ namespace ZeroEngine.EditorUI
         public void Dispose()
         {
             DisposeView();
+        }
+
+        public bool TryApplyWorkspaceRoute(string subrouteId)
+        {
+            if (string.IsNullOrWhiteSpace(subrouteId))
+                return true;
+            return _view is IEditorWorkspaceRouteReceiver receiver &&
+                   receiver.TryApplyWorkspaceRoute(subrouteId.Trim());
         }
 
         private void DisposeView()
