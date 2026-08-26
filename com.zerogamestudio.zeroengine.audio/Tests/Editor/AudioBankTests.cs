@@ -2,12 +2,20 @@ using System;
 using System.Collections.Generic;
 using NUnit.Framework;
 using UnityEngine;
+using UnityEngine.TestTools;
+using ZeroEngine.Core;
 
 namespace ZeroEngine.Audio.Tests
 {
     public sealed class AudioBankTests
     {
         private readonly List<UnityEngine.Object> _createdObjects = new();
+
+        [SetUp]
+        public void SetUp()
+        {
+            ServiceRegistry.ClearForTests();
+        }
 
         [TearDown]
         public void TearDown()
@@ -18,6 +26,7 @@ namespace ZeroEngine.Audio.Tests
             }
 
             _createdObjects.Clear();
+            ServiceRegistry.ClearForTests();
         }
 
         [Test]
@@ -127,6 +136,41 @@ namespace ZeroEngine.Audio.Tests
             Assert.That(service.HasEvent(new AudioEventId("piece.pickup")), Is.True);
             Assert.That(service.UnregisterBank(firstBank), Is.True);
             Assert.That(service.HasEvent(new AudioEventId("piece.pickup")), Is.False);
+        }
+
+        [Test]
+        public void EventService_EnabledLifecycleRegistersAndUnregistersApplicationOwner()
+        {
+            var serviceObject = new GameObject("AudioEventServiceOwner");
+            _createdObjects.Add(serviceObject);
+            UnityAudioEventService service = serviceObject.AddComponent<UnityAudioEventService>();
+
+            Assert.That(ServiceRegistry.ResolveOrNull<IAudioEventService>(), Is.SameAs(service));
+
+            service.enabled = false;
+            Assert.That(ServiceRegistry.ResolveOrNull<IAudioEventService>(), Is.Null);
+
+            service.enabled = true;
+            Assert.That(ServiceRegistry.ResolveOrNull<IAudioEventService>(), Is.SameAs(service));
+        }
+
+        [Test]
+        public void EventService_SecondEnabledOwnerFailsClosed()
+        {
+            var firstObject = new GameObject("FirstAudioEventServiceOwner");
+            var secondObject = new GameObject("SecondAudioEventServiceOwner");
+            _createdObjects.Add(firstObject);
+            _createdObjects.Add(secondObject);
+            UnityAudioEventService first = firstObject.AddComponent<UnityAudioEventService>();
+
+            LogAssert.Expect(
+                LogType.Error,
+                "[UnityAudioEventService] Another IAudioEventService owner is already registered. " +
+                "Only one enabled application owner is allowed.");
+            UnityAudioEventService second = secondObject.AddComponent<UnityAudioEventService>();
+
+            Assert.That(second.enabled, Is.False);
+            Assert.That(ServiceRegistry.ResolveOrNull<IAudioEventService>(), Is.SameAs(first));
         }
 
         private T Create<T>() where T : ScriptableObject

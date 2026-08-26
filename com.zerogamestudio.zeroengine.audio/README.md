@@ -8,7 +8,7 @@ Unity-native audio management with stable event ids.
 - pooled 2D/3D SFX with configurable rolloff, distances, pan, Doppler, spread, reverb, cooldown, and concurrency limits
 - intro/loop music with per-track or manager-default unscaled-time crossfades and fade-outs
 - `AudioBankSO` registration for Addressables-style content scopes
-- `UnityAudioEventService` facade for project-owned semantic event ids
+- `UnityAudioEventService` facade for project-owned semantic event ids, registered as the unique enabled `IAudioEventService` owner
 - AudioMixer Master/BGM/SFX volume control
 - optional SaveManager persistence for projects without their own settings model
 
@@ -26,6 +26,10 @@ Unity-native audio management with stable event ids.
 5. Play semantic ids through `IAudioEventService.Play`.
 6. Stop all loop instances mapped to an id with `IAudioEventService.Stop`.
 
+Consumers resolve the active owner through `ServiceRegistry`. Enabling a second
+`UnityAudioEventService` fails closed and disabling the owner unregisters it, so
+scene-scoped consumers never retain a stale service.
+
 Addressables is intentionally not a package dependency. A consumer loads an
 `AudioBankSO`, registers it for the relevant content scope, stops its looped
 events, unregisters it, and only then releases the Addressables handle.
@@ -41,5 +45,5 @@ those defaults.
 
 ## Version
 
-2.2.0 - Configurable spatial SFX, per-track music transitions, and project-level
-music/pool playback defaults.
+2.2.1 - Unique runtime `IAudioEventService` ownership with deterministic
+enable/disable registration.

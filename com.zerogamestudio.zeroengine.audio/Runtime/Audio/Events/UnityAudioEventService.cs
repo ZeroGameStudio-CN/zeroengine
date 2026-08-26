@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using UnityEngine;
+using ZeroEngine.Core;
 
 namespace ZeroEngine.Audio
 {
@@ -16,11 +17,40 @@ namespace ZeroEngine.Audio
 
         private readonly Dictionary<string, AudioCueSO> _sfxById = new();
         private readonly Dictionary<string, AudioMusicSO> _musicById = new();
+        private bool _registeredAsOwner;
 
         private void Awake()
         {
             ResolveAudioManager();
             RebuildCacheWithLogging();
+        }
+
+        private void OnEnable()
+        {
+            IAudioEventService existing = ServiceRegistry.ResolveOrNull<IAudioEventService>();
+            if (existing != null && !ReferenceEquals(existing, this))
+            {
+                Debug.LogError(
+                    "[UnityAudioEventService] Another IAudioEventService owner is already registered. " +
+                    "Only one enabled application owner is allowed.",
+                    this);
+                enabled = false;
+                return;
+            }
+
+            ServiceRegistry.Register<IAudioEventService>(this);
+            _registeredAsOwner = true;
+        }
+
+        private void OnDisable()
+        {
+            if (!_registeredAsOwner)
+            {
+                return;
+            }
+
+            ServiceRegistry.Unregister<IAudioEventService>(this);
+            _registeredAsOwner = false;
         }
 
         private void OnValidate()
