@@ -107,7 +107,7 @@ function Get-CSharpMethodBodies([string]$Source, [string]$MethodName) {
 $expectedPackages = [ordered]@{
     'com.zerogamestudio.analytics' = '2.0.1'
     'com.zerogamestudio.zeroengine' = '2.1.1'
-    'com.zerogamestudio.zeroengine.config-pipeline' = '2.1.0'
+    'com.zerogamestudio.zeroengine.config-pipeline' = '2.1.1'
     'com.zerogamestudio.zeroengine.dashboard' = '4.7.0'
     'com.zerogamestudio.zeroengine.data-toolkit' = '2.1.1'
     'com.zerogamestudio.zeroengine.formula' = '0.6.0'

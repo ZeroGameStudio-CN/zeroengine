@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
+using System.IO.Compression;
 using System.Linq;
 using System.Text;
 using DocumentFormat.OpenXml;
@@ -25,6 +26,8 @@ namespace ZeroGameStudio.ConfigPipeline.Editor
         private const uint BusinessHeaderStyle = 7U;
         private const uint BusinessHeaderLinkStyle = 8U;
         private const int MaximumTableColumnNameLength = 255;
+        private static readonly DateTimeOffset DeterministicPackageTimestamp =
+            new DateTimeOffset(1980, 1, 1, 0, 0, 0, TimeSpan.Zero);
 
         public void WriteTemplate(
             Stream destination,
@@ -55,47 +58,85 @@ namespace ZeroGameStudio.ConfigPipeline.Editor
                 throw new InvalidOperationException("Schema does not declare any x-zgs-sheet arrays.");
             }
 
-            using (SpreadsheetDocument workbook =
-                   SpreadsheetDocument.Create(
-                       destination,
-                       SpreadsheetDocumentType.Workbook,
-                       true))
+            byte[] packageBytes;
+            using (var packageStream = new MemoryStream())
             {
-                WorkbookPart workbookPart = workbook.AddWorkbookPart();
-                workbookPart.Workbook = new Workbook();
-                AddStyles(workbookPart);
-                var workbookView = new WorkbookView();
-                workbookPart.Workbook.AppendChild(new BookViews(workbookView));
-                var sheets = workbookPart.Workbook.AppendChild(new Sheets());
-                uint sheetId = 1;
-                AddSchemaSheet(workbookPart, sheets, schema, tables, ref sheetId);
-                AddMetaSheet(
-                    workbookPart,
-                    sheets,
-                    schema,
-                    configSetId,
-                    workbookBaseHash ?? CreateEmptySourceHash(tables),
-                    ref sheetId);
-                AddEnumSheet(workbookPart, sheets, tables, ref sheetId);
-                uint navigationSheetIndex = sheetId - 1U;
-                workbookView.ActiveTab = navigationSheetIndex;
-                workbookView.FirstSheet = navigationSheetIndex;
-                AddNavigationSheet(workbookPart, sheets, tables, ref sheetId);
-                uint tableId = 1U;
-                for (int tableIndex = 0; tableIndex < tables.Count; tableIndex++)
+                using (SpreadsheetDocument workbook =
+                       SpreadsheetDocument.Create(
+                           packageStream,
+                           SpreadsheetDocumentType.Workbook,
+                           true))
                 {
-                    TableDefinition table = tables[tableIndex];
-                    AddDataSheet(
+                    WorkbookPart workbookPart = workbook.AddWorkbookPart();
+                    workbook.ChangeIdOfPart(workbookPart, "rIdWorkbook");
+                    workbookPart.Workbook = new Workbook();
+                    AddStyles(workbookPart);
+                    var workbookView = new WorkbookView();
+                    workbookPart.Workbook.AppendChild(new BookViews(workbookView));
+                    var sheets = workbookPart.Workbook.AppendChild(new Sheets());
+                    uint sheetId = 1;
+                    AddSchemaSheet(workbookPart, sheets, schema, tables, ref sheetId);
+                    AddMetaSheet(
                         workbookPart,
                         sheets,
-                        table,
-                        FindRows(document, table),
-                        false,
-                        ref tableId,
+                        schema,
+                        configSetId,
+                        workbookBaseHash ?? CreateEmptySourceHash(tables),
                         ref sheetId);
+                    AddEnumSheet(workbookPart, sheets, tables, ref sheetId);
+                    uint navigationSheetIndex = sheetId - 1U;
+                    workbookView.ActiveTab = navigationSheetIndex;
+                    workbookView.FirstSheet = navigationSheetIndex;
+                    AddNavigationSheet(workbookPart, sheets, tables, ref sheetId);
+                    uint tableId = 1U;
+                    for (int tableIndex = 0; tableIndex < tables.Count; tableIndex++)
+                    {
+                        TableDefinition table = tables[tableIndex];
+                        AddDataSheet(
+                            workbookPart,
+                            sheets,
+                            table,
+                            FindRows(document, table),
+                            false,
+                            ref tableId,
+                            ref sheetId);
+                    }
+
+                    workbookPart.Workbook.Save();
                 }
 
-                workbookPart.Workbook.Save();
+                packageBytes = packageStream.ToArray();
+            }
+
+            WriteDeterministicPackage(packageBytes, destination);
+        }
+
+        private static void WriteDeterministicPackage(byte[] packageBytes, Stream destination)
+        {
+            using (var sourceStream = new MemoryStream(packageBytes, false))
+            using (var sourceArchive = new ZipArchive(sourceStream, ZipArchiveMode.Read, false))
+            using (var deterministicStream = new MemoryStream())
+            {
+                using (var destinationArchive =
+                       new ZipArchive(deterministicStream, ZipArchiveMode.Create, true))
+                {
+                    foreach (ZipArchiveEntry sourceEntry in
+                             sourceArchive.Entries.OrderBy(entry => entry.FullName, StringComparer.Ordinal))
+                    {
+                        ZipArchiveEntry destinationEntry = destinationArchive.CreateEntry(
+                            sourceEntry.FullName,
+                            CompressionLevel.Optimal);
+                        destinationEntry.LastWriteTime = DeterministicPackageTimestamp;
+                        using (Stream sourceEntryStream = sourceEntry.Open())
+                        using (Stream destinationEntryStream = destinationEntry.Open())
+                        {
+                            sourceEntryStream.CopyTo(destinationEntryStream);
+                        }
+                    }
+                }
+
+                deterministicStream.Position = 0;
+                deterministicStream.CopyTo(destination);
             }
         }
 
@@ -221,7 +262,7 @@ namespace ZeroGameStudio.ConfigPipeline.Editor
 
         private static void AddStyles(WorkbookPart workbookPart)
         {
-            WorkbookStylesPart stylesPart = workbookPart.AddNewPart<WorkbookStylesPart>();
+            WorkbookStylesPart stylesPart = workbookPart.AddNewPart<WorkbookStylesPart>("rIdStyles");
             stylesPart.Stylesheet = new Stylesheet(
                 new Fonts(
                     new Font(),
@@ -425,7 +466,7 @@ namespace ZeroGameStudio.ConfigPipeline.Editor
             IReadOnlyList<TableDefinition> tables,
             ref uint sheetId)
         {
-            WorksheetPart worksheetPart = workbookPart.AddNewPart<WorksheetPart>();
+            WorksheetPart worksheetPart = AddWorksheetPart(workbookPart, sheetId);
             var sheetData = new SheetData();
             worksheetPart.Worksheet = new Worksheet(sheetData);
             sheetData.Append(RowOf(
@@ -484,7 +525,7 @@ namespace ZeroGameStudio.ConfigPipeline.Editor
             string workbookBaseHash,
             ref uint sheetId)
         {
-            WorksheetPart worksheetPart = workbookPart.AddNewPart<WorksheetPart>();
+            WorksheetPart worksheetPart = AddWorksheetPart(workbookPart, sheetId);
             worksheetPart.Worksheet = new Worksheet(
                 new SheetData(
                     RowOf("toolFormatVersion", WorkbookFormatVersion.ToString(CultureInfo.InvariantCulture)),
@@ -515,7 +556,7 @@ namespace ZeroGameStudio.ConfigPipeline.Editor
             IReadOnlyList<TableDefinition> tables,
             ref uint sheetId)
         {
-            WorksheetPart worksheetPart = workbookPart.AddNewPart<WorksheetPart>();
+            WorksheetPart worksheetPart = AddWorksheetPart(workbookPart, sheetId);
             var sheetData = new SheetData();
             worksheetPart.Worksheet = new Worksheet(sheetData);
             int rowIndex = 1;
@@ -572,7 +613,7 @@ namespace ZeroGameStudio.ConfigPipeline.Editor
             IReadOnlyList<TableDefinition> tables,
             ref uint sheetId)
         {
-            WorksheetPart worksheetPart = workbookPart.AddNewPart<WorksheetPart>();
+            WorksheetPart worksheetPart = AddWorksheetPart(workbookPart, sheetId);
             var sheetViews = new SheetViews(
                 new SheetView(
                     new Pane
@@ -721,7 +762,7 @@ namespace ZeroGameStudio.ConfigPipeline.Editor
             ref uint tableId,
             ref uint sheetId)
         {
-            WorksheetPart worksheetPart = workbookPart.AddNewPart<WorksheetPart>();
+            WorksheetPart worksheetPart = AddWorksheetPart(workbookPart, sheetId);
             var sheetViews = new SheetViews(
                 new SheetView(
                     new Pane
@@ -1057,7 +1098,8 @@ namespace ZeroGameStudio.ConfigPipeline.Editor
                 });
             }
 
-            TableDefinitionPart tablePart = worksheetPart.AddNewPart<TableDefinitionPart>();
+            TableDefinitionPart tablePart = worksheetPart.AddNewPart<TableDefinitionPart>(
+                "rIdTable" + currentTableId.ToString(CultureInfo.InvariantCulture));
             tablePart.Table = new Table(
                 new AutoFilter { Reference = reference },
                 tableColumns,
@@ -1095,6 +1137,12 @@ namespace ZeroGameStudio.ConfigPipeline.Editor
 
             builder.Append('_').Append(tableId.ToString(CultureInfo.InvariantCulture));
             return builder.ToString();
+        }
+
+        private static WorksheetPart AddWorksheetPart(WorkbookPart workbookPart, uint sheetId)
+        {
+            return workbookPart.AddNewPart<WorksheetPart>(
+                "rIdSheet" + sheetId.ToString(CultureInfo.InvariantCulture));
         }
 
         private static string UniqueDisplayHeader(

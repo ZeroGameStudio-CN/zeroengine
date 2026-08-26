@@ -1,5 +1,6 @@
 using System;
 using System.IO;
+using System.IO.Compression;
 using System.Linq;
 using System.Text;
 using DocumentFormat.OpenXml.Packaging;
@@ -51,6 +52,26 @@ namespace ZeroGameStudio.ConfigPipeline.Tests
             "\"legacyId\":{\"type\":\"string\",\"x-zgs-primary-key\":true}," +
             "\"canonicalId\":{\"type\":\"string\"}" +
             "}}}}}";
+
+        [Test]
+        public void Writer_SameInput_ProducesByteIdenticalPackage()
+        {
+            ConfigSchema schema = Schema();
+            ConfigDocument document = Document();
+            byte[] first = WriteWorkbook(schema, document);
+            byte[] second = WriteWorkbook(schema, document);
+
+            CollectionAssert.AreEqual(first, second);
+            using (var stream = new MemoryStream(first, false))
+            using (var archive = new ZipArchive(stream, ZipArchiveMode.Read, false))
+            {
+                var expectedTimestamp = new DateTime(1980, 1, 1, 0, 0, 0);
+                Assert.That(archive.Entries, Is.Not.Empty);
+                Assert.That(
+                    archive.Entries.All(entry => entry.LastWriteTime.DateTime == expectedTimestamp),
+                    Is.True);
+            }
+        }
 
         [Test]
         public void TemplateAndReader_RoundTripTypedDocument()
@@ -727,6 +748,20 @@ namespace ZeroGameStudio.ConfigPipeline.Tests
                         stream,
                         new ConfigReadContext("sample.xlsx", schema.SchemaId, schema.SchemaVersion)));
                 Assert.That(exception.Code, Is.EqualTo("XLSX_EXTERNAL_LINK_FORBIDDEN"));
+            }
+        }
+
+        private static byte[] WriteWorkbook(ConfigSchema schema, ConfigDocument document)
+        {
+            using (var stream = new MemoryStream())
+            {
+                new XlsxConfigWorkbookWriter().WriteTemplate(
+                    stream,
+                    schema,
+                    "sample.xlsx",
+                    document,
+                    ConfigHash.Sha256(CanonicalJsonWriter.WriteUtf8(document.Root)));
+                return stream.ToArray();
             }
         }
 

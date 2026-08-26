@@ -1,5 +1,11 @@
 # Changelog
 
+## 2.1.1
+
+- Generate byte-identical XLSX packages for identical schema, source document,
+  config-set ID, and base hash inputs by assigning stable Open XML relationship
+  IDs, sorting ZIP entries, and fixing package timestamps.
+
 ## 2.1.0
 
 - Allow flat XLSX tables to declare an ordered composite identity with multiple

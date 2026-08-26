@@ -4,6 +4,9 @@ Schema-first configuration pipeline for Unity 2022.3 projects. It keeps one
 authoring source, validates through a typed intermediate document, emits
 deterministic artifacts, and loads immutable runtime snapshots.
 
+Version 2.1.1 makes generated XLSX packages byte-identical for identical inputs,
+including stable Open XML relationship IDs, ZIP entry order, and timestamps.
+
 Version 2.1.0 supports ordered composite identities for flat authoring tables:
 mark each top-level string component with `x-zgs-primary-key`. Duplicate
 validation and XLSX import ordering use the complete tuple. Child-sheet joins
