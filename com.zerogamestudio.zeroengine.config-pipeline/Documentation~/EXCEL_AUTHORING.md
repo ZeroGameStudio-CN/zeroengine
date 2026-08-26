@@ -13,3 +13,17 @@ table must still have one primary-key column. References likewise target only a
 single-field primary key. Do not add columns, rename sheets, edit internal sheets,
 use formulas/macros/links, or place JSON in a cell. Save the workbook and ask the
 AI maintainer to run Plan, Check and Apply.
+
+## Effective values and Reset to Preset
+
+Run Plan in the Config Pipeline Workbench to inspect each generated leaf or
+empty collection. The Workbench shows the canonical effective value, target,
+`Schema`/`Preset`/`Instance` source, source JSON/schema path and exact workbook
+cell when one exists.
+
+Reset to Preset is available only for a concrete `Instance` cell. Preview first:
+the pipeline clears that cell in memory, resolves the complete candidate again,
+and requires the field to become `Preset`. Apply revalidates both the source Plan
+and reset Plan, then commits the workbook and generated artifacts together. A
+stale workbook, non-preset fallback or failed post-Apply Check writes nothing or
+rolls the whole transaction back.

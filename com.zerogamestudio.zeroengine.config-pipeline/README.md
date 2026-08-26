@@ -4,6 +4,11 @@ Schema-first configuration pipeline for Unity 2022.3 projects. It keeps one
 authoring source, validates through a typed intermediate document, emits
 deterministic artifacts, and loads immutable runtime snapshots.
 
+Version 2.3.0 adds Workbench inspection of canonical effective values and their
+field-level provenance. A guarded Reset-to-Preset flow previews the inherited
+value and exact source cell, rejects stale plans, and updates the workbook plus
+all generated artifacts in one rollback-capable transaction.
+
 Version 2.2.0 adds generation-time typed preset inheritance, explicit whole-list
 replacement, nullable/empty Excel authoring tokens, and complete per-field
 `Schema`/`Preset`/`Instance` provenance. Generated runtime JSON is fully flat.

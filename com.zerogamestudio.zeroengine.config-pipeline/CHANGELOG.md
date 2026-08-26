@@ -1,5 +1,17 @@
 # Changelog
 
+## 2.3.0
+
+- Expose canonical effective values with target, field-level Schema/Preset/Instance
+  provenance, source JSON/schema paths, and exact workbook coordinates in every
+  prepared Plan.
+- Add Config Pipeline Workbench filtering and field inspection for effective
+  values and provenance.
+- Add guarded Reset-to-Preset preview/apply. Only concrete instance cells that
+  resolve to a preset after clearing are eligible; source and reset Plan IDs are
+  revalidated and the workbook plus generated artifacts are committed in one
+  rollback-capable transaction.
+
 ## 2.2.0
 
 - Add single-layer typed preset contracts. Schema-declared instance tables can

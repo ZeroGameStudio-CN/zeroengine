@@ -11,18 +11,21 @@ namespace ZeroGameStudio.ConfigPipeline.Editor
             ConfigPipelinePlan plan,
             IReadOnlyList<ConfigArtifact> artifacts,
             IReadOnlyList<ConfigDiagnostic> diagnostics,
-            IReadOnlyList<ConfigValueDiff> valueDiffs)
+            IReadOnlyList<ConfigValueDiff> valueDiffs,
+            IReadOnlyList<ConfigEffectiveValue> effectiveValues)
         {
             Plan = plan;
             Artifacts = artifacts;
             Diagnostics = diagnostics;
             ValueDiffs = valueDiffs;
+            EffectiveValues = effectiveValues;
         }
 
         public ConfigPipelinePlan Plan { get; }
         public IReadOnlyList<ConfigArtifact> Artifacts { get; }
         public IReadOnlyList<ConfigDiagnostic> Diagnostics { get; }
         public IReadOnlyList<ConfigValueDiff> ValueDiffs { get; }
+        public IReadOnlyList<ConfigEffectiveValue> EffectiveValues { get; }
     }
 
     public sealed class ConfigSchemaUpgradeCandidateResult
@@ -57,13 +60,28 @@ namespace ZeroGameStudio.ConfigPipeline.Editor
         public int CandidateFileCount { get; }
     }
 
-    public sealed class ConfigPipelineService
+    public sealed partial class ConfigPipelineService
     {
         public ConfigPipelinePreparedPlan Plan(
             string projectRoot,
             string profileRelativePath,
             string configSetId,
             string packageIdentity)
+        {
+            return PlanInternal(
+                projectRoot,
+                profileRelativePath,
+                configSetId,
+                packageIdentity,
+                null);
+        }
+
+        private ConfigPipelinePreparedPlan PlanInternal(
+            string projectRoot,
+            string profileRelativePath,
+            string configSetId,
+            string packageIdentity,
+            IReadOnlyDictionary<string, byte[]> workbookOverrides)
         {
             string root = ConfigPathGuard.NormalizeProjectRoot(projectRoot);
             string profilePath = ConfigPathGuard.NormalizeRelativePath(profileRelativePath);
@@ -72,7 +90,7 @@ namespace ZeroGameStudio.ConfigPipeline.Editor
             ConfigSetProfile set = profile.GetConfigSet(configSetId);
             string schemaAbsolute = ConfigPathGuard.ResolveInside(root, set.SchemaPath);
             ConfigSchema schema = ConfigSchemaParser.Parse(File.ReadAllBytes(schemaAbsolute));
-            XlsxReadResult source = ReadWorkbooks(root, set, schema);
+            XlsxReadResult source = ReadWorkbooks(root, set, schema, workbookOverrides);
             ConfigPresetResolutionResult presetResolution = ConfigPresetResolver.Resolve(
                 source.Document,
                 schema,
@@ -80,6 +98,7 @@ namespace ZeroGameStudio.ConfigPipeline.Editor
             var diagnostics = new List<ConfigDiagnostic>(presetResolution.Diagnostics);
             ThrowIfErrors(diagnostics);
             var artifacts = new List<ConfigArtifact>();
+            var effectiveValues = new List<ConfigEffectiveValue>();
             bool writeCode = true;
             foreach (ConfigTargetProfile target in set.Targets)
             {
@@ -112,6 +131,13 @@ namespace ZeroGameStudio.ConfigPipeline.Editor
                     continue;
                 }
 
+                effectiveValues.AddRange(ConfigEffectiveValueBuilder.Build(
+                    target.Scope,
+                    target.JsonPath,
+                    normalized.Document,
+                    schema,
+                    presetResolution.SourceMap));
+
                 artifacts.AddRange(new ConfigArtifactGenerator(
                     schema,
                     new ConfigArtifactGenerationOptions
@@ -133,6 +159,14 @@ namespace ZeroGameStudio.ConfigPipeline.Editor
             }
 
             ThrowIfErrors(diagnostics);
+            if (workbookOverrides != null)
+            {
+                foreach (KeyValuePair<string, byte[]> workbook in workbookOverrides)
+                {
+                    artifacts.Add(new ConfigArtifact(workbook.Key, workbook.Value));
+                }
+            }
+
             AddRequiredUnityMetas(root, configSetId, artifacts);
             EnsureUniqueArtifacts(artifacts);
             var inputs = new List<string> { profilePath, set.SchemaPath };
@@ -160,7 +194,12 @@ namespace ZeroGameStudio.ConfigPipeline.Editor
                 valueDiffs.AddRange(ConfigDocumentDiff.Compare(target.JsonPath, before, after));
             }
 
-            return new ConfigPipelinePreparedPlan(plan, artifacts, diagnostics, valueDiffs);
+            return new ConfigPipelinePreparedPlan(
+                plan,
+                artifacts,
+                diagnostics,
+                valueDiffs,
+                effectiveValues);
         }
 
         public bool Check(
@@ -678,10 +717,29 @@ namespace ZeroGameStudio.ConfigPipeline.Editor
             ConfigSetProfile set,
             ConfigSchema schema)
         {
+            return ReadWorkbooks(root, set, schema, null);
+        }
+
+        private static XlsxReadResult ReadWorkbooks(
+            string root,
+            ConfigSetProfile set,
+            ConfigSchema schema,
+            IReadOnlyDictionary<string, byte[]> workbookOverrides)
+        {
             return ReadWorkbooks(
                 set,
                 schema,
-                workbook => ConfigPathGuard.ResolveInside(root, workbook.Path),
+                workbook =>
+                {
+                    string path = ConfigPathGuard.NormalizeRelativePath(workbook.Path);
+                    if (workbookOverrides != null &&
+                        workbookOverrides.TryGetValue(path, out byte[] content))
+                    {
+                        return new MemoryStream(content, false);
+                    }
+
+                    return File.OpenRead(ConfigPathGuard.ResolveInside(root, path));
+                },
                 workbook => workbook.Path);
         }
 
@@ -691,12 +749,24 @@ namespace ZeroGameStudio.ConfigPipeline.Editor
             Func<ConfigWorkbookProfile, string> pathResolver,
             Func<ConfigWorkbookProfile, string> workbookNameResolver)
         {
+            return ReadWorkbooks(
+                set,
+                schema,
+                workbook => File.OpenRead(pathResolver(workbook)),
+                workbookNameResolver);
+        }
+
+        private static XlsxReadResult ReadWorkbooks(
+            ConfigSetProfile set,
+            ConfigSchema schema,
+            Func<ConfigWorkbookProfile, Stream> streamResolver,
+            Func<ConfigWorkbookProfile, string> workbookNameResolver)
+        {
             var properties = new Dictionary<string, ConfigNode>(StringComparer.Ordinal);
             var sourceMap = new List<XlsxSourceMapEntry>();
             foreach (ConfigWorkbookProfile workbook in set.Workbooks)
             {
-                string absolute = pathResolver(workbook);
-                using (FileStream stream = File.OpenRead(absolute))
+                using (Stream stream = streamResolver(workbook))
                 {
                     XlsxReadResult read = new XlsxConfigSourceReader(
                         schema,

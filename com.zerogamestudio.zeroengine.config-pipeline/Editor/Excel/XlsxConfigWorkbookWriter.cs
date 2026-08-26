@@ -111,7 +111,7 @@ namespace ZeroGameStudio.ConfigPipeline.Editor
             WriteDeterministicPackage(packageBytes, destination);
         }
 
-        private static void WriteDeterministicPackage(byte[] packageBytes, Stream destination)
+        internal static void WriteDeterministicPackage(byte[] packageBytes, Stream destination)
         {
             using (var sourceStream = new MemoryStream(packageBytes, false))
             using (var sourceArchive = new ZipArchive(sourceStream, ZipArchiveMode.Read, false))
