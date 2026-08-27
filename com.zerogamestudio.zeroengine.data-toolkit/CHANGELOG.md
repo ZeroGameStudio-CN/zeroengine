@@ -23,6 +23,7 @@
 
 - Changed full inspector fallback to prefer Unity native editors before Odin reflection, so project `[CustomEditor]` implementations are respected inside Data Toolkit.
 - Added diagnostics coverage for native inspector fallback.
+- Allowed the data type and asset columns to resize down to 64 pixels while long row labels remain clipped.
 
 ## 1.1.0 - 2026-06-06
 

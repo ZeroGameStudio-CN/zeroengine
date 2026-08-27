@@ -13,7 +13,7 @@ namespace ZGS.DataToolkit.Editor
     {
         private const float DefaultTypeColumnWidth = 190f;
         private const float DefaultAssetColumnWidth = 240f;
-        private const float MinColumnWidth = 150f;
+        private const float MinColumnWidth = 64f;
         private const float MaxColumnWidth = 520f;
         private const float MinInspectorWidth = 240f;
         private const float WindowPadding = 4f;

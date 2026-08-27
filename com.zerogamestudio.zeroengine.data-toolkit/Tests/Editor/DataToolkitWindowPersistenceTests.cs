@@ -115,7 +115,7 @@ namespace ZGS.DataToolkit.Editor.Tests
                 BindingFlags.Static | BindingFlags.NonPublic);
             Assert.NotNull(contentWidthMethod);
 
-            Assert.AreEqual(550f, (float)contentWidthMethod.Invoke(null, new object[] { 400f }));
+            Assert.AreEqual(378f, (float)contentWidthMethod.Invoke(null, new object[] { 320f }));
             Assert.AreEqual(700f, (float)contentWidthMethod.Invoke(null, new object[] { 700f }));
 
             var window = Track(DataToolkitWindow.Open(CreateProfile()));
@@ -124,14 +124,14 @@ namespace ZGS.DataToolkit.Editor.Tests
                 BindingFlags.Instance | BindingFlags.NonPublic);
             Assert.NotNull(layoutMethod);
 
-            var layout = layoutMethod.Invoke(window, new object[] { new Rect(0f, 0f, 550f, 400f) });
+            var layout = layoutMethod.Invoke(window, new object[] { new Rect(0f, 0f, 378f, 400f) });
             var layoutType = layout.GetType();
             var typeColumn = (Rect)layoutType.GetProperty("TypeColumn").GetValue(layout);
             var assetColumn = (Rect)layoutType.GetProperty("AssetColumn").GetValue(layout);
             var inspectorColumn = (Rect)layoutType.GetProperty("InspectorColumn").GetValue(layout);
 
-            Assert.AreEqual(150f, typeColumn.width);
-            Assert.AreEqual(150f, assetColumn.width);
+            Assert.AreEqual(64f, typeColumn.width);
+            Assert.AreEqual(64f, assetColumn.width);
             Assert.AreEqual(240f, inspectorColumn.width);
         }
 
