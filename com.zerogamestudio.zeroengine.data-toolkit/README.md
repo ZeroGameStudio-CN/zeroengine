@@ -8,6 +8,8 @@ Add the package through Unity Package Manager using the Git URL for this reposit
 
 Version 2.1.1 adds project-configurable Data Toolkit UI text while keeping English defaults. It requires a direct Git pin for `com.zerogamestudio.zeroengine.editor-ui@1.4.0` at the same commit. Unity 2022.3 does not resolve same-repository sibling packages transitively.
 
+The current unreleased change keeps row names readable by measuring compact count labels and hiding the count before it can truncate a title that would otherwise fit. Full names and counts remain available in row tooltips.
+
 Version 2.0.1 localizes the Dashboard host label and description to Simplified Chinese; project adapters and menu routes remain compatible.
 
 ## Embedded Workspace Panel

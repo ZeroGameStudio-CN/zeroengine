@@ -826,6 +826,30 @@ namespace ZGS.DataToolkit.Editor
             var rect = GUILayoutUtility.GetRect(1f, RowHeight, GUILayout.ExpandWidth(true));
             var currentEvent = Event.current;
             var hovered = rect.Contains(currentEvent.mousePosition);
+            var hasCountText = !string.IsNullOrEmpty(countText);
+            var titleStyle = new GUIStyle(EditorStyles.label)
+            {
+                clipping = TextClipping.Clip,
+                alignment = TextAnchor.MiddleLeft
+            };
+            titleStyle.normal.textColor = selected ? Color.white : EditorStyles.label.normal.textColor;
+            var countStyle = new GUIStyle(EditorStyles.miniLabel)
+            {
+                clipping = TextClipping.Clip,
+                alignment = TextAnchor.MiddleRight
+            };
+            countStyle.normal.textColor = selected
+                ? new Color(0.9f, 0.95f, 1f, 1f)
+                : EditorStyles.miniLabel.normal.textColor;
+
+            float countWidth = ResolveSelectableRowCountWidth(
+                hasCountText ? countStyle.CalcSize(new GUIContent(countText)).x : 0f);
+            bool showCount = ShouldShowSelectableRowCount(
+                rect.width,
+                titleStyle.CalcSize(new GUIContent(title)).x,
+                countWidth,
+                hasCountText);
+            Rect titleRect = BuildSelectableRowTitleRect(rect, showCount, countWidth);
 
             if (currentEvent.type == EventType.Repaint)
             {
@@ -838,35 +862,62 @@ namespace ZGS.DataToolkit.Editor
                     EditorGUI.DrawRect(rect, new Color(1f, 1f, 1f, 0.06f));
                 }
 
-                var hasCountText = !string.IsNullOrEmpty(countText);
-                var titleRect = BuildSelectableRowTitleRect(rect, hasCountText);
-                var titleStyle = new GUIStyle(EditorStyles.label)
-                {
-                    clipping = TextClipping.Clip,
-                    alignment = TextAnchor.MiddleLeft
-                };
-                titleStyle.normal.textColor = selected ? Color.white : EditorStyles.label.normal.textColor;
                 GUI.Label(titleRect, title, titleStyle);
 
-                if (hasCountText)
+                if (showCount)
                 {
-                    var countRect = new Rect(rect.xMax - 46f, rect.y + 2f, 40f, rect.height - 4f);
-                    var countStyle = new GUIStyle(EditorStyles.miniLabel)
-                    {
-                        alignment = TextAnchor.MiddleRight
-                    };
-                    countStyle.normal.textColor = selected ? new Color(0.9f, 0.95f, 1f, 1f) : EditorStyles.miniLabel.normal.textColor;
+                    Rect countRect = BuildSelectableRowCountRect(rect, countWidth);
                     GUI.Label(countRect, countText, countStyle);
                 }
             }
 
-            return GUI.Button(rect, GUIContent.none, GUIStyle.none);
+            return GUI.Button(
+                rect,
+                new GUIContent(string.Empty, BuildSelectableRowTooltip(title, countText)),
+                GUIStyle.none);
         }
 
-        private static Rect BuildSelectableRowTitleRect(Rect rect, bool hasCountText)
+        private static float ResolveSelectableRowCountWidth(float preferredWidth)
         {
-            var rightReservedWidth = hasCountText ? 56f : 12f;
-            return new Rect(rect.x + 6f, rect.y + 2f, Mathf.Max(0f, rect.width - rightReservedWidth), rect.height - 4f);
+            return Mathf.Clamp(Mathf.Ceil(preferredWidth) + 4f, 16f, 48f);
+        }
+
+        private static bool ShouldShowSelectableRowCount(
+            float rowWidth,
+            float titlePreferredWidth,
+            float countWidth,
+            bool hasCountText)
+        {
+            if (!hasCountText)
+            {
+                return false;
+            }
+
+            const float horizontalInsets = 12f;
+            const float titleCountGap = 6f;
+            return titlePreferredWidth + titleCountGap + countWidth <= rowWidth - horizontalInsets;
+        }
+
+        private static Rect BuildSelectableRowTitleRect(Rect rect, bool showCount, float countWidth)
+        {
+            const float horizontalInset = 6f;
+            const float titleCountGap = 6f;
+            float reservedWidth = showCount ? titleCountGap + countWidth : 0f;
+            return new Rect(
+                rect.x + horizontalInset,
+                rect.y + 2f,
+                Mathf.Max(0f, rect.width - horizontalInset * 2f - reservedWidth),
+                rect.height - 4f);
+        }
+
+        private static Rect BuildSelectableRowCountRect(Rect rect, float countWidth)
+        {
+            return new Rect(rect.xMax - 6f - countWidth, rect.y + 2f, countWidth, rect.height - 4f);
+        }
+
+        private static string BuildSelectableRowTooltip(string title, string countText)
+        {
+            return string.IsNullOrEmpty(countText) ? title : title + " · " + countText;
         }
 
         private void DrawColumnResizeHandle(Rect rect, ref float width, string prefsKey, float maxWidthByLayout)

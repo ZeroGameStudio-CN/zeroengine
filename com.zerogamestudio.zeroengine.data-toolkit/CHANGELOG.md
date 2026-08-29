@@ -21,6 +21,8 @@
 
 ## Unreleased
 
+- Measured per-row count labels instead of reserving a fixed-width column, and hid counts responsively when preserving the full row name requires the space.
+- Added row tooltips that retain the complete name and count even when either is clipped or hidden.
 - Changed full inspector fallback to prefer Unity native editors before Odin reflection, so project `[CustomEditor]` implementations are respected inside Data Toolkit.
 - Added diagnostics coverage for native inspector fallback.
 - Allowed the data type and asset columns to resize down to 64 pixels while long row labels remain clipped.
