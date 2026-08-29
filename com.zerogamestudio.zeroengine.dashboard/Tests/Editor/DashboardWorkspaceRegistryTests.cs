@@ -201,6 +201,153 @@ namespace ZeroEngine.Dashboard.Tests.Editor
         }
 
         [Test]
+        public void WorkspaceModuleOrigin_UsesCapabilityDependenciesInsteadOfPackagePrefix()
+        {
+            var installedPackages = new[]
+            {
+                new DashboardInstalledPackage(
+                    "com.zerogamestudio.pob.formula",
+                    "0.2.0",
+                    "Packages/com.zerogamestudio.pob.formula",
+                    dependencies: new[]
+                    {
+                        "com.zerogamestudio.zeroengine.formula",
+                        "com.zerogamestudio.zeroengine.editor-ui"
+                    }),
+                new DashboardInstalledPackage(
+                    "com.zerogamestudio.pob.quest",
+                    "0.1.0",
+                    "Packages/com.zerogamestudio.pob.quest",
+                    dependencies: new[]
+                    {
+                        "com.zerogamestudio.zeroengine.core",
+                        "com.zerogamestudio.zeroengine.dashboard",
+                        "com.zerogamestudio.zeroengine.editor-ui"
+                    }),
+                new DashboardInstalledPackage(
+                    "com.zerogamestudio.zeroengine.formula",
+                    "0.6.0",
+                    "Packages/com.zerogamestudio.zeroengine.formula",
+                    "ZeroEngine Formula"),
+                new DashboardInstalledPackage(
+                    "com.zerogamestudio.zeroengine.editor-ui",
+                    "1.5.0",
+                    "Packages/com.zerogamestudio.zeroengine.editor-ui",
+                    "ZeroEngine Editor UI")
+            };
+            DashboardModule zeroEngine = Module(
+                DashboardSourceKind.Package,
+                "com.zerogamestudio.zeroengine.data-toolkit",
+                DashboardModuleScope.Universal);
+            DashboardModule projectAdapter = Module(
+                DashboardSourceKind.Package,
+                "com.zerogamestudio.pob.formula",
+                DashboardModuleScope.Project,
+                "POB");
+            DashboardModule legacyProjectAdapter = Module(
+                DashboardSourceKind.Package,
+                "com.zerogamestudio.pob.formula",
+                DashboardModuleScope.Universal);
+            DashboardModule projectPackage = Module(
+                DashboardSourceKind.Package,
+                "com.zerogamestudio.pob.quest",
+                DashboardModuleScope.Project,
+                "POB");
+            DashboardModule projectModule = Module(
+                DashboardSourceKind.Project,
+                string.Empty,
+                DashboardModuleScope.Project,
+                "POB");
+
+            DashboardWorkspaceOriginPresentation zeroEngineOrigin =
+                ZeroEngineDashboard.ResolveWorkspaceModuleOrigin(zeroEngine, installedPackages);
+            DashboardWorkspaceOriginPresentation adapterOrigin =
+                ZeroEngineDashboard.ResolveWorkspaceModuleOrigin(projectAdapter, installedPackages);
+            DashboardWorkspaceOriginPresentation legacyAdapterOrigin =
+                ZeroEngineDashboard.ResolveWorkspaceModuleOrigin(legacyProjectAdapter, installedPackages);
+            DashboardWorkspaceOriginPresentation projectPackageOrigin =
+                ZeroEngineDashboard.ResolveWorkspaceModuleOrigin(projectPackage, installedPackages);
+            DashboardWorkspaceOriginPresentation projectModuleOrigin =
+                ZeroEngineDashboard.ResolveWorkspaceModuleOrigin(projectModule, installedPackages);
+
+            Assert.That(zeroEngineOrigin.ShortLabel, Is.EqualTo("ZE"));
+            Assert.That(zeroEngineOrigin.LongLabel, Is.EqualTo("ZE 通用"));
+            Assert.That(adapterOrigin.ShortLabel, Is.EqualTo("ZE·POB"));
+            Assert.That(adapterOrigin.LongLabel, Is.EqualTo("ZE 能力 · POB 适配"));
+            Assert.That(legacyAdapterOrigin.ShortLabel, Is.EqualTo("ZE·POB"));
+            Assert.That(legacyAdapterOrigin.LongLabel, Is.EqualTo("ZE 能力 · POB 适配"));
+            Assert.That(projectPackageOrigin.ShortLabel, Is.EqualTo("POB"));
+            Assert.That(projectPackageOrigin.LongLabel, Is.EqualTo("POB 项目"));
+            Assert.That(projectModuleOrigin.LongLabel, Is.EqualTo("POB 项目"));
+        }
+
+        [Test]
+        public void WorkspacePanelTooltip_KeepsDescriptionOwnershipAndTechnicalSource()
+        {
+            var installedPackages = new[]
+            {
+                new DashboardInstalledPackage(
+                    "com.zerogamestudio.pob.formula",
+                    "0.2.0",
+                    "Packages/com.zerogamestudio.pob.formula",
+                    dependencies: new[]
+                    {
+                        "com.zerogamestudio.zeroengine.formula",
+                        "com.zerogamestudio.zeroengine.editor-ui"
+                    }),
+                new DashboardInstalledPackage(
+                    "com.zerogamestudio.zeroengine.formula",
+                    "0.6.0",
+                    "Packages/com.zerogamestudio.zeroengine.formula",
+                    "ZeroEngine Formula")
+            };
+            DashboardModule module = Module(
+                DashboardSourceKind.Package,
+                "com.zerogamestudio.pob.formula",
+                DashboardModuleScope.Project,
+                "POB");
+            var panel = new DashboardPanel(
+                "project.workspace",
+                "runtime",
+                "运行概览",
+                "查看项目运行状态。",
+                string.Empty,
+                "诊断",
+                "workspace.lazy",
+                0,
+                DashboardEntrySafety.ReadOnly,
+                DashboardEntryAvailability.Always,
+                "Assets/Editor/ZeroEngineDashboardModule.json");
+
+            DashboardWorkspaceOriginPresentation origin =
+                ZeroEngineDashboard.ResolveWorkspaceModuleOrigin(module, installedPackages);
+            string tooltip = ZeroEngineDashboard.BuildWorkspacePanelTooltip(origin, panel);
+
+            Assert.That(tooltip, Does.StartWith("查看项目运行状态。"));
+            Assert.That(tooltip, Does.Contain("归属：ZE 能力 · POB 适配"));
+            Assert.That(
+                tooltip,
+                Does.Contain(
+                    "能力来源：ZeroEngine Formula（com.zerogamestudio.zeroengine.formula）"));
+            Assert.That(tooltip, Does.Contain("项目接入：POB 薄适配"));
+            Assert.That(tooltip, Does.Contain("来源包：com.zerogamestudio.pob.formula"));
+            Assert.That(tooltip, Does.Not.Contain("com.zerogamestudio.zeroengine.editor-ui"));
+        }
+
+        [TestCase(120f, 70f, 20f, true)]
+        [TestCase(100f, 70f, 20f, false)]
+        public void WorkspaceModuleOriginBadge_OnlyAppearsWhenTitleStillFits(
+            float buttonWidth,
+            float titleWidth,
+            float badgeWidth,
+            bool expected)
+        {
+            Assert.That(
+                ZeroEngineDashboard.ShouldShowWorkspaceModuleOriginBadge(buttonWidth, titleWidth, badgeWidth),
+                Is.EqualTo(expected));
+        }
+
+        [Test]
         public void InstalledPackagePresentation_SeparatesInstallAndWorkspaceState()
         {
             var namedPackage = new DashboardInstalledPackage(
@@ -680,6 +827,37 @@ namespace ZeroEngine.Dashboard.Tests.Editor
                 new[] { module },
                 Array.Empty<DashboardInstalledPackage>(),
                 Array.Empty<DashboardDiagnostic>());
+        }
+
+        private static DashboardModule Module(
+            DashboardSourceKind sourceKind,
+            string packageName,
+            DashboardModuleScope scope,
+            string projectDisplayName = null)
+        {
+            var source = new DashboardDescriptorSource(
+                sourceKind,
+                sourceKind == DashboardSourceKind.Package
+                    ? "Packages/" + packageName + "/Editor/ZeroEngineDashboardModule.json"
+                    : "Assets/Editor/ZeroEngineDashboardModule.json",
+                sourceKind == DashboardSourceKind.Package ? "Packages/" + packageName : "Assets/Editor",
+                packageName,
+                string.Empty,
+                "{}");
+            return new DashboardModule(
+                packageName.Length == 0 ? "project.workspace" : packageName,
+                "测试模块",
+                "测试模块说明",
+                0,
+                string.Empty,
+                string.Empty,
+                source,
+                Array.Empty<DashboardEntry>(),
+                panels: new[] { Panel("workspace.lazy") },
+                schemaVersion: 2,
+                scope: scope,
+                projectId: projectDisplayName,
+                projectDisplayName: projectDisplayName);
         }
 
         private static DashboardPanel Panel(string providerId) => new DashboardPanel(

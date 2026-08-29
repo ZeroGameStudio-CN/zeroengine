@@ -11,6 +11,20 @@ using ZeroEngine.EditorUI;
 
 namespace ZeroEngine.Editor
 {
+    internal readonly struct DashboardWorkspaceOriginPresentation
+    {
+        internal DashboardWorkspaceOriginPresentation(string shortLabel, string longLabel, string tooltip)
+        {
+            ShortLabel = shortLabel ?? string.Empty;
+            LongLabel = longLabel ?? string.Empty;
+            Tooltip = tooltip ?? string.Empty;
+        }
+
+        internal string ShortLabel { get; }
+        internal string LongLabel { get; }
+        internal string Tooltip { get; }
+    }
+
     [EditorUiSurface]
     public sealed class ZeroEngineDashboard : EditorWindow, IEditorWorkspaceNavigator, IEditorWorkspaceRouteNavigator
     {
@@ -27,6 +41,8 @@ namespace ZeroEngine.Editor
         private const float WorkspacePanelGap = 2f;
         private const float WorkspacePanelVerticalInset = 4f;
         private const float WorkspaceSelectionBarWidth = 3f;
+        private const float WorkspaceOriginBadgeGap = 4f;
+        private const float WorkspaceOriginBadgeHorizontalPadding = 8f;
         private const float StableScrollbarVisibilityEpsilon = 0.5f;
         private const float ContextDrawerWidth = 320f;
         private const float CompactContextDrawerMaxHeight = 240f;
@@ -849,7 +865,7 @@ namespace ZeroEngine.Editor
                         continue;
                     foreach (WorkspacePanelView item in moduleView.Panels)
                     {
-                        if (DrawWorkspacePanelTab(item.Panel))
+                        if (DrawWorkspacePanelTab(moduleView.Module, item.Panel))
                             SelectWorkspacePanel(item.Panel.FullId);
                     }
                     EditorGUILayout.Space(2f);
@@ -1206,7 +1222,7 @@ namespace ZeroEngine.Editor
             SaveViewState();
         }
 
-        private bool DrawWorkspacePanelTab(DashboardPanel panel)
+        private bool DrawWorkspacePanelTab(DashboardModule module, DashboardPanel panel)
         {
             Rect rowRect = GUILayoutUtility.GetRect(1f, 28f, GUILayout.ExpandWidth(true));
             DashboardWorkspacePanelLayout layout = DashboardWorkspaceLayout.CalculatePanelLayout(
@@ -1240,11 +1256,43 @@ namespace ZeroEngine.Editor
             Color previous = GUI.backgroundColor;
             if (selected)
                 GUI.backgroundColor = EditorUiPalette.Current.Selection;
+
+            GUIStyle baseButtonStyle = selected ? EditorStyles.miniButtonMid : EditorStyles.miniButton;
+            DashboardWorkspaceOriginPresentation origin = ResolveWorkspaceModuleOrigin(
+                module,
+                _catalog.InstalledPackages);
+            var originContent = new GUIContent(origin.ShortLabel);
+            float originWidth = EditorStyles.miniBoldLabel.CalcSize(originContent).x +
+                                WorkspaceOriginBadgeHorizontalPadding;
+            float titleWidth = baseButtonStyle.CalcSize(new GUIContent(panel.DisplayName)).x;
+            bool showOrigin = ShouldShowWorkspaceModuleOriginBadge(buttonRect.width, titleWidth, originWidth);
+            GUIStyle buttonStyle = baseButtonStyle;
+            if (showOrigin)
+            {
+                buttonStyle = new GUIStyle(baseButtonStyle);
+                buttonStyle.padding.right += Mathf.CeilToInt(originWidth + WorkspaceOriginBadgeGap);
+            }
+
             bool clicked = GUI.Button(
                 buttonRect,
-                new GUIContent(panel.DisplayName, panel.Description),
-                selected ? EditorStyles.miniButtonMid : EditorStyles.miniButton);
+                new GUIContent(panel.DisplayName, BuildWorkspacePanelTooltip(origin, panel)),
+                buttonStyle);
             GUI.backgroundColor = previous;
+            if (showOrigin && Event.current.type == EventType.Repaint)
+            {
+                Rect originRect = new Rect(
+                    buttonRect.xMax - originWidth - WorkspaceOriginBadgeGap,
+                    buttonRect.y,
+                    originWidth,
+                    buttonRect.height);
+                var originStyle = new GUIStyle(EditorStyles.miniBoldLabel)
+                {
+                    alignment = TextAnchor.MiddleCenter,
+                    clipping = TextClipping.Clip
+                };
+                originStyle.normal.textColor = selected ? Color.white : AccentColor;
+                GUI.Label(originRect, originContent, originStyle);
+            }
             if (Event.current.type == EventType.Repaint && selected)
                 EditorGUI.DrawRect(layout.SelectionRect, AccentColor);
 
@@ -1358,9 +1406,12 @@ namespace ZeroEngine.Editor
             }
             using (new EditorGUILayout.HorizontalScope(GUILayout.ExpandWidth(true)))
             {
+                DashboardWorkspaceOriginPresentation origin = ResolveWorkspaceModuleOrigin(
+                    module,
+                    _catalog.InstalledPackages);
                 GUILayout.FlexibleSpace();
                 DrawMetadataStatus(
-                    MetadataStatusContent(module.DisplayName, module.Description),
+                    MetadataStatusContent(origin.LongLabel, origin.Tooltip),
                     AccentColor);
                 if (descriptor.Safety != DashboardEntrySafety.Navigation)
                     DrawSafetyStatus(descriptor.Safety);
@@ -2665,6 +2716,196 @@ namespace ZeroEngine.Editor
         private static GUIContent MetadataStatusContent(string label, string tooltip)
         {
             return new GUIContent("● " + label, tooltip);
+        }
+
+        internal static DashboardWorkspaceOriginPresentation ResolveWorkspaceModuleOrigin(
+            DashboardModule module,
+            IReadOnlyList<DashboardInstalledPackage> installedPackages)
+        {
+            if (module == null)
+                return new DashboardWorkspaceOriginPresentation("EXT", "外部模块", "归属：外部模块");
+
+            string packageName = module.Source.PackageName;
+            string projectName = ProjectOriginName(module);
+            if (module.Source.Kind == DashboardSourceKind.Project)
+            {
+                string projectLabel = projectName + " 项目";
+                return new DashboardWorkspaceOriginPresentation(
+                    projectName,
+                    projectLabel,
+                    BuildWorkspaceModuleOriginTooltip(module, projectLabel));
+            }
+
+            bool projectOwnedPackage = module.Scope == DashboardModuleScope.Project ||
+                                       IsPobProjectPackage(packageName);
+            if (projectOwnedPackage)
+            {
+                string[] capabilityPackages = ResolveZeroEngineCapabilityDependencies(
+                    packageName,
+                    installedPackages);
+                if (capabilityPackages.Length > 0)
+                {
+                    string adapterLabel = "ZE 能力 · " + projectName + " 适配";
+                    string capabilityLabel = string.Join(
+                        "、",
+                        capabilityPackages.Select(item => CapabilitySourceLabel(item, installedPackages)));
+                    string tooltip = "归属：" + adapterLabel +
+                                     "\n能力来源：" + capabilityLabel +
+                                     "\n项目接入：" + projectName + " 薄适配" +
+                                     "\n来源包：" + packageName;
+                    return new DashboardWorkspaceOriginPresentation(
+                        "ZE·" + projectName,
+                        adapterLabel,
+                        tooltip);
+                }
+
+                string projectLabel = projectName + " 项目";
+                return new DashboardWorkspaceOriginPresentation(
+                    projectName,
+                    projectLabel,
+                    BuildWorkspaceModuleOriginTooltip(module, projectLabel));
+            }
+
+            if (IsZeroEnginePackage(packageName))
+            {
+                const string zeroEngineLabel = "ZE 通用";
+                return new DashboardWorkspaceOriginPresentation(
+                    "ZE",
+                    zeroEngineLabel,
+                    BuildWorkspaceModuleOriginTooltip(module, zeroEngineLabel));
+            }
+
+            if (!string.IsNullOrEmpty(packageName) &&
+                packageName.StartsWith("com.zerogamestudio.", StringComparison.Ordinal))
+            {
+                const string zgsLabel = "ZGS 模块";
+                return new DashboardWorkspaceOriginPresentation(
+                    "ZGS",
+                    zgsLabel,
+                    BuildWorkspaceModuleOriginTooltip(module, zgsLabel));
+            }
+
+            const string externalLabel = "外部模块";
+            return new DashboardWorkspaceOriginPresentation(
+                "EXT",
+                externalLabel,
+                BuildWorkspaceModuleOriginTooltip(module, externalLabel));
+        }
+
+        private static string BuildWorkspaceModuleOriginTooltip(DashboardModule module, string longLabel)
+        {
+            string sourceLabel = module.Source.Kind == DashboardSourceKind.Package
+                ? "来源包：" + module.Source.PackageName
+                : "来源模块：" + module.ModuleId;
+            return "归属：" + longLabel + "\n" + sourceLabel;
+        }
+
+        internal static string BuildWorkspacePanelTooltip(
+            DashboardWorkspaceOriginPresentation origin,
+            DashboardPanel panel)
+        {
+            return string.IsNullOrEmpty(panel?.Description)
+                ? origin.Tooltip
+                : panel.Description + "\n" + origin.Tooltip;
+        }
+
+        internal static bool ShouldShowWorkspaceModuleOriginBadge(
+            float buttonWidth,
+            float titlePreferredWidth,
+            float badgeWidth)
+        {
+            return buttonWidth >= titlePreferredWidth + badgeWidth + WorkspaceOriginBadgeGap + 12f;
+        }
+
+        private static string ProjectOriginName(DashboardModule module)
+        {
+            if (!string.IsNullOrEmpty(module.ProjectDisplayName))
+                return module.ProjectDisplayName;
+            if (!string.IsNullOrEmpty(module.ProjectId))
+                return module.ProjectId;
+            if (IsPobProjectPackage(module.Source.PackageName))
+                return "POB";
+            return "项目";
+        }
+
+        private static string[] ResolveZeroEngineCapabilityDependencies(
+            string packageName,
+            IReadOnlyList<DashboardInstalledPackage> installedPackages)
+        {
+            DashboardInstalledPackage owner = FindInstalledPackage(packageName, installedPackages);
+            if (owner == null)
+                return Array.Empty<string>();
+
+            return owner.Dependencies
+                .Where(IsZeroEngineCapabilityPackage)
+                .Distinct(StringComparer.Ordinal)
+                .OrderBy(item => item, StringComparer.Ordinal)
+                .ToArray();
+        }
+
+        private static string CapabilitySourceLabel(
+            string packageName,
+            IReadOnlyList<DashboardInstalledPackage> installedPackages)
+        {
+            DashboardInstalledPackage package = FindInstalledPackage(packageName, installedPackages);
+            if (package == null ||
+                string.IsNullOrEmpty(package.DisplayName) ||
+                string.Equals(package.DisplayName, packageName, StringComparison.Ordinal))
+            {
+                return packageName;
+            }
+
+            return package.DisplayName + "（" + packageName + "）";
+        }
+
+        private static DashboardInstalledPackage FindInstalledPackage(
+            string packageName,
+            IReadOnlyList<DashboardInstalledPackage> installedPackages)
+        {
+            if (string.IsNullOrEmpty(packageName) || installedPackages == null)
+                return null;
+
+            return installedPackages.FirstOrDefault(
+                item => string.Equals(item.Name, packageName, StringComparison.Ordinal));
+        }
+
+        private static bool IsZeroEnginePackage(string packageName)
+        {
+            return string.Equals(packageName, "com.zerogamestudio.zeroengine", StringComparison.Ordinal) ||
+                   (!string.IsNullOrEmpty(packageName) &&
+                    packageName.StartsWith("com.zerogamestudio.zeroengine.", StringComparison.Ordinal));
+        }
+
+        private static bool IsZeroEngineCapabilityPackage(string packageName)
+        {
+            return IsZeroEnginePackage(packageName) &&
+                   !IsZeroEngineInfrastructurePackage(packageName);
+        }
+
+        private static bool IsZeroEngineInfrastructurePackage(string packageName)
+        {
+            return string.Equals(
+                       packageName,
+                       "com.zerogamestudio.zeroengine",
+                       StringComparison.Ordinal) ||
+                   string.Equals(
+                       packageName,
+                       "com.zerogamestudio.zeroengine.core",
+                       StringComparison.Ordinal) ||
+                   string.Equals(
+                       packageName,
+                       "com.zerogamestudio.zeroengine.dashboard",
+                       StringComparison.Ordinal) ||
+                   string.Equals(
+                       packageName,
+                       "com.zerogamestudio.zeroengine.editor-ui",
+                       StringComparison.Ordinal);
+        }
+
+        private static bool IsPobProjectPackage(string packageName)
+        {
+            return !string.IsNullOrEmpty(packageName) &&
+                   packageName.StartsWith("com.zerogamestudio.pob.", StringComparison.Ordinal);
         }
 
         private static Color SafetyColor(DashboardEntrySafety safety)
