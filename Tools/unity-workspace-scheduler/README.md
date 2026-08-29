@@ -106,6 +106,11 @@ existing bounded task, recovery-event, receipt, and token-cleanup records withou
 running maintenance, renewing a task, creating a receipt, or exposing token paths and
 hashes. Normal callers access it only through `unity-workspace-router`.
 
+Version 1.4.2 makes `receipt_summary.finalized_undelivered` actionable: it counts only
+finalized receipts that are neither delivered nor safely retired. A retired receipt remains
+bounded audit history but no longer represents replay or acknowledgement debt. The view remains
+read-only and does not acknowledge, delete, prune, or otherwise mutate receipts.
+
 A heartbeat without `--ttl` preserves that task's configured lease duration; an explicit `--ttl`
 replaces it. Named resources conflict even between claims from the same task, so one owner cannot
 accidentally dispatch two concurrent executors against `unity-live`. Non-conflicting resources and
