@@ -3868,7 +3868,7 @@ class WorkspaceCoordinator:
                 "SELECT "
                 "SUM(CASE WHEN finalized_at IS NULL THEN 1 ELSE 0 END) AS pending, "
                 "SUM(CASE WHEN finalized_at IS NOT NULL AND delivered_at IS NULL "
-                "THEN 1 ELSE 0 END) AS finalized_undelivered, "
+                "AND retired_at IS NULL THEN 1 ELSE 0 END) AS finalized_undelivered, "
                 "SUM(CASE WHEN token_cleanup_path IS NOT NULL THEN 1 ELSE 0 END) "
                 "AS cleanup_pending "
                 "FROM operation_receipts WHERE workspace_id = ?",

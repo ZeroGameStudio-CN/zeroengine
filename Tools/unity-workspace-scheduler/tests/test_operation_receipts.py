@@ -3155,6 +3155,28 @@ def test_terminal_claim_release_proof_and_normal_task_release_contract(
         }
         assert task_receipt["terminal_json"] is None
         assert task_receipt["retired_at"] is None
+        with open_database(coordinator.paths) as connection:
+            workspace_id = connection.execute(
+                "SELECT workspace_id FROM tasks WHERE id = ?", (task["id"],)
+            ).fetchone()[0]
+            safely_retired = connection.execute(
+                "SELECT COUNT(*) FROM operation_receipts "
+                "WHERE workspace_id = ? AND finalized_at IS NOT NULL "
+                "AND delivered_at IS NULL AND retired_at IS NOT NULL",
+                (workspace_id,),
+            ).fetchone()[0]
+            actionable = connection.execute(
+                "SELECT COUNT(*) FROM operation_receipts "
+                "WHERE workspace_id = ? AND finalized_at IS NOT NULL "
+                "AND delivered_at IS NULL AND retired_at IS NULL",
+                (workspace_id,),
+            ).fetchone()[0]
+        assert safely_retired > 0
+        assert actionable > 0
+        assert (
+            coordinator.maintenance_history(workspace)["receipt_summary"]["finalized_undelivered"]
+            == actionable
+        )
         replay = coordinator.replay_terminal_task_release_without_token(
             workspace,
             operation_id=str(task_release["operation"]["operation_id"]),
