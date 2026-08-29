@@ -271,14 +271,14 @@ namespace ZeroEngine.Dashboard.Tests.Editor
                 ZeroEngineDashboard.ResolveWorkspaceModuleOrigin(projectModule, installedPackages);
 
             Assert.That(zeroEngineOrigin.ShortLabel, Is.EqualTo("ZE"));
-            Assert.That(zeroEngineOrigin.LongLabel, Is.EqualTo("ZE 通用"));
-            Assert.That(adapterOrigin.ShortLabel, Is.EqualTo("ZE·POB"));
-            Assert.That(adapterOrigin.LongLabel, Is.EqualTo("ZE 能力 · POB 适配"));
-            Assert.That(legacyAdapterOrigin.ShortLabel, Is.EqualTo("ZE·POB"));
-            Assert.That(legacyAdapterOrigin.LongLabel, Is.EqualTo("ZE 能力 · POB 适配"));
+            Assert.That(zeroEngineOrigin.LongLabel, Is.EqualTo("ZE"));
+            Assert.That(adapterOrigin.ShortLabel, Is.EqualTo("ZE"));
+            Assert.That(adapterOrigin.LongLabel, Is.EqualTo("ZE"));
+            Assert.That(legacyAdapterOrigin.ShortLabel, Is.EqualTo("ZE"));
+            Assert.That(legacyAdapterOrigin.LongLabel, Is.EqualTo("ZE"));
             Assert.That(projectPackageOrigin.ShortLabel, Is.EqualTo("POB"));
-            Assert.That(projectPackageOrigin.LongLabel, Is.EqualTo("POB 项目"));
-            Assert.That(projectModuleOrigin.LongLabel, Is.EqualTo("POB 项目"));
+            Assert.That(projectPackageOrigin.LongLabel, Is.EqualTo("POB"));
+            Assert.That(projectModuleOrigin.LongLabel, Is.EqualTo("POB"));
         }
 
         [Test]
@@ -324,7 +324,7 @@ namespace ZeroEngine.Dashboard.Tests.Editor
             string tooltip = ZeroEngineDashboard.BuildWorkspacePanelTooltip(origin, panel);
 
             Assert.That(tooltip, Does.StartWith("查看项目运行状态。"));
-            Assert.That(tooltip, Does.Contain("归属：ZE 能力 · POB 适配"));
+            Assert.That(tooltip, Does.Contain("归属：ZE"));
             Assert.That(
                 tooltip,
                 Does.Contain(
@@ -367,8 +367,8 @@ namespace ZeroEngine.Dashboard.Tests.Editor
             DashboardWorkspaceOriginPresentation origin =
                 ZeroEngineDashboard.ResolveWorkspacePanelOrigin(module, panel, installedPackages);
 
-            Assert.That(origin.ShortLabel, Is.EqualTo("ZE·POB"));
-            Assert.That(origin.LongLabel, Is.EqualTo("ZE 能力 · POB 适配"));
+            Assert.That(origin.ShortLabel, Is.EqualTo("ZE"));
+            Assert.That(origin.LongLabel, Is.EqualTo("ZE"));
             Assert.That(
                 origin.Tooltip,
                 Does.Contain(
