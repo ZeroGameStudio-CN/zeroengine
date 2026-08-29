@@ -1258,8 +1258,9 @@ namespace ZeroEngine.Editor
                 GUI.backgroundColor = EditorUiPalette.Current.Selection;
 
             GUIStyle baseButtonStyle = selected ? EditorStyles.miniButtonMid : EditorStyles.miniButton;
-            DashboardWorkspaceOriginPresentation origin = ResolveWorkspaceModuleOrigin(
+            DashboardWorkspaceOriginPresentation origin = ResolveWorkspacePanelOrigin(
                 module,
+                panel,
                 _catalog.InstalledPackages);
             var originContent = new GUIContent(origin.ShortLabel);
             float originWidth = EditorStyles.miniBoldLabel.CalcSize(originContent).x +
@@ -1406,8 +1407,9 @@ namespace ZeroEngine.Editor
             }
             using (new EditorGUILayout.HorizontalScope(GUILayout.ExpandWidth(true)))
             {
-                DashboardWorkspaceOriginPresentation origin = ResolveWorkspaceModuleOrigin(
+                DashboardWorkspaceOriginPresentation origin = ResolveWorkspacePanelOrigin(
                     module,
+                    descriptor,
                     _catalog.InstalledPackages);
                 GUILayout.FlexibleSpace();
                 DrawMetadataStatus(
@@ -2744,20 +2746,7 @@ namespace ZeroEngine.Editor
                     packageName,
                     installedPackages);
                 if (capabilityPackages.Length > 0)
-                {
-                    string adapterLabel = "ZE 能力 · " + projectName + " 适配";
-                    string capabilityLabel = string.Join(
-                        "、",
-                        capabilityPackages.Select(item => CapabilitySourceLabel(item, installedPackages)));
-                    string tooltip = "归属：" + adapterLabel +
-                                     "\n能力来源：" + capabilityLabel +
-                                     "\n项目接入：" + projectName + " 薄适配" +
-                                     "\n来源包：" + packageName;
-                    return new DashboardWorkspaceOriginPresentation(
-                        "ZE·" + projectName,
-                        adapterLabel,
-                        tooltip);
-                }
+                    return BuildProjectAdapterOrigin(module, capabilityPackages, installedPackages);
 
                 string projectLabel = projectName + " 项目";
                 return new DashboardWorkspaceOriginPresentation(
@@ -2790,6 +2779,46 @@ namespace ZeroEngine.Editor
                 "EXT",
                 externalLabel,
                 BuildWorkspaceModuleOriginTooltip(module, externalLabel));
+        }
+
+        internal static DashboardWorkspaceOriginPresentation ResolveWorkspacePanelOrigin(
+            DashboardModule module,
+            DashboardPanel panel,
+            IReadOnlyList<DashboardInstalledPackage> installedPackages)
+        {
+            if (module == null)
+                return ResolveWorkspaceModuleOrigin(null, installedPackages);
+
+            string[] declaredCapabilityPackages = (panel?.ZeroEngineCapabilityPackages ?? Array.Empty<string>())
+                .Where(IsZeroEngineCapabilityPackage)
+                .Distinct(StringComparer.Ordinal)
+                .ToArray();
+            return declaredCapabilityPackages.Length == 0
+                ? ResolveWorkspaceModuleOrigin(module, installedPackages)
+                : BuildProjectAdapterOrigin(module, declaredCapabilityPackages, installedPackages);
+        }
+
+        private static DashboardWorkspaceOriginPresentation BuildProjectAdapterOrigin(
+            DashboardModule module,
+            IReadOnlyList<string> capabilityPackages,
+            IReadOnlyList<DashboardInstalledPackage> installedPackages)
+        {
+            string projectName = ProjectOriginName(module);
+            string adapterLabel = "ZE 能力 · " + projectName + " 适配";
+            string capabilityLabel = string.Join(
+                "、",
+                capabilityPackages.Select(item => CapabilitySourceLabel(item, installedPackages)));
+            string sourceLabel = module.Source.Kind == DashboardSourceKind.Package
+                ? "来源包：" + module.Source.PackageName
+                : "来源模块：" + module.ModuleId;
+            string tooltip = "归属：" + adapterLabel +
+                             "\n能力来源：" + capabilityLabel +
+                             "\n项目接入：" + projectName + " 适配" +
+                             "\n" + sourceLabel;
+            return new DashboardWorkspaceOriginPresentation(
+                "ZE·" + projectName,
+                adapterLabel,
+                tooltip);
         }
 
         private static string BuildWorkspaceModuleOriginTooltip(DashboardModule module, string longLabel)

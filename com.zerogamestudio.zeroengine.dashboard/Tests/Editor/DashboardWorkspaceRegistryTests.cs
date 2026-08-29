@@ -329,9 +329,51 @@ namespace ZeroEngine.Dashboard.Tests.Editor
                 tooltip,
                 Does.Contain(
                     "能力来源：ZeroEngine Formula（com.zerogamestudio.zeroengine.formula）"));
-            Assert.That(tooltip, Does.Contain("项目接入：POB 薄适配"));
+            Assert.That(tooltip, Does.Contain("项目接入：POB 适配"));
             Assert.That(tooltip, Does.Contain("来源包：com.zerogamestudio.pob.formula"));
             Assert.That(tooltip, Does.Not.Contain("com.zerogamestudio.zeroengine.editor-ui"));
+        }
+
+        [Test]
+        public void WorkspacePanelOrigin_UsesExplicitCapabilityPackagesForProjectDescriptors()
+        {
+            var installedPackages = new[]
+            {
+                new DashboardInstalledPackage(
+                    "com.zerogamestudio.zeroengine.narrative",
+                    "1.0.0",
+                    "Packages/com.zerogamestudio.zeroengine.narrative",
+                    "ZeroEngine Narrative")
+            };
+            DashboardModule module = Module(
+                DashboardSourceKind.Project,
+                string.Empty,
+                DashboardModuleScope.Project,
+                "POB");
+            var panel = new DashboardPanel(
+                "pob.tools.quest",
+                "quest-panel",
+                "Quest 面板",
+                "编辑 POB Quest。",
+                string.Empty,
+                "内容创作",
+                "pob.quest",
+                0,
+                DashboardEntrySafety.ProjectWrite,
+                DashboardEntryAvailability.EditMode,
+                "Assets/Editor/Tools/QuestTools/ZeroEngineDashboardModule.json",
+                new[] { "com.zerogamestudio.zeroengine.narrative" });
+
+            DashboardWorkspaceOriginPresentation origin =
+                ZeroEngineDashboard.ResolveWorkspacePanelOrigin(module, panel, installedPackages);
+
+            Assert.That(origin.ShortLabel, Is.EqualTo("ZE·POB"));
+            Assert.That(origin.LongLabel, Is.EqualTo("ZE 能力 · POB 适配"));
+            Assert.That(
+                origin.Tooltip,
+                Does.Contain(
+                    "能力来源：ZeroEngine Narrative（com.zerogamestudio.zeroengine.narrative）"));
+            Assert.That(origin.Tooltip, Does.Contain("来源模块：project.workspace"));
         }
 
         [TestCase(120f, 70f, 20f, true)]

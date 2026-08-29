@@ -92,7 +92,7 @@ Unity 2022.3 不会为 Git URL 包自动解析同仓 editor-ui；两项必须直
 
 `section`、`contentType` 与全部 `surface*` 字段均可省略。`contentType` 默认为 `action`；`reference` 只允许 `navigation` 或 `read-only`，在相关资料区展示，不进入动作 surface。只有同一展示宿主内共享 `surfaceId` 且分类、section、显示名和默认动作兼容的 action 才会合并；每个 action 仍保留独立安全等级、可用性和确认。冲突会显示诊断并安全回退为独立行。
 
-entry 可选 `usage` 只在帮助抽屉显示。module 可选 `panels` 数组声明内嵌工作区面板；每项包含稳定 `id/providerId`、显示文案、section、order、safety 与 availability。provider 通过 editor-ui 的 `IEditorWorkspacePanelProvider.CreatePanel(panelId)` 延迟创建；需要画布布局的 panel 可实现 `IEditorWorkspaceFullWidthPanel` 横向铺满内容区，其他 panel 保持可读宽度约束；缺失、重复或异常 provider 不影响工具和系统页。
+entry 可选 `usage` 只在帮助抽屉显示。module 可选 `panels` 数组声明内嵌工作区面板；每项包含稳定 `id/providerId`、显示文案、section、order、safety 与 availability。项目面板若以 ZeroEngine 业务包为能力底座，可用 `zeroEngineCapabilityPackages` 明确列出包 ID；工作台会显示 `ZE·项目`，并在提示中列出能力来源，避免把放在 `Assets` 下的项目适配误判成纯项目能力。provider 通过 editor-ui 的 `IEditorWorkspacePanelProvider.CreatePanel(panelId)` 延迟创建；需要画布布局的 panel 可实现 `IEditorWorkspaceFullWidthPanel` 横向铺满内容区，其他 panel 保持可读宽度约束；缺失、重复或异常 provider 不影响工具和系统页。
 
 Dashboard 4.x 仍兼容外部 schema v1，并把它标记为“旧版入口”；第一方正式描述符必须使用 v2。v1 兼容将在首个 5.x 版本移除。
 

@@ -84,6 +84,25 @@ namespace ZeroEngine.Dashboard.Tests.Editor
         }
 
         [Test]
+        public void Build_PanelCapabilityPackages_PreservesExplicitZeroEngineOwnership()
+        {
+            DashboardCatalog catalog = Build(Source(Descriptor(
+                "project.panels",
+                "Panels",
+                string.Empty,
+                Panel(
+                    "runtime",
+                    "运行概览",
+                    "project.panels",
+                    "com.zerogamestudio.zeroengine.narrative"))));
+
+            Assert.That(
+                catalog.Modules[0].Panels[0].ZeroEngineCapabilityPackages,
+                Is.EqualTo(new[] { "com.zerogamestudio.zeroengine.narrative" }));
+            Assert.IsFalse(catalog.Diagnostics.Any(item => item.Severity == DashboardDiagnosticSeverity.Error));
+        }
+
+        [Test]
         public void Build_InvalidPanelProviderId_RejectsDescriptor()
         {
             DashboardCatalog catalog = Build(Source(Descriptor(
@@ -1012,8 +1031,17 @@ namespace ZeroEngine.Dashboard.Tests.Editor
                    "\"replaces\":[]" + confirmationField + contentTypeField + "}";
         }
 
-        private static string Panel(string id, string displayName, string providerId)
+        private static string Panel(
+            string id,
+            string displayName,
+            string providerId,
+            params string[] zeroEngineCapabilityPackages)
         {
+            string capabilityField = zeroEngineCapabilityPackages == null || zeroEngineCapabilityPackages.Length == 0
+                ? string.Empty
+                : ",\"zeroEngineCapabilityPackages\":[" +
+                  string.Join(",", zeroEngineCapabilityPackages.Select(value => "\"" + value + "\"")) +
+                  "]";
             return "{" +
                    "\"id\":\"" + id + "\"," +
                    "\"displayName\":\"" + displayName + "\"," +
@@ -1023,7 +1051,7 @@ namespace ZeroEngine.Dashboard.Tests.Editor
                    "\"providerId\":\"" + providerId + "\"," +
                    "\"order\":100," +
                    "\"safety\":\"read-only\"," +
-                   "\"availability\":\"always\"}";
+                   "\"availability\":\"always\"" + capabilityField + "}";
         }
 
         private static string Entry(
