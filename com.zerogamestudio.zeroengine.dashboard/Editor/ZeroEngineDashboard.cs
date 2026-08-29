@@ -945,7 +945,11 @@ namespace ZeroEngine.Editor
                     module.Entries,
                     panels: module.Panels.Where(panel =>
                             (_workspaceRegistry?.IsAvailable(panel) ?? false) && PanelMatchesSearch(panel))
-                        .ToArray()))
+                        .ToArray(),
+                    schemaVersion: module.SchemaVersion,
+                    scope: module.Scope,
+                    projectId: module.ProjectId,
+                    projectDisplayName: module.ProjectDisplayName))
                 .Where(module => module.Panels.Count > 0)
                 .ToArray();
 
