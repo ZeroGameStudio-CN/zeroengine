@@ -1,6 +1,6 @@
 # Scheduler Actionable Receipt Summary
 
-- 状态：Implemented；publication pending
+- 状态：Implemented and published
 - 最后更新：2026-08-29
 - 基线：`a1b519198500ed432525cae46036f189a908a592`（Scheduler 1.4.1）
 - 设计批准：已由当前 Router/Scheduler 长期稳定性修复任务授权
@@ -46,4 +46,8 @@ Scheduler 1.4.1 的只读 `maintenance history` 将所有 `finalized_at IS NOT N
 
 - Scheduler：394 passed、12 个平台限定 skipped；Ruff check/format、uv lock 和 diff check 通过。
 - Router：隔离 Scheduler 1.4.2 协议金丝雀随完整 303 项套件通过。
-- 真实 POB 状态验证保留为 canonical install 后的发布验收，不以测试库代替。
+- 发布：Scheduler 合并提交 `fca51c349f9d30cfb199df44d1fbc595d75249c1`，Router 合并提交
+  `31c083d6a49075970ca93e8d7c4ef1a81d109acc`；Windows 与 M5 均从这两个权威提交安装。
+- 真实验收：两机 POB history 均为 `pending=0`、`finalized_undelivered=0`、
+  `cleanup_pending=0`；Windows POB 与同时工作的 ZGSProject_5 均保持 ready、无 blocker、
+  fence 或 cleanup job，canonical Scheduler 1.4.2 协议金丝雀通过。
