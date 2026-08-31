@@ -474,7 +474,16 @@ namespace ZeroEngine.Pathfinding2D
             if (collider != fromPlatform && collider != toPlatform)
                 return false;
 
-            return !collider.OverlapPoint(trajectoryCenter);
+            if (collider.OverlapPoint(trajectoryCenter))
+                return false;
+
+            // The center can stay outside a platform while the cast radius still
+            // touches its underside/top surface. Only relax a clearly horizontal
+            // side graze; vertical and diagonal contact must remain blocking.
+            Vector2 separation = trajectoryCenter - collider.ClosestPoint(trajectoryCenter);
+            float horizontalSeparation = Mathf.Abs(separation.x);
+            float verticalSeparation = Mathf.Abs(separation.y);
+            return horizontalSeparation > verticalSeparation + 0.001f;
         }
     }
 }

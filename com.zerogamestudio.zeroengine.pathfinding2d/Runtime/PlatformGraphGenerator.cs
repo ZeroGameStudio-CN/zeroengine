@@ -6,6 +6,7 @@ using System;
 using System.Collections.Generic;
 using System.Threading;
 using UnityEngine;
+using UnityEngine.Tilemaps;
 #if ODIN_INSPECTOR
 using Sirenix.OdinInspector;
 #endif
@@ -145,6 +146,328 @@ namespace ZeroEngine.Pathfinding2D
         // 缓存所有边缘数据，用于全局转换节点生成
         private readonly List<(float left, float right, float y, Collider2D collider, bool isOneWay, int surfaceGroupId)> _allEdgesCache
             = new List<(float, float, float, Collider2D, bool, int)>();
+
+        private const float HeightTransitionMinimumDifference = 0.5f;
+        private const float HeightTransitionNodeDedupTolerance = 0.3f;
+        private const float HeightTransitionNodeBucketSize = HeightTransitionNodeDedupTolerance;
+        private const float HeightTransitionSafeLandingContactTolerance = 0.1f;
+        private const float HeightTransitionIndexCoordinateEpsilon = 0.00001f;
+        private const int HeightTransitionSurfaceSide = 0;
+        private const int HeightTransitionLeftSide = 1;
+        private const int HeightTransitionRightSide = 2;
+        private const float SurfaceNodeDedupTolerance = 0.05f;
+        private const float SurfaceNodeBucketSize = SurfaceNodeDedupTolerance;
+
+        private int heightTransitionCandidateChecks;
+        private int heightTransitionIntervalQueryCount;
+
+        /// <summary>
+        /// Number of interval hits examined by the most recent graph build.
+        /// This is a deterministic performance seam; it is not a gameplay limit.
+        /// </summary>
+        public int HeightTransitionCandidateChecks => heightTransitionCandidateChecks;
+
+        /// <summary>
+        /// Number of X-point interval queries issued by the most recent graph build.
+        /// </summary>
+        public int HeightTransitionIntervalQueryCount => heightTransitionIntervalQueryCount;
+
+        private readonly Dictionary<HeightTransitionNodeBucketKey, List<float>> _heightTransitionNodeBuckets
+            = new Dictionary<HeightTransitionNodeBucketKey, List<float>>();
+        private bool heightTransitionNodeBucketsBuilt;
+
+        private readonly Dictionary<SurfaceNodeBucketKey, List<Vector2>> _surfaceNodeBuckets
+            = new Dictionary<SurfaceNodeBucketKey, List<Vector2>>();
+        private bool surfaceNodeBucketsBuilt;
+
+        private readonly List<int> _heightTransitionCandidatesCache = new List<int>(32);
+
+        private readonly struct SurfaceNodeBucketKey : IEquatable<SurfaceNodeBucketKey>
+        {
+            private readonly int surfaceGroupId;
+            private readonly int xBucket;
+            private readonly int yBucket;
+
+            public SurfaceNodeBucketKey(int surfaceGroupId, int xBucket, int yBucket)
+            {
+                this.surfaceGroupId = surfaceGroupId;
+                this.xBucket = xBucket;
+                this.yBucket = yBucket;
+            }
+
+            public bool Equals(SurfaceNodeBucketKey other)
+            {
+                return surfaceGroupId == other.surfaceGroupId &&
+                       xBucket == other.xBucket &&
+                       yBucket == other.yBucket;
+            }
+
+            public override bool Equals(object obj)
+            {
+                return obj is SurfaceNodeBucketKey other && Equals(other);
+            }
+
+            public override int GetHashCode()
+            {
+                unchecked
+                {
+                    int hash = surfaceGroupId;
+                    hash = (hash * 397) ^ xBucket;
+                    return (hash * 397) ^ yBucket;
+                }
+            }
+        }
+
+        private struct HeightTransitionEdge
+        {
+            public float Left;
+            public float Right;
+            public float Y;
+            public Collider2D Collider;
+            public bool IsOneWay;
+            public int SurfaceGroupId;
+
+            public HeightTransitionEdge(
+                float left,
+                float right,
+                float y,
+                Collider2D collider,
+                bool isOneWay,
+                int surfaceGroupId)
+            {
+                Left = left;
+                Right = right;
+                Y = y;
+                Collider = collider;
+                IsOneWay = isOneWay;
+                SurfaceGroupId = surfaceGroupId;
+            }
+        }
+
+        private readonly struct HeightTransitionNodeBucketKey : IEquatable<HeightTransitionNodeBucketKey>
+        {
+            private readonly int surfaceGroupId;
+            private readonly int side;
+            private readonly int xBucket;
+
+            public HeightTransitionNodeBucketKey(int surfaceGroupId, int side, int xBucket)
+            {
+                this.surfaceGroupId = surfaceGroupId;
+                this.side = side;
+                this.xBucket = xBucket;
+            }
+
+            public bool Equals(HeightTransitionNodeBucketKey other)
+            {
+                return surfaceGroupId == other.surfaceGroupId &&
+                       side == other.side &&
+                       xBucket == other.xBucket;
+            }
+
+            public override bool Equals(object obj)
+            {
+                return obj is HeightTransitionNodeBucketKey other && Equals(other);
+            }
+
+            public override int GetHashCode()
+            {
+                unchecked
+                {
+                    int hash = surfaceGroupId;
+                    hash = (hash * 397) ^ side;
+                    return (hash * 397) ^ xBucket;
+                }
+            }
+        }
+
+        /// <summary>
+        /// Static X-coordinate interval index used while a Y sweep activates edges.
+        /// Intervals are decomposed into a segment tree over all query coordinates,
+        /// so a point query visits O(log m + matches) entries without scanning all
+        /// active intervals.
+        /// </summary>
+        private sealed class HeightTransitionIntervalIndex
+        {
+            private readonly float[] queryCoordinates;
+            private readonly List<int>[] segmentTree;
+
+            public HeightTransitionIntervalIndex(List<float> queryPoints)
+            {
+                if (queryPoints == null || queryPoints.Count == 0)
+                {
+                    queryCoordinates = Array.Empty<float>();
+                    segmentTree = Array.Empty<List<int>>();
+                    return;
+                }
+
+                var sorted = new List<float>(queryPoints);
+                sorted.Sort();
+                var unique = new List<float>(sorted.Count);
+                for (int i = 0; i < sorted.Count; i++)
+                {
+                    if (i == 0 || sorted[i] != sorted[i - 1])
+                        unique.Add(sorted[i]);
+                }
+
+                queryCoordinates = unique.ToArray();
+                segmentTree = new List<int>[queryCoordinates.Length * 4];
+            }
+
+            public void AddInterval(int edgeIndex, float left, float right)
+            {
+                if (queryCoordinates.Length == 0 ||
+                    float.IsNaN(left) || float.IsNaN(right) ||
+                    left >= right)
+                {
+                    return;
+                }
+
+                // The old transition tests use strict X bounds. Convert the
+                // continuous interval to the query coordinates that satisfy
+                // left < x < right.
+                int first = UpperBound(queryCoordinates, left);
+                int last = LowerBound(queryCoordinates, right) - 1;
+                if (first > last)
+                    return;
+
+                AddRange(1, 0, queryCoordinates.Length - 1, first, last, edgeIndex);
+            }
+
+            public void Query(float x, List<int> results)
+            {
+                if (queryCoordinates.Length == 0 || results == null)
+                    return;
+
+                int index = FindCoordinate(x);
+                if (index < 0)
+                    return;
+
+                QueryPoint(1, 0, queryCoordinates.Length - 1, index, results);
+            }
+
+            private void AddRange(
+                int treeIndex,
+                int rangeStart,
+                int rangeEnd,
+                int intervalStart,
+                int intervalEnd,
+                int edgeIndex)
+            {
+                if (intervalStart <= rangeStart && rangeEnd <= intervalEnd)
+                {
+                    List<int> entries = segmentTree[treeIndex];
+                    if (entries == null)
+                    {
+                        entries = new List<int>();
+                        segmentTree[treeIndex] = entries;
+                    }
+
+                    entries.Add(edgeIndex);
+                    return;
+                }
+
+                int midpoint = rangeStart + ((rangeEnd - rangeStart) / 2);
+                if (intervalStart <= midpoint)
+                {
+                    AddRange(
+                        treeIndex * 2,
+                        rangeStart,
+                        midpoint,
+                        intervalStart,
+                        intervalEnd,
+                        edgeIndex);
+                }
+
+                if (intervalEnd > midpoint)
+                {
+                    AddRange(
+                        treeIndex * 2 + 1,
+                        midpoint + 1,
+                        rangeEnd,
+                        intervalStart,
+                        intervalEnd,
+                        edgeIndex);
+                }
+            }
+
+            private void QueryPoint(
+                int treeIndex,
+                int rangeStart,
+                int rangeEnd,
+                int queryIndex,
+                List<int> results)
+            {
+                List<int> entries = segmentTree[treeIndex];
+                if (entries != null)
+                    results.AddRange(entries);
+
+                if (rangeStart == rangeEnd)
+                    return;
+
+                int midpoint = rangeStart + ((rangeEnd - rangeStart) / 2);
+                if (queryIndex <= midpoint)
+                {
+                    QueryPoint(treeIndex * 2, rangeStart, midpoint, queryIndex, results);
+                }
+                else
+                {
+                    QueryPoint(treeIndex * 2 + 1, midpoint + 1, rangeEnd, queryIndex, results);
+                }
+            }
+
+            private int FindCoordinate(float value)
+            {
+                int index = LowerBound(queryCoordinates, value);
+                if (index < queryCoordinates.Length && queryCoordinates[index] == value)
+                    return index;
+
+                if (index > 0 &&
+                    Mathf.Abs(queryCoordinates[index - 1] - value) <= HeightTransitionIndexCoordinateEpsilon)
+                {
+                    return index - 1;
+                }
+
+                if (index < queryCoordinates.Length &&
+                    Mathf.Abs(queryCoordinates[index] - value) <= HeightTransitionIndexCoordinateEpsilon)
+                {
+                    return index;
+                }
+
+                return -1;
+            }
+
+            private static int LowerBound(float[] values, float value)
+            {
+                int start = 0;
+                int end = values.Length;
+                while (start < end)
+                {
+                    int midpoint = start + ((end - start) / 2);
+                    if (values[midpoint] < value)
+                        start = midpoint + 1;
+                    else
+                        end = midpoint;
+                }
+
+                return start;
+            }
+
+            private static int UpperBound(float[] values, float value)
+            {
+                int start = 0;
+                int end = values.Length;
+                while (start < end)
+                {
+                    int midpoint = start + ((end - start) / 2);
+                    if (values[midpoint] <= value)
+                        start = midpoint + 1;
+                    else
+                        end = midpoint;
+                }
+
+                return start;
+            }
+        }
 
         // 复用 List 避免 GC
         private readonly List<Vector2> _pathPointsCache = new List<Vector2>(64);
@@ -422,6 +745,12 @@ namespace ZeroEngine.Pathfinding2D
             SpatialGrid?.Clear();
             SpatialGrid = null;
             nextSurfaceGroupId = 0;
+            heightTransitionCandidateChecks = 0;
+            heightTransitionIntervalQueryCount = 0;
+            _heightTransitionNodeBuckets.Clear();
+            heightTransitionNodeBucketsBuilt = false;
+            _surfaceNodeBuckets.Clear();
+            surfaceNodeBucketsBuilt = false;
         }
 
         private void EnsureGraphIdentity()
@@ -502,6 +831,12 @@ namespace ZeroEngine.Pathfinding2D
         /// </summary>
         private void GenerateNodesForTilemapCollider(UnityEngine.Tilemaps.TilemapCollider2D tilemapCollider, bool isOneWay)
         {
+            // A spacing-sized sweep can visit the same X twice for a short
+            // span (for example a single 1x1 tile). Use the tile columns as
+            // continuous boundaries so those spans retain a real interior.
+            if (TryGenerateNodesForTilemapCells(tilemapCollider, isOneWay))
+                return;
+
             var bounds = tilemapCollider.bounds;
             float nodeSpacing = config.ActualNodeSpacing;
 
@@ -535,6 +870,7 @@ namespace ZeroEngine.Pathfinding2D
                             Vector3 rightEdgePos = new Vector3(lastX, lastSurfaceY.Value, 0f);
                             AddNode(PlatformNodeData.CreateEdge(nextNodeId++, rightEdgePos, tilemapCollider, false, isOneWay, currentSurfaceGroupId));
                             AddSurfaceEdgeCache(currentSegmentLeftX, lastX, lastSurfaceY.Value, tilemapCollider, isOneWay, currentSurfaceGroupId);
+                            AddBodySafeLandingNodes(currentSegmentLeftX, lastX, lastSurfaceY.Value, tilemapCollider, isOneWay, currentSurfaceGroupId);
                         }
 
                         // 新平台段的左边缘
@@ -561,6 +897,7 @@ namespace ZeroEngine.Pathfinding2D
                         Vector3 rightEdgePos = new Vector3(lastX, lastSurfaceY.Value, 0f);
                         AddNode(PlatformNodeData.CreateEdge(nextNodeId++, rightEdgePos, tilemapCollider, false, isOneWay, currentSurfaceGroupId));
                         AddSurfaceEdgeCache(currentSegmentLeftX, lastX, lastSurfaceY.Value, tilemapCollider, isOneWay, currentSurfaceGroupId);
+                        AddBodySafeLandingNodes(currentSegmentLeftX, lastX, lastSurfaceY.Value, tilemapCollider, isOneWay, currentSurfaceGroupId);
                         lastSurfaceY = null;
                         currentSurfaceGroupId = -1;
                     }
@@ -573,7 +910,109 @@ namespace ZeroEngine.Pathfinding2D
                 Vector3 rightEdgePos = new Vector3(lastX, lastSurfaceY.Value, 0f);
                 AddNode(PlatformNodeData.CreateEdge(nextNodeId++, rightEdgePos, tilemapCollider, false, isOneWay, currentSurfaceGroupId));
                 AddSurfaceEdgeCache(currentSegmentLeftX, lastX, lastSurfaceY.Value, tilemapCollider, isOneWay, currentSurfaceGroupId);
+                AddBodySafeLandingNodes(currentSegmentLeftX, lastX, lastSurfaceY.Value, tilemapCollider, isOneWay, currentSurfaceGroupId);
             }
+        }
+
+        private bool TryGenerateNodesForTilemapCells(
+            TilemapCollider2D tilemapCollider,
+            bool isOneWay)
+        {
+            Tilemap tilemap = tilemapCollider.GetComponent<Tilemap>();
+            if (tilemap == null)
+                return false;
+
+            BoundsInt cellBounds = tilemap.cellBounds;
+            if (cellBounds.size.x <= 0)
+                return false;
+
+            Bounds colliderBounds = tilemapCollider.bounds;
+            if (colliderBounds.size.x <= SurfaceClipEpsilon)
+                return false;
+
+            Physics2D.SyncTransforms();
+            float scanY = colliderBounds.max.y + 1f;
+            float rayLength = Mathf.Max(2f, colliderBounds.size.y + 2f);
+            bool hasSpan = false;
+            bool generatedAnySpan = false;
+            float spanLeft = 0f;
+            float spanRight = 0f;
+            float spanY = 0f;
+            bool sawSurface = false;
+
+            for (int cellX = cellBounds.xMin; cellX < cellBounds.xMax; cellX++)
+            {
+                Vector3 cellOrigin = tilemap.CellToWorld(
+                    new Vector3Int(cellX, cellBounds.yMin, cellBounds.zMin));
+                Vector3 nextCellOrigin = tilemap.CellToWorld(
+                    new Vector3Int(cellX + 1, cellBounds.yMin, cellBounds.zMin));
+                float cellLeft = Mathf.Min(cellOrigin.x, nextCellOrigin.x);
+                float cellRight = Mathf.Max(cellOrigin.x, nextCellOrigin.x);
+                if (cellRight - cellLeft <= SurfaceClipEpsilon ||
+                    cellRight <= colliderBounds.min.x ||
+                    cellLeft >= colliderBounds.max.x)
+                {
+                    continue;
+                }
+
+                float sampleX = (cellLeft + cellRight) * 0.5f;
+                RaycastHit2D hit = Physics2D.Raycast(
+                    new Vector2(sampleX, scanY),
+                    Vector2.down,
+                    rayLength,
+                    config.AllPlatformLayers);
+                if (hit.collider == tilemapCollider)
+                {
+                    sawSurface = true;
+                    float surfaceY = hit.point.y;
+                    bool continuesSpan = hasSpan &&
+                                         Mathf.Abs(surfaceY - spanY) <= 0.5f &&
+                                         Mathf.Abs(cellLeft - spanRight) <= 0.01f;
+                    if (continuesSpan)
+                    {
+                        spanRight = cellRight;
+                    }
+                    else
+                    {
+                        if (hasSpan)
+                        {
+                            generatedAnySpan |= GenerateNodesForEdge(
+                                spanLeft,
+                                spanRight,
+                                spanY,
+                                tilemapCollider,
+                                isOneWay) >= 0;
+                        }
+
+                        spanLeft = cellLeft;
+                        spanRight = cellRight;
+                        spanY = surfaceY;
+                        hasSpan = true;
+                    }
+                }
+                else if (hasSpan)
+                {
+                    generatedAnySpan |= GenerateNodesForEdge(
+                        spanLeft,
+                        spanRight,
+                        spanY,
+                        tilemapCollider,
+                        isOneWay) >= 0;
+                    hasSpan = false;
+                }
+            }
+
+            if (hasSpan)
+            {
+                generatedAnySpan |= GenerateNodesForEdge(
+                    spanLeft,
+                    spanRight,
+                    spanY,
+                    tilemapCollider,
+                    isOneWay) >= 0;
+            }
+
+            return sawSurface;
         }
 
         /// <summary>
@@ -660,90 +1099,227 @@ namespace ZeroEngine.Pathfinding2D
             Collider2D collider,
             bool isOneWay)
         {
-            if (edges.Count < 2) return;
+            if (edges == null || edges.Count < 2)
+                return;
 
-            // 按 Y 坐标升序排序
-            var sortedByY = new List<(float left, float right, float y, int surfaceGroupId)>(edges);
-            sortedByY.Sort((a, b) => a.y.CompareTo(b.y));
-            float ledgeExitOffset = Mathf.Max(0.05f, config.EdgeInset * 0.5f);
+            var sortedByY = new List<HeightTransitionEdge>(edges.Count);
+            foreach (var edge in edges)
+            {
+                sortedByY.Add(new HeightTransitionEdge(
+                    edge.left,
+                    edge.right,
+                    edge.y,
+                    collider,
+                    isOneWay,
+                    edge.surfaceGroupId));
+            }
 
-            // 检测相邻高度层的交界处
+            sortedByY.Sort((a, b) => a.Y.CompareTo(b.Y));
+            GenerateDownwardHeightTransitionNodes(
+                sortedByY,
+                Mathf.Max(0.05f, config.EdgeInset * 0.5f),
+                config.EdgeInset);
+        }
+
+        private void GenerateDownwardHeightTransitionNodes(
+            List<HeightTransitionEdge> sortedByY,
+            float ledgeExitOffset,
+            float inset)
+        {
+            EnsureHeightTransitionNodeBucketIndex();
+
+            var queryPoints = new List<float>(sortedByY.Count * 2);
             for (int i = 0; i < sortedByY.Count; i++)
             {
-                var lower = sortedByY[i];
+                HeightTransitionEdge upper = sortedByY[i];
+                queryPoints.Add(upper.Left - ledgeExitOffset);
+                queryPoints.Add(upper.Right + ledgeExitOffset);
+            }
 
-                for (int j = i + 1; j < sortedByY.Count; j++)
+            var lowerIntervals = new HeightTransitionIntervalIndex(queryPoints);
+            int nextLowerIndex = 0;
+            for (int upperIndex = 0; upperIndex < sortedByY.Count; upperIndex++)
+            {
+                HeightTransitionEdge upper = sortedByY[upperIndex];
+                while (nextLowerIndex < upperIndex &&
+                       upper.Y - sortedByY[nextLowerIndex].Y >= HeightTransitionMinimumDifference)
                 {
-                    var upper = sortedByY[j];
-
-                    // 高度差太大（超过最大跳跃高度），跳过
-                    float heightDiff = upper.y - lower.y;
-                    if (heightDiff > 8f) continue;
-
-                    // 高度差太小（同一平面），跳过
-                    if (heightDiff < 0.5f) continue;
-
-                    // 检查上层平台的边缘是否在下层平台的 X 范围内
-                    // 如果是，说明存在高度交界点，需要在下层平台生成额外边缘节点
-
-                    // 上层左边缘在下层范围内 → 在下层的 ledge 外侧生成落点节点
-                    float leftLandingX = upper.left - ledgeExitOffset;
-                    if (leftLandingX > lower.left + config.EdgeInset && leftLandingX < lower.right - config.EdgeInset)
-                    {
-                        Vector3 transitionPos = new Vector3(leftLandingX, lower.y, 0f);
-                        // 检查是否已存在相近位置的节点
-                        if (!HasEdgeNodeNearPosition(transitionPos, 0.3f))
-                        {
-                            AddNode(PlatformNodeData.CreateEdge(nextNodeId++, transitionPos, collider, true, isOneWay, lower.surfaceGroupId, isTransitionAnchor: true));
-                        }
-                    }
-
-                    // 上层右边缘在下层范围内 → 在下层的 ledge 外侧生成落点节点
-                    float rightLandingX = upper.right + ledgeExitOffset;
-                    if (rightLandingX > lower.left + config.EdgeInset && rightLandingX < lower.right - config.EdgeInset)
-                    {
-                        Vector3 transitionPos = new Vector3(rightLandingX, lower.y, 0f);
-                        if (!HasEdgeNodeNearPosition(transitionPos, 0.3f))
-                        {
-                            AddNode(PlatformNodeData.CreateEdge(nextNodeId++, transitionPos, collider, false, isOneWay, lower.surfaceGroupId, isTransitionAnchor: true));
-                        }
-                    }
+                    HeightTransitionEdge lower = sortedByY[nextLowerIndex];
+                    lowerIntervals.AddInterval(
+                        nextLowerIndex,
+                        lower.Left + inset,
+                        lower.Right - inset);
+                    nextLowerIndex++;
                 }
+
+                AddDownwardHeightTransitionAnchors(
+                    sortedByY,
+                    lowerIntervals,
+                    upper.Left - ledgeExitOffset,
+                    isLeftEdge: true,
+                    inset);
+                AddDownwardHeightTransitionAnchors(
+                    sortedByY,
+                    lowerIntervals,
+                    upper.Right + ledgeExitOffset,
+                    isLeftEdge: false,
+                    inset);
             }
         }
 
-        /// <summary>
-        /// 检查指定位置附近是否已存在节点
-        /// </summary>
-        private bool HasNodeNearPosition(Vector3 position, float threshold)
+        private void AddDownwardHeightTransitionAnchors(
+            List<HeightTransitionEdge> sortedByY,
+            HeightTransitionIntervalIndex lowerIntervals,
+            float landingX,
+            bool isLeftEdge,
+            float inset)
         {
-            float thresholdSq = threshold * threshold;
-            foreach (var node in Nodes)
+            QueryHeightTransitionIntervals(lowerIntervals, landingX);
+            for (int i = 0; i < _heightTransitionCandidatesCache.Count; i++)
             {
-                if ((node.Position - position).sqrMagnitude < thresholdSq)
-                {
-                    return true;
-                }
-            }
-            return false;
-        }
-
-        private bool HasEdgeNodeNearPosition(Vector3 position, float threshold)
-        {
-            float thresholdSq = threshold * threshold;
-            foreach (var node in Nodes)
-            {
-                if (node.NodeType != PlatformNodeType.LeftEdge &&
-                    node.NodeType != PlatformNodeType.RightEdge)
+                HeightTransitionEdge lower = sortedByY[_heightTransitionCandidatesCache[i]];
+                if (!IsInsideHeightTransitionInterior(landingX, lower, inset))
                     continue;
 
-                if ((node.Position - position).sqrMagnitude < thresholdSq)
+                AddHeightTransitionEdgeNode(lower, landingX, isLeftEdge);
+            }
+        }
+
+        private void QueryHeightTransitionIntervals(
+            HeightTransitionIntervalIndex index,
+            float queryX)
+        {
+            _heightTransitionCandidatesCache.Clear();
+            index.Query(queryX, _heightTransitionCandidatesCache);
+            heightTransitionIntervalQueryCount++;
+            heightTransitionCandidateChecks += _heightTransitionCandidatesCache.Count;
+        }
+
+        private static bool IsInsideHeightTransitionInterior(
+            float x,
+            HeightTransitionEdge edge,
+            float inset)
+        {
+            return x > edge.Left + inset &&
+                   x < edge.Right - inset;
+        }
+
+        private void AddHeightTransitionEdgeNode(
+            HeightTransitionEdge edge,
+            float x,
+            bool isLeftEdge)
+        {
+            Vector3 position = new Vector3(x, edge.Y, 0f);
+            if (HasEdgeNodeNearPosition(
+                    position,
+                    HeightTransitionNodeDedupTolerance,
+                    edge.SurfaceGroupId,
+                    isLeftEdge))
+            {
+                return;
+            }
+
+            AddNode(PlatformNodeData.CreateEdge(
+                nextNodeId++,
+                position,
+                edge.Collider,
+                isLeftEdge,
+                edge.IsOneWay,
+                edge.SurfaceGroupId,
+                isTransitionAnchor: true));
+        }
+
+        private void EnsureHeightTransitionNodeBucketIndex()
+        {
+            if (heightTransitionNodeBucketsBuilt)
+                return;
+
+            _heightTransitionNodeBuckets.Clear();
+            for (int i = 0; i < Nodes.Count; i++)
+                AddHeightTransitionNodeToBucketIndex(Nodes[i]);
+
+            heightTransitionNodeBucketsBuilt = true;
+        }
+
+        private void AddHeightTransitionNodeToBucketIndex(PlatformNodeData node)
+        {
+            int side = GetHeightTransitionNodeSide(node.NodeType);
+            if (side < 0)
+                return;
+
+            var key = new HeightTransitionNodeBucketKey(
+                node.SurfaceGroupId,
+                side,
+                GetHeightTransitionXBucket(node.Position.x));
+            if (!_heightTransitionNodeBuckets.TryGetValue(key, out List<float> positions))
+            {
+                positions = new List<float>();
+                _heightTransitionNodeBuckets.Add(key, positions);
+            }
+
+            positions.Add(node.Position.x);
+        }
+
+        private static int GetHeightTransitionNodeSide(PlatformNodeType nodeType)
+        {
+            switch (nodeType)
+            {
+                case PlatformNodeType.Surface:
+                    return HeightTransitionSurfaceSide;
+                case PlatformNodeType.LeftEdge:
+                    return HeightTransitionLeftSide;
+                case PlatformNodeType.RightEdge:
+                    return HeightTransitionRightSide;
+                default:
+                    return -1;
+            }
+        }
+
+        private static int GetHeightTransitionXBucket(float x)
+        {
+            return Mathf.FloorToInt(x / HeightTransitionNodeBucketSize);
+        }
+
+        private bool HasNodeNearPosition(
+            Vector3 position,
+            float threshold,
+            int surfaceGroupId,
+            int side)
+        {
+            EnsureHeightTransitionNodeBucketIndex();
+            if (threshold < 0f)
+                threshold = -threshold;
+
+            float bucketSize = HeightTransitionNodeBucketSize;
+            int minBucket = Mathf.FloorToInt((position.x - threshold) / bucketSize);
+            int maxBucket = Mathf.FloorToInt((position.x + threshold) / bucketSize);
+            for (int bucket = minBucket; bucket <= maxBucket; bucket++)
+            {
+                var key = new HeightTransitionNodeBucketKey(surfaceGroupId, side, bucket);
+                if (!_heightTransitionNodeBuckets.TryGetValue(key, out List<float> positions))
+                    continue;
+
+                for (int i = 0; i < positions.Count; i++)
                 {
-                    return true;
+                    if (Mathf.Abs(positions[i] - position.x) < threshold)
+                        return true;
                 }
             }
 
             return false;
+        }
+
+        private bool HasEdgeNodeNearPosition(
+            Vector3 position,
+            float threshold,
+            int surfaceGroupId,
+            bool isLeftEdge)
+        {
+            return HasNodeNearPosition(
+                position,
+                threshold,
+                surfaceGroupId,
+                isLeftEdge ? HeightTransitionLeftSide : HeightTransitionRightSide);
         }
 
         /// <summary>
@@ -756,115 +1332,167 @@ namespace ZeroEngine.Pathfinding2D
         /// </summary>
         private void GenerateGlobalHeightTransitionNodes()
         {
-            if (_allEdgesCache.Count < 2) return;
+            if (_allEdgesCache.Count < 2)
+                return;
 
-            // 按 Y 坐标升序排序
-            var sortedByY = new List<(float left, float right, float y, Collider2D collider, bool isOneWay, int surfaceGroupId)>(_allEdgesCache);
-            sortedByY.Sort((a, b) => a.y.CompareTo(b.y));
+            var sortedByY = new List<HeightTransitionEdge>(_allEdgesCache.Count);
+            for (int i = 0; i < _allEdgesCache.Count; i++)
+            {
+                var edge = _allEdgesCache[i];
+                sortedByY.Add(new HeightTransitionEdge(
+                    edge.left,
+                    edge.right,
+                    edge.y,
+                    edge.collider,
+                    edge.isOneWay,
+                    edge.surfaceGroupId));
+            }
+
+            sortedByY.Sort((a, b) => a.Y.CompareTo(b.Y));
+            float inset = config.EdgeInset;
             float ledgeExitOffset = Mathf.Max(0.05f, config.EdgeInset * 0.5f);
 
+            // Both directions use the same Y sweep and X interval index. In
+            // particular, no jump-height policy belongs in graph generation:
+            // JumpLinkCalculator applies its own MaxJump/MaxFall limits later.
+            GenerateDownwardHeightTransitionNodes(sortedByY, ledgeExitOffset, inset);
+            GenerateUpwardHeightTransitionNodes(sortedByY, inset);
+        }
+
+        private void GenerateUpwardHeightTransitionNodes(
+            List<HeightTransitionEdge> sortedByY,
+            float inset)
+        {
+            EnsureHeightTransitionNodeBucketIndex();
+
+            var queryPoints = new List<float>(sortedByY.Count * 2);
             for (int i = 0; i < sortedByY.Count; i++)
             {
-                var lower = sortedByY[i];
+                queryPoints.Add(sortedByY[i].Left);
+                queryPoints.Add(sortedByY[i].Right);
+            }
 
-                for (int j = i + 1; j < sortedByY.Count; j++)
+            var upperIntervals = new HeightTransitionIntervalIndex(queryPoints);
+            int nextUpperIndex = sortedByY.Count - 1;
+            float intervalExpansion = HeightTransitionSafeLandingContactTolerance +
+                                       HeightTransitionIndexCoordinateEpsilon;
+
+            for (int lowerIndex = sortedByY.Count - 1; lowerIndex >= 0; lowerIndex--)
+            {
+                HeightTransitionEdge lower = sortedByY[lowerIndex];
+                while (nextUpperIndex > lowerIndex &&
+                       sortedByY[nextUpperIndex].Y - lower.Y >= HeightTransitionMinimumDifference)
                 {
-                    var upper = sortedByY[j];
+                    HeightTransitionEdge upper = sortedByY[nextUpperIndex];
+                    upperIntervals.AddInterval(
+                        nextUpperIndex,
+                        upper.Left - intervalExpansion,
+                        upper.Right + intervalExpansion);
+                    nextUpperIndex--;
+                }
 
-                    float heightDiff = upper.y - lower.y;
-                    if (heightDiff > 8f) continue;  // 高度差太大（超过最大跳跃高度）
-                    if (heightDiff < 0.5f) continue; // 同一平面
+                AddUpwardHeightTransitionAnchors(
+                    sortedByY,
+                    upperIntervals,
+                    lower.Left,
+                    isLowerLeftEdge: true,
+                    inset);
+                AddUpwardHeightTransitionAnchors(
+                    sortedByY,
+                    upperIntervals,
+                    lower.Right,
+                    isLowerLeftEdge: false,
+                    inset);
+            }
+        }
 
-                    // 检查上层平台的边缘是否在下层平台的 X 范围内
-                    float inset = config.EdgeInset;
+        private void AddUpwardHeightTransitionAnchors(
+            List<HeightTransitionEdge> sortedByY,
+            HeightTransitionIntervalIndex upperIntervals,
+            float lowerEdgeX,
+            bool isLowerLeftEdge,
+            float inset)
+        {
+            QueryHeightTransitionIntervals(upperIntervals, lowerEdgeX);
+            for (int i = 0; i < _heightTransitionCandidatesCache.Count; i++)
+            {
+                HeightTransitionEdge upper = sortedByY[_heightTransitionCandidatesCache[i]];
 
-                    // 上层左边缘在下层范围内 → 在下层的 ledge 外侧生成落点节点
-                    float leftLandingX = upper.left - ledgeExitOffset;
-                    if (leftLandingX > lower.left + inset && leftLandingX < lower.right - inset)
-                    {
-                        Vector3 pos = new Vector3(leftLandingX, lower.y, 0f);
-                        if (!HasEdgeNodeNearPosition(pos, 0.3f))
-                        {
-                            AddNode(PlatformNodeData.CreateEdge(nextNodeId++, pos, lower.collider, true, lower.isOneWay, lower.surfaceGroupId, isTransitionAnchor: true));
-                        }
-                    }
+                if (IsInsideHeightTransitionInterior(lowerEdgeX, upper, inset))
+                {
+                    AddHeightTransitionEdgeNode(
+                        upper,
+                        lowerEdgeX,
+                        isLowerLeftEdge);
+                }
 
-                    // 上层右边缘在下层范围内 → 在下层的 ledge 外侧生成落点节点
-                    float rightLandingX = upper.right + ledgeExitOffset;
-                    if (rightLandingX > lower.left + inset && rightLandingX < lower.right - inset)
-                    {
-                        Vector3 pos = new Vector3(rightLandingX, lower.y, 0f);
-                        if (!HasEdgeNodeNearPosition(pos, 0.3f))
-                        {
-                            AddNode(PlatformNodeData.CreateEdge(nextNodeId++, pos, lower.collider, false, lower.isOneWay, lower.surfaceGroupId, isTransitionAnchor: true));
-                        }
-                    }
-
-                    // === 新增：向上生成落地点 ===
-                    // 检查下层平台的边缘是否在上层平台的 X 范围内
-                    // 如果是，在上层平台对应位置生成落地点，使垂直跳跃能够成功
-
-                    // 下层左边缘在上层范围内 → 在上层的 lower.left 位置生成落地点
-                    if (lower.left > upper.left + inset && lower.left < upper.right - inset)
-                    {
-                        Vector3 pos = new Vector3(lower.left, upper.y, 0f);
-                        if (!HasEdgeNodeNearPosition(pos, 0.3f))
-                        {
-                            AddNode(PlatformNodeData.CreateEdge(nextNodeId++, pos, upper.collider, true, upper.isOneWay, upper.surfaceGroupId, isTransitionAnchor: true));
-                        }
-                    }
-
-                    AddSafeStepUpLandingSurfaceAnchor(lower.left, isLowerLeftEdge: true, upper);
-
-                    // 下层右边缘在上层范围内 → 在上层的 lower.right 位置生成落地点
-                    if (lower.right > upper.left + inset && lower.right < upper.right - inset)
-                    {
-                        Vector3 pos = new Vector3(lower.right, upper.y, 0f);
-                        if (!HasEdgeNodeNearPosition(pos, 0.3f))
-                        {
-                            AddNode(PlatformNodeData.CreateEdge(nextNodeId++, pos, upper.collider, false, upper.isOneWay, upper.surfaceGroupId, isTransitionAnchor: true));
-                        }
-                    }
-
-                    AddSafeStepUpLandingSurfaceAnchor(lower.right, isLowerLeftEdge: false, upper);
+                // Keep the old small contact band used for safe step-up
+                // surface anchors; the interval index is deliberately expanded
+                // by that band before this exact predicate is applied.
+                if (CanAddSafeStepUpLandingSurfaceAnchor(
+                        lowerEdgeX,
+                        isLowerLeftEdge,
+                        upper))
+                {
+                    AddSafeStepUpLandingSurfaceAnchor(
+                        lowerEdgeX,
+                        isLowerLeftEdge,
+                        upper);
                 }
             }
+        }
+
+        private static bool CanAddSafeStepUpLandingSurfaceAnchor(
+            float lowerEdgeX,
+            bool isLowerLeftEdge,
+            HeightTransitionEdge upper)
+        {
+            bool canLandFromLeftEdge = isLowerLeftEdge &&
+                                      lowerEdgeX <= upper.Right + HeightTransitionSafeLandingContactTolerance &&
+                                      lowerEdgeX > upper.Left + HeightTransitionSafeLandingContactTolerance;
+            bool canLandFromRightEdge = !isLowerLeftEdge &&
+                                       lowerEdgeX >= upper.Left - HeightTransitionSafeLandingContactTolerance &&
+                                       lowerEdgeX < upper.Right - HeightTransitionSafeLandingContactTolerance;
+            return canLandFromLeftEdge || canLandFromRightEdge;
         }
 
         private void AddSafeStepUpLandingSurfaceAnchor(
             float lowerEdgeX,
             bool isLowerLeftEdge,
-            (float left, float right, float y, Collider2D collider, bool isOneWay, int surfaceGroupId) upper)
+            HeightTransitionEdge upper)
         {
             float safeInset = Mathf.Max(config.CharacterRadius, config.EdgeInset) + 0.15f;
-            if (upper.right - upper.left <= safeInset * 2f)
+            if (upper.Right - upper.Left <= safeInset * 2f)
                 return;
 
-            const float contactTolerance = 0.1f;
             bool canLandFromLeftEdge = isLowerLeftEdge &&
-                                      lowerEdgeX <= upper.right + contactTolerance &&
-                                      lowerEdgeX > upper.left + contactTolerance;
+                                      lowerEdgeX <= upper.Right + HeightTransitionSafeLandingContactTolerance &&
+                                      lowerEdgeX > upper.Left + HeightTransitionSafeLandingContactTolerance;
             bool canLandFromRightEdge = !isLowerLeftEdge &&
-                                       lowerEdgeX >= upper.left - contactTolerance &&
-                                       lowerEdgeX < upper.right - contactTolerance;
+                                       lowerEdgeX >= upper.Left - HeightTransitionSafeLandingContactTolerance &&
+                                       lowerEdgeX < upper.Right - HeightTransitionSafeLandingContactTolerance;
             if (!canLandFromLeftEdge && !canLandFromRightEdge)
                 return;
 
             float desiredX = isLowerLeftEdge
                 ? lowerEdgeX - safeInset
                 : lowerEdgeX + safeInset;
-            float landingX = Mathf.Clamp(desiredX, upper.left + safeInset, upper.right - safeInset);
-            Vector3 landingPos = new Vector3(landingX, upper.y, 0f);
+            float landingX = Mathf.Clamp(desiredX, upper.Left + safeInset, upper.Right - safeInset);
+            Vector3 landingPos = new Vector3(landingX, upper.Y, 0f);
 
-            if (HasNodeNearPosition(landingPos, 0.1f))
+            if (HasNodeNearPosition(
+                    landingPos,
+                    0.1f,
+                    upper.SurfaceGroupId,
+                    HeightTransitionSurfaceSide))
                 return;
 
             AddNode(PlatformNodeData.CreateSurface(
                 nextNodeId++,
                 landingPos,
-                upper.collider,
-                upper.isOneWay,
-                upper.surfaceGroupId));
+                upper.Collider,
+                upper.IsOneWay,
+                upper.SurfaceGroupId));
         }
 
         /// <summary>
@@ -1202,7 +1830,7 @@ namespace ZeroEngine.Pathfinding2D
             float width = right - left;
             float nodeSpacing = config.ActualNodeSpacing;
 
-            // 平台太窄时仍保留左右边界锚点；Jump/Fall 只在 edge 之间生成。
+            // 平台太窄时仍保留左右边界锚点；如果角色刚好能站立，额外保留中心安全落点。
             if (width < config.MinPlatformWidth)
             {
                 Vector3 leftPos = new Vector3(left, y, 0f);
@@ -1213,6 +1841,8 @@ namespace ZeroEngine.Pathfinding2D
                     Vector3 rightPos = new Vector3(right, y, 0f);
                     AddNode(PlatformNodeData.CreateEdge(nextNodeId++, rightPos, collider, false, isOneWay, surfaceGroupId));
                 }
+
+                AddBodySafeLandingNodes(left, right, y, collider, isOneWay, surfaceGroupId);
                 return surfaceGroupId;
             }
 
@@ -1226,6 +1856,10 @@ namespace ZeroEngine.Pathfinding2D
 
             AddPhysicalEdgeTransitionAnchors(left, right, y, collider, isOneWay, surfaceGroupId);
 
+            // Jump landing uses the actor center, so preserve stable landing anchors independently
+            // from traversal edges. This keeps edge/step/fall topology unchanged.
+            AddBodySafeLandingNodes(left, right, y, collider, isOneWay, surfaceGroupId);
+
             // 生成中间表面节点
             float innerWidth = width - 2 * config.EdgeInset;
             int innerNodeCount = Mathf.FloorToInt(innerWidth / nodeSpacing);
@@ -1236,12 +1870,56 @@ namespace ZeroEngine.Pathfinding2D
                 for (int i = 1; i <= innerNodeCount; i++)
                 {
                     float x = left + config.EdgeInset + actualSpacing * i;
-                    Vector3 surfacePos = new Vector3(x, y, 0f);
-                    AddNode(PlatformNodeData.CreateSurface(nextNodeId++, surfacePos, collider, isOneWay, surfaceGroupId));
+                    AddNode(PlatformNodeData.CreateSurface(
+                        nextNodeId++,
+                        new Vector3(x, y, 0f),
+                        collider,
+                        isOneWay,
+                        surfaceGroupId));
                 }
             }
 
             return surfaceGroupId;
+        }
+
+        private void AddBodySafeLandingNodes(
+            float left,
+            float right,
+            float y,
+            Collider2D collider,
+            bool isOneWay,
+            int surfaceGroupId)
+        {
+            float safeInset = Mathf.Max(0.05f, config.CharacterRadius + 0.05f);
+            float leftSafeX = left + safeInset;
+            float rightSafeX = right - safeInset;
+            if (leftSafeX > rightSafeX + 0.001f)
+                return;
+
+            AddSurfaceNodeIfMissing(leftSafeX, y, collider, isOneWay, surfaceGroupId);
+            if (rightSafeX - leftSafeX > 0.05f)
+                AddSurfaceNodeIfMissing(rightSafeX, y, collider, isOneWay, surfaceGroupId);
+        }
+
+        private void AddSurfaceNodeIfMissing(
+            float x,
+            float y,
+            Collider2D collider,
+            bool isOneWay,
+            int surfaceGroupId)
+        {
+            EnsureSurfaceNodeBucketIndex();
+
+            Vector3 surfacePos = new Vector3(x, y, 0f);
+            if (HasSurfaceNodeNearPosition(surfacePos, surfaceGroupId))
+                return;
+
+            AddNode(PlatformNodeData.CreateSurface(
+                nextNodeId++,
+                surfacePos,
+                collider,
+                isOneWay,
+                surfaceGroupId));
         }
 
         private void AddPhysicalEdgeTransitionAnchors(
@@ -1256,7 +1934,11 @@ namespace ZeroEngine.Pathfinding2D
                 return;
 
             Vector3 leftAnchor = new Vector3(left, y, 0f);
-            if (!HasNodeNearPosition(leftAnchor, 0.05f))
+            if (!HasNodeNearPosition(
+                    leftAnchor,
+                    0.05f,
+                    surfaceGroupId,
+                    HeightTransitionLeftSide))
             {
                 AddNode(PlatformNodeData.CreateEdge(
                     nextNodeId++,
@@ -1269,7 +1951,11 @@ namespace ZeroEngine.Pathfinding2D
             }
 
             Vector3 rightAnchor = new Vector3(right, y, 0f);
-            if (!HasNodeNearPosition(rightAnchor, 0.05f))
+            if (!HasNodeNearPosition(
+                    rightAnchor,
+                    0.05f,
+                    surfaceGroupId,
+                    HeightTransitionRightSide))
             {
                 AddNode(PlatformNodeData.CreateEdge(
                     nextNodeId++,
@@ -1280,6 +1966,69 @@ namespace ZeroEngine.Pathfinding2D
                     surfaceGroupId,
                     isTransitionAnchor: true));
             }
+        }
+
+        private void EnsureSurfaceNodeBucketIndex()
+        {
+            if (surfaceNodeBucketsBuilt)
+                return;
+
+            _surfaceNodeBuckets.Clear();
+            for (int i = 0; i < Nodes.Count; i++)
+                AddSurfaceNodeToBucketIndex(Nodes[i]);
+
+            surfaceNodeBucketsBuilt = true;
+        }
+
+        private void AddSurfaceNodeToBucketIndex(PlatformNodeData node)
+        {
+            var key = new SurfaceNodeBucketKey(
+                node.SurfaceGroupId,
+                GetSurfaceNodeBucket(node.Position.x),
+                GetSurfaceNodeBucket(node.Position.y));
+            if (!_surfaceNodeBuckets.TryGetValue(key, out List<Vector2> positions))
+            {
+                positions = new List<Vector2>();
+                _surfaceNodeBuckets.Add(key, positions);
+            }
+
+            positions.Add(node.Position);
+        }
+
+        private static int GetSurfaceNodeBucket(float coordinate)
+        {
+            return Mathf.FloorToInt(coordinate / SurfaceNodeBucketSize);
+        }
+
+        private bool HasSurfaceNodeNearPosition(Vector3 position, int surfaceGroupId)
+        {
+            float threshold = SurfaceNodeDedupTolerance;
+            int minXBucket = GetSurfaceNodeBucket(position.x - threshold);
+            int maxXBucket = GetSurfaceNodeBucket(position.x + threshold);
+            int minYBucket = GetSurfaceNodeBucket(position.y - threshold);
+            int maxYBucket = GetSurfaceNodeBucket(position.y + threshold);
+
+            for (int xBucket = minXBucket; xBucket <= maxXBucket; xBucket++)
+            {
+                for (int yBucket = minYBucket; yBucket <= maxYBucket; yBucket++)
+                {
+                    var key = new SurfaceNodeBucketKey(surfaceGroupId, xBucket, yBucket);
+                    if (!_surfaceNodeBuckets.TryGetValue(key, out List<Vector2> positions))
+                        continue;
+
+                    for (int i = 0; i < positions.Count; i++)
+                    {
+                        Vector2 existing = positions[i];
+                        if (Mathf.Abs(existing.x - position.x) <= threshold &&
+                            Mathf.Abs(existing.y - position.y) <= threshold)
+                        {
+                            return true;
+                        }
+                    }
+                }
+            }
+
+            return false;
         }
 
         /// <summary>
@@ -1301,6 +2050,12 @@ namespace ZeroEngine.Pathfinding2D
         {
             NodeIdToIndex[node.NodeId] = Nodes.Count;
             Nodes.Add(node);
+
+            if (surfaceNodeBucketsBuilt)
+                AddSurfaceNodeToBucketIndex(node);
+
+            if (heightTransitionNodeBucketsBuilt)
+                AddHeightTransitionNodeToBucketIndex(node);
 
             if (surfaceSegmentsById.TryGetValue(node.SurfaceGroupId, out var segment))
             {
@@ -1520,6 +2275,8 @@ namespace ZeroEngine.Pathfinding2D
             if (segment == null)
                 return null;
 
+            PlatformNodeData? bestStandableOnGroup = null;
+            float bestStandableDistance = maxDistance;
             PlatformNodeData? bestOnGroup = null;
             float bestNodeDistance = maxDistance;
             foreach (var node in Nodes)
@@ -1533,9 +2290,15 @@ namespace ZeroEngine.Pathfinding2D
                     bestNodeDistance = dist;
                     bestOnGroup = node;
                 }
+
+                if (!node.IsTransitionAnchor && dist < bestStandableDistance)
+                {
+                    bestStandableDistance = dist;
+                    bestStandableOnGroup = node;
+                }
             }
 
-            return bestOnGroup;
+            return bestStandableOnGroup ?? bestOnGroup;
         }
 
         public PlatformSurfaceSegment FindSurfaceSegmentAt(Vector2 position, Collider2D preferredPlatform, float maxDistance)

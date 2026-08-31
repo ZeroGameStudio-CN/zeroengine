@@ -26,6 +26,9 @@ namespace ZeroEngine.Pathfinding2D
         [Tooltip("行走指令到达判定距离。应小于 ArriveDistance，避免短距离起跳点被第一帧跳过。")]
         public float WalkCommandArriveDistance = 0.25f;
 
+        [Tooltip("衔接 Jump/Fall/DropDown 前的行走到达距离；使用更小值避免提前切换后越过合法起跳点。")]
+        public float TraversalApproachArriveDistance = 0.05f;
+
         [Tooltip("行走指令允许的最大高度差。更大的垂直移动必须由 Jump/Fall/DropDown 表达。")]
         public float WalkCommandVerticalTolerance = 0.5f;
 
@@ -2158,7 +2161,15 @@ namespace ZeroEngine.Pathfinding2D
             switch (command.CommandType)
             {
                 case MoveCommandType.Walk:
-                    if (Mathf.Abs(currentPosition.x - command.Target.x) >= config.WalkCommandArriveDistance)
+                    float horizontalDelta = command.Target.x - currentPosition.x;
+                    float arriveDistance = IsNextCommandTraversal()
+                        ? Mathf.Min(config.WalkCommandArriveDistance, config.TraversalApproachArriveDistance)
+                        : config.WalkCommandArriveDistance;
+                    bool reachedOrPassedTarget =
+                        Mathf.Abs(horizontalDelta) < Mathf.Max(0f, arriveDistance) ||
+                        (command.FacingDirection > 0 && horizontalDelta < 0f) ||
+                        (command.FacingDirection < 0 && horizontalDelta > 0f);
+                    if (!reachedOrPassedTarget)
                         return false;
 
                     float verticalDelta = currentPosition.y - command.Target.y;
@@ -2192,6 +2203,21 @@ namespace ZeroEngine.Pathfinding2D
             return CurrentPath == null ||
                    CurrentPath.Commands == null ||
                    CurrentPath.CurrentIndex >= CurrentPath.Commands.Count - 1;
+        }
+
+        private bool IsNextCommandTraversal()
+        {
+            if (CurrentPath?.Commands == null)
+                return false;
+
+            int nextIndex = CurrentPath.CurrentIndex + 1;
+            if (nextIndex < 0 || nextIndex >= CurrentPath.Commands.Count)
+                return false;
+
+            MoveCommandType nextType = CurrentPath.Commands[nextIndex].CommandType;
+            return nextType == MoveCommandType.Jump ||
+                   nextType == MoveCommandType.Fall ||
+                   nextType == MoveCommandType.DropDown;
         }
 
         /// <summary>
@@ -2477,7 +2503,14 @@ namespace ZeroEngine.Pathfinding2D
                 {
                     float dist = Vector2.Distance(actualStart, firstNode.Value.Position);
                     generatedEnd = firstNode.Value.Position;
-                    if (dist > config.WalkCommandArriveDistance &&
+                    bool firstLinkIsTraversal = linkPath.Count > 0 &&
+                                                (linkPath[0].LinkType == PlatformLinkType.Jump ||
+                                                 linkPath[0].LinkType == PlatformLinkType.Fall ||
+                                                 linkPath[0].LinkType == PlatformLinkType.DropThrough);
+                    float initialWalkArriveDistance = firstLinkIsTraversal
+                        ? Mathf.Min(config.WalkCommandArriveDistance, config.TraversalApproachArriveDistance)
+                        : config.WalkCommandArriveDistance;
+                    if (dist > initialWalkArriveDistance &&
                         CanCreateWalkCommand(actualStart, firstNode.Value.Position) &&
                         !IsShortInitialBacktrack(actualStart, firstNode.Value.Position, dist, linkPath))
                     {
@@ -2521,13 +2554,18 @@ namespace ZeroEngine.Pathfinding2D
                         break;
 
                     case PlatformLinkType.Jump:
+                        if (link.FacingDirectionOverride != 0)
+                            facing = link.FacingDirectionOverride > 0 ? 1 : -1;
+
                         commands.Add(MoveCommand.Jump(
                             toNode.Value.Position,
                             link.JumpVelocityY,
                             link.JumpVelocityX,
                             link.Duration,
                             link.JumpTrajectory,  // 传递预计算的轨迹点用于可视化
-                            facing
+                            facing,
+                            link.HasWallContactAnchor,
+                            link.WallContactX
                         ));
                         break;
 

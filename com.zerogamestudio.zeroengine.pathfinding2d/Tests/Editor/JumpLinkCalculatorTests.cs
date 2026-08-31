@@ -64,13 +64,14 @@ namespace ZeroEngine.Pathfinding2D.Tests.Editor
                 graph.Config.ScanSize = new Vector2(80f, 18f);
                 graph.Config.NodeSpacing = 1.5f;
                 graph.Config.EdgeInset = 0.3f;
+                graph.Config.CharacterRadius = 0.4f;
                 graph.GeneratePlatformGraph();
 
                 var calculator = host.AddComponent<JumpLinkCalculator>();
                 calculator.Config.GravityScale = 5f;
                 calculator.Config.MaxJumpVelocity = 20f;
                 calculator.Config.MaxJumpHeight = 6f;
-                calculator.Config.MaxHorizontalDistance = 6f;
+                calculator.Config.MaxHorizontalDistance = 6.75f;
                 calculator.Config.AirJumpCount = 1;
                 calculator.Config.AirJumpVelocity = 20f;
                 calculator.Config.TrajectoryCheckRadius = 0.4f;
@@ -78,7 +79,7 @@ namespace ZeroEngine.Pathfinding2D.Tests.Editor
 
                 Assert.IsTrue(
                     HasJumpLink(graph, middle.GetComponent<Collider2D>(), upper.GetComponent<Collider2D>()),
-                    "Sub-centimeter CompositeCollider edge rounding must not remove a physically reachable boundary jump.");
+                    "Sub-centimeter CompositeCollider edge rounding must not remove a boundary jump within the configured body-safe node distance limit.");
             }
             finally
             {
@@ -124,6 +125,346 @@ namespace ZeroEngine.Pathfinding2D.Tests.Editor
                 Object.DestroyImmediate(lower);
                 Object.DestroyImmediate(upper);
                 Object.DestroyImmediate(oneWay);
+            }
+        }
+
+        [Test]
+        public void GenerateJumpLinks_MaxHorizontalDistance_RejectsNodeGapBeyondConfiguredLimit()
+        {
+            var host = new GameObject("MaxHorizontalDistanceRejectHost");
+            var lower = CreatePlatform("MaxHorizontalDistanceRejectLower", GroundLayer, new Vector2(0f, 0f), new Vector2(4f, 0.2f));
+            var upper = CreatePlatform("MaxHorizontalDistanceRejectUpper", GroundLayer, new Vector2(9.9f, 3f), new Vector2(4f, 0.2f));
+
+            try
+            {
+                var graph = CreateGraph(host, groundMask: 1 << GroundLayer, oneWayMask: 0);
+                graph.Config.ScanCenter = new Vector2(5f, 1.5f);
+                graph.Config.ScanSize = new Vector2(16f, 8f);
+                graph.Config.EdgeInset = 0.3f;
+                graph.Config.CharacterRadius = 0.4f;
+                graph.GeneratePlatformGraph();
+
+                Collider2D lowerCollider = lower.GetComponent<Collider2D>();
+                Collider2D upperCollider = upper.GetComponent<Collider2D>();
+                PlatformNodeData fromNode = graph.Nodes.Single(node =>
+                    node.PlatformCollider == lowerCollider &&
+                    node.NodeType == PlatformNodeType.RightEdge &&
+                    !node.IsTransitionAnchor);
+                PlatformNodeData toNode = graph.Nodes
+                    .Where(node => node.PlatformCollider == upperCollider && node.NodeType == PlatformNodeType.Surface)
+                    .OrderBy(node => node.Position.x)
+                    .First();
+                float horizontalNodeDistance = Mathf.Abs(toNode.Position.x - fromNode.Position.x);
+
+                Assert.That(horizontalNodeDistance, Is.EqualTo(6.65f).Within(0.02f));
+
+                var calculator = host.AddComponent<JumpLinkCalculator>();
+                calculator.Config.MaxJumpVelocity = 20f;
+                calculator.Config.GravityScale = 5f;
+                calculator.Config.MaxJumpHeight = 6f;
+                calculator.Config.MaxHorizontalDistance = 6f;
+                calculator.Config.TrajectoryCheckRadius = 0.4f;
+                calculator.GenerateJumpLinks();
+
+                Assert.IsFalse(
+                    graph.Links.Any(link =>
+                        link.LinkType == PlatformLinkType.Jump &&
+                        link.FromNodeId == fromNode.NodeId &&
+                        link.ToNodeId == toNode.NodeId),
+                    "A jump whose actual graph-node distance is about 6.65 must not cross a 6.0 maximum plus 0.05 tolerance.");
+            }
+            finally
+            {
+                Object.DestroyImmediate(host);
+                Object.DestroyImmediate(lower);
+                Object.DestroyImmediate(upper);
+            }
+        }
+
+        [Test]
+        public void GenerateJumpLinks_MaxHorizontalDistance_KeepsNodeGapWithinConfiguredTolerance()
+        {
+            var host = new GameObject("MaxHorizontalDistanceKeepHost");
+            var lower = CreatePlatform("MaxHorizontalDistanceKeepLower", GroundLayer, new Vector2(0f, 0f), new Vector2(4f, 0.2f));
+            var upper = CreatePlatform("MaxHorizontalDistanceKeepUpper", GroundLayer, new Vector2(9.25f, 3f), new Vector2(4f, 0.2f));
+
+            try
+            {
+                var graph = CreateGraph(host, groundMask: 1 << GroundLayer, oneWayMask: 0);
+                graph.Config.ScanCenter = new Vector2(4.5f, 1.5f);
+                graph.Config.ScanSize = new Vector2(15f, 8f);
+                graph.Config.EdgeInset = 0.3f;
+                graph.Config.CharacterRadius = 0.4f;
+                graph.GeneratePlatformGraph();
+
+                Collider2D lowerCollider = lower.GetComponent<Collider2D>();
+                Collider2D upperCollider = upper.GetComponent<Collider2D>();
+                PlatformNodeData fromNode = graph.Nodes.Single(node =>
+                    node.PlatformCollider == lowerCollider &&
+                    node.NodeType == PlatformNodeType.RightEdge &&
+                    !node.IsTransitionAnchor);
+                PlatformNodeData toNode = graph.Nodes
+                    .Where(node => node.PlatformCollider == upperCollider && node.NodeType == PlatformNodeType.Surface)
+                    .OrderBy(node => node.Position.x)
+                    .First();
+                float horizontalNodeDistance = Mathf.Abs(toNode.Position.x - fromNode.Position.x);
+
+                Assert.That(horizontalNodeDistance, Is.EqualTo(6f).Within(0.02f));
+                Assert.That(horizontalNodeDistance, Is.LessThanOrEqualTo(6.05f));
+
+                var calculator = host.AddComponent<JumpLinkCalculator>();
+                calculator.Config.MaxJumpVelocity = 20f;
+                calculator.Config.GravityScale = 5f;
+                calculator.Config.MaxJumpHeight = 6f;
+                calculator.Config.MaxHorizontalDistance = 6f;
+                calculator.Config.TrajectoryCheckRadius = 0.4f;
+                calculator.GenerateJumpLinks();
+
+                Assert.IsTrue(
+                    graph.Links.Any(link =>
+                        link.LinkType == PlatformLinkType.Jump &&
+                        link.FromNodeId == fromNode.NodeId &&
+                        link.ToNodeId == toNode.NodeId),
+                    "A jump whose actual graph-node distance is 6.0 must remain available under the 6.0 maximum plus 0.05 tolerance.");
+            }
+            finally
+            {
+                Object.DestroyImmediate(host);
+                Object.DestroyImmediate(lower);
+                Object.DestroyImmediate(upper);
+            }
+        }
+
+        [Test]
+        public void GenerateJumpLinks_HigherPlatformOnRight_UsesRightSourceEdgeOnly()
+        {
+            var host = new GameObject("RightwardJumpDirectionHost");
+            var lower = CreatePlatform("RightwardJumpLower", GroundLayer, new Vector2(-3f, 0f), new Vector2(4f, 0.2f));
+            var upper = CreatePlatform("RightwardJumpUpper", GroundLayer, new Vector2(2f, 3f), new Vector2(4f, 0.2f));
+
+            try
+            {
+                var graph = CreateGraph(host, groundMask: 1 << GroundLayer, oneWayMask: 0);
+                graph.Config.ScanCenter = new Vector2(-0.5f, 1.5f);
+                graph.Config.ScanSize = new Vector2(12f, 8f);
+                graph.GeneratePlatformGraph();
+
+                var calculator = host.AddComponent<JumpLinkCalculator>();
+                calculator.Config.MaxJumpVelocity = 20f;
+                calculator.Config.MaxJumpHeight = 5f;
+                calculator.Config.MaxHorizontalDistance = 8f;
+                calculator.Config.TrajectoryCheckRadius = 0.1f;
+                calculator.GenerateJumpLinks();
+
+                Collider2D lowerCollider = lower.GetComponent<Collider2D>();
+                Collider2D upperCollider = upper.GetComponent<Collider2D>();
+                Assert.IsTrue(
+                    HasJumpLinkFromEdgeToPlatform(graph, lowerCollider, PlatformNodeType.RightEdge, upperCollider),
+                    "A higher platform on the right must retain the outward jump from the source right edge.");
+                Assert.IsFalse(
+                    HasJumpLinkFromEdgeToPlatform(graph, lowerCollider, PlatformNodeType.LeftEdge, upperCollider),
+                    "The source left edge must not offer an inward jump across its own platform to a right-side target.");
+            }
+            finally
+            {
+                Object.DestroyImmediate(host);
+                Object.DestroyImmediate(lower);
+                Object.DestroyImmediate(upper);
+            }
+        }
+
+        [Test]
+        public void GenerateJumpLinks_UsesBodySafeLandingsAndSkipsPhysicalTransitionAnchors()
+        {
+            var host = new GameObject("BodySafeJumpEdgesHost");
+            var lower = CreatePlatform("BodySafeJumpLower", GroundLayer, new Vector2(-3f, 0f), new Vector2(4f, 0.2f));
+            var upper = CreatePlatform("BodySafeJumpUpper", GroundLayer, new Vector2(2f, 3f), new Vector2(4f, 0.2f));
+
+            try
+            {
+                var graph = CreateGraph(host, groundMask: 1 << GroundLayer, oneWayMask: 0);
+                graph.Config.ScanCenter = new Vector2(-0.5f, 1.5f);
+                graph.Config.ScanSize = new Vector2(12f, 8f);
+                graph.Config.EdgeInset = 0.3f;
+                graph.Config.CharacterRadius = 0.45f;
+                graph.GeneratePlatformGraph();
+
+                var calculator = host.AddComponent<JumpLinkCalculator>();
+                calculator.Config.GravityScale = 5f;
+                calculator.Config.MaxJumpVelocity = 20f;
+                calculator.Config.MaxJumpHeight = 5f;
+                calculator.Config.MaxHorizontalDistance = 8f;
+                calculator.Config.TrajectoryCheckRadius = 0.1f;
+                calculator.GenerateJumpLinks();
+
+                Collider2D lowerCollider = lower.GetComponent<Collider2D>();
+                Collider2D upperCollider = upper.GetComponent<Collider2D>();
+                var links = graph.Links.Where(link =>
+                    link.LinkType == PlatformLinkType.Jump &&
+                    graph.GetNode(link.FromNodeId) is { } fromNode &&
+                    graph.GetNode(link.ToNodeId) is { } toNode &&
+                    fromNode.PlatformCollider == lowerCollider &&
+                    toNode.PlatformCollider == upperCollider).ToArray();
+
+                Assert.That(links, Is.Not.Empty, "The reachable rightward jump must remain available.");
+                float safeInset = graph.Config.CharacterRadius + 0.05f;
+                foreach (var link in links)
+                {
+                    var fromNode = graph.GetNode(link.FromNodeId).Value;
+                    var toNode = graph.GetNode(link.ToNodeId).Value;
+                    Assert.That(fromNode.IsTransitionAnchor, Is.False, "Jump must not start at the physical boundary anchor.");
+                    Assert.That(toNode.IsTransitionAnchor, Is.False, "Jump must not land at the physical boundary anchor.");
+                    Assert.That(toNode.Position.x, Is.GreaterThanOrEqualTo(upperCollider.bounds.min.x + safeInset - 0.001f));
+                    Assert.That(toNode.Position.x, Is.LessThanOrEqualTo(upperCollider.bounds.max.x - safeInset + 0.001f));
+                }
+            }
+            finally
+            {
+                Object.DestroyImmediate(host);
+                Object.DestroyImmediate(lower);
+                Object.DestroyImmediate(upper);
+            }
+        }
+
+        [Test]
+        public void GenerateJumpLinks_NarrowButStandablePlatform_KeepsSafeSurfaceLanding()
+        {
+            var host = new GameObject("NarrowSafeLandingHost");
+            var lower = CreatePlatform("NarrowSafeLandingLower", GroundLayer, new Vector2(-1.5f, 0f), new Vector2(2f, 0.2f));
+            var upper = CreatePlatform("NarrowSafeLandingUpper", GroundLayer, new Vector2(0.5f, 2.5f), new Vector2(0.9f, 0.2f));
+
+            try
+            {
+                var graph = CreateGraph(host, groundMask: 1 << GroundLayer, oneWayMask: 0);
+                graph.Config.ScanCenter = new Vector2(-0.5f, 1.25f);
+                graph.Config.ScanSize = new Vector2(6f, 6f);
+                graph.Config.MinPlatformWidth = 1f;
+                graph.Config.CharacterRadius = 0.4f;
+                graph.GeneratePlatformGraph();
+
+                var calculator = host.AddComponent<JumpLinkCalculator>();
+                calculator.Config.MaxJumpVelocity = 20f;
+                calculator.Config.MaxJumpHeight = 4f;
+                calculator.Config.MaxHorizontalDistance = 4f;
+                calculator.Config.TrajectoryCheckRadius = 0.1f;
+                calculator.GenerateJumpLinks();
+
+                Collider2D lowerCollider = lower.GetComponent<Collider2D>();
+                Collider2D upperCollider = upper.GetComponent<Collider2D>();
+                Assert.That(graph.Links.Any(link =>
+                    link.LinkType == PlatformLinkType.Jump &&
+                    graph.GetNode(link.FromNodeId) is { } fromNode &&
+                    graph.GetNode(link.ToNodeId) is { } toNode &&
+                    fromNode.PlatformCollider == lowerCollider &&
+                    toNode.PlatformCollider == upperCollider &&
+                    toNode.NodeType == PlatformNodeType.Surface &&
+                    Mathf.Abs(toNode.Position.x - upperCollider.bounds.center.x) <= 0.01f), Is.True,
+                    "A platform that exactly fits the actor must retain one body-safe center landing.");
+            }
+            finally
+            {
+                Object.DestroyImmediate(host);
+                Object.DestroyImmediate(lower);
+                Object.DestroyImmediate(upper);
+            }
+        }
+
+        [Test]
+        public void GenerateJumpLinks_MultipleSafeSurfaceCandidates_KeepsBothApproachLandings()
+        {
+            var host = new GameObject("MultipleSafeLandingCandidatesHost");
+            var leftSource = CreatePlatform("MultipleSafeLandingLeftSource", GroundLayer, new Vector2(-5f, 0f), new Vector2(4f, 0.2f));
+            var rightSource = CreatePlatform("MultipleSafeLandingRightSource", GroundLayer, new Vector2(5f, 0f), new Vector2(4f, 0.2f));
+            var upper = CreatePlatform("MultipleSafeLandingUpper", GroundLayer, new Vector2(0f, 3f), new Vector2(6f, 0.2f));
+
+            try
+            {
+                var graph = CreateGraph(host, groundMask: 1 << GroundLayer, oneWayMask: 0);
+                graph.Config.ScanCenter = new Vector2(0f, 1.5f);
+                graph.Config.ScanSize = new Vector2(18f, 8f);
+                graph.Config.EdgeInset = 0.3f;
+                graph.Config.CharacterRadius = 0.4f;
+                graph.GeneratePlatformGraph();
+
+                var calculator = host.AddComponent<JumpLinkCalculator>();
+                calculator.Config.MaxJumpVelocity = 20f;
+                calculator.Config.MaxJumpHeight = 5f;
+                calculator.Config.MaxHorizontalDistance = 8f;
+                calculator.Config.TrajectoryCheckRadius = 0.1f;
+                calculator.GenerateJumpLinks();
+
+                Collider2D leftSourceCollider = leftSource.GetComponent<Collider2D>();
+                Collider2D rightSourceCollider = rightSource.GetComponent<Collider2D>();
+                Collider2D upperCollider = upper.GetComponent<Collider2D>();
+                float safeInset = graph.Config.CharacterRadius + 0.05f;
+                float leftSafeX = upperCollider.bounds.min.x + safeInset;
+                float rightSafeX = upperCollider.bounds.max.x - safeInset;
+
+                Assert.IsTrue(
+                    graph.Links.Any(link =>
+                        link.LinkType == PlatformLinkType.Jump &&
+                        graph.GetNode(link.FromNodeId) is { } fromNode &&
+                        graph.GetNode(link.ToNodeId) is { } toNode &&
+                        fromNode.PlatformCollider == leftSourceCollider &&
+                        toNode.PlatformCollider == upperCollider &&
+                        toNode.NodeType == PlatformNodeType.Surface &&
+                        Mathf.Abs(toNode.Position.x - leftSafeX) <= 0.05f),
+                    "A left-side source must retain the upper platform's left safe landing candidate.");
+                Assert.IsTrue(
+                    graph.Links.Any(link =>
+                        link.LinkType == PlatformLinkType.Jump &&
+                        graph.GetNode(link.FromNodeId) is { } fromNode &&
+                        graph.GetNode(link.ToNodeId) is { } toNode &&
+                        fromNode.PlatformCollider == rightSourceCollider &&
+                        toNode.PlatformCollider == upperCollider &&
+                        toNode.NodeType == PlatformNodeType.Surface &&
+                        Mathf.Abs(toNode.Position.x - rightSafeX) <= 0.05f),
+                    "A right-side source must retain the upper platform's right safe landing candidate.");
+            }
+            finally
+            {
+                Object.DestroyImmediate(host);
+                Object.DestroyImmediate(leftSource);
+                Object.DestroyImmediate(rightSource);
+                Object.DestroyImmediate(upper);
+            }
+        }
+
+        [Test]
+        public void GenerateJumpLinks_HigherPlatformOnLeft_UsesLeftSourceEdgeOnly()
+        {
+            var host = new GameObject("LeftwardJumpDirectionHost");
+            var lower = CreatePlatform("LeftwardJumpLower", GroundLayer, new Vector2(3f, 0f), new Vector2(4f, 0.2f));
+            var upper = CreatePlatform("LeftwardJumpUpper", GroundLayer, new Vector2(-2f, 3f), new Vector2(4f, 0.2f));
+
+            try
+            {
+                var graph = CreateGraph(host, groundMask: 1 << GroundLayer, oneWayMask: 0);
+                graph.Config.ScanCenter = new Vector2(0.5f, 1.5f);
+                graph.Config.ScanSize = new Vector2(12f, 8f);
+                graph.GeneratePlatformGraph();
+
+                var calculator = host.AddComponent<JumpLinkCalculator>();
+                calculator.Config.MaxJumpVelocity = 20f;
+                calculator.Config.MaxJumpHeight = 5f;
+                calculator.Config.MaxHorizontalDistance = 8f;
+                calculator.Config.TrajectoryCheckRadius = 0.1f;
+                calculator.GenerateJumpLinks();
+
+                Collider2D lowerCollider = lower.GetComponent<Collider2D>();
+                Collider2D upperCollider = upper.GetComponent<Collider2D>();
+                Assert.IsTrue(
+                    HasJumpLinkFromEdgeToPlatform(graph, lowerCollider, PlatformNodeType.LeftEdge, upperCollider),
+                    "A higher platform on the left must retain the outward jump from the source left edge.");
+                Assert.IsFalse(
+                    HasJumpLinkFromEdgeToPlatform(graph, lowerCollider, PlatformNodeType.RightEdge, upperCollider),
+                    "The source right edge must not offer an inward jump across its own platform to a left-side target.");
+            }
+            finally
+            {
+                Object.DestroyImmediate(host);
+                Object.DestroyImmediate(lower);
+                Object.DestroyImmediate(upper);
             }
         }
 
@@ -637,6 +978,119 @@ namespace ZeroEngine.Pathfinding2D.Tests.Editor
         }
 
         [Test]
+        public void GenerateJumpLinks_SingleImpulseProfile_RejectsTargetSideCollisionBeforeFootClearance()
+        {
+            var host = new GameObject("SingleImpulseBlockedLandingHost");
+            var lower = CreatePlatform("SingleImpulseBlockedLower", GroundLayer, new Vector2(-3f, 0f), new Vector2(4f, 0.2f));
+            var upper = CreatePlatform("SingleImpulseBlockedUpper", GroundLayer, new Vector2(1.5f, 3f), new Vector2(4f, 0.2f));
+
+            try
+            {
+                var graph = CreateGraph(host, groundMask: 1 << GroundLayer, oneWayMask: 0);
+                graph.Config.ScanCenter = new Vector2(-0.5f, 1.5f);
+                graph.Config.ScanSize = new Vector2(12f, 8f);
+                graph.Config.CharacterRadius = 0.4f;
+                graph.GeneratePlatformGraph();
+
+                var calculator = host.AddComponent<JumpLinkCalculator>();
+                calculator.Config.GravityScale = 5f;
+                calculator.Config.MaxJumpHeight = 4f;
+                calculator.Config.MaxHorizontalDistance = 8f;
+                calculator.Config.TrajectoryCheckRadius = 0.4f;
+                calculator.Config.UseSingleSmartJump = true;
+                calculator.Config.SupportsMidairHorizontalSteering = false;
+                calculator.GenerateJumpLinks();
+
+                Assert.IsFalse(
+                    HasJumpLink(graph, lower.GetComponent<Collider2D>(), upper.GetComponent<Collider2D>()),
+                    "A single-impulse actor must not receive a link that collides with the target side before its feet clear the surface.\n" +
+                    BuildLocalGraphDebug(graph, minX: -6f, maxX: 5f));
+            }
+            finally
+            {
+                Object.DestroyImmediate(host);
+                Object.DestroyImmediate(lower);
+                Object.DestroyImmediate(upper);
+            }
+        }
+
+        [Test]
+        public void GenerateJumpLinks_SingleImpulseProfile_KeepsArcThatClearsTargetSideBeforeContact()
+        {
+            var host = new GameObject("SingleImpulseClearLandingHost");
+            var lower = CreatePlatform("SingleImpulseClearLower", GroundLayer, new Vector2(-3f, 0f), new Vector2(4f, 0.2f));
+            var upper = CreatePlatform("SingleImpulseClearUpper", GroundLayer, new Vector2(3.5f, 3f), new Vector2(4f, 0.2f));
+
+            try
+            {
+                var graph = CreateGraph(host, groundMask: 1 << GroundLayer, oneWayMask: 0);
+                graph.Config.ScanCenter = new Vector2(0.25f, 1.5f);
+                graph.Config.ScanSize = new Vector2(14f, 8f);
+                graph.Config.CharacterRadius = 0.4f;
+                graph.GeneratePlatformGraph();
+
+                var calculator = host.AddComponent<JumpLinkCalculator>();
+                calculator.Config.GravityScale = 5f;
+                calculator.Config.MaxJumpHeight = 4f;
+                calculator.Config.MaxHorizontalDistance = 8f;
+                calculator.Config.TrajectoryCheckRadius = 0.4f;
+                calculator.Config.UseSingleSmartJump = true;
+                calculator.Config.SupportsMidairHorizontalSteering = false;
+                calculator.GenerateJumpLinks();
+
+                Assert.IsTrue(
+                    HasJumpLink(graph, lower.GetComponent<Collider2D>(), upper.GetComponent<Collider2D>()),
+                    "A single-impulse actor must retain a ballistic arc whose feet clear the target side before horizontal contact.");
+            }
+            finally
+            {
+                Object.DestroyImmediate(host);
+                Object.DestroyImmediate(lower);
+                Object.DestroyImmediate(upper);
+            }
+        }
+
+        [Test]
+        public void GenerateJumpLinks_SingleImpulseProfile_VerticalOneWayTarget_KeepsJump()
+        {
+            var host = new GameObject("SingleImpulseVerticalOneWayHost");
+            var lower = CreatePlatform("SingleImpulseVerticalLower", GroundLayer, new Vector2(0f, 0f), new Vector2(4f, 0.2f));
+            var upper = CreatePlatform("SingleImpulseVerticalOneWayUpper", OneWayLayer, new Vector2(0f, 3f), new Vector2(4f, 0.2f));
+
+            try
+            {
+                var graph = CreateGraph(host, groundMask: 1 << GroundLayer, oneWayMask: 1 << OneWayLayer);
+                graph.Config.ScanCenter = new Vector2(0f, 1.5f);
+                graph.Config.ScanSize = new Vector2(8f, 8f);
+                graph.Config.CharacterRadius = 0.4f;
+                graph.GeneratePlatformGraph();
+
+                var calculator = host.AddComponent<JumpLinkCalculator>();
+                calculator.Config.GravityScale = 5f;
+                calculator.Config.MaxJumpHeight = 4f;
+                calculator.Config.MaxHorizontalDistance = 8f;
+                calculator.Config.TrajectoryCheckRadius = 0.4f;
+                calculator.Config.UseSingleSmartJump = true;
+                calculator.Config.SupportsMidairHorizontalSteering = false;
+                calculator.GenerateJumpLinks();
+
+                Collider2D upperCollider = upper.GetComponent<Collider2D>();
+                Assert.IsTrue(
+                    graph.SurfaceSegments.Any(segment => segment.Collider == upperCollider && segment.IsOneWay),
+                    "The vertical target must be represented as a one-way surface segment.");
+                Assert.IsTrue(
+                    HasJumpLink(graph, lower.GetComponent<Collider2D>(), upperCollider),
+                    "A no-steering actor must retain a vertical jump through a one-way target platform.");
+            }
+            finally
+            {
+                Object.DestroyImmediate(host);
+                Object.DestroyImmediate(lower);
+                Object.DestroyImmediate(upper);
+            }
+        }
+
+        [Test]
         public void GenerateJumpLinks_EdgeStepUpFallback_RejectsSkippedIntermediateSurface()
         {
             var host = new GameObject("IntermediateEdgeStepUpFallbackHost");
@@ -687,6 +1141,162 @@ namespace ZeroEngine.Pathfinding2D.Tests.Editor
                 Object.DestroyImmediate(upper);
                 Object.DestroyImmediate(wall);
                 Object.DestroyImmediate(ceiling);
+            }
+        }
+
+        [Test]
+        public void GenerateJumpLinks_RightEdgeAdjacentHigherSolidWall_DoesNotCreateFallChain()
+        {
+            var host = new GameObject("Room008RightEdgeWallFallHost");
+            var lower = CreatePlatform("Room008RightLower", GroundLayer, new Vector2(0f, 0f), new Vector2(10f, 0.2f));
+            var source = CreatePlatform("Room008RightSource", GroundLayer, new Vector2(0f, 4f), new Vector2(6f, 0.2f));
+            var higherWall = CreatePlatform("Room008RightHigherWall", GroundLayer, new Vector2(4f, 5.6f), new Vector2(2f, 3f));
+
+            try
+            {
+                var graph = CreateGraph(host, groundMask: 1 << GroundLayer, oneWayMask: 0);
+                graph.Config.ScanCenter = new Vector2(0f, 3.5f);
+                graph.Config.ScanSize = new Vector2(12f, 10f);
+                graph.GeneratePlatformGraph();
+
+                var calculator = host.AddComponent<JumpLinkCalculator>();
+                calculator.Config.MaxFallHeight = 8f;
+                calculator.Config.MaxFallHorizontalDistance = 4f;
+                calculator.Config.TrajectoryCheckRadius = 0.25f;
+                calculator.GenerateJumpLinks();
+
+                Assert.IsFalse(
+                    HasFallLinkFromEdgeToPlatform(
+                        graph,
+                        source.GetComponent<Collider2D>(),
+                        PlatformNodeType.RightEdge,
+                        lower.GetComponent<Collider2D>()),
+                    "A solid wall flush with the source right edge must not create a Fall chain that walks into the higher wall.");
+            }
+            finally
+            {
+                Object.DestroyImmediate(host);
+                Object.DestroyImmediate(lower);
+                Object.DestroyImmediate(source);
+                Object.DestroyImmediate(higherWall);
+            }
+        }
+
+        [Test]
+        public void GenerateJumpLinks_LeftEdgeAdjacentHigherSolidWall_DoesNotCreateFallChain()
+        {
+            var host = new GameObject("Room008LeftEdgeWallFallHost");
+            var lower = CreatePlatform("Room008LeftLower", GroundLayer, new Vector2(0f, 0f), new Vector2(10f, 0.2f));
+            var source = CreatePlatform("Room008LeftSource", GroundLayer, new Vector2(0f, 4f), new Vector2(6f, 0.2f));
+            var higherWall = CreatePlatform("Room008LeftHigherWall", GroundLayer, new Vector2(-4f, 5.6f), new Vector2(2f, 3f));
+
+            try
+            {
+                var graph = CreateGraph(host, groundMask: 1 << GroundLayer, oneWayMask: 0);
+                graph.Config.ScanCenter = new Vector2(0f, 3.5f);
+                graph.Config.ScanSize = new Vector2(12f, 10f);
+                graph.GeneratePlatformGraph();
+
+                var calculator = host.AddComponent<JumpLinkCalculator>();
+                calculator.Config.MaxFallHeight = 8f;
+                calculator.Config.MaxFallHorizontalDistance = 4f;
+                calculator.Config.TrajectoryCheckRadius = 0.25f;
+                calculator.GenerateJumpLinks();
+
+                Assert.IsFalse(
+                    HasFallLinkFromEdgeToPlatform(
+                        graph,
+                        source.GetComponent<Collider2D>(),
+                        PlatformNodeType.LeftEdge,
+                        lower.GetComponent<Collider2D>()),
+                    "A solid wall flush with the source left edge must not create a mirrored Fall chain that walks into the higher wall.");
+            }
+            finally
+            {
+                Object.DestroyImmediate(host);
+                Object.DestroyImmediate(lower);
+                Object.DestroyImmediate(source);
+                Object.DestroyImmediate(higherWall);
+            }
+        }
+
+        [Test]
+        public void GenerateJumpLinks_ExposedRightEdge_CreatesFallChain()
+        {
+            var host = new GameObject("Room008ExposedRightEdgeFallHost");
+            var lower = CreatePlatform("Room008ExposedLower", GroundLayer, new Vector2(0f, 0f), new Vector2(10f, 0.2f));
+            var source = CreatePlatform("Room008ExposedSource", GroundLayer, new Vector2(0f, 4f), new Vector2(6f, 0.2f));
+
+            try
+            {
+                var graph = CreateGraph(host, groundMask: 1 << GroundLayer, oneWayMask: 0);
+                graph.Config.ScanCenter = new Vector2(0f, 2f);
+                graph.Config.ScanSize = new Vector2(12f, 8f);
+                graph.GeneratePlatformGraph();
+
+                var calculator = host.AddComponent<JumpLinkCalculator>();
+                calculator.Config.MaxFallHeight = 8f;
+                calculator.Config.MaxFallHorizontalDistance = 4f;
+                calculator.Config.TrajectoryCheckRadius = 0.25f;
+                calculator.GenerateJumpLinks();
+
+                Assert.IsTrue(
+                    HasFallLinkFromEdgeToPlatform(
+                        graph,
+                        source.GetComponent<Collider2D>(),
+                        PlatformNodeType.RightEdge,
+                        lower.GetComponent<Collider2D>()),
+                    "An exposed source edge must retain its valid Fall chain to the lower platform.");
+            }
+            finally
+            {
+                Object.DestroyImmediate(host);
+                Object.DestroyImmediate(lower);
+                Object.DestroyImmediate(source);
+            }
+        }
+
+        [Test]
+        public void GenerateJumpLinks_HighExposedEdgeAboveWideLowerPlatform_CreatesFallTransitionAnchor()
+        {
+            var host = new GameObject("HighWideLowerPlatformFallHost");
+            var lower = CreatePlatform("HighWideLowerPlatform", GroundLayer, new Vector2(33f, 0f), new Vector2(64f, 0.2f));
+            var source = CreatePlatform("HighNarrowUpperPlatform", GroundLayer, new Vector2(33f, 13f), new Vector2(16f, 0.2f));
+
+            try
+            {
+                var graph = CreateGraph(host, groundMask: 1 << GroundLayer, oneWayMask: 0);
+                graph.Config.ScanCenter = new Vector2(33f, 6.5f);
+                graph.Config.ScanSize = new Vector2(70f, 30f);
+                graph.GeneratePlatformGraph();
+
+                var calculator = host.AddComponent<JumpLinkCalculator>();
+                calculator.Config.MaxFallHeight = 20f;
+                calculator.Config.MaxFallHorizontalDistance = 4f;
+                calculator.Config.TrajectoryCheckRadius = 0.25f;
+                calculator.GenerateJumpLinks();
+
+                Assert.IsTrue(graph.Links.Any(link =>
+                {
+                    if (link.LinkType != PlatformLinkType.Fall)
+                        return false;
+
+                    var fromNode = graph.GetNode(link.FromNodeId);
+                    var toNode = graph.GetNode(link.ToNodeId);
+                    return fromNode.HasValue &&
+                           toNode.HasValue &&
+                           fromNode.Value.PlatformCollider == source.GetComponent<Collider2D>() &&
+                           fromNode.Value.NodeType == PlatformNodeType.RightEdge &&
+                           toNode.Value.PlatformCollider == lower.GetComponent<Collider2D>() &&
+                           toNode.Value.NodeType == PlatformNodeType.RightEdge &&
+                           toNode.Value.IsTransitionAnchor;
+                }), "A high exposed edge must retain a Fall link to the matching lower transition anchor.");
+            }
+            finally
+            {
+                Object.DestroyImmediate(host);
+                Object.DestroyImmediate(lower);
+                Object.DestroyImmediate(source);
             }
         }
 
@@ -804,6 +1414,36 @@ namespace ZeroEngine.Pathfinding2D.Tests.Editor
                 toNode.PlatformCollider == to &&
                 Vector2.Distance(fromNode.Position, expectedFrom) <= tolerance &&
                 Vector2.Distance(toNode.Position, expectedTo) <= tolerance);
+        }
+
+        private static bool HasFallLinkFromEdgeToPlatform(
+            PlatformGraphGenerator graph,
+            Collider2D from,
+            PlatformNodeType fromType,
+            Collider2D to)
+        {
+            return graph.Links.Any(link =>
+                link.LinkType == PlatformLinkType.Fall &&
+                graph.GetNode(link.FromNodeId) is { } fromNode &&
+                graph.GetNode(link.ToNodeId) is { } toNode &&
+                fromNode.PlatformCollider == from &&
+                fromNode.NodeType == fromType &&
+                toNode.PlatformCollider == to);
+        }
+
+        private static bool HasJumpLinkFromEdgeToPlatform(
+            PlatformGraphGenerator graph,
+            Collider2D from,
+            PlatformNodeType fromType,
+            Collider2D to)
+        {
+            return graph.Links.Any(link =>
+                link.LinkType == PlatformLinkType.Jump &&
+                graph.GetNode(link.FromNodeId) is { } fromNode &&
+                graph.GetNode(link.ToNodeId) is { } toNode &&
+                fromNode.PlatformCollider == from &&
+                fromNode.NodeType == fromType &&
+                toNode.PlatformCollider == to);
         }
 
         private static bool HasJumpLinkNear(

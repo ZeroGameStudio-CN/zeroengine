@@ -24,6 +24,8 @@
 - **路径验证与回退** (v1.1.0+)：检测路径过期/目标移动/偏离，A* 失败时返回部分路径
 - **不可变搜索快照** (v1.7.0+)：一次事务只发布一个图修订，异步结果可可靠拒绝旧图回调
 - **可替换搜索后端** (v1.7.0+)：默认 managed 二叉堆实现，无任何商业插件依赖；消费者可在自己的叶子程序集注入后端
+- **身体安全落点与转换锚点** (v1.7.0+)：每个平台段（包括 direct Tilemap span）生成 body-safe landing 节点；physical transition anchor 独立用于 Fall/DropDown 路由
+- **高度转换索引** (v1.7.0+)：按实际 X 区间查找高度转换，不在图生成阶段用固定 8m 高差截断，最终跳跃/下落限制仍由 JumpLinkConfig 执行
 
 ## 核心组件
 
@@ -48,6 +50,8 @@ var node = platformGraphGenerator.FindNearestNode(position, maxDistance);
 var results = new List<PlatformNodeData>();
 platformGraphGenerator.FindNodesInRangeNonAlloc(position, range, results);
 ```
+
+节点生成会为每个平台段（包括直接扫描得到的 Tilemap span）补充 body-safe landing Surface 节点，并将 physical transition anchor 与可站立的跳跃起点/落点分离。高度转换使用 X 区间索引；图生成不以固定 8m 高差过滤，具体可达性由 `JumpLinkConfig` 的跳跃/下落限制决定。
 
 ### SpatialGrid2D (v1.1.0+)
 
@@ -75,6 +79,8 @@ jumpLinkCalculator.GenerateJumpLinks();
 ```
 
 **v1.1.0 更新**：表面节点也支持垂直下落链接生成（水平距离 <= 1.5 单位）。
+
+**v1.7.0 更新**：`MaxHorizontalDistance` 按真实图节点的水平距离执行上限，比较仅额外允许 0.05m 容差。`SupportsMidairHorizontalSteering=false` 时，会保守拒绝在越过目标平台顶面前撞到其侧面的跳跃链接。
 
 ### Platform2DPathfinder
 
@@ -167,10 +173,11 @@ public override void OnPhysicsUpdate()
 | 参数 | 说明 | 默认值 |
 |------|------|--------|
 | MaxJumpVelocity | 最大跳跃速度 | 14 |
-| MaxHorizontalDistance | 最大水平跳跃距离 | 6m |
+| MaxHorizontalDistance | 实际图节点水平距离上限（仅额外允许 0.05m 比较容差） | 6m |
 | MaxJumpHeight | 最大跳跃高度 | 4m |
 | GravityScale | 重力缩放 | 3 |
 | SurfaceNodeVerticalFallMaxHorizontal | 表面节点垂直下落最大水平距离 (v1.1.0+) | 1.5m |
+| SupportsMidairHorizontalSteering | 执行器不能持续修正水平速度时，拒绝会先撞到目标平台侧面的跳跃链接 | true |
 
 ### PathfinderConfig (v1.1.0+)
 
@@ -179,6 +186,8 @@ public override void OnPhysicsUpdate()
 | PathRequestInterval | 路径请求间隔 | 0.3s |
 | PathExpireTime | 路径过期时间 | 2s |
 | ArriveDistance | 到达判定距离 | 0.5m |
+| WalkCommandArriveDistance | 普通 Walk 指令到达判定距离 | 0.25m |
+| TraversalApproachArriveDistance | 衔接 Jump/Fall/DropDown 前的精确行走接近距离（与 WalkCommandArriveDistance 取更小值） | 0.05m |
 | TargetMoveThreshold | 目标移动重寻路阈值 | 2m |
 | PathDeviationThreshold | 偏离路径重寻路阈值 | 3m |
 | AutoValidatePath | 启用自动路径验证 | true |
