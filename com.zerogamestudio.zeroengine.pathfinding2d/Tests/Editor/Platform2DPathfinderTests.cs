@@ -1,12 +1,170 @@
 using NUnit.Framework;
 using System.Linq;
 using UnityEngine;
+using UnityEngine.Tilemaps;
 
 namespace ZeroEngine.Pathfinding2D.Tests.Editor
 {
     [TestFixture]
     public class Platform2DPathfinderTests
     {
+        [Test]
+        public void CreateJump_NormalizesFacingDirectionOverride()
+        {
+            var geometric = PlatformLinkData.CreateJump(1, 2, 8f, 2f, 0.5f);
+            var right = PlatformLinkData.CreateJump(1, 2, 8f, 2f, 0.5f, null, 7);
+            var left = PlatformLinkData.CreateJump(1, 2, 8f, 2f, 0.5f, null, -3);
+            var wall = PlatformLinkData.CreateWallTraversalJump(1, 2, 8f, 0f, 0.5f, null, -3, 31f);
+
+            Assert.AreEqual(0, geometric.FacingDirectionOverride);
+            Assert.AreEqual(1, right.FacingDirectionOverride);
+            Assert.AreEqual(-1, left.FacingDirectionOverride);
+            Assert.IsFalse(geometric.HasWallContactAnchor);
+            Assert.IsTrue(wall.HasWallContactAnchor);
+            Assert.AreEqual(-1, wall.FacingDirectionOverride);
+            Assert.AreEqual(31f, wall.WallContactX);
+        }
+
+        [Test]
+        public void ReconstructPath_JumpUsesOverrideOtherwiseGeometricFacing()
+        {
+            var host = new GameObject("JumpFacingOverridePathTest");
+            try
+            {
+                var graph = host.AddComponent<PlatformGraphGenerator>();
+                graph.Nodes.Add(PlatformNodeData.CreateSurface(1, Vector3.zero, null));
+                graph.Nodes.Add(PlatformNodeData.CreateSurface(2, new Vector3(-2f, 2f, 0f), null));
+                graph.NodeIdToIndex[1] = 0;
+                graph.NodeIdToIndex[2] = 1;
+
+                var pathfinder = host.AddComponent<Platform2DPathfinder>();
+                pathfinder.SetGraphGenerator(graph);
+
+                var method = typeof(Platform2DPathfinder).GetMethod(
+                    "ReconstructPath",
+                    System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic);
+                Assert.IsNotNull(method);
+
+                var cameFrom = new System.Collections.Generic.Dictionary<int, int>
+                {
+                    [2] = 1
+                };
+                var overrideLink = PlatformLinkData.CreateWallTraversalJump(
+                    1,
+                    2,
+                    8f,
+                    0f,
+                    0.5f,
+                    null,
+                    1,
+                    4.25f);
+                var overrideLinks = new System.Collections.Generic.Dictionary<int, PlatformLinkData>
+                {
+                    [2] = overrideLink
+                };
+
+                var overridePath = (Platform2DPath)method.Invoke(
+                    pathfinder,
+                    new object[]
+                    {
+                        cameFrom,
+                        overrideLinks,
+                        2,
+                        Vector3.zero,
+                        new Vector3(-2f, 2f, 0f)
+                    });
+
+                Assert.AreEqual(1, overridePath.Commands.Count);
+                Assert.AreEqual(MoveCommandType.Jump, overridePath.Commands[0].CommandType);
+                Assert.AreEqual(1, overridePath.Commands[0].FacingDirection);
+                Assert.IsTrue(overridePath.Commands[0].HasWallContactAnchor);
+                Assert.AreEqual(4.25f, overridePath.Commands[0].WallContactX);
+
+                var geometricLink = PlatformLinkData.CreateJump(1, 2, 8f, 0f, 0.5f);
+                var geometricLinks = new System.Collections.Generic.Dictionary<int, PlatformLinkData>
+                {
+                    [2] = geometricLink
+                };
+                var geometricPath = (Platform2DPath)method.Invoke(
+                    pathfinder,
+                    new object[]
+                    {
+                        cameFrom,
+                        geometricLinks,
+                        2,
+                        Vector3.zero,
+                        new Vector3(-2f, 2f, 0f)
+                    });
+
+                Assert.AreEqual(-1, geometricPath.Commands[0].FacingDirection);
+                Assert.IsFalse(geometricPath.Commands[0].HasWallContactAnchor);
+            }
+            finally
+            {
+                Object.DestroyImmediate(host);
+            }
+        }
+
+        [Test]
+        public void ReconstructPath_InitialWalkBeforeJumpUsesTraversalApproachThreshold()
+        {
+            var host = new GameObject("InitialJumpApproachThresholdTest");
+            try
+            {
+                var graph = host.AddComponent<PlatformGraphGenerator>();
+                graph.Nodes.Add(PlatformNodeData.CreateSurface(1, Vector3.zero, null));
+                graph.Nodes.Add(PlatformNodeData.CreateSurface(2, new Vector3(2f, 1f, 0f), null));
+                graph.NodeIdToIndex[1] = 0;
+                graph.NodeIdToIndex[2] = 1;
+
+                var pathfinder = host.AddComponent<Platform2DPathfinder>();
+                pathfinder.SetGraphGenerator(graph);
+                pathfinder.Config.WalkCommandArriveDistance = 0.25f;
+                pathfinder.Config.TraversalApproachArriveDistance = 0.05f;
+
+                var method = typeof(Platform2DPathfinder).GetMethod(
+                    "ReconstructPath",
+                    System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic);
+                Assert.IsNotNull(method);
+                var cameFrom = new System.Collections.Generic.Dictionary<int, int> { [2] = 1 };
+                var links = new System.Collections.Generic.Dictionary<int, PlatformLinkData>
+                {
+                    [2] = PlatformLinkData.CreateJump(1, 2, 8f, 1f, 0.5f)
+                };
+
+                var pathWithApproach = (Platform2DPath)method.Invoke(
+                    pathfinder,
+                    new object[]
+                    {
+                        cameFrom,
+                        links,
+                        2,
+                        new Vector3(-0.1f, 0f, 0f),
+                        new Vector3(2f, 1f, 0f)
+                    });
+                Assert.AreEqual(2, pathWithApproach.Commands.Count);
+                Assert.AreEqual(MoveCommandType.Walk, pathWithApproach.Commands[0].CommandType);
+                Assert.AreEqual(MoveCommandType.Jump, pathWithApproach.Commands[1].CommandType);
+
+                var pathWithinApproachThreshold = (Platform2DPath)method.Invoke(
+                    pathfinder,
+                    new object[]
+                    {
+                        cameFrom,
+                        links,
+                        2,
+                        new Vector3(-0.04f, 0f, 0f),
+                        new Vector3(2f, 1f, 0f)
+                    });
+                Assert.AreEqual(1, pathWithinApproachThreshold.Commands.Count);
+                Assert.AreEqual(MoveCommandType.Jump, pathWithinApproachThreshold.Commands[0].CommandType);
+            }
+            finally
+            {
+                Object.DestroyImmediate(host);
+            }
+        }
+
         [Test]
         public void TryRequestPathWithoutGraph_ReturnsMissingGraphReason()
         {
@@ -533,7 +691,7 @@ namespace ZeroEngine.Pathfinding2D.Tests.Editor
                 "SameColliderLayeredRoute",
                 (new Vector2(35f, -0.1f), new Vector2(40f, 0.2f)),
                 (new Vector2(65f, 3.9f), new Vector2(20f, 0.2f)),
-                (new Vector2(35.5f, 9.9f), new Vector2(27f, 0.2f)));
+                (new Vector2(36.3f, 9.9f), new Vector2(27f, 0.2f)));
 
             try
             {
@@ -736,6 +894,174 @@ namespace ZeroEngine.Pathfinding2D.Tests.Editor
             {
                 Object.DestroyImmediate(host);
                 Object.DestroyImmediate(platform.gameObject);
+            }
+        }
+
+        [Test]
+        public void GeneratePlatformGraph_DirectTilemapSpanAddsBodySafeLandingNodes()
+        {
+            var host = new GameObject("DirectTilemapGraphHost");
+            var gridObject = new GameObject("DirectTilemapGrid", typeof(Grid));
+            var tilemapObject = new GameObject("DirectTilemap", typeof(Tilemap), typeof(TilemapCollider2D));
+            tilemapObject.transform.SetParent(gridObject.transform, false);
+            var tilemap = tilemapObject.GetComponent<Tilemap>();
+            var tilemapCollider = tilemapObject.GetComponent<TilemapCollider2D>();
+            var tile = ScriptableObject.CreateInstance<Tile>();
+            tile.colliderType = Tile.ColliderType.Grid;
+
+            try
+            {
+                // Two short, separated spans ensure the regression cannot pass by relying on
+                // sampled interior nodes; each span needs its own right-side safe landing node.
+                for (int x = 0; x < 3; x++)
+                    tilemap.SetTile(new Vector3Int(x, 0, 0), tile);
+                for (int x = 6; x < 9; x++)
+                    tilemap.SetTile(new Vector3Int(x, 0, 0), tile);
+
+                tilemap.CompressBounds();
+                tilemap.RefreshAllTiles();
+                tilemapCollider.ProcessTilemapChanges();
+                Physics2D.SyncTransforms();
+
+                var graph = host.AddComponent<PlatformGraphGenerator>();
+                graph.Config.ScanCenter = new Vector2(4.5f, 1.5f);
+                graph.Config.ScanSize = new Vector2(12f, 6f);
+                graph.Config.GroundLayer = 1 << tilemapObject.layer;
+                graph.Config.OneWayPlatformLayer = 0;
+                graph.Config.ObstacleLayer = 0;
+                graph.Config.NodeSpacing = 1.5f;
+                graph.Config.EdgeInset = 0.2f;
+                graph.Config.CharacterRadius = 0.4f;
+
+                graph.GeneratePlatformGraph();
+
+                Assert.AreEqual(2, graph.SurfaceSegments.Count, graph.BuildSurfaceSegmentDebug());
+                float safeInset = graph.Config.CharacterRadius + 0.05f;
+
+                foreach (var segment in graph.SurfaceSegments)
+                {
+                    Assert.AreEqual(tilemapCollider, segment.Collider);
+
+                    var nodes = graph.Nodes
+                        .Where(node => node.SurfaceGroupId == segment.GroupId)
+                        .ToList();
+                    Assert.IsTrue(
+                        nodes.Any(node => node.NodeType == PlatformNodeType.LeftEdge &&
+                                          Mathf.Abs(node.Position.x - segment.Left) <= 0.05f),
+                        $"Missing left edge anchor for span {segment}. Nodes: {string.Join(", ", nodes)}");
+                    Assert.IsTrue(
+                        nodes.Any(node => node.NodeType == PlatformNodeType.RightEdge &&
+                                          Mathf.Abs(node.Position.x - segment.Right) <= 0.05f),
+                        $"Missing right edge anchor for span {segment}. Nodes: {string.Join(", ", nodes)}");
+
+                    float expectedRightSafeX = segment.Right - safeInset;
+                    Assert.That(expectedRightSafeX, Is.GreaterThan(segment.Left + 0.05f));
+                    Assert.That(expectedRightSafeX, Is.LessThan(segment.Right - 0.05f));
+                    Assert.IsTrue(
+                        nodes.Any(node => node.NodeType == PlatformNodeType.Surface &&
+                                          Mathf.Abs(node.Position.x - expectedRightSafeX) <= 0.05f),
+                        $"Missing body-safe landing node for span {segment}. Nodes: {string.Join(", ", nodes)}");
+                }
+            }
+            finally
+            {
+                Object.DestroyImmediate(tile);
+                Object.DestroyImmediate(host);
+                Object.DestroyImmediate(gridObject);
+            }
+        }
+
+        [Test]
+        public void GeneratePlatformGraph_DirectTilemapSingleTileAddsBodySafeLandingSurface()
+        {
+            var host = new GameObject("DirectTilemapSingleTileGraphHost");
+            var gridObject = new GameObject("DirectTilemapSingleTileGrid", typeof(Grid));
+            var tilemapObject = new GameObject(
+                "DirectTilemapSingleTile",
+                typeof(Tilemap),
+                typeof(TilemapCollider2D));
+            tilemapObject.transform.SetParent(gridObject.transform, false);
+            var tilemap = tilemapObject.GetComponent<Tilemap>();
+            var tilemapCollider = tilemapObject.GetComponent<TilemapCollider2D>();
+            var tile = ScriptableObject.CreateInstance<Tile>();
+            tile.colliderType = Tile.ColliderType.Grid;
+
+            try
+            {
+                tilemap.SetTile(Vector3Int.zero, tile);
+                tilemap.CompressBounds();
+                tilemap.RefreshAllTiles();
+                tilemapCollider.ProcessTilemapChanges();
+                Physics2D.SyncTransforms();
+
+                var graph = host.AddComponent<PlatformGraphGenerator>();
+                graph.Config.ScanCenter = new Vector2(0.5f, 1.5f);
+                graph.Config.ScanSize = new Vector2(4f, 4f);
+                graph.Config.GroundLayer = 1 << tilemapObject.layer;
+                graph.Config.OneWayPlatformLayer = 0;
+                graph.Config.ObstacleLayer = 0;
+                graph.Config.NodeSpacing = 1.5f;
+                graph.Config.EdgeInset = 0.2f;
+                graph.Config.CharacterRadius = 0.4f;
+
+                graph.GeneratePlatformGraph();
+
+                Assert.AreEqual(1, graph.SurfaceSegments.Count, graph.BuildSurfaceSegmentDebug());
+                var segment = graph.SurfaceSegments[0];
+                float safeInset = graph.Config.CharacterRadius + 0.05f;
+                float expectedSafeX = (segment.Left + segment.Right) * 0.5f;
+                Assert.That(segment.Width, Is.GreaterThan(0.9f));
+                Assert.IsTrue(
+                    graph.Nodes.Any(node => node.SurfaceGroupId == segment.GroupId &&
+                                            node.NodeType == PlatformNodeType.Surface &&
+                                            Mathf.Abs(node.Position.x - expectedSafeX) <= 0.06f),
+                    $"A 1x1 direct Tilemap span must retain a body-safe Surface node. " +
+                    $"Expected around x={expectedSafeX:F2} (inset={safeInset:F2}); Nodes: {string.Join(", ", graph.Nodes)}");
+            }
+            finally
+            {
+                Object.DestroyImmediate(tile);
+                Object.DestroyImmediate(host);
+                Object.DestroyImmediate(gridObject);
+            }
+        }
+
+        [Test]
+        public void FindNearestNodeOnPlatform_NearPhysicalEdgePrefersStandableNode()
+        {
+            var host = new GameObject("NearestStandableEdgeNodeTest");
+            var platform = CreatePlatform("NearestStandableEdgePlatform", Vector2.zero, new Vector2(8f, 0.2f));
+
+            try
+            {
+                var graph = host.AddComponent<PlatformGraphGenerator>();
+                graph.Config.ScanCenter = new Vector2(0f, 1.5f);
+                graph.Config.ScanSize = new Vector2(12f, 6f);
+                graph.Config.GroundLayer = 1 << platform.layer;
+                graph.Config.OneWayPlatformLayer = 0;
+                graph.Config.ObstacleLayer = 0;
+                graph.Config.NodeSpacing = 1.5f;
+                graph.Config.EdgeInset = 0.3f;
+                graph.Config.CharacterRadius = 0.4f;
+                graph.GeneratePlatformGraph();
+
+                var segment = graph.SurfaceSegments.Single();
+                Vector2 nearLeftPhysicalEdge = new Vector2(segment.Left + 0.01f, segment.Y);
+                var nearest = graph.FindNearestNodeOnPlatform(
+                    nearLeftPhysicalEdge,
+                    platform.GetComponent<Collider2D>(),
+                    maxDistance: 2f);
+
+                Assert.IsTrue(nearest.HasValue, graph.BuildSurfaceSegmentDebug());
+                Assert.IsFalse(
+                    nearest.Value.IsTransitionAnchor,
+                    $"A target near the physical edge must resolve to a standable node before the transition anchor. " +
+                    $"Resolved node: {nearest.Value}");
+            }
+            finally
+            {
+                Object.DestroyImmediate(host);
+                Object.DestroyImmediate(platform);
             }
         }
 
@@ -970,6 +1296,123 @@ namespace ZeroEngine.Pathfinding2D.Tests.Editor
         }
 
         [Test]
+        public void GenerateHeightTransitionNodes_UsesScopedXIntervalHits()
+        {
+            var host = new GameObject("HeightTransitionIndexLocalTest");
+            var collider = host.AddComponent<BoxCollider2D>();
+
+            try
+            {
+                var graph = host.AddComponent<PlatformGraphGenerator>();
+                graph.Config.EdgeInset = 0.2f;
+
+                var edges = new System.Collections.Generic.List<(float left, float right, float y, int surfaceGroupId)>
+                {
+                    (0f, 20f, 0f, 1),
+                    (0f, 20f, 0f, 2),
+                    (4f, 8f, 13f, 3),
+                    (4f, 8f, 13f, 4)
+                };
+                InvokeGenerateHeightTransitionNodes(graph, edges, collider);
+
+                var anchors = graph.Nodes
+                    .Where(node => node.IsTransitionAnchor)
+                    .ToList();
+                Assert.AreEqual(4, anchors.Count);
+                Assert.AreEqual(1, anchors.Count(node => node.SurfaceGroupId == 1 &&
+                                                          node.NodeType == PlatformNodeType.LeftEdge));
+                Assert.AreEqual(1, anchors.Count(node => node.SurfaceGroupId == 1 &&
+                                                          node.NodeType == PlatformNodeType.RightEdge));
+                Assert.AreEqual(1, anchors.Count(node => node.SurfaceGroupId == 2 &&
+                                                          node.NodeType == PlatformNodeType.LeftEdge));
+                Assert.AreEqual(1, anchors.Count(node => node.SurfaceGroupId == 2 &&
+                                                          node.NodeType == PlatformNodeType.RightEdge));
+                Assert.IsTrue(anchors.All(node => node.PlatformCollider == collider));
+                Assert.AreEqual(8, graph.HeightTransitionCandidateChecks);
+                Assert.AreEqual(8, graph.HeightTransitionIntervalQueryCount);
+            }
+            finally
+            {
+                Object.DestroyImmediate(host);
+            }
+        }
+
+        [Test]
+        public void GenerateGlobalHeightTransitionNodes_13mKeepsFallAndUpwardAnchorsAcrossColliders()
+        {
+            var host = new GameObject("HeightTransitionIndexGlobalTest");
+            var lowerCollider = host.AddComponent<BoxCollider2D>();
+            var upperObject = new GameObject("HeightTransitionUpperCollider");
+            var upperCollider = upperObject.AddComponent<BoxCollider2D>();
+
+            try
+            {
+                var graph = host.AddComponent<PlatformGraphGenerator>();
+                graph.Config.EdgeInset = 0.2f;
+                graph.Config.CharacterRadius = 0.4f;
+
+                AddCachedSurfaceEdge(graph, 0f, 20f, 0f, lowerCollider, 1);
+                AddCachedSurfaceEdge(graph, 4f, 16f, 13f, upperCollider, 2);
+                AddCachedSurfaceEdge(graph, 30f, 34f, 0f, lowerCollider, 3);
+                AddCachedSurfaceEdge(graph, 29f, 35f, 13f, upperCollider, 4);
+                InvokeGenerateGlobalHeightTransitionNodes(graph);
+
+                var lowerFallAnchors = graph.Nodes
+                    .Where(node => node.IsTransitionAnchor && node.SurfaceGroupId == 1)
+                    .ToList();
+                Assert.AreEqual(2, lowerFallAnchors.Count);
+                Assert.IsTrue(lowerFallAnchors.Any(node => node.NodeType == PlatformNodeType.LeftEdge &&
+                                                           Mathf.Abs(node.Position.x - 3.9f) < 0.001f));
+                Assert.IsTrue(lowerFallAnchors.Any(node => node.NodeType == PlatformNodeType.RightEdge &&
+                                                           Mathf.Abs(node.Position.x - 16.1f) < 0.001f));
+                Assert.IsTrue(lowerFallAnchors.All(node => node.PlatformCollider == lowerCollider));
+
+                var upperAnchors = graph.Nodes
+                    .Where(node => node.IsTransitionAnchor && node.SurfaceGroupId == 4)
+                    .ToList();
+                Assert.AreEqual(2, upperAnchors.Count);
+                Assert.IsTrue(upperAnchors.Any(node => node.NodeType == PlatformNodeType.LeftEdge &&
+                                                       Mathf.Abs(node.Position.x - 30f) < 0.001f));
+                Assert.IsTrue(upperAnchors.Any(node => node.NodeType == PlatformNodeType.RightEdge &&
+                                                       Mathf.Abs(node.Position.x - 34f) < 0.001f));
+                Assert.IsTrue(upperAnchors.All(node => node.PlatformCollider == upperCollider));
+            }
+            finally
+            {
+                Object.DestroyImmediate(host);
+                Object.DestroyImmediate(upperObject);
+            }
+        }
+
+        [Test]
+        public void GenerateGlobalHeightTransitionNodes_UsesCandidateHitsInsteadOfPairScan()
+        {
+            var host = new GameObject("HeightTransitionIndexScaleTest");
+            var collider = host.AddComponent<BoxCollider2D>();
+
+            try
+            {
+                var graph = host.AddComponent<PlatformGraphGenerator>();
+                graph.Config.EdgeInset = 0.2f;
+                const int edgeCount = 256;
+                for (int i = 0; i < edgeCount; i++)
+                {
+                    float left = i * 3f;
+                    AddCachedSurfaceEdge(graph, left, left + 1f, i, collider, i);
+                }
+
+                InvokeGenerateGlobalHeightTransitionNodes(graph);
+
+                Assert.AreEqual(0, graph.HeightTransitionCandidateChecks);
+                Assert.AreEqual(edgeCount * 4, graph.HeightTransitionIntervalQueryCount);
+            }
+            finally
+            {
+                Object.DestroyImmediate(host);
+            }
+        }
+
+        [Test]
         public void IsCurrentCommandComplete_WalkTargetAbovePlayer_DoesNotComplete()
         {
             var host = new GameObject("WalkCompletionHeightTest");
@@ -988,6 +1431,70 @@ namespace ZeroEngine.Pathfinding2D.Tests.Editor
                 SetCurrentPath(pathfinder, path);
 
                 Assert.IsFalse(pathfinder.IsCurrentCommandComplete(new Vector3(1f, 0f, 0f), isGrounded: true));
+            }
+            finally
+            {
+                Object.DestroyImmediate(host);
+            }
+        }
+
+        [TestCase(1, 1f, 1.2f)]
+        [TestCase(-1, -1f, -1.2f)]
+        public void IsCurrentCommandComplete_WalkTargetPassedBetweenPhysicsSteps_Completes(
+            int facingDirection,
+            float targetX,
+            float currentX)
+        {
+            var host = new GameObject("WalkTargetOvershootCompletionTest");
+
+            try
+            {
+                var pathfinder = host.AddComponent<Platform2DPathfinder>();
+                var commands = new System.Collections.Generic.List<MoveCommand>
+                {
+                    MoveCommand.Walk(new Vector3(targetX, 2f, 0f), 0.1f, facingDirection),
+                    MoveCommand.Jump(new Vector3(targetX + facingDirection, 4f, 0f), 8f, facingDirection, 0.3f, facingDirection: facingDirection)
+                };
+                var path = new Platform2DPath(
+                    new Vector3(0f, 2f, 0f),
+                    commands[1].Target,
+                    commands);
+                SetCurrentPath(pathfinder, path);
+
+                Assert.IsTrue(
+                    pathfinder.IsCurrentCommandComplete(new Vector3(currentX, 2f, 0f), isGrounded: true),
+                    "A short Walk segment crossed in one physics step must advance instead of running away forever.");
+            }
+            finally
+            {
+                Object.DestroyImmediate(host);
+            }
+        }
+
+        [Test]
+        public void IsCurrentCommandComplete_WalkBeforeTraversal_DoesNotUseGeneralArrivalTolerance()
+        {
+            var host = new GameObject("TraversalApproachCompletionTest");
+
+            try
+            {
+                var pathfinder = host.AddComponent<Platform2DPathfinder>();
+                pathfinder.Config.WalkCommandArriveDistance = 0.25f;
+                pathfinder.Config.TraversalApproachArriveDistance = 0.05f;
+                var commands = new System.Collections.Generic.List<MoveCommand>
+                {
+                    MoveCommand.Walk(new Vector3(1f, 2f, 0f), 0.1f, 1),
+                    MoveCommand.Jump(new Vector3(2f, 4f, 0f), 8f, 1f, 0.3f, facingDirection: 1)
+                };
+                var path = new Platform2DPath(
+                    new Vector3(0f, 2f, 0f),
+                    commands[1].Target,
+                    commands);
+                SetCurrentPath(pathfinder, path);
+
+                Assert.IsFalse(
+                    pathfinder.IsCurrentCommandComplete(new Vector3(0.9f, 2f, 0f), isGrounded: true),
+                    "A walk command before traversal must not complete early at the general walk tolerance.");
             }
             finally
             {
@@ -1304,6 +1811,44 @@ namespace ZeroEngine.Pathfinding2D.Tests.Editor
 
             Physics2D.SyncTransforms();
             return collider;
+        }
+
+        private static void InvokeGenerateHeightTransitionNodes(
+            PlatformGraphGenerator graph,
+            System.Collections.Generic.List<(float left, float right, float y, int surfaceGroupId)> edges,
+            Collider2D collider)
+        {
+            var method = typeof(PlatformGraphGenerator).GetMethod(
+                "GenerateHeightTransitionNodes",
+                System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic);
+            Assert.IsNotNull(method);
+            method.Invoke(graph, new object[] { edges, collider, false });
+        }
+
+        private static void AddCachedSurfaceEdge(
+            PlatformGraphGenerator graph,
+            float left,
+            float right,
+            float y,
+            Collider2D collider,
+            int surfaceGroupId)
+        {
+            var method = typeof(PlatformGraphGenerator).GetMethod(
+                "AddSurfaceEdgeCache",
+                System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic);
+            Assert.IsNotNull(method);
+            method.Invoke(
+                graph,
+                new object[] { left, right, y, collider, false, surfaceGroupId });
+        }
+
+        private static void InvokeGenerateGlobalHeightTransitionNodes(PlatformGraphGenerator graph)
+        {
+            var method = typeof(PlatformGraphGenerator).GetMethod(
+                "GenerateGlobalHeightTransitionNodes",
+                System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic);
+            Assert.IsNotNull(method);
+            method.Invoke(graph, null);
         }
 
         private static Platform2DPathfinder CreatePathfinderForSingleCollider(
