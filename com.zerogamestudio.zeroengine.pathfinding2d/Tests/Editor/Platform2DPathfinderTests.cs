@@ -898,6 +898,59 @@ namespace ZeroEngine.Pathfinding2D.Tests.Editor
         }
 
         [Test]
+        public void GenerateCompositeCollider_WithParentOffset_UsesWorldSpaceSurfaceCoordinates()
+        {
+            var parent = new GameObject("CompositeWorldSpaceParent");
+            var platform = new GameObject("CompositeWorldSpacePlatform");
+            platform.transform.SetParent(parent.transform, false);
+            parent.transform.position = new Vector3(20f, 4f, 0f);
+            platform.transform.localPosition = new Vector3(3f, 2f, 0f);
+
+            var body = platform.AddComponent<Rigidbody2D>();
+            body.bodyType = RigidbodyType2D.Static;
+            var source = platform.AddComponent<BoxCollider2D>();
+            source.size = new Vector2(10f, 0.5f);
+            var composite = platform.AddComponent<CompositeCollider2D>();
+            composite.geometryType = CompositeCollider2D.GeometryType.Polygons;
+            composite.generationType = CompositeCollider2D.GenerationType.Manual;
+            source.usedByComposite = true;
+
+            try
+            {
+                Physics2D.SyncTransforms();
+                composite.GenerateGeometry();
+
+                var graphHost = new GameObject("CompositeWorldSpaceGraphHost");
+                try
+                {
+                    var graph = graphHost.AddComponent<PlatformGraphGenerator>();
+                    var generate = typeof(PlatformGraphGenerator).GetMethod(
+                        "GenerateNodesForCompositeCollider",
+                        System.Reflection.BindingFlags.Instance |
+                        System.Reflection.BindingFlags.NonPublic);
+                    Assert.IsNotNull(generate);
+
+                    generate.Invoke(graph, new object[] { composite, false });
+
+                    Assert.That(graph.SurfaceSegments, Has.Count.EqualTo(1), graph.BuildSurfaceSegmentDebug());
+                    var segment = graph.SurfaceSegments.Single();
+                    Assert.AreEqual(composite.bounds.min.x, segment.Left, 0.05f);
+                    Assert.AreEqual(composite.bounds.max.x, segment.Right, 0.05f);
+                    Assert.AreEqual(composite.bounds.max.y, segment.Y, 0.05f);
+                    Assert.AreSame(composite, segment.Collider);
+                }
+                finally
+                {
+                    Object.DestroyImmediate(graphHost);
+                }
+            }
+            finally
+            {
+                Object.DestroyImmediate(parent);
+            }
+        }
+
+        [Test]
         public void GeneratePlatformGraph_DirectTilemapSpanAddsBodySafeLandingNodes()
         {
             var host = new GameObject("DirectTilemapGraphHost");

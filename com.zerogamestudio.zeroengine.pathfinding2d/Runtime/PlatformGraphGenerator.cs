@@ -1029,6 +1029,17 @@ namespace ZeroEngine.Pathfinding2D
 
                 if (pointCount < 2) continue;
 
+                // CompositeCollider2D.GetPath returns points in the collider's local space. The graph stores
+                // world-space nodes and segments, so parent/room offsets must be applied just like they are for
+                // PolygonCollider2D below. Without this, a nested Tilemap composite produces a graph displaced
+                // from its physical collider.
+                var transform = composite.transform;
+                for (int pointIndex = 0; pointIndex < pointCount; pointIndex++)
+                {
+                    _pathPointsCache[pointIndex] =
+                        transform.TransformPoint(_pathPointsCache[pointIndex]);
+                }
+
                 // 提取该路径的顶部边缘并生成节点
                 GenerateNodesForPath(_pathPointsCache, composite, isOneWay);
             }
