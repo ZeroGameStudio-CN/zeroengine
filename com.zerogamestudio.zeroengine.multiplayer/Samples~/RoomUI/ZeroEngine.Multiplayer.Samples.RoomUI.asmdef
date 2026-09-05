@@ -1,0 +1,27 @@
+{
+  "name": "ZeroEngine.Multiplayer.Samples.RoomUI",
+  "rootNamespace": "ZeroEngine.Multiplayer.Samples",
+  "references": [
+    "ZeroEngine.Multiplayer.Core",
+    "ZeroEngine.Multiplayer.Local",
+    "ZeroEngine.Multiplayer.FishNet",
+    "FishNet.Runtime"
+  ],
+  "includePlatforms": [],
+  "excludePlatforms": [],
+  "allowUnsafeCode": false,
+  "overrideReferences": false,
+  "precompiledReferences": [],
+  "autoReferenced": true,
+  "defineConstraints": [
+    "ZEROENGINE_MULTIPLAYER_FISHNET_SAMPLE"
+  ],
+  "versionDefines": [
+    {
+      "name": "com.firstgeargames.fishnet",
+      "expression": "[4.6.15,5.0.0)",
+      "define": "ZEROENGINE_MULTIPLAYER_FISHNET_SAMPLE"
+    }
+  ],
+  "noEngineReferences": false
+}
