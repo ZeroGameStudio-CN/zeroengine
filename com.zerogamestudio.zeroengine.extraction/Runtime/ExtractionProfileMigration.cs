@@ -24,6 +24,7 @@ namespace POB.Extraction
                 profile.ActiveRaidInventory = null;
             }
 
+            ExtractionRaidWorldItemService.ExpireWorldItems(profile, preserveCurrentRaid: true);
             profile.SchemaVersion = ExtractionProfileSaveData.CurrentSchemaVersion;
         }
 

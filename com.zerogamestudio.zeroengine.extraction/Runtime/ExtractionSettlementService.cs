@@ -257,6 +257,9 @@ namespace POB.Extraction
 
         private static void ClearActiveRaid(ExtractionProfileSaveData profile)
         {
+            // Called only after all settlement validations/moves succeed; the caller commits
+            // world expiry and settlement together, so a rejected settlement preserves drops.
+            ExtractionRaidWorldItemService.ExpireWorldItems(profile, preserveCurrentRaid: false);
             profile.activeRaidId = null;
             profile.ActiveRaid = null;
             profile.ActiveRaidElapsedSeconds = 0f;

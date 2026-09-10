@@ -39,6 +39,9 @@ namespace POB.Extraction
             }
 
             if (!ExtractionFeatureSwitch.Enabled
+                || profile.ActiveRaid?.Content?.WorldPickupItemInstanceIds == null
+                || string.IsNullOrEmpty(profile.activeRaidId)
+                || profile.activeRaidId != profile.ActiveRaid.RaidId
                 || string.IsNullOrEmpty(worldPickupId)
                 || !ExtractionItemActionPolicyService.CanDrop(definition, item))
             {
@@ -99,7 +102,8 @@ namespace POB.Extraction
             {
                 return false;
             }
-            if (entry.Container != ExtractionInventoryContainerType.WorldPickup)
+            if (entry.Container != ExtractionInventoryContainerType.WorldPickup
+                || !ExtractionRaidWorldItemService.IsCurrentRaidItem(profile, itemInstanceId))
             {
                 result = ExtractionItemLifecycleResult.LocationConflict;
                 return false;
