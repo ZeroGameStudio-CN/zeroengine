@@ -1,0 +1,14 @@
+{
+  "name": "com.zerogamestudio.zeroengine.activity",
+  "version": "1.0.0",
+  "displayName": "ZeroEngine.Activity",
+  "description": "Game-independent activity levels and budgeted work, with optional Unity world adapters.",
+  "unity": "2022.3",
+  "license": "MIT",
+  "author": { "name": "ZeroGameStudio" },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/ZeroGameStudio-CN/zeroengine.git",
+    "directory": "com.zerogamestudio.zeroengine.activity"
+  }
+}

@@ -1,0 +1,7 @@
+{
+  "name": "ZeroEngine.Activity",
+  "rootNamespace": "ZeroEngine.Activity",
+  "references": [],
+  "autoReferenced": true,
+  "noEngineReferences": true
+}
