@@ -2,6 +2,13 @@
 
 All notable changes to this package will be documented in this file.
 
+## [1.7.1] - 2026-09-11
+
+### Changed
+- Jump/fall/drop link generation uses a conservative spatial candidate envelope instead of all node pairs, while retaining original node order and exact trajectory checks. Invalid query bounds fall back to exhaustive candidates.
+- Added candidate-pair diagnostics and equivalence tests against the exhaustive generator, including original link order and trajectories.
+- Added main-thread incremental link generation with caller-owned CPU budgets and disposal/cancellation. Synchronous generation drains the same algorithm; both preserve topology and order. Diagnostic scopes exclude frame waits.
+
 ## [1.7.0] - 2026-08-24
 
 ### Added

@@ -20,6 +20,17 @@ namespace ZeroEngine.Pathfinding2D.Tests.Editor
         }
 
         [Test]
+        public void EveryMetric_HasAUsableMarkerAndSnapshotSlot()
+        {
+            foreach (PlatformPathfindingMetricKind kind in System.Enum.GetValues(typeof(PlatformPathfindingMetricKind)))
+            {
+                if (kind == PlatformPathfindingMetricKind.Count) continue;
+                using (PlatformPathfindingDiagnostics.Measure(kind)) { }
+                Assert.AreEqual(1, PlatformPathfindingDiagnostics.Capture().GetMetric(kind).SampleCount, kind.ToString());
+            }
+        }
+
+        [Test]
         public void DisabledRecording_IsNoOp()
         {
             PlatformPathfindingDiagnostics.EndCapture();

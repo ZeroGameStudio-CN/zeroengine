@@ -12,6 +12,8 @@ namespace ZeroEngine.Pathfinding2D
         FindPath,
         GraphBuild,
         JumpLinkBuild,
+        JumpLandingPreparation,
+        JumpCandidateTraversal,
         Count
     }
 
@@ -233,7 +235,9 @@ namespace ZeroEngine.Pathfinding2D
                 new ProfilerMarker("ZeroEngine.Pathfinding2D.RouteEvaluation"),
                 new ProfilerMarker("ZeroEngine.Pathfinding2D.FindPath"),
                 new ProfilerMarker("ZeroEngine.Pathfinding2D.GraphBuild"),
-                new ProfilerMarker("ZeroEngine.Pathfinding2D.JumpLinkBuild")
+                new ProfilerMarker("ZeroEngine.Pathfinding2D.JumpLinkBuild"),
+                new ProfilerMarker("ZeroEngine.Pathfinding2D.JumpLandingPreparation"),
+                new ProfilerMarker("ZeroEngine.Pathfinding2D.JumpCandidateTraversal")
             };
         }
 

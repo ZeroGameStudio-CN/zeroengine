@@ -93,47 +93,95 @@ namespace ZeroEngine.Pathfinding2D
         private readonly Dictionary<Collider2D, List<PlatformSurfaceSegment>> landingSegmentsByCollider =
             new Dictionary<Collider2D, List<PlatformSurfaceSegment>>();
         private ContactFilter2D landingClearanceContactFilter;
+        private bool buildActive;
+
+        private sealed class BuildCounters
+        {
+            public int Jump;
+            public int Fall;
+            public int Drop;
+        }
 
         /// <summary>配置</summary>
         public JumpLinkConfig Config => config;
 
+        /// <summary>Candidate Jump/Fall pairs examined by the last build, before exact trajectory checks.</summary>
+        public long CandidatePairChecks { get; private set; }
+
         /// <summary>
         /// 生成所有跳跃链接
         /// </summary>
-        public void GenerateJumpLinks()
+        public void GenerateJumpLinks() => GenerateJumpLinks(useSpatialCandidates: true);
+
+        // The exhaustive path is an internal reference oracle for topology/order regressions.
+        internal void GenerateJumpLinks(bool useSpatialCandidates)
         {
-            int jumpLinksCreated = 0;
-            int fallLinksCreated = 0;
-            int dropLinksCreated = 0;
-            using (PlatformPathfindingDiagnostics.Measure(PlatformPathfindingMetricKind.JumpLinkBuild))
+            using var measurement = PlatformPathfindingDiagnostics.Measure(PlatformPathfindingMetricKind.JumpLinkBuild);
+            using var steps = GenerateJumpLinksSteps(useSpatialCandidates, 0d);
+            while (steps.MoveNext()) { }
+        }
+
+        /// <summary>
+        /// Main-thread, CPU-budgeted link generation. The caller must keep geometry/configuration
+        /// stable, own a graph BeginBuild/CommitBuild transaction, and dispose on cancellation.
+        /// Each trajectory is indivisible; the budget is checked between candidate pairs.
+        /// </summary>
+        public IEnumerator<object> GenerateJumpLinksIncrementally(double budgetMilliseconds = 16d)
+        {
+            if (double.IsNaN(budgetMilliseconds) || double.IsInfinity(budgetMilliseconds) || budgetMilliseconds <= 0d)
+                throw new System.ArgumentOutOfRangeException(nameof(budgetMilliseconds));
+            return GenerateJumpLinksSteps(true, budgetMilliseconds);
+        }
+
+        private IEnumerator<object> GenerateJumpLinksSteps(bool useSpatialCandidates, double budgetMilliseconds)
+        {
+            if (buildActive) throw new System.InvalidOperationException("Jump link generation is already active.");
+            buildActive = true;
+            var counters = new BuildCounters();
+            long stepStarted = 0;
+            System.Func<bool> shouldYield = budgetMilliseconds > 0d
+                ? () => (System.Diagnostics.Stopwatch.GetTimestamp() - stepStarted) * 1000d /
+                        System.Diagnostics.Stopwatch.Frequency >= budgetMilliseconds
+                : null;
+            try
             {
-                try
+                using var core = GenerateJumpLinksCore(counters, useSpatialCandidates, shouldYield);
+                bool traversal = false;
+                while (true)
                 {
-                    GenerateJumpLinksCore(
-                        ref jumpLinksCreated,
-                        ref fallLinksCreated,
-                        ref dropLinksCreated);
+                    // Never hold profiler/elapsed-time scopes across a caller's frame wait.
+                    stepStarted = System.Diagnostics.Stopwatch.GetTimestamp();
+                    bool more;
+                    using (budgetMilliseconds > 0d
+                        ? PlatformPathfindingDiagnostics.Measure(PlatformPathfindingMetricKind.JumpLinkBuild)
+                        : default)
+                    {
+                        if (traversal)
+                        {
+                            using (PlatformPathfindingDiagnostics.Measure(PlatformPathfindingMetricKind.JumpCandidateTraversal))
+                                more = core.MoveNext();
+                        }
+                        else more = core.MoveNext();
+                    }
+                    if (!more) yield break;
+                    traversal = true;
+                    yield return null;
                 }
-                finally
-                {
-                    PlatformPathfindingDiagnostics.Add(
-                        PlatformPathfindingCounterKind.JumpLinksCreated,
-                        jumpLinksCreated);
-                    PlatformPathfindingDiagnostics.Add(
-                        PlatformPathfindingCounterKind.FallLinksCreated,
-                        fallLinksCreated);
-                    PlatformPathfindingDiagnostics.Add(
-                        PlatformPathfindingCounterKind.DropLinksCreated,
-                        dropLinksCreated);
-                }
+            }
+            finally
+            {
+                PlatformPathfindingDiagnostics.Add(PlatformPathfindingCounterKind.JumpLinksCreated, counters.Jump);
+                PlatformPathfindingDiagnostics.Add(PlatformPathfindingCounterKind.FallLinksCreated, counters.Fall);
+                PlatformPathfindingDiagnostics.Add(PlatformPathfindingCounterKind.DropLinksCreated, counters.Drop);
+                ResetLandingClearanceState();
+                buildActive = false;
             }
         }
 
-        private void GenerateJumpLinksCore(
-            ref int jumpLinksCreated,
-            ref int fallLinksCreated,
-            ref int dropLinksCreated)
+        private IEnumerator<object> GenerateJumpLinksCore(
+            BuildCounters counters, bool useSpatialCandidates, System.Func<bool> shouldYield)
         {
+            CandidatePairChecks = 0;
             ResetLandingClearanceState();
 
             if (graphGenerator == null)
@@ -144,7 +192,7 @@ namespace ZeroEngine.Pathfinding2D
             if (graphGenerator == null || !graphGenerator.IsGenerated)
             {
                 Debug.LogWarning("[JumpLinkCalculator] PlatformGraphGenerator 未找到或未生成");
-                return;
+                yield break;
             }
 
             var nodes = graphGenerator.Nodes;
@@ -163,11 +211,24 @@ namespace ZeroEngine.Pathfinding2D
             int fallSkippedToNotEdge = 0;
             int edgeNodeCount = 0;
             float effectiveMaxJumpHeight = GetEffectiveMaxJumpHeight();
+            SpatialGrid2D candidateGrid = null;
+            if (useSpatialCandidates)
+            {
+                // Rebuild from current mutable nodes; do not trust a potentially stale graph query cache.
+                candidateGrid = new SpatialGrid2D(graphGenerator.Config.SpatialGridCellSize);
+                candidateGrid.Build(nodes);
+            }
+            var candidateIndices = new List<int>();
+            float horizontalReach = Mathf.Max(1f,
+                Mathf.Max(config.MaxHorizontalDistance + HorizontalDistanceTolerance, config.MaxFallHorizontalDistance));
+            float downwardReach = Mathf.Max(0.5f, config.MaxFallHeight);
 
             // 预处理：为每个平台找到最近的边缘节点（用于去重）
             // 使用 Y 坐标分组（支持 Tilemap Composite Collider 场景，所有平台共享一个 Collider）
             var platformEdgeCache = BuildPlatformEdgeCacheByHeight(nodes);
-            var safeLandingNodeIds = BuildSafeLandingNodeIds(nodes);
+            HashSet<int> safeLandingNodeIds;
+            using (PlatformPathfindingDiagnostics.Measure(PlatformPathfindingMetricKind.JumpLandingPreparation))
+                safeLandingNodeIds = BuildSafeLandingNodeIds(nodes);
 
             // 统计边缘节点数量
             foreach (var node in nodes)
@@ -190,16 +251,29 @@ namespace ZeroEngine.Pathfinding2D
                 Debug.Log($"[JumpLinkCalculator] 节点统计: 总数={nodes.Count}, 边缘节点={edgeNodeCount}, 平台数(按高度)={platformEdgeCache.Count}");
 
             // 遍历所有节点（跳跃链接仅从边缘节点发起，下落链接根据节点类型区分处理）
+            yield return null; // Preparation ends here, even for the synchronous draining caller.
             for (int i = 0; i < nodes.Count; i++)
             {
+                if (shouldYield != null && shouldYield()) yield return null;
                 var fromNode = nodes[i];
+                float padding = Mathf.Max(0.001f,
+                    Mathf.Max(Mathf.Abs(fromNode.Position.x), Mathf.Abs(fromNode.Position.y)) * 0.000001f);
+                var minimum = (Vector2)fromNode.Position - new Vector2(horizontalReach + padding, downwardReach + padding);
+                var maximum = (Vector2)fromNode.Position + new Vector2(horizontalReach + padding, Mathf.Max(0f, effectiveMaxJumpHeight) + padding);
+                if (candidateGrid == null || !candidateGrid.TryFindNodeIndicesInBounds(minimum, maximum, candidateIndices))
+                {
+                    candidateIndices.Clear();
+                    for (int index = 0; index < nodes.Count; index++) candidateIndices.Add(index);
+                }
 
                 // 判断节点类型
                 bool isEdgeNode = fromNode.NodeType == PlatformNodeType.LeftEdge ||
                                   fromNode.NodeType == PlatformNodeType.RightEdge;
                 // 计算跳跃到其他平台的链接
-                for (int j = 0; j < nodes.Count; j++)
+                foreach (int j in candidateIndices)
                 {
+                    if (shouldYield != null && shouldYield()) yield return null;
+                    CandidatePairChecks++;
                     if (i == j) continue;
 
                     var toNode = nodes[j];
@@ -271,7 +345,7 @@ namespace ZeroEngine.Pathfinding2D
                             jumpAttempts++;
                             if (TryCreateJumpLink(fromNode, toNode, trajectoryBlockerLayer, out string failReason))
                             {
-                                jumpLinksCreated++;
+                                counters.Jump++;
                             }
                             else
                             {
@@ -317,7 +391,7 @@ namespace ZeroEngine.Pathfinding2D
 
                             if (TryCreateFallLink(fromNode, toNode, trajectoryBlockerLayer))
                             {
-                                fallLinksCreated++;
+                                counters.Fall++;
                             }
                         }
                     }
@@ -326,19 +400,20 @@ namespace ZeroEngine.Pathfinding2D
                 // 检查穿透单向平台下落（单向平台任意位置都可下穿，不限于边缘节点）
                 if (fromNode.IsOneWay)
                 {
-                    var dropLinks = CreateDropThroughLinks(fromNode, nodes, trajectoryBlockerLayer);
-                    dropLinksCreated += dropLinks;
+                    using var drops = CreateDropThroughLinks(fromNode, nodes, candidateIndices,
+                        trajectoryBlockerLayer, counters, shouldYield);
+                    while (drops.MoveNext()) yield return null;
                 }
             }
 
             if (PathfindingLogSettings.EnableGenerationSummary)
             {
-                Debug.Log($"[JumpLinkCalculator] 链接生成完成: 跳跃 {jumpLinksCreated}, 下落 {fallLinksCreated}, 穿透 {dropLinksCreated}");
+                Debug.Log($"[JumpLinkCalculator] 链接生成完成: 跳跃 {counters.Jump}, 下落 {counters.Fall}, 穿透 {counters.Drop}");
             }
 
             if (PathfindingLogSettings.EnableDetailedDiagnostics)
             {
-                Debug.Log($"[JumpLinkCalculator] 跳跃诊断: 尝试={jumpAttempts}, 成功={jumpLinksCreated}, " +
+                Debug.Log($"[JumpLinkCalculator] 跳跃诊断: 尝试={jumpAttempts}, 成功={counters.Jump}, " +
                           $"超距离={jumpFailedDistance}, 超高度={jumpFailedHeight}, 不可达={jumpFailedReachable}, 轨迹阻挡={jumpFailedTrajectory}");
                 Debug.Log($"[JumpLinkCalculator] 过滤诊断: 起点非边缘={jumpSkippedNotEdge}, 终点非边缘(跳)={jumpSkippedToNotEdge}, 终点非边缘(落)={fallSkippedToNotEdge}");
                 Debug.Log($"[JumpLinkCalculator] 配置: MaxJumpHeight={config.MaxJumpHeight}, EffectiveMaxJumpHeight={effectiveMaxJumpHeight}, MaxHorizontalDistance={config.MaxHorizontalDistance}, " +
@@ -1375,15 +1450,17 @@ namespace ZeroEngine.Pathfinding2D
         /// <summary>
         /// 创建穿透单向平台的下落链接
         /// </summary>
-        private int CreateDropThroughLinks(PlatformNodeData fromNode, List<PlatformNodeData> allNodes, LayerMask obstacleLayer)
+        private IEnumerator<object> CreateDropThroughLinks(PlatformNodeData fromNode, List<PlatformNodeData> allNodes,
+            List<int> candidateIndices, LayerMask obstacleLayer, BuildCounters counters, System.Func<bool> shouldYield)
         {
-            int created = 0;
 
             // 向下检测可以穿透到达的平台
             Vector2 startPos = fromNode.Position;
 
-            foreach (var toNode in allNodes)
+            foreach (int index in candidateIndices)
             {
+                if (shouldYield != null && shouldYield()) yield return null;
+                var toNode = allNodes[index];
                 // 跳过同一连续平台段。
                 float heightDiff = Mathf.Abs(toNode.Position.y - fromNode.Position.y);
                 if (fromNode.SurfaceGroupId >= 0 &&
@@ -1422,10 +1499,8 @@ namespace ZeroEngine.Pathfinding2D
                 // 创建穿透下落链接
                 var link = PlatformLinkData.CreateDropThrough(fromNode.NodeId, toNode.NodeId, result.FlightTime);
                 graphGenerator.Links.Add(link);
-                created++;
+                counters.Drop++;
             }
-
-            return created;
         }
 
         /// <summary>

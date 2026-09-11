@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using System.Linq;
 using NUnit.Framework;
 using UnityEngine;
@@ -10,6 +11,149 @@ namespace ZeroEngine.Pathfinding2D.Tests.Editor
         private const int GroundLayer = 8;
         private const int OneWayLayer = 9;
         private const int ObstacleLayer = 10;
+
+        [TestCase(0f)]
+        [TestCase(-100.05f)]
+        [TestCase(123.456f)]
+        public void SpatialCandidates_PreserveExhaustiveLinkOrderAndTrajectories(float offset)
+        {
+            var host = new GameObject("SpatialCandidateEquivalence");
+            var platforms = new[]
+            {
+                CreatePlatform("CandidateFloor", GroundLayer, new Vector2(offset, 0), new Vector2(3, 0.2f)),
+                CreatePlatform("CandidateRise", GroundLayer, new Vector2(offset + 5, 3), new Vector2(3, 0.2f)),
+                CreatePlatform("CandidateDrop", OneWayLayer, new Vector2(offset, 6), new Vector2(3, 0.2f)),
+                CreatePlatform("CandidateDistant", GroundLayer, new Vector2(offset + 100, 0), new Vector2(3, 0.2f))
+            };
+            try
+            {
+                var graph = CreateGraph(host, 1 << GroundLayer, 1 << OneWayLayer);
+                graph.Config.ScanCenter = new Vector2(offset + 50, 3);
+                graph.Config.ScanSize = new Vector2(120, 30);
+                graph.GeneratePlatformGraph();
+                var calculator = host.AddComponent<JumpLinkCalculator>();
+                calculator.Config.MaxJumpVelocity = 20;
+                calculator.Config.GravityScale = 3;
+                calculator.Config.MaxJumpHeight = 8;
+                calculator.Config.MaxHorizontalDistance = 10;
+                calculator.Config.MaxFallHorizontalDistance = 6;
+                calculator.Config.MaxFallHeight = 20;
+                calculator.GenerateJumpLinks();
+                long optimizedPairs = calculator.CandidatePairChecks;
+                Assert.IsTrue(graph.Links.Any(link => link.LinkType != PlatformLinkType.Walk));
+                var optimized = graph.Links.Select(link => JsonUtility.ToJson(link)).ToArray();
+                calculator.ClearJumpLinks();
+                calculator.GenerateJumpLinks(useSpatialCandidates: false);
+                CollectionAssert.AreEqual(optimized, graph.Links.Select(link => JsonUtility.ToJson(link)).ToArray());
+                Assert.Less(optimizedPairs, calculator.CandidatePairChecks);
+                calculator.ClearJumpLinks();
+                graph.BeginBuild();
+                int slices = 0;
+                using (var steps = calculator.GenerateJumpLinksIncrementally(0.001d))
+                {
+                    while (steps.MoveNext())
+                    {
+                        Assert.IsTrue(graph.IsBuildInProgress);
+                        Assert.Less(++slices, 100000, "Incremental generation must make forward progress.");
+                    }
+                }
+                Assert.Greater(slices, 1);
+                graph.CommitBuild();
+                CollectionAssert.AreEqual(optimized, graph.Links.Select(link => JsonUtility.ToJson(link)).ToArray());
+                Assert.AreEqual(optimizedPairs, calculator.CandidatePairChecks);
+            }
+            finally
+            {
+                Object.DestroyImmediate(host);
+                foreach (var platform in platforms) Object.DestroyImmediate(platform);
+            }
+        }
+
+        [Test]
+        public void IncrementalBuild_DisposeReleasesCalculatorWithoutPublishingPartialSnapshot()
+        {
+            var host = new GameObject("IncrementalCancellationContract");
+            var platform = CreatePlatform("IncrementalFloor", GroundLayer, Vector2.zero, new Vector2(8, 0.2f));
+            try
+            {
+                var graph = CreateGraph(host, 1 << GroundLayer, 0);
+                graph.GeneratePlatformGraph();
+                var before = graph.GraphRevision;
+                var calculator = host.AddComponent<JumpLinkCalculator>();
+                graph.BeginBuild();
+                using (var steps = calculator.GenerateJumpLinksIncrementally(0.001d))
+                {
+                    Assert.IsTrue(steps.MoveNext());
+                    Assert.Throws<System.InvalidOperationException>(() => calculator.GenerateJumpLinks());
+                    Assert.AreEqual(before, graph.GraphRevision);
+                }
+                graph.CancelBuild();
+                Assert.AreEqual(before, graph.GraphRevision);
+                Assert.DoesNotThrow(() => calculator.GenerateJumpLinks());
+                Assert.Throws<System.ArgumentOutOfRangeException>(() => calculator.GenerateJumpLinksIncrementally(0));
+                Assert.Throws<System.ArgumentOutOfRangeException>(() => calculator.GenerateJumpLinksIncrementally(double.NaN));
+            }
+            finally
+            {
+                Object.DestroyImmediate(host);
+                Object.DestroyImmediate(platform);
+            }
+        }
+
+        [Test]
+        public void SpatialCandidates_SparseLargeGraphAvoidsAllPairs()
+        {
+            var host = new GameObject("SparseCandidateContract");
+            try
+            {
+                var graph = CreateGraph(host, 0, 0);
+                graph.GeneratePlatformGraph();
+                const int count = 2000;
+                for (int i = 0; i < count; i++)
+                    graph.Nodes.Add(PlatformNodeData.CreateSurface(i, new Vector3(i * 30f, 0, 0), null));
+                var calculator = host.AddComponent<JumpLinkCalculator>();
+                calculator.Config.MaxHorizontalDistance = 5;
+                calculator.Config.MaxFallHorizontalDistance = 5;
+                calculator.GenerateJumpLinks();
+                Assert.LessOrEqual(calculator.CandidatePairChecks, count * 2L,
+                    "A sparse graph must not regress to N squared candidate visits.");
+                Assert.IsEmpty(graph.Links);
+            }
+            finally { Object.DestroyImmediate(host); }
+        }
+
+        [TestCase(-4.25f, 3.75f)]
+        [TestCase(-1000000f, 1000000f)]
+        public void SpatialBounds_MatchExhaustiveInclusiveQueryInOriginalOrder(float minimum, float maximum)
+        {
+            var nodes = new List<PlatformNodeData>();
+            for (int i = 0; i < 500; i++)
+                nodes.Add(PlatformNodeData.CreateSurface(500 - i,
+                    new Vector3((i * 17 % 101) * 0.25f - 10, (i * 7 % 41) * 0.25f - 5, 0), null));
+            var grid = new SpatialGrid2D(3);
+            grid.Build(nodes);
+            var indices = new List<int>();
+            Assert.IsTrue(grid.TryFindNodeIndicesInBounds(new Vector2(minimum, -3), new Vector2(maximum, 2), indices));
+            CollectionAssert.AreEqual(Enumerable.Range(0, nodes.Count).Where(i =>
+                nodes[i].Position.x >= minimum && nodes[i].Position.x <= maximum &&
+                nodes[i].Position.y >= -3 && nodes[i].Position.y <= 2).ToArray(), indices);
+            grid.Clear();
+            Assert.IsFalse(grid.TryFindNodeIndicesInBounds(Vector2.zero, Vector2.one, indices));
+            Assert.IsEmpty(indices);
+        }
+
+        [TestCase(50331644f, 3f)]
+        [TestCase(-33554428f, 3f)]
+        [TestCase(12.4f, 3.1f)]
+        public void SpatialPointBounds_UseTheSameRoundedCellAsInsertion(float position, float cellSize)
+        {
+            var nodes = new List<PlatformNodeData> { PlatformNodeData.CreateSurface(7, new Vector3(position, 0, 0), null) };
+            var grid = new SpatialGrid2D(cellSize);
+            grid.Build(nodes);
+            var results = new List<int>();
+            Assert.IsTrue(grid.TryFindNodeIndicesInBounds(new Vector2(position, 0), new Vector2(position, 0), results));
+            CollectionAssert.AreEqual(new[] { 0 }, results);
+        }
 
         [Test]
         public void GenerateJumpLinks_GroundBetweenEndpoints_BlocksDirectJump()
