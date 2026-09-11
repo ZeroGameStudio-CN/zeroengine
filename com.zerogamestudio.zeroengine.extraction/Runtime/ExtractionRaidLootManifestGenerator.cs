@@ -49,11 +49,27 @@ namespace POB.Extraction
             };
 
             var spawns = ResolveProfileSpawns(config, profile);
+            bool skippedCurrentDifficultyCandidate = false;
             foreach (var spawn in spawns)
             {
                 if (!ShouldSpawn(spawn, raidSeed)) continue;
-                if (!TrySelectContainer(config, spawn, raidSeed, out var definition))
-                    return Fail(ExtractionRaidLootManifestFailure.MissingContentConfiguration, out failure);
+                // A point may intentionally have no candidates for the
+                // current difficulty. It simply does not spawn at this
+                // difficulty; malformed references are rejected by the
+                // authoring validator before runtime generation.
+                if (!TrySelectContainer(config, spawn, raidSeed, map.ThreatLevel, out var definition))
+                {
+                    if (HasDifficultySpecificCandidate(spawn)
+                        && !HasConfiguredCandidateForDifficulty(spawn, map.ThreatLevel))
+                    {
+                        skippedCurrentDifficultyCandidate = true;
+                        continue;
+                    }
+
+                    return Fail(
+                        ExtractionRaidLootManifestFailure.MissingContentConfiguration,
+                        out failure);
+                }
 
                 int maximum = Math.Min(definition.Capacity, definition.MaximumContentCount);
                 int target = RollInclusive(
@@ -77,7 +93,7 @@ namespace POB.Extraction
                 result.Containers.Add(manifestContainer);
             }
 
-            if (result.Containers.Count == 0)
+            if (result.Containers.Count == 0 && !skippedCurrentDifficultyCandidate)
                 return Fail(ExtractionRaidLootManifestFailure.NoSpawnedContainers, out failure);
 
             if (!TryAssignGuarantees(config, tier, profile, result, out failure))
@@ -361,12 +377,27 @@ namespace POB.Extraction
             ExtractionPlayableConfig config,
             ExtractionContainerSpawnDefinition spawn,
             int raidSeed,
+            int difficultyLevel,
             out ExtractionContainerDefinition definition)
         {
             definition = null;
+            bool hasDifficultySpecificCandidate = HasDifficultySpecificCandidate(spawn);
+
             long totalWeight = 0;
             foreach (var candidate in spawn.Candidates)
-                if (candidate != null && candidate.Weight > 0) totalWeight += candidate.Weight;
+            {
+                if (!IsCandidateEligible(
+                        config,
+                        spawn,
+                        candidate,
+                        difficultyLevel,
+                        hasDifficultySpecificCandidate,
+                        out _))
+                {
+                    continue;
+                }
+                totalWeight += candidate.Weight;
+            }
             if (totalWeight <= 0) return false;
 
             long target = unchecked((uint)ExtractionStableHash.ComputeInt32(
@@ -376,13 +407,68 @@ namespace POB.Extraction
             long cursor = 0;
             foreach (var candidate in spawn.Candidates)
             {
-                if (candidate == null || candidate.Weight <= 0) continue;
+                if (!IsCandidateEligible(
+                        config,
+                        spawn,
+                        candidate,
+                        difficultyLevel,
+                        hasDifficultySpecificCandidate,
+                        out _))
+                {
+                    continue;
+                }
                 cursor += candidate.Weight;
                 if (target >= cursor) continue;
                 return TryGetContainer(config, candidate.ContainerTypeId, out definition);
             }
 
             return false;
+        }
+
+        private static bool HasDifficultySpecificCandidate(
+            ExtractionContainerSpawnDefinition spawn)
+        {
+            if (spawn?.Candidates == null) return false;
+            foreach (var candidate in spawn.Candidates)
+            {
+                if (candidate != null && candidate.DifficultyLevel > 0)
+                    return true;
+            }
+
+            return false;
+        }
+
+        private static bool HasConfiguredCandidateForDifficulty(
+            ExtractionContainerSpawnDefinition spawn,
+            int difficultyLevel)
+        {
+            if (spawn?.Candidates == null) return false;
+            foreach (var candidate in spawn.Candidates)
+            {
+                if (candidate != null && candidate.DifficultyLevel == difficultyLevel)
+                    return true;
+            }
+
+            return false;
+        }
+
+        private static bool IsCandidateEligible(
+            ExtractionPlayableConfig config,
+            ExtractionContainerSpawnDefinition spawn,
+            ExtractionWeightedContainerCandidate candidate,
+            int difficultyLevel,
+            bool hasDifficultySpecificCandidate,
+            out ExtractionContainerDefinition definition)
+        {
+            definition = null;
+            if (candidate == null || !candidate.IsValid) return false;
+            if (hasDifficultySpecificCandidate && candidate.DifficultyLevel != difficultyLevel)
+                return false;
+            if (!TryGetContainer(config, candidate.ContainerTypeId, out definition))
+                return false;
+            if (spawn.PointKind == ExtractionLootPointKind.Special && !definition.IsSpecial)
+                return false;
+            return true;
         }
 
         private static int RollInclusive(int minimum, int maximum, string domain, int seed, string identity)

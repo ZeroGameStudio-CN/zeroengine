@@ -173,6 +173,57 @@ namespace ZeroEngine.Pathfinding2D
             }
         }
 
+        /// <summary>Conservative rectangular broadphase, returned in original node order.</summary>
+        internal bool TryFindNodeIndicesInBounds(Vector2 minimum, Vector2 maximum, List<int> results)
+        {
+            results.Clear();
+            if (_nodes == null || !Finite(CellSize) || CellSize <= 0f
+                || !Finite(minimum.x) || !Finite(minimum.y) || !Finite(maximum.x) || !Finite(maximum.y)
+                || minimum.x > maximum.x || minimum.y > maximum.y) return false;
+
+            double left = System.Math.Floor(minimum.x / CellSize);
+            double right = System.Math.Floor(maximum.x / CellSize);
+            double bottom = System.Math.Floor(minimum.y / CellSize);
+            double top = System.Math.Floor(maximum.y / CellSize);
+            if (left < int.MinValue || right > int.MaxValue || bottom < int.MinValue || top > int.MaxValue)
+                return false;
+
+            // Decode the actual insertion keys. Calling Math.Floor via double can retain
+            // extra precision in Mono, unlike GetCellKey's Mathf.FloorToInt(float) boundary.
+            long minimumKey = GetCellKey(minimum);
+            long maximumKey = GetCellKey(maximum);
+            left = (int)(minimumKey >> 32);
+            right = (int)(maximumKey >> 32);
+            bottom = unchecked((int)minimumKey);
+            top = unchecked((int)maximumKey);
+            if (left > right || bottom > top) return false;
+
+            // A huge sparse rectangle must not enumerate billions of empty cells.
+            if ((right - left + 1d) * (top - bottom + 1d) > System.Math.Max(1, _nodes.Count) * 4d)
+            {
+                for (int i = 0; i < _nodes.Count; i++)
+                    if (Inside(_nodes[i].Position, minimum, maximum)) results.Add(i);
+                return true;
+            }
+
+            for (long x = (long)left; x <= (long)right; x++)
+            {
+                for (long y = (long)bottom; y <= (long)top; y++)
+                {
+                    if (!_grid.TryGetValue(PackKey((int)x, (int)y), out var indices)) continue;
+                    foreach (int index in indices)
+                        if (Inside(_nodes[index].Position, minimum, maximum)) results.Add(index);
+                }
+            }
+            results.Sort(); // Preserve link IDs, tie-breaking and trajectory evaluation order.
+            return true;
+        }
+
+        private static bool Inside(Vector3 position, Vector2 minimum, Vector2 maximum) =>
+            position.x >= minimum.x && position.x <= maximum.x && position.y >= minimum.y && position.y <= maximum.y;
+
+        private static bool Finite(float value) => !float.IsNaN(value) && !float.IsInfinity(value);
+
         /// <summary>
         /// 获取指定位置所在格子的节点索引列表
         /// </summary>

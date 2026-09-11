@@ -4,7 +4,7 @@
 
 ## 版本
 
-- **当前版本**: 1.3.0
+- **当前版本**: 1.7.1
 - **依赖**: ZeroEngine.Core >= 1.0.0
 
 ## 概述
@@ -15,6 +15,8 @@
 
 - **自动平台检测**：扫描 Collider2D 生成平台节点
 - **智能跳跃链接**：基于抛物线物理计算跳跃可达性
+- **连边候选裁剪** (v1.7.1+)：按跳跃、下落与单向平台下穿范围查询保守候选，再按原节点顺序运行相同轨迹判定；`CandidatePairChecks` 可观测实际候选工作量，不改变移动范围或跳跃规则。
+- **预算分帧连边** (v1.7.1+)：`GenerateJumpLinksIncrementally(budgetMilliseconds)` 返回主线程迭代器；调用者在每次 `MoveNext()` 后等待下一帧，保持几何体和配置不变，并持有 `BeginBuild` 事务，完成后 `CommitBuild`，取消时先释放迭代器再 `CancelBuild`。预算在候选之间检查，单条轨迹不可中断；计时只累计 CPU 步骤，不计帧等待。同步接口保持原行为。
 - **A* 寻路**：内置 A* 路径搜索算法
 - **MoveCommand 系统**：将路径转换为具体移动指令
 - **编辑器可视化**：在 Scene 视图实时预览节点和链接
@@ -22,6 +24,10 @@
 - **空间索引加速** (v1.1.0+)：使用 SpatialGrid2D 将节点查询从 O(n) 优化到 O(k)
 - **同平台快速路径** (v1.1.0+)：起终点在同一平台时跳过 A*，直接生成 Walk 指令
 - **路径验证与回退** (v1.1.0+)：检测路径过期/目标移动/偏离，A* 失败时返回部分路径
+- **不可变搜索快照** (v1.7.0+)：一次事务只发布一个图修订，异步结果可可靠拒绝旧图回调
+- **可替换搜索后端** (v1.7.0+)：默认 managed 二叉堆实现，无任何商业插件依赖；消费者可在自己的叶子程序集注入后端
+- **身体安全落点与转换锚点** (v1.7.0+)：每个平台段（包括 direct Tilemap span）生成 body-safe landing 节点；physical transition anchor 独立用于 Fall/DropDown 路由
+- **高度转换索引** (v1.7.0+)：按实际 X 区间查找高度转换，不在图生成阶段用固定 8m 高差截断，最终跳跃/下落限制仍由 JumpLinkConfig 执行
 
 ## 核心组件
 
@@ -33,6 +39,12 @@
 // 生成平台图
 platformGraphGenerator.GeneratePlatformGraph();
 
+// 需要在基础图之后继续增加 Jump/Fall/DropThrough 时，用一次事务原子发布
+platformGraphGenerator.BeginBuild();
+platformGraphGenerator.GeneratePlatformGraph();
+jumpLinkCalculator.GenerateJumpLinks();
+var snapshot = platformGraphGenerator.CommitBuild();
+
 // 查找最近节点（使用空间索引加速）(v1.1.0+)
 var node = platformGraphGenerator.FindNearestNode(position, maxDistance);
 
@@ -40,6 +52,8 @@ var node = platformGraphGenerator.FindNearestNode(position, maxDistance);
 var results = new List<PlatformNodeData>();
 platformGraphGenerator.FindNodesInRangeNonAlloc(position, range, results);
 ```
+
+节点生成会为每个平台段（包括直接扫描得到的 Tilemap span）补充 body-safe landing Surface 节点，并将 physical transition anchor 与可站立的跳跃起点/落点分离。高度转换使用 X 区间索引；图生成不以固定 8m 高差过滤，具体可达性由 `JumpLinkConfig` 的跳跃/下落限制决定。
 
 ### SpatialGrid2D (v1.1.0+)
 
@@ -68,6 +82,8 @@ jumpLinkCalculator.GenerateJumpLinks();
 
 **v1.1.0 更新**：表面节点也支持垂直下落链接生成（水平距离 <= 1.5 单位）。
 
+**v1.7.0 更新**：`MaxHorizontalDistance` 按真实图节点的水平距离执行上限，比较仅额外允许 0.05m 容差。`SupportsMidairHorizontalSteering=false` 时，会保守拒绝在越过目标平台顶面前撞到其侧面的跳跃链接。
+
 ### Platform2DPathfinder
 
 执行寻路请求，生成 MoveCommand 序列。
@@ -85,6 +101,12 @@ var result = pathfinder.ValidatePath(currentPos, targetPos);
 
 // 自动重新寻路 (v1.1.0+)
 bool repathed = pathfinder.TryAutoRevalidate(currentPos, targetPos);
+
+// 新的非写入式查询不会改变 CurrentPath；由角色在安全边界显式提交
+var submission = pathfinder.SubmitPathQuery(
+    new PlatformPathRequest(start, end, forceRequest: true));
+if (submission.Kind == PlatformSearchSubmissionKind.Immediate)
+    pathfinder.TryCommitPathQueryResult(submission.ImmediateResult);
 ```
 
 ### MoveCommand
@@ -153,10 +175,11 @@ public override void OnPhysicsUpdate()
 | 参数 | 说明 | 默认值 |
 |------|------|--------|
 | MaxJumpVelocity | 最大跳跃速度 | 14 |
-| MaxHorizontalDistance | 最大水平跳跃距离 | 6m |
+| MaxHorizontalDistance | 实际图节点水平距离上限（仅额外允许 0.05m 比较容差） | 6m |
 | MaxJumpHeight | 最大跳跃高度 | 4m |
 | GravityScale | 重力缩放 | 3 |
 | SurfaceNodeVerticalFallMaxHorizontal | 表面节点垂直下落最大水平距离 (v1.1.0+) | 1.5m |
+| SupportsMidairHorizontalSteering | 执行器不能持续修正水平速度时，拒绝会先撞到目标平台侧面的跳跃链接 | true |
 
 ### PathfinderConfig (v1.1.0+)
 
@@ -165,6 +188,8 @@ public override void OnPhysicsUpdate()
 | PathRequestInterval | 路径请求间隔 | 0.3s |
 | PathExpireTime | 路径过期时间 | 2s |
 | ArriveDistance | 到达判定距离 | 0.5m |
+| WalkCommandArriveDistance | 普通 Walk 指令到达判定距离 | 0.25m |
+| TraversalApproachArriveDistance | 衔接 Jump/Fall/DropDown 前的精确行走接近距离（与 WalkCommandArriveDistance 取更小值） | 0.05m |
 | TargetMoveThreshold | 目标移动重寻路阈值 | 2m |
 | PathDeviationThreshold | 偏离路径重寻路阈值 | 3m |
 | AutoValidatePath | 启用自动路径验证 | true |

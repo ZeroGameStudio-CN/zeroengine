@@ -57,6 +57,12 @@ namespace ZeroEngine.Pathfinding2D
         /// </summary>
         public int FacingDirection;
 
+        /// <summary>跳墙指令是否携带显式墙面接触锚点。</summary>
+        public bool HasWallContactAnchor;
+
+        /// <summary>墙面接触锚点的世界 X 坐标。</summary>
+        public float WallContactX;
+
         /// <summary>
         /// 创建行走指令
         /// </summary>
@@ -87,6 +93,27 @@ namespace ZeroEngine.Pathfinding2D
         /// <param name="facingDirection">目标朝向：-1=左, 0=保持, 1=右</param>
         public static MoveCommand Jump(Vector3 target, float velocityY, float velocityX = 0f, float duration = 0f, Vector2[] trajectory = null, int facingDirection = 0)
         {
+            return Jump(
+                target,
+                velocityY,
+                velocityX,
+                duration,
+                trajectory,
+                facingDirection,
+                false,
+                0f);
+        }
+
+        public static MoveCommand Jump(
+            Vector3 target,
+            float velocityY,
+            float velocityX,
+            float duration,
+            Vector2[] trajectory,
+            int facingDirection,
+            bool hasWallContactAnchor,
+            float wallContactX)
+        {
             return new MoveCommand
             {
                 CommandType = MoveCommandType.Jump,
@@ -95,7 +122,9 @@ namespace ZeroEngine.Pathfinding2D
                 JumpVelocityX = velocityX,
                 EstimatedDuration = duration,
                 JumpTrajectory = trajectory,
-                FacingDirection = facingDirection
+                FacingDirection = facingDirection,
+                HasWallContactAnchor = hasWallContactAnchor,
+                WallContactX = wallContactX
             };
         }
 

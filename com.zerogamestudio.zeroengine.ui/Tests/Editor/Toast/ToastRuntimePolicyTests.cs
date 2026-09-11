@@ -168,19 +168,22 @@ namespace ZeroEngine.UI.Tests.Editor.Toast
             manager.Show(ToastRequest.Text("two"));
             manager.Show(ToastRequest.Text("three"));
 
-            Tick(manager, startTime + 0.49f);
+            // Advance from each float deadline: (start + .5f) + .5f need not equal start + 1f.
+            float nextShowTime = startTime + settings.ShowInterval;
+            Tick(manager, nextShowTime - 0.01f);
             Assert.AreEqual(1, manager.ActiveCount);
             Assert.AreEqual(2, manager.QueuedCount);
 
-            Tick(manager, startTime + 0.5f);
+            Tick(manager, nextShowTime);
             Assert.AreEqual(2, manager.ActiveCount);
             Assert.AreEqual(1, manager.QueuedCount);
 
-            Tick(manager, startTime + 0.99f);
+            nextShowTime += settings.ShowInterval;
+            Tick(manager, nextShowTime - 0.01f);
             Assert.AreEqual(2, manager.ActiveCount);
             Assert.AreEqual(1, manager.QueuedCount);
 
-            Tick(manager, startTime + 1f);
+            Tick(manager, nextShowTime);
             Assert.AreEqual(3, manager.ActiveCount);
             Assert.AreEqual(0, manager.QueuedCount);
             Assert.AreEqual(3, presenter.ShowCount);
@@ -203,21 +206,24 @@ namespace ZeroEngine.UI.Tests.Editor.Toast
             manager.Show(ToastRequest.Text("six"));
             var startTime = Time.unscaledTime;
 
-            Tick(manager, startTime + 0.5f);
-            Tick(manager, startTime + 1f);
-            Tick(manager, startTime + 1.5f);
-            Tick(manager, startTime + 2f);
+            float nextShowTime = startTime;
+            for (int i = 0; i < 4; i++)
+            {
+                nextShowTime += settings.ShowInterval;
+                Tick(manager, nextShowTime);
+            }
 
             Assert.AreEqual(5, manager.ActiveCount);
             Assert.AreEqual(1, manager.QueuedCount);
             Assert.IsFalse(first.IsDismissed);
 
             first.Dismiss();
-            Tick(manager, startTime + 2.49f);
+            nextShowTime += settings.ShowInterval;
+            Tick(manager, nextShowTime - 0.01f);
             Assert.AreEqual(4, manager.ActiveCount);
             Assert.AreEqual(1, manager.QueuedCount);
 
-            Tick(manager, startTime + 2.51f);
+            Tick(manager, nextShowTime);
             Assert.AreEqual(5, manager.ActiveCount);
             Assert.AreEqual(0, manager.QueuedCount);
             Assert.IsTrue(presenter.WasTextShown("six"));

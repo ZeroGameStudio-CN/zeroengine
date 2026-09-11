@@ -2,6 +2,32 @@
 
 All notable changes to this package will be documented in this file.
 
+## [1.7.1] - 2026-09-11
+
+### Changed
+- Jump/fall/drop link generation uses a conservative spatial candidate envelope instead of all node pairs, while retaining original node order and exact trajectory checks. Invalid query bounds fall back to exhaustive candidates.
+- Added candidate-pair diagnostics and equivalence tests against the exhaustive generator, including original link order and trajectories.
+- Added main-thread incremental link generation with caller-owned CPU budgets and disposal/cancellation. Synchronous generation drains the same algorithm; both preserve topology and order. Diagnostic scopes exclude frame waits.
+
+## [1.7.0] - 2026-08-24
+
+### Added
+- Added atomic `BeginBuild` / `CommitBuild` search snapshots with stable graph revisions and snapshot-local `LinkId` bindings.
+- Added the backend-neutral `IPlatformPathSearchBackend` contract, cancellable handles, multi-target requests, and immutable search results.
+- Added the deterministic binary-heap `ManagedPlatformPathSearchBackend` as the package default and reference oracle.
+- Added non-mutating semantic path submission and revision-checked commit APIs on `Platform2DPathfinder`.
+
+### Fixed
+- Jump-link generation now enforces `MaxHorizontalDistance` against the actual graph-node horizontal distance, with only a fixed 0.05 m comparison tolerance.
+- Added body-safe landing nodes for every platform span, including direct Tilemap spans; physical transition anchors remain separate for Fall/DropDown routing and are not used as Jump origins or landings.
+- When `SupportsMidairHorizontalSteering` is `false`, jump trajectories that would hit the target platform side before clearing its top are conservatively rejected.
+- Walk completion immediately before Jump, Fall, or DropDown now uses the tighter `TraversalApproachArriveDistance` for precise traversal approach.
+- Height-transition generation now uses an X-interval index and no longer applies the old hard-coded 8 m height-difference cutoff; `MaxJumpHeight` and `MaxFallHeight` remain the link-generation limits.
+
+### Changed
+- Removed the unused commercial A* package version define; ZeroEngine remains independent of vendor assemblies and source.
+- Added default-off backend-neutral diagnostics for search, route evaluation, graph generation, and jump-link generation.
+
 ## [1.6.17] - 2026-05-08
 
 ### Added

@@ -125,6 +125,44 @@ namespace ZeroEngine.Pathfinding2D.Tests.Editor
         }
 
         [Test]
+        public void ValidateTrajectory_SameColliderHorizontalUndersideGrazing_BlocksTrajectory()
+        {
+            const int platformLayer = 8;
+            var platform = CreateMultiPathPolygonPlatform(
+                "SameColliderHorizontalUnderside",
+                platformLayer,
+                (new Vector2(-3f, 0f), new Vector2(2f, 0.2f)),
+                (new Vector2(2f, 1.5f), new Vector2(4f, 0.4f)),
+                (new Vector2(7f, 0f), new Vector2(2f, 0.2f)));
+
+            try
+            {
+                var trajectory = new[]
+                {
+                    new Vector2(-3f, 0.35f),
+                    new Vector2(2f, 1.05f),
+                    new Vector2(7f, 0.35f)
+                };
+
+                bool valid = JumpMovementHandler.ValidateTrajectory(
+                    trajectory,
+                    1 << platformLayer,
+                    colliderRadius: 0.3f,
+                    fromPlatform: platform,
+                    toPlatform: platform,
+                    ignoreInitialDistance: 0.45f);
+
+                Assert.IsFalse(
+                    valid,
+                    "A same-collider horizontal underside graze must block when the trajectory center stays outside the collider.");
+            }
+            finally
+            {
+                Object.DestroyImmediate(platform.gameObject);
+            }
+        }
+
+        [Test]
         public void ValidateTrajectory_ThirdPartySideGrazing_BlocksTrajectory()
         {
             const int platformLayer = 8;
