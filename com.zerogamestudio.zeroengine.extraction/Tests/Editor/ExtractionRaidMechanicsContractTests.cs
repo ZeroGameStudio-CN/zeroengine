@@ -11,11 +11,13 @@ namespace POB.Extraction.Tests
         {
             var profile = ExtractionProfileSaveData.CreateEmpty();
             profile.ActiveRaid = CreateSession(new ExtractionMapDefinition("map-a", "room-a", 900, 1, true));
+            profile.activeRaidId = profile.ActiveRaid.RaidId;
             string json = missingField
-                ? "{\"SchemaVersion\":2,\"ActiveRaid\":{\"RaidId\":\"raid-a\",\"MapId\":\"map-a\",\"StartedAtUnixSeconds\":1000,\"DurationSeconds\":900}}"
+                ? "{\"SchemaVersion\":2,\"activeRaidId\":\"raid-a\",\"ActiveRaid\":{\"RaidId\":\"raid-a\",\"MapId\":\"map-a\",\"StartedAtUnixSeconds\":1000,\"DurationSeconds\":900}}"
                 : ExtractionProfileSerialization.ToJson(profile);
             var restored = ExtractionProfileSerialization.FromJson(json);
             var cloned = new ExtractionInMemoryProfileStore(restored).LoadProfile();
+            Assert.IsNotNull(cloned.ActiveRaid);
             Assert.IsNull(cloned.ActiveRaid.RuleSnapshot);
             Assert.IsFalse(ExtractionRaidPressureService.ShouldFailForTimeout(cloned.ActiveRaid, 1899));
             Assert.IsTrue(ExtractionRaidPressureService.ShouldFailForTimeout(cloned.ActiveRaid, 1900));
@@ -27,6 +29,7 @@ namespace POB.Extraction.Tests
             var config = CreateRulesConfig();
             var profile = ExtractionProfileSaveData.CreateEmpty();
             profile.ActiveRaid = CreateSession(config.Maps[0]);
+            profile.activeRaidId = profile.ActiveRaid.RaidId;
             Assert.IsTrue(ExtractionRaidMechanicsService.TryCreateRuleSnapshot(config, config.Maps[0], 1, out var snapshot));
             Assert.IsTrue(profile.ActiveRaid.TrySetRuleSnapshot(snapshot));
             var restored = new ExtractionInMemoryProfileStore(profile).LoadProfile();
