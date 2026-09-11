@@ -262,6 +262,13 @@ namespace POB.Extraction
             LootedSourceIds ??= new List<string>();
             Content ??= new ExtractionActiveRaidContentState();
             Content.EnsureInitialized();
+            // JsonUtility can materialize an absent inline class as its all-default value.
+            // Only discard that empty representation; preserve meaningful or malformed data for diagnosis.
+            if (RuleSnapshot != null && string.IsNullOrEmpty(RuleSnapshot.ProfileId)
+                && RuleSnapshot.DifficultyLevel == 0 && RuleSnapshot.DurationSeconds == 0
+                && (RuleSnapshot.PhaseRules == null || RuleSnapshot.PhaseRules.Count == 0)
+                && (RuleSnapshot.Effects == null || RuleSnapshot.Effects.Count == 0))
+                RuleSnapshot = null;
             RuleSnapshot?.EnsureInitialized();
         }
     }

@@ -5,6 +5,45 @@ namespace POB.Extraction.Tests
 {
     public sealed class ExtractionRaidMechanicsContractTests
     {
+        [TestCase(false)]
+        [TestCase(true)]
+        public void LegacySnapshot_ProfileRoundTripKeepsAbsenceAndTimeout(bool missingField)
+        {
+            var profile = ExtractionProfileSaveData.CreateEmpty();
+            profile.ActiveRaid = CreateSession(new ExtractionMapDefinition("map-a", "room-a", 900, 1, true));
+            string json = missingField
+                ? "{\"SchemaVersion\":2,\"ActiveRaid\":{\"RaidId\":\"raid-a\",\"MapId\":\"map-a\",\"StartedAtUnixSeconds\":1000,\"DurationSeconds\":900}}"
+                : ExtractionProfileSerialization.ToJson(profile);
+            var restored = ExtractionProfileSerialization.FromJson(json);
+            var cloned = new ExtractionInMemoryProfileStore(restored).LoadProfile();
+            Assert.IsNull(cloned.ActiveRaid.RuleSnapshot);
+            Assert.IsFalse(ExtractionRaidPressureService.ShouldFailForTimeout(cloned.ActiveRaid, 1899));
+            Assert.IsTrue(ExtractionRaidPressureService.ShouldFailForTimeout(cloned.ActiveRaid, 1900));
+        }
+
+        [Test]
+        public void RuleSnapshot_ProfileRoundTripPreservesFrozenRulesAndOvertimePolicy()
+        {
+            var config = CreateRulesConfig();
+            var profile = ExtractionProfileSaveData.CreateEmpty();
+            profile.ActiveRaid = CreateSession(config.Maps[0]);
+            Assert.IsTrue(ExtractionRaidMechanicsService.TryCreateRuleSnapshot(config, config.Maps[0], 1, out var snapshot));
+            Assert.IsTrue(profile.ActiveRaid.TrySetRuleSnapshot(snapshot));
+            var restored = new ExtractionInMemoryProfileStore(profile).LoadProfile();
+            Assert.AreEqual("default", restored.ActiveRaid.RuleSnapshot.ProfileId);
+            Assert.AreEqual(2, restored.ActiveRaid.RuleSnapshot.PhaseRules.Count);
+            Assert.IsFalse(ExtractionRaidPressureService.ShouldFailForTimeout(restored.ActiveRaid, 1900));
+        }
+
+        [Test]
+        public void RuleSnapshot_InitializationDoesNotDiscardNonemptyInvalidEvidence()
+        {
+            var session = CreateSession(new ExtractionMapDefinition("map-a", "room-a", 900, 1, true));
+            session.RuleSnapshot = new ExtractionRaidRuleSnapshot { ProfileId = "preserve-invalid-evidence" };
+            session.EnsureInitialized();
+            Assert.AreEqual("preserve-invalid-evidence", session.RuleSnapshot.ProfileId);
+        }
+
         [Test]
         public void RuleSnapshot_FreezesProfileRulesAndEffects()
         {
