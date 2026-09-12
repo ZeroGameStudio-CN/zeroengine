@@ -253,7 +253,7 @@ namespace ZeroGameStudio.ConfigPipeline.Editor
                         sourceSheet, generatedSheet.Value);
                 }
 
-                MergeManagedTables(sourcePart, sourceSheet, generatedSheet.Value);
+                MergeManagedTables(sourcePart, sourceSheet, generatedSheet.Value, allowSchemaUpgradeColumnRelocation);
             }
 
             foreach (Sheet generatedSheet in generatedPart.Workbook.Sheets.Elements<Sheet>())
@@ -425,7 +425,8 @@ namespace ZeroGameStudio.ConfigPipeline.Editor
         private static void MergeManagedTables(
             WorkbookPart sourcePart,
             WorksheetPart sourceSheet,
-            WorksheetPart generatedSheet)
+            WorksheetPart generatedSheet,
+            bool allowSchemaUpgradeColumnRelocation)
         {
             List<ManagedTableState> sourceTables = ManagedTableStates(sourceSheet);
             List<ManagedTableState> generatedTables = ManagedTableStates(generatedSheet);
