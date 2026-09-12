@@ -1,5 +1,10 @@
 # Project integration
 
+New project templates and schema upgrades must declare authoring policy v2 and
+explicit table/field visibility. Follow the cross-project minimal input contract
+in `EXCEL_AUTHORING.md` before copying a sample or adding a table. Legacy source
+reading is compatible; it is not a supported shortcut for new template creation.
+
 Add the package and `com.unity.nuget.newtonsoft-json`, then create
 `Config/config-project.json`. Each config set declares its Schema, Excel source,
 optional `authoringWorkbookFormat` (`xlsx` or `xlsm`; omitted means `xlsx`), one owner
@@ -153,7 +158,7 @@ To run the package's CoreContract tests from a consuming project, add
 project’s `Packages/manifest.json`. The test framework is a consumer test-only
 prerequisite and is intentionally not a runtime dependency of this package.
 Treat a zero-test result as failure even when the Unity process exits with code
-0. For package 2.1.0, run EditMode tests with NUnit category
-`ZGS.ConfigPipeline.CoreContract` and require exactly 200 discovered and passed
-tests; update the documented expected count when the package test contract
-changes.
+0. Run EditMode tests with NUnit category `ZGS.ConfigPipeline.CoreContract` and
+require the intended contracts, including newly added cases, to be discovered
+and pass. Keep fixture counts in dated release evidence rather than a permanent
+magic number that becomes stale when the package evolves.

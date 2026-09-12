@@ -23,6 +23,14 @@ depend on this local checkout as their normal setup.
 
 ## Editing Rules
 
+- Configuration-authoring work follows
+  `com.zerogamestudio.zeroengine.config-pipeline/Documentation~/EXCEL_AUTHORING.md`.
+  New/updated authoring templates use the minimal policy: classify tables and fields,
+  hide maintained relationship storage and inactive modules, keep required input routes
+  reachable, and define a single effective authority for preset/custom choices.
+  Hiding columns alone is not proof of minimal configuration. Keep legacy readers
+  compatible and verify the actual workbook plus migration behavior before release.
+
 - Keep changes surgical and tied to the requested task.
 - Preserve UPM package boundaries: each top-level `com.zerogamestudio.*`
   directory is its own package with its own `package.json`, `.asmdef` files,

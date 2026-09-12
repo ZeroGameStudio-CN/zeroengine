@@ -52,6 +52,9 @@ namespace ZeroGameStudio.ConfigPipeline
         public ConfigObjectNode SourceNode { get; }
 
         public ConfigSchemaNode Root { get; }
+
+        public int AuthoringPolicyVersion => SourceNode.TryGetValue("x-zgs-authoring-policy-version", out var value)
+            && value is ConfigIntegerNode version ? (int)version.Value : 0;
     }
 
     public sealed class ConfigSchemaNode
@@ -186,6 +189,13 @@ namespace ZeroGameStudio.ConfigPipeline
 
         /// <summary>Null preserves legacy authoring; classified fields use basic, advanced, technical or inactive.</summary>
         public string AuthoringVisibility { get; }
+
+        public string ResolveAuthoringVisibility(string inherited)
+        {
+            if (AuthoringVisibility == "inactive" || inherited == "inactive") return "inactive";
+            if (inherited == "technical" || inherited == "advanced") return inherited;
+            return AuthoringVisibility;
+        }
 
         public bool IsRequired(string propertyName)
         {

@@ -1,5 +1,47 @@
 # Excel authoring
 
+## Minimal input contract (policy v2)
+
+This is the default contract for every project creating or upgrading tables with
+this pipeline, not a POB-specific skin. The project schema declares
+`x-zgs-require-authoring-visibility:true` and `x-zgs-authoring-policy-version:2`.
+Every sheet array and scalar field explicitly declares `x-zgs-authoring-visibility`:
+
+- `basic`: necessary human choices and enough identity/context to distinguish rows.
+- `advanced`: infrequent human inputs, reachable through the explicit advanced action.
+- `technical`: system-maintained IDs, ordering, derived previews, or raw relationship storage.
+- `inactive`: a feature that is not currently used; not an available authoring control.
+
+Table visibility bounds all its columns, including parent keys and payload values.
+Inactive tables never appear in the basic navigation; an inactive-only worksheet
+is hidden while its data, identity and references remain readable by the pipeline.
+Keep a visible navigation sheet even when no module is active. Group technical
+relations with their root so the existing relation editor/advanced action can
+reach them. Complex relationships without an editor remain basic inputs; do not
+hide an input solely because its name contains `Id` or it has a default value.
+Active roots need a visible identity/input, not a dead screen of hidden columns.
+
+Each effective value needs one authoring authority. A preset selector must not
+silently lose to hidden overrides. Give custom configuration an explicit choice,
+preserve old effective behavior through migration, and test switching both ways.
+Bindings required by a preset remain explicit inputs with useful validation.
+Derived previews are not hand-maintained prerequisites: changing a visible driver
+must recompute its result or clearly fail at the actual invalid input.
+
+`WriteTemplates` and `UpgradeCandidate` reject missing policy v2 before generating
+new tables. Existing legacy reads and same-schema refresh remain compatible;
+adoption is an explicit schema migration, not a silent layout/data rewrite.
+The low-level workbook writer retains compatibility for existing integrations,
+but new project workflows use the governed service entry points.
+
+Acceptance covers actual visible columns/sheets, accessible actions, preserved
+rows/keys/values/VBA, blank versus zero, derived input updates, preset/custom
+precedence, and repeat refresh after a desktop Excel save. Use synthetic tests
+for exact layouts and values. A schema annotation or passing parser alone does
+not establish "no redundancy"; project owners still review the business inputs.
+Do not claim an existing consumer migrated until its package pin, schema, source
+workbooks, generated artifacts, and runtime consumption have all been verified.
+
 Without authoring operations, designers edit only row 3 onward in declared Excel
 tables: row 1 is the hidden machine header and row 2 is the localized title.
 With `authoringOperationsVersion: 1`, row 1 is the visible shared action bar,

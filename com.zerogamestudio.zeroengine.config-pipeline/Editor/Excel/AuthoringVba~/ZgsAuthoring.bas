@@ -695,15 +695,21 @@ Private Function ZgsChooseRelationTable(ByVal ParentPhysical As String, _
     Dim Choice As String
     Dim Candidate As Variant
     Dim FieldInfo As Variant
+    Dim RelationVisibility As String
+    Dim RelationLabel As String
 
     For Each DefinedName In ThisWorkbook.Names
         If Left$(DefinedName.Name, 15) = "ZGS_META_TABLE_" Then
             Meta = Split(ZgsDefinedValue(DefinedName), vbTab)
             If UBound(Meta) >= 7 Then
-                If CStr(Meta(5)) = ParentPhysical Then
+                RelationVisibility = ""
+                RelationLabel = CStr(Meta(2))
+                If UBound(Meta) >= 8 Then RelationVisibility = CStr(Meta(8))
+                If UBound(Meta) >= 9 Then RelationLabel = CStr(Meta(9))
+                If CStr(Meta(5)) = ParentPhysical And RelationVisibility <> "inactive" Then
                     FieldInfo = ZgsSimplePayload(CStr(Meta(0)), CStr(Meta(4)), CStr(Meta(7)))
                     If CStr(FieldInfo(0)) <> "" Then
-                        Candidates.Add Array(CStr(Meta(0)), CStr(Meta(2)), _
+                        Candidates.Add Array(CStr(Meta(0)), RelationLabel, _
                             CStr(FieldInfo(0)), CStr(FieldInfo(1)))
                     End If
                 End If

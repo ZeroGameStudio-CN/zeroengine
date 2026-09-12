@@ -143,6 +143,16 @@ namespace ZeroGameStudio.ConfigPipeline.Editor
                 throw new InvalidOperationException("Schema does not declare any x-zgs-sheet arrays.");
             }
 
+            if (schema.AuthoringPolicyVersion >= 2)
+            {
+                foreach (TableDefinition table in tables.Where(table => table.Parent == null && TableVisibility(table) != "inactive"))
+                    if (!Enumerable.Range(0, table.ColumnCount).Any(index => IsHiddenAuthoringColumn(table, index)?.Value != true))
+                        throw new InvalidOperationException("CONFIG_AUTHORING_ROOT_UNREACHABLE: Active root tables need a visible identity/input; classify individual advanced fields instead of hiding the whole root.");
+                if ((authoringSheets == null || !authoringSheets.Any()) && tables.Any(table => table.Parent != null &&
+                    (TableVisibility(table) == "technical" || TableVisibility(table) == "advanced")))
+                    throw new InvalidOperationException("CONFIG_AUTHORING_RELATION_REQUIRES_GROUP: Group hidden relation tables with their root so the explicit relation/advanced action remains reachable.");
+            }
+
             using (SpreadsheetDocument workbook =
                    SpreadsheetDocument.Create(
                        destination,
@@ -214,6 +224,20 @@ namespace ZeroGameStudio.ConfigPipeline.Editor
                     authoringOperationsEnabled,
                     protectedRecordIds);
 
+                if (!sheets.Elements<Sheet>().Any(sheet => sheet.State == null || sheet.State.Value == SheetStateValues.Visible))
+                    AddNavigationSheet(workbookPart, sheets, tables, ref sheetId);
+                uint firstVisible = (uint)sheets.Elements<Sheet>().ToList().FindIndex(sheet =>
+                    sheet.State == null || sheet.State.Value == SheetStateValues.Visible);
+                workbookView.ActiveTab = firstVisible;
+                workbookView.FirstSheet = firstVisible;
+                int selectedIndex = 0;
+                foreach (Sheet sheet in sheets.Elements<Sheet>())
+                {
+                    var worksheet = (WorksheetPart)workbookPart.GetPartById(sheet.Id.Value);
+                    foreach (SheetView view in worksheet.Worksheet.Descendants<SheetView>()) view.TabSelected = selectedIndex == firstVisible;
+                    worksheet.Worksheet.Save();
+                    selectedIndex++;
+                }
                 workbookPart.Workbook.Save();
             }
         }
@@ -804,9 +828,10 @@ namespace ZeroGameStudio.ConfigPipeline.Editor
 
             sheetData.Append(headerRow);
             var hyperlinks = new Hyperlinks();
-            for (int tableIndex = 0; tableIndex < tables.Count; tableIndex++)
+            var navigationTables = tables.Where(table => TableVisibility(table) != "inactive").ToList();
+            for (int tableIndex = 0; tableIndex < navigationTables.Count; tableIndex++)
             {
-                TableDefinition table = tables[tableIndex];
+                TableDefinition table = navigationTables[tableIndex];
                 uint rowIndex = (uint)tableIndex + 5U;
                 var row = new Row
                 {
@@ -1087,7 +1112,7 @@ namespace ZeroGameStudio.ConfigPipeline.Editor
                 Id = workbookPart.GetIdOfPart(worksheetPart),
                 SheetId = sheetId++,
                 Name = table.SheetName,
-                State = SheetStateValues.Visible
+                State = TableVisibility(table) == "inactive" ? SheetStateValues.Hidden : SheetStateValues.Visible
             });
         }
 
@@ -1307,7 +1332,8 @@ namespace ZeroGameStudio.ConfigPipeline.Editor
                 Id = workbookPart.GetIdOfPart(worksheetPart),
                 SheetId = sheetId++,
                 Name = authoringSheet.Name,
-                State = SheetStateValues.Visible
+                State = authoringSheet.Tables.All(table => TableVisibility(table) == "inactive")
+                    ? SheetStateValues.Hidden : SheetStateValues.Visible
             });
         }
 
@@ -1429,9 +1455,16 @@ namespace ZeroGameStudio.ConfigPipeline.Editor
                         table.PrimaryKey.Name,
                         parentPhysicalName,
                         table.ArraySchema.ParentKey ?? string.Empty,
-                        table.ArraySchema.OrderField ?? string.Empty
+                        table.ArraySchema.OrderField ?? string.Empty,
+                        TableVisibility(table) ?? string.Empty,
+                        table.ArraySchema.Title ?? table.PropertyName
                     }));
 
+                if (table.Parent != null)
+                    AddConstantDefinedName(workbookPart,
+                        "ZGS_META_FIELD_" + tableId.ToString(CultureInfo.InvariantCulture) + "_parent",
+                        string.Join("\t", new[] { physicalName, table.ArraySchema.ParentKey, string.Empty,
+                            "1", "1", TableVisibility(table) ?? string.Empty }));
                 for (int fieldIndex = 0; fieldIndex < table.Fields.Count; fieldIndex++)
                 {
                     FieldDefinition field = table.Fields[fieldIndex];
@@ -1446,7 +1479,7 @@ namespace ZeroGameStudio.ConfigPipeline.Editor
                             field.Schema.ReferencePath ?? string.Empty,
                             field.Required ? "1" : "0",
                             field.Schema.AuthoringOnly ? "1" : "0",
-                            field.Schema.AuthoringVisibility ?? string.Empty
+                            field.Schema.ResolveAuthoringVisibility(TableVisibility(table)) ?? string.Empty
                         }));
                 }
 
@@ -1849,11 +1882,17 @@ namespace ZeroGameStudio.ConfigPipeline.Editor
 
         private static BooleanValue IsHiddenAuthoringColumn(TableDefinition table, int columnIndex)
         {
+            string tableVisibility = TableVisibility(table);
             if (table.Parent != null && columnIndex == 0)
-                return null; // Preserve relation-area layout; the parent is necessary context when expanded.
+                return tableVisibility == null || tableVisibility == "basic" ? null : new BooleanValue(true);
             string visibility = table.Fields[columnIndex - (table.Parent == null ? 0 : 1)]
-                .Schema.AuthoringVisibility;
+                .Schema.ResolveAuthoringVisibility(tableVisibility);
             return visibility == null ? null : new BooleanValue(visibility != "basic");
+        }
+
+        private static string TableVisibility(TableDefinition table)
+        {
+            return table.ArraySchema.ResolveAuthoringVisibility(table.Parent == null ? null : TableVisibility(table.Parent));
         }
 
         private static int FirstVisibleAuthoringColumn(TableDefinition table)

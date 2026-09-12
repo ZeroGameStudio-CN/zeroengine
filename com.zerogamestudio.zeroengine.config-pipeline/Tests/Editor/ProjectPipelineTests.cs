@@ -7,6 +7,7 @@ using DocumentFormat.OpenXml.Packaging;
 using DocumentFormat.OpenXml.Spreadsheet;
 using DocumentFormat.OpenXml.Validation;
 using NUnit.Framework;
+using Newtonsoft.Json.Linq;
 using ZeroGameStudio.ConfigPipeline.Editor;
 
 namespace ZeroGameStudio.ConfigPipeline.Tests.Editor
@@ -136,6 +137,8 @@ namespace ZeroGameStudio.ConfigPipeline.Tests.Editor
                 Path.Combine(root, "Config", "config-project-xlsm.json"),
                 Utf8(json));
             string templates = Path.Combine(root, "XlsmTemplates");
+            File.WriteAllText(Path.Combine(root, "Config", "schema.json"),
+                WithBasicAuthoringPolicy(File.ReadAllText(Path.Combine(root, "Config", "schema.json"))));
             new ConfigPipelineService().WriteTemplates(
                 root,
                 "Config/config-project-xlsm.json",
@@ -155,7 +158,7 @@ namespace ZeroGameStudio.ConfigPipeline.Tests.Editor
                 Cell[] actionCells = rows[0].Elements<Cell>().Take(6).ToArray();
                 Assert.That(
                     actionCells.Select(value => value.InnerText),
-                    Is.EqualTo(new[] { "新增", "复制", "安全删除", "编辑关系", "技术区", "帮助" }));
+                    Is.EqualTo(new[] { "新增", "复制", "安全删除", "编辑关系", "高级/技术", "帮助" }));
                 Assert.That(actionCells.All(value => value.CellFormula == null), Is.True);
                 Assert.That(
                     actionCells.All(value => value.DataType?.Value == CellValues.InlineString),
@@ -945,6 +948,7 @@ namespace ZeroGameStudio.ConfigPipeline.Tests.Editor
                     "\"serverValue\":{\"type\":\"string\",\"x-zgs-scope\":\"server\"}",
                     "\"serverValue\":{\"type\":\"string\",\"x-zgs-scope\":\"server\"}," +
                     "\"descriptionKey\":{\"type\":\"string\"}");
+            nextSchemaJson = WithBasicAuthoringPolicy(nextSchemaJson);
             File.WriteAllText(
                 Path.Combine(root, "Config", "schema-v2.json"),
                 nextSchemaJson,
@@ -1416,12 +1420,46 @@ namespace ZeroGameStudio.ConfigPipeline.Tests.Editor
             }
         }
 
+        [Test]
+        public void NewTemplates_RejectLegacyPolicyWithoutChangingExistingSources()
+        {
+            string source = Path.Combine(root, "Config", "items.xlsx");
+            string before = ConfigPipelinePlanBuilder.HashFile(source);
+            var error = Assert.Throws<InvalidOperationException>(() => new ConfigPipelineService().WriteTemplates(
+                root, "Config/config-project.json", "sample", Path.Combine(root, "new-templates")));
+            Assert.That(error.Message, Does.StartWith("CONFIG_MINIMAL_AUTHORING_POLICY_REQUIRED"));
+            Assert.That(ConfigPipelinePlanBuilder.HashFile(source), Is.EqualTo(before));
+            Assert.That(Directory.Exists(Path.Combine(root, "new-templates")), Is.False);
+        }
+
+        private static string WithBasicAuthoringPolicy(string json)
+        {
+            var value = JObject.Parse(json);
+            value["x-zgs-require-authoring-visibility"] = true;
+            value["x-zgs-authoring-policy-version"] = 2;
+            Action<JObject> visit = null;
+            visit = node =>
+            {
+                string type = (string)node["type"];
+                if (type == "object")
+                    foreach (JProperty field in ((JObject)node["properties"]).Properties()) visit((JObject)field.Value);
+                else if (type == "array")
+                {
+                    if (node["x-zgs-sheet"] != null) node["x-zgs-authoring-visibility"] = "basic";
+                    visit((JObject)node["items"]);
+                }
+                else node["x-zgs-authoring-visibility"] = "basic";
+            };
+            visit(value);
+            return value.ToString(Newtonsoft.Json.Formatting.None);
+        }
+
         private string VersionTwoSchemaJson()
         {
-            return File.ReadAllText(Path.Combine(root, "Config", "schema.json"))
+            return WithBasicAuthoringPolicy(File.ReadAllText(Path.Combine(root, "Config", "schema.json"))
                 .Replace(
                     "\"x-zgs-schema-version\":1",
-                    "\"x-zgs-schema-version\":2");
+                    "\"x-zgs-schema-version\":2"));
         }
 
         private string ExpandedGroupSchemaJson()
@@ -1433,18 +1471,19 @@ namespace ZeroGameStudio.ConfigPipeline.Tests.Editor
                 "\"properties\":{\"id\":{\"type\":\"string\"," +
                 "\"x-zgs-primary-key\":true}," +
                 "\"label\":{\"type\":\"string\"}}}}}}";
-            string current = VersionTwoSchemaJson();
+            string current = File.ReadAllText(Path.Combine(root, "Config", "schema.json"))
+                .Replace("\"x-zgs-schema-version\":1", "\"x-zgs-schema-version\":2");
             if (!current.Contains(currentGroup))
             {
                 throw new InvalidOperationException("Test Schema group shape changed.");
             }
 
-            return current.Replace(currentGroup, expandedGroup);
+            return WithBasicAuthoringPolicy(current.Replace(currentGroup, expandedGroup));
         }
 
         private static string FreshTableSchemaJson()
         {
-            return "{\"$id\":\"urn:zgs:test:project\"," +
+            return WithBasicAuthoringPolicy("{\"$id\":\"urn:zgs:test:project\"," +
                    "\"x-zgs-schema-version\":2,\"type\":\"object\"," +
                    "\"additionalProperties\":false," +
                    "\"required\":[\"items\",\"groups\",\"bonuses\"]," +
@@ -1461,7 +1500,7 @@ namespace ZeroGameStudio.ConfigPipeline.Tests.Editor
                    "\"bonuses\":{\"type\":\"array\",\"x-zgs-sheet\":\"Bonuses\"," +
                    "\"items\":{\"type\":\"object\",\"additionalProperties\":false," +
                    "\"required\":[\"id\"],\"properties\":{" +
-                   "\"id\":{\"type\":\"string\",\"x-zgs-primary-key\":true}}}}}}";
+                   "\"id\":{\"type\":\"string\",\"x-zgs-primary-key\":true}}}}}}");
         }
 
         private static string UpgradeProfileJson(

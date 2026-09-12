@@ -124,6 +124,66 @@ namespace ZeroGameStudio.ConfigPipeline.Tests
             }
         }
 
+        [TestCase(false)]
+        [TestCase(true)]
+        public void InactiveTable_HidesEntireSheetWithoutLosingDataOrVisibleNavigation(bool grouped)
+        {
+            var root = JObject.Parse(CanonicalJsonWriter.WriteText(ClassifiedSchema().SourceNode));
+            root["x-zgs-authoring-policy-version"] = 2;
+            root["properties"]["items"]["x-zgs-authoring-visibility"] = "inactive";
+            var schema = ConfigSchemaParser.Parse(Encoding.UTF8.GetBytes(root.ToString()));
+            var groups = grouped ? new[] { new ConfigAuthoringSheetProfile("Authoring", new[] { "items" }) } : null;
+            using (var stream = new MemoryStream())
+            {
+                new XlsxConfigWorkbookWriter().WriteTemplate(stream, schema, "sample.xlsm", Document(), null, null, groups, true, null, true);
+                stream.Position = 0;
+                using (var workbook = SpreadsheetDocument.Open(stream, false))
+                {
+                    Assert.That(workbook.WorkbookPart.Workbook.Sheets.Elements<Sheet>().Single(sheet =>
+                        sheet.Name.Value == (grouped ? "Authoring" : "Items")).State.Value, Is.EqualTo(SheetStateValues.Hidden));
+                    Assert.That(workbook.WorkbookPart.Workbook.Sheets.Elements<Sheet>().Any(sheet => sheet.State == null ||
+                        sheet.State.Value == SheetStateValues.Visible), Is.True);
+                    Assert.That(new OpenXmlValidator().Validate(workbook), Is.Empty);
+                }
+                stream.Position = 0;
+                var read = new XlsxConfigSourceReader(schema, null, null, true).Read(stream,
+                    new ConfigReadContext("sample.xlsm", schema.SchemaId, schema.SchemaVersion));
+                Assert.That(CanonicalJsonWriter.WriteText(read.Root), Is.EqualTo(CanonicalJsonWriter.WriteText(Document().Root)));
+            }
+        }
+
+        [Test]
+        public void TechnicalRelation_HidesPayloadAndParentTogetherButPreservesEditableRelationship()
+        {
+            var root = JObject.Parse(CanonicalJsonWriter.WriteText(ClassifiedSchema().SourceNode));
+            root["x-zgs-authoring-policy-version"] = 2;
+            root["properties"]["items"]["x-zgs-authoring-visibility"] = "basic";
+            root["properties"]["items"]["items"]["properties"]["tags"] = JObject.Parse(
+                "{\"type\":\"array\",\"x-zgs-sheet\":\"Tags\",\"x-zgs-parent-key\":\"parentId\",\"x-zgs-order-field\":\"order\",\"x-zgs-authoring-visibility\":\"technical\"," +
+                "\"items\":{\"type\":\"object\",\"additionalProperties\":false,\"properties\":{" +
+                "\"id\":{\"type\":\"string\",\"x-zgs-primary-key\":true,\"x-zgs-authoring-visibility\":\"technical\"}," +
+                "\"order\":{\"type\":\"integer\",\"x-zgs-number-type\":\"int32\",\"x-zgs-authoring-visibility\":\"technical\"}," +
+                "\"value\":{\"type\":\"string\",\"x-zgs-authoring-visibility\":\"basic\"}}}}");
+            var schema = ConfigSchemaParser.Parse(Encoding.UTF8.GetBytes(root.ToString()));
+            using (var stream = new MemoryStream())
+            {
+                new XlsxConfigWorkbookWriter().WriteTemplate(stream, schema, "sample.xlsm", Document(), null, null,
+                    new[] { new ConfigAuthoringSheetProfile("Authoring", new[] { "items" }) }, true, null, true);
+                stream.Position = 0;
+                using (var workbook = SpreadsheetDocument.Open(stream, false))
+                {
+                    var sheet = GetWorksheetPart(workbook, "Authoring");
+                    var table = sheet.TableDefinitionParts.Single(part => part.Table.Name.Value.StartsWith("ZGS_Tags_")).Table;
+                    var bounds = table.Reference.Value.Split(':');
+                    var hidden = sheet.Worksheet.GetFirstChild<Columns>().Elements<Column>().Where(column => column.Hidden?.Value == true);
+                    for (int col = TestColumnOf(bounds[0]); col <= TestColumnOf(bounds[1]); col++)
+                        Assert.That(hidden.Any(column => column.Min.Value <= col && column.Max.Value >= col), Is.True);
+                    Assert.That(workbook.WorkbookPart.Workbook.GetFirstChild<DefinedNames>().Elements<DefinedName>()
+                        .Any(name => name.Name.Value.EndsWith("_parent") && name.Text.Contains("technical")), Is.True);
+                }
+            }
+        }
+
         private static ConfigSchema ClassifiedSchema()
         {
             var root = JObject.Parse(SchemaJson);

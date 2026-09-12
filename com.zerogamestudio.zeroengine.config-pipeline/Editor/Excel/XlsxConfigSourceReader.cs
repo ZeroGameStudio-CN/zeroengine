@@ -146,7 +146,7 @@ namespace ZeroGameStudio.ConfigPipeline.Editor
                 }
                 else
                 {
-                    ValidateGroupedSheets(workbookPart, tableLocations.Values);
+                    ValidateGroupedSheets(workbookPart, tableLocations);
                 }
 
                 var sourceMap = new List<XlsxSourceMapEntry>();
@@ -342,6 +342,7 @@ namespace ZeroGameStudio.ConfigPipeline.Editor
                 required.Remove(sheet.Name.Value);
                 if (!RequiredInternalSheets.Contains(sheet.Name.Value) &&
                     !OptionalInternalSheets.Contains(sheet.Name.Value) &&
+                    !tables.Where(table => table.SheetName == sheet.Name.Value).All(table => TableVisibility(table) == "inactive") &&
                     sheet.State != null &&
                     sheet.State.Value != SheetStateValues.Visible)
                 {
@@ -454,8 +455,12 @@ namespace ZeroGameStudio.ConfigPipeline.Editor
 
         private void ValidateGroupedSheets(
             WorkbookPart workbookPart,
-            IEnumerable<TableLocation> locations)
+            IReadOnlyDictionary<TableDefinition, TableLocation> tableLocations)
         {
+            IEnumerable<TableLocation> locations = tableLocations.Values;
+            var inactiveSheets = new HashSet<string>(tableLocations.GroupBy(pair => pair.Value.WorksheetName)
+                .Where(group => group.All(pair => TableVisibility(pair.Key) == "inactive"))
+                .Select(group => group.Key), StringComparer.Ordinal);
             List<Sheet> sheets = workbookPart.Workbook.Sheets?.Elements<Sheet>().ToList() ??
                                  new List<Sheet>();
             int optionalSheetCount = sheets.Count(
@@ -508,7 +513,7 @@ namespace ZeroGameStudio.ConfigPipeline.Editor
                         "Workbook contains unknown Sheet '" + name + "'.");
                 }
 
-                if (sheet.State != null && sheet.State.Value != SheetStateValues.Visible)
+                if (!inactiveSheets.Contains(name) && sheet.State != null && sheet.State.Value != SheetStateValues.Visible)
                 {
                     throw new XlsxConfigException(
                         "XLSX_DATA_SHEET_HIDDEN",
@@ -1814,6 +1819,11 @@ namespace ZeroGameStudio.ConfigPipeline.Editor
         private static string EscapePointer(string value)
         {
             return value.Replace("~", "~0").Replace("/", "~1");
+        }
+
+        private static string TableVisibility(TableDefinition table)
+        {
+            return table.ArraySchema.ResolveAuthoringVisibility(table.Parent == null ? null : TableVisibility(table.Parent));
         }
 
         private sealed class TableDefinition

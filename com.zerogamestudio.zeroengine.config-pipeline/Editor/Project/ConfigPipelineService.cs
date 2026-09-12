@@ -217,6 +217,12 @@ namespace ZeroGameStudio.ConfigPipeline.Editor
                 () => Check(projectRoot, profileRelativePath, configSetId, packageIdentity));
         }
 
+        private static void RequireMinimalAuthoringPolicy(ConfigSchema schema)
+        {
+            if (schema.AuthoringPolicyVersion < 2)
+                throw new InvalidOperationException("CONFIG_MINIMAL_AUTHORING_POLICY_REQUIRED: New and upgraded authoring templates require policy version 2 with explicit table and field visibility. Existing legacy reads and same-schema refreshes remain supported.");
+        }
+
         public void WriteTemplates(
             string projectRoot,
             string profileRelativePath,
@@ -230,6 +236,7 @@ namespace ZeroGameStudio.ConfigPipeline.Editor
             ConfigSchema schema = ConfigSchemaParser.Parse(File.ReadAllBytes(
                 ConfigPathGuard.ResolveInside(root, set.SchemaPath)));
             ValidateWorkbookOwnership(set, schema);
+            RequireMinimalAuthoringPolicy(schema);
             Directory.CreateDirectory(outputDirectory);
             foreach (ConfigWorkbookProfile workbook in set.Workbooks)
             {
@@ -549,6 +556,7 @@ namespace ZeroGameStudio.ConfigPipeline.Editor
             ConfigSchema nextSchema = ConfigSchemaParser.Parse(File.ReadAllBytes(
                 ConfigPathGuard.ResolveInside(root, nextSet.SchemaPath)));
             ValidateWorkbookOwnership(nextSet, nextSchema);
+            RequireMinimalAuthoringPolicy(nextSchema);
             if (!string.Equals(currentSchema.SchemaId, nextSchema.SchemaId, StringComparison.Ordinal))
             {
                 throw new InvalidOperationException("Schema upgrade cannot change the schema ID.");

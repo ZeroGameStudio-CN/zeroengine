@@ -217,7 +217,7 @@ namespace ZeroGameStudio.ConfigPipeline.Editor
             {
                 if (!sourceSheets.TryGetValue(generatedSheet.Key, out WorksheetPart sourceSheet))
                 {
-                    if (PipelineSheets.Contains(generatedSheet.Key))
+                    if (PipelineSheets.Contains(generatedSheet.Key) && generatedSheet.Key != XlsxConfigWorkbookWriter.NavigationSheetName)
                     {
                         throw new InvalidDataException(
                             "Source workbook is missing pipeline worksheet '" +
@@ -254,6 +254,25 @@ namespace ZeroGameStudio.ConfigPipeline.Editor
                 MergeManagedTables(sourcePart, sourceSheet, generatedSheet.Value);
             }
 
+            foreach (Sheet generatedSheet in generatedPart.Workbook.Sheets.Elements<Sheet>())
+            {
+                Sheet target = sourcePart.Workbook.Sheets.Elements<Sheet>().Single(sheet => sheet.Name.Value == generatedSheet.Name.Value);
+                target.State = generatedSheet.State == null ? null : new EnumValue<SheetStateValues>(generatedSheet.State.Value);
+                if (target.State != null && target.State.Value != SheetStateValues.Visible)
+                {
+                    var worksheet = (WorksheetPart)sourcePart.GetPartById(target.Id.Value);
+                    foreach (SheetView view in worksheet.Worksheet.Descendants<SheetView>()) view.TabSelected = false;
+                    worksheet.Worksheet.Save();
+                }
+            }
+            var allSheets = sourcePart.Workbook.Sheets.Elements<Sheet>().ToList();
+            int firstVisible = allSheets.FindIndex(sheet => sheet.State == null || sheet.State.Value == SheetStateValues.Visible);
+            foreach (WorkbookView view in sourcePart.Workbook.Descendants<WorkbookView>())
+            {
+                int selected = (int)(view.ActiveTab?.Value ?? 0);
+                if (selected >= allSheets.Count || (allSheets[selected].State != null && allSheets[selected].State.Value != SheetStateValues.Visible))
+                    view.ActiveTab = view.FirstSheet = (uint)firstVisible;
+            }
             MergePipelineDefinedNames(sourcePart, generatedPart);
             fidelity.Verify(sourcePart);
             sourcePart.Workbook.Save();

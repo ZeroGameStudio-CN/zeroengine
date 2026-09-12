@@ -6,6 +6,11 @@ deterministic artifacts, and loads immutable runtime snapshots.
 
 ## Minimal authoring views
 
+New template and schema-upgrade entry points require authoring policy v2, including
+explicit table classification. The durable cross-project contract and acceptance
+checks live in `Documentation~/EXCEL_AUTHORING.md`; legacy read/refresh compatibility
+does not waive the new-project rule.
+
 New governed schemas set `x-zgs-require-authoring-visibility:true` on the root
 and classify each scalar with `x-zgs-authoring-visibility`: `basic` for necessary
 business inputs, `advanced` for infrequent inputs, `technical` for maintained

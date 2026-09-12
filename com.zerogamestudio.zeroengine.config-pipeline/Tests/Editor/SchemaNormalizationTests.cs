@@ -52,6 +52,24 @@ namespace ZeroGameStudio.ConfigPipeline.Tests
         }
 
         [Test]
+        public void AuthoringPolicyV2_RequiresTableClassificationAsWellAsFields()
+        {
+            var root = JObject.Parse(SchemaJson);
+            root["x-zgs-require-authoring-visibility"] = true;
+            root["x-zgs-authoring-policy-version"] = 2;
+            var table = (JObject)root["properties"]["items"];
+            table["x-zgs-sheet"] = "Items";
+            foreach (JProperty field in ((JObject)table["items"]["properties"]).Properties())
+                field.Value["x-zgs-authoring-visibility"] = "basic";
+            Assert.That(Assert.Throws<ConfigSchemaException>(() => ConfigSchemaParser.Parse(Encoding.UTF8.GetBytes(root.ToString()))).Code,
+                Is.EqualTo("SCHEMA_AUTHORING_TABLE_VISIBILITY_REQUIRED"));
+            table["x-zgs-authoring-visibility"] = "inactive";
+            var schema = ConfigSchemaParser.Parse(Encoding.UTF8.GetBytes(root.ToString()));
+            Assert.That(schema.AuthoringPolicyVersion, Is.EqualTo(2));
+            Assert.That(schema.Root.Properties[0].Schema.Items.Properties[0].Schema.ResolveAuthoringVisibility("inactive"), Is.EqualTo("inactive"));
+        }
+
+        [Test]
         public void AuthoringPolicy_DoesNotHideUnfillableRequiredInputs()
         {
             var root = JObject.Parse(SchemaJson);
