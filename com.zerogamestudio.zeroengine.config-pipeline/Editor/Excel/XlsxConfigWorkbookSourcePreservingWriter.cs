@@ -247,16 +247,8 @@ namespace ZeroGameStudio.ConfigPipeline.Editor
 
                 if (HasAuthoringActions(generatedPart, generatedSheet.Key))
                 {
-                    ReplaceManagedCells(
-                        sourceSheet,
-                        generatedSheet.Value,
-                        1,
-                        1U,
-                        6,
-                        1U,
-                        1U,
-                        1U,
-                        0);
+                    MergeAuthoringActions(sourcePart, generatedPart, generatedSheet.Key,
+                        sourceSheet, generatedSheet.Value);
                 }
 
                 MergeManagedTables(sourcePart, sourceSheet, generatedSheet.Value);
@@ -265,6 +257,51 @@ namespace ZeroGameStudio.ConfigPipeline.Editor
             MergePipelineDefinedNames(sourcePart, generatedPart);
             fidelity.Verify(sourcePart);
             sourcePart.Workbook.Save();
+        }
+
+        private static HashSet<string> AuthoringActionCells(WorkbookPart workbook, string sheetName)
+        {
+            string prefix = "'" + sheetName.Replace("'", "''") + "'!";
+            string unquotedPrefix = sheetName + "!";
+            return new HashSet<string>((workbook.Workbook.GetFirstChild<DefinedNames>()?
+                    .Elements<DefinedName>() ?? Enumerable.Empty<DefinedName>())
+                .Where(name => name.Name?.Value?.StartsWith("ZGS_ACTION_", StringComparison.Ordinal) == true
+                    && ((name.Text ?? string.Empty).StartsWith(prefix, StringComparison.Ordinal)
+                        || (name.Text ?? string.Empty).StartsWith(unquotedPrefix, StringComparison.Ordinal)))
+                .Select(name => name.Text.Substring(name.Text.StartsWith(prefix, StringComparison.Ordinal)
+                    ? prefix.Length : unquotedPrefix.Length).Replace("$", string.Empty)),
+                StringComparer.Ordinal);
+        }
+
+        private static void MergeAuthoringActions(WorkbookPart sourcePart, WorkbookPart generatedPart,
+            string sheetName, WorksheetPart sourceSheet, WorksheetPart generatedSheet)
+        {
+            HashSet<string> oldCells = AuthoringActionCells(sourcePart, sheetName);
+            HashSet<string> newCells = AuthoringActionCells(generatedPart, sheetName);
+            SheetData data = sourceSheet.Worksheet.GetFirstChild<SheetData>();
+            Row row = data.Elements<Row>().FirstOrDefault(value => value.RowIndex?.Value == 1U);
+            if (row == null)
+            {
+                row = new Row { RowIndex = 1U, Height = 24D, CustomHeight = true };
+                data.PrependChild(row);
+            }
+            foreach (Cell cell in row.Elements<Cell>().ToArray())
+            {
+                string reference = cell.CellReference?.Value;
+                if (newCells.Contains(reference) && !oldCells.Contains(reference) &&
+                    (cell.CellFormula != null || !string.IsNullOrEmpty(cell.InnerText)))
+                    throw new InvalidDataException("CONFIG_WORKBOOK_MANAGED_LAYOUT_CONFLICT: action " +
+                        sheetName + "!" + reference + " overlaps designer content.");
+                if (oldCells.Contains(reference) || newCells.Contains(reference)) cell.Remove();
+            }
+            foreach (Cell cell in generatedSheet.Worksheet.Descendants<Cell>()
+                         .Where(value => newCells.Contains(value.CellReference?.Value)))
+            {
+                Cell next = row.Elements<Cell>().FirstOrDefault(value =>
+                    ColumnOf(value.CellReference?.Value) > ColumnOf(cell.CellReference?.Value));
+                if (next == null) row.Append(cell.CloneNode(true));
+                else row.InsertBefore(cell.CloneNode(true), next);
+            }
         }
 
         private static void AddGeneratedBusinessSheet(
@@ -490,12 +527,59 @@ namespace ZeroGameStudio.ConfigPipeline.Editor
                 UpsertManagedTable(sourcePart, sourceSheet, target);
             }
 
+            MergeManagedColumnVisibility(sourceSheet, generatedSheet, targets);
+
             MergeManagedDataValidations(
                 sourceSheet,
                 generatedSheet,
                 sourcePlacements,
                 targets.Select(target => target.Placement).ToList());
             sourceSheet.Worksheet.Save();
+        }
+
+        private static void MergeManagedColumnVisibility(WorksheetPart source, WorksheetPart generated,
+            IEnumerable<ManagedTableTarget> targets)
+        {
+            Columns sourceColumns = source.Worksheet.GetFirstChild<Columns>();
+            if (sourceColumns == null)
+            {
+                sourceColumns = new Columns();
+                source.Worksheet.InsertBefore(sourceColumns, source.Worksheet.GetFirstChild<SheetData>());
+            }
+            Columns generatedColumns = generated.Worksheet.GetFirstChild<Columns>();
+            if (generatedColumns == null) return;
+            foreach (ManagedTableTarget target in targets)
+            for (uint index = (uint)target.FirstColumn; index <= target.LastColumn; index++)
+            {
+                Column expected = generatedColumns.Elements<Column>().FirstOrDefault(column =>
+                    column.Min.Value <= index && column.Max.Value >= index);
+                if (expected?.Hidden == null) continue;
+                Column original = sourceColumns.Elements<Column>().FirstOrDefault(column =>
+                    column.Min.Value <= index && column.Max.Value >= index);
+                var current = original == null ? new Column { Width = expected.Width, CustomWidth = true }
+                    : (Column)original.CloneNode(true);
+                if (original != null)
+                {
+                    if (original.Min.Value < index)
+                    {
+                        var left = (Column)original.CloneNode(true);
+                        left.Max = index - 1;
+                        sourceColumns.InsertBefore(left, original);
+                    }
+                    if (original.Max.Value > index)
+                    {
+                        var right = (Column)original.CloneNode(true);
+                        right.Min = index + 1;
+                        sourceColumns.InsertAfter(right, original);
+                    }
+                    original.Remove();
+                }
+                current.Min = current.Max = index;
+                current.Hidden = expected.Hidden.Value;
+                Column next = sourceColumns.Elements<Column>().FirstOrDefault(column => column.Min.Value > index);
+                if (next == null) sourceColumns.Append(current);
+                else sourceColumns.InsertBefore(current, next);
+            }
         }
 
         private sealed class AuthoringFidelitySnapshot
@@ -568,14 +652,14 @@ namespace ZeroGameStudio.ConfigPipeline.Editor
                         .ToList();
                     bool generatedHasAuthoringActions =
                         HasAuthoringActions(generatedPart, entry.Key);
+                    HashSet<string> actionCells = AuthoringActionCells(sourcePart, entry.Key);
                     foreach (Cell cell in entry.Value.Worksheet.Descendants<Cell>())
                     {
                         string reference = cell.CellReference?.Value;
                         int column = ColumnOf(reference);
                         uint row = RowOf(reference);
                         if (managedRanges.Any(range => range.Contains(column, row)) ||
-                            (generatedHasAuthoringActions && row == 1U &&
-                             column >= 1 && column <= 6))
+                            (generatedHasAuthoringActions && actionCells.Contains(reference)))
                         {
                             continue;
                         }

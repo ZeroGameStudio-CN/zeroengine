@@ -9,6 +9,7 @@ using DocumentFormat.OpenXml.Packaging;
 using DocumentFormat.OpenXml.Spreadsheet;
 using DocumentFormat.OpenXml.Validation;
 using NUnit.Framework;
+using Newtonsoft.Json.Linq;
 using ZeroGameStudio.ConfigPipeline.Editor;
 using Xdr = DocumentFormat.OpenXml.Drawing.Spreadsheet;
 
@@ -35,6 +36,106 @@ namespace ZeroGameStudio.ConfigPipeline.Tests
             "\"weight\":{\"type\":\"number\",\"title\":\"权重\",\"x-zgs-number-type\":\"float32\",\"minimum\":0}," +
             "\"enabled\":{\"type\":\"boolean\",\"title\":\"启用\",\"default\":true}" +
             "}}}}}";
+
+        [TestCase(false)]
+        [TestCase(true)]
+        public void ClassifiedAuthoring_HidesOnlyNonBasicColumnsAndKeepsActionsAccessible(bool grouped)
+        {
+            ConfigSchema schema = ClassifiedSchema();
+            string sheetName = grouped ? "Authoring" : "Items";
+            var groups = grouped ? new[] { new ConfigAuthoringSheetProfile(sheetName, new[] { "items" }) } : null;
+            using (var stream = new MemoryStream())
+            {
+                new XlsxConfigWorkbookWriter().WriteTemplate(stream, schema, "sample.xlsm", Document(),
+                    null, null, groups, true, null, true);
+                stream.Position = 0;
+                using (SpreadsheetDocument workbook = SpreadsheetDocument.Open(stream, false))
+                {
+                    WorksheetPart sheet = GetWorksheetPart(workbook, sheetName);
+                    var columns = sheet.Worksheet.GetFirstChild<Columns>().Elements<Column>().ToArray();
+                    Assert.That(columns.Where(column => column.Hidden?.Value == true).Select(column => column.Min.Value),
+                        Is.EqualTo(new uint[] { 1, 3, 4 }));
+                    Assert.That(sheet.TableDefinitionParts.Single().Table.TableColumns.ChildElements.Count, Is.EqualTo(4));
+                    var actionNames = workbook.WorkbookPart.Workbook.GetFirstChild<DefinedNames>().Elements<DefinedName>()
+                        .Where(name => name.Name.Value.StartsWith("ZGS_ACTION_", StringComparison.Ordinal)).ToArray();
+                    Assert.That(actionNames.Length, Is.EqualTo(6));
+                    foreach (DefinedName name in actionNames)
+                    {
+                        string reference = name.Text.Substring(name.Text.IndexOf('!') + 1).Replace("$", "");
+                        int physical = TestColumnOf(reference);
+                        Assert.That(columns.Any(column => column.Min.Value <= physical && column.Max.Value >= physical
+                            && column.Hidden?.Value == true), Is.False, name.Name.Value);
+                        Assert.That(sheet.Worksheet.Descendants<Cell>().Single(cell => cell.CellReference == reference)
+                            .InnerText, Is.Not.Empty);
+                    }
+                    Assert.That(new OpenXmlValidator().Validate(workbook), Is.Empty);
+                }
+                stream.Position = 0;
+                var read = new XlsxConfigSourceReader(schema, null, null, true).Read(stream,
+                    new ConfigReadContext("sample.xlsm", schema.SchemaId, schema.SchemaVersion));
+                Assert.That(CanonicalJsonWriter.WriteText(read.Root), Is.EqualTo(CanonicalJsonWriter.WriteText(Document().Root)));
+            }
+        }
+
+        [Test]
+        public void ClassifiedCandidate_PreservesSourceDataAndResetsExpandedColumns()
+        {
+            string sourcePath = TemporaryWorkbookPath("visibility-source");
+            string candidatePath = TemporaryWorkbookPath("visibility-candidate");
+            try
+            {
+                using (FileStream stream = File.Create(sourcePath))
+                    new XlsxConfigWorkbookWriter().WriteTemplate(stream, Schema(), "sample.xlsm", Document(),
+                        null, null, null, true, null, true);
+                string before = Sha256(File.ReadAllBytes(sourcePath));
+                using (SpreadsheetDocument source = SpreadsheetDocument.Open(sourcePath, true))
+                {
+                    foreach (DefinedName name in source.WorkbookPart.Workbook.GetFirstChild<DefinedNames>().Elements<DefinedName>())
+                        if (name.Name.Value.StartsWith("ZGS_ACTION_", StringComparison.Ordinal))
+                            name.Text = name.Text.Replace("'Items'!", "Items!");
+                    source.WorkbookPart.Workbook.Save();
+                }
+                before = Sha256(File.ReadAllBytes(sourcePath));
+                XlsxConfigWorkbookSourcePreservingWriter.WriteCandidate(sourcePath, candidatePath, ClassifiedSchema(),
+                    "sample.xlsm", Document(), null, null, null, true, null, true);
+                Assert.That(Sha256(File.ReadAllBytes(sourcePath)), Is.EqualTo(before));
+                using (SpreadsheetDocument candidate = SpreadsheetDocument.Open(candidatePath, false))
+                {
+                    WorksheetPart sheet = GetWorksheetPart(candidate, "Items");
+                    Assert.That(sheet.Worksheet.GetFirstChild<Columns>().Elements<Column>()
+                        .Where(column => column.Hidden?.Value == true).Select(column => column.Min.Value),
+                        Is.EqualTo(new uint[] { 1, 3, 4 }));
+                    Assert.That(sheet.Worksheet.Descendants<Cell>().Single(cell => cell.CellReference == "B1").InnerText,
+                        Is.EqualTo("新增"));
+                    Assert.That(new OpenXmlValidator().Validate(candidate), Is.Empty);
+                }
+                using (FileStream stream = File.OpenRead(candidatePath))
+                {
+                    ConfigSchema schema = ClassifiedSchema();
+                    var read = new XlsxConfigSourceReader(schema, null, null, true).Read(stream,
+                        new ConfigReadContext("sample.xlsm", schema.SchemaId, schema.SchemaVersion));
+                    Assert.That(CanonicalJsonWriter.WriteText(read.Root), Is.EqualTo(CanonicalJsonWriter.WriteText(Document().Root)));
+                }
+            }
+            finally
+            {
+                if (File.Exists(sourcePath)) File.Delete(sourcePath);
+                if (File.Exists(candidatePath)) File.Delete(candidatePath);
+            }
+        }
+
+        private static ConfigSchema ClassifiedSchema()
+        {
+            var root = JObject.Parse(SchemaJson);
+            root["x-zgs-require-authoring-visibility"] = true;
+            var fields = (JObject)root["properties"]["items"]["items"]["properties"];
+            fields["id"]["x-zgs-authoring-visibility"] = "technical";
+            fields["kind"]["x-zgs-authoring-visibility"] = "basic";
+            fields["weight"]["x-zgs-authoring-visibility"] = "advanced";
+            fields["weight"]["default"] = 1;
+            fields["enabled"]["x-zgs-authoring-visibility"] = "inactive";
+            return ConfigSchemaParser.Parse(Encoding.UTF8.GetBytes(root.ToString()));
+        }
 
         [Test]
         public void TemplateAndReader_RoundTripTypedDocument()
@@ -1250,7 +1351,7 @@ namespace ZeroGameStudio.ConfigPipeline.Tests
                         actionCells.Select(value => value.InnerText),
                         Is.EqualTo(new[]
                         {
-                            "新增", "复制", "安全删除", "编辑关系", "技术区", "帮助"
+                            "新增", "复制", "安全删除", "编辑关系", "高级/技术", "帮助"
                         }));
                     Assert.That(actionCells.All(value => value.CellFormula == null), Is.True);
                     Assert.That(

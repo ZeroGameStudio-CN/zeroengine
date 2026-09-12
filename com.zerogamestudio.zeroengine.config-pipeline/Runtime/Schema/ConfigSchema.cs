@@ -89,7 +89,8 @@ namespace ZeroGameStudio.ConfigPipeline
             string title,
             string description,
             string unit,
-            string group)
+            string group,
+            string authoringVisibility = null)
         {
             Type = type;
             this.properties = new List<ConfigSchemaProperty>(
@@ -124,6 +125,7 @@ namespace ZeroGameStudio.ConfigPipeline
             Description = description;
             Unit = unit;
             Group = group;
+            AuthoringVisibility = authoringVisibility;
         }
 
         public ConfigSchemaType Type { get; }
@@ -181,6 +183,9 @@ namespace ZeroGameStudio.ConfigPipeline
         public string Unit { get; }
 
         public string Group { get; }
+
+        /// <summary>Null preserves legacy authoring; classified fields use basic, advanced, technical or inactive.</summary>
+        public string AuthoringVisibility { get; }
 
         public bool IsRequired(string propertyName)
         {

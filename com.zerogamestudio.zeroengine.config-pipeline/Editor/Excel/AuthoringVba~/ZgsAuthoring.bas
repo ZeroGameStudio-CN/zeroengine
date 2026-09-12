@@ -105,7 +105,11 @@ Private Sub ZgsAddRecord()
 
     Set Table = ZgsCurrentRootTable()
     Meta = ZgsTableMeta(Table.Name)
-    If Not ZgsPromptText("新增配置", "请输入新的稳定 ID", "", NewId) Then Exit Sub
+    If ZgsFieldVisibility(Table, CStr(Meta(4))) = "technical" Then
+        NewId = ZgsNextRecordId(Table, CStr(Meta(1)), CStr(Meta(4)))
+    Else
+        If Not ZgsPromptText("新增配置", "请输入新的稳定 ID", "", NewId) Then Exit Sub
+    End If
     NewId = Trim$(NewId)
     If Not ZgsValidId(NewId) Then
         MsgBox "稳定 ID 不能为空，也不能包含逗号、分号或换行。", vbExclamation
@@ -150,7 +154,11 @@ Private Sub ZgsCopyRecord()
     Set Table = ZgsCurrentRootTable()
     Meta = ZgsTableMeta(Table.Name)
     Set SourceRow = ZgsCurrentRow(Table, CStr(Meta(4)))
-    If Not ZgsPromptText("复制配置", "请输入副本的稳定 ID", mLastRecordId & "-copy", NewId) Then Exit Sub
+    If ZgsFieldVisibility(Table, CStr(Meta(4))) = "technical" Then
+        NewId = ZgsNextRecordId(Table, CStr(Meta(1)), CStr(Meta(4)))
+    Else
+        If Not ZgsPromptText("复制配置", "请输入副本的稳定 ID", mLastRecordId & "-copy", NewId) Then Exit Sub
+    End If
     NewId = Trim$(NewId)
     If Not ZgsValidId(NewId) Then
         MsgBox "稳定 ID 不合法。", vbExclamation
@@ -168,7 +176,10 @@ Private Sub ZgsCopyRecord()
     Set NewRow = Table.ListRows.Add
     NewRow.Range.Value2 = SourceRow.Range.Value2
     ZgsSetValue NewRow, Table, CStr(Meta(4)), NewId, True
-    ZgsSetValue NewRow, Table, CStr(Meta(7)), ZgsNextOrder(Table, CStr(Meta(7))), False
+    Dim OrderField As String
+    OrderField = CStr(Meta(7))
+    If Len(OrderField) = 0 Then OrderField = "order"
+    ZgsSetValue NewRow, Table, OrderField, ZgsNextOrder(Table, OrderField), False
     ZgsCopyChildren Table.Name, mLastRecordId, NewId
     mLastRecordId = NewId
     ZgsLockAll
@@ -269,6 +280,21 @@ Private Sub ZgsToggleTechnical()
     Dim HasTable As Boolean
 
     Set ParentTable = ZgsCurrentRootTable()
+    For Each DefinedName In ThisWorkbook.Names
+        If Left$(DefinedName.Name, 15) = "ZGS_META_FIELD_" Then
+            Meta = Split(ZgsDefinedValue(DefinedName), vbTab)
+            If UBound(Meta) >= 5 Then
+                If CStr(Meta(5)) = "advanced" Or CStr(Meta(5)) = "technical" Then
+                    Set Table = ZgsFindTable(CStr(Meta(0)))
+                    If Table.Parent Is ParentTable.Parent Then
+                        HideColumns = Not Table.Range.Columns(ZgsMachineColumn(Table, CStr(Meta(1)))).EntireColumn.Hidden
+                        ZgsSetAuthoringView ParentTable.Parent, HideColumns
+                        Exit Sub
+                    End If
+                End If
+            End If
+        End If
+    Next DefinedName
     ZgsUnlock ParentTable.Parent
     For Each DefinedName In ThisWorkbook.Names
         If Left$(DefinedName.Name, 15) = "ZGS_META_TABLE_" Then
@@ -287,6 +313,68 @@ Private Sub ZgsToggleTechnical()
     Next DefinedName
     ZgsLock ParentTable.Parent
     If Not HasTable Then MsgBox "当前配置没有独立技术关系区。", vbInformation
+End Sub
+
+Private Function ZgsFieldVisibility(ByVal Table As ListObject, ByVal FieldName As String) As String
+    Dim DefinedName As Name
+    Dim Meta As Variant
+    For Each DefinedName In ThisWorkbook.Names
+        If Left$(DefinedName.Name, 15) = "ZGS_META_FIELD_" Then
+            Meta = Split(ZgsDefinedValue(DefinedName), vbTab)
+            If UBound(Meta) >= 5 Then
+                If CStr(Meta(0)) = Table.Name And CStr(Meta(1)) = FieldName Then
+                    ZgsFieldVisibility = CStr(Meta(5))
+                    Exit Function
+                End If
+            End If
+        End If
+    Next DefinedName
+End Function
+
+Private Function ZgsNextRecordId(ByVal Table As ListObject, ByVal Prefix As String, ByVal KeyField As String) As String
+    Dim Sequence As Long
+    Dim Candidate As String
+    Dim Existing As ListRow
+    Sequence = 1
+    Do
+        Candidate = Prefix & "-" & Format$(Sequence, "0000")
+        Set Existing = ZgsFindRow(Table, KeyField, Candidate)
+        If Existing Is Nothing Then
+            ZgsNextRecordId = Candidate
+            Exit Function
+        End If
+        Sequence = Sequence + 1
+    Loop
+End Function
+
+Private Sub ZgsSetAuthoringView(ByVal Sheet As Worksheet, ByVal Minimal As Boolean)
+    Dim DefinedName As Name
+    Dim Meta As Variant
+    Dim Table As ListObject
+    Dim FieldColumn As Long
+    On Error GoTo Failed
+    ZgsUnlock Sheet
+    For Each DefinedName In ThisWorkbook.Names
+        If Left$(DefinedName.Name, 15) = "ZGS_META_FIELD_" Then
+            Meta = Split(ZgsDefinedValue(DefinedName), vbTab)
+            If UBound(Meta) >= 5 Then
+                If Len(CStr(Meta(5))) > 0 Then
+                    Set Table = ZgsFindTable(CStr(Meta(0)))
+                    If Table.Parent Is Sheet Then
+                        FieldColumn = ZgsMachineColumn(Table, CStr(Meta(1)))
+                        If CStr(Meta(5)) <> "basic" Then
+                            Table.Range.Columns(FieldColumn).EntireColumn.Hidden = Minimal Or CStr(Meta(5)) = "inactive"
+                        End If
+                    End If
+                End If
+            End If
+        End If
+    Next DefinedName
+    ZgsLock Sheet
+    Exit Sub
+Failed:
+    ZgsLock Sheet
+    Err.Raise vbObjectError + 821, "ZGS Authoring", "显示级别切换失败，请刷新工作簿结构。"
 End Sub
 
 Private Sub ZgsShowHelp()

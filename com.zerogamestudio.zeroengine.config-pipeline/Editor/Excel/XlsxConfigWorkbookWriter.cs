@@ -37,7 +37,7 @@ namespace ZeroGameStudio.ConfigPipeline.Editor
             "复制",
             "安全删除",
             "编辑关系",
-            "技术区",
+            "高级/技术",
             "帮助"
         };
 
@@ -919,6 +919,7 @@ namespace ZeroGameStudio.ConfigPipeline.Editor
                     Min = (uint)columnIndex + 1U,
                     Max = (uint)columnIndex + 1U,
                     Style = EditableStyleForColumn(table, columnIndex),
+                    Hidden = IsHiddenAuthoringColumn(table, columnIndex),
                     Width = SuggestedColumnWidth(table, columnIndex),
                     CustomWidth = true
                 });
@@ -927,7 +928,7 @@ namespace ZeroGameStudio.ConfigPipeline.Editor
             var sheetData = new SheetData();
             if (macroEnabled)
             {
-                AddAuthoringActionRow(workbookPart, sheetData, table.SheetName);
+                AddAuthoringActionRow(workbookPart, sheetData, table.SheetName, columns);
             }
 
             var machineHeader = new Row { RowIndex = machineHeaderRowIndex, Hidden = true };
@@ -1124,10 +1125,6 @@ namespace ZeroGameStudio.ConfigPipeline.Editor
             var rowsByIndex = new SortedDictionary<uint, Row>();
             var validations = new DataValidations();
             var tablePlacements = new List<GroupedTablePlacement>();
-            if (macroEnabled)
-            {
-                AddAuthoringActionRow(workbookPart, rowsByIndex, authoringSheet.Name);
-            }
             int firstColumnIndex = 1;
             foreach (TableDefinition table in authoringSheet.Tables)
             {
@@ -1145,6 +1142,7 @@ namespace ZeroGameStudio.ConfigPipeline.Editor
                         Min = physicalColumn,
                         Max = physicalColumn,
                         Style = EditableStyleForColumn(table, columnIndex),
+                        Hidden = IsHiddenAuthoringColumn(table, columnIndex),
                         Width = SuggestedColumnWidth(table, columnIndex),
                         CustomWidth = true
                     });
@@ -1183,7 +1181,7 @@ namespace ZeroGameStudio.ConfigPipeline.Editor
                     machineCell.CellReference = ColumnName(physicalColumn) +
                                                 machineHeaderRowIndex.ToString(CultureInfo.InvariantCulture);
                     machineHeader.Append(machineCell);
-                    if (columnIndex == 0)
+                    if (columnIndex == FirstVisibleAuthoringColumn(table))
                     {
                         string sectionTitle = table.ArraySchema.Title ?? table.SheetName;
                         fieldTitle = sectionTitle + " ｜ " + fieldTitle;
@@ -1268,6 +1266,9 @@ namespace ZeroGameStudio.ConfigPipeline.Editor
                 firstColumnIndex += table.ColumnCount + 1;
             }
 
+            if (macroEnabled)
+                AddAuthoringActionRow(workbookPart, rowsByIndex, authoringSheet.Name, columns);
+
             var sheetData = new SheetData();
             foreach (Row row in rowsByIndex.Values)
             {
@@ -1313,7 +1314,8 @@ namespace ZeroGameStudio.ConfigPipeline.Editor
         private static void AddAuthoringActionRow(
             WorkbookPart workbookPart,
             SheetData sheetData,
-            string sheetName)
+            string sheetName,
+            Columns columns)
         {
             var row = new Row
             {
@@ -1321,30 +1323,42 @@ namespace ZeroGameStudio.ConfigPipeline.Editor
                 Height = 24D,
                 CustomHeight = true
             };
-            PopulateAuthoringActionRow(workbookPart, row, sheetName);
+            PopulateAuthoringActionRow(workbookPart, row, sheetName, columns);
             sheetData.Append(row);
         }
 
         private static void AddAuthoringActionRow(
             WorkbookPart workbookPart,
             IDictionary<uint, Row> rows,
-            string sheetName)
+            string sheetName,
+            Columns columns)
         {
             Row row = GetOrCreateRow(rows, 1U, false);
             row.Height = 24D;
             row.CustomHeight = true;
-            PopulateAuthoringActionRow(workbookPart, row, sheetName);
+            PopulateAuthoringActionRow(workbookPart, row, sheetName, columns);
         }
 
         private static void PopulateAuthoringActionRow(
             WorkbookPart workbookPart,
             Row row,
-            string sheetName)
+            string sheetName,
+            Columns columns)
         {
             string token = DefinedNameToken(sheetName);
+            int physicalColumn = 0;
             for (int index = 0; index < AuthoringActionLabels.Length; index++)
             {
-                string reference = ColumnName(index + 1) + "1";
+                Column column;
+                do
+                {
+                    physicalColumn++;
+                    if (physicalColumn > 16384)
+                        throw new InvalidOperationException("No visible columns remain for authoring actions.");
+                    column = columns.Elements<Column>().FirstOrDefault(value =>
+                        value.Min.Value <= physicalColumn && value.Max.Value >= physicalColumn);
+                } while (column?.Hidden?.Value == true);
+                string reference = ColumnName(physicalColumn) + "1";
                 Cell cell = TextCell(AuthoringActionLabels[index], NavigationHeaderStyle);
                 cell.CellReference = reference;
                 row.Append(cell);
@@ -1352,7 +1366,7 @@ namespace ZeroGameStudio.ConfigPipeline.Editor
                     workbookPart,
                     "ZGS_ACTION_" + token + "_" + AuthoringActionKeys[index],
                     "'" + sheetName.Replace("'", "''") + "'!$" +
-                    ColumnName(index + 1) + "$1");
+                    ColumnName(physicalColumn) + "$1");
             }
         }
 
@@ -1431,7 +1445,8 @@ namespace ZeroGameStudio.ConfigPipeline.Editor
                             field.Name,
                             field.Schema.ReferencePath ?? string.Empty,
                             field.Required ? "1" : "0",
-                            field.Schema.AuthoringOnly ? "1" : "0"
+                            field.Schema.AuthoringOnly ? "1" : "0",
+                            field.Schema.AuthoringVisibility ?? string.Empty
                         }));
                 }
 
@@ -1826,9 +1841,26 @@ namespace ZeroGameStudio.ConfigPipeline.Editor
 
         private static uint EditableStyleForSchema(ConfigSchemaNode schema)
         {
+            if (schema.AuthoringVisibility == "inactive") return 0U;
             return schema.Type == ConfigSchemaType.String
                 ? EditableTextCellStyle
                 : EditableCellStyle;
+        }
+
+        private static BooleanValue IsHiddenAuthoringColumn(TableDefinition table, int columnIndex)
+        {
+            if (table.Parent != null && columnIndex == 0)
+                return null; // Preserve relation-area layout; the parent is necessary context when expanded.
+            string visibility = table.Fields[columnIndex - (table.Parent == null ? 0 : 1)]
+                .Schema.AuthoringVisibility;
+            return visibility == null ? null : new BooleanValue(visibility != "basic");
+        }
+
+        private static int FirstVisibleAuthoringColumn(TableDefinition table)
+        {
+            for (int index = 0; index < table.ColumnCount; index++)
+                if (IsHiddenAuthoringColumn(table, index)?.Value != true) return index;
+            return 0;
         }
 
         private static double SuggestedColumnWidth(TableDefinition table, int columnIndex)

@@ -44,7 +44,9 @@ namespace ZeroGameStudio.ConfigPipeline
                 "x-zgs-scope",
                 "x-zgs-unit",
                 "x-zgs-group",
-                "x-zgs-authoring-only"
+                "x-zgs-authoring-only",
+                "x-zgs-authoring-visibility",
+                "x-zgs-require-authoring-visibility"
             };
 
         public static ConfigSchema Parse(byte[] utf8Schema)
@@ -81,6 +83,9 @@ namespace ZeroGameStudio.ConfigPipeline
             {
                 throw new ConfigSchemaException("SCHEMA_ROOT_TYPE_INVALID", "$", "Schema root type must be object.");
             }
+
+            if (OptionalBoolean(root, "x-zgs-require-authoring-visibility", false, "$"))
+                RequireAuthoringVisibility(schemaRoot, "$");
 
             return new ConfigSchema(
                 schemaId,
@@ -159,6 +164,16 @@ namespace ZeroGameStudio.ConfigPipeline
             }
 
             ConfigSchemaType type = ParseType(RequireString(source, "type", path), path);
+            string visibility = OptionalString(source, "x-zgs-authoring-visibility", path);
+            if (visibility != null &&
+                (type == ConfigSchemaType.Object || type == ConfigSchemaType.Array ||
+                 (visibility != "basic" && visibility != "advanced" &&
+                  visibility != "technical" && visibility != "inactive")))
+                throw new ConfigSchemaException("SCHEMA_AUTHORING_VISIBILITY_INVALID", path,
+                    "Scalar authoring visibility must be basic, advanced, technical or inactive.");
+            if (source["x-zgs-require-authoring-visibility"] != null && path != "$")
+                throw new ConfigSchemaException("SCHEMA_AUTHORING_POLICY_INVALID", path,
+                    "The authoring visibility policy belongs on the schema root.");
             ConfigFieldScope scope = source.TryGetValue("x-zgs-scope", out JToken scopeToken)
                 ? ParseScope(RequireString(scopeToken, path + "/x-zgs-scope"), path)
                 : inheritedScope;
@@ -359,7 +374,31 @@ namespace ZeroGameStudio.ConfigPipeline
                 OptionalString(source, "title", path),
                 OptionalString(source, "description", path),
                 OptionalString(source, "x-zgs-unit", path),
-                OptionalString(source, "x-zgs-group", path));
+                OptionalString(source, "x-zgs-group", path),
+                visibility);
+        }
+
+        private static void RequireAuthoringVisibility(ConfigSchemaNode node, string path)
+        {
+            if (node.Type == ConfigSchemaType.Object)
+            {
+                foreach (ConfigSchemaProperty property in node.Properties)
+                {
+                    ConfigSchemaNode field = property.Schema;
+                    if (node.IsRequired(property.Name) && field.AuthoringVisibility != null &&
+                        field.AuthoringVisibility != "basic" && field.DefaultValue == null &&
+                        !field.PrimaryKey && property.Name != "order")
+                        throw new ConfigSchemaException("SCHEMA_HIDDEN_INPUT_REQUIRES_DEFAULT",
+                            path + "/properties/" + property.Name,
+                            "A hidden required input needs a default or must remain basic.");
+                    RequireAuthoringVisibility(property.Schema, path + "/properties/" + property.Name);
+                }
+            }
+            else if (node.Type == ConfigSchemaType.Array)
+                RequireAuthoringVisibility(node.Items, path + "/items");
+            else if (node.AuthoringVisibility == null)
+                throw new ConfigSchemaException("SCHEMA_AUTHORING_VISIBILITY_REQUIRED", path,
+                    "Classify every authoring field before adding it to a governed configuration table.");
         }
 
         private static void ValidateAnnotationApplicability(

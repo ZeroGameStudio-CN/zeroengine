@@ -13,7 +13,7 @@ $actionLabels = @(
     '复制',
     '安全删除',
     '编辑关系',
-    '技术区',
+    '高级/技术',
     '帮助'
 )
 $excel = $null
@@ -22,6 +22,9 @@ try {
     $excel = New-Object -ComObject Excel.Application
     $excel.Visible = $false
     $excel.DisplayAlerts = $false
+    # Controlled, reviewed candidates only; keep workbook events disabled while compiling the approved module.
+    $excel.AutomationSecurity = 1
+    $excel.EnableEvents = $false
     foreach ($path in $WorkbookPath) {
         $absolute = [System.IO.Path]::GetFullPath($path)
         if (-not [System.IO.File]::Exists($absolute)) {
@@ -51,8 +54,10 @@ try {
 
                 $worksheet.Rows.Item(1).Hidden = $false
                 $worksheet.Rows.Item(1).RowHeight = 24
+                $physicalColumn = 0
                 for ($index = 0; $index -lt $actionLabels.Count; $index++) {
-                    $cell = $worksheet.Cells.Item(1, $index + 1)
+                    do { $physicalColumn++ } while ($worksheet.Columns.Item($physicalColumn).Hidden)
+                    $cell = $worksheet.Cells.Item(1, $physicalColumn)
                     $cell.Value2 = $actionLabels[$index]
                     $cell.Font.Bold = $true
                     $cell.Font.Color = 0xFFFFFF
@@ -65,7 +70,7 @@ try {
                     })
                     $definedName = "ZGS_ACTION_${token}_$($actionKeys[$index])"
                     try { $workbook.Names.Item($definedName).Delete() | Out-Null } catch { }
-                    $workbook.Names.Add($definedName, "='$($worksheet.Name.Replace("'", "''"))'!`$$([char](65 + $index))`$1") | Out-Null
+                    $workbook.Names.Add($definedName, "='$($worksheet.Name.Replace("'", "''"))'!$($cell.Address())") | Out-Null
                 }
 
                 $worksheet.Activate() | Out-Null
@@ -115,12 +120,12 @@ try {
 
             for ($index = $project.VBComponents.Count; $index -ge 1; $index--) {
                 $component = $project.VBComponents.Item($index)
-                if ($component.Type -ne 100) {
+                if ($component.Name -eq 'ZgsAuthoring' -and $component.Type -ne 100) {
                     $project.VBComponents.Remove($component) | Out-Null
                     continue
                 }
 
-                if ($component.Type -eq 100) {
+                if ($component.Name -eq $workbook.CodeName -and $component.Type -eq 100) {
                     $code = $component.CodeModule
                     if ($code.CountOfLines -gt 0) {
                         $code.DeleteLines(1, $code.CountOfLines) | Out-Null
@@ -145,7 +150,7 @@ try {
             $workbook.Save() | Out-Null
         }
         finally {
-            $excel.EnableEvents = $true
+            $excel.EnableEvents = $false
             $workbook.Close($false) | Out-Null
         }
     }
