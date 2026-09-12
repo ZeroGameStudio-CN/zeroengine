@@ -676,7 +676,8 @@ namespace ZeroGameStudio.ConfigPipeline.Editor
                             workbook.AuthoringSheets,
                             nextSet.UsesMacroEnabledWorkbooks,
                             workbook.ProtectedRecordIds,
-                            nextSet.UsesAuthoringOperations);
+                            nextSet.UsesAuthoringOperations,
+                            allowSchemaUpgradeColumnRelocation: true);
                     }
                     else
                     {
