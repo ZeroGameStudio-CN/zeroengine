@@ -41,7 +41,8 @@ namespace ZeroGameStudio.ConfigPipeline.Editor
             IEnumerable<ConfigAuthoringSheetProfile> authoringSheets,
             bool macroEnabled,
             IReadOnlyDictionary<string, IReadOnlyList<string>> protectedRecordIds = null,
-            bool authoringOperationsEnabled = false)
+            bool authoringOperationsEnabled = false,
+            bool allowSchemaUpgradeColumnRelocation = false)
         {
             if (string.IsNullOrWhiteSpace(sourcePath))
             {
@@ -116,7 +117,7 @@ namespace ZeroGameStudio.ConfigPipeline.Editor
                             sourceWorkbook,
                             macroEnabled,
                             sourcePath);
-                        MergeWorkbook(sourceWorkbook, generatedWorkbook);
+                        MergeWorkbook(sourceWorkbook, generatedWorkbook, allowSchemaUpgradeColumnRelocation);
                     }
                 }
 
@@ -182,7 +183,8 @@ namespace ZeroGameStudio.ConfigPipeline.Editor
 
         private static void MergeWorkbook(
             SpreadsheetDocument sourceWorkbook,
-            SpreadsheetDocument generatedWorkbook)
+            SpreadsheetDocument generatedWorkbook,
+            bool allowSchemaUpgradeColumnRelocation)
         {
             WorkbookPart sourcePart = sourceWorkbook.WorkbookPart ??
                                        throw new InvalidDataException(
@@ -505,7 +507,7 @@ namespace ZeroGameStudio.ConfigPipeline.Editor
                     newTableRowOffset));
             }
 
-            if (targets.Any(target => target.ColumnOffset != 0))
+            if (targets.Any(target => target.ColumnOffset != 0) && !allowSchemaUpgradeColumnRelocation)
             {
                 throw new InvalidDataException(
                     "Pipeline table column relocation requires an explicit workbook migration.");
