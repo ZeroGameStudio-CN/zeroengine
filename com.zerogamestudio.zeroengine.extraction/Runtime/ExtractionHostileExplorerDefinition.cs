@@ -16,6 +16,8 @@ namespace POB.Extraction
         public string SpawnPointId;
         public int DifficultyLevel;
         public bool IsBoss;
+        /// <summary>Spawn chance after candidate selection; omitted legacy data keeps guaranteed spawning.</summary>
+        public float SpawnProbability = 1f;
 
         public bool IsValid =>
             !string.IsNullOrEmpty(EncounterId)
@@ -24,7 +26,10 @@ namespace POB.Extraction
             && !string.IsNullOrEmpty(LootTableId)
             && MinThreatLevel >= 0
             && DifficultyLevel >= 0
-            && Weight > 0;
+            && Weight > 0
+            && !float.IsNaN(SpawnProbability)
+            && SpawnProbability >= 0f
+            && SpawnProbability <= 1f;
 
         public ExtractionHostileExplorerDefinition(
             string encounterId,
