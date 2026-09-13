@@ -22,6 +22,7 @@ namespace ZGS.Analytics
         /// </summary>
         public static void Initialize()
         {
+            if (AnalyticsBootstrap.IsAutomationIsolated) return;
             if (_isInitialized) return;
             
             Application.logMessageReceived += OnLogMessageReceived;
@@ -91,6 +92,7 @@ namespace ZGS.Analytics
         /// <returns>协程（需要 MonoBehaviour 启动）</returns>
         public static System.Collections.IEnumerator ReportBugWithAttachments(AttachmentUploadRequest request)
         {
+            if (AnalyticsBootstrap.IsAutomationIsolated) yield break;
             request = request ?? new AttachmentUploadRequest();
 
             if (_attachmentUploader is ZipAttachmentUploader)

@@ -4,9 +4,29 @@ namespace ZGS.Analytics
 {
     public static class AnalyticsBootstrap
     {
+        public static bool IsAutomationIsolated { get; private set; }
+        private static bool started;
+
+        // Configure from AfterAssembliesLoaded, before any SDK service is used.
+        public static void DisableForAutomation()
+        {
+            if (started)
+                throw new System.InvalidOperationException("Analytics isolation must precede initialization.");
+            IsAutomationIsolated = true;
+        }
+
+        [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
+        private static void ResetStartup()
+        {
+            IsAutomationIsolated = false;
+            started = false;
+        }
+
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.BeforeSceneLoad)]
         private static void AutoInitialize()
         {
+            started = true;
+            if (IsAutomationIsolated) return;
             var config = Resources.Load<ZGSAnalyticsConfig>("ZGSAnalyticsConfig");
             if (config == null)
             {
