@@ -572,7 +572,7 @@ namespace ZeroGameStudio.ConfigPipeline.Editor
             {
                 Column expected = generatedColumns.Elements<Column>().FirstOrDefault(column =>
                     column.Min.Value <= index && column.Max.Value >= index);
-                if (expected?.Hidden == null) continue;
+                if (expected == null) continue;
                 Column original = sourceColumns.Elements<Column>().FirstOrDefault(column =>
                     column.Min.Value <= index && column.Max.Value >= index);
                 var current = original == null ? new Column { Width = expected.Width, CustomWidth = true }
@@ -594,7 +594,8 @@ namespace ZeroGameStudio.ConfigPipeline.Editor
                     original.Remove();
                 }
                 current.Min = current.Max = index;
-                current.Hidden = expected.Hidden.Value;
+                // OpenXML omits Hidden for visible columns; it must also clear a legacy hidden state.
+                current.Hidden = expected.Hidden?.Value ?? false;
                 Column next = sourceColumns.Elements<Column>().FirstOrDefault(column => column.Min.Value > index);
                 if (next == null) sourceColumns.Append(current);
                 else sourceColumns.InsertBefore(current, next);

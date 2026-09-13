@@ -886,7 +886,7 @@ namespace ZeroGameStudio.ConfigPipeline.Editor
                 {
                     Count = 3U
                 });
-            worksheet.Append(hyperlinks);
+            if (hyperlinks.HasChildren) worksheet.Append(hyperlinks);
             worksheetPart.Worksheet = worksheet;
             worksheetPart.Worksheet.Save();
             sheets.Append(new Sheet

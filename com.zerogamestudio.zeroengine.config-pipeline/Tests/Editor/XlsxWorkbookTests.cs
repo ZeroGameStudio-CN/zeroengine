@@ -124,6 +124,40 @@ namespace ZeroGameStudio.ConfigPipeline.Tests
             }
         }
 
+        [Test]
+        public void SourcePreservingRefresh_ClearsLegacyHiddenWhenSchemaOmitsHidden()
+        {
+            string sourcePath = TemporaryWorkbookPath("legacy-hidden-source");
+            string candidatePath = TemporaryWorkbookPath("legacy-hidden-candidate");
+            try
+            {
+                using (FileStream stream = File.Create(sourcePath))
+                    new XlsxConfigWorkbookWriter().WriteTemplate(stream, Schema(), "sample.xlsm", Document(),
+                        null, null, null, true);
+                using (SpreadsheetDocument source = SpreadsheetDocument.Open(sourcePath, true))
+                {
+                    var sheet = GetWorksheetPart(source, "Items");
+                    var column = sheet.Worksheet.GetFirstChild<Columns>().Elements<Column>()
+                        .Single(value => value.Min.Value <= 2 && value.Max.Value >= 2);
+                    Assert.That(column.Hidden, Is.Null, "Unclassified visible columns omit Hidden.");
+                    column.Hidden = true;
+                    sheet.Worksheet.Save();
+                }
+                string before = Sha256(File.ReadAllBytes(sourcePath));
+                XlsxConfigWorkbookSourcePreservingWriter.WriteCandidate(sourcePath, candidatePath, Schema(),
+                    "sample.xlsm", Document(), null, null, null, true);
+                Assert.That(Sha256(File.ReadAllBytes(sourcePath)), Is.EqualTo(before));
+                using (SpreadsheetDocument candidate = SpreadsheetDocument.Open(candidatePath, false))
+                    Assert.That(GetWorksheetPart(candidate, "Items").Worksheet.GetFirstChild<Columns>().Elements<Column>()
+                        .Any(value => value.Min.Value <= 2 && value.Max.Value >= 2 && value.Hidden?.Value == true), Is.False);
+            }
+            finally
+            {
+                if (File.Exists(sourcePath)) File.Delete(sourcePath);
+                if (File.Exists(candidatePath)) File.Delete(candidatePath);
+            }
+        }
+
         [TestCase(false)]
         [TestCase(true)]
         public void InactiveTable_HidesEntireSheetWithoutLosingDataOrVisibleNavigation(bool grouped)
@@ -143,7 +177,7 @@ namespace ZeroGameStudio.ConfigPipeline.Tests
                         sheet.Name.Value == (grouped ? "Authoring" : "Items")).State.Value, Is.EqualTo(SheetStateValues.Hidden));
                     Assert.That(workbook.WorkbookPart.Workbook.Sheets.Elements<Sheet>().Any(sheet => sheet.State == null ||
                         sheet.State.Value == SheetStateValues.Visible), Is.True);
-                    Assert.That(new OpenXmlValidator().Validate(workbook), Is.Empty);
+                    Assert.That(new OpenXmlValidator().Validate(workbook).Select(error => error.Description), Is.Empty);
                 }
                 stream.Position = 0;
                 var read = new XlsxConfigSourceReader(schema, null, null, true).Read(stream,
