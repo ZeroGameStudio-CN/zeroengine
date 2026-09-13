@@ -20,6 +20,9 @@ relations with their root so the existing relation editor/advanced action can
 reach them. Complex relationships without an editor remain basic inputs; do not
 hide an input solely because its name contains `Id` or it has a default value.
 Active roots need a visible identity/input, not a dead screen of hidden columns.
+The advanced/technical view action targets the active authoring sheet, including
+standalone child sheets and empty tables; it does not require a selected root record.
+Record-changing actions retain their existing ownership checks.
 
 Each effective value needs one authoring authority. A preset selector must not
 silently lose to hidden overrides. Give custom configuration an explicit choice,

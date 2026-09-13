@@ -279,7 +279,12 @@ Private Sub ZgsToggleTechnical()
     Dim HideColumns As Boolean
     Dim HasTable As Boolean
 
-    Set ParentTable = ZgsCurrentRootTable()
+    ' View changes belong to the active authoring sheet, not a selected root record.
+    ' This also supports standalone child sheets and empty tables.
+    If Not TypeOf ActiveSheet Is Worksheet Then Exit Sub
+    If Not ActiveSheet.Parent Is ThisWorkbook Then Exit Sub
+    If ActiveSheet.ListObjects.Count = 0 Then Exit Sub
+    Set ParentTable = ActiveSheet.ListObjects(1)
     For Each DefinedName In ThisWorkbook.Names
         If Left$(DefinedName.Name, 15) = "ZGS_META_FIELD_" Then
             Meta = Split(ZgsDefinedValue(DefinedName), vbTab)
