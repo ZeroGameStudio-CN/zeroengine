@@ -63,6 +63,7 @@ namespace ZGS.Analytics
         /// </summary>
         public static void Initialize()
         {
+            if (AnalyticsBootstrap.IsAutomationIsolated) return;
             if (_initialized) return;
             _initialized = true;
             

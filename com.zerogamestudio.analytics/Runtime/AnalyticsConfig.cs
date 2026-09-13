@@ -26,10 +26,12 @@ namespace ZGS.Analytics
 
         /// <summary>是否已配置服务器</summary>
         public static bool IsConfigured =>
+            !AnalyticsBootstrap.IsAutomationIsolated &&
             !string.IsNullOrEmpty(ServerUrl) && !string.IsNullOrEmpty(Secret);
 
         /// <summary>是否已配置反馈上传</summary>
         public static bool IsUploadConfigured =>
+            !AnalyticsBootstrap.IsAutomationIsolated &&
             !string.IsNullOrEmpty(ServerUrl) && !string.IsNullOrEmpty(UploadSecret);
     }
 }

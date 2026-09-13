@@ -72,6 +72,8 @@ namespace ZGS.Analytics
         {
             get
             {
+                if (AnalyticsBootstrap.IsAutomationIsolated)
+                    throw new InvalidOperationException("Feedback storage is unavailable during isolated automation.");
                 string dir = Path.Combine(Application.persistentDataPath, "PendingFeedback");
                 if (!Directory.Exists(dir))
                     Directory.CreateDirectory(dir);
@@ -84,6 +86,7 @@ namespace ZGS.Analytics
         /// </summary>
         public static void Initialize()
         {
+            if (AnalyticsBootstrap.IsAutomationIsolated) return;
             _isProcessing = false;
             _backgroundRunning = false;
             _queueMutationVersion = 0;
@@ -120,6 +123,7 @@ namespace ZGS.Analytics
             string version,
             string userName)
         {
+            if (AnalyticsBootstrap.IsAutomationIsolated) return false;
             if (_pendingUploads == null)
                 LoadQueue();
 
@@ -183,6 +187,7 @@ namespace ZGS.Analytics
         /// </summary>
         public static IEnumerator ProcessPendingUploads()
         {
+            if (AnalyticsBootstrap.IsAutomationIsolated) yield break;
             if (_isProcessing) yield break;
             if (_pendingUploads == null) LoadQueue();
             if (_pendingUploads.Count == 0) yield break;
@@ -243,6 +248,11 @@ namespace ZGS.Analytics
         /// </summary>
         public static IEnumerator UploadWithRetry(string zipPath, string version, string userName, Action<bool> onComplete)
         {
+            if (AnalyticsBootstrap.IsAutomationIsolated)
+            {
+                onComplete?.Invoke(false);
+                yield break;
+            }
             bool success = false;
 
             for (int i = 0; i <= MaxRetries; i++)
@@ -636,6 +646,7 @@ namespace ZGS.Analytics
         {
             get
             {
+                if (AnalyticsBootstrap.IsAutomationIsolated) return 0;
                 if (_pendingUploads == null) LoadQueue();
                 return _pendingUploads.Count;
             }
@@ -646,6 +657,7 @@ namespace ZGS.Analytics
         /// </summary>
         public static void ClearQueue()
         {
+            if (AnalyticsBootstrap.IsAutomationIsolated) return;
             if (_pendingUploads == null) LoadQueue();
 
             foreach (var item in _pendingUploads)
