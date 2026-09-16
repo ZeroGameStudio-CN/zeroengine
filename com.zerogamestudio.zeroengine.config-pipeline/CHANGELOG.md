@@ -1,5 +1,14 @@
 # Changelog
 
+## 2.2.0
+
+- Add opt-in single-cell lists for child arrays with one scalar business value;
+  accept English/Chinese commas and quoted values without changing runtime shape.
+- Keep complex records in detail tables and validation in the configurator.
+  Existing workbooks require an explicit backed-up migration before adoption.
+- Verify typed round trips and source-preserving candidates, including large
+  integers, duplicates, empty lists and unchanged runtime projections.
+
 ## 2.1.0
 
 - Add config-set-wide `.xlsm` authoring, validate macro package structure, and

@@ -45,6 +45,7 @@ namespace ZeroGameStudio.ConfigPipeline
                 "x-zgs-unit",
                 "x-zgs-group",
                 "x-zgs-authoring-only",
+                "x-zgs-inline-value-field",
                 "x-zgs-authoring-visibility",
                 "x-zgs-authoring-policy-version",
                 "x-zgs-require-authoring-visibility"
@@ -279,6 +280,24 @@ namespace ZeroGameStudio.ConfigPipeline
             }
 
             ConfigIntegerType? integerType = ParseIntegerType(source, type, path);
+            string inlineValueField = OptionalString(source, "x-zgs-inline-value-field", path);
+            if (inlineValueField != null)
+            {
+                var payload = items?.Properties.SingleOrDefault(property => property.Name == inlineValueField);
+                if (type != ConfigSchemaType.Array || items.Type != ConfigSchemaType.Object ||
+                    sheet == null || parentKey == null || orderField == null ||
+                    payload == null || payload.Schema.AuthoringOnly || payload.Schema.PrimaryKey ||
+                    payload.Schema.Type == ConfigSchemaType.Object || payload.Schema.Type == ConfigSchemaType.Array ||
+                    items.Properties.Count != 3 ||
+                    items.Properties.Count(property => property.Schema.PrimaryKey && property.Schema.AuthoringOnly) != 1 ||
+                    !items.Properties.Any(property => property.Name == orderField && property.Schema.AuthoringOnly &&
+                        !property.Schema.PrimaryKey && property.Schema.Type == ConfigSchemaType.Integer) ||
+                    items.Properties.Any(property => property.Name != inlineValueField &&
+                        !(property.Schema.PrimaryKey && property.Schema.AuthoringOnly) &&
+                        !(property.Name == orderField && property.Schema.AuthoringOnly)))
+                    throw new ConfigSchemaException("SCHEMA_INLINE_LIST_INVALID", path,
+                        "Inline lists require one scalar business value, an author-only key and author-only integer order. Complex rows remain tables.");
+            }
             ConfigNumberType? numberType = ParseNumberType(source, type, path);
             double? minimum = OptionalFiniteNumber(source, "minimum", path);
             double? maximum = OptionalFiniteNumber(source, "maximum", path);
@@ -381,7 +400,8 @@ namespace ZeroGameStudio.ConfigPipeline
                 OptionalString(source, "description", path),
                 OptionalString(source, "x-zgs-unit", path),
                 OptionalString(source, "x-zgs-group", path),
-                visibility);
+                visibility,
+                inlineValueField);
         }
 
         private static void RequireAuthoringVisibility(ConfigSchemaNode node, string path, bool classifyTables)

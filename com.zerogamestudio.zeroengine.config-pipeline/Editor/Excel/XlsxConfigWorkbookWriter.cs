@@ -363,7 +363,7 @@ namespace ZeroGameStudio.ConfigPipeline.Editor
                 parent);
             tables.Add(table);
             foreach (ConfigSchemaProperty child in arraySchema.Items.Properties
-                         .Where(field => field.Schema.Type == ConfigSchemaType.Array))
+                         .Where(field => field.Schema.Type == ConfigSchemaType.Array && field.Schema.InlineValueField == null))
             {
                 AddTable(tables, sheetNames, rootPropertyName, child.Name, child.Schema, table);
             }
@@ -385,7 +385,7 @@ namespace ZeroGameStudio.ConfigPipeline.Editor
                 {
                     AddScalarFields(property.Schema, path, required, fields);
                 }
-                else if (property.Schema.Type != ConfigSchemaType.Array)
+                else if (property.Schema.Type != ConfigSchemaType.Array || property.Schema.InlineValueField != null)
                 {
                     fields.Add(new FieldDefinition(path, property.Schema, required));
                 }
@@ -1026,7 +1026,7 @@ namespace ZeroGameStudio.ConfigPipeline.Editor
                         FieldDefinition field = table.Fields[fieldIndex];
                         uint styleIndex = EditableStyleForSchema(field.Schema);
                         Cell cell = TryGetPath(tableRow.Value, field.Name, out ConfigNode value)
-                                 ? ValueCell(value, styleIndex)
+                                 ? FieldValueCell(field.Schema, value, styleIndex)
                                  : new Cell { StyleIndex = styleIndex };
                         cell.CellReference =
                             ColumnName(fieldIndex + table.FieldColumnOffset) +
@@ -1240,7 +1240,7 @@ namespace ZeroGameStudio.ConfigPipeline.Editor
                             FieldDefinition field = table.Fields[fieldIndex];
                             uint styleIndex = EditableStyleForSchema(field.Schema);
                             Cell cell = TryGetPath(tableRow.Value, field.Name, out ConfigNode value)
-                                ? ValueCell(value, styleIndex)
+                                ? FieldValueCell(field.Schema, value, styleIndex)
                                 : new Cell { StyleIndex = styleIndex };
                             cell.CellReference = ColumnName(
                                                      firstColumnIndex + fieldIndex +
@@ -1875,7 +1875,7 @@ namespace ZeroGameStudio.ConfigPipeline.Editor
         private static uint EditableStyleForSchema(ConfigSchemaNode schema)
         {
             if (schema.AuthoringVisibility == "inactive") return 0U;
-            return schema.Type == ConfigSchemaType.String
+            return schema.Type == ConfigSchemaType.String || schema.InlineValueField != null
                 ? EditableTextCellStyle
                 : EditableCellStyle;
         }
@@ -1967,6 +1967,12 @@ namespace ZeroGameStudio.ConfigPipeline.Editor
                 CellValue = new CellValue(value.ToString(CultureInfo.InvariantCulture)),
                 StyleIndex = styleIndex
             };
+        }
+
+        private static Cell FieldValueCell(ConfigSchemaNode schema, ConfigNode value, uint styleIndex)
+        {
+            return schema.InlineValueField == null ? ValueCell(value, styleIndex)
+                : TextCell(InlineListCell.Format(schema, value), styleIndex);
         }
 
         private static Cell ValueCell(ConfigNode value, uint styleIndex)

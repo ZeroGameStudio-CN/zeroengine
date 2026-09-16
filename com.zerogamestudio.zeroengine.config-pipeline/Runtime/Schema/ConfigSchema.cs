@@ -93,7 +93,8 @@ namespace ZeroGameStudio.ConfigPipeline
             string description,
             string unit,
             string group,
-            string authoringVisibility = null)
+            string authoringVisibility = null,
+            string inlineValueField = null)
         {
             Type = type;
             this.properties = new List<ConfigSchemaProperty>(
@@ -129,6 +130,7 @@ namespace ZeroGameStudio.ConfigPipeline
             Unit = unit;
             Group = group;
             AuthoringVisibility = authoringVisibility;
+            InlineValueField = inlineValueField;
         }
 
         public ConfigSchemaType Type { get; }
@@ -189,6 +191,9 @@ namespace ZeroGameStudio.ConfigPipeline
 
         /// <summary>Null preserves legacy authoring; classified fields use basic, advanced, technical or inactive.</summary>
         public string AuthoringVisibility { get; }
+
+        /// <summary>Opt-in single-cell list of a child row's sole business value.</summary>
+        public string InlineValueField { get; }
 
         public string ResolveAuthoringVisibility(string inherited)
         {

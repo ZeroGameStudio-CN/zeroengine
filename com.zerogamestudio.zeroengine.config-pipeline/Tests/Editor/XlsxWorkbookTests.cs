@@ -37,6 +37,124 @@ namespace ZeroGameStudio.ConfigPipeline.Tests
             "\"enabled\":{\"type\":\"boolean\",\"title\":\"启用\",\"default\":true}" +
             "}}}}}";
 
+        [TestCase("a,b", "a|b")]
+        [TestCase("a， b", "a|b")]
+        [TestCase("\"a,b\",\"say \"\"hi\"\"\"", "a,b|say \"hi\"")]
+        [TestCase("", "")]
+        public void InlineListCodec_PreservesValues(string text, string expected)
+        {
+            var values = InlineListCell.Split(text);
+            Assert.That(string.Join("|", values), Is.EqualTo(expected));
+            Assert.That(InlineListCell.Split(InlineListCell.Join(values)), Is.EqualTo(values));
+        }
+
+        [TestCase("a,,b")]
+        [TestCase("a,")]
+        [TestCase("\"a")]
+        [TestCase("\"a\"b")]
+        public void InlineListCodec_RejectsAmbiguousInput(string text)
+        {
+            Assert.Throws<FormatException>(() => InlineListCell.Split(text));
+        }
+
+        [TestCase(false, "string")]
+        [TestCase(true, "string")]
+        [TestCase(false, "integer")]
+        [TestCase(false, "number")]
+        [TestCase(false, "boolean")]
+        public void InlineListWorkbook_UsesOneTableAndPreservesPayloadAcrossRefresh(bool empty, string payloadType)
+        {
+            var json = JObject.Parse(SchemaJson);
+            var fields = (JObject)json["properties"]["items"]["items"]["properties"];
+            fields["tags"] = JObject.Parse(@"{
+                'type':'array','x-zgs-sheet':'ItemTags','x-zgs-parent-key':'parentId',
+                'x-zgs-order-field':'order','x-zgs-inline-value-field':'value',
+                'items':{'type':'object','additionalProperties':false,'required':['authorId','order','value'],
+                    'properties':{
+                        'authorId':{'type':'string','x-zgs-primary-key':true,'x-zgs-authoring-only':true},
+                        'order':{'type':'integer','x-zgs-number-type':'int32','x-zgs-authoring-only':true},
+                        'value':{'type':'string'}
+                    }}}");
+            var payloadSchema = (JObject)fields["tags"]["items"]["properties"]["value"];
+            payloadSchema["type"] = payloadType;
+            if (payloadType == "integer") payloadSchema["x-zgs-number-type"] = "int64";
+            if (payloadType == "number") payloadSchema["x-zgs-number-type"] = "float64";
+            ConfigSchema schema = ConfigSchemaParser.Parse(Encoding.UTF8.GetBytes(json.ToString()));
+            var data = JObject.Parse(CanonicalJsonWriter.WriteText(Document().Root));
+            data["items"][0]["tags"] = empty ? new JArray() : JArray.Parse(@"[
+                {'authorId':'old-a','order':0,'value':'a,b'},
+                {'authorId':'old-b','order':1,'value':'quoted ""value""'},
+                {'authorId':'old-c','order':2,'value':'a,b'}]");
+            if (payloadType != "string")
+            {
+                JArray payloads = payloadType == "integer" ? JArray.Parse("[9007199254740993,-2,0]") :
+                    payloadType == "number" ? JArray.Parse("[1.25,-0.5,0]") : JArray.Parse("[true,false,true]");
+                for (int index = 0; index < payloads.Count; index++) data["items"][0]["tags"][index]["value"] = payloads[index];
+            }
+            var document = new ConfigDocument("sample.xlsx", schema.SchemaId, schema.SchemaVersion,
+                (ConfigObjectNode)ConfigJsonParser.Parse(data.ToString()));
+            var expectedRuntime = ConfigSchemaNormalizer.Normalize(document, schema, "client");
+            Assert.That(expectedRuntime.IsValid, Is.True);
+            ConfigDocument first = null;
+            for (int pass = 0; pass < 2; pass++)
+            {
+                using (var stream = new MemoryStream())
+                {
+                    new XlsxConfigWorkbookWriter().WriteTemplate(stream, schema, "sample.xlsx", document);
+                    stream.Position = 0;
+                    using (var workbook = SpreadsheetDocument.Open(stream, false))
+                    {
+                        Assert.That(GetWorksheetPart(workbook, "Items").TableDefinitionParts.Count(), Is.EqualTo(1));
+                        Assert.That(workbook.WorkbookPart.Workbook.Sheets.Elements<Sheet>().Any(sheet => sheet.Name == "ItemTags"), Is.False);
+                    }
+                    stream.Position = 0;
+                    document = new XlsxConfigSourceReader(schema).Read(stream,
+                        new ConfigReadContext("sample.xlsx", schema.SchemaId, schema.SchemaVersion));
+                }
+                var read = JObject.Parse(CanonicalJsonWriter.WriteText(document.Root));
+                Assert.That(read["items"][0]["tags"].Select(value => value["value"].ToString()),
+                    Is.EqualTo(data["items"][0]["tags"].Select(value => value["value"].ToString())));
+                var runtime = ConfigSchemaNormalizer.Normalize(document, schema, "client");
+                Assert.That(runtime.IsValid, Is.True);
+                Assert.That(CanonicalJsonWriter.WriteText(runtime.Document.Root),
+                    Is.EqualTo(CanonicalJsonWriter.WriteText(expectedRuntime.Document.Root)));
+                if (first != null)
+                    Assert.That(CanonicalJsonWriter.WriteText(document.Root), Is.EqualTo(CanonicalJsonWriter.WriteText(first.Root)));
+                first = document;
+            }
+            // Migration must collapse a same-sheet child table without changing effective data.
+            string sourcePath = TemporaryWorkbookPath("inline-source");
+            string candidatePath = TemporaryWorkbookPath("inline-candidate");
+            try
+            {
+                var legacyJson = (JObject)json.DeepClone();
+                ((JObject)legacyJson["properties"]["items"]["items"]["properties"]["tags"])
+                    .Remove("x-zgs-inline-value-field");
+                ConfigSchema legacy = ConfigSchemaParser.Parse(Encoding.UTF8.GetBytes(legacyJson.ToString()));
+                var groups = new[] { new ConfigAuthoringSheetProfile("Container", new[] { "items" }) };
+                using (var stream = File.Create(sourcePath))
+                    new XlsxConfigWorkbookWriter().WriteTemplate(stream, legacy, "sample.xlsm", document,
+                        null, null, groups, true, null, true);
+                string beforeHash = Sha256(File.ReadAllBytes(sourcePath));
+                XlsxConfigWorkbookSourcePreservingWriter.WriteCandidate(sourcePath, candidatePath, schema,
+                    "sample.xlsm", document, null, null, groups, true, null, true);
+                Assert.That(Sha256(File.ReadAllBytes(sourcePath)), Is.EqualTo(beforeHash));
+                using (var stream = File.OpenRead(candidatePath))
+                {
+                    var migrated = new XlsxConfigSourceReader(schema, null, null, true).Read(stream,
+                        new ConfigReadContext("sample.xlsm", schema.SchemaId, schema.SchemaVersion));
+                    Assert.That(CanonicalJsonWriter.WriteText(migrated.Root), Is.EqualTo(CanonicalJsonWriter.WriteText(document.Root)));
+                }
+            }
+            finally
+            {
+                if (File.Exists(sourcePath)) File.Delete(sourcePath);
+                if (File.Exists(candidatePath)) File.Delete(candidatePath);
+            }
+            fields["tags"]["items"]["properties"]["weight"] = JObject.Parse("{'type':'integer','x-zgs-number-type':'int32'}");
+            Assert.Throws<ConfigSchemaException>(() => ConfigSchemaParser.Parse(Encoding.UTF8.GetBytes(json.ToString())));
+        }
+
         [TestCase(false)]
         [TestCase(true)]
         public void ClassifiedAuthoring_HidesOnlyNonBasicColumnsAndKeepsActionsAccessible(bool grouped)

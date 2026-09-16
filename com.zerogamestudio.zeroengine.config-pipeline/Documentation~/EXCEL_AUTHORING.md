@@ -59,7 +59,32 @@ one visible authoring Sheet; each table keeps its own headers and remains a
 separate normalized JSON array. `_zgs_schema` explains fields; `_zgs_meta` and
 `_zgs_lists` are protected internal sheets.
 
-Blank means absent. Defaults and required checks come from Schema. Use stable IDs
+## Simple lists in a cell
+
+Prefer one row per business record. A list with only one business value can opt
+into `x-zgs-inline-value-field` on its existing child-array schema. Name the scalar
+payload property (for example `value` or `tagId`). The other two fields must be an
+author-only primary key and author-only integer order. Multi-field business rows
+are rejected: keep item/weight/quantity entries together in a same-sheet detail
+table, never separate parallel comma lists.
+
+The opted-in array becomes one text column on its parent table, not another
+editable child table. Use `a,b,c`; Chinese commas are also accepted. Whitespace
+outside a value is trimmed. Quote values containing commas, quotes or whitespace
+that must be preserved; double embedded quotes, as in `"say ""hello"""`.
+Blank is an empty list; consecutive/trailing separators and unclosed quotes fail
+with a cell location. Values retain order and duplicates; schema/normalization
+and reference validation still decide whether those values are valid.
+
+This changes the authoring representation only. The reader reconstructs the
+same object-array shape, with deterministic author-only IDs and order. Adoption
+must explicitly migrate old author-only row IDs (not business IDs), verify the
+runtime projection, and retain a recovery copy. Unannotated tables keep their
+existing behavior. Do not keep both an editable child table and a list column.
+VBA does not parse lists or validate their references. The configurator checks
+the complete reference graph before applying, including edits and deletions.
+
+Blank means absent for ordinary scalar columns. Defaults and required checks come from Schema. Use stable IDs
 for primary keys, references, content IDs and localization keys. Child records go
 in their own Excel table with parent ID, explicit order and child ID; the table may
 share its visible Sheet with its root table when `authoringSheets` declares that

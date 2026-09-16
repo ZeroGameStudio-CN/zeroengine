@@ -280,7 +280,7 @@ namespace ZeroGameStudio.ConfigPipeline.Editor
                 parent);
             tables.Add(table);
             foreach (ConfigSchemaProperty child in array.Items.Properties
-                         .Where(field => field.Schema.Type == ConfigSchemaType.Array))
+                         .Where(field => field.Schema.Type == ConfigSchemaType.Array && field.Schema.InlineValueField == null))
             {
                 AddTable(tables, sheetNames, rootPropertyName, child.Name, child.Schema, table);
             }
@@ -300,7 +300,7 @@ namespace ZeroGameStudio.ConfigPipeline.Editor
                 {
                     AddScalarFields(property.Schema, path, fields);
                 }
-                else if (property.Schema.Type != ConfigSchemaType.Array)
+                else if (property.Schema.Type != ConfigSchemaType.Array || property.Schema.InlineValueField != null)
                 {
                     fields.Add(new FieldDefinition(path, property.Schema));
                 }
@@ -785,6 +785,9 @@ namespace ZeroGameStudio.ConfigPipeline.Editor
                     }
                 }
 
+                int keyColumn = location.FirstColumnIndex + table.Fields.ToList().IndexOf(table.PrimaryKey) + table.FieldColumnOffset - 1;
+                cells.TryGetValue(keyColumn, out Cell identityCell);
+                string identity = identityCell == null ? string.Empty : ReadCellText(workbookPart, identityCell);
                 for (int columnIndex = 0; columnIndex < table.Fields.Count; columnIndex++)
                 {
                     int physicalColumn = location.FirstColumnIndex + columnIndex +
@@ -814,7 +817,8 @@ namespace ZeroGameStudio.ConfigPipeline.Editor
                         workbookName,
                         location.WorksheetName,
                         rowNumber,
-                        physicalColumn);
+                        physicalColumn,
+                        identity + "/" + field.Name);
                     values.Add(field, value);
                 }
 
@@ -903,13 +907,15 @@ namespace ZeroGameStudio.ConfigPipeline.Editor
                         properties.Add(new ConfigProperty(property.Name, child));
                     }
                 }
-                else if (property.Schema.Type != ConfigSchemaType.Array)
+                else if (property.Schema.Type != ConfigSchemaType.Array || property.Schema.InlineValueField != null)
                 {
                     FieldDefinition field = fields.Single(value => value.Name == path);
                     if (values.TryGetValue(field, out ConfigNode node))
                     {
                         properties.Add(new ConfigProperty(property.Name, node));
                     }
+                    else if (property.Schema.InlineValueField != null)
+                        properties.Add(new ConfigProperty(property.Name, new ConfigArrayNode(Array.Empty<ConfigNode>())));
                 }
             }
 
@@ -1097,8 +1103,42 @@ namespace ZeroGameStudio.ConfigPipeline.Editor
             string workbookName = null,
             string worksheetName = null,
             int? row = null,
-            int? column = null)
+            int? column = null,
+            string inlineIdentity = null)
         {
+            if (schema.InlineValueField != null)
+            {
+                // Numeric-looking IDs and large integers must not be rounded by Excel.
+                if (cell.DataType == null || (cell.DataType.Value != CellValues.SharedString &&
+                    cell.DataType.Value != CellValues.InlineString && cell.DataType.Value != CellValues.String))
+                    throw new XlsxConfigException("XLSX_STRING_CELL_REQUIRED", "List fields require an explicit text cell.",
+                        workbookName, worksheetName, row, column);
+                try
+                {
+                    var payload = schema.Items.Properties.Single(property => property.Name == schema.InlineValueField);
+                    var occurrences = new Dictionary<string, int>(StringComparer.Ordinal);
+                    var records = new List<ConfigNode>();
+                    foreach (string token in InlineListCell.Split(text))
+                    {
+                        var tokenCell = new Cell { DataType = CellValues.InlineString };
+                        ConfigNode value = ParseCell(payload.Schema, tokenCell, token, workbookName, worksheetName, row, column);
+                        string canonical = CanonicalJsonWriter.WriteText(value);
+                        occurrences.TryGetValue(canonical, out int occurrence);
+                        occurrences[canonical] = occurrence + 1;
+                        string key = "inline-" + ConfigHash.Sha256(System.Text.Encoding.UTF8.GetBytes(
+                            inlineIdentity + "\n" + canonical + "\n" + occurrence.ToString(CultureInfo.InvariantCulture)));
+                        records.Add(new ConfigObjectNode(schema.Items.Properties.Select(property => new ConfigProperty(
+                            property.Name, property.Name == schema.InlineValueField ? value :
+                            property.Schema.PrimaryKey ? (ConfigNode)new ConfigStringNode(key) : new ConfigIntegerNode(records.Count)))));
+                    }
+                    return new ConfigArrayNode(records);
+                }
+                catch (FormatException exception)
+                {
+                    throw new XlsxConfigException("XLSX_INLINE_LIST_INVALID", exception.Message,
+                        workbookName, worksheetName, row, column);
+                }
+            }
             switch (schema.Type)
             {
                 case ConfigSchemaType.String:
