@@ -106,6 +106,12 @@ namespace ZeroGameStudio.ConfigPipeline.Tests
                     {
                         Assert.That(GetWorksheetPart(workbook, "Items").TableDefinitionParts.Count(), Is.EqualTo(1));
                         Assert.That(workbook.WorkbookPart.Workbook.Sheets.Elements<Sheet>().Any(sheet => sheet.Name == "ItemTags"), Is.False);
+                        var listCell = GetWorksheetPart(workbook, "Items").Worksheet.Descendants<Cell>()
+                            .Single(cell => cell.CellReference == "E3");
+                        var listStyle = workbook.WorkbookPart.WorkbookStylesPart.Stylesheet.CellFormats
+                            .Elements<CellFormat>().ElementAt((int)listCell.StyleIndex.Value);
+                        Assert.That(listStyle.NumberFormatId.Value, Is.EqualTo(49U));
+                        Assert.That(listStyle.Alignment.WrapText.Value, Is.True);
                     }
                     stream.Position = 0;
                     document = new XlsxConfigSourceReader(schema).Read(stream,

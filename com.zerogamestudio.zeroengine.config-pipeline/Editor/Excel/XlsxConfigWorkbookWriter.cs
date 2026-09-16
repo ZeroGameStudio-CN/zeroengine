@@ -17,6 +17,7 @@ namespace ZeroGameStudio.ConfigPipeline.Editor
 
         private const uint EditableCellStyle = 1U;
         private const uint EditableTextCellStyle = 9U;
+        private const uint EditableListCellStyle = 10U;
         private const uint NavigationTitleStyle = 2U;
         private const uint NavigationSubtitleStyle = 3U;
         private const uint NavigationHeaderStyle = 4U;
@@ -556,9 +557,18 @@ namespace ZeroGameStudio.ConfigPipeline.Editor
                         ApplyNumberFormat = true,
                         ApplyProtection = true,
                         Protection = new Protection { Locked = false }
+                    },
+                    new CellFormat
+                    {
+                        NumberFormatId = 49U,
+                        ApplyNumberFormat = true,
+                        ApplyProtection = true,
+                        Protection = new Protection { Locked = false },
+                        ApplyAlignment = true,
+                        Alignment = new Alignment { WrapText = true, Vertical = VerticalAlignmentValues.Center }
                     })
                 {
-                    Count = 10
+                    Count = 11
                 },
                 new CellStyles(
                     new CellStyle
@@ -1875,7 +1885,8 @@ namespace ZeroGameStudio.ConfigPipeline.Editor
         private static uint EditableStyleForSchema(ConfigSchemaNode schema)
         {
             if (schema.AuthoringVisibility == "inactive") return 0U;
-            return schema.Type == ConfigSchemaType.String || schema.InlineValueField != null
+            if (schema.InlineValueField != null) return EditableListCellStyle;
+            return schema.Type == ConfigSchemaType.String
                 ? EditableTextCellStyle
                 : EditableCellStyle;
         }
@@ -1911,6 +1922,7 @@ namespace ZeroGameStudio.ConfigPipeline.Editor
             }
 
             FieldDefinition field = table.Fields[columnIndex - (table.Parent == null ? 0 : 1)];
+            if (field.Schema.InlineValueField != null) return 40D;
             if (field.Schema.PrimaryKey)
             {
                 return 28D;

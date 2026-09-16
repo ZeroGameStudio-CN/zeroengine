@@ -1,5 +1,10 @@
 # Changelog
 
+## 2.2.1
+
+- Give inline lists a wrapped, editable text style and a readable default width.
+  Verify the format alongside typed workbook round trips.
+
 ## 2.2.0
 
 - Add opt-in single-cell lists for child arrays with one scalar business value;
