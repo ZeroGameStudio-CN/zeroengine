@@ -1,5 +1,11 @@
 # Changelog
 
+## 2.2.2
+
+- Insert refreshed data validations in schema order, before page settings, and
+  normalize legacy misplaced containers without changing rules or VBA. Cover
+  both missing and misplaced validation containers with synthetic regressions.
+
 ## 2.2.1
 
 - Give inline lists a wrapped, editable text style and a readable default width.

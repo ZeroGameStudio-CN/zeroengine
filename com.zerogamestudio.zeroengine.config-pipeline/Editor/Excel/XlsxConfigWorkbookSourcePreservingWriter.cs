@@ -1874,23 +1874,13 @@ namespace ZeroGameStudio.ConfigPipeline.Editor
             if (sourceContainer == null)
             {
                 sourceContainer = new DataValidations();
-                OpenXmlElement next =
-                    sourceSheet.Worksheet.GetFirstChild<Hyperlinks>();
-                if (next == null)
-                {
-                    next = sourceSheet.Worksheet.GetFirstChild<TableParts>();
-                }
-                if (next == null)
-                {
-                    sourceSheet.Worksheet.Append(sourceContainer);
-                }
-                else
-                {
-                    sourceSheet.Worksheet.InsertBefore(sourceContainer, next);
-                }
+                // Excel requires validations before print/page settings as well as tables.
+                sourceSheet.Worksheet.AddChild(sourceContainer, true);
             }
             else
             {
+                sourceContainer.Remove();
+                sourceSheet.Worksheet.AddChild(sourceContainer, true);
                 sourceContainer.RemoveAllChildren<DataValidation>();
             }
 

@@ -1595,6 +1595,48 @@ namespace ZeroGameStudio.ConfigPipeline.Tests
             }
         }
 
+        [TestCase(false)]
+        [TestCase(true)]
+        public void SourcePreservingWriterRestoresValidationsBeforePageSettings(bool legacyMisordered)
+        {
+            // Permanent regression: Excel refuses a worksheet with validations after pageMargins.
+            string sourcePath = TemporaryWorkbookPath("validation-order-source");
+            string candidatePath = TemporaryWorkbookPath("validation-order-candidate");
+            try
+            {
+                using (FileStream stream = File.Create(sourcePath))
+                    new XlsxConfigWorkbookWriter().WriteTemplate(stream, Schema(), "sample.xlsx", Document());
+                using (SpreadsheetDocument source = SpreadsheetDocument.Open(sourcePath, true))
+                {
+                    Worksheet worksheet = GetWorksheetPart(source, "Items").Worksheet;
+                    DataValidations validations = worksheet.GetFirstChild<DataValidations>();
+                    Assert.That(validations, Is.Not.Null);
+                    validations.Remove();
+                    worksheet.AddChild(new PageMargins
+                    {
+                        Left = 0.7D, Right = 0.7D, Top = 0.75D, Bottom = 0.75D,
+                        Header = 0.3D, Footer = 0.3D
+                    }, true);
+                    if (legacyMisordered) worksheet.Append(validations);
+                    worksheet.Save();
+                }
+                XlsxConfigWorkbookSourcePreservingWriter.WriteCandidate(sourcePath, candidatePath,
+                    Schema(), "sample.xlsx", Document(), "source-hash", new[] { "items" }, null, false);
+                using (SpreadsheetDocument candidate = SpreadsheetDocument.Open(candidatePath, false))
+                {
+                    Worksheet worksheet = GetWorksheetPart(candidate, "Items").Worksheet;
+                    Assert.That(worksheet.GetFirstChild<DataValidations>(), Is.Not.Null);
+                    Assert.That(worksheet.GetFirstChild<PageMargins>().Left.Value, Is.EqualTo(0.7D));
+                    Assert.That(new OpenXmlValidator().Validate(candidate), Is.Empty);
+                }
+            }
+            finally
+            {
+                if (File.Exists(sourcePath)) File.Delete(sourcePath);
+                if (File.Exists(candidatePath)) File.Delete(candidatePath);
+            }
+        }
+
         [Test]
         public void SourcePreservingWriterRetainsMacroAndDesignerCells()
         {
