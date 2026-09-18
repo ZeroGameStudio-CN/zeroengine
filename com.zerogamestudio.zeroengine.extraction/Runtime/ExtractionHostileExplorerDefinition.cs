@@ -10,6 +10,8 @@ namespace POB.Extraction
         public string EncounterId;
         public string MapId;
         public string ActorKey;
+        public string ContainerTypeId;
+        // Legacy serialized configurations retain their original table until an explicit container is selected.
         public string LootTableId;
         public int MinThreatLevel;
         public int Weight;
@@ -23,7 +25,7 @@ namespace POB.Extraction
             !string.IsNullOrEmpty(EncounterId)
             && !string.IsNullOrEmpty(MapId)
             && !string.IsNullOrEmpty(ActorKey)
-            && !string.IsNullOrEmpty(LootTableId)
+            && (!string.IsNullOrEmpty(ContainerTypeId) || !string.IsNullOrEmpty(LootTableId))
             && MinThreatLevel >= 0
             && DifficultyLevel >= 0
             && Weight > 0
