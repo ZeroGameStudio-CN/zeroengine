@@ -87,6 +87,8 @@ namespace POB.Extraction
                     maximum,
                     definition.SearchTimeMultiplier)
                 {
+                    Rows = definition.Rows,
+                    Columns = definition.Columns,
                     BonusGroupId = spawn.BonusGroupId,
                     Active = string.IsNullOrEmpty(spawn.BonusGroupId)
                 };
