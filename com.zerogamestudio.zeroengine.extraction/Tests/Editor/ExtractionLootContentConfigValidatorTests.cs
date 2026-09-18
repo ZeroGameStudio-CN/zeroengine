@@ -62,14 +62,31 @@ namespace POB.Extraction.Core.Package.Tests.Editor
             StringAssert.Contains("Always 与 ChancePerRaid", report.FirstError);
         }
 
-        [Test]
-        public void Validate_ChancePerRaidOutsideUnitInterval_ReturnsError()
+        // Permanent regression: Always ignores the preserved probability, as runtime generation does.
+        [TestCase(-1f)]
+        [TestCase(0f)]
+        [TestCase(0.37f)]
+        [TestCase(1f)]
+        [TestCase(2f)]
+        public void Validate_AlwaysIgnoresChance(float chance)
+        {
+            var config = CreateValidConfig();
+            config.ContainerSpawns[0].Chance = chance;
+            var report = ExtractionLootContentConfigValidator.Validate(config);
+            Assert.IsTrue(report.IsValid, report.FirstError);
+            Assert.AreEqual(chance, config.ContainerSpawns[0].Chance);
+        }
+
+        [TestCase(-1f)]
+        [TestCase(0f)]
+        [TestCase(2f)]
+        public void Validate_ChancePerRaidOutsideUnitInterval_ReturnsError(float chance)
         {
             var config = CreateValidConfig();
             var spawn = config.ContainerSpawns[0];
             spawn.Always = false;
             spawn.ChancePerRaid = true;
-            spawn.Chance = 0f;
+            spawn.Chance = chance;
 
             var report = ExtractionLootContentConfigValidator.Validate(config);
 

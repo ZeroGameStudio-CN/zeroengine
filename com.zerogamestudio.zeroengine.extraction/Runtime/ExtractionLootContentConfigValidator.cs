@@ -456,8 +456,6 @@ namespace POB.Extraction
                     report.AddError($"容器生成点 '{spawn.SpawnId}' 必须且只能启用 Always 与 ChancePerRaid 其中一种模式。");
                 else if (spawn.ChancePerRaid && (spawn.Chance <= 0f || spawn.Chance > 1f))
                     report.AddError($"容器生成点 '{spawn.SpawnId}' 的 ChancePerRaid 出现率必须在 (0, 1] 内。");
-                else if (spawn.Always && Math.Abs(spawn.Chance - 1f) > 0.0001f)
-                    report.AddError($"固定容器生成点 '{spawn.SpawnId}' 的出现率必须为 1。");
 
                 if (spawn.Candidates == null || spawn.Candidates.Count == 0)
                 {

@@ -17,6 +17,52 @@ namespace POB.Extraction.Core.Package.Tests.Editor
             ExtractionFeatureSwitch.SetEnabledForTests(false);
         }
 
+        // Permanent regression: stored Chance must not alter an Always point's generated manifest.
+        [TestCase(-1f)]
+        [TestCase(0f)]
+        [TestCase(0.37f)]
+        [TestCase(1f)]
+        [TestCase(2f)]
+        public void Generate_AlwaysIgnoresChance(float chance)
+        {
+            var config = ExtractionLootRuntimeFixture.CreateConfig();
+            foreach (int seed in new[] { 0, 77, 12345 })
+            {
+                config.ContainerSpawns[0].Chance = 1f;
+                Assert.IsTrue(ExtractionRaidLootManifestGenerator.TryGenerate(
+                    config, config.Maps[0], seed, false, out var expected, out var failure), failure.ToString());
+                config.ContainerSpawns[0].Chance = chance;
+                Assert.IsTrue(ExtractionRaidLootManifestGenerator.TryGenerate(
+                    config, config.Maps[0], seed, false, out var actual, out failure), failure.ToString());
+                Assert.AreEqual(JsonUtility.ToJson(expected), JsonUtility.ToJson(actual));
+            }
+        }
+
+        [TestCase(0.37f)]
+        [TestCase(1f)]
+        public void Generate_ChancePerRaidStillUsesProbability(float chance)
+        {
+            var config = ExtractionLootRuntimeFixture.CreateConfigWithoutGuarantees();
+            var spawn = config.ContainerSpawns[0];
+            spawn.Always = false;
+            spawn.ChancePerRaid = true;
+            spawn.Chance = chance;
+            var report = ExtractionLootContentConfigValidator.Validate(config);
+            Assert.IsTrue(report.IsValid, report.FirstError);
+            int generated = 0;
+            for (int seed = 0; seed < 64; seed++)
+            {
+                Assert.IsTrue(ExtractionRaidLootManifestGenerator.TryGenerate(
+                    config, config.Maps[0], seed, false, out var first, out var failure), failure.ToString());
+                Assert.IsTrue(ExtractionRaidLootManifestGenerator.TryGenerate(
+                    config, config.Maps[0], seed, false, out var second, out failure), failure.ToString());
+                Assert.AreEqual(JsonUtility.ToJson(first), JsonUtility.ToJson(second));
+                if (first.Containers.Exists(container => container.ContainerId == spawn.SpawnId)) generated++;
+            }
+            if (chance == 1f) Assert.AreEqual(64, generated);
+            else Assert.That(generated, Is.GreaterThan(0).And.LessThan(64));
+        }
+
         [Test]
         public void Generate_SameSeedAndConfig_ProducesIdenticalManifest()
         {
