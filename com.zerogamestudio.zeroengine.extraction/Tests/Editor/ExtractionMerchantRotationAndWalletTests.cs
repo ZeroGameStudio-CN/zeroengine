@@ -160,6 +160,81 @@ namespace POB.Extraction.Core.Package.Tests.Editor
             Assert.IsTrue(store.Profile.Stash.TryGetPlacement("no-sell", out _));
         }
 
+        // Permanent regression: proportional sale, stale-quote rejection and save compatibility.
+        [TestCase(10, 10, 100, 1, 50)]
+        [TestCase(3, 10, 101, 1, 15)]
+        [TestCase(0, 10, 100, 1, 0)]
+        [TestCase(-1, 10, 100, 1, 0)]
+        [TestCase(20, 10, 100, 1, 50)]
+        [TestCase(0, 0, 101, 3, 151)]
+        [TestCase(0, -1, 100, 1, 50)]
+        [TestCase(1, 100, 100, 1, 0)]
+        [TestCase(int.MaxValue, int.MaxValue, int.MaxValue, int.MaxValue, int.MaxValue)]
+        public void SellQuote_Durability_RoundsDownAndClamps(int current, int maximum, int value,
+            int quantity, int expected)
+        {
+            var definition = config.ItemDefinitions[0];
+            definition.MaxDurability = maximum;
+            definition.Value = value;
+            var initial = CreateSellProfile(definition, current, quantity);
+            var loaded = ExtractionProfileSerialization.FromJson(UnityEngine.JsonUtility.ToJson(initial));
+            var store = new ExtractionInMemoryProfileStore(loaded);
+            var wallet = new TestWallet(0);
+            var service = new ExtractionMerchantWalletTransactionService(store, wallet, config);
+
+            Assert.AreEqual(expected > 0, service.TryGetSellQuote("durable", out int quote));
+            Assert.AreEqual(expected, quote);
+            Assert.IsTrue(store.Profile.Items.TryGet("durable", out var item));
+            Assert.AreEqual(current, item.CurrentDurability, "Loading/quoting must not refill durability.");
+            Assert.AreEqual(expected, ExtractionSellTransactionService.GetSellQuantity(definition, item));
+            var sale = service.TrySell("durable-sale", "durable", quote);
+            Assert.AreEqual(expected > 0, sale.IsSuccess);
+            Assert.AreEqual(expected, wallet.Balance);
+            Assert.AreEqual(expected > 0 ? ExtractionInventoryContainerType.Sold : ExtractionInventoryContainerType.Stash,
+                store.Profile.Ownership.GetRequiredContainer("durable"));
+            if (expected > 0)
+            {
+                Assert.IsTrue(service.TrySell("durable-sale", "durable", quote).IsSuccess);
+                Assert.AreEqual(expected, wallet.Balance, "Replaying a sale cannot credit twice.");
+            }
+        }
+
+        [Test]
+        public void Sell_DurabilityChangesAfterQuote_RejectsOldPriceWithoutMutation()
+        {
+            var definition = config.ItemDefinitions[0];
+            definition.MaxDurability = 10;
+            definition.Value = 100;
+            var store = new ExtractionInMemoryProfileStore(CreateSellProfile(definition, 10, 1));
+            var wallet = new TestWallet(0);
+            var service = new ExtractionMerchantWalletTransactionService(store, wallet, config);
+            Assert.IsTrue(service.TryGetSellQuote("durable", out int oldQuote));
+            store.Profile.Items.TryGet("durable", out var item);
+            item.CurrentDurability = 4;
+
+            Assert.IsFalse(service.TrySell("stale-sale", "durable", oldQuote).IsSuccess);
+            Assert.AreEqual(0, wallet.Balance);
+            Assert.IsTrue(store.Profile.Stash.TryGetPlacement("durable", out _));
+            Assert.IsTrue(service.TryGetSellQuote("durable", out int freshQuote));
+            Assert.AreEqual(20, freshQuote);
+            Assert.IsTrue(service.TrySell("fresh-sale", "durable", freshQuote).IsSuccess);
+            Assert.AreEqual(20, wallet.Balance);
+        }
+
+        private static ExtractionProfileSaveData CreateSellProfile(ExtractionItemDefinition definition,
+            int current, int quantity)
+        {
+            var profile = ExtractionProfileSaveData.CreateEmpty();
+            var item = new ExtractionItemInstance("durable", definition.DefinitionId, quantity)
+            {
+                CurrentDurability = current
+            };
+            Assert.IsTrue(profile.Items.Register(item));
+            Assert.IsTrue(profile.Stash.TryPlace(item, definition, 0, 0, false));
+            Assert.IsTrue(profile.Ownership.Register(item.InstanceId, ExtractionInventoryContainerType.Stash));
+            return profile;
+        }
+
         private static ExtractionPlayableConfig CreateConfig()
         {
             var result = new ExtractionPlayableConfig(4, 4, 2, 2);

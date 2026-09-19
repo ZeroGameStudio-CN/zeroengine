@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 
 namespace POB.Extraction
@@ -5,6 +6,20 @@ namespace POB.Extraction
     public static class ExtractionSellTransactionService
     {
         public const float SellValueMultiplier = 0.5f;
+
+        // One quote for both wallet and inventory-currency transactions. Round down once;
+        // zero proceeds remain unsellable. Decimal prevents overflow before the final cap.
+        public static int GetSellQuantity(ExtractionItemDefinition definition, ExtractionItemInstance item)
+        {
+            if (definition == null || item == null || definition.Value <= 0 || item.Quantity <= 0)
+                return 0;
+
+            decimal value = (decimal)definition.Value * item.Quantity / 2m;
+            if (definition.MaxDurability > 0)
+                value = value * Math.Max(0, Math.Min(item.CurrentDurability, definition.MaxDurability))
+                        / definition.MaxDurability;
+            return (int)Math.Min(int.MaxValue, decimal.Floor(value));
+        }
 
         public static bool TrySellItem(
             ExtractionProfileSaveData profile,
@@ -40,7 +55,7 @@ namespace POB.Extraction
 
             // Value 是每单位基准单价（见 ExtractionItemDefinition 注释），出售按 Quantity 线性折算；
             // 半价后不足 1 视为不可出售，不生成 0 数量的收益物。
-            grantedQuantity = (int)(soldDefinition.Value * soldItem.Quantity * SellValueMultiplier);
+            grantedQuantity = GetSellQuantity(soldDefinition, soldItem);
             if (grantedQuantity <= 0) return false;
 
             var grantedItem = new ExtractionItemInstance(grantedProceedsInstanceId, proceedsItemDefinitionId, grantedQuantity);
