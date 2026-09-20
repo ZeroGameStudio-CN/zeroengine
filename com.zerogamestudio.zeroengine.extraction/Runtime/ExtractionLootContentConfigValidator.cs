@@ -3,17 +3,26 @@ using System.Collections.Generic;
 
 namespace POB.Extraction
 {
+    public sealed class ExtractionLootContentValidationIssue
+    {
+        public ExtractionLootContentValidationIssue(string message, string fieldPath) { Message = message; FieldPath = fieldPath; }
+        public string Message { get; }
+        public string FieldPath { get; }
+    }
+
     public sealed class ExtractionLootContentValidationReport
     {
         public readonly List<string> Errors = new();
         public readonly List<string> Warnings = new();
+        public readonly List<ExtractionLootContentValidationIssue> Issues = new();
 
         public bool IsValid => Errors.Count == 0;
         public string FirstError => Errors.Count > 0 ? Errors[0] : null;
 
-        internal void AddError(string message)
+        internal void AddError(string message, string fieldPath = "$")
         {
             Errors.Add(message);
+            Issues.Add(new ExtractionLootContentValidationIssue(message, fieldPath));
         }
 
         internal void AddWarning(string message)
@@ -33,6 +42,25 @@ namespace POB.Extraction
             ExtractionItemRarity.Legendary,
             ExtractionItemRarity.Mythic
         };
+
+        /// <summary>Read-only authoring diagnostics; independent spawn checks continue after sibling failures.</summary>
+        public static ExtractionLootContentValidationReport ValidateContainerPoints(ExtractionPlayableConfig config)
+        {
+            var report = new ExtractionLootContentValidationReport();
+            if (config == null) { report.AddError("搜打撤内容配置为空，无法继续解析。", "$"); return report; }
+            if (config.ContainerSpawns == null)
+            {
+                report.AddError("容器点位列表为空，无法继续解析该列表。", "$/containerSpawns");
+                return report;
+            }
+            CollectSpawns(config, report);
+            var regions = config.LootRegions == null ? null : CollectRegions(config, report);
+            var containers = config.ContainerDefinitions == null ? null : CollectContainers(config, report);
+            if (regions == null) report.AddError("区域目录缺失，未执行区域引用校验。", "$/lootRegions");
+            if (containers == null) report.AddError("容器目录缺失，未执行容器类型引用校验。", "$/containerDefinitions");
+            ValidateSpawnReferences(config.ContainerSpawns, regions, containers, report);
+            return report;
+        }
 
         public static ExtractionLootContentValidationReport Validate(ExtractionPlayableConfig config)
         {
@@ -65,7 +93,7 @@ namespace POB.Extraction
             ValidateMapReferences(config, tiers, profiles, report);
             ValidateProfileReferences(profiles, tiers, regions, report);
             ValidateRegionReferences(regions, containers, spawns, report);
-            ValidateSpawnReferences(spawns, regions, containers, report);
+            ValidateSpawnReferences(config.ContainerSpawns, regions, containers, report);
             ValidateContainerTables(containers, tables, items, report);
             if (!report.IsValid)
                 return report;
@@ -444,40 +472,47 @@ namespace POB.Extraction
             ExtractionLootContentValidationReport report)
         {
             var result = new Dictionary<string, ExtractionContainerSpawnDefinition>();
+            int rowIndex = -1;
             foreach (var spawn in config.ContainerSpawns)
             {
-                if (spawn == null || IsBlank(spawn.SpawnId) || IsBlank(spawn.RegionId))
+                string path = "$/containerSpawns[" + (++rowIndex) + "]";
+                if (spawn == null)
                 {
-                    report.AddError("容器生成点为空，或 SpawnId/RegionId 无效。");
+                    report.AddError("容器生成点为空，无法继续解析该记录。", path);
                     continue;
                 }
+                if (IsBlank(spawn.SpawnId)) report.AddError("容器生成点 SpawnId 无效。", path + "/SpawnId");
+                if (IsBlank(spawn.RegionId)) report.AddError($"容器生成点 '{spawn.SpawnId}' 的 RegionId 无效。", path + "/RegionId");
 
                 if (spawn.Always == spawn.ChancePerRaid)
-                    report.AddError($"容器生成点 '{spawn.SpawnId}' 必须且只能启用 Always 与 ChancePerRaid 其中一种模式。");
+                    report.AddError($"容器生成点 '{spawn.SpawnId}' 必须且只能启用 Always 与 ChancePerRaid 其中一种模式。", path + "/Always");
                 else if (spawn.ChancePerRaid && (spawn.Chance <= 0f || spawn.Chance > 1f))
-                    report.AddError($"容器生成点 '{spawn.SpawnId}' 的 ChancePerRaid 出现率必须在 (0, 1] 内。");
+                    report.AddError($"容器生成点 '{spawn.SpawnId}' 的 ChancePerRaid 出现率必须在 (0, 1] 内。", path + "/Chance");
 
                 if (spawn.Candidates == null || spawn.Candidates.Count == 0)
                 {
-                    report.AddError($"容器生成点 '{spawn.SpawnId}' 至少需要一个候选容器类型。");
+                    report.AddError($"容器生成点 '{spawn.SpawnId}' 至少需要一个候选容器类型。", path + "/Candidates");
                 }
                 else
                 {
                     var candidateIds = new HashSet<string>();
-                    foreach (var candidate in spawn.Candidates)
+                    for (int candidateIndex = 0; candidateIndex < spawn.Candidates.Count; candidateIndex++)
                     {
+                        var candidate = spawn.Candidates[candidateIndex];
+                        string candidatePath = path + "/Candidates[" + candidateIndex + "]";
                         if (candidate == null || IsBlank(candidate.ContainerTypeId) || candidate.Weight <= 0)
                         {
-                            report.AddError($"容器生成点 '{spawn.SpawnId}' 包含无效候选或非正权重。");
+                            report.AddError($"容器生成点 '{spawn.SpawnId}' 包含无效候选或非正权重。", candidatePath);
                             continue;
                         }
                         if (!candidateIds.Add(candidate.ContainerTypeId))
-                            report.AddError($"容器生成点 '{spawn.SpawnId}' 重复引用候选容器 '{candidate.ContainerTypeId}'。");
+                            report.AddError($"容器生成点 '{spawn.SpawnId}' 重复引用候选容器 '{candidate.ContainerTypeId}'。", candidatePath + "/ContainerTypeId");
                     }
                 }
 
+                if (IsBlank(spawn.SpawnId)) continue;
                 if (result.ContainsKey(spawn.SpawnId))
-                    report.AddError($"容器生成点 ID '{spawn.SpawnId}' 重复。");
+                    report.AddError($"容器生成点 ID '{spawn.SpawnId}' 重复。", path + "/SpawnId");
                 else
                     result.Add(spawn.SpawnId, spawn);
             }
@@ -561,32 +596,36 @@ namespace POB.Extraction
         }
 
         private static void ValidateSpawnReferences(
-            Dictionary<string, ExtractionContainerSpawnDefinition> spawns,
+            IEnumerable<ExtractionContainerSpawnDefinition> spawns,
             Dictionary<string, ExtractionLootRegionDefinition> regions,
             Dictionary<string, ExtractionContainerDefinition> containers,
             ExtractionLootContentValidationReport report)
         {
-            foreach (var pair in spawns)
+            int rowIndex = -1;
+            foreach (var spawn in spawns)
             {
-                var spawn = pair.Value;
-                if (!regions.TryGetValue(spawn.RegionId, out var region))
+                string path = "$/containerSpawns[" + (++rowIndex) + "]";
+                if (spawn == null) continue;
+                ExtractionLootRegionDefinition region = null;
+                if (regions != null && !IsBlank(spawn.RegionId))
                 {
-                    report.AddError($"容器生成点 '{spawn.SpawnId}' 引用了不存在的区域 '{spawn.RegionId}'。");
-                    continue;
+                    if (!regions.TryGetValue(spawn.RegionId, out region))
+                        report.AddError($"容器生成点 '{spawn.SpawnId}' 引用了不存在的区域 '{spawn.RegionId}'。", path + "/RegionId");
+                    else if (!IsBlank(spawn.SpawnId) && (region.ContainerSpawnIds == null || !region.ContainerSpawnIds.Contains(spawn.SpawnId)))
+                        report.AddError($"容器生成点 '{spawn.SpawnId}' 未列入所属区域 '{spawn.RegionId}' 的生成点列表。", path + "/RegionId");
                 }
-                if (region.ContainerSpawnIds == null || !region.ContainerSpawnIds.Contains(spawn.SpawnId))
-                    report.AddError($"容器生成点 '{spawn.SpawnId}' 未列入所属区域 '{spawn.RegionId}' 的生成点列表。");
                 if (spawn.Candidates == null) continue;
-                foreach (var candidate in spawn.Candidates)
+                for (int index = 0; index < spawn.Candidates.Count; index++)
                 {
-                    if (candidate == null) continue;
-                    if (!containers.ContainsKey(candidate.ContainerTypeId))
-                        report.AddError($"容器生成点 '{spawn.SpawnId}' 引用了不存在的容器类型 '{candidate.ContainerTypeId}'。");
-                    else if (region.AllowedContainerTypeIds == null
-                             || !region.AllowedContainerTypeIds.Contains(candidate.ContainerTypeId))
-                    {
-                        report.AddError($"容器生成点 '{spawn.SpawnId}' 的候选容器 '{candidate.ContainerTypeId}' 不在区域允许集合内。");
-                    }
+                    var candidate = spawn.Candidates[index];
+                    // Invalid identity was already diagnosed while collecting; do not invent a missing reference.
+                    if (candidate == null || IsBlank(candidate.ContainerTypeId)) continue;
+                    string field = path + "/Candidates[" + index + "]/ContainerTypeId";
+                    if (containers != null && !containers.ContainsKey(candidate.ContainerTypeId))
+                        report.AddError($"容器生成点 '{spawn.SpawnId}' 引用了不存在的容器类型 '{candidate.ContainerTypeId}'。", field);
+                    else if (containers != null && region != null && (region.AllowedContainerTypeIds == null
+                             || !region.AllowedContainerTypeIds.Contains(candidate.ContainerTypeId)))
+                        report.AddError($"容器生成点 '{spawn.SpawnId}' 的候选容器 '{candidate.ContainerTypeId}' 不在区域允许集合内。", field);
                 }
             }
         }

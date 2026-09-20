@@ -19,6 +19,8 @@
 
 ## 验证
 
+编辑器预览可使用 `ExtractionLootContentConfigValidator.ValidateContainerPoints` 汇总容器点位的独立错误；`Issues` 提供字段路径，`Errors` 保留原有消息接口。缺失目录会说明关联校验边界，重复 ID 不会遮挡同一记录的其他错误。运行时完整验证继续使用 `Validate`。
+
 敌人定义使用 `ContainerTypeId` 引用共享容器及其 `LootTableIds`，单次奖励 API 复用现有加权 pickup 抽取。
 旧序列化 `LootTableId` 继续兼容；配置了容器时优先容器，错误容器或关联表不会静默回退旧表。
 容器容量及搜索行为仍由开箱服务负责，单次奖励 API 不替代开箱流程。
