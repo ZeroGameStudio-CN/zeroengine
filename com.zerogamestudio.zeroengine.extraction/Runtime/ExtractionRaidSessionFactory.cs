@@ -32,7 +32,8 @@ namespace POB.Extraction
                     request.Seed,
                     rareLootDisabled,
                     out var manifest,
-                    out manifestFailure))
+                    out manifestFailure,
+                    request.LootSelectionPolicy))
             {
                 return false;
             }

@@ -35,3 +35,10 @@
 - 原始稳定树 SHA-256：`21db143662621b18e255ae3d9e5cdf1b944605b5d7a63072d7783d022f41e838`。
 - 树哈希输入按相对路径排序，每项为 `relative/path + NUL + lowercase(file SHA-256) + LF` 的 UTF-8 拼接。
 - 上游首提交只允许在这份原样基线上补 package metadata 与本 README；领域代码和测试不得静默改写。
+
+## Shared rarity and luck
+
+Requires ZeroEngine.Core 2.0.0; pin Core and Extraction to the same tested Git commit.
+New POB raids supply a copied ExtractionLootSelectionPolicy (v2): rarity first, then item weight.
+LootSelectionVersion=0 (including missing fields) preserves v1 selection even if Unity materializes a nested policy object. Never replace the policy when resuming a raid.
+The common WeightedSelection kernel owns interval selection and logarithmic luck; adapters own configuration and RNG.

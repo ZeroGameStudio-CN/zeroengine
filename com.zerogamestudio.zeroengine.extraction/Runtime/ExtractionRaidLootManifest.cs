@@ -126,6 +126,10 @@ namespace POB.Extraction
     public class ExtractionRaidLootManifest
     {
         public string ManifestId;
+        // Unity JSON can materialize a null nested object; the scalar version owns dispatch.
+        public int LootSelectionVersion;
+        // Absent in old saves: preserve their single-stage unopened-container behavior.
+        public ExtractionLootSelectionPolicy SelectionPolicy;
         public string LootProfileId;
         public string ContentTierId;
         public int RaidSeed;

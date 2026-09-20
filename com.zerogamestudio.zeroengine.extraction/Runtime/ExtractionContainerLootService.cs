@@ -53,6 +53,12 @@ namespace POB.Extraction
                 result = ExtractionContainerOpenResult.AlreadyOpened;
                 return true;
             }
+            if (manifest.LootSelectionVersion != 0 && (manifest.LootSelectionVersion != 2
+                || manifest.SelectionPolicy == null || !manifest.SelectionPolicy.IsValid))
+            {
+                result = ExtractionContainerOpenResult.MissingConfiguration;
+                return false;
+            }
 
             if (!ExtractionRaidLootManifestGenerator.TryGetContentDefinitions(
                     config,
@@ -95,7 +101,8 @@ namespace POB.Extraction
                         out var itemDefinition,
                         manifest.PityState.ConsecutiveMisses,
                         pity,
-                        manifest.RareLootDisabled))
+                        manifest.RareLootDisabled,
+                        manifest.LootSelectionVersion == 2 ? manifest.SelectionPolicy : null))
                 {
                     result = ExtractionContainerOpenResult.LootRollFailed;
                     return false;

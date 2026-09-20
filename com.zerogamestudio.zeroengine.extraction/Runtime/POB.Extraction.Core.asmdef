@@ -1,7 +1,7 @@
 {
     "name": "POB.Extraction.Core",
     "rootNamespace": "POB.Extraction",
-    "references": [],
+    "references": ["ZeroEngine.Core"],
     "includePlatforms": [],
     "excludePlatforms": [],
     "allowUnsafeCode": false,

@@ -4,7 +4,7 @@
   "displayName": "ZeroEngine Extraction Core",
   "description": "Pure extraction-looter rules for inventory, loot, raid sessions, recovery, economy, and settlement.",
   "unity": "2022.3",
-  "dependencies": {},
+  "dependencies": { "com.zerogamestudio.zeroengine.core": "2.0.0" },
   "keywords": [
     "zeroengine",
     "extraction",

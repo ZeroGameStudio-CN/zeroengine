@@ -108,3 +108,5 @@ string hp = ZeroGC.CacheFormattedValue("hp", 100, v => $"{v} HP");
 ## 许可
 
 ZeroGameStudio Internal Use
+
+WeightedSelection provides pure weighted interval selection and a rank-count-independent logarithmic luck curve. Callers supply stable candidate order and a unit sample in [0,1); invalid or empty weight pools fail without consuming fallback randomness.
