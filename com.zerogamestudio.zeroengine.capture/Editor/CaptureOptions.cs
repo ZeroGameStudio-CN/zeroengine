@@ -22,7 +22,7 @@ namespace ZeroEngine.Capture
                 throw new ArgumentException("Label must be a short lowercase ASCII identifier.");
             if (Width < 16 || Height < 16 || Width > 3840 || Height > 2160)
                 throw new ArgumentOutOfRangeException(nameof(Width), "Capture size must be between 16x16 and 3840x2160.");
-            if (FramesPerSecond < 1 || FramesPerSecond > 60 || SimulationFramesPerSecond < FramesPerSecond ||
+            if (FramesPerSecond < 10 || FramesPerSecond > 60 || SimulationFramesPerSecond < FramesPerSecond ||
                 SimulationFramesPerSecond > 240 || SimulationFramesPerSecond % FramesPerSecond != 0)
                 throw new ArgumentException("Simulation FPS must be an integral multiple of capture FPS (maximum 240).");
             if (MaximumFrames < 1 || MaximumFrames > FramesPerSecond * 120)

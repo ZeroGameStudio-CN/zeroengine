@@ -11,6 +11,7 @@ namespace ZeroEngine.Capture.Tests
     {
         [TestCase(30, 59)]
         [TestCase(0, 60)]
+        [TestCase(9, 63)]
         [TestCase(61, 61)]
         public void Options_InvalidCadence_Rejects(int fps, int simulationFps)
         {
@@ -86,6 +87,52 @@ namespace ZeroEngine.Capture.Tests
                 // This exact generated directory owns only the synthetic test's frame.
                 if (File.Exists(png)) File.Delete(png);
                 Directory.Delete(root);
+            }
+        }
+
+        [Test]
+        public void Screenshot_WritesUniqueImage_AndPreservesOverlayAndTiming()
+        {
+            var root = Path.Combine(Path.GetTempPath(), "ze-screenshot-" + Guid.NewGuid().ToString("N"));
+            var cameraObject = new GameObject("Screenshot contract camera");
+            var canvasObject = new GameObject("Screenshot contract canvas", typeof(RectTransform), typeof(Canvas));
+            var camera = cameraObject.AddComponent<Camera>();
+            camera.enabled = false;
+            camera.cullingMask = 0;
+            camera.clearFlags = CameraClearFlags.SolidColor;
+            camera.backgroundColor = Color.blue;
+            var canvas = canvasObject.GetComponent<Canvas>();
+            canvas.renderMode = RenderMode.ScreenSpaceOverlay;
+            var distance = canvas.planeDistance;
+            var delta = Time.captureDeltaTime;
+            var background = Application.runInBackground;
+            string image = null;
+            try
+            {
+                image = BackgroundCapture.Screenshot(new CaptureOptions
+                { OutputRoot = root, Width = 64, Height = 64 }, camera, new[] { canvas });
+                Assert.IsTrue(File.Exists(image));
+                Assert.AreEqual(RenderMode.ScreenSpaceOverlay, canvas.renderMode);
+                Assert.IsNull(canvas.worldCamera);
+                Assert.AreEqual(distance, canvas.planeDistance);
+                Assert.AreEqual(0, camera.cullingMask);
+                Assert.IsNull(camera.targetTexture);
+                Assert.AreEqual(delta, Time.captureDeltaTime);
+                Assert.AreEqual(background, Application.runInBackground);
+                Assert.IsNull(BackgroundCapture.Current);
+                Assert.Throws<ArgumentException>(() => BackgroundCapture.Screenshot(new CaptureOptions
+                { OutputRoot = Application.dataPath }, camera));
+            }
+            finally
+            {
+                Object.DestroyImmediate(canvasObject);
+                Object.DestroyImmediate(cameraObject);
+                if (image != null)
+                {
+                    File.Delete(image);
+                    Directory.Delete(Path.GetDirectoryName(image));
+                }
+                if (Directory.Exists(root)) Directory.Delete(root);
             }
         }
 
