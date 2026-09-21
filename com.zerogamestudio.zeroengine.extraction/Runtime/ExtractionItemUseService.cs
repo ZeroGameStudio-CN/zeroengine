@@ -62,7 +62,9 @@ namespace POB.Extraction
                 result = ExtractionItemUseResult.LocationConflict;
                 return false;
             }
-            if (!IsUsableLocation(entry))
+            if (!IsUsableLocation(entry)
+                || (entry.Container == ExtractionInventoryContainerType.RaidContainer
+                    && !ExtractionContainerInventoryService.TryGetRevealedItem(profile, itemCatalog, itemInstanceId, out _, out _, out _)))
             {
                 result = ExtractionItemUseResult.LocationConflict;
                 return false;
@@ -134,6 +136,9 @@ namespace POB.Extraction
                     return false;
             }
 
+            if (entry.Container == ExtractionInventoryContainerType.RaidContainer
+                && ExtractionContainerInventoryService.TryFindRevealedEntry(profile, itemInstanceId, out _, out var containerItem))
+                containerItem.Quantity = item.Quantity;
             profile.ItemActionReceiptIds.Add(receiptId);
             result = ExtractionItemUseResult.Succeeded;
             return true;
@@ -148,7 +153,11 @@ namespace POB.Extraction
             ExtractionInventoryContainerType terminal)
         {
             Action restore = () => { };
-            if (entry.Container == ExtractionInventoryContainerType.EquipmentSlot)
+            if (entry.Container == ExtractionInventoryContainerType.RaidContainer)
+            {
+                if (!ExtractionContainerInventoryService.TryDetach(profile, item.InstanceId, out restore)) return false;
+            }
+            else if (entry.Container == ExtractionInventoryContainerType.EquipmentSlot)
             {
                 if (!ExtractionItemLocationService.TryGetEquipment(
                         profile,
@@ -215,7 +224,8 @@ namespace POB.Extraction
                    || entry.Container == ExtractionInventoryContainerType.InRaid
                    || entry.Container == ExtractionInventoryContainerType.RaidBackpack
                    || entry.Container == ExtractionInventoryContainerType.InSecureContainer
-                   || entry.Container == ExtractionInventoryContainerType.EquipmentSlot;
+                   || entry.Container == ExtractionInventoryContainerType.EquipmentSlot
+                   || entry.Container == ExtractionInventoryContainerType.RaidContainer;
         }
     }
 }

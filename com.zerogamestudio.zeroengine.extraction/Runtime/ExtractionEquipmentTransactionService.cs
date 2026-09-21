@@ -30,6 +30,24 @@ namespace POB.Extraction
             out string displacedItemInstanceId,
             out ExtractionEquipmentTransactionResult result)
         {
+            return TryEquipWithSourceGrid(profile, raidInventory, itemCatalog, itemInstanceId, sourceContainer,
+                equipmentLocationSubtype, slotId, slotType, receiptId, out displacedItemInstanceId, out result, null, null);
+        }
+
+        internal static bool TryEquipWithSourceGrid(
+            ExtractionProfileSaveData profile,
+            ExtractionRaidInventoryState raidInventory,
+            IExtractionItemCatalog itemCatalog,
+            string itemInstanceId,
+            ExtractionInventoryContainerType sourceContainer,
+            string equipmentLocationSubtype,
+            string slotId,
+            ExtractionEquipmentSlotType slotType,
+            string receiptId,
+            out string displacedItemInstanceId,
+            out ExtractionEquipmentTransactionResult result,
+            ExtractionItemGrid containerGrid, string containerId)
+        {
             displacedItemInstanceId = null;
             result = ExtractionEquipmentTransactionResult.InvalidRequest;
             if (!ExtractionFeatureSwitch.Enabled
@@ -40,23 +58,26 @@ namespace POB.Extraction
                 || string.IsNullOrEmpty(receiptId)
                 || !Enum.IsDefined(typeof(ExtractionEquipmentSlotType), slotType)
                 || slotType == ExtractionEquipmentSlotType.None
-                || !IsSourceAllowed(sourceContainer, equipmentLocationSubtype))
+                || (!IsSourceAllowed(sourceContainer, equipmentLocationSubtype)
+                    && !(sourceContainer == ExtractionInventoryContainerType.RaidContainer && containerGrid != null
+                        && equipmentLocationSubtype == ExtractionItemLocationService.RaidEquipmentLocationSubtype)))
             {
                 return false;
             }
 
             profile.EnsureInitialized();
             raidInventory?.EnsureInitialized();
+            var sourceGrid = containerGrid;
             if (!ExtractionItemLocationService.TryGetEquipment(
                     profile,
                     raidInventory,
                     equipmentLocationSubtype,
                     out var equipment)
-                || !ExtractionItemLocationService.TryGetGrid(
+                || (sourceGrid == null && !ExtractionItemLocationService.TryGetGrid(
                     profile,
                     raidInventory,
                     sourceContainer,
-                    out var sourceGrid))
+                    out sourceGrid)))
             {
                 result = ExtractionEquipmentTransactionResult.LocationConflict;
                 return false;
@@ -180,12 +201,16 @@ namespace POB.Extraction
                 && !profile.Ownership.TryMove(
                     displacedItemInstanceId,
                     ExtractionInventoryContainerType.EquipmentSlot,
-                    sourceContainer))
+                    sourceContainer,
+                    sourceContainer == ExtractionInventoryContainerType.RaidContainer ? ExtractionContainerInventoryService.LocationSubtype : null,
+                    containerId))
             {
                 profile.Ownership.TryMove(
                     itemInstanceId,
                     ExtractionInventoryContainerType.EquipmentSlot,
-                    sourceContainer);
+                    sourceContainer,
+                    sourceContainer == ExtractionInventoryContainerType.RaidContainer ? ExtractionContainerInventoryService.LocationSubtype : null,
+                    containerId);
                 RollbackSourceGrid(
                     sourceGrid,
                     item,

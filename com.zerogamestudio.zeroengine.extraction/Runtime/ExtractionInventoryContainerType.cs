@@ -17,6 +17,7 @@ namespace POB.Extraction
         Destroyed = 12,
         Consumed = 13,
         Sold = 14,
-        DestroyedByUse = 15
+        DestroyedByUse = 15,
+        RaidContainer = 16
     }
 }
