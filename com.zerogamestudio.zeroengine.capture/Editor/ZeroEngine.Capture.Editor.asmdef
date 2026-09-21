@@ -1,0 +1,7 @@
+{
+  "name": "ZeroEngine.Capture.Editor",
+  "rootNamespace": "ZeroEngine.Capture",
+  "references": [],
+  "includePlatforms": ["Editor"],
+  "autoReferenced": true
+}
