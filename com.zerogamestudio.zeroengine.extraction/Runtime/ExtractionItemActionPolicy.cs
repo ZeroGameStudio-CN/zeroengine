@@ -8,7 +8,13 @@ namespace POB.Extraction
         None = 0,
         Weapon = 1,
         Relic = 2,
-        Card = 3
+        Card = 3,
+        Head = 4,
+        Top = 5,
+        Pants = 6,
+        Shoes = 7,
+        Underwear = 8,
+        Gloves = 9
     }
 
     public enum ExtractionItemConsumptionType

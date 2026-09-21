@@ -9,7 +9,7 @@ namespace POB.Extraction
     [MovedFrom(true, sourceAssembly: "POB.Runtime")]
     public class ExtractionProfileSaveData
     {
-        public const int CurrentSchemaVersion = 2;
+        public const int CurrentSchemaVersion = 3;
 
         public int SchemaVersion;
         public string activeRaidId;

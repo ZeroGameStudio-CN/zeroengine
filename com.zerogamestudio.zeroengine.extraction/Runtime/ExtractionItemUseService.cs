@@ -94,13 +94,16 @@ namespace POB.Extraction
                     }
                     break;
                 case ExtractionItemConsumptionType.Durability:
+                    if (definition.MaxDurability < 0) break;
                     if (item.CurrentDurability <= 0)
                     {
                         result = ExtractionItemUseResult.Exhausted;
                         return false;
                     }
-                    item.CurrentDurability--;
-                    if (item.CurrentDurability == 0
+                    int previousDurability = item.CurrentDurability;
+                    if (ExtractionDurabilityService.ShouldWear(definition, receiptId, item.InstanceId))
+                        item.CurrentDurability = Math.Max(0, item.CurrentDurability - definition.DurabilityReductionAmount);
+                    if (item.CurrentDurability == 0 && definition.DestroyOnZeroDurability
                         && !TryMoveToTerminal(
                             profile,
                             raidInventory,
@@ -109,7 +112,7 @@ namespace POB.Extraction
                             entry,
                             ExtractionInventoryContainerType.DestroyedByUse))
                     {
-                        item.CurrentDurability++;
+                        item.CurrentDurability = previousDurability;
                         result = ExtractionItemUseResult.LocationConflict;
                         return false;
                     }

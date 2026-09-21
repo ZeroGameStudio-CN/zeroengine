@@ -7,7 +7,7 @@ namespace POB.Extraction.Core.Package.Tests.Editor
     {
         [TestCase(0)]
         [TestCase(1)]
-        public void EnsureInitialized_LegacyProfile_MigratesDeterministicallyToSchemaV2(int schemaVersion)
+        public void EnsureInitialized_LegacyProfile_MigratesDeterministicallyToCurrentSchema(int schemaVersion)
         {
             string json =
                 $"{{\"SchemaVersion\":{schemaVersion}," +
@@ -16,7 +16,7 @@ namespace POB.Extraction.Core.Package.Tests.Editor
                 "\"Ownership\":{\"Entries\":[{\"ItemInstanceId\":\"legacy-item\",\"Container\":1}]}}";
             var profile = ExtractionProfileSerialization.FromJson(json);
 
-            Assert.AreEqual(2, profile.SchemaVersion);
+            Assert.AreEqual(ExtractionProfileSaveData.CurrentSchemaVersion, profile.SchemaVersion);
             Assert.IsTrue(profile.CarryGrid.TryGetPlacement("legacy-item", out _));
             Assert.AreEqual(0, profile.Equipment.Slots.Count, "旧 Loadout 不能在迁移时被猜测为已装备。");
             Assert.IsNotNull(profile.Character);
@@ -66,11 +66,11 @@ namespace POB.Extraction.Core.Package.Tests.Editor
         }
 
         [Test]
-        public void CreateEmpty_SchemaV2_InitializesNewAuthorityRoots()
+        public void CreateEmpty_CurrentSchema_InitializesNewAuthorityRoots()
         {
             var profile = ExtractionProfileSaveData.CreateEmpty();
 
-            Assert.AreEqual(2, profile.SchemaVersion);
+            Assert.AreEqual(ExtractionProfileSaveData.CurrentSchemaVersion, profile.SchemaVersion);
             Assert.IsNotNull(profile.CarryGrid);
             Assert.IsNotNull(profile.Character);
             Assert.AreEqual(1f, profile.Character.SearchSpeedMultiplier);

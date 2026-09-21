@@ -30,6 +30,9 @@ namespace POB.Extraction
 
         // 耐久工具/钥匙配置。MaxDurability=0 表示普通物品；兼容目标使用稳定 actor ID。
         public int MaxDurability;
+        public bool DestroyOnZeroDurability = true;
+        public int DurabilityReductionAmount = 1;
+        public float DurabilityReductionProbability = 1f;
         public List<string> CompatibleTargetIds = new();
         public ExtractionItemActionPolicy ActionPolicy = ExtractionItemActionPolicy.CreateDefaultLoot();
 

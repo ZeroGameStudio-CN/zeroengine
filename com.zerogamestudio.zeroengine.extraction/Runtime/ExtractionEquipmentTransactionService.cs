@@ -77,6 +77,7 @@ namespace POB.Extraction
 
             var policy = ExtractionItemActionPolicyService.GetPolicy(definition);
             if (policy == null
+                || ExtractionDurabilityService.IsBroken(definition, item)
                 || !policy.CanEquip
                 || string.IsNullOrEmpty(policy.EffectAdapterId))
             {
@@ -313,7 +314,7 @@ namespace POB.Extraction
                    && container == ExtractionInventoryContainerType.RaidBackpack;
         }
 
-        private static bool SlotIdMatchesType(
+        public static bool SlotIdMatchesType(
             string slotId,
             ExtractionEquipmentSlotType slotType)
         {
@@ -322,9 +323,16 @@ namespace POB.Extraction
                 ExtractionEquipmentSlotType.Weapon => "weapon",
                 ExtractionEquipmentSlotType.Relic => "relic",
                 ExtractionEquipmentSlotType.Card => "card",
+                ExtractionEquipmentSlotType.Head => "head",
+                ExtractionEquipmentSlotType.Top => "top",
+                ExtractionEquipmentSlotType.Pants => "pants",
+                ExtractionEquipmentSlotType.Shoes => "shoes",
+                ExtractionEquipmentSlotType.Underwear => "underwear",
+                ExtractionEquipmentSlotType.Gloves => "gloves",
                 _ => null
             };
-            return prefix != null && slotId.StartsWith(prefix, StringComparison.OrdinalIgnoreCase);
+            return prefix != null && !string.IsNullOrEmpty(slotId)
+                   && slotId.StartsWith(prefix, StringComparison.OrdinalIgnoreCase);
         }
 
         private static bool TryFindOwnership(
