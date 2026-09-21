@@ -48,10 +48,39 @@ recordings or unrelated ZE pins. Test artifacts stay outside source workspaces.
 
 ## Status
 
-Implementation in progress. POB local package installed with Client.Add and first
-Unity 2022 compile passed. Focused tests and P5 validation remain pending.
+Remote implementation commit: `353be899da13086fe27e01527fc45fa20358dd87`.
+P5 and POB manifest/Unity-generated lock both resolve the remote capture package;
+neither depends on the development checkout. P5's 30 ZE pins share this snapshot
+(the former snapshot plus this package). POB retains its existing deliberate
+version splits: this independent Editor leaf has no sibling ZE dependencies.
+
+Validation on 2026-09-22:
+- Unity 6.3 / P5: capture EditMode 9/9, PlayMode 2/2, real city route 1/1;
+  native NUnit XML checked. Atlas coverage/feature/registry passed, freshness
+  passed after regenerating for the final pins. Routed Editor console had no
+  current compiler errors. Protected configuration SHA256 baseline: 895 unchanged.
+- Unity 2022.3 / POB: compile succeeded, capture EditMode 9/9 + Atlas 3/3,
+  PlayMode 2/2, real Intro/StartGame/BaseShip screenshot + video proof 1/1.
+  Native Uloop terminal results were nonempty with no failures/skips. Protected
+  configuration baseline: 713 unchanged; isolated world disposed before restoring
+  the original save root. The one-shot integration fixture was removed, with an
+  external reproducibility copy retained; cleanup compile passed with zero errors
+  and zero warnings.
+- P5 produced 1967 continuous 1280x720 frames at 30 FPS (60 Hz simulation),
+  exported as 65.588 seconds. POB produced a standalone screenshot and 90 frames,
+  exported as 3.021 seconds. Inspected actual images and sampled contact sheets;
+  human motion/visual acceptance, audio and Player performance are not claimed.
+- External task artifacts: `ze-capture-p5-20260922` and `ze-capture-pob-20260922`.
+  Original frames remain under per-run OS temporary artifact directories.
+
 User approved controlled manifest editing and then requested a durable remote
 package route. Router pinned Git installation support was released as
 78a234ab9522048a35f849cb1478c83a441d839d on Windows and macOS, with scoped tests.
+Media helper now accepts a bounded 120-second continuous frame input (12 tests
+passed on both development machines); skill guidance prioritizes the installed
+capture package. Final skill release `8204aacd305f483ba51469d41ceee8fd57b51cf1`
+is installed and read back on Windows and M5.
 Game-camera screenshots share the writer; SO Inspector/Editor-window screenshots
 remain a separate native UI evidence route, not a claim of this package.
+No Plastic changeset was created. Package source is on the dedicated remote
+`codex/unity-background-capture-20260922` branch; it is not merged into main.

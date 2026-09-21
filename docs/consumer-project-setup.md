@@ -56,9 +56,7 @@ Git revisions.
 7. Commit the consumer project's `Packages/manifest.json` and
    `Packages/packages-lock.json` if Unity updated the lock file.
 
-## Temporary Local Development
-
-### Optional background capture
+## Optional background capture
 
 `com.zerogamestudio.zeroengine.capture` is an independent Editor-only tool.
 Install its package path at the reviewed Git commit; it does not require ZE
@@ -66,6 +64,8 @@ gameplay packages. Enable its `testables` entry during consumer validation.
 Projects supply camera selection and isolated gameplay scenarios; encoding and
 delivery remain external. Its README distinguishes still camera screenshots,
 fixed-step video frames, and unsupported Editor-window/audio/Player capture.
+
+## Temporary Local Development
 
 Use `file:` dependencies only for short local debugging when you need to edit
 ZeroEngine and a consumer project together before a ZeroEngine commit exists:
