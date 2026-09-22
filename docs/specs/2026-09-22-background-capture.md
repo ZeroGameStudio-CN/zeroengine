@@ -169,3 +169,21 @@ input-order independence and success/failure restoration with synthetic pixels;
 then rerun the P5 SDF case and real victory/native-reference comparison. Continue
 the same user-authorized independent-branch/P5-only fix; POB and main stay intact.
 Candidate validation is pending.
+
+Sorting candidate `97f5a5af17086e83b8d0247745bd8b26bb367c88` passed native P5
+validation: capture contracts 14/14 (`20260922T101843382Z-82acae2af2dd4444af271124bdae8e23`),
+SDF 1/1 (`20260922T102301924Z-ee89c2ca98fe4a0b8999764894116cd9`), capture lifecycle
+2/2 (`20260922T102421260Z-47925374f2f548698836a5c1dde64390`), and real victory/return
+1/1 (`20260922T102212476Z-526ecae8af154594a9be8dcea79c0253`). Inspected 720p capture
+and native 4K Game View agree on the hero/result-panel layering.
+
+P5's 30 manifest/lock pins now all resolve this tested commit through native UPM;
+the other 29 package implementations are unchanged. Final compile succeeded,
+Atlas coverage/freshness passed 4/4, and the uncut city/interior/real-battle/victory/
+return recording passed 1/1 (`20260922T104117701Z-b65da032b147429ebdc6e8c3ca08240b`).
+It contains 2384 frames at 30 fps, fixed 60 Hz simulation, with no recorded audio.
+MP4 SHA256: `32eeb5741a52bc7cf8639a7c3fcb75a927fc0572f2f853b9ff12650a2e0f4506`.
+All 999 protected P5 inputs were unchanged. Human visual graduation and existing
+gameplay/art warnings remain outside this capture-fidelity pass; POB was not
+updated or retested. This evidence-only documentation commit needs no consumer
+repin and does not merge the independent branch into main.
