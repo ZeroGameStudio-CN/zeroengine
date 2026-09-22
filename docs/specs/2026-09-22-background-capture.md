@@ -91,10 +91,18 @@ The P5 battle camera excludes the exploration world. Temporarily adding the
 overlay Canvas layer to its culling mask breaks that boundary when the Canvas is
 on Default. Correct this inside the shared writer, not with P5 renderer hiding.
 Synthetic pixel tests must simultaneously prove visible green UI and a blue
-background in place of an excluded red world quad, including an empty camera
-mask; restoration checks remain in force. Verify a real P5 battle after package
+background in place of an excluded red world quad; restoration checks remain in
+force. Verify a real P5 battle after package
 resolution before making art decisions from that evidence.
 
 The user authorized publishing this fix on the existing independent branch and
 updating P5 only. POB stays at its previously verified pin; no main-branch merge
 or Plastic checkin is included. Candidate validation is pending.
+
+The first candidate's pixel regression passed 9/11: preserving the camera mask
+alone also excluded the UI. The follow-up borrows a layer already included by the
+source camera for explicitly supplied Canvas/CanvasRenderer objects, restoring
+their layers synchronously on success or failure. It never searches or suppresses
+world renderers, widens the camera mask, or writes project assets. A zero-mask
+camera with nonempty UI fails explicitly; the caller must choose a visible camera
+layer. Synthetic coverage includes the high bit and write-failure restoration.

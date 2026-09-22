@@ -27,6 +27,7 @@ namespace ZeroEngine.Capture
             var previousActive = RenderTexture.active;
             var previousAspect = camera.aspect;
             var states = new List<CanvasState>();
+            var layers = new Dictionary<GameObject, int>();
             try
             {
                 if (overlays != null)
@@ -34,6 +35,17 @@ namespace ZeroEngine.Capture
                     {
                         if (canvas == null || !canvas.isActiveAndEnabled || !canvas.isRootCanvas ||
                             canvas.renderMode != RenderMode.ScreenSpaceOverlay) continue;
+                        // Borrow an already visible layer, never widen the world's visibility.
+                        // Only the supplied UI renderers/canvases participate; no scene search.
+                        var renderers = canvas.GetComponentsInChildren<CanvasRenderer>(true);
+                        if (renderers.Length > 0)
+                        {
+                            int layer = FindVisibleLayer(camera.cullingMask);
+                            foreach (var nested in canvas.GetComponentsInChildren<Canvas>(true))
+                                BorrowLayer(nested.gameObject, layer, layers);
+                            foreach (var renderer in renderers)
+                                BorrowLayer(renderer.gameObject, layer, layers);
+                        }
                         states.Add(new CanvasState(canvas));
                         canvas.renderMode = RenderMode.ScreenSpaceCamera;
                         canvas.worldCamera = camera;
@@ -53,6 +65,8 @@ namespace ZeroEngine.Capture
             finally
             {
                 foreach (var state in states) state.Restore();
+                foreach (var pair in layers)
+                    if (pair.Key != null) pair.Key.layer = pair.Value;
                 if (camera != null)
                 {
                     camera.targetTexture = previousTarget;
@@ -60,6 +74,24 @@ namespace ZeroEngine.Capture
                 }
                 RenderTexture.active = previousActive;
             }
+        }
+
+        private static int FindVisibleLayer(int mask)
+        {
+            for (int layer = 0; layer < 32; layer++)
+                if ((mask & (1 << layer)) != 0) return layer;
+            throw new InvalidOperationException(
+                "Overlay capture requires at least one visible camera layer. " +
+                "A zero culling mask cannot render UI without exposing excluded world content.");
+        }
+
+        private static void BorrowLayer(GameObject target, int layer, Dictionary<GameObject, int> layers)
+        {
+            if (target.layer == layer || layers.ContainsKey(target)) return;
+            if (target.GetComponent<Renderer>() != null)
+                throw new InvalidOperationException("Overlay UI and a world Renderer must not share a GameObject.");
+            layers.Add(target, target.layer);
+            target.layer = layer;
         }
 
         public void Dispose()

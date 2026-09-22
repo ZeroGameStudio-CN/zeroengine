@@ -138,6 +138,7 @@ namespace ZeroEngine.Capture.Tests
 
         [TestCase(0)]
         [TestCase(1 << 10)]
+        [TestCase(1 << 31)]
         public void Screenshot_OverlayOnExcludedLayer_DoesNotRevealExcludedWorld(int cameraMask)
         {
             var root = Path.Combine(Path.GetTempPath(), "ze-capture-layer-contract-" + Guid.NewGuid().ToString("N"));
@@ -170,21 +171,34 @@ namespace ZeroEngine.Capture.Tests
                 rect.anchorMax = new Vector2(0.5f, 1f);
                 rect.offsetMin = rect.offsetMax = Vector2.zero;
                 imageObject.GetComponent<UnityEngine.UI.Image>().color = Color.green;
-                path = BackgroundCapture.Screenshot(new CaptureOptions
-                { OutputRoot = root, Width = 64, Height = 64 }, camera, new[] { canvas });
-
-                var pixels = new Texture2D(2, 2);
-                try
+                var options = new CaptureOptions { OutputRoot = root, Width = 64, Height = 64 };
+                if (cameraMask == 0)
                 {
-                    Assert.IsTrue(pixels.LoadImage(File.ReadAllBytes(path)));
-                    var ui = pixels.GetPixel(16, 32);
-                    var world = pixels.GetPixel(48, 32);
-                    Assert.Greater(ui.g, 0.8f, "The explicit overlay must be visible: " + path);
-                    Assert.Less(ui.b, 0.1f);
-                    Assert.Greater(world.b, 0.8f, "Excluded world content must remain absent: " + path);
-                    Assert.Less(world.r, 0.1f);
+                    var error = Assert.Throws<InvalidOperationException>(() =>
+                        BackgroundCapture.Screenshot(options, camera, new[] { canvas }));
+                    StringAssert.Contains("visible camera layer", error.Message);
+                    Assert.IsEmpty(Directory.GetFiles(root, "*.png", SearchOption.AllDirectories));
                 }
-                finally { Object.DestroyImmediate(pixels); }
+                else
+                {
+                    path = BackgroundCapture.Screenshot(options, camera, new[] { canvas });
+
+                    var pixels = new Texture2D(2, 2);
+                    try
+                    {
+                        Assert.IsTrue(pixels.LoadImage(File.ReadAllBytes(path)));
+                        var ui = pixels.GetPixel(16, 32);
+                        var world = pixels.GetPixel(48, 32);
+                        Assert.Greater(ui.g, 0.8f, "The explicit overlay must be visible: " + path);
+                        Assert.Less(ui.b, 0.1f);
+                        Assert.Greater(world.b, 0.8f, "Excluded world content must remain absent: " + path);
+                        Assert.Less(world.r, 0.1f);
+                    }
+                    finally { Object.DestroyImmediate(pixels); }
+                    // IO failure after rendering must also restore every borrowed UI layer.
+                    using (var writer = new CameraFrameWriter(64, 64))
+                        Assert.Throws<IOException>(() => writer.Write(camera, new[] { canvas }, path));
+                }
                 Assert.AreEqual(cameraMask, camera.cullingMask);
                 Assert.AreEqual(0, canvasObject.layer);
                 Assert.AreEqual(0, imageObject.layer);
