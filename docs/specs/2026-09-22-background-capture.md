@@ -127,3 +127,21 @@ dependency). The P5 synthetic `RuntimeFontScope_BackgroundCaptureScale` regressi
 fails against the prior package with mean pixel error 0.03566 versus 0.005 allowed.
 The next candidate will be tested as an explicit temporary capture-only version
 split before cohort promotion; the in-project probe is removed before validation.
+
+Candidate `bffc535e84d0638aec441ef61936e50c135f8843` passed that native P5 validation:
+the SDF pixel regression 1/1, capture contracts 12/12, capture PlayMode lifecycle
+2/2, and the real Classic battle skills/attack/auto-toggle route 1/1. Each result
+was checked against its native NUnit XML, not just CLI success. The matching P5
+NativeRuns are `20260922T072358845Z-d41cfbb75ceb49cfb8b8703ff107a2e9`,
+`20260922T072534639Z-05d2a9df75e14ee49c64b08e63113931`,
+`20260922T072553112Z-83466f3e20814110b8a8f504085a741b`, and
+`20260922T072649736Z-93bc849db0284aa882d96a266dfa75fc`. The inspected 720p battle
+image has readable text with no P5 invalidation probe and no exploration shell
+leaking into the battle camera. The separate native 4K reference is retained.
+
+P5 has promoted all 30 ZE pins to that implementation commit through native UPM,
+with matching manifest/lock hashes, settled compilation and unchanged content
+across 944 protected configuration inputs. The other 29 package implementations
+are identical to the prior cohort. This evidence-only follow-up does not require
+repinning consumers to its documentation commit. POB was not updated; no new
+Unity 2022, audio, performance or human visual-acceptance claim is made.
