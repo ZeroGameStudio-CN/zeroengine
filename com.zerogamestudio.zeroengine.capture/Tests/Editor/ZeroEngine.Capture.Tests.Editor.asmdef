@@ -1,6 +1,6 @@
 {
   "name": "ZeroEngine.Capture.Tests.Editor",
-  "references": ["ZeroEngine.Capture.Editor", "UnityEngine.TestRunner", "UnityEditor.TestRunner"],
+  "references": ["ZeroEngine.Capture.Editor", "UnityEngine.UI", "UnityEngine.TestRunner", "UnityEditor.TestRunner"],
   "includePlatforms": ["Editor"],
   "overrideReferences": true,
   "precompiledReferences": ["nunit.framework.dll"],

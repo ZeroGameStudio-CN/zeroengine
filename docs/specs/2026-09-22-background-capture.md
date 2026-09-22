@@ -84,3 +84,17 @@ Game-camera screenshots share the writer; SO Inspector/Editor-window screenshots
 remain a separate native UI evidence route, not a claim of this package.
 No Plastic changeset was created. Package source is on the dedicated remote
 `codex/unity-background-capture-20260922` branch; it is not merged into main.
+
+## P5 visual-graduation follow-up: camera visibility fidelity
+
+The P5 battle camera excludes the exploration world. Temporarily adding the
+overlay Canvas layer to its culling mask breaks that boundary when the Canvas is
+on Default. Correct this inside the shared writer, not with P5 renderer hiding.
+Synthetic pixel tests must simultaneously prove visible green UI and a blue
+background in place of an excluded red world quad, including an empty camera
+mask; restoration checks remain in force. Verify a real P5 battle after package
+resolution before making art decisions from that evidence.
+
+The user authorized publishing this fix on the existing independent branch and
+updating P5 only. POB stays at its previously verified pin; no main-branch merge
+or Plastic checkin is included. Candidate validation is pending.

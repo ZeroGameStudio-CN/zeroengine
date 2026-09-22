@@ -25,7 +25,6 @@ namespace ZeroEngine.Capture
             if (camera == null) throw new InvalidOperationException("The capture camera is unavailable.");
             var previousTarget = camera.targetTexture;
             var previousActive = RenderTexture.active;
-            var previousMask = camera.cullingMask;
             var previousAspect = camera.aspect;
             var states = new List<CanvasState>();
             try
@@ -39,7 +38,6 @@ namespace ZeroEngine.Capture
                         canvas.renderMode = RenderMode.ScreenSpaceCamera;
                         canvas.worldCamera = camera;
                         canvas.planeDistance = Mathf.Max(camera.nearClipPlane + 0.01f, 1f);
-                        camera.cullingMask |= 1 << canvas.gameObject.layer;
                     }
                 camera.targetTexture = _target;
                 camera.aspect = (float)_target.width / _target.height;
@@ -58,7 +56,6 @@ namespace ZeroEngine.Capture
                 if (camera != null)
                 {
                     camera.targetTexture = previousTarget;
-                    camera.cullingMask = previousMask;
                     camera.aspect = previousAspect;
                 }
                 RenderTexture.active = previousActive;

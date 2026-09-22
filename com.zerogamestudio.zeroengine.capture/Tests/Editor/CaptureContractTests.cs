@@ -136,6 +136,71 @@ namespace ZeroEngine.Capture.Tests
             }
         }
 
+        [TestCase(0)]
+        [TestCase(1 << 10)]
+        public void Screenshot_OverlayOnExcludedLayer_DoesNotRevealExcludedWorld(int cameraMask)
+        {
+            var root = Path.Combine(Path.GetTempPath(), "ze-capture-layer-contract-" + Guid.NewGuid().ToString("N"));
+            var cameraObject = new GameObject("Layer contract camera");
+            var canvasObject = new GameObject("Default layer overlay", typeof(RectTransform), typeof(Canvas));
+            var imageObject = new GameObject("Opaque UI", typeof(RectTransform), typeof(UnityEngine.UI.Image));
+            var excludedWorld = GameObject.CreatePrimitive(PrimitiveType.Quad);
+            var material = new Material(Shader.Find("Universal Render Pipeline/Unlit") ?? Shader.Find("Unlit/Color"));
+            string path = null;
+            try
+            {
+                var camera = cameraObject.AddComponent<Camera>();
+                camera.enabled = false;
+                camera.cullingMask = cameraMask;
+                camera.clearFlags = CameraClearFlags.SolidColor;
+                camera.backgroundColor = Color.blue;
+                excludedWorld.name = "Excluded default-layer world";
+                excludedWorld.layer = 0;
+                excludedWorld.transform.position = new Vector3(0f, 0f, 5f);
+                excludedWorld.transform.localScale = Vector3.one * 20f;
+                material.color = Color.red;
+                if (material.HasProperty("_BaseColor")) material.SetColor("_BaseColor", Color.red);
+                excludedWorld.GetComponent<Renderer>().sharedMaterial = material;
+
+                var canvas = canvasObject.GetComponent<Canvas>();
+                canvas.renderMode = RenderMode.ScreenSpaceOverlay;
+                imageObject.transform.SetParent(canvasObject.transform, false);
+                var rect = imageObject.GetComponent<RectTransform>();
+                rect.anchorMin = Vector2.zero;
+                rect.anchorMax = new Vector2(0.5f, 1f);
+                rect.offsetMin = rect.offsetMax = Vector2.zero;
+                imageObject.GetComponent<UnityEngine.UI.Image>().color = Color.green;
+                path = BackgroundCapture.Screenshot(new CaptureOptions
+                { OutputRoot = root, Width = 64, Height = 64 }, camera, new[] { canvas });
+
+                var pixels = new Texture2D(2, 2);
+                try
+                {
+                    Assert.IsTrue(pixels.LoadImage(File.ReadAllBytes(path)));
+                    var ui = pixels.GetPixel(16, 32);
+                    var world = pixels.GetPixel(48, 32);
+                    Assert.Greater(ui.g, 0.8f, "The explicit overlay must be visible: " + path);
+                    Assert.Less(ui.b, 0.1f);
+                    Assert.Greater(world.b, 0.8f, "Excluded world content must remain absent: " + path);
+                    Assert.Less(world.r, 0.1f);
+                }
+                finally { Object.DestroyImmediate(pixels); }
+                Assert.AreEqual(cameraMask, camera.cullingMask);
+                Assert.AreEqual(0, canvasObject.layer);
+                Assert.AreEqual(0, imageObject.layer);
+                Assert.AreEqual(RenderMode.ScreenSpaceOverlay, canvas.renderMode);
+                Assert.IsNull(canvas.worldCamera);
+            }
+            finally
+            {
+                Object.DestroyImmediate(imageObject);
+                Object.DestroyImmediate(canvasObject);
+                Object.DestroyImmediate(excludedWorld);
+                Object.DestroyImmediate(material);
+                Object.DestroyImmediate(cameraObject);
+            }
+        }
+
         [Test]
         public void Cancel_RestoresTimingAndNeverPublishesSuccessManifest()
         {

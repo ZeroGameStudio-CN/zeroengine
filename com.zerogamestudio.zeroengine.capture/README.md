@@ -29,6 +29,8 @@ does not capture Editor windows or the SO Inspector; use the native Editor/UI
 evidence route for those, and validate serialized references separately.
 Only explicitly supplied root overlay canvases are temporarily rendered with the
 camera. No scene search, business logic or production asset writes occur here.
+Overlay capture must preserve the gameplay camera's visibility mask: a Canvas on
+Default must not make otherwise excluded world content appear in the recording.
 
 `Complete()` publishes `capture.json` for the existing external media helper;
 PNG names follow `<label>-0000.png`. Only call it after scenario success.
