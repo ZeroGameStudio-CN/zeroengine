@@ -7,6 +7,18 @@ namespace ZeroEngine.Pathfinding2D.Tests.Editor
     public class JumpMovementHandlerTests
     {
         [Test]
+        public void TallJump_OptionalFlightBudgetAllowsLongArc_WithoutBypassingVelocityLimit()
+        {
+            var end = new Vector2(3f, 40f);
+            Assert.That(JumpMovementHandler.CalculateJump(Vector2.zero, end, 60f).IsReachable, Is.False);
+            var tall = JumpMovementHandler.CalculateJump(Vector2.zero, end, 60f, maxFlightTime: 0f);
+            Assert.That(tall.IsReachable, Is.True);
+            Assert.That(tall.FlightTime, Is.GreaterThan(2f));
+            Assert.That(Vector2.Distance(tall.Trajectory[tall.Trajectory.Length - 1], end), Is.LessThan(.01f));
+            Assert.That(JumpMovementHandler.CalculateJump(Vector2.zero, end, 14f, maxFlightTime: 0f).IsReachable, Is.False);
+        }
+
+        [Test]
         public void CalculateJump_WhenRequiredHorizontalSpeedExceedsAirLimit_ReturnsNotReachable()
         {
             var unlimited = JumpMovementHandler.CalculateJump(

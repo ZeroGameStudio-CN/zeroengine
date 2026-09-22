@@ -275,3 +275,5 @@ var gui = gameObject.AddComponent<PathfindingDebugGUI>();
 - 跳跃链接计算
 - A* 寻路算法
 - MoveCommand 指令系统
+
+JumpLinkConfig.MaxJumpFlightTime defaults to 2 seconds. Set it to 0 for actor profiles that adapt to tall platforms; finite trajectories, velocity, horizontal speed, and collision checks still apply. JumpMovementHandler.CalculateJump exposes the same optional final argument. Consumers own actor capabilities and must use matching gravity and velocities for execution.

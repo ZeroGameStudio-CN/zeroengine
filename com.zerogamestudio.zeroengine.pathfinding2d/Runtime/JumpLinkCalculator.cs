@@ -38,6 +38,9 @@ namespace ZeroEngine.Pathfinding2D
         [Tooltip("使用按目标高度计算的一次智能跳跃，不继承玩家多段跳")]
         public bool UseSingleSmartJump = false;
 
+        [Tooltip("Maximum jump flight time; 0 permits any finite duration. Existing profiles default to 2 seconds.")]
+        public float MaxJumpFlightTime = 2f;
+
         [Tooltip("执行器能在起跳后持续修正水平速度；关闭时拒绝会先撞目标平台侧面的跳跃链接")]
         public bool SupportsMidairHorizontalSteering = true;
 
@@ -639,7 +642,8 @@ namespace ZeroEngine.Pathfinding2D
                 GetEffectiveMaxJumpVelocity(),
                 config.GravityScale,
                 config.Overshoot,
-                config.MaxAirHorizontalSpeed
+                config.MaxAirHorizontalSpeed,
+                config.MaxJumpFlightTime
             );
 
             if (!result.IsReachable)

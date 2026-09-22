@@ -62,7 +62,8 @@ namespace ZeroEngine.Pathfinding2D
             float maxJumpVelocity,
             float gravityScale = DefaultGravityScale,
             float overshoot = 1.2f,
-            float maxAirHorizontalSpeed = DisabledAirSpeedLimit)
+            float maxAirHorizontalSpeed = DisabledAirSpeedLimit,
+            float maxFlightTime = MaxJumpTime)
         {
             float deltaX = end.x - start.x;
             float deltaY = end.y - start.y;
@@ -137,7 +138,8 @@ namespace ZeroEngine.Pathfinding2D
             float totalTime = timeToApex + timeToFall;
 
             // 限制飞行时间
-            if (totalTime < MinJumpTime || totalTime > MaxJumpTime)
+            if (float.IsNaN(totalTime) || float.IsInfinity(totalTime) || totalTime < MinJumpTime ||
+                (maxFlightTime > 0f && totalTime > maxFlightTime))
             {
                 return JumpCalculationResult.NotReachable;
             }
