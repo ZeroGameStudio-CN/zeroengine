@@ -145,3 +145,27 @@ across 944 protected configuration inputs. The other 29 package implementations
 are identical to the prior cohort. This evidence-only follow-up does not require
 repinning consumers to its documentation commit. POB was not updated; no new
 Unity 2022, audio, performance or human visual-acceptance claim is made.
+
+## Overlay sorting fidelity follow-up
+
+P5's real victory route exposed a separate capture-only defect: native Game View
+correctly covers the hero with the result panel, whereas the captured image puts
+the hero above it. Both images are from NativeRun
+`20260922T100852658Z-cedba646771f4f8c8f9a5de01ccd01de` (1/1 functional pass, not a
+capture-fidelity pass). Converting Overlay to Camera mode introduces scene sprite
+sorting; preserving its original order zero is not equivalent to Overlay.
+
+Keep the existing writer and API. Snapshot native render order for explicit root
+canvases and their active nested sorting overrides before converting any root;
+temporarily assign consecutive upper-end orders in the highest configured sorting
+layer, without editing project layer settings or world objects. Preserve relative
+UI order and restore all borrowed values synchronously, including on IO failure.
+Duplicate supplied roots are ignored. Fail closed on an unrepresentable count.
+This does not promise to override custom post-UI render passes or arbitrary world
+content deliberately placed in the same reserved upper sorting range.
+
+Verify overlapping high-order world sprites, multiple overlays, nested sorting,
+input-order independence and success/failure restoration with synthetic pixels;
+then rerun the P5 SDF case and real victory/native-reference comparison. Continue
+the same user-authorized independent-branch/P5-only fix; POB and main stay intact.
+Candidate validation is pending.

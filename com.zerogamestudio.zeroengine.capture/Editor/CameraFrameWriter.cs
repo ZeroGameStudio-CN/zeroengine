@@ -28,6 +28,8 @@ namespace ZeroEngine.Capture
             var previousActive = RenderTexture.active;
             var previousAspect = camera.aspect;
             var states = new List<CanvasState>();
+            var sorting = new List<CanvasSortState>();
+            var seen = new HashSet<Canvas>();
             var layers = new Dictionary<GameObject, int>();
             var graphics = new List<Graphic>();
             try
@@ -36,7 +38,7 @@ namespace ZeroEngine.Capture
                     foreach (var canvas in overlays)
                     {
                         if (canvas == null || !canvas.isActiveAndEnabled || !canvas.isRootCanvas ||
-                            canvas.renderMode != RenderMode.ScreenSpaceOverlay) continue;
+                            canvas.renderMode != RenderMode.ScreenSpaceOverlay || !seen.Add(canvas)) continue;
                         // Borrow an already visible layer, never widen the world's visibility.
                         // Only the supplied UI renderers/canvases participate; no scene search.
                         var renderers = canvas.GetComponentsInChildren<CanvasRenderer>(true);
@@ -49,11 +51,15 @@ namespace ZeroEngine.Capture
                                 BorrowLayer(renderer.gameObject, layer, layers);
                         }
                         states.Add(new CanvasState(canvas));
+                        foreach (var nested in canvas.GetComponentsInChildren<Canvas>(true))
+                            if (nested.isActiveAndEnabled && (nested == canvas || nested.overrideSorting))
+                                sorting.Add(new CanvasSortState(nested, sorting.Count));
                         graphics.AddRange(canvas.GetComponentsInChildren<Graphic>(true));
-                        canvas.renderMode = RenderMode.ScreenSpaceCamera;
-                        canvas.worldCamera = camera;
-                        canvas.planeDistance = Mathf.Max(camera.nearClipPlane + 0.01f, 1f);
                     }
+                // Record native Overlay order before converting any root. Camera-space
+                // canvases otherwise compete with world sprites at their original orders.
+                foreach (var state in states) state.BorrowCamera(camera);
+                PromoteOverlaySorting(sorting);
                 camera.targetTexture = _target;
                 camera.aspect = (float)_target.width / _target.height;
                 InvalidateGraphics(graphics);
@@ -69,6 +75,7 @@ namespace ZeroEngine.Capture
             finally
             {
                 foreach (var state in states) state.Restore();
+                foreach (var state in sorting) state.Restore();
                 foreach (var pair in layers)
                     if (pair.Key != null) pair.Key.layer = pair.Value;
                 if (camera != null)
@@ -90,6 +97,21 @@ namespace ZeroEngine.Capture
             // uGUI's layout invalidation. Explicitly rebuild only the supplied UI trees.
             foreach (var graphic in graphics)
                 if (graphic != null) graphic.SetAllDirty();
+        }
+
+        private static void PromoteOverlaySorting(List<CanvasSortState> states)
+        {
+            if (states.Count == 0) return;
+            // Canvas orders are signed 16-bit values. Compress only the supplied UI's
+            // existing order into the top end; do not depend on project layer names.
+            if (states.Count > short.MaxValue)
+                throw new InvalidOperationException("Too many independently sorted overlay canvases to capture.");
+            var topLayer = SortingLayer.layers[0];
+            foreach (var layer in SortingLayer.layers)
+                if (layer.value > topLayer.value) topLayer = layer;
+            states.Sort((left, right) => left.CompareTo(right));
+            for (int index = 0; index < states.Count; index++)
+                states[index].Apply(topLayer.id, short.MaxValue - states.Count + 1 + index);
         }
 
         private static int FindVisibleLayer(int mask)
@@ -125,12 +147,56 @@ namespace ZeroEngine.Capture
             {
                 _canvas = canvas; _camera = canvas.worldCamera; _distance = canvas.planeDistance;
             }
+            public void BorrowCamera(Camera camera)
+            {
+                _canvas.renderMode = RenderMode.ScreenSpaceCamera;
+                _canvas.worldCamera = camera;
+                _canvas.planeDistance = Mathf.Max(camera.nearClipPlane + 0.01f, 1f);
+            }
             public void Restore()
             {
                 if (_canvas == null) return;
                 _canvas.renderMode = RenderMode.ScreenSpaceOverlay;
                 _canvas.worldCamera = _camera;
                 _canvas.planeDistance = _distance;
+            }
+        }
+
+        private readonly struct CanvasSortState
+        {
+            private readonly Canvas _canvas;
+            private readonly int _layer;
+            private readonly int _order;
+            private readonly int _renderOrder;
+            private readonly int _index;
+
+            public CanvasSortState(Canvas canvas, int index)
+            {
+                _canvas = canvas;
+                _layer = canvas.sortingLayerID;
+                _order = canvas.sortingOrder;
+                _renderOrder = canvas.renderOrder;
+                _index = index;
+            }
+
+            public int CompareTo(CanvasSortState other)
+            {
+                int result = _renderOrder.CompareTo(other._renderOrder);
+                if (result == 0) result = _order.CompareTo(other._order);
+                return result == 0 ? _index.CompareTo(other._index) : result;
+            }
+
+            public void Apply(int layer, int order)
+            {
+                _canvas.sortingLayerID = layer;
+                _canvas.sortingOrder = order;
+            }
+
+            public void Restore()
+            {
+                if (_canvas == null) return;
+                _canvas.sortingLayerID = _layer;
+                _canvas.sortingOrder = _order;
             }
         }
     }

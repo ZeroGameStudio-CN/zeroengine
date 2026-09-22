@@ -215,6 +215,129 @@ namespace ZeroEngine.Capture.Tests
             }
         }
 
+        [TestCase(false)]
+        [TestCase(true)]
+        public void Screenshot_OverlaySorting_PreservesNestedUiOrderAboveSpritesAndRestores(bool reverseInputs)
+        {
+            var root = Path.Combine(Path.GetTempPath(), "ze-capture-sorting-" + Guid.NewGuid().ToString("N"));
+            Directory.CreateDirectory(root);
+            var cameraObject = new GameObject("Sorting contract camera");
+            var worldObject = new GameObject("High-order world sprite", typeof(SpriteRenderer));
+            var lowerObject = new GameObject("Lower overlay", typeof(RectTransform), typeof(Canvas));
+            var upperObject = new GameObject("Upper overlay", typeof(RectTransform), typeof(Canvas));
+            var nestedObject = new GameObject("Nested override", typeof(RectTransform), typeof(Canvas));
+            var texture = new Texture2D(2, 2);
+            Sprite sprite = null;
+            try
+            {
+                var camera = cameraObject.AddComponent<Camera>();
+                camera.enabled = false;
+                camera.orthographic = true;
+                camera.orthographicSize = 2f;
+                camera.cullingMask = 1 << 30;
+                camera.clearFlags = CameraClearFlags.SolidColor;
+                camera.backgroundColor = Color.black;
+                texture.SetPixels(new[] { Color.white, Color.white, Color.white, Color.white });
+                texture.Apply();
+                sprite = Sprite.Create(texture, new Rect(0, 0, 2, 2), Vector2.one * 0.5f, 1f);
+                var world = worldObject.GetComponent<SpriteRenderer>();
+                world.sprite = sprite;
+                world.color = Color.red;
+                world.sortingOrder = 32760;
+                foreach (var layer in SortingLayer.layers)
+                    if (layer.value > SortingLayer.GetLayerValueFromID(world.sortingLayerID))
+                        world.sortingLayerID = layer.id;
+                worldObject.layer = 30;
+                worldObject.transform.position = new Vector3(0f, 0f, 5f);
+                worldObject.transform.localScale = Vector3.one * 10f;
+
+                var lower = lowerObject.GetComponent<Canvas>();
+                lower.renderMode = RenderMode.ScreenSpaceOverlay;
+                lower.sortingOrder = -25;
+                var upper = upperObject.GetComponent<Canvas>();
+                upper.renderMode = RenderMode.ScreenSpaceOverlay;
+                upper.sortingOrder = 17;
+                nestedObject.transform.SetParent(lowerObject.transform, false);
+                var nestedRect = nestedObject.GetComponent<RectTransform>();
+                nestedRect.anchorMin = Vector2.zero;
+                nestedRect.anchorMax = Vector2.one;
+                nestedRect.offsetMin = nestedRect.offsetMax = Vector2.zero;
+                var nested = nestedObject.GetComponent<Canvas>();
+                nested.overrideSorting = true;
+                nested.sortingOrder = 41;
+                AddImage(lower.transform, Color.green, Vector2.zero, new Vector2(0.75f, 1f));
+                AddImage(upper.transform, Color.blue, new Vector2(0.25f, 0f), new Vector2(0.75f, 1f));
+                AddImage(nested.transform, Color.yellow, new Vector2(0.25f, 0.5f), new Vector2(0.75f, 1f));
+                Canvas.ForceUpdateCanvases();
+                var overlays = reverseInputs ? new[] { upper, lower, lower } : new[] { lower, upper, lower };
+                var path = Path.Combine(root, "frame.png");
+                using (var writer = new CameraFrameWriter(64, 64))
+                {
+                    writer.Write(camera, overlays, path);
+                    var pixels = new Texture2D(2, 2);
+                    try
+                    {
+                        Assert.IsTrue(pixels.LoadImage(File.ReadAllBytes(path)));
+                        AssertPixel(pixels, 8, 16, Color.green, path);
+                        AssertPixel(pixels, 32, 16, Color.blue, path);
+                        AssertPixel(pixels, 32, 48, Color.yellow, path);
+                        AssertPixel(pixels, 60, 32, Color.red, path);
+                    }
+                    finally { Object.DestroyImmediate(pixels); }
+                    AssertSortingRestored(lower, upper, nested, camera);
+                    Assert.Throws<IOException>(() => writer.Write(camera, overlays, path));
+                    AssertSortingRestored(lower, upper, nested, camera);
+                }
+            }
+            finally
+            {
+                Object.DestroyImmediate(nestedObject);
+                Object.DestroyImmediate(lowerObject);
+                Object.DestroyImmediate(upperObject);
+                Object.DestroyImmediate(worldObject);
+                Object.DestroyImmediate(sprite);
+                Object.DestroyImmediate(texture);
+                Object.DestroyImmediate(cameraObject);
+            }
+        }
+
+        private static void AddImage(Transform parent, Color color, Vector2 min, Vector2 max)
+        {
+            var image = new GameObject("Synthetic UI", typeof(RectTransform), typeof(UnityEngine.UI.Image));
+            image.transform.SetParent(parent, false);
+            var rect = image.GetComponent<RectTransform>();
+            rect.anchorMin = min;
+            rect.anchorMax = max;
+            rect.offsetMin = rect.offsetMax = Vector2.zero;
+            image.GetComponent<UnityEngine.UI.Image>().color = color;
+        }
+
+        private static void AssertPixel(Texture2D pixels, int x, int y, Color expected, string path)
+        {
+            Color actual = pixels.GetPixel(x, y);
+            Assert.That(Mathf.Abs(actual.r - expected.r), Is.LessThan(0.1f), path);
+            Assert.That(Mathf.Abs(actual.g - expected.g), Is.LessThan(0.1f), path);
+            Assert.That(Mathf.Abs(actual.b - expected.b), Is.LessThan(0.1f), path);
+        }
+
+        private static void AssertSortingRestored(Canvas lower, Canvas upper, Canvas nested, Camera camera)
+        {
+            Assert.AreEqual(-25, lower.sortingOrder);
+            Assert.AreEqual(17, upper.sortingOrder);
+            Assert.AreEqual(41, nested.sortingOrder);
+            Assert.IsTrue(nested.overrideSorting);
+            foreach (var canvas in new[] { lower, upper, nested })
+            {
+                Assert.AreEqual(0, canvas.sortingLayerID);
+                Assert.AreEqual(0, canvas.gameObject.layer);
+                Assert.AreEqual(RenderMode.ScreenSpaceOverlay, canvas.renderMode);
+            }
+            Assert.IsNull(lower.worldCamera);
+            Assert.IsNull(upper.worldCamera);
+            Assert.IsNull(camera.targetTexture);
+            Assert.AreEqual(1 << 30, camera.cullingMask);
+        }
+
         [Test]
         public void Cancel_RestoresTimingAndNeverPublishesSuccessManifest()
         {

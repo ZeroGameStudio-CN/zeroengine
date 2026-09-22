@@ -41,6 +41,12 @@ Supplied uGUI trees rebuild their layout/graphic caches at capture resolution an
 again after restoration. This preserves scale-sensitive text when the Game View
 and capture have equal logical layouts but different pixel resolutions; no TMP or
 project-specific rendering dependency is required by the implementation.
+The native order of supplied overlay roots and nested sorting overrides is kept
+when borrowing the camera: their orders are temporarily compressed into the top
+of the highest existing sorting layer, then restored on both success and failure.
+No layer configuration or world-renderer state is changed. This protects ordinary
+sprite/UI ordering; custom render passes that draw after the UI still need their
+own camera contract and are not made faithful by changing Canvas sorting.
 
 `Complete()` publishes `capture.json` for the existing external media helper;
 PNG names follow `<label>-0000.png`. Only call it after scenario success.
