@@ -1,7 +1,7 @@
 {
   "name": "ZeroEngine.Capture.Editor",
   "rootNamespace": "ZeroEngine.Capture",
-  "references": [],
+  "references": ["UnityEngine.UI"],
   "includePlatforms": ["Editor"],
   "autoReferenced": true
 }

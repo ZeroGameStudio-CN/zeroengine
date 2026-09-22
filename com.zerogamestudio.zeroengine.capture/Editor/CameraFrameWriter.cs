@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using UnityEngine;
+using UnityEngine.UI;
 using Object = UnityEngine.Object;
 
 namespace ZeroEngine.Capture
@@ -28,6 +29,7 @@ namespace ZeroEngine.Capture
             var previousAspect = camera.aspect;
             var states = new List<CanvasState>();
             var layers = new Dictionary<GameObject, int>();
+            var graphics = new List<Graphic>();
             try
             {
                 if (overlays != null)
@@ -47,12 +49,14 @@ namespace ZeroEngine.Capture
                                 BorrowLayer(renderer.gameObject, layer, layers);
                         }
                         states.Add(new CanvasState(canvas));
+                        graphics.AddRange(canvas.GetComponentsInChildren<Graphic>(true));
                         canvas.renderMode = RenderMode.ScreenSpaceCamera;
                         canvas.worldCamera = camera;
                         canvas.planeDistance = Mathf.Max(camera.nearClipPlane + 0.01f, 1f);
                     }
                 camera.targetTexture = _target;
                 camera.aspect = (float)_target.width / _target.height;
+                InvalidateGraphics(graphics);
                 Canvas.ForceUpdateCanvases();
                 camera.Render();
                 RenderTexture.active = _target;
@@ -73,7 +77,19 @@ namespace ZeroEngine.Capture
                     camera.aspect = previousAspect;
                 }
                 RenderTexture.active = previousActive;
+                // Scale-sensitive geometry (for example SDF text) must also be rebuilt
+                // for the normal Game View after the borrowed camera-space capture.
+                InvalidateGraphics(graphics);
+                if (graphics.Count > 0) Canvas.ForceUpdateCanvases();
             }
+        }
+
+        private static void InvalidateGraphics(List<Graphic> graphics)
+        {
+            // Equal logical RectTransform sizes can hide a change in pixel scale from
+            // uGUI's layout invalidation. Explicitly rebuild only the supplied UI trees.
+            foreach (var graphic in graphics)
+                if (graphic != null) graphic.SetAllDirty();
         }
 
         private static int FindVisibleLayer(int mask)

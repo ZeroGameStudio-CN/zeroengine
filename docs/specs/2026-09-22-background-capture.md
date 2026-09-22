@@ -106,3 +106,24 @@ their layers synchronously on success or failure. It never searches or suppresse
 world renderers, widens the camera mask, or writes project assets. A zero-mask
 camera with nonempty UI fails explicitly; the caller must choose a visible camera
 layer. Synthetic coverage includes the high bit and write-failure restoration.
+
+Candidate `8ae66f9a33b72ad43076708fb924c8cfe8cd3647` was resolved through native
+UPM in P5, with matching manifest/lock and no compilation errors. Its 12 EditMode
+capture contracts passed (`20260922T053818440Z-d8fa3d0d8e3f43f5bcedbda32411ee83`).
+The real Boot-to-Classic skills/attack/auto-toggle route passed 1/1 with camera
+screenshots (`20260922T053938875Z-71822597754d4967b64033a18073cc81`). This is not a
+complete battle-victory movie. A remaining house in the new image was traced to
+P5's explicit cutaway renderer pass ignoring the camera mask; that distinct
+production-rendering defect is being fixed in P5, not hidden by the capture SDK.
+P5 promoted its ZE cohort to this one tested source commit; POB remains on
+its earlier pin and this follow-up does not claim a new Unity 2022 validation.
+
+The next P5 visual comparison exposed cached SDF geometry when converting a 4K
+overlay to a 720p camera target with the same logical layout. Native Game View
+text remained clear; a scoped uGUI invalidation probe restored capture fidelity.
+The shared writer now invalidates only supplied Graphic trees before capture and
+after restoration, using the already declared uGUI dependency (no TMP/P5 runtime
+dependency). The P5 synthetic `RuntimeFontScope_BackgroundCaptureScale` regression
+fails against the prior package with mean pixel error 0.03566 versus 0.005 allowed.
+The next candidate will be tested as an explicit temporary capture-only version
+split before cohort promotion; the in-project probe is removed before validation.

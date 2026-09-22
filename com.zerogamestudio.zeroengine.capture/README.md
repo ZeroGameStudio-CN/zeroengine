@@ -37,6 +37,10 @@ zero culling mask can capture its background, but must have a visible layer
 configured by its owner to capture nonempty overlays. This case fails explicitly
 instead of silently losing UI or revealing excluded scene objects. UI and a world
 Renderer sharing one GameObject are likewise rejected if relayering is required.
+Supplied uGUI trees rebuild their layout/graphic caches at capture resolution and
+again after restoration. This preserves scale-sensitive text when the Game View
+and capture have equal logical layouts but different pixel resolutions; no TMP or
+project-specific rendering dependency is required by the implementation.
 
 `Complete()` publishes `capture.json` for the existing external media helper;
 PNG names follow `<label>-0000.png`. Only call it after scenario success.
