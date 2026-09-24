@@ -12,7 +12,7 @@ ROOT = Path(__file__).resolve().parents[1]
 
 def test_distribution_has_no_runtime_dependencies() -> None:
     project = tomllib.loads((ROOT / "pyproject.toml").read_text(encoding="utf-8"))
-    assert project["project"]["version"] == "1.4.4"
+    assert project["project"]["version"] == "1.5.0"
     assert project["project"]["dependencies"] == []
     assert set(project["project"]["scripts"]) == {"unity-scheduler"}
     assert SCHEMA_VERSION == 3
@@ -123,13 +123,13 @@ def test_restore_recovery_runbook_covers_persistent_evidence_and_cleanup() -> No
 def test_upgrade_runbook_uses_an_absolute_staged_candidate_before_canonical_install() -> None:
     setup = (ROOT / "docs" / "setup.md").read_text(encoding="utf-8")
     normalized_setup = " ".join(setup.split())
-    staged_version = setup.index("<absolute-staged-1.4-executable> --version")
+    staged_version = setup.index("<absolute-staged-1.5-executable> --version")
     staged_backup = setup.index(
-        "<absolute-staged-1.4-executable> --state-dir <current-state-dir> state backup"
+        "<absolute-staged-1.5-executable> --state-dir <current-state-dir> state backup"
     )
-    router_install = setup.index("install the canonical Router version that requires 1.4")
+    router_install = setup.index("install the canonical Router version that requires 1.5")
     scheduler_install = setup.index("Then install canonical Scheduler")
 
     assert staged_version < staged_backup < router_install < scheduler_install
-    assert "require the parsed version to equal exactly `1.4.4`" in normalized_setup
+    assert "require the parsed version to equal exactly `1.5.0`" in normalized_setup
     assert "unity-scheduler --state-dir <current-state-dir> state backup" not in setup

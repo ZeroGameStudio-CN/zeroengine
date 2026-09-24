@@ -143,6 +143,7 @@ def build_parser() -> SchedulerArgumentParser:
     _claim_scope_arguments(acquire)
     _wait_arguments(acquire)
     acquire.add_argument("--keep-queued", action="store_true")
+    acquire.add_argument("--priority", choices=("normal", "urgent"), default="normal")
     acquire.set_defaults(handler=_claim_acquire)
     claim_release = claim_commands.add_parser("release")
     _workspace_argument(claim_release)
@@ -520,6 +521,7 @@ def _claim_acquire(
             operation_id=args.operation_id,
             writes=args.write,
             resources=args.resource,
+            priority=args.priority,
             wait_seconds=args.wait,
             requested_wait_seconds=args.requested_wait,
             keep_queued=args.keep_queued,
@@ -533,6 +535,7 @@ def _claim_acquire(
         receipt_only=args.receipt_only,
         writes=args.write,
         resources=args.resource,
+        priority=args.priority,
         wait_seconds=args.wait,
         requested_wait_seconds=args.requested_wait,
         keep_queued=args.keep_queued,
