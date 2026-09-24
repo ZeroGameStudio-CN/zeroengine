@@ -2449,6 +2449,83 @@ class WorkspaceCoordinator:
         )
 
     @staticmethod
+    def _unknown_scope_conflicts(
+        connection: sqlite3.Connection,
+        workspace_id: str,
+        writes: Sequence[str],
+        resources: Sequence[str],
+        *,
+        freeze: bool = False,
+    ) -> list[dict[str, Any]]:
+        """Return only the unknown task fences that overlap a requested claim.
+
+        An unknown task still fences a workspace-wide freeze because a freeze is
+        intentionally unscoped. Ordinary claims can continue when they do not
+        overlap any scope retained by the unknown task. The returned records are
+        diagnostic evidence for callers; they never authorize another task's
+        release or recovery.
+        """
+
+        unknown_tasks = connection.execute(
+            "SELECT id FROM tasks WHERE workspace_id = ? AND state = 'outcome_unknown' "
+            "ORDER BY created_at, id",
+            (workspace_id,),
+        ).fetchall()
+        if not unknown_tasks:
+            return []
+        if freeze:
+            return [
+                {
+                    "task_id": str(task["id"]),
+                    "claim_id": None,
+                    "kind": "task",
+                    "writes": [],
+                    "resources": [],
+                }
+                for task in unknown_tasks
+            ]
+
+        unknown_claims = WorkspaceCoordinator._unknown_open_claims(connection, workspace_id)
+        requested_writes = tuple(writes)
+        requested_resources = set(resources)
+        conflicts: list[dict[str, Any]] = []
+        for claim in unknown_claims:
+            scopes = WorkspaceCoordinator._claim_scopes(connection, claim["id"])
+            overlaps_resource = bool(requested_resources & set(scopes["resource"]))
+            overlaps_write = any(
+                _path_conflicts(left, right)
+                for left in requested_writes
+                for right in scopes["write"]
+            )
+            if claim["kind"] != "freeze" and not overlaps_resource and not overlaps_write:
+                continue
+            conflicts.append(
+                {
+                    "task_id": str(claim["owner_task_id"]),
+                    "claim_id": str(claim["id"]),
+                    "kind": str(claim["kind"]),
+                    "writes": list(scopes["write"]),
+                    "resources": list(scopes["resource"]),
+                }
+            )
+        return conflicts
+
+    @staticmethod
+    def _unknown_open_claims(
+        connection: sqlite3.Connection, workspace_id: str
+    ) -> list[sqlite3.Row]:
+        return list(
+            connection.execute(
+                "SELECT claims.*, tasks.id AS owner_task_id FROM claims "
+                "JOIN tasks ON tasks.id = claims.task_id "
+                "WHERE claims.workspace_id = ? AND tasks.state = 'outcome_unknown' "
+                "AND claims.state IN ('queued', 'active', 'parked') "
+                "ORDER BY claims.queue_order, claims.id",
+                (workspace_id,),
+            ).fetchall()
+        )
+
+    @staticmethod
     def _bound_open_task_times(
         connection: sqlite3.Connection, now: float, workspace_id: str | None = None
     ) -> set[str]:
@@ -3041,6 +3118,10 @@ class WorkspaceCoordinator:
     def _task_drain_request(
         connection: sqlite3.Connection, workspace_id: str, task_id: str
     ) -> dict[str, Any] | None:
+        if WorkspaceCoordinator._unknown_exists(connection, workspace_id):
+            # No queued freeze can run until recovery. Draining independent
+            # owners for it would turn a scoped fence back into a global stop.
+            return None
         freezes = connection.execute(
             "SELECT * FROM claims WHERE workspace_id = ? "
             "AND task_id != ? AND kind = 'freeze' AND state = 'queued'",
@@ -3296,8 +3377,13 @@ class WorkspaceCoordinator:
     @staticmethod
     def _schedule_workspace(connection: sqlite3.Connection, workspace_id: str, now: float) -> None:
         WorkspaceCoordinator._finalize_due_wait_operations(connection, workspace_id, now)
-        if WorkspaceCoordinator._unknown_exists(connection, workspace_id):
-            return
+        unknown_exists = WorkspaceCoordinator._unknown_exists(connection, workspace_id)
+        unknown_claims = WorkspaceCoordinator._unknown_open_claims(connection, workspace_id)
+        unknown_scopes = {
+            claim["id"]: WorkspaceCoordinator._claim_scopes(connection, claim["id"])
+            for claim in unknown_claims
+        }
+        unknown_task_ids = {str(claim["task_id"]) for claim in unknown_claims}
         active = list(
             connection.execute(
                 "SELECT * FROM claims WHERE workspace_id = ? AND state = 'active' "
@@ -3334,7 +3420,21 @@ class WorkspaceCoordinator:
                 # Leave its order/priority intact for scheduling after release.
                 continue
             candidate_scopes = queued_scopes[candidate["id"]]
+            if str(candidate["task_id"]) in unknown_task_ids:
+                # An unresolved owner never regains authority through a queued
+                # claim. Keep its original queue position as a fence for later
+                # overlapping work, while disjoint claims remain eligible.
+                blocked_earlier.append(candidate)
+                blocked_scopes[candidate["id"]] = candidate_scopes
+                if candidate["kind"] == "freeze":
+                    break
+                continue
             if candidate["kind"] == "freeze":
+                if unknown_exists:
+                    # A freeze is a workspace-wide barrier. Keep it queued until
+                    # every unknown outcome has deterministic recovery, while
+                    # allowing independent scoped claims below it to progress.
+                    continue
                 other_active = [
                     claim for claim in active if claim["task_id"] != candidate["task_id"]
                 ]
@@ -3360,6 +3460,15 @@ class WorkspaceCoordinator:
                 )
                 for existing in active
             )
+            conflicts_unknown = any(
+                WorkspaceCoordinator._claims_conflict(
+                    candidate,
+                    candidate_scopes,
+                    unknown_claim,
+                    unknown_scopes[unknown_claim["id"]],
+                )
+                for unknown_claim in unknown_claims
+            )
             conflicts_queued = any(
                 WorkspaceCoordinator._claims_conflict(
                     candidate,
@@ -3369,7 +3478,7 @@ class WorkspaceCoordinator:
                 )
                 for earlier in blocked_earlier
             )
-            if conflicts_active or conflicts_queued:
+            if conflicts_active or conflicts_unknown or conflicts_queued:
                 blocked_earlier.append(candidate)
                 blocked_scopes[candidate["id"]] = candidate_scopes
                 continue
@@ -3806,7 +3915,10 @@ class WorkspaceCoordinator:
                 "WHERE workspace_id = ? ORDER BY created_at, task_id",
                 (registered["id"],),
             ).fetchall()
-            blocked = any(task["state"] == "outcome_unknown" for task in tasks)
+            unknown_task_ids = [
+                str(task["id"]) for task in tasks if task["state"] == "outcome_unknown"
+            ]
+            blocked = bool(unknown_task_ids)
             public_tasks = []
             for task in tasks:
                 public_task = self._public_task(task)
@@ -3819,6 +3931,15 @@ class WorkspaceCoordinator:
                 "coordination_mode": "required",
                 "ready": not blocked,
                 "blocked": blocked,
+                "admission": {
+                    "unknown_outcome": "scope_fenced" if blocked else "open",
+                    "independent_scopes": not any(
+                        claim["task_id"] in unknown_task_ids and claim["kind"] == "freeze"
+                        for claim in claims
+                    ),
+                    "workspace_freeze_blocked": blocked,
+                    "unknown_task_ids": unknown_task_ids,
+                },
                 "workspace": {
                     "id": registered["id"],
                     "root": registered["root"],
@@ -5118,9 +5239,7 @@ class WorkspaceCoordinator:
                     )
                 return True
             self._maintain(connection, _workspace_id(root))
-            registered = self._workspace(connection, root)
-            if self._unknown_exists(connection, registered["id"]):
-                raise BusyError("Workspace is blocked by an unknown task outcome.")
+            self._workspace(connection, root)
             self._require_token_cleanup_admission(connection)
             cleanup = self._task_token_cleanup_conflict(connection, canonical_path)
             if cleanup is not None:
@@ -5417,8 +5536,6 @@ class WorkspaceCoordinator:
                 return replay, secret
             self._maintain(connection, identifier)
             registered = self._workspace(connection, root)
-            if self._unknown_exists(connection, registered["id"]):
-                raise BusyError("Workspace is blocked by an unknown task outcome.")
             self._require_token_cleanup_admission(connection)
             cleanup = self._task_token_cleanup_conflict(
                 connection,
@@ -5835,8 +5952,6 @@ class WorkspaceCoordinator:
                 now = time.time()
                 self._maintain(connection, identifier)
                 registered = self._workspace(connection, root)
-                if self._unknown_exists(connection, registered["id"]):
-                    raise BusyError("Workspace is blocked by an unknown task outcome.")
                 task = self._authenticate_task(connection, registered["id"], token)
                 restoration_pending = connection.execute(
                     "SELECT claims.id FROM claims "
@@ -5858,6 +5973,23 @@ class WorkspaceCoordinator:
                     raise BusyError(
                         "Workspace freeze is waiting for this task to park its claims.",
                         details={"reason": "freeze-drain-requested", **drain},
+                    )
+                unknown_conflicts = self._unknown_scope_conflicts(
+                    connection,
+                    registered["id"],
+                    normalized_writes,
+                    normalized_resources,
+                    freeze=freeze,
+                )
+                if unknown_conflicts:
+                    raise BusyError(
+                        "Requested claim conflicts with an unknown task outcome.",
+                        details={
+                            "reason": "unknown-scope-conflict",
+                            "task_ids": sorted({item["task_id"] for item in unknown_conflicts}),
+                            "conflicts": unknown_conflicts,
+                            "next_action": "recover_before_retry",
+                        },
                     )
                 order = self._allocate_queue_order(connection, registered["id"])
                 claim_id = uuid.uuid4().hex

@@ -107,7 +107,8 @@ explicitly replaces that duration after the same validation.
 Task expiry finalizes that task's pending acquire, freeze, and park receipts in the same transaction
 with `aborted=true`, their fixed original identities, and `reason=task-ttl-expired` or
 `task-ttl-expired-with-active-claim`. Exact retry and receipt acknowledgement can then converge;
-an active claim remains unauthorized behind the normal `outcome_unknown` recovery fence.
+an active claim remains unauthorized behind the normal `outcome_unknown` recovery fence. A new
+task may still start, and disjoint normal claims remain schedulable.
 
 Within one workspace, an open task token hash is unique. Authentication selects
 the open task before any historical terminal task and falls back to history
@@ -116,8 +117,9 @@ and fail closed; offline `state verify` enforces the same invariant.
 
 Only a freeze may use `--priority urgent`. An urgent freeze passes all queued normal claims and
 normal freezes, while urgent freezes remain FIFO by their original queue order. Priority never
-preempts an active claim and never bypasses an unknown-outcome fence. Public claim JSON always
-reports `priority` as `normal` or `urgent`.
+preempts an active claim and never bypasses an unknown-outcome fence. Disjoint normal claims may
+continue while an unknown task retains unrelated scopes. Public claim JSON always reports
+`priority` as `normal` or `urgent`.
 
 While a task has a drain request or any restoration-pending claim, every new
 claim or freeze for that task is rejected. The owner must finish and release
@@ -181,7 +183,7 @@ staged_scheduler="$stage_root/bin/unity-scheduler"
 Keep `$stagedScheduler` or `$staged_scheduler` as the exact
 `<absolute-staged-1.4-executable>` for every later staged command. The isolated uv environment
 variables must not remain set during the canonical install; require the parsed version to equal
-exactly `1.4.3`:
+exactly `1.4.4`:
 
 ```text
 <absolute-staged-1.4-executable> --version
@@ -205,7 +207,7 @@ These staged invocations are limited to `--version`, `state backup`, and `state 
 not open the database through the scheduling path or migrate schema 1 or 2. After the backup and
 `--for-migration` verification succeed, install the canonical Router version that requires 1.4
 first, so it fails closed while canonical Scheduler is still older. Then install canonical Scheduler
-1.4, require canonical `unity-scheduler --version` to report version `1.4.3`, run the
+1.4, require canonical `unity-scheduler --version` to report version `1.4.4`, run the
 `workspace list` maintenance read-back, exact-workspace status read-backs, and Router protocol
 canary, and only then reopen Router admission.
 
@@ -330,7 +332,15 @@ never rewritten automatically because it is an evidence-bearing manual recovery 
 
 ## Unknown outcomes
 
-An active task whose TTL expires while it owns a claim, or a task explicitly released as `outcome-unknown`, blocks new scheduling and preserves active claims. Recovery requires human-readable evidence:
+An active task whose TTL expires while it owns a claim, or a task explicitly released as
+`outcome-unknown`, preserves active claims as a scoped recovery fence. Overlapping normal claims
+and all workspace-wide freezes wait for recovery; disjoint normal claims and new task starts may
+continue.
+Queued freezes keep their original IDs, priority and order but defer draining and the global
+barrier until recovery; existing parked claims keep waiting for restoration. Status `admission`
+distinguishes scoped eligibility from the legacy `ready=false` / `blocked=true` recovery flag.
+
+Recovery requires human-readable evidence:
 
 ```text
 unity-scheduler recovery resolve --workspace <root> --task-id <id> --resolution completed|failed --evidence <text> --operation-id <uuid-v4>

@@ -781,6 +781,11 @@ def test_unknown_active_freeze_keeps_parked_claims_until_recovery(
     status = scheduler.status(workspace)
     assert status["blocked"] is True
     still_parked = next(claim for claim in status["claims"] if claim["id"] == owned["id"])
+    assert status["admission"]["independent_scopes"] is False
+    _, independent_token = start(scheduler, workspace, "independent")
+    with pytest.raises(BusyError) as blocked:
+        scheduler.acquire_claim(workspace, independent_token, writes=("Assets/Unrelated.cs",))
+    assert blocked.value.details["reason"] == "unknown-scope-conflict"
     assert still_parked["state"] == "parked"
     assert still_parked["parked_for"] is not None
     assert inspect_state(scheduler.paths.database)["counts"]["parked_claims"] == 1
@@ -862,12 +867,11 @@ def test_resolve_unknown_rejects_disallowed_evidence_control(
     assert inspect_state(scheduler.paths.database)["counts"]["recovery_events"] == 0
 
 
-def test_expired_owner_blocks_until_evidence_recovery(
+def test_unknown_scope_allows_independent_work_but_keeps_overlaps_fenced(
     scheduler: WorkspaceCoordinator, workspace: Path
 ) -> None:
     task, token = start(scheduler, workspace, "expiring")
-    _, urgent_token = start(scheduler, workspace, "urgent")
-    scheduler.acquire_claim(workspace, token, resources=("unity-live",))
+    scheduler.acquire_claim(workspace, token, writes=("Assets/Hero.prefab",))
     with open_database(scheduler.paths) as connection:
         connection.execute(
             "UPDATE tasks SET expires_at = ? WHERE id = ?",
@@ -878,11 +882,31 @@ def test_expired_owner_blocks_until_evidence_recovery(
     assert status["blocked"] is True
     expired = next(task_item for task_item in status["tasks"] if task_item["id"] == task["id"])
     assert expired["state"] == "outcome_unknown"
-    with pytest.raises(BusyError):
-        start(scheduler, workspace, "blocked")
+    assert status["admission"] == {
+        "unknown_outcome": "scope_fenced",
+        "independent_scopes": True,
+        "workspace_freeze_blocked": True,
+        "unknown_task_ids": [task["id"]],
+    }
+    _, independent_token = start(scheduler, workspace, "independent")
+    independent = scheduler.acquire_claim(
+        workspace,
+        independent_token,
+        writes=("Assets/Villain.prefab",),
+    )
+    assert independent["state"] == "active"
 
-    with pytest.raises(BusyError):
-        scheduler.acquire_claim(workspace, urgent_token, freeze=True, priority="urgent")
+    with pytest.raises(BusyError) as overlap_error:
+        scheduler.acquire_claim(
+            workspace,
+            independent_token,
+            writes=("Assets/Hero.prefab.meta",),
+        )
+    assert overlap_error.value.details["reason"] == "unknown-scope-conflict"
+    with pytest.raises(BusyError) as freeze_error:
+        scheduler.acquire_claim(workspace, independent_token, freeze=True, priority="urgent")
+    assert freeze_error.value.details["reason"] == "unknown-scope-conflict"
+    assert str(task["id"]) in freeze_error.value.details["task_ids"]
 
     recovered = scheduler.resolve_unknown(
         workspace,
@@ -892,6 +916,123 @@ def test_expired_owner_blocks_until_evidence_recovery(
     )
     assert recovered["state"] == "failed"
     assert scheduler.status(workspace)["ready"] is True
+
+
+def test_claimless_unknown_task_does_not_fence_scoped_work(
+    scheduler: WorkspaceCoordinator, workspace: Path
+) -> None:
+    task, token = start(scheduler, workspace, "claimless-unknown")
+    scheduler.release_task(workspace, token, result="outcome-unknown")
+
+    _, independent_token = start(scheduler, workspace, "independent")
+    claim = scheduler.acquire_claim(
+        workspace,
+        independent_token,
+        resources=("unity-live",),
+    )
+    assert claim["state"] == "active"
+    assert scheduler.status(workspace)["blocked"] is True
+    assert str(task["id"]) in {item["id"] for item in scheduler.status(workspace)["tasks"]}
+
+
+def test_unknown_parked_claim_keeps_preexisting_overlap_queued(
+    scheduler: WorkspaceCoordinator, workspace: Path
+) -> None:
+    unknown_task, unknown_token = start(scheduler, workspace, "parked-unknown")
+    _, waiting_token = start(scheduler, workspace, "waiting")
+    _, freeze_token = start(scheduler, workspace, "maintenance")
+
+    owned = scheduler.acquire_claim(workspace, unknown_token, writes=("Assets/Hero.prefab",))
+    freeze = scheduler.acquire_claim(workspace, freeze_token, freeze=True)
+    waiting = scheduler.acquire_claim(workspace, waiting_token, writes=("Assets/Hero.prefab",))
+    assert waiting["state"] == "queued"
+
+    parked = scheduler.park_task(workspace, unknown_token)
+    assert parked["states"] == {owned["id"]: "parked"}
+    scheduler.release_task(workspace, unknown_token, result="outcome-unknown")
+    scheduler.release_claim(workspace, freeze_token, str(freeze["id"]))
+
+    by_id = {claim["id"]: claim for claim in scheduler.status(workspace)["claims"]}
+    assert by_id[owned["id"]]["state"] == "queued"
+    assert by_id[waiting["id"]]["state"] == "queued"
+    with pytest.raises(AuthorizationError):
+        scheduler.assert_claims(workspace, unknown_token, writes=("Assets/Hero.prefab",))
+
+    recovered = scheduler.resolve_unknown(
+        workspace,
+        str(unknown_task["id"]),
+        resolution="failed",
+        evidence="parked claim retained until owner recovery.",
+    )
+    assert recovered["state"] == "failed"
+    by_id = {claim["id"]: claim for claim in scheduler.status(workspace)["claims"]}
+    assert by_id[waiting["id"]]["state"] == "active"
+
+
+@pytest.mark.parametrize("priority", ["normal", "urgent"])
+def test_unknown_defers_freeze_without_draining_independent_work(
+    scheduler: WorkspaceCoordinator, workspace: Path, priority: str
+) -> None:
+    unknown_task, unknown_token = start(scheduler, workspace, "unknown")
+    _, writer_token = start(scheduler, workspace, "independent-writer")
+    _, maintenance_token = start(scheduler, workspace, "maintenance")
+    _, live_token = start(scheduler, workspace, "independent-live")
+    scheduler.acquire_claim(workspace, unknown_token, writes=("Assets/Hero.prefab",))
+    writer = scheduler.acquire_claim(workspace, writer_token, writes=("Assets/Villain.prefab",))
+    freeze = scheduler.acquire_claim(workspace, maintenance_token, freeze=True, priority=priority)
+    live = scheduler.acquire_claim(workspace, live_token, resources=("unity-live",))
+    assert live["state"] == "queued"
+
+    scheduler.release_task(workspace, unknown_token, result="outcome-unknown")
+    by_id = {claim["id"]: claim for claim in scheduler.status(workspace)["claims"]}
+    assert by_id[freeze["id"]]["state"] == "queued"
+    assert by_id[freeze["id"]]["queue_order"] == freeze["queue_order"]
+    assert by_id[live["id"]]["state"] == "active"
+    assert "drain_requested" not in scheduler.heartbeat(workspace, writer_token)
+    assert scheduler.assert_claims(workspace, writer_token, writes=("Assets/Villain.prefab",))[
+        "authorized"
+    ]
+    extra = scheduler.acquire_claim(workspace, writer_token, writes=("Assets/Other.cs",))
+    assert extra["state"] == "active"
+
+    scheduler.resolve_unknown(
+        workspace,
+        str(unknown_task["id"]),
+        resolution="failed",
+        evidence="isolated fixture writer stopped; edits preserved",
+    )
+    assert (
+        scheduler.heartbeat(workspace, writer_token)["drain_requested"]["freeze_id"] == freeze["id"]
+    )
+    scheduler.release_claim(workspace, live_token, str(live["id"]))
+    scheduler.park_task(workspace, writer_token)
+    by_id = {claim["id"]: claim for claim in scheduler.status(workspace)["claims"]}
+    assert by_id[freeze["id"]]["state"] == "active"
+    scheduler.release_claim(workspace, maintenance_token, str(freeze["id"]))
+    by_id = {claim["id"]: claim for claim in scheduler.status(workspace)["claims"]}
+    assert by_id[writer["id"]]["state"] == by_id[extra["id"]]["state"] == "active"
+
+
+def test_unknown_resource_blocks_its_waiters_but_allows_other_resources(
+    scheduler: WorkspaceCoordinator, workspace: Path
+) -> None:
+    _, unknown_token = start(scheduler, workspace, "unknown-live")
+    _, waiting_token = start(scheduler, workspace, "waiting")
+    scheduler.acquire_claim(workspace, unknown_token, resources=("unity-live",))
+    waiting = scheduler.acquire_claim(workspace, waiting_token, resources=("unity-live",))
+    scheduler.release_task(workspace, unknown_token, result="outcome-unknown")
+    _, independent_token = start(scheduler, workspace, "independent-vcs")
+    assert (
+        scheduler.acquire_claim(workspace, independent_token, resources=("vcs-maintenance",))[
+            "state"
+        ]
+        == "active"
+    )
+    with pytest.raises(BusyError) as blocked:
+        scheduler.acquire_claim(workspace, independent_token, resources=("UNITY-LIVE",))
+    assert blocked.value.details["reason"] == "unknown-scope-conflict"
+    by_id = {claim["id"]: claim for claim in scheduler.status(workspace)["claims"]}
+    assert by_id[waiting["id"]]["state"] == "queued"
 
 
 def test_expired_active_path_claim_preserves_an_unknown_outcome_fence(
