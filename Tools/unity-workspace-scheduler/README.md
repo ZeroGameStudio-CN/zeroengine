@@ -124,6 +124,21 @@ resource conflicts, same-task resource exclusion, drain/restoration admission
 guards, finite wait deadlines and outcome-unknown fences remain unchanged.
 This changes neither protocol version 3 nor state schema 3 and needs no data migration.
 
+Version 1.4.4 narrows unknown-outcome admission to the scopes that are still fenced.
+Starting a new task remains possible while another task is unresolved. A normal claim may
+run when its write paths and logical resources do not overlap the unresolved task's open
+claims; overlapping claims and workspace-wide freezes remain blocked with exact conflict
+details. A claimless unknown task therefore no longer stops independent work, while an
+unknown freeze or overlapping active/queued/parked claim still requires deterministic
+recovery. This changes neither protocol version 3 nor state schema 3 and needs no data
+migration.
+Queued freezes blocked by an unknown outcome defer draining and their global queue barrier;
+independent normal work may continue. Their priority and order resume after recovery, and
+unknown owners' retained queued/parked claims cannot be granted before recovery.
+Status retains the legacy `ready`/`blocked` flags and adds `admission` with the unknown task
+IDs, scoped-work eligibility, and workspace-freeze blocking. An unknown freeze sets
+`independent_scopes=false`; each actual claim still requires normal authorization.
+
 Within one workspace, an open task token hash is unique. Authentication selects
 an open task before any historical terminal task and falls back to history only
 when no open match exists; multiple open matches are corrupt state and fail
