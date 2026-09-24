@@ -1441,3 +1441,121 @@ def test_queue_cancel_never_releases_active_or_parked_claims(
     preserved = next(claim for claim in status["claims"] if claim["id"] == active["id"])
     assert preserved["state"] == "parked"
     scheduler.release_claim(workspace, freeze_token, str(freeze["id"]))
+
+
+def test_urgent_live_queue_overtakes_normal_and_preserves_active_and_urgent_fifo(
+    scheduler: WorkspaceCoordinator, workspace: Path
+) -> None:
+    _, active_token = start(scheduler, workspace, "active")
+    _, normal_token = start(scheduler, workspace, "normal")
+    _, first_token = start(scheduler, workspace, "first-urgent")
+    _, second_token = start(scheduler, workspace, "second-urgent")
+    active = scheduler.acquire_claim(workspace, active_token, resources=("unity-live",))
+    normal = scheduler.acquire_claim(workspace, normal_token, resources=("unity-live",))
+    first = scheduler.acquire_claim(
+        workspace, first_token, resources=("unity-live",), priority="urgent"
+    )
+    second = scheduler.acquire_claim(
+        workspace, second_token, resources=("unity-live",), priority="urgent"
+    )
+    claims = {c["id"]: c for c in scheduler.status(workspace)["claims"]}
+    assert claims[active["id"]]["state"] == "active"
+    assert all(claims[c["id"]]["state"] == "queued" for c in (normal, first, second))
+    scheduler.release_claim(workspace, active_token, active["id"])
+    claims = {c["id"]: c for c in scheduler.status(workspace)["claims"]}
+    assert claims[first["id"]]["state"] == "active"
+    assert claims[normal["id"]]["state"] == claims[second["id"]]["state"] == "queued"
+    scheduler.release_claim(workspace, first_token, first["id"])
+    claims = {c["id"]: c for c in scheduler.status(workspace)["claims"]}
+    assert claims[second["id"]]["state"] == "active"
+    scheduler.release_claim(workspace, second_token, second["id"])
+    assert (
+        next(c for c in scheduler.status(workspace)["claims"] if c["id"] == normal["id"])["state"]
+        == "active"
+    )
+
+
+def test_urgent_live_does_not_require_global_freeze_or_clear_unrelated_unknown_writer(
+    scheduler: WorkspaceCoordinator, workspace: Path
+) -> None:
+    unknown, writer = start(scheduler, workspace, "unknown-source")
+    scheduler.acquire_claim(workspace, writer, writes=("Assets/Other.cs",))
+    scheduler.release_task(workspace, writer, result="outcome-unknown")
+    _, urgent = start(scheduler, workspace, "urgent-test")
+    claim = scheduler.acquire_claim(workspace, urgent, resources=("unity-live",), priority="urgent")
+    assert claim["state"] == "active"
+    assert inspect_state(scheduler.paths.database)["counts"]["active_claims"] == 2
+    status = scheduler.status(workspace)
+    assert (
+        next(t for t in status["tasks"] if t["id"] == unknown["id"])["state"] == "outcome_unknown"
+    )
+    assert status["admission"]["workspace_freeze_blocked"] is True
+    scheduler.assert_claims(workspace, urgent, resources=("unity-live",))
+
+
+def test_urgent_live_still_rejects_unknown_live_owner(
+    scheduler: WorkspaceCoordinator, workspace: Path
+) -> None:
+    _, owner = start(scheduler, workspace, "unknown-live")
+    scheduler.acquire_claim(workspace, owner, resources=("unity-live",))
+    scheduler.release_task(workspace, owner, result="outcome-unknown")
+    _, waiter = start(scheduler, workspace, "urgent")
+    with pytest.raises(BusyError):
+        scheduler.acquire_claim(workspace, waiter, resources=("unity-live",), priority="urgent")
+
+
+@pytest.mark.parametrize(
+    "writes,resources",
+    [
+        (("Assets/Hero.cs",), ()),
+        (("Assets/Hero.cs",), ("unity-live",)),
+        ((), ("vcs-maintenance",)),
+        ((), ("unity-live", "another-resource")),
+    ],
+)
+def test_urgent_normal_claim_rejects_scope_expansion(
+    scheduler: WorkspaceCoordinator, workspace: Path, writes: tuple, resources: tuple
+) -> None:
+    _, owner = start(scheduler, workspace, "scope-check")
+    with pytest.raises(UsageError):
+        scheduler.acquire_claim(
+            workspace, owner, writes=writes, resources=resources, priority="urgent"
+        )
+
+
+def test_urgent_live_waits_for_active_freeze(
+    scheduler: WorkspaceCoordinator, workspace: Path
+) -> None:
+    _, owner = start(scheduler, workspace, "maintenance")
+    _, waiter = start(scheduler, workspace, "urgent-test")
+    freeze = scheduler.acquire_claim(workspace, owner, freeze=True)
+    claim = scheduler.acquire_claim(workspace, waiter, resources=("unity-live",), priority="urgent")
+    assert claim["state"] == "queued"
+    scheduler.release_claim(workspace, owner, freeze["id"])
+    assert (
+        next(c for c in scheduler.status(workspace)["claims"] if c["id"] == claim["id"])["state"]
+        == "active"
+    )
+
+
+def test_normal_freeze_does_not_drain_the_urgent_live_lease_that_overtook_it(
+    scheduler: WorkspaceCoordinator, workspace: Path
+) -> None:
+    _, writer = start(scheduler, workspace, "writer")
+    _, maintenance = start(scheduler, workspace, "maintenance")
+    _, urgent = start(scheduler, workspace, "urgent")
+    scheduler.acquire_claim(workspace, writer, writes=("Assets/Other.cs",))
+    freeze = scheduler.acquire_claim(workspace, maintenance, freeze=True)
+    live = scheduler.acquire_claim(workspace, urgent, resources=("unity-live",), priority="urgent")
+    assert live["state"] == "active"
+    assert scheduler.heartbeat(workspace, urgent).get("drain_requested") is None
+    scheduler.park_task(workspace, writer)
+    assert (
+        next(c for c in scheduler.status(workspace)["claims"] if c["id"] == freeze["id"])["state"]
+        == "queued"
+    )
+    scheduler.release_claim(workspace, urgent, live["id"])
+    assert (
+        next(c for c in scheduler.status(workspace)["claims"] if c["id"] == freeze["id"])["state"]
+        == "active"
+    )

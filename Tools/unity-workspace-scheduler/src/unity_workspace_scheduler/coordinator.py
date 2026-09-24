@@ -3082,7 +3082,14 @@ class WorkspaceCoordinator:
         priorities = scopes["priority"]
         if not priorities:
             return "normal"
-        if claim["kind"] != "freeze" or priorities != ("urgent",):
+        if priorities != ("urgent",) or (
+            claim["kind"] != "freeze"
+            and not (
+                claim["kind"] == "normal"
+                and not scopes["write"]
+                and scopes["resource"] == ("unity-live",)
+            )
+        ):
             raise StateError("Claim priority state is invalid.")
         return "urgent"
 
@@ -3145,6 +3152,19 @@ class WorkspaceCoordinator:
             "AND state IN ('queued', 'active')",
             (workspace_id, task_id),
         ).fetchall()
+        # A lower-priority freeze cannot immediately drain the urgent live
+        # lease which legitimately overtook it. Its owner releases the bounded
+        # operation normally; source claims then cooperate with maintenance.
+        if freeze_scopes[freeze["id"]]["priority"] != ("urgent",) and any(
+            claim["state"] == "active"
+            and claim["kind"] == "normal"
+            and WorkspaceCoordinator._claim_priority(
+                claim, WorkspaceCoordinator._claim_scopes(connection, claim["id"])
+            )
+            == "urgent"
+            for claim in owned_claims
+        ):
+            return None
         blocking_claims = [
             claim
             for claim in owned_claims
@@ -4161,8 +4181,13 @@ class WorkspaceCoordinator:
             else:
                 if freeze or (not normalized_writes and not normalized_resources):
                     raise UsageError("A claim needs at least one write path or resource.")
-                if priority != "normal":
-                    raise UsageError("Urgent priority is only supported for freeze claims.")
+                if priority not in {"normal", "urgent"} or (
+                    priority == "urgent"
+                    and (normalized_writes or normalized_resources != ("unity-live",))
+                ):
+                    raise UsageError(
+                        "Urgent priority requires an exclusive freeze or a pure unity-live claim."
+                    )
             _validate_wait(wait_seconds, "Claim")
             if requested_wait_seconds is None:
                 requested_wait_seconds = wait_seconds
@@ -5910,8 +5935,14 @@ class WorkspaceCoordinator:
             raise UsageError("A claim needs at least one write path or resource.")
         if priority not in {"normal", "urgent"}:
             raise UsageError("Claim priority must be normal or urgent.")
-        if not freeze and priority != "normal":
-            raise UsageError("Urgent priority is only supported for freeze claims.")
+        if (
+            not freeze
+            and priority == "urgent"
+            and (normalized_writes or normalized_resources != ("unity-live",))
+        ):
+            raise UsageError(
+                "Urgent priority requires an exclusive freeze or a pure unity-live claim."
+            )
         _validate_wait(wait_seconds, "Claim")
         if requested_wait_seconds is None:
             requested_wait_seconds = wait_seconds

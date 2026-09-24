@@ -1450,7 +1450,9 @@ def _validate_claim_result_shape(result: dict[str, Any]) -> None:
     if result["kind"] == "freeze":
         if writes or resources:
             raise ValueError("freeze receipt result has scopes")
-    elif result["priority"] != "normal" or not (writes or resources):
+    elif not (writes or resources) or (
+        result["priority"] == "urgent" and (writes or resources != ["unity-live"])
+    ):
         raise ValueError("normal claim receipt result is malformed")
     if result["state"] == "parked":
         if result["parked_for"] is None:
@@ -1742,7 +1744,9 @@ def _validate_receipt_parameters(action: str, parameters: dict[str, Any]) -> Non
         if action == "freeze.acquire":
             if writes or resources:
                 raise ValueError("freeze receipt includes scopes")
-        elif parameters["priority"] != "normal" or not (writes or resources):
+        elif not (writes or resources) or (
+            parameters["priority"] == "urgent" and (writes or resources != ["unity-live"])
+        ):
             raise ValueError("normal claim receipt parameters are malformed")
     elif action in {"claim.release", "queue.cancel"}:
         if not _receipt_text(parameters["claim_id"]):
@@ -3047,7 +3051,14 @@ def _validate_semantics(
         "SELECT COUNT(*) FROM claim_scopes AS priority "
         "JOIN claims AS claim ON claim.id = priority.claim_id "
         "WHERE priority.scope_type = 'priority' "
-        "AND (claim.kind != 'freeze' OR priority.value != 'urgent')",
+        "AND (priority.value != 'urgent' OR (claim.kind != 'freeze' AND NOT ("
+        "claim.kind = 'normal' AND "
+        "(SELECT COUNT(*) FROM claim_scopes AS resource WHERE resource.claim_id = claim.id "
+        "AND resource.scope_type = 'resource') = 1 AND "
+        "EXISTS (SELECT 1 FROM claim_scopes AS resource WHERE resource.claim_id = claim.id "
+        "AND resource.scope_type = 'resource' AND resource.value = 'unity-live') AND "
+        "NOT EXISTS (SELECT 1 FROM claim_scopes AS path WHERE path.claim_id = claim.id "
+        "AND path.scope_type = 'write'))))",
     )
     duplicate_priorities = _scalar(
         connection,

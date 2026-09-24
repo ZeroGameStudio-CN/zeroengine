@@ -146,15 +146,33 @@ order below. Never expose canonical Scheduler 1.4 to a Router that does not requ
 Schema 3 cannot be opened by older Scheduler versions; rollback means repairing or reinstalling
 1.4.x unless a whole schema-1/2 backup can be restored before any schema-3 command writes new state.
 
+## Urgent live resource admission (1.5)
+
+`claim acquire --priority urgent --resource unity-live` is accepted only with no
+write scopes and no other resources. It uses the existing priority/FIFO queue:
+active claims are never preempted, equal-priority claims remain FIFO, and active
+freezes or overlapping unknown outcomes remain fenced. An unrelated unknown
+source claim does not require a global freeze for this resource request. The
+caller must establish explicit user urgency through Router and release its exact
+bounded live lease on a known terminal result. Missing markers, expired timers,
+or completed Agent turns do not prove a live operation or source writer ended.
+
+Priority is part of the immutable acquire receipt. Omitted priority remains
+normal, including old clients' existing receipts. Protocol and state schema stay
+at 3; install the paired Router requiring 1.5 before admitting urgent live claims.
+After an urgent normal claim has been recorded, rollback must use a compatible
+1.5 binary; a 1.4 verifier cannot interpret that history. Never remove priority
+markers or restore an earlier state snapshot over later work to downgrade.
+
 ## Offline state maintenance
 
 Do not copy `scheduler.sqlite3` with a filesystem copy command: committed data may still live in
 its WAL. Before directly invoking either Scheduler executable, stop admission at the Router entry,
 wait for every Router call, scheduler process, and executor child to exit, and classify every
 operation as a known terminal result or an explicit `outcome_unknown` fence. Confirm with the
-operating system's process inventory that the count is zero. Then stage the tested Scheduler 1.4
+operating system's process inventory that the count is zero. Then stage the tested Scheduler 1.5
 executable at a separate absolute path. In the commands below,
-`<absolute-staged-1.4-executable>` means that exact file, not `unity-scheduler` resolved through
+`<absolute-staged-1.5-executable>` means that exact file, not `unity-scheduler` resolved through
 `PATH` and not the still-canonical 1.2 binary. Build the candidate from the exact tested commit into
 private, isolated uv tool and bin directories. For PowerShell:
 
@@ -181,12 +199,12 @@ staged_scheduler="$stage_root/bin/unity-scheduler"
 ```
 
 Keep `$stagedScheduler` or `$staged_scheduler` as the exact
-`<absolute-staged-1.4-executable>` for every later staged command. The isolated uv environment
+`<absolute-staged-1.5-executable>` for every later staged command. The isolated uv environment
 variables must not remain set during the canonical install; require the parsed version to equal
-exactly `1.4.4`:
+exactly `1.5.0`:
 
 ```text
-<absolute-staged-1.4-executable> --version
+<absolute-staged-1.5-executable> --version
 ```
 
 Keep admission stopped and re-confirm zero processes after that check succeeds.
@@ -198,16 +216,16 @@ controlled by the current user and not writable by a broad OS principal. The `--
 substitute another copy, relative path, or later snapshot between commands:
 
 ```text
-<absolute-staged-1.4-executable> --state-dir <current-state-dir> state backup --output <backup.sqlite3> --confirm-no-processes
-<absolute-staged-1.4-executable> state verify --input <backup.sqlite3>
-<absolute-staged-1.4-executable> state verify --input <backup.sqlite3> --for-migration
+<absolute-staged-1.5-executable> --state-dir <current-state-dir> state backup --output <backup.sqlite3> --confirm-no-processes
+<absolute-staged-1.5-executable> state verify --input <backup.sqlite3>
+<absolute-staged-1.5-executable> state verify --input <backup.sqlite3> --for-migration
 ```
 
 These staged invocations are limited to `--version`, `state backup`, and `state verify`; they do
 not open the database through the scheduling path or migrate schema 1 or 2. After the backup and
-`--for-migration` verification succeed, install the canonical Router version that requires 1.4
+`--for-migration` verification succeed, install the canonical Router version that requires 1.5
 first, so it fails closed while canonical Scheduler is still older. Then install canonical Scheduler
-1.4, require canonical `unity-scheduler --version` to report version `1.4.4`, run the
+1.5, require canonical `unity-scheduler --version` to report version `1.5.0`, run the
 `workspace list` maintenance read-back, exact-workspace status read-backs, and Router protocol
 canary, and only then reopen Router admission.
 
