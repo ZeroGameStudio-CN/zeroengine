@@ -63,7 +63,8 @@ namespace ZeroEngine.Pathfinding2D
             float gravityScale = DefaultGravityScale,
             float overshoot = 1.2f,
             float maxAirHorizontalSpeed = DisabledAirSpeedLimit,
-            float maxFlightTime = MaxJumpTime)
+            float maxFlightTime = MaxJumpTime,
+            bool allowHigherArcForHorizontalSpeed = false)
         {
             float deltaX = end.x - start.x;
             float deltaY = end.y - start.y;
@@ -148,7 +149,15 @@ namespace ZeroEngine.Pathfinding2D
             float requiredVelocityX = deltaX / totalTime;
             if (ExceedsAirHorizontalSpeed(requiredVelocityX, maxAirHorizontalSpeed))
             {
-                return JumpCalculationResult.NotReachable;
+                if (!allowHigherArcForHorizontalSpeed)
+                    return JumpCalculationResult.NotReachable;
+                totalTime = Mathf.Abs(deltaX) / maxAirHorizontalSpeed;
+                requiredVelocityY = (deltaY + 0.5f * gravity * totalTime * totalTime) / totalTime;
+                if (requiredVelocityY <= 0f || requiredVelocityY > maxJumpVelocity + 0.001f ||
+                    (maxFlightTime > 0f && totalTime > maxFlightTime))
+                    return JumpCalculationResult.NotReachable;
+                requiredHeight = requiredVelocityY * requiredVelocityY / (2f * gravity);
+                requiredVelocityX = deltaX / totalTime;
             }
 
             // 生成轨迹点

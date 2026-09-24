@@ -7,6 +7,22 @@ namespace ZeroEngine.Pathfinding2D.Tests.Editor
     public class JumpMovementHandlerTests
     {
         [Test]
+        public void LowerLanding_HigherArcFitsHorizontalSpeedWithoutExceedingHeightBudget()
+        {
+            var end = new Vector2(3.5f, -3f);
+            Assert.That(JumpMovementHandler.CalculateJump(Vector2.zero, end, 25f,
+                gravityScale: 5f, maxAirHorizontalSpeed: 5f).IsReachable, Is.False);
+            var result = JumpMovementHandler.CalculateJump(Vector2.zero, end, 25f,
+                gravityScale: 5f, maxAirHorizontalSpeed: 5f, allowHigherArcForHorizontalSpeed: true);
+            Assert.That(result.IsReachable, Is.True);
+            Assert.That(Mathf.Abs(result.VelocityX), Is.LessThanOrEqualTo(5.001f));
+            Assert.That(result.VelocityY, Is.LessThanOrEqualTo(25f));
+            Assert.That(Vector2.Distance(result.Trajectory[result.Trajectory.Length - 1], end), Is.LessThan(.001f));
+            Assert.That(JumpMovementHandler.CalculateJump(Vector2.zero, end, 11f,
+                gravityScale: 5f, maxAirHorizontalSpeed: 5f, allowHigherArcForHorizontalSpeed: true).IsReachable, Is.False);
+        }
+
+        [Test]
         public void TallJump_OptionalFlightBudgetAllowsLongArc_WithoutBypassingVelocityLimit()
         {
             var end = new Vector2(3f, 40f);

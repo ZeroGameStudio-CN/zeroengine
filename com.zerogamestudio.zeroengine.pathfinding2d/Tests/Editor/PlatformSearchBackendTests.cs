@@ -83,6 +83,29 @@ namespace ZeroEngine.Pathfinding2D.Tests.Editor
         }
 
         [Test]
+        public void BaseGraphReuse_RebuildsBodySafeLandingCentersWithoutChangingSource()
+        {
+            var source = CreateGraph(1, out _);
+            source.CommitBuild();
+            var originalNodes = source.Nodes.ToArray();
+            var host = new GameObject("DifferentBodyProfile");
+            createdObjects.Add(host);
+            var target = host.AddComponent<PlatformGraphGenerator>();
+            JsonUtility.FromJsonOverwrite(JsonUtility.ToJson(source.Config), target.Config);
+            target.Config.CharacterRadius = source.Config.CharacterRadius + 0.05f;
+            target.GeneratePlatformGraphFromBase(source);
+            foreach (var segment in target.SurfaceSegments)
+            {
+                float safeX = segment.MinX + target.Config.CharacterRadius + 0.05f;
+                var landing = target.Nodes.Single(node => node.SurfaceGroupId == segment.GroupId &&
+                    Mathf.Abs(node.Position.x - safeX) < 0.001f);
+                Assert.That(target.GetOutgoingLinks(landing.NodeId), Is.Not.Empty);
+            }
+            CollectionAssert.AreEqual(originalNodes, source.Nodes);
+            Assert.That(target.SearchSnapshot.NodeCount, Is.EqualTo(target.Nodes.Count));
+        }
+
+        [Test]
         public void FailedCommit_PreservesPreviouslyCommittedSnapshotAndRevision()
         {
             PlatformGraphGenerator graph = CreateGraph(2, out PlatformNodeData[] nodes);

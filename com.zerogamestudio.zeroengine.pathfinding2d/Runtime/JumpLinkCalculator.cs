@@ -643,7 +643,8 @@ namespace ZeroEngine.Pathfinding2D
                 config.GravityScale,
                 config.Overshoot,
                 config.MaxAirHorizontalSpeed,
-                config.MaxJumpFlightTime
+                config.MaxJumpFlightTime,
+                config.UseSingleSmartJump
             );
 
             if (!result.IsReachable)

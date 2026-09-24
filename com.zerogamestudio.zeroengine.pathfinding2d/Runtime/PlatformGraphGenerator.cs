@@ -715,6 +715,16 @@ namespace ZeroEngine.Pathfinding2D
 
             nextNodeId = source.nextNodeId;
             nextSurfaceGroupId = source.nextSurfaceGroupId;
+            // Surface geometry is shared, but landing centers depend on the actor's body.
+            // Keep the source immutable and reconnect new safe centers through normal walk checks.
+            if (!Mathf.Approximately(config.CharacterRadius, source.Config.CharacterRadius))
+            {
+                foreach (var segment in SurfaceSegments)
+                    AddBodySafeLandingNodes(segment.MinX, segment.MaxX, segment.Y,
+                        segment.Collider, segment.IsOneWay, segment.GroupId);
+                Links.Clear();
+                GenerateWalkLinks();
+            }
             BuildAdjacencyList();
             SpatialGrid = new SpatialGrid2D(config.SpatialGridCellSize);
             SpatialGrid.Build(Nodes);
@@ -2013,7 +2023,9 @@ namespace ZeroEngine.Pathfinding2D
 
         private bool HasSurfaceNodeNearPosition(Vector3 position, int surfaceGroupId)
         {
-            float threshold = SurfaceNodeDedupTolerance;
+            // A nearby edge or another actor's landing center can be outside this
+            // actor's support margin. Only merge effectively identical safe centers.
+            const float threshold = 0.001f;
             int minXBucket = GetSurfaceNodeBucket(position.x - threshold);
             int maxXBucket = GetSurfaceNodeBucket(position.x + threshold);
             int minYBucket = GetSurfaceNodeBucket(position.y - threshold);
