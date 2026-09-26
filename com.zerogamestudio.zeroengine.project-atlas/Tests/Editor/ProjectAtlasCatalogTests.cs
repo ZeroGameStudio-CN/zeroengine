@@ -4,9 +4,11 @@ using System.IO;
 using System.Linq;
 using System.Reflection;
 using NUnit.Framework;
+#if UNITY_EDITOR
 using UnityEditor;
 using UnityEngine;
 using ZeroEngine.EditorUI;
+#endif
 
 namespace ZeroEngine.ProjectAtlas.Tests
 {
@@ -304,6 +306,7 @@ namespace ZeroEngine.ProjectAtlas.Tests
             Assert.That(graph.Diagnostics.Single().Code, Is.EqualTo("catalog-not-configured"));
         }
 
+#if UNITY_EDITOR
         [Test]
         public void WorkspaceProvider_KnownPanel_IsFullWidthAndUnknownPanelIsRejected()
         {
@@ -396,6 +399,8 @@ namespace ZeroEngine.ProjectAtlas.Tests
 
             panel.Dispose();
         }
+
+#endif
 
         private static Type[] FixtureCoverageTypes => new[]
         {
