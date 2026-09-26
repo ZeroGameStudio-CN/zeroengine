@@ -1974,35 +1974,12 @@ namespace ZeroEngine.Pathfinding2D
             if (actualEnd.y <= actualStart.y + config.SamePlatformMaxHeightDiff)
                 return false;
 
-            bool hasJump = false;
-            bool hasDownwardTraversal = false;
+            // A complete route may climb above an elevated target and descend
+            // onto it. Traversal ordering is not evidence of an invalid endpoint;
+            // command and partial-endpoint validation remain responsible for that.
             foreach (var command in path.Commands)
-            {
-                if (command.CommandType == MoveCommandType.Jump)
-                    hasJump = true;
-                else if (command.CommandType == MoveCommandType.Fall ||
-                         command.CommandType == MoveCommandType.DropDown)
-                    hasDownwardTraversal = true;
-            }
-
-            if (!hasJump)
-                return true;
-
-            if (!hasDownwardTraversal)
-                return false;
-
-            int lastJumpIndex = -1;
-            int lastDownIndex = -1;
-            for (int i = 0; i < path.Commands.Count; i++)
-            {
-                var type = path.Commands[i].CommandType;
-                if (type == MoveCommandType.Jump)
-                    lastJumpIndex = i;
-                else if (type == MoveCommandType.Fall || type == MoveCommandType.DropDown)
-                    lastDownIndex = i;
-            }
-
-            return lastDownIndex > lastJumpIndex;
+                if (command.CommandType == MoveCommandType.Jump) return false;
+            return true;
         }
 
         /// <summary>

@@ -1668,30 +1668,33 @@ namespace ZeroEngine.Pathfinding2D
             });
 
             var merged = new List<(float left, float right, float y)>();
-            var current = edges[0];
-
-            for (int i = 1; i < edges.Count; i++)
+            for (int start = 0; start < edges.Count;)
             {
-                var next = edges[i];
-
-                // 检查是否可以合并（Y 坐标接近且 X 范围重叠或相邻）
-                if (Mathf.Abs(current.y - next.y) < threshold &&
-                    next.left <= current.right + threshold)
+                int end = start + 1;
+                while (end < edges.Count && edges[start].y - edges[end].y < threshold) end++;
+                // Composite vertices on one floor can differ by a few ULPs.
+                // Exact-Y sorting alone does not order those intervals by X:
+                // a later left interval could bridge a real gap, then deduplication
+                // could discard both outer floor sections as one lower interval.
+                var band = edges.GetRange(start, end - start);
+                band.Sort((a, b) => a.left.CompareTo(b.left));
+                var current = band[0];
+                for (int i = 1; i < band.Count; i++)
                 {
-                    // 合并
-                    current = (
-                        Mathf.Min(current.left, next.left),
-                        Mathf.Max(current.right, next.right),
-                        (current.y + next.y) / 2f
-                    );
+                    var next = band[i];
+                    if (next.left <= current.right + threshold)
+                    {
+                        current = (current.left, Mathf.Max(current.right, next.right), (current.y + next.y) / 2f);
+                    }
+                    else
+                    {
+                        merged.Add(current);
+                        current = next;
+                    }
                 }
-                else
-                {
-                    merged.Add(current);
-                    current = next;
-                }
+                merged.Add(current);
+                start = end;
             }
-            merged.Add(current);
 
             return merged;
         }
