@@ -347,6 +347,13 @@ namespace ZeroEngine.Pathfinding2D
             Vector2 endPos = trajectory[trajectory.Length - 1];
             float traveledDistance = 0f;
             float endpointIgnoreDistance = Mathf.Max(ignoreInitialDistance, colliderRadius * 2f + 0.05f);
+            using var castLease = UnityEngine.Pool.ListPool<RaycastHit2D>.Get(out var hits);
+            using var overlapLease = UnityEngine.Pool.ListPool<Collider2D>.Get(out var overlaps);
+            var filter = new ContactFilter2D();
+            filter.NoFilter(); filter.SetLayerMask(obstacleMask);
+            filter.useTriggers = Physics2D.queriesHitTriggers;
+            bool checkedEndpoint = false;
+            Vector2 previousEndpointSample = default;
 
             for (int i = 0; i < trajectory.Length - 1; i++)
             {
@@ -355,10 +362,11 @@ namespace ZeroEngine.Pathfinding2D
                 float segmentDist = Vector2.Distance(from, to);
                 if (segmentDist <= Mathf.Epsilon) continue;
 
-                RaycastHit2D[] hits = Physics2D.CircleCastAll(
-                    from, colliderRadius, (to - from).normalized, segmentDist, obstacleMask);
+                hits.Clear();
+                int hitCount = Physics2D.CircleCast(
+                    from, colliderRadius, (to - from).normalized, filter, hits, segmentDist);
 
-                for (int hitIndex = 0; hitIndex < hits.Length; hitIndex++)
+                for (int hitIndex = 0; hitIndex < hitCount; hitIndex++)
                 {
                     var hit = hits[hitIndex];
                     if (hit.collider == null) continue;
@@ -394,16 +402,20 @@ namespace ZeroEngine.Pathfinding2D
                         from,
                         to,
                         colliderRadius,
-                        obstacleMask,
+                        filter,
+                        overlaps,
                         startPos,
                         endPos,
                         fromPlatform,
                         toPlatform,
-                        endpointIgnoreDistance))
+                        endpointIgnoreDistance,
+                        checkedEndpoint && previousEndpointSample.Equals(from)))
                 {
                     return false;
                 }
 
+                checkedEndpoint = true;
+                previousEndpointSample = Vector2.Lerp(from, to, 1f);
                 traveledDistance += segmentDist;
             }
             return true;
@@ -419,22 +431,27 @@ namespace ZeroEngine.Pathfinding2D
             Vector2 from,
             Vector2 to,
             float colliderRadius,
-            LayerMask obstacleMask,
+            ContactFilter2D filter,
+            System.Collections.Generic.List<Collider2D> overlaps,
             Vector2 startPos,
             Vector2 endPos,
             Collider2D fromPlatform,
             Collider2D toPlatform,
-            float endpointIgnoreDistance)
+            float endpointIgnoreDistance,
+            bool skipFirstSample)
         {
             float segmentDist = Vector2.Distance(from, to);
             if (segmentDist <= Mathf.Epsilon) return false;
 
             int steps = Mathf.Max(1, Mathf.CeilToInt(segmentDist / Mathf.Max(0.1f, colliderRadius)));
-            for (int step = 0; step <= steps; step++)
+            // The shared endpoint was already checked with identical inputs by
+            // the previous segment. Retest if float interpolation differed.
+            for (int step = skipFirstSample ? 1 : 0; step <= steps; step++)
             {
                 Vector2 sample = Vector2.Lerp(from, to, (float)step / steps);
-                Collider2D[] overlaps = Physics2D.OverlapCircleAll(sample, colliderRadius, obstacleMask);
-                for (int i = 0; i < overlaps.Length; i++)
+                overlaps.Clear();
+                int overlapCount = Physics2D.OverlapCircle(sample, colliderRadius, filter, overlaps);
+                for (int i = 0; i < overlapCount; i++)
                 {
                     var collider = overlaps[i];
                     if (collider == null) continue;

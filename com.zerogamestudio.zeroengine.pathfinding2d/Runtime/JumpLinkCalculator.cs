@@ -128,15 +128,27 @@ namespace ZeroEngine.Pathfinding2D
         /// Main-thread, CPU-budgeted link generation. The caller must keep geometry/configuration
         /// stable, own a graph BeginBuild/CommitBuild transaction, and dispose on cancellation.
         /// Each trajectory is indivisible; the budget is checked between candidate pairs.
+        /// Use GenerateFilteredJumpLinksIncrementally for additional profile clearance.
         /// </summary>
-        public IEnumerator<object> GenerateJumpLinksIncrementally(double budgetMilliseconds = 16d)
+        public IEnumerator<object> GenerateJumpLinksIncrementally(double budgetMilliseconds = 16d) =>
+            GenerateFilteredJumpLinksIncrementally(budgetMilliseconds, null);
+
+        /// <summary>
+        /// Additional pure profile predicates, scoped to this build: candidate checks
+        /// precede trajectory construction; trajectory checks supplement built-in validation.
+        /// </summary>
+        public IEnumerator<object> GenerateFilteredJumpLinksIncrementally(double budgetMilliseconds,
+            System.Func<Vector2[], bool> jumpTrajectoryFilter,
+            System.Func<PlatformNodeData, PlatformNodeData, bool> jumpCandidateFilter = null)
         {
             if (double.IsNaN(budgetMilliseconds) || double.IsInfinity(budgetMilliseconds) || budgetMilliseconds <= 0d)
                 throw new System.ArgumentOutOfRangeException(nameof(budgetMilliseconds));
-            return GenerateJumpLinksSteps(true, budgetMilliseconds);
+            return GenerateJumpLinksSteps(true, budgetMilliseconds, jumpTrajectoryFilter, jumpCandidateFilter);
         }
 
-        private IEnumerator<object> GenerateJumpLinksSteps(bool useSpatialCandidates, double budgetMilliseconds)
+        private IEnumerator<object> GenerateJumpLinksSteps(bool useSpatialCandidates, double budgetMilliseconds,
+            System.Func<Vector2[], bool> jumpTrajectoryFilter = null,
+            System.Func<PlatformNodeData, PlatformNodeData, bool> jumpCandidateFilter = null)
         {
             if (buildActive) throw new System.InvalidOperationException("Jump link generation is already active.");
             buildActive = true;
@@ -148,7 +160,7 @@ namespace ZeroEngine.Pathfinding2D
                 : null;
             try
             {
-                using var core = GenerateJumpLinksCore(counters, useSpatialCandidates, shouldYield);
+                using var core = GenerateJumpLinksCore(counters, useSpatialCandidates, shouldYield, jumpTrajectoryFilter, jumpCandidateFilter);
                 bool traversal = false;
                 while (true)
                 {
@@ -182,7 +194,9 @@ namespace ZeroEngine.Pathfinding2D
         }
 
         private IEnumerator<object> GenerateJumpLinksCore(
-            BuildCounters counters, bool useSpatialCandidates, System.Func<bool> shouldYield)
+            BuildCounters counters, bool useSpatialCandidates, System.Func<bool> shouldYield,
+            System.Func<Vector2[], bool> jumpTrajectoryFilter,
+            System.Func<PlatformNodeData, PlatformNodeData, bool> jumpCandidateFilter)
         {
             CandidatePairChecks = 0;
             ResetLandingClearanceState();
@@ -259,19 +273,26 @@ namespace ZeroEngine.Pathfinding2D
             {
                 if (shouldYield != null && shouldYield()) yield return null;
                 var fromNode = nodes[i];
+                bool isEdgeNode = fromNode.NodeType == PlatformNodeType.LeftEdge ||
+                                  fromNode.NodeType == PlatformNodeType.RightEdge;
+                // Interior solid-floor nodes cannot originate any traversal here:
+                // Jump/Fall require an edge, and DropThrough requires a one-way floor.
+                // Do not enumerate a room-height candidate column only to reject it.
+                bool canStartJump = isEdgeNode && !fromNode.IsTransitionAnchor;
+                bool canStartFall = isEdgeNode && CanStartFallFromEdgeNode(fromNode);
+                if (!canStartJump && !canStartFall && !fromNode.IsOneWay) continue;
+                float sourceHorizontalReach = canStartJump || canStartFall ? horizontalReach : 1f;
+                float upwardReach = canStartJump ? Mathf.Max(0f, effectiveMaxJumpHeight) : 0f;
                 float padding = Mathf.Max(0.001f,
                     Mathf.Max(Mathf.Abs(fromNode.Position.x), Mathf.Abs(fromNode.Position.y)) * 0.000001f);
-                var minimum = (Vector2)fromNode.Position - new Vector2(horizontalReach + padding, downwardReach + padding);
-                var maximum = (Vector2)fromNode.Position + new Vector2(horizontalReach + padding, Mathf.Max(0f, effectiveMaxJumpHeight) + padding);
+                var minimum = (Vector2)fromNode.Position - new Vector2(sourceHorizontalReach + padding, downwardReach + padding);
+                var maximum = (Vector2)fromNode.Position + new Vector2(sourceHorizontalReach + padding, upwardReach + padding);
                 if (candidateGrid == null || !candidateGrid.TryFindNodeIndicesInBounds(minimum, maximum, candidateIndices))
                 {
                     candidateIndices.Clear();
                     for (int index = 0; index < nodes.Count; index++) candidateIndices.Add(index);
                 }
 
-                // 判断节点类型
-                bool isEdgeNode = fromNode.NodeType == PlatformNodeType.LeftEdge ||
-                                  fromNode.NodeType == PlatformNodeType.RightEdge;
                 // 计算跳跃到其他平台的链接
                 foreach (int j in candidateIndices)
                 {
@@ -345,8 +366,9 @@ namespace ZeroEngine.Pathfinding2D
 
                         if (horizontalDist <= config.MaxHorizontalDistance + HorizontalDistanceTolerance)
                         {
+                            if (jumpCandidateFilter != null && !jumpCandidateFilter(fromNode, toNode)) continue;
                             jumpAttempts++;
-                            if (TryCreateJumpLink(fromNode, toNode, trajectoryBlockerLayer, out string failReason))
+                            if (TryCreateJumpLink(fromNode, toNode, trajectoryBlockerLayer, out string failReason, jumpTrajectoryFilter))
                             {
                                 counters.Jump++;
                             }
@@ -378,7 +400,7 @@ namespace ZeroEngine.Pathfinding2D
                     else if (verticalDist < -0.5f && Mathf.Abs(verticalDist) <= config.MaxFallHeight)
                     {
                         // 边缘节点：完整下落检测（水平 + 垂直）
-                        if (isEdgeNode && CanStartFallFromEdgeNode(fromNode) && horizontalDist <= config.MaxFallHorizontalDistance)
+                        if (canStartFall && horizontalDist <= config.MaxFallHorizontalDistance)
                         {
                             // ★ 终点也必须是边缘节点
                             bool toIsEdge = toNode.NodeType == PlatformNodeType.LeftEdge ||
@@ -627,7 +649,8 @@ namespace ZeroEngine.Pathfinding2D
         /// <summary>
         /// 尝试创建跳跃链接
         /// </summary>
-        private bool TryCreateJumpLink(PlatformNodeData from, PlatformNodeData to, LayerMask obstacleLayer, out string failReason)
+        private bool TryCreateJumpLink(PlatformNodeData from, PlatformNodeData to, LayerMask obstacleLayer, out string failReason,
+            System.Func<Vector2[], bool> jumpTrajectoryFilter)
         {
             failReason = null;
 
@@ -665,6 +688,14 @@ namespace ZeroEngine.Pathfinding2D
             if (edgeStepUpCandidate && !canCreateEdgeJumpLink)
             {
                 failReason = "unsafe-edge-step-up";
+                return false;
+            }
+
+            // A pure, profile-specific clearance predicate can reject a trajectory
+            // before the generic collision sweep. All built-in checks still apply.
+            if (jumpTrajectoryFilter != null && !jumpTrajectoryFilter(result.Trajectory))
+            {
+                failReason = "trajectory";
                 return false;
             }
 

@@ -101,6 +101,73 @@ namespace ZeroEngine.Pathfinding2D.Tests.Editor
         }
 
         [Test]
+        public void IncrementalTrajectoryFilter_MatchesPostFilter_AndDoesNotLeakIntoNextBuild()
+        {
+            var host = new GameObject("ProfileClearanceFilterContract");
+            var platforms = new[] {
+                CreatePlatform("FilterFloor", GroundLayer, Vector2.zero, new Vector2(3f, .2f)),
+                CreatePlatform("FilterRise", GroundLayer, new Vector2(5f, 3f), new Vector2(3f, .2f)),
+                CreatePlatform("FilterUpper", OneWayLayer, new Vector2(0f, 6f), new Vector2(3f, .2f)),
+                CreatePlatform("FilterLeft", GroundLayer, new Vector2(-5f, 2f), new Vector2(3f, .2f))
+            };
+            try
+            {
+                var graph = CreateGraph(host, 1 << GroundLayer, 1 << OneWayLayer);
+                graph.Config.ScanSize = new Vector2(25f, 25f); graph.GeneratePlatformGraph();
+                var calculator = host.AddComponent<JumpLinkCalculator>();
+                calculator.Config.MaxJumpVelocity = 20f; calculator.Config.GravityScale = 3f;
+                calculator.Config.MaxJumpHeight = 8f; calculator.Config.MaxHorizontalDistance = 10f;
+                calculator.GenerateJumpLinks();
+                bool Allowed(Vector2[] trajectory) => trajectory.All(point => point.y < 5f);
+                bool CandidateAllowed(PlatformNodeData from, PlatformNodeData to) => to.Position.x < 0f;
+                var all = graph.Links.Select(link => JsonUtility.ToJson(link)).ToArray();
+                Assert.IsTrue(graph.Links.Any(link => link.LinkType == PlatformLinkType.Jump && !Allowed(link.JumpTrajectory)));
+                bool Keep(PlatformLinkData link) => Allowed(link.JumpTrajectory) &&
+                    CandidateAllowed(graph.GetNode(link.FromNodeId).Value, graph.GetNode(link.ToNodeId).Value);
+                Assert.IsTrue(graph.Links.Any(link => link.LinkType == PlatformLinkType.Jump && Keep(link)));
+                Assert.IsTrue(graph.Links.Any(link => link.LinkType == PlatformLinkType.Jump && Allowed(link.JumpTrajectory) && !Keep(link)));
+                var expected = graph.Links.Where(link => link.LinkType != PlatformLinkType.Jump || Keep(link))
+                    .Select(link => JsonUtility.ToJson(link)).ToArray();
+                calculator.ClearJumpLinks(); graph.BeginBuild();
+                using (var steps = calculator.GenerateFilteredJumpLinksIncrementally(.1d, Allowed, CandidateAllowed))
+                    while (steps.MoveNext()) { }
+                graph.CommitBuild();
+                CollectionAssert.AreEqual(expected, graph.Links.Select(link => JsonUtility.ToJson(link)).ToArray());
+                calculator.ClearJumpLinks(); calculator.GenerateJumpLinks();
+                CollectionAssert.AreEqual(all, graph.Links.Select(link => JsonUtility.ToJson(link)).ToArray());
+            }
+            finally
+            {
+                Object.DestroyImmediate(host);
+                foreach (var platform in platforms) Object.DestroyImmediate(platform);
+            }
+        }
+
+        [Test]
+        public void SpatialCandidates_DenseSolidFloorOnlyVisitsTraversalOrigins()
+        {
+            var host = new GameObject("DenseSolidCandidateContract");
+            var floor = CreatePlatform("DenseSolidFloor", GroundLayer, new Vector2(1000f, 0f), new Vector2(128f, .2f));
+            try
+            {
+                var graph = CreateGraph(host, 1 << GroundLayer, 0);
+                graph.Config.ScanCenter = new Vector2(1000f, 0f);
+                graph.Config.ScanSize = new Vector2(140f, 20f);
+                graph.Config.NodeSpacing = .5f;
+                graph.GeneratePlatformGraph();
+                Assert.Greater(graph.Nodes.Count, 100);
+                var calculator = host.AddComponent<JumpLinkCalculator>();
+                calculator.Config.MaxJumpHeight = 250f;
+                calculator.GenerateJumpLinks();
+                int origins = graph.Nodes.Count(node => node.NodeType == PlatformNodeType.LeftEdge || node.NodeType == PlatformNodeType.RightEdge);
+                Assert.LessOrEqual(calculator.CandidatePairChecks, (long)origins * graph.Nodes.Count,
+                    "Interior solid-floor density must not multiply traversal candidate work.");
+                Assert.IsTrue(graph.Links.All(link => link.LinkType == PlatformLinkType.Walk));
+            }
+            finally { Object.DestroyImmediate(host); Object.DestroyImmediate(floor); }
+        }
+
+        [Test]
         public void SpatialCandidates_SparseLargeGraphAvoidsAllPairs()
         {
             var host = new GameObject("SparseCandidateContract");
