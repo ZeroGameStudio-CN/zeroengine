@@ -60,7 +60,7 @@ namespace ZeroGameStudio.ConfigPipeline.Tests
         }
 
         [Test]
-        public void Template_ContainsProtectedMetadataAndEnumValidation()
+        public void Template_ProtectsMetadataAndDefaultsToNavigationSheet()
         {
             ConfigSchema schema = Schema();
             using (var stream = new MemoryStream())
@@ -87,16 +87,161 @@ namespace ZeroGameStudio.ConfigPipeline.Tests
                         Is.EqualTo("Normal"));
                     Sheet[] sheets = workbook.WorkbookPart.Workbook.Sheets.Elements<Sheet>().ToArray();
                     Assert.That(sheets[0].Name.Value, Is.EqualTo("_zgs_schema"));
+                    Assert.That(sheets[0].State.Value, Is.EqualTo(SheetStateValues.VeryHidden));
                     Assert.That(
                         sheets.Single(sheet => sheet.Name.Value == "_zgs_meta").State.Value,
                         Is.EqualTo(SheetStateValues.VeryHidden));
-                    WorksheetPart itemsPart = (WorksheetPart)workbook.WorkbookPart.GetPartById(
-                        sheets.Single(sheet => sheet.Name.Value == "Items").Id.Value);
+                    WorkbookView workbookView = workbook.WorkbookPart.Workbook
+                        .GetFirstChild<BookViews>()
+                        .Elements<WorkbookView>()
+                        .Single();
+                    Sheet navigationSheet = sheets.Single(
+                        sheet => sheet.Name.Value == XlsxConfigWorkbookWriter.NavigationSheetName);
+                    uint navigationSheetIndex = (uint)Array.IndexOf(sheets, navigationSheet);
+                    Assert.That(workbookView.ActiveTab.Value, Is.EqualTo(navigationSheetIndex));
+                    Assert.That(workbookView.FirstSheet.Value, Is.EqualTo(navigationSheetIndex));
+                    WorksheetPart navigationPart = (WorksheetPart)workbook.WorkbookPart.GetPartById(
+                        navigationSheet.Id.Value);
+                    SheetView navigationView = navigationPart.Worksheet.GetFirstChild<SheetViews>()
+                        .Elements<SheetView>()
+                        .Single();
+                    Assert.That(navigationView.TabSelected.Value, Is.True);
+                    Pane navigationPane = navigationView.GetFirstChild<Pane>();
+                    Assert.That(navigationView.ShowGridLines.Value, Is.False);
+                    Assert.That(navigationPane.HorizontalSplit, Is.Null);
+                    Assert.That(navigationPane.VerticalSplit.Value, Is.EqualTo(4D));
+                    Assert.That(navigationPane.TopLeftCell.Value, Is.EqualTo("A5"));
+                    Assert.That(
+                        navigationPart.Worksheet.GetFirstChild<AutoFilter>().Reference.Value,
+                        Is.EqualTo("A4:D5"));
+                    Hyperlink itemLink = navigationPart.Worksheet.GetFirstChild<Hyperlinks>()
+                        .Elements<Hyperlink>()
+                        .Single();
+                    Assert.That(itemLink.Reference.Value, Is.EqualTo("B5"));
+                    Assert.That(itemLink.Location.Value, Is.EqualTo("'Items'!A2"));
+                    Sheet itemsSheet = sheets.Single(sheet => sheet.Name.Value == "Items");
+                    WorksheetPart itemsPart = (WorksheetPart)workbook.WorkbookPart.GetPartById(itemsSheet.Id.Value);
+                    SheetView itemsView = itemsPart.Worksheet.GetFirstChild<SheetViews>()
+                        .Elements<SheetView>()
+                        .Single();
+                    Assert.That(itemsView.TabSelected.Value, Is.False);
+                    Assert.That(itemsView.ShowGridLines.Value, Is.False);
+                    Assert.That(itemsPart.Worksheet.Elements<SheetProtection>(), Is.Empty);
                     Assert.That(
                         itemsPart.Worksheet.GetFirstChild<SheetData>().Elements<Row>().First().Hidden.Value,
                         Is.True);
-                    Assert.That(itemsPart.Worksheet.Elements<DataValidations>().Single().Count.Value, Is.EqualTo(1U));
+                    Hyperlink navigationLink = itemsPart.Worksheet.GetFirstChild<Hyperlinks>()
+                        .Elements<Hyperlink>()
+                        .Single();
+                    Assert.That(navigationLink.Reference.Value, Is.EqualTo("A2"));
+                    Assert.That(
+                        navigationLink.Location.Value,
+                        Is.EqualTo("'" + XlsxConfigWorkbookWriter.NavigationSheetName + "'!A1"));
+                    Row businessHeader = itemsPart.Worksheet.GetFirstChild<SheetData>()
+                        .Elements<Row>()
+                        .ElementAt(1);
+                    Assert.That(businessHeader.Elements<Cell>().First().InnerText, Does.StartWith("← 配置目录 ｜ ＊ ID"));
+                    Assert.That(businessHeader.Elements<Cell>().ElementAt(1).InnerText, Is.EqualTo("＊ 类型"));
+
+                    TableDefinitionPart tablePart = itemsPart.TableDefinitionParts.Single();
+                    Table table = tablePart.Table;
+                    Assert.That(table.Reference.Value, Is.EqualTo("A2:D3"));
+                    Assert.That(table.GetFirstChild<AutoFilter>().Reference.Value, Is.EqualTo("A2:D3"));
+                    Assert.That(table.GetFirstChild<TableColumns>().Count.Value, Is.EqualTo(4U));
+                    Assert.That(table.GetFirstChild<TableStyleInfo>().ShowRowStripes.Value, Is.True);
+                    Assert.That(itemsPart.Worksheet.GetFirstChild<TableParts>().Count.Value, Is.EqualTo(1U));
+                    Column[] columns = itemsPart.Worksheet.GetFirstChild<Columns>()
+                        .Elements<Column>()
+                        .ToArray();
+                    Assert.That(columns.Select(column => column.Style.Value),
+                        Is.EqualTo(new uint[] { 9U, 9U, 1U, 1U }));
+                    CellFormat textFormat = workbook.WorkbookPart.WorkbookStylesPart.Stylesheet
+                        .CellFormats
+                        .Elements<CellFormat>()
+                        .ElementAt(9);
+                    Assert.That(textFormat.NumberFormatId.Value, Is.EqualTo(49U));
+                    Assert.That(textFormat.ApplyNumberFormat.Value, Is.True);
+
+                    DataValidation[] validations = itemsPart.Worksheet.Elements<DataValidations>()
+                        .Single()
+                        .Elements<DataValidation>()
+                        .ToArray();
+                    Assert.That(validations, Has.Length.EqualTo(3));
+                    DataValidation enumValidation = validations.Single(
+                        value => value.SequenceOfReferences.InnerText.StartsWith("B3:", StringComparison.Ordinal));
+                    Assert.That(enumValidation.Type.Value, Is.EqualTo(DataValidationValues.List));
+                    Assert.That(enumValidation.Formula1.InnerText, Is.EqualTo("=ZGS_ENUM_Items_kind"));
+                    DataValidation numberValidation = validations.Single(
+                        value => value.SequenceOfReferences.InnerText.StartsWith("C3:", StringComparison.Ordinal));
+                    Assert.That(numberValidation.Type.Value, Is.EqualTo(DataValidationValues.Decimal));
+                    Assert.That(
+                        numberValidation.Operator.Value,
+                        Is.EqualTo(DataValidationOperatorValues.GreaterThanOrEqual));
+                    Assert.That(numberValidation.Formula1.InnerText, Is.EqualTo("0"));
+                    DataValidation booleanValidation = validations.Single(
+                        value => value.SequenceOfReferences.InnerText.StartsWith("D3:", StringComparison.Ordinal));
+                    Assert.That(booleanValidation.Type.Value, Is.EqualTo(DataValidationValues.List));
+                    Assert.That(booleanValidation.Formula1.InnerText, Is.EqualTo("\"TRUE,FALSE\""));
+                    Assert.That(itemsPart.Worksheet.Descendants<CellFormula>(), Is.Empty);
                 }
+            }
+        }
+
+        [Test]
+        public void EmptyTemplate_ProvidesEditableTableRowAndReadsAsEmptyArray()
+        {
+            ConfigSchema schema = Schema();
+            ConfigDocument source = EmptyDocument();
+            using (var stream = new MemoryStream())
+            {
+                new XlsxConfigWorkbookWriter().WriteTemplate(stream, schema, "sample.xlsx", source);
+                stream.Position = 0;
+                using (SpreadsheetDocument workbook = SpreadsheetDocument.Open(stream, false))
+                {
+                    Sheet items = workbook.WorkbookPart.Workbook.Sheets.Elements<Sheet>()
+                        .Single(sheet => sheet.Name.Value == "Items");
+                    WorksheetPart part = (WorksheetPart)workbook.WorkbookPart.GetPartById(items.Id.Value);
+                    Assert.That(part.TableDefinitionParts.Single().Table.Reference.Value, Is.EqualTo("A2:D3"));
+                    Row inputRow = part.Worksheet.GetFirstChild<SheetData>().Elements<Row>().ElementAt(2);
+                    Assert.That(inputRow.Elements<Cell>().All(cell => string.IsNullOrEmpty(cell.InnerText)), Is.True);
+                }
+
+                stream.Position = 0;
+                ConfigDocument read = new XlsxConfigSourceReader(schema).Read(
+                    stream,
+                    new ConfigReadContext("sample.xlsx", schema.SchemaId, schema.SchemaVersion));
+                Assert.That(
+                    CanonicalJsonWriter.WriteText(read.Root),
+                    Is.EqualTo(CanonicalJsonWriter.WriteText(source.Root)));
+            }
+        }
+
+        [Test]
+        public void Reader_AcceptsLegacyWorkbookWithoutNavigationSheet()
+        {
+            ConfigSchema schema = Schema();
+            ConfigDocument source = Document();
+            using (var stream = new MemoryStream())
+            {
+                new XlsxConfigWorkbookWriter().WriteTemplate(stream, schema, "sample.xlsx", source);
+                using (SpreadsheetDocument workbook = SpreadsheetDocument.Open(stream, true))
+                {
+                    Sheet navigationSheet = workbook.WorkbookPart.Workbook.Sheets
+                        .Elements<Sheet>()
+                        .Single(sheet => sheet.Name.Value == XlsxConfigWorkbookWriter.NavigationSheetName);
+                    OpenXmlPart navigationPart = workbook.WorkbookPart.GetPartById(navigationSheet.Id.Value);
+                    navigationSheet.Remove();
+                    workbook.WorkbookPart.DeletePart(navigationPart);
+                    workbook.WorkbookPart.Workbook.Save();
+                }
+
+                stream.Position = 0;
+                ConfigDocument read = new XlsxConfigSourceReader(schema).Read(
+                    stream,
+                    new ConfigReadContext("sample.xlsx", schema.SchemaId, schema.SchemaVersion));
+                Assert.That(
+                    CanonicalJsonWriter.WriteText(read.Root),
+                    Is.EqualTo(CanonicalJsonWriter.WriteText(source.Root)));
             }
         }
 
@@ -136,6 +281,111 @@ namespace ZeroGameStudio.ConfigPipeline.Tests
                             schema.SchemaId,
                             schema.SchemaVersion)));
                 Assert.That(exception.Code, Is.EqualTo("XLSX_FORMULA_FORBIDDEN"));
+            }
+        }
+
+        [TestCase(false)]
+        [TestCase(true)]
+        public void Reader_RejectsTableFormulaInjection(bool totalsFormula)
+        {
+            ConfigSchema schema = Schema();
+            using (var stream = new MemoryStream())
+            {
+                new XlsxConfigWorkbookWriter().WriteTemplate(
+                    stream,
+                    schema,
+                    "sample.xlsx",
+                    Document());
+                using (SpreadsheetDocument workbook = SpreadsheetDocument.Open(stream, true))
+                {
+                    Sheet items = workbook.WorkbookPart.Workbook.Sheets
+                        .Elements<Sheet>()
+                        .Single(sheet => sheet.Name.Value == "Items");
+                    WorksheetPart part =
+                        (WorksheetPart)workbook.WorkbookPart.GetPartById(items.Id.Value);
+                    TableColumn column = part.TableDefinitionParts.Single().Table
+                        .GetFirstChild<TableColumns>()
+                        .Elements<TableColumn>()
+                        .First();
+                    if (totalsFormula)
+                    {
+                        column.Append(new TotalsRowFormula("SUM([ID])"));
+                    }
+                    else
+                    {
+                        column.Append(new CalculatedColumnFormula("[ID]"));
+                    }
+
+                    part.TableDefinitionParts.Single().Table.Save();
+                }
+
+                stream.Position = 0;
+                XlsxConfigException exception = Assert.Throws<XlsxConfigException>(
+                    () => new XlsxConfigSourceReader(schema).Read(
+                        stream,
+                        new ConfigReadContext(
+                            "sample.xlsx",
+                            schema.SchemaId,
+                            schema.SchemaVersion)));
+                Assert.That(exception.Code, Is.EqualTo("XLSX_FORMULA_FORBIDDEN"));
+            }
+        }
+
+        [Test]
+        public void Template_TruncatesTableHeadersToOpenXmlLimit()
+        {
+            string longTitle = new string('长', 300);
+            string schemaJson =
+                "{\"$id\":\"zgs.sample.long-header\",\"x-zgs-schema-version\":1," +
+                "\"type\":\"object\",\"additionalProperties\":false,\"required\":[\"items\"]," +
+                "\"properties\":{\"items\":{\"type\":\"array\",\"x-zgs-sheet\":\"Items\"," +
+                "\"items\":{\"type\":\"object\",\"additionalProperties\":false," +
+                "\"required\":[\"id\",\"code\"],\"properties\":{\"id\":{\"type\":\"string\"," +
+                "\"title\":\"" + longTitle + "\",\"x-zgs-primary-key\":true}," +
+                "\"code\":{\"type\":\"string\",\"title\":\"" + longTitle + "\"}}}}}}";
+            ConfigSchema schema = ConfigSchemaParser.Parse(Encoding.UTF8.GetBytes(schemaJson));
+            var source = new ConfigDocument(
+                "long-header.xlsx",
+                schema.SchemaId,
+                schema.SchemaVersion,
+                new ConfigObjectNode(new[]
+                {
+                    new ConfigProperty("items", new ConfigArrayNode(new ConfigNode[]
+                    {
+                        new ConfigObjectNode(new[]
+                        {
+                            new ConfigProperty("id", new ConfigStringNode("00123")),
+                            new ConfigProperty("code", new ConfigStringNode("abc"))
+                        })
+                    }))
+                }));
+
+            using (var stream = new MemoryStream())
+            {
+                new XlsxConfigWorkbookWriter().WriteTemplate(stream, schema, "long-header.xlsx", source);
+                stream.Position = 0;
+                using (SpreadsheetDocument workbook = SpreadsheetDocument.Open(stream, false))
+                {
+                    Assert.That(new OpenXmlValidator().Validate(workbook), Is.Empty);
+                    TableColumn[] columns = workbook.WorkbookPart.WorksheetParts
+                        .SelectMany(part => part.TableDefinitionParts)
+                        .SelectMany(part => part.Table.GetFirstChild<TableColumns>().Elements<TableColumn>())
+                        .ToArray();
+                    Assert.That(columns, Is.Not.Empty);
+                    Assert.That(columns.All(column => column.Name.Value.Length <= 255), Is.True);
+                    Assert.That(
+                        columns.Select(column => column.Name.Value)
+                            .Distinct(StringComparer.OrdinalIgnoreCase)
+                            .Count(),
+                        Is.EqualTo(columns.Length));
+                }
+
+                stream.Position = 0;
+                ConfigDocument read = new XlsxConfigSourceReader(schema).Read(
+                    stream,
+                    new ConfigReadContext("long-header.xlsx", schema.SchemaId, schema.SchemaVersion));
+                Assert.That(CanonicalJsonWriter.WriteText(read.Root),
+                    Is.EqualTo(CanonicalJsonWriter.WriteText(source.Root)));
             }
         }
 
@@ -289,6 +539,29 @@ namespace ZeroGameStudio.ConfigPipeline.Tests
         }
 
         [Test]
+        public void Reader_DoesNotChargeOptionalNavigationAgainstWorksheetLimit()
+        {
+            ConfigSchema schema = Schema();
+            using (var stream = new MemoryStream())
+            {
+                new XlsxConfigWorkbookWriter().WriteTemplate(stream, schema, "sample.xlsx", Document());
+                long length = stream.Length;
+                stream.Position = 0;
+                Assert.DoesNotThrow(() => new XlsxConfigSourceReader(
+                        schema,
+                        new XlsxWorkbookLimits(
+                            length,
+                            XlsxWorkbookLimits.DefaultExpandedBytes,
+                            4,
+                            1,
+                            4))
+                    .Read(
+                        stream,
+                        new ConfigReadContext("sample.xlsx", schema.SchemaId, schema.SchemaVersion)));
+            }
+        }
+
+        [Test]
         public void Reader_RejectsMacroPart()
         {
             ConfigSchema schema = Schema();
@@ -375,6 +648,18 @@ namespace ZeroGameStudio.ConfigPipeline.Tests
                                 new ConfigProperty("enabled", new ConfigBooleanNode(true))
                             })
                         }))
+                }));
+        }
+
+        private static ConfigDocument EmptyDocument()
+        {
+            return new ConfigDocument(
+                "sample.xlsx",
+                "zgs.sample.xlsx",
+                1,
+                new ConfigObjectNode(new[]
+                {
+                    new ConfigProperty("items", new ConfigArrayNode(Array.Empty<ConfigNode>()))
                 }));
         }
     }

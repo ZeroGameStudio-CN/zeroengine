@@ -145,10 +145,10 @@ foreach ($descriptorPath in $descriptorPaths) {
 $dashboardRoot = Join-Path $RootPath 'com.zerogamestudio.zeroengine.dashboard'
 $dashboardPackage = Get-Content -LiteralPath (Join-Path $dashboardRoot 'package.json') -Raw -Encoding UTF8 | ConvertFrom-Json
 $dashboardAsmdef = Get-Content -LiteralPath (Join-Path $dashboardRoot 'Editor\ZeroEngine.Dashboard.Editor.asmdef') -Raw -Encoding UTF8 | ConvertFrom-Json
-Assert-Condition ($dashboardPackage.version -eq '4.1.0') 'Dashboard package version must be 4.1.0.'
+Assert-Condition ($dashboardPackage.version -eq '4.5.0') 'Dashboard package version must be 4.5.0.'
 $dashboardDependencies = @($dashboardPackage.dependencies.psobject.Properties)
 Assert-Condition ($dashboardDependencies.Count -eq 1) 'Dashboard package must depend only on editor-ui.'
-Assert-Condition ($dashboardDependencies[0].Name -eq 'com.zerogamestudio.zeroengine.editor-ui' -and $dashboardDependencies[0].Value -eq '1.3.0') 'Dashboard editor-ui dependency must be exactly 1.3.0.'
+Assert-Condition ($dashboardDependencies[0].Name -eq 'com.zerogamestudio.zeroengine.editor-ui' -and $dashboardDependencies[0].Value -eq '1.4.0') 'Dashboard editor-ui dependency must be exactly 1.4.0.'
 $dashboardReferences = @($dashboardAsmdef.references)
 Assert-Condition ($dashboardReferences.Count -eq 1 -and $dashboardReferences[0] -eq 'ZeroEngine.EditorUI.Editor') 'Dashboard production asmdef must reference only editor-ui.'
 Assert-Condition (@($dashboardAsmdef.includePlatforms).Count -eq 1 -and $dashboardAsmdef.includePlatforms[0] -eq 'Editor') 'Dashboard production asmdef must be Editor-only.'
@@ -170,6 +170,8 @@ $forbiddenDashboardTokens = @(
 foreach ($token in $forbiddenDashboardTokens) {
     Assert-Condition (-not $dashboardProductionText.Contains($token)) "Dashboard production code contains forbidden side-effect token '$token'."
 }
+Assert-Condition (-not $dashboardProductionText.Contains('未声明工具')) 'Installed package rows must not describe installed packages as undeclared.'
+Assert-Condition ($dashboardProductionText.Contains('已安装 · 无工作台入口')) 'Installed package rows must separate installation from workspace integration.'
 
 $menuPaths = @(Get-ChildItem -LiteralPath $RootPath -Directory -Filter 'com.zerogamestudio*' |
     ForEach-Object { Get-ChildItem -LiteralPath $_.FullName -Recurse -File -Filter '*.cs' } |
@@ -183,7 +185,7 @@ foreach ($menuPath in $menuPaths) {
 Assert-Condition (@($menuPaths | Where-Object { $_ -eq 'ZGS/工作台' }).Count -eq 1) 'Exactly one ZGS/工作台 MenuItem is required.'
 
 $editorUiPackage = Get-Content -LiteralPath (Join-Path $RootPath 'com.zerogamestudio.zeroengine.editor-ui\package.json') -Raw -Encoding UTF8 | ConvertFrom-Json
-Assert-Condition ($editorUiPackage.version -eq '1.3.0') 'editor-ui package version must be 1.3.0.'
+Assert-Condition ($editorUiPackage.version -eq '1.4.0') 'editor-ui package version must be 1.4.0.'
 
 if (-not [string]::IsNullOrWhiteSpace($ProjectManifest)) {
     $manifest = Get-Content -LiteralPath $ProjectManifest -Raw -Encoding UTF8 | ConvertFrom-Json

@@ -10,7 +10,7 @@ namespace ZeroEngine.Formula.Editor
     }
 
     [ZeroEngine.EditorUI.EditorUiSurface]
-    public sealed class FormulaWorkbenchWindow : EditorWindow
+    public sealed class FormulaWorkbenchWindow : EditorWindow, ZeroEngine.EditorUI.IEditorWorkspaceEmbeddedView
     {
         private static readonly GUIContent[] PageNames =
         {
@@ -57,10 +57,33 @@ namespace ZeroEngine.Formula.Editor
             Open(profile, null, FormulaStudioPage.Catalog);
         }
 
+        public static FormulaWorkbenchWindow CreateWorkspaceView(FormulaEditorProfile profile, bool catalog)
+        {
+            EnsureProfile(profile);
+            var view = CreateInstance<FormulaWorkbenchWindow>();
+            view.SetWorkspacePage(catalog);
+            return view;
+        }
+
         private static void Open(
             FormulaEditorProfile profile,
             FormulaAsset selectedFormula,
             FormulaStudioPage page)
+        {
+            EnsureProfile(profile);
+
+            var window = GetWindow<FormulaWorkbenchWindow>(FormulaEditorLabels.Studio);
+            window.titleContent = new GUIContent(FormulaEditorLabels.Studio, FormulaEditorLabels.StudioTooltip);
+            if (selectedFormula != null)
+                window.formula = selectedFormula;
+            window.activePage = page;
+            if (page == FormulaStudioPage.Catalog)
+                window.EnsureCatalogPane(true);
+            window.Repaint();
+            window.Show();
+        }
+
+        private static void EnsureProfile(FormulaEditorProfile profile)
         {
             if (profile != null)
             {
@@ -79,16 +102,6 @@ namespace ZeroEngine.Formula.Editor
 
                 FormulaEditorProfileRegistry.SetActiveProfile(profile.ProfileId);
             }
-
-            var window = GetWindow<FormulaWorkbenchWindow>(FormulaEditorLabels.Studio);
-            window.titleContent = new GUIContent(FormulaEditorLabels.Studio, FormulaEditorLabels.StudioTooltip);
-            if (selectedFormula != null)
-                window.formula = selectedFormula;
-            window.activePage = page;
-            if (page == FormulaStudioPage.Catalog)
-                window.EnsureCatalogPane(true);
-            window.Repaint();
-            window.Show();
         }
 
         private void OnEnable()
@@ -104,6 +117,23 @@ namespace ZeroEngine.Formula.Editor
         }
 
         private void OnGUI()
+        {
+            DrawView();
+        }
+
+        public void OnWorkspaceGUI(ZeroEngine.EditorUI.EditorWorkspacePanelContext context)
+        {
+            DrawView();
+        }
+
+        internal void SetWorkspacePage(bool catalog)
+        {
+            activePage = catalog ? FormulaStudioPage.Catalog : FormulaStudioPage.Workbench;
+            if (activePage == FormulaStudioPage.Catalog)
+                EnsureCatalogPane(true);
+        }
+
+        private void DrawView()
         {
             var profile = FormulaEditorProfileRegistry.ActiveProfile;
             ZeroEngine.EditorUI.EditorUiGUILayout.Header(

@@ -11,12 +11,18 @@ namespace ZeroGameStudio.ConfigPipeline.Editor
 {
     public sealed class XlsxConfigSourceReader : IConfigSourceReader
     {
-        private static readonly HashSet<string> InternalSheets =
+        private static readonly HashSet<string> RequiredInternalSheets =
             new HashSet<string>(StringComparer.Ordinal)
             {
                 "_zgs_schema",
                 "_zgs_meta",
                 "_zgs_lists"
+            };
+
+        private static readonly HashSet<string> OptionalInternalSheets =
+            new HashSet<string>(StringComparer.Ordinal)
+            {
+                XlsxConfigWorkbookWriter.NavigationSheetName
             };
 
         private readonly ConfigSchema schema;
@@ -182,7 +188,8 @@ namespace ZeroGameStudio.ConfigPipeline.Editor
             if (array.Items?.Type != ConfigSchemaType.Object ||
                 string.IsNullOrEmpty(array.Sheet) ||
                 !sheetNames.Add(array.Sheet) ||
-                InternalSheets.Contains(array.Sheet))
+                RequiredInternalSheets.Contains(array.Sheet) ||
+                OptionalInternalSheets.Contains(array.Sheet))
             {
                 throw new XlsxConfigException(
                     "XLSX_TABLE_SCHEMA_INVALID",
@@ -257,17 +264,23 @@ namespace ZeroGameStudio.ConfigPipeline.Editor
         {
             List<Sheet> sheets = workbookPart.Workbook.Sheets?.Elements<Sheet>().ToList() ??
                                  new List<Sheet>();
-            if (sheets.Count > limits.MaximumWorksheetCount)
+            int optionalSheetCount = sheets.Count(
+                sheet => OptionalInternalSheets.Contains(sheet.Name.Value));
+            int quotaSheetCount = sheets.Count - (optionalSheetCount == 1 ? 1 : 0);
+            if (quotaSheetCount > limits.MaximumWorksheetCount)
             {
                 throw new XlsxConfigException(
                     "XLSX_SHEET_LIMIT",
                     "Workbook exceeds the worksheet-count limit.");
             }
 
-            var allowed = new HashSet<string>(InternalSheets, StringComparer.Ordinal);
+            var allowed = new HashSet<string>(RequiredInternalSheets, StringComparer.Ordinal);
+            allowed.UnionWith(OptionalInternalSheets);
+            var required = new HashSet<string>(RequiredInternalSheets, StringComparer.Ordinal);
             foreach (TableDefinition table in tables)
             {
                 allowed.Add(table.SheetName);
+                required.Add(table.SheetName);
             }
 
             foreach (Sheet sheet in sheets)
@@ -279,7 +292,9 @@ namespace ZeroGameStudio.ConfigPipeline.Editor
                         "Workbook contains unknown or duplicate sheet '" + sheet.Name + "'.");
                 }
 
-                if (!InternalSheets.Contains(sheet.Name.Value) &&
+                required.Remove(sheet.Name.Value);
+                if (!RequiredInternalSheets.Contains(sheet.Name.Value) &&
+                    !OptionalInternalSheets.Contains(sheet.Name.Value) &&
                     sheet.State != null &&
                     sheet.State.Value != SheetStateValues.Visible)
                 {
@@ -289,7 +304,7 @@ namespace ZeroGameStudio.ConfigPipeline.Editor
                 }
             }
 
-            if (allowed.Count != 0)
+            if (required.Count != 0)
             {
                 throw new XlsxConfigException(
                     "XLSX_SHEET_MISSING",
@@ -828,7 +843,12 @@ namespace ZeroGameStudio.ConfigPipeline.Editor
 
             foreach (WorksheetPart worksheetPart in workbookPart.WorksheetParts)
             {
-                if (worksheetPart.Worksheet.Descendants<CellFormula>().Any())
+                bool containsTableFormula = worksheetPart.TableDefinitionParts.Any(
+                    part => part.Table != null &&
+                            (part.Table.Descendants<CalculatedColumnFormula>().Any() ||
+                             part.Table.Descendants<TotalsRowFormula>().Any()));
+                if (worksheetPart.Worksheet.Descendants<CellFormula>().Any() ||
+                    containsTableFormula)
                 {
                     throw new XlsxConfigException(
                         "XLSX_FORMULA_FORBIDDEN",
