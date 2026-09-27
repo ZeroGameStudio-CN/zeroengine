@@ -240,6 +240,39 @@ namespace ZeroEngine.Pathfinding2D.Tests.Editor
         }
 
         [Test]
+        public void ValidateTrajectory_DestinationSideHitNearEndpoint_BlocksTrajectory()
+        {
+            const int platformLayer = 8;
+            var fromPlatform = CreateBoxColliderPlatform(
+                "DestinationSideHitFrom", platformLayer, new Vector2(-2f, 0f), new Vector2(1f, .2f));
+            var toPlatform = CreateBoxColliderPlatform(
+                "DestinationSideHitTarget", platformLayer, new Vector2(3f, 1.5f), new Vector2(4f, 1f));
+            try
+            {
+                // The final sample is inside the platform's vertical span but
+                // reaches its left side before descending onto the top.
+                var trajectory = new[]
+                {
+                    new Vector2(-1.5f, .2f),
+                    new Vector2(2.25f, 1.1f),
+                    new Vector2(2.45f, 1.5f)
+                };
+
+                bool valid = JumpMovementHandler.ValidateTrajectory(
+                    trajectory, 1 << platformLayer, colliderRadius: .2f,
+                    fromPlatform, toPlatform, ignoreInitialDistance: 1f);
+
+                Assert.IsFalse(valid,
+                    "A destination-platform side hit near the endpoint must not be mistaken for safe landing.");
+            }
+            finally
+            {
+                Object.DestroyImmediate(fromPlatform.gameObject);
+                Object.DestroyImmediate(toPlatform.gameObject);
+            }
+        }
+
+        [Test]
         public void ValidateTrajectory_SameColliderMiddlePlatform_BlocksTrajectory()
         {
             const int platformLayer = 8;

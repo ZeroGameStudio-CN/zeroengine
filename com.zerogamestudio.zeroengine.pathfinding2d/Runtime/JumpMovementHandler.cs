@@ -488,7 +488,17 @@ namespace ZeroEngine.Pathfinding2D
                 return true;
 
             if (collider == toPlatform && Vector2.Distance(hitPoint, endPos) <= endpointIgnoreDistance)
-                return true;
+            {
+                // The destination platform is ignored only for the final
+                // top-side landing contact. A side hit shortly before the
+                // endpoint must remain blocking; otherwise the graph accepts
+                // a trajectory that the runtime body will bonk into, lose its
+                // horizontal velocity, and fail to climb the platform.
+                Vector2 closest = collider.ClosestPoint(hitPoint);
+                Vector2 separation = hitPoint - closest;
+                if (Mathf.Abs(separation.x) <= Mathf.Abs(separation.y) + 0.001f)
+                    return true;
+            }
 
             return false;
         }
