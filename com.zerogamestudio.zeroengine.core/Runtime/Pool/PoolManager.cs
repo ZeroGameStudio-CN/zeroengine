@@ -2,6 +2,12 @@ using System;
 using System.Collections.Generic;
 using UnityEngine;
 
+#if UNITY_6000_2_OR_NEWER
+using PoolObjectId = UnityEngine.EntityId;
+#else
+using PoolObjectId = System.Int32;
+#endif
+
 #if UNITASK_ENABLED
 using System.Threading;
 using Cysharp.Threading.Tasks;
@@ -56,7 +62,7 @@ namespace ZeroEngine.Pool
             private readonly Transform _parent;
             private float _lastDespawnTime;
 
-            public int PrefabId { get; }
+            public PoolObjectId PrefabId { get; }
             public int CountAll => _queue.Count + _activeObjects.Count;
             public int CountInactive => _queue.Count;
             public int CountActive => _activeObjects.Count;
@@ -69,7 +75,11 @@ namespace ZeroEngine.Pool
             {
                 _prefab = prefab;
                 _parent = parent;
+#if UNITY_6000_2_OR_NEWER
+                PrefabId = prefab.GetEntityId();
+#else
                 PrefabId = prefab.GetInstanceID();
+#endif
                 MinSize = minSize;
                 _lastDespawnTime = Time.time;
             }
@@ -135,7 +145,7 @@ namespace ZeroEngine.Pool
 #if ODIN_INSPECTOR
         [ShowInInspector, ReadOnly, FoldoutGroup("Pools Overview")]
 #endif
-        private readonly Dictionary<int, SmartPool> _poolsById = new();
+        private readonly Dictionary<PoolObjectId, SmartPool> _poolsById = new();
 
 #if ADDRESSABLES_ENABLED
 #if ODIN_INSPECTOR
@@ -302,7 +312,11 @@ namespace ZeroEngine.Pool
 
         private SmartPool GetOrCreatePool(GameObject prefab, PoolType poolType)
         {
-            int id = prefab.GetInstanceID();
+#if UNITY_6000_2_OR_NEWER
+            PoolObjectId id = prefab.GetEntityId();
+#else
+            PoolObjectId id = prefab.GetInstanceID();
+#endif
             if (!_poolsById.TryGetValue(id, out var pool))
             {
                 pool = new SmartPool(prefab, _poolParents.GetValueOrDefault(poolType, _poolsRoot));
