@@ -472,7 +472,11 @@ namespace ZeroEngine.Formula.Editor
                 case FormulaParameterType.Bool:
                     return "b:" + (parameter.BoolValue ? "true" : "false");
                 case FormulaParameterType.Object:
+#if UNITY_6000_2_OR_NEWER
+                    return "o:" + (parameter.ObjectValue ? UnityEngine.EntityId.ToULong(parameter.ObjectValue.GetEntityId()).ToString(CultureInfo.InvariantCulture) : "0");
+#else
                     return "o:" + (parameter.ObjectValue ? parameter.ObjectValue.GetInstanceID().ToString(CultureInfo.InvariantCulture) : "0");
+#endif
                 case FormulaParameterType.String:
                 default:
                     var builder = new StringBuilder("s:");
