@@ -139,22 +139,42 @@ namespace POB.Extraction
                             out failure);
                     }
 
-                    var container = candidates[0];
-                    if (!TrySelectLootEntry(
+                    ExtractionRaidContainerManifest container = null;
+                    ExtractionLootTableEntry tableEntry = null;
+                    ExtractionItemDefinition itemDefinition = null;
+                    bool hasWeightedCandidate = false;
+                    foreach (var candidate in candidates)
+                    {
+                        if (!ExtractionContainerLayoutService.TryBuildGenerationGrid(candidate, config,
+                                out var grid, out bool hasOverflow) || hasOverflow) continue;
+                        if (TrySelectLootEntry(
                             config,
                             tier,
-                            container.RegionId,
-                            container.ContainerTypeId,
+                            candidate.RegionId,
+                            candidate.ContainerTypeId,
                             rarity,
                             manifest.RaidSeed,
                             GuaranteeItemHashDomain,
-                            container.ContainerId,
+                            candidate.ContainerId,
                             index.ToString(CultureInfo.InvariantCulture),
-                            out var tableEntry,
-                            out var itemDefinition,
-                            rareLootDisabled: manifest.RareLootDisabled))
+                            out tableEntry,
+                            out itemDefinition,
+                            rareLootDisabled: manifest.RareLootDisabled,
+                            canFit: item => ExtractionContainerLayoutService.CanFit(grid, item)))
+                        {
+                            container = candidate;
+                            break;
+                        }
+                        hasWeightedCandidate |= TrySelectLootEntry(config, tier, candidate.RegionId,
+                            candidate.ContainerTypeId, rarity, manifest.RaidSeed, GuaranteeItemHashDomain,
+                            candidate.ContainerId, index.ToString(CultureInfo.InvariantCulture), out _, out _,
+                            rareLootDisabled: manifest.RareLootDisabled);
+                    }
+                    if (container == null)
                     {
-                        return Fail(ExtractionRaidLootManifestFailure.MissingRarityCandidate, out failure);
+                        return Fail(hasWeightedCandidate
+                            ? ExtractionRaidLootManifestFailure.InsufficientGuaranteedCapacity
+                            : ExtractionRaidLootManifestFailure.MissingRarityCandidate, out failure);
                     }
 
                     string entryId = CreateStableId(
@@ -257,12 +277,13 @@ namespace POB.Extraction
             int pityMisses = 0,
             ExtractionLootPityDefinition pity = null,
             bool rareLootDisabled = false,
-            ExtractionLootSelectionPolicy selectionPolicy = null)
+            ExtractionLootSelectionPolicy selectionPolicy = null,
+            Func<ExtractionItemDefinition, bool> canFit = null)
         {
             if (selectionPolicy != null)
                 return TrySelectTwoStage(config, tier, regionId, containerTypeId, exactRarity,
                     raidSeed, hashDomain, identityA, identityB, selectionPolicy,
-                    pityMisses, pity, rareLootDisabled, out selectedEntry, out selectedDefinition);
+                    pityMisses, pity, rareLootDisabled, out selectedEntry, out selectedDefinition, canFit);
             // Save compatibility only: old raids keep the exact v1 hash and interval mapping.
             selectedEntry = null;
             selectedDefinition = null;
@@ -287,6 +308,7 @@ namespace POB.Extraction
                     if (entry == null || !entry.IsValid) continue;
                     if (!config.TryGetItemDefinition(entry.DefinitionId, out var definition) || definition == null)
                         continue;
+                    if (canFit != null && !canFit(definition)) continue;
                     if (exactRarity.HasValue && definition.Rarity != exactRarity.Value) continue;
                     if (!ExtractionLootContentPolicy.IsRarityEnabled(definition.Rarity, rareLootDisabled)) continue;
 
@@ -332,7 +354,8 @@ namespace POB.Extraction
             string regionId, string containerTypeId, ExtractionItemRarity? exactRarity,
             int seed, string domain, string identityA, string identityB,
             ExtractionLootSelectionPolicy policy, int pityMisses, ExtractionLootPityDefinition pity,
-            bool rareLootDisabled, out ExtractionLootTableEntry entry, out ExtractionItemDefinition item)
+            bool rareLootDisabled, out ExtractionLootTableEntry entry, out ExtractionItemDefinition item,
+            Func<ExtractionItemDefinition, bool> canFit)
         {
             entry = null;
             item = null;
@@ -350,6 +373,7 @@ namespace POB.Extraction
                         || !config.TryGetItemDefinition(candidate.DefinitionId, out var definition)
                         || definition == null || (int)definition.Rarity < 0 || (int)definition.Rarity >= 6
                         || !ExtractionLootContentPolicy.IsRarityEnabled(definition.Rarity, rareLootDisabled)) continue;
+                    if (canFit != null && !canFit(definition)) continue;
                     pools[(int)definition.Rarity].Add(candidate);
                 }
             }

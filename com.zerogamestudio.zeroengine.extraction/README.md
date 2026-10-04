@@ -14,7 +14,7 @@
 消费者使用经过测试的 Git commit pin，不使用本机 `file:` 路径：
 
 ```json
-"com.zerogamestudio.zeroengine.extraction": "https://github.com/liuzqk/zeroengine.git?path=com.zerogamestudio.zeroengine.extraction#<tested-commit>"
+"com.zerogamestudio.zeroengine.extraction": "https://github.com/ZeroGameStudio-CN/zeroengine.git?path=com.zerogamestudio.zeroengine.extraction#<tested-commit>"
 ```
 
 ## 验证
@@ -24,6 +24,11 @@
 敌人定义使用 `ContainerTypeId` 引用共享容器及其 `LootTableIds`，单次奖励 API 复用现有加权 pickup 抽取。
 旧序列化 `LootTableId` 继续兼容；配置了容器时优先容器，错误容器或关联表不会静默回退旧表。
 容器容量及搜索行为仍由开箱服务负责，单次奖励 API 不替代开箱流程。
+
+新容器的保证掉落及首次开启的普通掉落复用真实 `Columns × Rows` 网格与物品 `CanRotate`。
+只从当前可放下的候选中按原有品质、物品权重和保底规则选择，并立即保留其占位；
+普通候选耗尽时提交较短结果，保证配额无处安放时仍原子返回 `InsufficientGuaranteedCapacity`。
+开过的容器不重抽、不重新排布；旧存档已提交的溢出物品保留原实例和数量，不为新掉落腾位而删除。
 
 - 包级合同测试位于 `Tests/Editor`。
 - 通用行为先在包内测试；消费者项目随后运行自己的 adapter 回归测试。
