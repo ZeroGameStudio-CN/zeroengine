@@ -1525,12 +1525,9 @@ def _validate_receipt_result(
                 or result["summary"] != parameters["summary"]
                 or result["state"] != "active"
                 or result["heartbeat_at"] != result["created_at"]
-                or not math.isclose(
-                    float(result["expires_at"]) - float(result["created_at"]),
-                    ttl,
-                    rel_tol=0.0,
-                    abs_tol=1e-9,
-                )
+                # Reproduce the writer's addition; subtracting epoch timestamps
+                # loses precision for valid fractional lease durations.
+                or float(result["expires_at"]) != float(result["created_at"]) + ttl
                 or result["finished_at"] is not None
                 or result["result"] is not None
                 or result["note"] is not None
@@ -1547,12 +1544,9 @@ def _validate_receipt_result(
             ):
                 raise ValueError("task-heartbeat receipt result is malformed")
             ttl = parameters["ttl_seconds"]
-            if ttl is not None and not math.isclose(
-                float(result["expires_at"]) - float(result["heartbeat_at"]),
-                float(ttl),
-                rel_tol=0.0,
-                abs_tol=1e-9,
-            ):
+            if ttl is not None and float(result["expires_at"]) != float(
+                result["heartbeat_at"]
+            ) + float(ttl):
                 raise ValueError("task-heartbeat TTL result is malformed")
         elif action == "task.release":
             expected_state = (

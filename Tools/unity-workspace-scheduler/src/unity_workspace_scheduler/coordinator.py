@@ -665,12 +665,8 @@ class WorkspaceCoordinator:
                         for field in numeric_fields
                     )
                     or stored_result["heartbeat_at"] != stored_result["created_at"]
-                    or not math.isclose(
-                        float(stored_result["expires_at"]) - float(stored_result["created_at"]),
-                        float(ttl),
-                        rel_tol=0.0,
-                        abs_tol=1e-9,
-                    )
+                    or float(stored_result["expires_at"])
+                    != float(stored_result["created_at"]) + float(ttl)
                 ):
                     raise StateError(
                         "Task-start receipt result is internally inconsistent.",
