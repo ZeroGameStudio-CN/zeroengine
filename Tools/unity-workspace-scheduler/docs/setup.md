@@ -186,6 +186,12 @@ an older snapshot, but loses aging fairness; never run mixed old/new scheduling 
 
 ## Offline state maintenance
 
+Version 1.6.1 validates receipt lease expiry using the same timestamp-plus-duration
+calculation as the writer. Subtracting large epoch timestamps could reject valid
+fractional TTLs in task-start ACK/replay and offline backup/verification. This fix
+does not rewrite receipts, relax expiry equality, or change protocol/state schema.
+Use 1.6.1 for this maintenance route, including state written by the 1.5 cohort.
+
 Do not copy `scheduler.sqlite3` with a filesystem copy command: committed data may still live in
 its WAL. Before directly invoking either Scheduler executable, stop admission at the Router entry,
 wait for every Router call, scheduler process, and executor child to exit, and classify every
@@ -221,7 +227,7 @@ staged_scheduler="$stage_root/bin/unity-scheduler"
 Keep `$stagedScheduler` or `$staged_scheduler` as the exact
 `<absolute-staged-1.6-executable>` for every later staged command. The isolated uv environment
 variables must not remain set during the canonical install; require the parsed version to equal
-exactly `1.6.0`:
+exactly `1.6.1`:
 
 ```text
 <absolute-staged-1.6-executable> --version
@@ -238,14 +244,20 @@ substitute another copy, relative path, or later snapshot between commands:
 ```text
 <absolute-staged-1.6-executable> --state-dir <current-state-dir> state backup --output <backup.sqlite3> --confirm-no-processes
 <absolute-staged-1.6-executable> state verify --input <backup.sqlite3>
+```
+
+Only when ordinary verification reports schema 1 or 2, also run the migration gate
+against that same backup; schema 3 is already current and must skip this gate:
+
+```text
 <absolute-staged-1.6-executable> state verify --input <backup.sqlite3> --for-migration
 ```
 
 These staged invocations are limited to `--version`, `state backup`, and `state verify`; they do
-not open the database through the scheduling path or migrate schema 1 or 2. After the backup and
-`--for-migration` verification succeed, install the canonical Router version that requires 1.6
+not open the database through the scheduling path or migrate schema 1 or 2. After the backup,
+ordinary verification, and applicable migration gate succeed, install the canonical Router version that requires 1.6
 first, so it fails closed while canonical Scheduler is still older. Then install canonical Scheduler
-1.6, require canonical `unity-scheduler --version` to report version `1.6.0`, run the
+1.6, require canonical `unity-scheduler --version` to report version `1.6.1`, run the
 `workspace list` maintenance read-back, exact-workspace status read-backs, and Router protocol
 canary, and only then reopen Router admission.
 
