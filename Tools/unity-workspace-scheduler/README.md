@@ -193,7 +193,13 @@ release resource work, park when instructed, or wait for restoration instead
 of adding ownership that can self-deadlock the drain or starve the queue.
 
 An explicitly urgent maintenance operation can request
-`freeze acquire --priority urgent`. It passes queued normal work, remains FIFO with other urgent
-freezes, and never preempts active work or an unknown-outcome fence.
+`freeze acquire --priority urgent`. It passes recent queued normal work, remains FIFO with other
+urgent claims, and never preempts active work or an unknown-outcome fence. Since 1.6, a normal
+claim waiting for 300 seconds competes at the same scheduling rank as urgent work, using its
+original FIFO order. This prevents continuing urgent arrivals from indefinitely overtaking older
+normal work. It does not bound the duration of an active operation or recovery fence. Restored
+claims retain their original age; disjoint work remains concurrent. Workspace status includes
+`scheduling_rank` (0 for urgent or aged, otherwise 1); immutable claim priority and receipts stay
+unchanged.
 
 See [Setup and protocol](docs/setup.md) for the complete command contract and recovery rules.

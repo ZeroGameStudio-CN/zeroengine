@@ -63,6 +63,7 @@ TOKEN_CLEANUP_BACKLOG_LIMIT = 4096
 REPLAY_REQUIRED_OPERATION_LIMIT = 16384
 TASK_LIFECYCLE_OPERATION_LIMIT = 512
 TASK_SAFE_LIFECYCLE_RETENTION = 256
+NORMAL_PRIORITY_AGING_SECONDS = 300.0
 
 
 @dataclass(frozen=True)
@@ -3094,8 +3095,15 @@ class WorkspaceCoordinator:
         return "urgent"
 
     @staticmethod
-    def _claim_sort_key(claim: sqlite3.Row, scopes: dict[str, tuple[str, ...]]) -> tuple[int, int]:
-        rank = 0 if WorkspaceCoordinator._claim_priority(claim, scopes) == "urgent" else 1
+    def _claim_sort_key(
+        claim: sqlite3.Row, scopes: dict[str, tuple[str, ...]], now: float
+    ) -> tuple[int, int]:
+        urgent = WorkspaceCoordinator._claim_priority(claim, scopes) == "urgent"
+        # Age changes scheduling only, never the immutable priority or FIFO identity.
+        # A restored claim retains credit for its original wait; a backward clock
+        # cannot prematurely age a claim whose creation time is still in the future.
+        aged = now - claim["created_at"] >= NORMAL_PRIORITY_AGING_SECONDS
+        rank = 0 if urgent or aged else 1
         return rank, claim["queue_order"]
 
     @staticmethod
@@ -3123,8 +3131,10 @@ class WorkspaceCoordinator:
 
     @staticmethod
     def _task_drain_request(
-        connection: sqlite3.Connection, workspace_id: str, task_id: str
+        connection: sqlite3.Connection, workspace_id: str, task_id: str, *, now: float | None = None
     ) -> dict[str, Any] | None:
+        if now is None:
+            now = time.time()
         if WorkspaceCoordinator._unknown_exists(connection, workspace_id):
             # No queued freeze can run until recovery. Draining independent
             # owners for it would turn a scoped fence back into a global stop.
@@ -3143,10 +3153,10 @@ class WorkspaceCoordinator:
         freeze = min(
             freezes,
             key=lambda candidate: WorkspaceCoordinator._claim_sort_key(
-                candidate, freeze_scopes[candidate["id"]]
+                candidate, freeze_scopes[candidate["id"]], now
             ),
         )
-        freeze_key = WorkspaceCoordinator._claim_sort_key(freeze, freeze_scopes[freeze["id"]])
+        freeze_key = WorkspaceCoordinator._claim_sort_key(freeze, freeze_scopes[freeze["id"]], now)
         owned_claims = connection.execute(
             "SELECT * FROM claims WHERE workspace_id = ? AND task_id = ? "
             "AND state IN ('queued', 'active')",
@@ -3171,7 +3181,7 @@ class WorkspaceCoordinator:
             if (
                 claim["state"] == "active"
                 or WorkspaceCoordinator._claim_sort_key(
-                    claim, WorkspaceCoordinator._claim_scopes(connection, claim["id"])
+                    claim, WorkspaceCoordinator._claim_scopes(connection, claim["id"]), now
                 )
                 < freeze_key
             )
@@ -3428,7 +3438,7 @@ class WorkspaceCoordinator:
         }
         queued.sort(
             key=lambda claim: WorkspaceCoordinator._claim_sort_key(
-                claim, queued_scopes[claim["id"]]
+                claim, queued_scopes[claim["id"]], now
             )
         )
         blocked_earlier: list[sqlite3.Row] = []
@@ -3939,10 +3949,13 @@ class WorkspaceCoordinator:
                 str(task["id"]) for task in tasks if task["state"] == "outcome_unknown"
             ]
             blocked = bool(unknown_task_ids)
+            observed_at = time.time()
             public_tasks = []
             for task in tasks:
                 public_task = self._public_task(task)
-                drain = self._task_drain_request(connection, registered["id"], task["id"])
+                drain = self._task_drain_request(
+                    connection, registered["id"], task["id"], now=observed_at
+                )
                 if drain is not None:
                     public_task["drain_requested"] = drain
                 public_tasks.append(public_task)
@@ -3979,7 +3992,15 @@ class WorkspaceCoordinator:
                     }
                     for job in cleanup_jobs
                 ],
-                "claims": [self._public_claim(connection, claim) for claim in claims],
+                "claims": [
+                    {
+                        **self._public_claim(connection, claim),
+                        "scheduling_rank": self._claim_sort_key(
+                            claim, self._claim_scopes(connection, claim["id"]), observed_at
+                        )[0],
+                    }
+                    for claim in claims
+                ],
             }
             return result
 
@@ -6223,7 +6244,10 @@ class WorkspaceCoordinator:
                         raise StateError("Parked claims reference a closed freeze.")
                     parked_claims = existing_parked
                 else:
-                    drain = self._task_drain_request(connection, registered["id"], task_id)
+                    drain_now = time.time()
+                    drain = self._task_drain_request(
+                        connection, registered["id"], task_id, now=drain_now
+                    )
                     if drain is None:
                         raise StateError(
                             "No queued freeze is requesting this task to drain.",
@@ -6245,7 +6269,7 @@ class WorkspaceCoordinator:
                             details={"reason": "task-claimless"},
                         )
                     target_scopes = self._claim_scopes(connection, target_freeze["id"])
-                    target_key = self._claim_sort_key(target_freeze, target_scopes)
+                    target_key = self._claim_sort_key(target_freeze, target_scopes, drain_now)
                     parked_claims = [
                         claim
                         for claim in owned
@@ -6253,6 +6277,7 @@ class WorkspaceCoordinator:
                         or self._claim_sort_key(
                             claim,
                             self._claim_scopes(connection, claim["id"]),
+                            drain_now,
                         )
                         < target_key
                     ]
