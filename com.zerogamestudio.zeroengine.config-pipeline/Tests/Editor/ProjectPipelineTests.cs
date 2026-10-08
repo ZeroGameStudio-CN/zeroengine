@@ -523,6 +523,7 @@ namespace ZeroGameStudio.ConfigPipeline.Tests.Editor
             }
 
             WriteItemsDocument(sourceRows);
+            WriteWorkbook("Config/groups.xlsx", "groups", "group-a", null);
             var service = new ConfigPipelineService();
             service.Apply(root, "Config/config-project.json", "sample", "package@1");
             ConfigObjectNode[] projectedRows = sourceRows.Skip(1).Reverse()
