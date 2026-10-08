@@ -666,26 +666,30 @@ namespace ZeroGameStudio.ConfigPipeline.Editor
                 projected is ConfigArrayNode projectedArray &&
                 schema.Items?.Type == ConfigSchemaType.Object)
             {
-                ConfigSchemaProperty primary = schema.Items.Properties.SingleOrDefault(
-                    property => property.Schema.PrimaryKey);
-                if (primary != null)
+                ConfigSchemaProperty[] primaryKeys = schema.Items.Properties
+                    .Where(property => property.Schema.PrimaryKey)
+                    .ToArray();
+                if (primaryKeys.Length != 0)
                 {
-                    Dictionary<string, ConfigNode> currentById = currentArray.Items
-                        .OfType<ConfigObjectNode>()
-                        .Where(value => value.TryGetValue(primary.Name, out ConfigNode id) &&
-                                        id is ConfigStringNode)
-                        .ToDictionary(
-                            value => ((ConfigStringNode)value.Properties.Single(
-                                property => property.Name == primary.Name).Value).Value,
-                            value => (ConfigNode)value,
-                            StringComparer.Ordinal);
+                    var currentById = new Dictionary<string, ConfigNode>(StringComparer.Ordinal);
+                    foreach (ConfigObjectNode currentRow in currentArray.Items.OfType<ConfigObjectNode>())
+                    {
+                        if (TryGetProjectionKey(currentRow, primaryKeys, out string key))
+                        {
+                            currentById.Add(key, currentRow);
+                        }
+                    }
+
                     var merged = new List<ConfigNode>();
                     foreach (ConfigNode projectedItem in projectedArray.Items)
                     {
                         var projectedRow = (ConfigObjectNode)projectedItem;
-                        string id = ((ConfigStringNode)projectedRow.Properties.Single(
-                            property => property.Name == primary.Name).Value).Value;
-                        merged.Add(currentById.TryGetValue(id, out ConfigNode currentItem)
+                        if (!TryGetProjectionKey(projectedRow, primaryKeys, out string key))
+                        {
+                            throw new InvalidDataException("Candidate row requires every string primary key component.");
+                        }
+
+                        merged.Add(currentById.TryGetValue(key, out ConfigNode currentItem)
                             ? MergeProjection(schema.Items, currentItem, projectedItem, targetScope)
                             : projectedItem);
                     }
@@ -695,6 +699,28 @@ namespace ZeroGameStudio.ConfigPipeline.Editor
             }
 
             return projected;
+        }
+
+        private static bool TryGetProjectionKey(
+            ConfigObjectNode row,
+            IReadOnlyList<ConfigSchemaProperty> primaryKeys,
+            out string key)
+        {
+            var components = new List<ConfigNode>(primaryKeys.Count);
+            foreach (ConfigSchemaProperty primary in primaryKeys)
+            {
+                if (!row.TryGetValue(primary.Name, out ConfigNode value) || !(value is ConfigStringNode))
+                {
+                    key = null;
+                    return false;
+                }
+
+                components.Add(value);
+            }
+
+            // Canonical tuples preserve ordinal identity without delimiter collisions between components.
+            key = CanonicalJsonWriter.WriteText(new ConfigArrayNode(components));
+            return true;
         }
 
         private static bool AppliesToTarget(ConfigFieldScope scope, string targetScope)

@@ -483,6 +483,172 @@ namespace ZeroGameStudio.ConfigPipeline.Tests.Editor
             }
         }
 
+        [TestCase(1, "client")]
+        [TestCase(1, "server")]
+        [TestCase(2, "client")]
+        [TestCase(2, "server")]
+        [TestCase(3, "client")]
+        [TestCase(3, "server")]
+        public void ExportJsonCandidate_KeyTuplesPreserveOppositeScopeAndOnlyProjectedRows(
+            int keyComponents,
+            string targetScope)
+        {
+            string schemaPath = Path.Combine(root, "Config", "schema.json");
+            string schemaJson = File.ReadAllText(schemaPath)
+                .Replace("\"required\":[\"id\",\"value\"]", "\"required\":[\"id\",\"kind\",\"domain\",\"value\"]")
+                .Replace("\"value\":{\"type\":\"integer\"",
+                    "\"kind\":{\"type\":\"string\",\"x-zgs-primary-key\":" +
+                    (keyComponents >= 2 ? "true" : "false") + "}," +
+                    "\"domain\":{\"type\":\"string\",\"x-zgs-primary-key\":" +
+                    (keyComponents >= 3 ? "true" : "false") + "}," +
+                    "\"value\":{\"type\":\"integer\"");
+            File.WriteAllBytes(schemaPath, Utf8(schemaJson));
+            schema = ConfigSchemaParser.Parse(Utf8(schemaJson));
+            File.WriteAllBytes(Path.Combine(root, "Config", "config-project.json"),
+                Utf8(ProfileJson().Replace("\"scope\":\"client\"", "\"scope\":\"" + targetScope + "\"")));
+
+            ConfigObjectNode[] sourceRows = new[]
+            {
+                ProjectionRow("a|b", "c", "one", 1, "client-0", "server-0"),
+                ProjectionRow("a", "b|c", "one", 2, "client-1", "server-1"),
+                ProjectionRow("shared", "alpha", "one", 3, "client-2", "server-2"),
+                ProjectionRow(keyComponents == 1 ? "Shared" : "shared", "Alpha", "one", 4, "client-3", "server-3")
+            };
+            if (keyComponents == 3)
+            {
+                sourceRows = sourceRows.Concat(new[]
+                {
+                    ProjectionRow("shared", "alpha", "two", 5, "client-4", "server-4")
+                }).ToArray();
+            }
+
+            WriteItemsDocument(sourceRows);
+            var service = new ConfigPipelineService();
+            service.Apply(root, "Config/config-project.json", "sample", "package@1");
+            ConfigObjectNode[] projectedRows = sourceRows.Skip(1).Reverse()
+                .Select(row => ProjectionRow(RowString(row, "id"), RowString(row, "kind"), RowString(row, "domain"),
+                    99, targetScope == "client" ? "projected-client" : null,
+                    targetScope == "server" ? "projected-server" : null))
+                .Concat(new[]
+                {
+                    ProjectionRow("new", "new-kind", "new-domain", 99,
+                        targetScope == "client" ? "projected-client" : null,
+                        targetScope == "server" ? "projected-server" : null)
+                }).ToArray();
+            // This is an explicitly unbased import in an owned temporary project, not a production artifact edit.
+            File.Delete(Path.Combine(root, "Generated", "sample.manifest.json"));
+            File.WriteAllBytes(Path.Combine(root, "Generated", "sample.json"),
+                CanonicalJsonWriter.WriteUtf8(new ConfigObjectNode(new[]
+                {
+                    new ConfigProperty("items", new ConfigArrayNode(projectedRows)),
+                    new ConfigProperty("groups", new ConfigArrayNode(new ConfigNode[]
+                    {
+                        new ConfigObjectNode(new[] { new ConfigProperty("id", new ConfigStringNode("group-a")) })
+                    }))
+                })));
+            string[] protectedPaths = new[]
+            {
+                schemaPath, Path.Combine(root, "Config", "config-project.json"),
+                Path.Combine(root, "Config", "items.xlsx"), Path.Combine(root, "Config", "groups.xlsx"),
+                Path.Combine(root, "Generated", "sample.json")
+            };
+            string[] beforeHashes = protectedPaths.Select(ConfigPipelinePlanBuilder.HashFile).ToArray();
+            string candidates = Path.Combine(root, "TupleCandidates");
+
+            ConfigImportConflictResult result = service.ExportJsonCandidate(
+                root, "Config/config-project.json", "sample", targetScope, candidates);
+
+            Assert.That(result.Decision, Is.EqualTo(ConfigImportDecision.CandidateUnbased));
+            string candidatePath = Path.Combine(candidates, "items.candidate.xlsx");
+            using (FileStream stream = File.OpenRead(candidatePath))
+            {
+                ConfigDocument candidate = new XlsxConfigSourceReader(schema, null, new[] { "items" })
+                    .Read(stream, new ConfigReadContext("sample", schema.SchemaId, schema.SchemaVersion));
+                Assert.That(candidate.Root.TryGetValue("items", out ConfigNode items), Is.True);
+                ConfigObjectNode[] rows = ((ConfigArrayNode)items).Items.Cast<ConfigObjectNode>().ToArray();
+                Assert.That(rows.Length, Is.EqualTo(projectedRows.Length));
+                foreach (ConfigObjectNode projectedRow in projectedRows)
+                {
+                    ConfigObjectNode row = rows.Single(value => SameProjectionIdentity(value, projectedRow));
+                    ConfigObjectNode original = sourceRows.SingleOrDefault(value => SameProjectionIdentity(value, projectedRow));
+                    Assert.That(RowString(row, targetScope + "Value"), Is.EqualTo("projected-" + targetScope));
+                    string oppositeField = targetScope == "client" ? "serverValue" : "clientValue";
+                    if (original == null)
+                    {
+                        Assert.That(row.TryGetValue(oppositeField, out _), Is.False);
+                    }
+                    else
+                    {
+                        Assert.That(RowString(row, oppositeField), Is.EqualTo(RowString(original, oppositeField)));
+                    }
+                }
+
+                Assert.That(rows.Any(value => SameProjectionIdentity(value, sourceRows[0])), Is.False);
+            }
+
+            string candidateHash = ConfigPipelinePlanBuilder.HashFile(candidatePath);
+            service.ExportJsonCandidate(root, "Config/config-project.json", "sample", targetScope, candidates);
+            Assert.That(ConfigPipelinePlanBuilder.HashFile(candidatePath), Is.EqualTo(candidateHash));
+            CollectionAssert.AreEqual(beforeHashes, protectedPaths.Select(ConfigPipelinePlanBuilder.HashFile).ToArray());
+        }
+
+        [Test]
+        public void ExportJsonCandidate_UnkeyedTableRejectsBeforeWritingCandidateOrSource()
+        {
+            string schemaPath = Path.Combine(root, "Config", "schema.json");
+            File.WriteAllBytes(schemaPath, Utf8(File.ReadAllText(schemaPath)
+                .Replace("\"x-zgs-primary-key\":true", "\"x-zgs-primary-key\":false")));
+            string itemsPath = Path.Combine(root, "Config", "items.xlsx");
+            string beforeHash = ConfigPipelinePlanBuilder.HashFile(itemsPath);
+            string candidates = Path.Combine(root, "UnkeyedCandidates");
+
+            XlsxConfigException exception = Assert.Throws<XlsxConfigException>(() =>
+                new ConfigPipelineService().ExportJsonCandidate(
+                    root, "Config/config-project.json", "sample", "client", candidates));
+
+            Assert.That(exception.Code, Is.EqualTo("XLSX_PRIMARY_KEY_REQUIRED"));
+            Assert.That(Directory.Exists(candidates), Is.False);
+            Assert.That(ConfigPipelinePlanBuilder.HashFile(itemsPath), Is.EqualTo(beforeHash));
+        }
+
+        private static ConfigObjectNode ProjectionRow(
+            string id, string kind, string domain, int value, string clientValue, string serverValue)
+        {
+            var properties = new System.Collections.Generic.List<ConfigProperty>
+            {
+                new ConfigProperty("id", new ConfigStringNode(id)),
+                new ConfigProperty("kind", new ConfigStringNode(kind)),
+                new ConfigProperty("domain", new ConfigStringNode(domain)),
+                new ConfigProperty("value", new ConfigIntegerNode(value))
+            };
+            if (clientValue != null) { properties.Add(new ConfigProperty("clientValue", new ConfigStringNode(clientValue))); }
+            if (serverValue != null) { properties.Add(new ConfigProperty("serverValue", new ConfigStringNode(serverValue))); }
+            return new ConfigObjectNode(properties);
+        }
+
+        private static string RowString(ConfigObjectNode row, string property)
+        {
+            Assert.That(row.TryGetValue(property, out ConfigNode value), Is.True, property);
+            return ((ConfigStringNode)value).Value;
+        }
+
+        private static bool SameProjectionIdentity(ConfigObjectNode left, ConfigObjectNode right)
+        {
+            return new[] { "id", "kind", "domain" }.All(name =>
+                string.Equals(RowString(left, name), RowString(right, name), StringComparison.Ordinal));
+        }
+
+        private void WriteItemsDocument(ConfigObjectNode[] rows)
+        {
+            using (FileStream stream = File.Create(Path.Combine(root, "Config", "items.xlsx")))
+            {
+                new XlsxConfigWorkbookWriter().WriteTemplate(stream, schema, "sample",
+                    new ConfigDocument("sample", schema.SchemaId, schema.SchemaVersion,
+                        new ConfigObjectNode(new[] { new ConfigProperty("items", new ConfigArrayNode(rows)) })),
+                    null, new[] { "items" });
+            }
+        }
+
         private void WriteWorkbook(string relativePath, string property, string id, int? value)
         {
             var fields = new System.Collections.Generic.List<ConfigProperty>
