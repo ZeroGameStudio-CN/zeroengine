@@ -115,8 +115,9 @@ namespace ZeroEngine.Pathfinding2D.Tests.Editor
                 "The calculated jump must stay within the actor's configured maximum jump velocity.");
         }
 
-        [Test]
-        public void ValidateTrajectory_FromToPlatformSideGrazingWithoutCenterPenetration_AllowsTrajectory()
+        [TestCase(false)]
+        [TestCase(true)]
+        public void ValidateTrajectory_FromToPlatformSideGrazingWithoutCenterPenetration_AllowsTrajectory(bool sampled)
         {
             const int platformLayer = 8;
             var platform = CreateBoxColliderPlatform(
@@ -134,6 +135,7 @@ namespace ZeroEngine.Pathfinding2D.Tests.Editor
                     new Vector2(1.55f, 2.8f)
                 };
 
+                trajectory = ResampleTrajectory(trajectory, sampled);
                 bool valid = JumpMovementHandler.ValidateTrajectory(
                     trajectory,
                     1 << platformLayer,
@@ -152,8 +154,9 @@ namespace ZeroEngine.Pathfinding2D.Tests.Editor
             }
         }
 
-        [Test]
-        public void ValidateTrajectory_SameColliderHorizontalUndersideGrazing_BlocksTrajectory()
+        [TestCase(false)]
+        [TestCase(true)]
+        public void ValidateTrajectory_SameColliderHorizontalUndersideGrazing_BlocksTrajectory(bool sampled)
         {
             const int platformLayer = 8;
             var platform = CreateMultiPathPolygonPlatform(
@@ -172,6 +175,7 @@ namespace ZeroEngine.Pathfinding2D.Tests.Editor
                     new Vector2(7f, 0.35f)
                 };
 
+                trajectory = ResampleTrajectory(trajectory, sampled);
                 bool valid = JumpMovementHandler.ValidateTrajectory(
                     trajectory,
                     1 << platformLayer,
@@ -190,8 +194,9 @@ namespace ZeroEngine.Pathfinding2D.Tests.Editor
             }
         }
 
-        [Test]
-        public void ValidateTrajectory_ThirdPartySideGrazing_BlocksTrajectory()
+        [TestCase(false)]
+        [TestCase(true)]
+        public void ValidateTrajectory_ThirdPartySideGrazing_BlocksTrajectory(bool sampled)
         {
             const int platformLayer = 8;
             var fromPlatform = CreateBoxColliderPlatform(
@@ -219,6 +224,7 @@ namespace ZeroEngine.Pathfinding2D.Tests.Editor
                     new Vector2(1.55f, 2.8f)
                 };
 
+                trajectory = ResampleTrajectory(trajectory, sampled);
                 bool valid = JumpMovementHandler.ValidateTrajectory(
                     trajectory,
                     1 << platformLayer,
@@ -239,8 +245,9 @@ namespace ZeroEngine.Pathfinding2D.Tests.Editor
             }
         }
 
-        [Test]
-        public void ValidateTrajectory_DestinationSideHitNearEndpoint_BlocksTrajectory()
+        [TestCase(false)]
+        [TestCase(true)]
+        public void ValidateTrajectory_DestinationSideHitNearEndpoint_BlocksTrajectory(bool sampled)
         {
             const int platformLayer = 8;
             var fromPlatform = CreateBoxColliderPlatform(
@@ -258,6 +265,7 @@ namespace ZeroEngine.Pathfinding2D.Tests.Editor
                     new Vector2(2.45f, 1.5f)
                 };
 
+                trajectory = ResampleTrajectory(trajectory, sampled);
                 bool valid = JumpMovementHandler.ValidateTrajectory(
                     trajectory, 1 << platformLayer, colliderRadius: .2f,
                     fromPlatform, toPlatform, ignoreInitialDistance: 1f);
@@ -272,8 +280,9 @@ namespace ZeroEngine.Pathfinding2D.Tests.Editor
             }
         }
 
-        [Test]
-        public void ValidateTrajectory_SameColliderMiddlePlatform_BlocksTrajectory()
+        [TestCase(false)]
+        [TestCase(true)]
+        public void ValidateTrajectory_SameColliderMiddlePlatform_BlocksTrajectory(bool sampled)
         {
             const int platformLayer = 8;
             var platform = CreateMultiPathPolygonPlatform(
@@ -292,6 +301,7 @@ namespace ZeroEngine.Pathfinding2D.Tests.Editor
                     new Vector2(4f, 0.35f)
                 };
 
+                trajectory = ResampleTrajectory(trajectory, sampled);
                 bool valid = JumpMovementHandler.ValidateTrajectory(
                     trajectory,
                     1 << platformLayer,
@@ -308,6 +318,78 @@ namespace ZeroEngine.Pathfinding2D.Tests.Editor
             {
                 Object.DestroyImmediate(platform.gameObject);
             }
+        }
+
+        // Core contract: changing query order must preserve trigger/layer policy
+        // and the existing result for a trajectory with no nonzero segments.
+        [TestCase(true, 8, false)]
+        [TestCase(false, 8, true)]
+        [TestCase(true, 9, true)]
+        public void GeneratedFall_CentralTriggerPreservesQueryPolicy(bool hitTriggers, int layer, bool expectedClear)
+        {
+            var origin = new Vector2(2000f, 2000f);
+            var trajectory = JumpMovementHandler.CalculateFall(origin + Vector2.up * 8f, origin, 1f).Trajectory;
+            var blocker = CreateBoxColliderPlatform("CentralProbeTrigger", layer,
+                trajectory[trajectory.Length * 3 / 5], new Vector2(.2f, .2f));
+            bool previous = Physics2D.queriesHitTriggers;
+            try
+            {
+                blocker.isTrigger = true;
+                Physics2D.queriesHitTriggers = hitTriggers;
+                Physics2D.SyncTransforms();
+                Assert.That(JumpMovementHandler.ValidateTrajectory(trajectory, 1 << 8, .2f, null, null), Is.EqualTo(expectedClear));
+            }
+            finally
+            {
+                Physics2D.queriesHitTriggers = previous;
+                Object.DestroyImmediate(blocker.gameObject);
+            }
+        }
+
+        [Test]
+        public void GeneratedTrajectory_WithOnlyRepeatedPoints_PreservesEmptySweep()
+        {
+            var point = new Vector2(2000f, 2000f);
+            var trajectory = JumpMovementHandler.CalculateFall(point + Vector2.up, point, 1f).Trajectory;
+            for (int i = 0; i < trajectory.Length; i++) trajectory[i] = point;
+            var blocker = CreateBoxColliderPlatform("RepeatedProbePoint", 8, point, Vector2.one);
+            try
+            {
+                Assert.That(JumpMovementHandler.ValidateTrajectory(trajectory, 1 << 8, .2f, null, null), Is.True);
+            }
+            finally { Object.DestroyImmediate(blocker.gameObject); }
+        }
+
+        [TestCase(0f, 0f, false)]
+        [TestCase(.25f, 35f, false)]
+        [TestCase(1f, 0f, true)]
+        public void GeneratedTrajectory_ThinMiddleObstacleUsesFullSweptRadius(float height, float angle, bool expectedClear)
+        {
+            var origin = new Vector2(2000f, 2000f);
+            var trajectory = ResampleTrajectory(new[] { origin + Vector2.left * 5f, origin + Vector2.right * 5f }, true);
+            var blocker = CreateBoxColliderPlatform("ThinInteriorObstacle", 8,
+                origin + Vector2.right + Vector2.up * height, new Vector2(.03f, .4f));
+            try
+            {
+                blocker.transform.rotation = Quaternion.Euler(0f, 0f, angle);
+                Physics2D.SyncTransforms();
+                Assert.That(JumpMovementHandler.ValidateTrajectory(trajectory, 1 << 8, .2f,
+                    null, null), Is.EqualTo(expectedClear));
+            }
+            finally { Object.DestroyImmediate(blocker.gameObject); }
+        }
+
+        private static Vector2[] ResampleTrajectory(Vector2[] path, bool sampled)
+        {
+            if (!sampled) return path;
+            var result = new Vector2[20];
+            for (int i = 0; i < result.Length; i++)
+            {
+                float position = i * (path.Length - 1f) / (result.Length - 1);
+                int segment = Mathf.Min((int)position, path.Length - 2);
+                result[i] = Vector2.Lerp(path[segment], path[segment + 1], position - segment);
+            }
+            return result;
         }
 
         private static Collider2D CreateBoxColliderPlatform(
