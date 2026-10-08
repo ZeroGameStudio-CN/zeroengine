@@ -1285,18 +1285,8 @@ class WorkspaceCoordinator:
 
     @staticmethod
     def _prune_delivered_operations(connection: sqlite3.Connection) -> None:
-        candidates = connection.execute(
-            "SELECT receipt.*, task.id AS bound_task_id, "
-            "task.workspace_id AS task_workspace_id, task.token_hash AS task_token_hash, "
-            "task.state AS task_state, task.result AS task_result, "
-            "task.finished_at AS task_finished_at, task.start_operation_id, "
-            "EXISTS(SELECT 1 FROM token_cleanup_jobs AS job "
-            "WHERE job.task_id = receipt.task_id) AS has_cleanup_job, "
-            "EXISTS(SELECT 1 FROM operation_receipts AS cleanup "
-            "WHERE cleanup.task_id = receipt.task_id "
-            "AND cleanup.token_cleanup_path IS NOT NULL) AS has_cleanup_receipt "
+        eligible = (
             "FROM operation_receipts AS receipt "
-            "LEFT JOIN tasks AS task ON task.id = receipt.task_id "
             "WHERE (receipt.delivered_at IS NOT NULL OR receipt.retired_at IS NOT NULL) "
             "AND receipt.token_cleanup_path IS NULL "
             "AND (receipt.action <> 'task.start' OR ("
@@ -1308,12 +1298,42 @@ class WorkspaceCoordinator:
             "AND NOT EXISTS(SELECT 1 FROM operation_receipts AS protected_cleanup "
             "WHERE protected_cleanup.task_id = receipt.task_id "
             "AND protected_cleanup.token_cleanup_path IS NOT NULL))) "
-            "ORDER BY COALESCE(receipt.delivered_at, receipt.retired_at) DESC, "
+        )
+        # Most maintenance passes have nothing to remove. Do not sort the entire
+        # retained history or load its JSON/proofs while holding the writer lock.
+        if (
+            connection.execute(
+                "SELECT 1 " + eligible + "LIMIT 1 OFFSET ?",
+                (DELIVERED_OPERATION_RETENTION,),
+            ).fetchone()
+            is None
+        ):
+            return
+        candidates = connection.execute(
+            "SELECT receipt.operation_id "
+            + eligible
+            + "ORDER BY COALESCE(receipt.delivered_at, receipt.retired_at) DESC, "
             "receipt.created_at DESC, receipt.operation_id DESC "
             "LIMIT -1 OFFSET ?",
             (DELIVERED_OPERATION_RETENTION,),
         ).fetchall()
-        for receipt in candidates:
+        for candidate in candidates:
+            receipt = connection.execute(
+                "SELECT receipt.*, task.id AS bound_task_id, "
+                "task.workspace_id AS task_workspace_id, task.token_hash AS task_token_hash, "
+                "task.state AS task_state, task.result AS task_result, "
+                "task.finished_at AS task_finished_at, task.start_operation_id, "
+                "EXISTS(SELECT 1 FROM token_cleanup_jobs AS job "
+                "WHERE job.task_id = receipt.task_id) AS has_cleanup_job, "
+                "EXISTS(SELECT 1 FROM operation_receipts AS cleanup "
+                "WHERE cleanup.task_id = receipt.task_id "
+                "AND cleanup.token_cleanup_path IS NOT NULL) AS has_cleanup_receipt "
+                "FROM operation_receipts AS receipt "
+                "LEFT JOIN tasks AS task ON task.id = receipt.task_id "
+                "WHERE receipt.operation_id = ?",
+                (candidate["operation_id"],),
+            ).fetchone()
+            assert receipt is not None
             if receipt["action"] == "task.start":
                 if not _entity_id(receipt["task_id"]):
                     raise StateError(

@@ -190,7 +190,11 @@ Version 1.6.1 validates receipt lease expiry using the same timestamp-plus-durat
 calculation as the writer. Subtracting large epoch timestamps could reject valid
 fractional TTLs in task-start ACK/replay and offline backup/verification. This fix
 does not rewrite receipts, relax expiry equality, or change protocol/state schema.
-Use 1.6.1 for this maintenance route, including state written by the 1.5 cohort.
+Version 1.6.2 reduces writer-lock time during receipt retention: it skips sorting
+when the eligible window has no overflow and loads payloads/cleanup proofs only
+for the exact overflow victims. Eligibility, recency order, custody validation,
+protocol 3 and schema 3 are unchanged. It introduces no database migration.
+Use 1.6.2 for this maintenance route, including state written by the 1.5 cohort.
 
 Do not copy `scheduler.sqlite3` with a filesystem copy command: committed data may still live in
 its WAL. Before directly invoking either Scheduler executable, stop admission at the Router entry,
@@ -227,7 +231,7 @@ staged_scheduler="$stage_root/bin/unity-scheduler"
 Keep `$stagedScheduler` or `$staged_scheduler` as the exact
 `<absolute-staged-1.6-executable>` for every later staged command. The isolated uv environment
 variables must not remain set during the canonical install; require the parsed version to equal
-exactly `1.6.1`:
+exactly `1.6.2`:
 
 ```text
 <absolute-staged-1.6-executable> --version
@@ -257,7 +261,7 @@ These staged invocations are limited to `--version`, `state backup`, and `state 
 not open the database through the scheduling path or migrate schema 1 or 2. After the backup,
 ordinary verification, and applicable migration gate succeed, install the canonical Router version that requires 1.6
 first, so it fails closed while canonical Scheduler is still older. Then install canonical Scheduler
-1.6, require canonical `unity-scheduler --version` to report version `1.6.1`, run the
+1.6, require canonical `unity-scheduler --version` to report version `1.6.2`, run the
 `workspace list` maintenance read-back, exact-workspace status read-backs, and Router protocol
 canary, and only then reopen Router admission.
 
