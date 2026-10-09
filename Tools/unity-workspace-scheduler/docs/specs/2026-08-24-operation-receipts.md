@@ -70,3 +70,25 @@ task start 首次调用独占创建 token；同 operation ID 重试复用已存�
 8. schema 1 和 schema 2 正常迁移；每版畸形/冲突输入 fail closed，拒绝时 DB bytes、journal 与 schema 不变；schema 3 inspect 验证 receipt 语义。
 9. `task identify` 返回唯一 open task，且前后 heartbeat、expiry、epoch、claims 完全不变；随后 heartbeat/assert 仍独立决定授权。
 10. README/setup、CLI help、JSON protocol 与实现一致；Scheduler 全套 pytest、Ruff format/check、`git diff --check` 全绿。
+
+
+## 2026-10-09: bounded polling under writer contention
+
+POB callers observed a retained freeze request followed by `database is locked`.
+Exact receipt replay recovered the original queued claim without a new operation
+or Unity dispatch. Source inspection found claim/freeze and park waiters entering
+`BEGIN IMMEDIATE` plus maintenance every 100 ms, including retained-history work.
+
+The 1.6.3 candidate starts at 100 ms and doubles idle delays up to 2 seconds,
+clipped by the original remaining deadline. It preserves the existing transaction,
+receipt/ACK, admission, queue and recovery contracts. No schema or index changes
+are included. Fake-clock behavior tests bound idle writer attempts, retain exact
+claim/FIFO identity and timeout behavior, and observe a grant during backoff.
+
+An isolated Windows comparison with 8 waiting callers, 10,000 delivered receipts,
+1,000 terminal tasks and 10,000 terminal claims measured 154 -> 79 transactions.
+For an 8-second wait request including final drain, elapsed time was 18.75 ->
+11.89 seconds; the slowest concurrent status call was 13.87 -> 1.05 seconds.
+These are synthetic contention observations, not a fixed latency or long-term
+availability guarantee. The running Scheduler remains unchanged until reviewed
+publication and the documented maintenance activation checks complete.

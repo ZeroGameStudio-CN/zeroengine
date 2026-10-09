@@ -6120,8 +6120,12 @@ class WorkspaceCoordinator:
             "claim",
         )
         deadline = time.monotonic() + remaining_wait
+        poll_delay = 0.1
         while time.monotonic() < deadline:
-            time.sleep(min(0.1, max(0.0, deadline - time.monotonic())))
+            time.sleep(min(poll_delay, max(0.0, deadline - time.monotonic())))
+            # Unchanged waiters must leave writer capacity for owners finishing
+            # work. Keep the first observation fast, then bound idle polling.
+            poll_delay = min(2.0, poll_delay * 2)
             with self._transaction() as connection:
                 self._maintain(connection, identifier)
                 receipt = self._matching_operation_receipt(connection, operation)
@@ -6406,8 +6410,12 @@ class WorkspaceCoordinator:
             "task park",
         )
         deadline = time.monotonic() + remaining_wait
+        poll_delay = 0.1
         while time.monotonic() < deadline:
-            time.sleep(min(0.1, max(0.0, deadline - time.monotonic())))
+            time.sleep(min(poll_delay, max(0.0, deadline - time.monotonic())))
+            # Unchanged waiters must leave writer capacity for owners finishing
+            # work. Keep the first observation fast, then bound idle polling.
+            poll_delay = min(2.0, poll_delay * 2)
             result = result_payload(timed_out=False, persist=False)
             if result["resumed"]:
                 return result_payload(timed_out=False, persist=True)
