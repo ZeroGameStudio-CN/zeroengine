@@ -203,3 +203,14 @@ claims retain their original age; disjoint work remains concurrent. Workspace st
 unchanged.
 
 See [Setup and protocol](docs/setup.md) for the complete command contract and recovery rules.
+
+## Idle waiting under contention
+
+Version 1.6.3 keeps the first wait observation at 100 ms, then backs off idle
+claim/freeze and park observations to at most 2 seconds. Every observation still
+uses the same authoritative transaction; the original deadline clips the final
+sleep. This reduces repeated writer-lock acquisition while another owner is
+finishing work. It does not cancel a request, move its FIFO position, change
+priority, or make an unknown executor safe to replay. Protocol 3 and schema 3 are
+unchanged. Use the existing stopped-admission backup/install procedure in
+[Setup and protocol](docs/setup.md#offline-state-maintenance).
