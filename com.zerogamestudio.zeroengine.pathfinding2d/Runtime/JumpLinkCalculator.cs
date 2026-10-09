@@ -1053,15 +1053,17 @@ namespace ZeroEngine.Pathfinding2D
 
             if (!result.IsReachable) return false;
 
-            if (!JumpMovementHandler.ValidateTrajectory(
+            // These acceptance paths are alternatives. Try the narrowly qualified edge fall
+            // first, so an accepted fallback does not pay for a redundant trajectory sweep.
+            if (!CanCreateEdgeFallLink(from, to) &&
+                !JumpMovementHandler.ValidateTrajectory(
                     result.Trajectory,
                     obstacleLayer,
                     config.TrajectoryCheckRadius,
                     from.PlatformCollider,
                     to.PlatformCollider))
             {
-                if (!CanCreateEdgeFallLink(from, to))
-                    return false;
+                return false;
             }
 
             // 创建下落链接
@@ -1123,10 +1125,10 @@ namespace ZeroEngine.Pathfinding2D
                     return false;
 
                 float exitX = fromSegment.MaxX + exitOffset;
-                return HasOutwardFallClearance(fromSegment, from.Position.x, exitX, 1) &&
-                       toSegment.ContainsX(exitX, landingTolerance) &&
+                return toSegment.ContainsX(exitX, landingTolerance) &&
                        to.Position.x >= from.Position.x - landingTolerance &&
-                       IsFirstLandingBelowEdge(fromSegment, toSegment, exitX, landingTolerance);
+                       IsFirstLandingBelowEdge(fromSegment, toSegment, exitX, landingTolerance) &&
+                       HasOutwardFallClearance(fromSegment, from.Position.x, exitX, 1);
             }
 
             if (from.NodeType == PlatformNodeType.LeftEdge)
@@ -1135,10 +1137,10 @@ namespace ZeroEngine.Pathfinding2D
                     return false;
 
                 float exitX = fromSegment.MinX - exitOffset;
-                return HasOutwardFallClearance(fromSegment, from.Position.x, exitX, -1) &&
-                       toSegment.ContainsX(exitX, landingTolerance) &&
+                return toSegment.ContainsX(exitX, landingTolerance) &&
                        to.Position.x <= from.Position.x + landingTolerance &&
-                       IsFirstLandingBelowEdge(fromSegment, toSegment, exitX, landingTolerance);
+                       IsFirstLandingBelowEdge(fromSegment, toSegment, exitX, landingTolerance) &&
+                       HasOutwardFallClearance(fromSegment, from.Position.x, exitX, -1);
             }
 
             return false;
