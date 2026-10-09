@@ -140,6 +140,68 @@ namespace ZeroEngine.Pathfinding2D.Tests.Editor
         }
 
         [Test]
+        public void ReconstructPath_RetainedCommandsSurviveOtherRoutesAndEarlyFailure()
+        {
+            var host = new GameObject("RetainedReconstructedPathTest");
+            try
+            {
+                var graph = host.AddComponent<PlatformGraphGenerator>();
+                var positions = new[] { Vector3.zero, new Vector3(3f, 0f), new Vector3(5f, 2f) };
+                for (int i = 0; i < positions.Length; i++)
+                {
+                    graph.Nodes.Add(PlatformNodeData.CreateSurface(i + 1, positions[i], null));
+                    graph.NodeIdToIndex[i + 1] = i;
+                }
+                var pathfinder = host.AddComponent<Platform2DPathfinder>();
+                pathfinder.SetGraphGenerator(graph);
+                var reconstruct = typeof(Platform2DPathfinder).GetMethod("ReconstructPath",
+                    System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic);
+                Assert.IsNotNull(reconstruct);
+                var parents = new System.Collections.Generic.Dictionary<int, int> { [2] = 1, [3] = 2 };
+                var links = new System.Collections.Generic.Dictionary<int, PlatformLinkData>
+                {
+                    [2] = new PlatformLinkData { FromNodeId = 1, ToNodeId = 2, LinkType = PlatformLinkType.Walk, Duration = .3f },
+                    [3] = PlatformLinkData.CreateWallTraversalJump(2, 3, 8f, 2f, .5f, null, -1, 4.25f)
+                };
+                Platform2DPath Build(int target, Vector3 start, Vector3 end) =>
+                    (Platform2DPath)reconstruct.Invoke(pathfinder, new object[] { parents, links, target, start, end });
+
+                var retained = Build(3, positions[0], positions[2]);
+                Assert.AreEqual(PathStatus.Valid, retained.Status);
+                Assert.AreEqual(2, retained.Commands.Count);
+                var retainedCommands = retained.Commands.ToArray();
+                float retainedDuration = retained.TotalDuration;
+                retained.AdvanceToNext();
+
+                parents.Clear(); links.Clear();
+                parents[3] = 1;
+                links[3] = new PlatformLinkData { FromNodeId = 1, ToNodeId = 3, LinkType = PlatformLinkType.Walk, Duration = 1f };
+                Assert.AreEqual(PathStatus.NotFound, Build(3, positions[0], positions[2]).Status,
+                    "A vertical walk must still fail after temporary route buffers were populated.");
+
+                parents.Clear(); links.Clear();
+                parents[2] = 1;
+                links[2] = new PlatformLinkData { FromNodeId = 1, ToNodeId = 2, LinkType = PlatformLinkType.Walk, Duration = .3f };
+                var next = Build(2, positions[0], positions[1]);
+                Assert.AreEqual(PathStatus.Valid, next.Status);
+                Assert.AreEqual(1, next.Commands.Count);
+                Assert.AreEqual(positions[1], next.Commands[0].Target);
+                Assert.AreNotSame(retained.Commands, next.Commands);
+                next.Commands.Clear();
+
+                CollectionAssert.AreEqual(retainedCommands, retained.Commands);
+                Assert.AreEqual(1, retained.CurrentIndex);
+                Assert.AreEqual(retainedDuration, retained.TotalDuration);
+                Assert.AreEqual(positions[0], retained.StartPosition);
+                Assert.AreEqual(positions[2], retained.EndPosition);
+            }
+            finally
+            {
+                Object.DestroyImmediate(host);
+            }
+        }
+
+        [Test]
         public void ReconstructPath_InitialWalkBeforeJumpUsesTraversalApproachThreshold()
         {
             var host = new GameObject("InitialJumpApproachThresholdTest");

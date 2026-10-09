@@ -4,6 +4,7 @@
 
 using System.Collections.Generic;
 using UnityEngine;
+using UnityEngine.Pool;
 
 namespace ZeroEngine.Pathfinding2D
 {
@@ -667,8 +668,9 @@ namespace ZeroEngine.Pathfinding2D
             Vector3 actualStart,
             Vector3 actualEnd)
         {
-            var cameFrom = new Dictionary<int, int>(targetResult.LinkCount);
-            var cameFromLink = new Dictionary<int, PlatformLinkData>(targetResult.LinkCount);
+            // Reconstruction is synchronous; none of these maps escape into a returned path.
+            using var cameFromScope = DictionaryPool<int, int>.Get(out var cameFrom);
+            using var cameFromLinkScope = DictionaryPool<int, PlatformLinkData>.Get(out var cameFromLink);
             int currentNodeId = sourceNodeId;
             for (int i = 0; i < targetResult.LinkCount; i++)
             {
@@ -2452,8 +2454,9 @@ namespace ZeroEngine.Pathfinding2D
             Vector3 actualStart,
             Vector3 actualEnd)
         {
-            var nodePath = new List<int>();
-            var linkPath = new List<PlatformLinkData>();
+            // Only the temporary route sequences are pooled. Each result retains its own commands.
+            using var nodePathScope = ListPool<int>.Get(out var nodePath);
+            using var linkPathScope = ListPool<PlatformLinkData>.Get(out var linkPath);
 
             // 回溯路径
             while (cameFrom.ContainsKey(current))

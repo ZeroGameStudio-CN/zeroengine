@@ -289,6 +289,83 @@ namespace ZeroEngine.Pathfinding2D.Tests.Editor
         }
 
         [Test]
+        public void Pathfinder_RetainedResultsSurviveLaterQueriesAndBatchedReconstruction()
+        {
+            PlatformGraphGenerator graph = CreateGraph(3, out PlatformNodeData[] nodes);
+            graph.AddLink(Link(nodes[0], nodes[1], PlatformLinkType.Walk, 1f));
+            graph.AddLink(Link(nodes[1], nodes[2], PlatformLinkType.Walk, 2f));
+            graph.CommitBuild();
+            Platform2DPathfinder pathfinder = graph.gameObject.AddComponent<Platform2DPathfinder>();
+            pathfinder.SetGraphGenerator(graph);
+
+            PlatformPathQuerySubmission first = pathfinder.SubmitPathQuery(new PlatformPathRequest(
+                nodes[0].Position, nodes[2].Position, projectTargetToGround: false, forceRequest: true));
+            Assert.IsTrue(first.ImmediateResult.PathResult.Success);
+            Platform2DPath retained = first.ImmediateResult.PathResult.Path;
+            var expected = retained.Commands.ToArray();
+            Assert.IsTrue(pathfinder.TryCommitPathQueryResult(first.ImmediateResult));
+            retained.AdvanceToNext();
+
+            PlatformRouteBatchSubmission batch = pathfinder.SubmitRouteBatch(new PlatformRouteBatchQuery(new[]
+            {
+                new PlatformRouteQuery(nodes[0].Position, nodes[1].Position, projectTargetToGround: false),
+                new PlatformRouteQuery(nodes[0].Position, nodes[2].Position, projectTargetToGround: false)
+            }));
+            Assert.IsTrue(batch.ImmediateResult.GetResult(0).Success);
+            Assert.IsTrue(batch.ImmediateResult.GetResult(1).Success);
+            Assert.AreSame(retained, pathfinder.CurrentPath);
+
+            PlatformPathQuerySubmission failed = pathfinder.SubmitPathQuery(new PlatformPathRequest(
+                nodes[2].Position, nodes[0].Position, projectTargetToGround: false,
+                forceRequest: true, allowPartialPathOverride: false));
+            Assert.IsFalse(failed.ImmediateResult.PathResult.Success);
+            CollectionAssert.AreEqual(expected, retained.Commands);
+            Assert.AreEqual(1, retained.CurrentIndex);
+            Assert.AreSame(retained, pathfinder.CurrentPath);
+
+            var shortCommands = batch.ImmediateResult.GetResult(0).Path.Commands;
+            var longCommands = batch.ImmediateResult.GetResult(1).Path.Commands;
+            Assert.AreNotSame(shortCommands, longCommands);
+            Assert.AreNotSame(retained.Commands, longCommands);
+            var expectedLong = longCommands.ToArray();
+            shortCommands.Clear();
+            CollectionAssert.AreEqual(expectedLong, longCommands);
+            CollectionAssert.AreEqual(expected, retained.Commands);
+        }
+
+        [Test]
+        public void Pathfinder_InvalidSearchLinksDoNotContaminateTheNextReconstruction()
+        {
+            PlatformGraphGenerator graph = CreateGraph(3, out PlatformNodeData[] nodes);
+            graph.AddLink(Link(nodes[0], nodes[1], PlatformLinkType.Walk, 1f));
+            graph.AddLink(Link(nodes[1], nodes[2], PlatformLinkType.Walk, 2f));
+            PlatformSearchGraphSnapshot snapshot = graph.CommitBuild();
+            Platform2DPathfinder pathfinder = graph.gameObject.AddComponent<Platform2DPathfinder>();
+            pathfinder.SetGraphGenerator(graph);
+            int firstLink = Enumerable.Range(0, snapshot.LinkCount).Single(i =>
+                snapshot.GetLink(i).FromNodeId == nodes[0].NodeId && snapshot.GetLink(i).ToNodeId == nodes[1].NodeId);
+            var malformed = new PlatformSearchTargetResult(nodes[2].NodeId, nodes[2].NodeId,
+                true, false, 3f, new[] { firstLink, int.MaxValue });
+            var reconstruct = typeof(Platform2DPathfinder).GetMethod("ReconstructSearchPath",
+                System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic);
+            Assert.IsNotNull(reconstruct);
+            var rejected = (Platform2DPath)reconstruct.Invoke(pathfinder, new object[]
+            {
+                snapshot, snapshot.GraphRevision, nodes[0].NodeId, malformed, nodes[0].Position, nodes[2].Position
+            });
+            Assert.AreEqual(PathStatus.NotFound, rejected.Status);
+
+            PlatformPathQuerySubmission valid = pathfinder.SubmitPathQuery(new PlatformPathRequest(
+                nodes[1].Position, nodes[2].Position, projectTargetToGround: false, forceRequest: true));
+            Assert.IsTrue(valid.ImmediateResult.PathResult.Success);
+            Platform2DPath path = valid.ImmediateResult.PathResult.Path;
+            Assert.AreEqual(nodes[1].Position, path.StartPosition);
+            Assert.AreEqual(nodes[2].Position, path.EndPosition);
+            Assert.AreEqual(1, path.Commands.Count, "Rejected search links must not reappear in a later result.");
+            Assert.AreEqual(nodes[2].Position, path.Commands[0].Target);
+        }
+
+        [Test]
         public void Pathfinder_ResultCannotCommitWhileGraphBuildTransactionIsOpen()
         {
             PlatformGraphGenerator graph = CreateGraph(2, out PlatformNodeData[] nodes);
