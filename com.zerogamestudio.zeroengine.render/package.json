@@ -1,0 +1,17 @@
+{
+  "name": "com.zerogamestudio.zeroengine.render",
+  "version": "0.1.0",
+  "displayName": "ZeroEngine Render",
+  "description": "Caller-owned sprite pose history and portable flow-pattern shading primitives.",
+  "unity": "2022.3",
+  "author": {
+    "name": "ZeroGameStudio",
+    "url": "https://github.com/ZeroGameStudio-CN"
+  },
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/ZeroGameStudio-CN/zeroengine.git",
+    "directory": "com.zerogamestudio.zeroengine.render"
+  }
+}
