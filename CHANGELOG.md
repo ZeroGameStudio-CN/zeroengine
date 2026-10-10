@@ -5,6 +5,7 @@ tracked in each package's `package.json`.
 
 ## Unreleased
 
+- Expanded `com.zerogamestudio.zeroengine.multiplayer` with Multipass route selection, pre-transport game preparation, post-connect local synchronization, automatic client reconnect/restore, authenticated remote-start confirmation, and reconnect-focused coordinator tests.
 - Added root project documentation.
 - Added contribution, support, and security guidance.
 - Added MIT licensing.

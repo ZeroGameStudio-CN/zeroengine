@@ -1,0 +1,32 @@
+{
+  "name": "com.zerogamestudio.zeroengine.multiplayer",
+  "version": "0.2.0",
+  "displayName": "ZeroEngine.Multiplayer",
+  "description": "Configurable multiplayer room, FishNet connection, Steam lobby, LocalDirect, retry, and reconnect orchestration for ZeroEngine projects.",
+  "unity": "2022.3",
+  "unityRelease": "0f1",
+  "dependencies": {},
+  "keywords": [
+    "zeroengine",
+    "multiplayer",
+    "lobby",
+    "session",
+    "reconnect"
+  ],
+  "author": {
+    "name": "ZeroGameStudio"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/liuzqk/zeroengine.git",
+    "directory": "com.zerogamestudio.zeroengine.multiplayer"
+  },
+  "samples": [
+    {
+      "displayName": "LocalDirect Room UI",
+      "description": "Minimal two-process FishNet room and readiness sample.",
+      "path": "Samples~/RoomUI"
+    }
+  ],
+  "license": "MIT"
+}

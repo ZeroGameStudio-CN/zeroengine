@@ -1,0 +1,19 @@
+{
+  "name": "ZeroEngine.Multiplayer.Editor",
+  "rootNamespace": "ZeroEngine.Multiplayer.Editor",
+  "references": [
+    "ZeroEngine.Multiplayer.Core",
+    "ZeroEngine.Multiplayer.Local"
+  ],
+  "includePlatforms": [
+    "Editor"
+  ],
+  "excludePlatforms": [],
+  "allowUnsafeCode": false,
+  "overrideReferences": false,
+  "precompiledReferences": [],
+  "autoReferenced": true,
+  "defineConstraints": [],
+  "versionDefines": [],
+  "noEngineReferences": false
+}
