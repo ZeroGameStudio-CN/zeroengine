@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
 using System.Linq;
+using System.Text;
 using DocumentFormat.OpenXml;
 using DocumentFormat.OpenXml.Packaging;
 using DocumentFormat.OpenXml.Spreadsheet;
@@ -12,6 +13,18 @@ namespace ZeroGameStudio.ConfigPipeline.Editor
     public sealed class XlsxConfigWorkbookWriter
     {
         public const int WorkbookFormatVersion = 1;
+        public const string NavigationSheetName = "配置目录";
+
+        private const uint EditableCellStyle = 1U;
+        private const uint EditableTextCellStyle = 9U;
+        private const uint NavigationTitleStyle = 2U;
+        private const uint NavigationSubtitleStyle = 3U;
+        private const uint NavigationHeaderStyle = 4U;
+        private const uint NavigationLinkStyle = 5U;
+        private const uint NavigationBodyStyle = 6U;
+        private const uint BusinessHeaderStyle = 7U;
+        private const uint BusinessHeaderLinkStyle = 8U;
+        private const int MaximumTableColumnNameLength = 255;
 
         public void WriteTemplate(
             Stream destination,
@@ -51,6 +64,8 @@ namespace ZeroGameStudio.ConfigPipeline.Editor
                 WorkbookPart workbookPart = workbook.AddWorkbookPart();
                 workbookPart.Workbook = new Workbook();
                 AddStyles(workbookPart);
+                var workbookView = new WorkbookView();
+                workbookPart.Workbook.AppendChild(new BookViews(workbookView));
                 var sheets = workbookPart.Workbook.AppendChild(new Sheets());
                 uint sheetId = 1;
                 AddSchemaSheet(workbookPart, sheets, schema, tables, ref sheetId);
@@ -62,10 +77,22 @@ namespace ZeroGameStudio.ConfigPipeline.Editor
                     workbookBaseHash ?? CreateEmptySourceHash(tables),
                     ref sheetId);
                 AddEnumSheet(workbookPart, sheets, tables, ref sheetId);
-                foreach (TableDefinition table in tables)
+                uint navigationSheetIndex = sheetId - 1U;
+                workbookView.ActiveTab = navigationSheetIndex;
+                workbookView.FirstSheet = navigationSheetIndex;
+                AddNavigationSheet(workbookPart, sheets, tables, ref sheetId);
+                uint tableId = 1U;
+                for (int tableIndex = 0; tableIndex < tables.Count; tableIndex++)
                 {
-                    IReadOnlyList<TableRow> rows = FindRows(document, table);
-                    AddDataSheet(workbookPart, sheets, table, rows, ref sheetId);
+                    TableDefinition table = tables[tableIndex];
+                    AddDataSheet(
+                        workbookPart,
+                        sheets,
+                        table,
+                        FindRows(document, table),
+                        false,
+                        ref tableId,
+                        ref sheetId);
                 }
 
                 workbookPart.Workbook.Save();
@@ -118,7 +145,8 @@ namespace ZeroGameStudio.ConfigPipeline.Editor
         {
             if (arraySchema.Items?.Type != ConfigSchemaType.Object ||
                 string.IsNullOrEmpty(arraySchema.Sheet) ||
-                !sheetNames.Add(arraySchema.Sheet))
+                !sheetNames.Add(arraySchema.Sheet) ||
+                IsReservedSheetName(arraySchema.Sheet))
             {
                 throw new InvalidOperationException("Every table requires a unique sheet and object items schema.");
             }
@@ -184,14 +212,60 @@ namespace ZeroGameStudio.ConfigPipeline.Editor
         {
             WorkbookStylesPart stylesPart = workbookPart.AddNewPart<WorkbookStylesPart>();
             stylesPart.Stylesheet = new Stylesheet(
-                new Fonts(new Font()) { Count = 1 },
+                new Fonts(
+                    new Font(),
+                    new Font(
+                        new Bold(),
+                        new FontSize { Val = 16D },
+                        new Color { Rgb = "FFFFFFFF" }),
+                    new Font(
+                        new Bold(),
+                        new Color { Rgb = "FFFFFFFF" }),
+                    new Font(
+                        new Underline(),
+                        new Color { Rgb = "FF0563C1" }),
+                    new Font(new Color { Rgb = "FF666666" }),
+                    new Font(
+                        new Underline(),
+                        new Color { Rgb = "FFFFFFFF" }))
+                {
+                    Count = 6
+                },
                 new Fills(
                     new Fill(new PatternFill { PatternType = PatternValues.None }),
-                    new Fill(new PatternFill { PatternType = PatternValues.Gray125 }))
+                    new Fill(new PatternFill { PatternType = PatternValues.Gray125 }),
+                    SolidFill("FF1F4E78"),
+                    SolidFill("FF5B9BD5"))
+                {
+                    Count = 4
+                },
+                new Borders(
+                    new Border(),
+                    new Border(
+                        new LeftBorder
+                        {
+                            Style = BorderStyleValues.Thin,
+                            Color = new Color { Rgb = "FFD9E2F3" }
+                        },
+                        new RightBorder
+                        {
+                            Style = BorderStyleValues.Thin,
+                            Color = new Color { Rgb = "FFD9E2F3" }
+                        },
+                        new TopBorder
+                        {
+                            Style = BorderStyleValues.Thin,
+                            Color = new Color { Rgb = "FFD9E2F3" }
+                        },
+                        new BottomBorder
+                        {
+                            Style = BorderStyleValues.Thin,
+                            Color = new Color { Rgb = "FFD9E2F3" }
+                        },
+                        new DiagonalBorder()))
                 {
                     Count = 2
                 },
-                new Borders(new Border()) { Count = 1 },
                 new CellStyleFormats(new CellFormat()) { Count = 1 },
                 new CellFormats(
                     new CellFormat(),
@@ -199,9 +273,108 @@ namespace ZeroGameStudio.ConfigPipeline.Editor
                     {
                         ApplyProtection = true,
                         Protection = new Protection { Locked = false }
+                    },
+                    new CellFormat
+                    {
+                        FontId = 1,
+                        FillId = 2,
+                        ApplyFont = true,
+                        ApplyFill = true,
+                        ApplyAlignment = true,
+                        Alignment = new Alignment
+                        {
+                            Vertical = VerticalAlignmentValues.Center
+                        }
+                    },
+                    new CellFormat
+                    {
+                        FontId = 4,
+                        ApplyFont = true,
+                        ApplyAlignment = true,
+                        Alignment = new Alignment
+                        {
+                            Vertical = VerticalAlignmentValues.Center
+                        }
+                    },
+                    new CellFormat
+                    {
+                        FontId = 2,
+                        FillId = 3,
+                        BorderId = 1,
+                        ApplyFont = true,
+                        ApplyFill = true,
+                        ApplyBorder = true,
+                        ApplyAlignment = true,
+                        Alignment = new Alignment
+                        {
+                            Horizontal = HorizontalAlignmentValues.Center,
+                            Vertical = VerticalAlignmentValues.Center
+                        }
+                    },
+                    new CellFormat
+                    {
+                        FontId = 3,
+                        BorderId = 1,
+                        ApplyFont = true,
+                        ApplyBorder = true,
+                        ApplyAlignment = true,
+                        Alignment = new Alignment
+                        {
+                            Vertical = VerticalAlignmentValues.Center
+                        }
+                    },
+                    new CellFormat
+                    {
+                        BorderId = 1,
+                        ApplyBorder = true,
+                        ApplyAlignment = true,
+                        Alignment = new Alignment
+                        {
+                            Vertical = VerticalAlignmentValues.Center,
+                            WrapText = true
+                        }
+                    },
+                    new CellFormat
+                    {
+                        FontId = 2,
+                        FillId = 2,
+                        BorderId = 1,
+                        ApplyFont = true,
+                        ApplyFill = true,
+                        ApplyBorder = true,
+                        ApplyAlignment = true,
+                        Alignment = new Alignment
+                        {
+                            Horizontal = HorizontalAlignmentValues.Center,
+                            Vertical = VerticalAlignmentValues.Center,
+                            WrapText = true
+                        }
+                    },
+                    new CellFormat
+                    {
+                        FontId = 5,
+                        FillId = 2,
+                        BorderId = 1,
+                        ApplyFont = true,
+                        ApplyFill = true,
+                        ApplyBorder = true,
+                        ApplyAlignment = true,
+                        Alignment = new Alignment
+                        {
+                            Horizontal = HorizontalAlignmentValues.Left,
+                            Vertical = VerticalAlignmentValues.Center,
+                            WrapText = true
+                        }
+                    },
+                    new CellFormat
+                    {
+                        NumberFormatId = 49U,
+                        ApplyNumberFormat = true,
+                        ApplyProtection = true,
+                        Protection = new Protection { Locked = false }
                     })
                 {
-                    Count = 2
+                    Count = 10
                 },
                 new CellStyles(
                     new CellStyle
@@ -221,6 +394,17 @@ namespace ZeroGameStudio.ConfigPipeline.Editor
                     DefaultPivotStyle = "PivotStyleLight16"
                 });
             stylesPart.Stylesheet.Save();
+        }
+
+        private static Fill SolidFill(string color)
+        {
+            return new Fill(
+                new PatternFill(
+                    new ForegroundColor { Rgb = color },
+                    new BackgroundColor { Indexed = 64U })
+                {
+                    PatternType = PatternValues.Solid
+                });
         }
 
         private static void AddSchemaSheet(
@@ -277,7 +461,7 @@ namespace ZeroGameStudio.ConfigPipeline.Editor
                 Id = workbookPart.GetIdOfPart(worksheetPart),
                 SheetId = sheetId++,
                 Name = "_zgs_schema",
-                State = SheetStateValues.Visible
+                State = SheetStateValues.VeryHidden
             });
         }
 
@@ -371,11 +555,159 @@ namespace ZeroGameStudio.ConfigPipeline.Editor
             });
         }
 
+        private static void AddNavigationSheet(
+            WorkbookPart workbookPart,
+            Sheets sheets,
+            IReadOnlyList<TableDefinition> tables,
+            ref uint sheetId)
+        {
+            WorksheetPart worksheetPart = workbookPart.AddNewPart<WorksheetPart>();
+            var sheetViews = new SheetViews(
+                new SheetView(
+                    new Pane
+                    {
+                        VerticalSplit = 4D,
+                        TopLeftCell = "A5",
+                        ActivePane = PaneValues.BottomLeft,
+                        State = PaneStateValues.Frozen
+                    })
+                {
+                    WorkbookViewId = 0U,
+                    ShowGridLines = false,
+                    TabSelected = true,
+                    ZoomScale = 95U,
+                    ZoomScaleNormal = 100U
+                });
+            var columns = new Columns(
+                new Column { Min = 1, Max = 1, Width = 24, CustomWidth = true },
+                new Column { Min = 2, Max = 2, Width = 28, CustomWidth = true },
+                new Column { Min = 3, Max = 3, Width = 56, CustomWidth = true },
+                new Column { Min = 4, Max = 4, Width = 12, CustomWidth = true });
+            var sheetData = new SheetData();
+
+            var titleRow = new Row
+            {
+                RowIndex = 1U,
+                Height = 30D,
+                CustomHeight = true
+            };
+            Cell titleCell = TextCell("配置目录", NavigationTitleStyle);
+            titleCell.CellReference = "A1";
+            titleRow.Append(titleCell);
+            sheetData.Append(titleRow);
+
+            var subtitleRow = new Row
+            {
+                RowIndex = 2U,
+                Height = 24D,
+                CustomHeight = true
+            };
+            Cell subtitleCell = TextCell(
+                "点击 Sheet 名称进入配置；保存后回 Unity 执行 Check / Plan / Apply。",
+                NavigationSubtitleStyle);
+            subtitleCell.CellReference = "A2";
+            subtitleRow.Append(subtitleCell);
+            sheetData.Append(subtitleRow);
+
+            var headerRow = new Row
+            {
+                RowIndex = 4U,
+                Height = 22D,
+                CustomHeight = true
+            };
+            string[] headers = { "配置模块", "Sheet", "说明", "字段数" };
+            for (int columnIndex = 0; columnIndex < headers.Length; columnIndex++)
+            {
+                Cell cell = TextCell(headers[columnIndex], NavigationHeaderStyle);
+                cell.CellReference = ColumnName(columnIndex + 1) + "4";
+                headerRow.Append(cell);
+            }
+
+            sheetData.Append(headerRow);
+            var hyperlinks = new Hyperlinks();
+            for (int tableIndex = 0; tableIndex < tables.Count; tableIndex++)
+            {
+                TableDefinition table = tables[tableIndex];
+                uint rowIndex = (uint)tableIndex + 5U;
+                var row = new Row
+                {
+                    RowIndex = rowIndex,
+                    Height = 21D,
+                    CustomHeight = true
+                };
+                Cell moduleCell = TextCell(
+                    table.ArraySchema.Title ?? table.PropertyName,
+                    NavigationBodyStyle);
+                moduleCell.CellReference = "A" + rowIndex.ToString(CultureInfo.InvariantCulture);
+                row.Append(moduleCell);
+                Cell sheetCell = TextCell(table.SheetName, NavigationLinkStyle);
+                sheetCell.CellReference = "B" + rowIndex.ToString(CultureInfo.InvariantCulture);
+                row.Append(sheetCell);
+                Cell descriptionCell = TextCell(
+                    table.ArraySchema.Description ?? string.Empty,
+                    NavigationBodyStyle);
+                descriptionCell.CellReference = "C" + rowIndex.ToString(CultureInfo.InvariantCulture);
+                row.Append(descriptionCell);
+                Cell fieldCountCell = NumberCell(table.ColumnCount, NavigationBodyStyle);
+                fieldCountCell.CellReference = "D" + rowIndex.ToString(CultureInfo.InvariantCulture);
+                row.Append(fieldCountCell);
+                sheetData.Append(row);
+                hyperlinks.Append(new Hyperlink
+                {
+                    Reference = sheetCell.CellReference,
+                    Location = "'" + table.SheetName.Replace("'", "''") + "'!A2",
+                    Display = table.SheetName
+                });
+            }
+
+            var worksheet = new Worksheet(sheetViews, columns, sheetData);
+            worksheet.Append(new SheetProtection
+            {
+                Sheet = true,
+                Objects = true,
+                Scenarios = true,
+                Sort = false,
+                AutoFilter = false
+            });
+            uint lastDirectoryRow = (uint)Math.Max(4, tables.Count + 4);
+            worksheet.Append(new AutoFilter
+            {
+                Reference = "A4:D" + lastDirectoryRow.ToString(CultureInfo.InvariantCulture)
+            });
+            worksheet.Append(
+                new MergeCells(
+                    new MergeCell { Reference = "A1:D1" },
+                    new MergeCell { Reference = "A2:D2" })
+                {
+                    Count = 2U
+                });
+            worksheet.Append(hyperlinks);
+            worksheetPart.Worksheet = worksheet;
+            worksheetPart.Worksheet.Save();
+            sheets.Append(new Sheet
+            {
+                Id = workbookPart.GetIdOfPart(worksheetPart),
+                SheetId = sheetId++,
+                Name = NavigationSheetName,
+                State = SheetStateValues.Visible
+            });
+        }
+
+        private static bool IsReservedSheetName(string sheetName)
+        {
+            return string.Equals(sheetName, "_zgs_schema", StringComparison.Ordinal) ||
+                   string.Equals(sheetName, "_zgs_meta", StringComparison.Ordinal) ||
+                   string.Equals(sheetName, "_zgs_lists", StringComparison.Ordinal) ||
+                   string.Equals(sheetName, NavigationSheetName, StringComparison.Ordinal);
+        }
+
         private static void AddDataSheet(
             WorkbookPart workbookPart,
             Sheets sheets,
             TableDefinition table,
             IReadOnlyList<TableRow> rows,
+            bool selected,
+            ref uint tableId,
             ref uint sheetId)
         {
             WorksheetPart worksheetPart = workbookPart.AddNewPart<WorksheetPart>();
@@ -389,20 +721,35 @@ namespace ZeroGameStudio.ConfigPipeline.Editor
                         State = PaneStateValues.Frozen
                     })
                 {
-                    WorkbookViewId = 0U
+                    WorkbookViewId = 0U,
+                    TabSelected = selected,
+                    ShowGridLines = false,
+                    ZoomScale = 90U,
+                    ZoomScaleNormal = 100U
                 });
-            var columns = new Columns(
-                new Column
+            var columns = new Columns();
+            for (int columnIndex = 0; columnIndex < table.ColumnCount; columnIndex++)
+            {
+                columns.Append(new Column
                 {
-                    Min = 1,
-                    Max = (uint)table.ColumnCount,
-                    Style = 1,
-                    Width = 18,
+                    Min = (uint)columnIndex + 1U,
+                    Max = (uint)columnIndex + 1U,
+                    Style = EditableStyleForColumn(table, columnIndex),
+                    Width = SuggestedColumnWidth(table, columnIndex),
                     CustomWidth = true
                 });
+            }
+
             var sheetData = new SheetData();
             var machineHeader = new Row { RowIndex = 1U, Hidden = true };
-            var titleHeader = new Row { RowIndex = 2U };
+            var titleHeader = new Row
+            {
+                RowIndex = 2U,
+                Height = 28D,
+                CustomHeight = true
+            };
+            var displayHeaders = new List<string>();
+            var usedHeaders = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
             for (int columnIndex = 0; columnIndex < table.ColumnCount; columnIndex++)
             {
                 bool parentColumn = table.Parent != null && columnIndex == 0;
@@ -411,25 +758,39 @@ namespace ZeroGameStudio.ConfigPipeline.Editor
                     : table.Fields[columnIndex - (table.Parent == null ? 0 : 1)];
                 string fieldName = parentColumn ? table.ArraySchema.ParentKey : field.Name;
                 string fieldTitle = parentColumn ? table.ArraySchema.ParentKey : field.Schema.Title ?? field.Name;
+                if (parentColumn || field.Required)
+                {
+                    fieldTitle = "＊ " + fieldTitle;
+                }
+
                 Cell machineCell = TextCell(fieldName, 0);
                 machineCell.CellReference = ColumnName(columnIndex + 1) + "1";
                 machineHeader.Append(machineCell);
-                Cell titleCell = TextCell(fieldTitle, 0);
+                if (columnIndex == 0)
+                {
+                    fieldTitle = "← 配置目录 ｜ " + fieldTitle;
+                }
+
+                fieldTitle = UniqueDisplayHeader(fieldTitle, fieldName, usedHeaders);
+                displayHeaders.Add(fieldTitle);
+                Cell titleCell = TextCell(
+                    fieldTitle,
+                    columnIndex == 0 ? BusinessHeaderLinkStyle : BusinessHeaderStyle);
                 titleCell.CellReference = ColumnName(columnIndex + 1) + "2";
                 titleHeader.Append(titleCell);
             }
 
             sheetData.Append(machineHeader);
             sheetData.Append(titleHeader);
+            uint rowIndex = 3U;
             if (rows != null)
             {
-                uint rowIndex = 3;
                 foreach (TableRow tableRow in rows)
                 {
                     var row = new Row { RowIndex = rowIndex++ };
                     if (table.Parent != null)
                     {
-                        Cell parentCell = TextCell(tableRow.ParentKey, 1);
+                        Cell parentCell = TextCell(tableRow.ParentKey, EditableTextCellStyle);
                         parentCell.CellReference = "A" + (rowIndex - 1).ToString(CultureInfo.InvariantCulture);
                         row.Append(parentCell);
                     }
@@ -437,9 +798,10 @@ namespace ZeroGameStudio.ConfigPipeline.Editor
                     for (int fieldIndex = 0; fieldIndex < table.Fields.Count; fieldIndex++)
                     {
                         FieldDefinition field = table.Fields[fieldIndex];
+                        uint styleIndex = EditableStyleForSchema(field.Schema);
                         Cell cell = TryGetPath(tableRow.Value, field.Name, out ConfigNode value)
-                                 ? ValueCell(value, 1)
-                                 : new Cell { StyleIndex = 1U };
+                                 ? ValueCell(value, styleIndex)
+                                 : new Cell { StyleIndex = styleIndex };
                         cell.CellReference =
                             ColumnName(fieldIndex + table.FieldColumnOffset) +
                             (rowIndex - 1).ToString(CultureInfo.InvariantCulture);
@@ -450,42 +812,35 @@ namespace ZeroGameStudio.ConfigPipeline.Editor
                 }
             }
 
-            string lastColumn = ColumnName(table.ColumnCount);
-            var worksheet = new Worksheet(sheetViews, columns, sheetData);
-            worksheet.Append(new SheetProtection
+            if (rowIndex == 3U)
             {
-                Sheet = true,
-                Objects = true,
-                Scenarios = true,
-                InsertRows = false,
-                DeleteRows = false,
-                Sort = false,
-                AutoFilter = false
-            });
-            worksheet.Append(new AutoFilter { Reference = "A2:" + lastColumn + "2" });
+                var blankAuthoringRow = new Row { RowIndex = rowIndex++ };
+                for (int columnIndex = 0; columnIndex < table.ColumnCount; columnIndex++)
+                {
+                    blankAuthoringRow.Append(new Cell
+                    {
+                        CellReference = ColumnName(columnIndex + 1) + "3",
+                        StyleIndex = EditableStyleForColumn(table, columnIndex)
+                    });
+                }
+
+                sheetData.Append(blankAuthoringRow);
+            }
+
+            string lastColumn = ColumnName(table.ColumnCount);
+            uint lastDataRow = rowIndex - 1U;
+            var worksheet = new Worksheet(sheetViews, columns, sheetData);
             var validations = new DataValidations();
             for (int index = 0; index < table.Fields.Count; index++)
             {
                 FieldDefinition field = table.Fields[index];
-                if (field.Schema.EnumValues.Count == 0)
+                DataValidation validation = CreateFieldValidation(table, field, index);
+                if (validation == null)
                 {
                     continue;
                 }
 
-                string columnName = ColumnName(index + table.FieldColumnOffset);
-                validations.Append(new DataValidation
-                {
-                    Type = DataValidationValues.List,
-                    AllowBlank = !field.Required,
-                    ShowErrorMessage = true,
-                    ErrorTitle = "Invalid config value",
-                    Error = "Select a value declared by the Schema.",
-                    SequenceOfReferences = new ListValue<StringValue>
-                    {
-                        InnerText = columnName + "3:" + columnName + "1048576"
-                    },
-                    Formula1 = new Formula1("=" + EnumRangeName(table.SheetName, field.Name))
-                });
+                validations.Append(validation);
             }
 
             if (validations.HasChildren)
@@ -493,6 +848,23 @@ namespace ZeroGameStudio.ConfigPipeline.Editor
                 validations.Count = (uint)validations.ChildElements.Count;
                 worksheet.Append(validations);
             }
+
+            worksheet.Append(
+                new Hyperlinks(
+                    new Hyperlink
+                    {
+                        Reference = "A2",
+                        Location = "'" + NavigationSheetName + "'!A1",
+                        Display = "← 配置目录"
+                    }));
+            AddBusinessTable(
+                worksheetPart,
+                worksheet,
+                table,
+                displayHeaders,
+                lastColumn,
+                lastDataRow,
+                ref tableId);
 
             worksheetPart.Worksheet = worksheet;
             worksheetPart.Worksheet.Save();
@@ -503,6 +875,326 @@ namespace ZeroGameStudio.ConfigPipeline.Editor
                 Name = table.SheetName,
                 State = SheetStateValues.Visible
             });
+        }
+
+        private static DataValidation CreateFieldValidation(
+            TableDefinition table,
+            FieldDefinition field,
+            int fieldIndex)
+        {
+            string columnName = ColumnName(fieldIndex + table.FieldColumnOffset);
+            var validation = new DataValidation
+            {
+                AllowBlank = !field.Required,
+                ShowErrorMessage = true,
+                ShowInputMessage = true,
+                ErrorStyle = DataValidationErrorStyleValues.Stop,
+                ErrorTitle = "配置值无效",
+                Error = "请按字段约束输入；保存后仍需执行 Check。",
+                PromptTitle = ValidationTitle(field),
+                SequenceOfReferences = new ListValue<StringValue>
+                {
+                    InnerText = columnName + "3:" + columnName + "1048576"
+                }
+            };
+
+            if (field.Schema.EnumValues.Count != 0)
+            {
+                validation.Type = DataValidationValues.List;
+                validation.Prompt = field.Required ? "必填；请从下拉选项选择。" : "请从下拉选项选择。";
+                validation.Formula1 = new Formula1("=" + EnumRangeName(table.SheetName, field.Name));
+                return validation;
+            }
+
+            if (field.Schema.Type == ConfigSchemaType.Boolean)
+            {
+                validation.Type = DataValidationValues.List;
+                validation.Prompt = field.Required ? "必填；请选择 TRUE 或 FALSE。" : "请选择 TRUE 或 FALSE。";
+                validation.Formula1 = new Formula1("\"TRUE,FALSE\"");
+                return validation;
+            }
+
+            bool integer = field.Schema.Type == ConfigSchemaType.Integer;
+            if (!integer && field.Schema.Type != ConfigSchemaType.Number)
+            {
+                return null;
+            }
+
+            double? minimum = field.Schema.ExclusiveMinimum ?? field.Schema.Minimum;
+            double? maximum = field.Schema.ExclusiveMaximum ?? field.Schema.Maximum;
+            bool minimumExclusive = field.Schema.ExclusiveMinimum.HasValue;
+            bool maximumExclusive = field.Schema.ExclusiveMaximum.HasValue;
+            validation.Prompt = field.Required ? "必填；请输入符合范围的数值。" : "请输入符合范围的数值。";
+            if (!minimum.HasValue && !maximum.HasValue)
+            {
+                if (!integer)
+                {
+                    return null;
+                }
+
+                return CreateCustomNumericValidation(
+                    validation,
+                    columnName,
+                    true,
+                    null,
+                    false,
+                    null,
+                    false,
+                    field.Required);
+            }
+
+            if (minimum.HasValue && maximum.HasValue &&
+                (minimumExclusive || maximumExclusive))
+            {
+                return CreateCustomNumericValidation(
+                    validation,
+                    columnName,
+                    integer,
+                    minimum,
+                    minimumExclusive,
+                    maximum,
+                    maximumExclusive,
+                    field.Required);
+            }
+
+            validation.Type = integer ? DataValidationValues.Whole : DataValidationValues.Decimal;
+            if (minimum.HasValue && maximum.HasValue)
+            {
+                validation.Operator = DataValidationOperatorValues.Between;
+                validation.Formula1 = new Formula1(CanonicalNumberWriter.Write(minimum.Value));
+                validation.Formula2 = new Formula2(CanonicalNumberWriter.Write(maximum.Value));
+            }
+            else if (minimum.HasValue)
+            {
+                validation.Operator = minimumExclusive
+                    ? DataValidationOperatorValues.GreaterThan
+                    : DataValidationOperatorValues.GreaterThanOrEqual;
+                validation.Formula1 = new Formula1(CanonicalNumberWriter.Write(minimum.Value));
+            }
+            else
+            {
+                validation.Operator = maximumExclusive
+                    ? DataValidationOperatorValues.LessThan
+                    : DataValidationOperatorValues.LessThanOrEqual;
+                validation.Formula1 = new Formula1(CanonicalNumberWriter.Write(maximum.Value));
+            }
+
+            return validation;
+        }
+
+        private static DataValidation CreateCustomNumericValidation(
+            DataValidation validation,
+            string columnName,
+            bool integer,
+            double? minimum,
+            bool minimumExclusive,
+            double? maximum,
+            bool maximumExclusive,
+            bool required)
+        {
+            string cell = columnName + "3";
+            var conditions = new List<string> { "ISNUMBER(" + cell + ")" };
+            if (integer)
+            {
+                conditions.Add("MOD(" + cell + ",1)=0");
+            }
+
+            if (minimum.HasValue)
+            {
+                conditions.Add(
+                    cell + (minimumExclusive ? ">" : ">=") + CanonicalNumberWriter.Write(minimum.Value));
+            }
+
+            if (maximum.HasValue)
+            {
+                conditions.Add(
+                    cell + (maximumExclusive ? "<" : "<=") + CanonicalNumberWriter.Write(maximum.Value));
+            }
+
+            string predicate = "AND(" + string.Join(",", conditions) + ")";
+            validation.Type = DataValidationValues.Custom;
+            validation.Formula1 = new Formula1(
+                required ? "=" + predicate : "=OR(" + cell + "=\"\"," + predicate + ")");
+            return validation;
+        }
+
+        private static string ValidationTitle(FieldDefinition field)
+        {
+            string title = field.Schema.Title ?? field.Name;
+            return title.Length <= 30 ? title : title.Substring(0, 30);
+        }
+
+        private static void AddBusinessTable(
+            WorksheetPart worksheetPart,
+            Worksheet worksheet,
+            TableDefinition definition,
+            IReadOnlyList<string> displayHeaders,
+            string lastColumn,
+            uint lastDataRow,
+            ref uint tableId)
+        {
+            string reference = "A2:" + lastColumn + lastDataRow.ToString(CultureInfo.InvariantCulture);
+            uint currentTableId = tableId++;
+            string tableName = BusinessTableName(definition.SheetName, currentTableId);
+            var tableColumns = new TableColumns { Count = (uint)displayHeaders.Count };
+            for (int columnIndex = 0; columnIndex < displayHeaders.Count; columnIndex++)
+            {
+                tableColumns.Append(new TableColumn
+                {
+                    Id = (uint)columnIndex + 1U,
+                    Name = displayHeaders[columnIndex]
+                });
+            }
+
+            TableDefinitionPart tablePart = worksheetPart.AddNewPart<TableDefinitionPart>();
+            tablePart.Table = new Table(
+                new AutoFilter { Reference = reference },
+                tableColumns,
+                new TableStyleInfo
+                {
+                    Name = "TableStyleMedium2",
+                    ShowFirstColumn = false,
+                    ShowLastColumn = false,
+                    ShowRowStripes = true,
+                    ShowColumnStripes = false
+                })
+            {
+                Id = currentTableId,
+                Name = tableName,
+                DisplayName = tableName,
+                Reference = reference,
+                TotalsRowShown = false
+            };
+            tablePart.Table.Save();
+            worksheet.Append(
+                new TableParts(
+                    new TablePart { Id = worksheetPart.GetIdOfPart(tablePart) })
+                {
+                    Count = 1U
+                });
+        }
+
+        private static string BusinessTableName(string sheetName, uint tableId)
+        {
+            var builder = new StringBuilder("ZGS_");
+            foreach (char value in sheetName)
+            {
+                builder.Append(char.IsLetterOrDigit(value) || value == '_' ? value : '_');
+            }
+
+            builder.Append('_').Append(tableId.ToString(CultureInfo.InvariantCulture));
+            return builder.ToString();
+        }
+
+        private static string UniqueDisplayHeader(
+            string title,
+            string fieldName,
+            ISet<string> usedHeaders)
+        {
+            string candidate = FitDisplayHeader(title, string.Empty);
+            if (usedHeaders.Add(candidate))
+            {
+                return candidate;
+            }
+
+            candidate = FitDisplayHeader(title, " (" + fieldName + ")");
+            if (usedHeaders.Add(candidate))
+            {
+                return candidate;
+            }
+
+            int suffix = 2;
+            while (!usedHeaders.Add(candidate))
+            {
+                candidate = FitDisplayHeader(
+                    title,
+                    " (" + suffix.ToString(CultureInfo.InvariantCulture) + ")");
+                suffix++;
+            }
+
+            return candidate;
+        }
+
+        private static string FitDisplayHeader(string title, string suffix)
+        {
+            string safeTitle = title ?? string.Empty;
+            string safeSuffix = suffix ?? string.Empty;
+            if (safeSuffix.Length >= MaximumTableColumnNameLength)
+            {
+                return TruncateText(safeSuffix, MaximumTableColumnNameLength);
+            }
+
+            return TruncateText(
+                       safeTitle,
+                       MaximumTableColumnNameLength - safeSuffix.Length) +
+                   safeSuffix;
+        }
+
+        private static string TruncateText(string value, int maximumLength)
+        {
+            if (value.Length <= maximumLength)
+            {
+                return value;
+            }
+
+            int length = maximumLength;
+            if (length > 0 && char.IsHighSurrogate(value[length - 1]))
+            {
+                length--;
+            }
+
+            return value.Substring(0, length);
+        }
+
+        private static uint EditableStyleForColumn(TableDefinition table, int columnIndex)
+        {
+            if (table.Parent != null && columnIndex == 0)
+            {
+                return EditableTextCellStyle;
+            }
+
+            int fieldIndex = columnIndex - (table.Parent == null ? 0 : 1);
+            return EditableStyleForSchema(table.Fields[fieldIndex].Schema);
+        }
+
+        private static uint EditableStyleForSchema(ConfigSchemaNode schema)
+        {
+            return schema.Type == ConfigSchemaType.String
+                ? EditableTextCellStyle
+                : EditableCellStyle;
+        }
+
+        private static double SuggestedColumnWidth(TableDefinition table, int columnIndex)
+        {
+            bool parentColumn = table.Parent != null && columnIndex == 0;
+            if (parentColumn)
+            {
+                return 28D;
+            }
+
+            FieldDefinition field = table.Fields[columnIndex - (table.Parent == null ? 0 : 1)];
+            if (field.Schema.PrimaryKey)
+            {
+                return 28D;
+            }
+
+            if (field.Schema.Type == ConfigSchemaType.Boolean)
+            {
+                return 12D;
+            }
+
+            if (field.Schema.Type == ConfigSchemaType.Integer ||
+                field.Schema.Type == ConfigSchemaType.Number)
+            {
+                return 15D;
+            }
+
+            if (field.Schema.EnumValues.Count != 0)
+            {
+                return 20D;
+            }
+
+            return string.IsNullOrEmpty(field.Schema.Description) ? 22D : 28D;
         }
 
         private static Row RowOf(params string[] values)
@@ -522,6 +1214,16 @@ namespace ZeroGameStudio.ConfigPipeline.Editor
             {
                 DataType = CellValues.InlineString,
                 InlineString = new InlineString(new Text(value ?? string.Empty)),
+                StyleIndex = styleIndex
+            };
+        }
+
+        private static Cell NumberCell(int value, uint styleIndex)
+        {
+            return new Cell
+            {
+                DataType = CellValues.Number,
+                CellValue = new CellValue(value.ToString(CultureInfo.InvariantCulture)),
                 StyleIndex = styleIndex
             };
         }

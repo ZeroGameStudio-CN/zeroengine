@@ -1,6 +1,6 @@
 # ZeroEngine Dashboard
 
-ZeroEngine Dashboard 4.1.0 是一个可选、仅限 Unity Editor 的简体中文工作台。它从已注册 UPM 包以及项目 `Assets/**/Editor/` 中读取 `ZeroEngineDashboardModule.json`，只展示所有者明确声明的窗口、命令、资料和内嵌面板。
+ZeroEngine Dashboard 4.5.0 是一个可选、仅限 Unity Editor 的简体中文工作台。它从已注册 UPM 包以及项目 `Assets/**/Editor/` 中读取 `ZeroEngineDashboardModule.json`，只展示所有者明确声明的窗口、命令、资料和内嵌面板。
 
 ## 特性
 
@@ -11,9 +11,13 @@ ZeroEngine Dashboard 4.1.0 是一个可选、仅限 Unity Editor 的简体中文
 - `project-write` 与 `destructive` 命令执行前要求明确确认。
 - 项目适配入口可通过 `mountModuleId` 挂到已安装的通用模块，不产生独立项目 Tab。
 - 可选 `section` 将大型模块拆成可读分区；共享 `surfaceId` 可把同一宿主窗口的兼容入口合并为一行多动作。
-- 首页/工具库/系统三页采用自适应布局：首页汇总项目面板和主要流程，工具库按任务、范围、安全和可用性筛选，系统页集中健康状态与诊断。
-- 工具库以 surface 为主行，同一窗口的次要动作收入“更多”；文档类 entry 通过 `contentType: "reference"` 独立进入相关资料，不参与动作 surface。
-- 说明、使用方法、安全影响和技术来源默认进入 tooltip 或上下文抽屉；宽窗口使用右栏，窄窗口使用覆盖层。
+- 首页/系统/帮助三页采用自适应布局：首页左侧统一承载总览、全部工具和项目面板；全部工具按任务、范围、安全和可用性筛选。
+- 全部工具以 surface 为主行，同一窗口的次要动作收入“更多”；已有内嵌面板的导航入口自动隐藏，文档类 entry 通过 `contentType: "reference"` 独立进入相关资料。
+- 说明、使用方法、安全影响和技术来源进入 tooltip 或独立帮助页，不占用工作面板正文。
+- 本机记忆上次页面、首页视图、面板、搜索、筛选和主要滚动位置；旧“工具库”页面自动迁移为首页“全部工具”。
+- 工作台先显示框架再延迟发现目录和恢复面板；同一脚本 Domain 内重开复用目录快照。
+- 首页左侧模块分组可拖拽排序和折叠，面板可在组内拖拽；侧栏宽度、顺序与折叠状态均持久化，也可一键展开、折叠或恢复描述符默认顺序。
+- 系统页将包的安装状态与工作台接入状态分开，按接入情况折叠分组，并使用可读名称和紧凑版本徽标。
 - 固定 label、状态、安全提示与可操作控件 tooltip 使用简体中文；品牌缩写和技术标识保持原值。
 - 不安装包、不写 manifest、不清理 PlayerPrefs/存档、不写项目资源。
 
@@ -30,7 +34,7 @@ ZeroEngine Dashboard 4.1.0 是一个可选、仅限 Unity Editor 的简体中文
 }
 ```
 
-Unity 2022.3 不会为 Git URL 包自动解析同仓 editor-ui；两项必须直接 pin 到同一提交。4.1.0 要求 editor-ui 1.3.0。
+Unity 2022.3 不会为 Git URL 包自动解析同仓 editor-ui；两项必须直接 pin 到同一提交。4.5.0 要求 editor-ui 1.4.0。
 
 本地 `file:` 依赖只用于临时联调，不应进入共享分支。
 
@@ -81,11 +85,40 @@ Unity 2022.3 不会为 Git URL 包自动解析同仓 editor-ui；两项必须直
 
 `section`、`contentType` 与全部 `surface*` 字段均可省略。`contentType` 默认为 `action`；`reference` 只允许 `navigation` 或 `read-only`，在相关资料区展示，不进入动作 surface。只有同一展示宿主内共享 `surfaceId` 且分类、section、显示名和默认动作兼容的 action 才会合并；每个 action 仍保留独立安全等级、可用性和确认。冲突会显示诊断并安全回退为独立行。
 
-entry 可选 `usage` 只在帮助抽屉显示。module 可选 `panels` 数组声明内嵌工作区面板；每项包含稳定 `id/providerId`、显示文案、section、order、safety 与 availability。provider 通过 editor-ui 的 `IEditorWorkspacePanelProvider.CreatePanel(panelId)` 延迟创建；缺失、重复或异常 provider 不影响工具和系统页。
+entry 可选 `usage` 只在帮助抽屉显示。module 可选 `panels` 数组声明内嵌工作区面板；每项包含稳定 `id/providerId`、显示文案、section、order、safety 与 availability。provider 通过 editor-ui 的 `IEditorWorkspacePanelProvider.CreatePanel(panelId)` 延迟创建；需要画布布局的 panel 可实现 `IEditorWorkspaceFullWidthPanel` 横向铺满内容区，其他 panel 保持可读宽度约束；缺失、重复或异常 provider 不影响工具和系统页。
 
 Dashboard 4.x 仍兼容外部 schema v1，并把它标记为“旧版入口”；第一方正式描述符必须使用 v2。v1 兼容将在首个 5.x 版本移除。
 
 ## 版本历史
+
+### 4.5.0
+
+- 将工具库并入首页左侧“全部工具”，顶部只保留首页、系统和帮助。
+- 迁移旧四页导航记忆，并隐藏已由内嵌面板承载的重复导航动作。
+
+### 4.4.1
+
+- 系统页明确区分“已安装”和“是否接入工作台”，移除容易误解的“未声明工具”。
+- 已安装包按配置异常、已接入和无工作台入口分组；无入口包默认折叠，版本徽标保持紧凑。
+- 修正工作区侧栏面板按钮越过右边界的问题；选中标记严格贴合按钮可视高度，导航和页面主体保留统一安全边距。
+
+### 4.4.0
+
+- 首页左侧模块分组支持拖拽排序、折叠和持久记忆；搜索期间匹配分组临时展开。
+- 面板排序收口为组内拖拽，保持模块归属与连续分组布局。
+- 侧栏支持拖动调宽并记忆；分组与面板采用两级视觉层次，面板拖柄仅在需要时强调。
+- 导航分组视图按目录、搜索与排序变化缓存，未变化帧不再重复分组扫描。
+
+### 4.3.0
+
+- 首次打开延迟目录发现，重开复用当前 Domain 的目录快照；恢复的面板晚于工作台框架首帧创建。
+- 首页左侧面板支持拖拽排序、持久记忆和恢复默认顺序。
+
+### 4.2.0
+
+- 新增独立帮助页，移除工作区与工具列表的常驻说明抽屉。
+- 记住上次页面、面板、搜索、筛选和主要滚动位置。
+- 支持 typed action provider 通过 editor-ui 导航接口切换现有内嵌面板。
 
 ### 4.1.0
 
