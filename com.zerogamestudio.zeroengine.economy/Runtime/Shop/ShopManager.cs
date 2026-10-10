@@ -4,6 +4,7 @@ using UnityEngine;
 using ZeroEngine.Core;
 using ZeroEngine.Save;
 using ZeroEngine.Inventory;
+using ZeroEngine.Wallet;
 
 namespace ZeroEngine.Shop
 {
@@ -41,6 +42,7 @@ namespace ZeroEngine.Shop
 
         public ShopSO CurrentShop => _currentShop;
         public bool IsShopOpen => _currentShop != null;
+        public ICurrencyWallet Wallet { get; private set; }
 
         #endregion
 
@@ -190,6 +192,11 @@ namespace ZeroEngine.Shop
         /// </summary>
         public IReadOnlyList<ShopSO> GetAllShops() => _allShops;
 
+        public void SetWallet(ICurrencyWallet wallet)
+        {
+            Wallet = wallet;
+        }
+
         #endregion
 
         #region Public API - Purchase
@@ -204,7 +211,10 @@ namespace ZeroEngine.Shop
 
             // 检查商品可用性
             if (!item.CanPurchase(GetPlayerLevel(), GetPlayerReputation(), out var reason))
-                return reason;
+            {
+                if (reason != PurchaseResult.InsufficientStock && reason != PurchaseResult.LimitReached)
+                    return reason;
+            }
 
             // 检查库存
             var data = GetOrCreateData(shop.ShopId);
@@ -232,7 +242,7 @@ namespace ZeroEngine.Shop
 
             // 检查背包空间
             var inventory = InventoryManager.Instance;
-            if (inventory != null && inventory.IsFull)
+            if (inventory != null && !CanFitItem(inventory, item.Item, item.Quantity * amount))
                 return PurchaseResult.InventoryFull;
 
             return PurchaseResult.Success;
@@ -251,27 +261,48 @@ namespace ZeroEngine.Shop
             }
 
             int totalPrice = item.GetFinalBuyPrice() * amount;
+            string currencyId = item.BuyPrice.GetCurrencyId();
 
             // 扣除货币
-            ConsumeCurrency(item.BuyPrice.GetCurrencyId(), totalPrice);
+            if (!ConsumeCurrency(currencyId, totalPrice))
+            {
+                return PurchaseResult.InsufficientCurrency;
+            }
 
             // 添加物品
             var inventory = InventoryManager.Instance;
-            inventory?.AddItem(item.Item, item.Quantity * amount);
+            if (inventory != null && item.Item != null)
+            {
+                int itemAmount = item.Quantity * amount;
+                int itemCountBeforePurchase = inventory.GetItemCount(item.Item);
+                if (!inventory.AddItem(item.Item, itemAmount))
+                {
+                    int addedAmount = inventory.GetItemCount(item.Item) - itemCountBeforePurchase;
+                    if (addedAmount > 0)
+                    {
+                        inventory.RemoveItem(item.Item, addedAmount);
+                    }
+
+                    AddCurrency(currencyId, totalPrice);
+                    return PurchaseResult.InventoryFull;
+                }
+            }
 
             // 更新库存和限购
             var data = GetOrCreateData(shop.ShopId);
-            var itemData = data.GetOrCreateItemData(item.ItemId);
+            var itemData = data.GetItemData(item.ItemId);
+            if (itemData == null)
+            {
+                itemData = data.GetOrCreateItemData(item.ItemId);
+                itemData.CurrentStock = item.Stock.InitialStock;
+            }
 
             if (item.Stock.InitialStock >= 0)
             {
                 itemData.CurrentStock -= amount;
             }
 
-            if (item.Limit.MaxCount > 0)
-            {
-                itemData.PurchaseCount += amount;
-            }
+            itemData.PurchaseCount += amount;
 
             // 触发事件
             OnShopEvent?.Invoke(ShopEventArgs.Purchased(shop, item, amount, totalPrice));
@@ -460,20 +491,69 @@ namespace ZeroEngine.Shop
         // 货币系统接口 (需要外部实现)
         private bool HasCurrency(string currencyId, int amount)
         {
-            // TODO: 接入货币系统
-            return true;
+            return Wallet == null || Wallet.CanSpend(currencyId, amount);
         }
 
-        private void ConsumeCurrency(string currencyId, int amount)
+        private bool ConsumeCurrency(string currencyId, int amount)
         {
-            // TODO: 接入货币系统
+            if (Wallet != null)
+            {
+                return Wallet.TrySpend(currencyId, amount);
+            }
+
             Log($"消耗货币: {currencyId} x{amount}");
+            return true;
         }
 
         private void AddCurrency(string currencyId, int amount)
         {
-            // TODO: 接入货币系统
+            Wallet?.Add(currencyId, amount);
             Log($"获得货币: {currencyId} x{amount}");
+        }
+
+        private static bool CanFitItem(InventoryManager inventory, InventoryItemSO item, int amount)
+        {
+            if (inventory == null || item == null || amount <= 0)
+            {
+                return true;
+            }
+
+            int remaining = amount;
+            var slots = inventory.Slots;
+
+            if (item.IsStackable)
+            {
+                for (int i = 0; i < slots.Count; i++)
+                {
+                    var slot = slots[i];
+                    if (slot != null && !slot.IsEmpty && slot.ItemId == item.Id)
+                    {
+                        remaining -= Mathf.Max(0, item.MaxStack - slot.Amount);
+                        if (remaining <= 0)
+                        {
+                            return true;
+                        }
+                    }
+                }
+            }
+
+            for (int i = 0; i < slots.Count; i++)
+            {
+                var slot = slots[i];
+                if (slot != null && slot.IsEmpty)
+                {
+                    remaining -= item.MaxStack;
+                    if (remaining <= 0)
+                    {
+                        return true;
+                    }
+                }
+            }
+
+            int uncreatedSlotCount = Mathf.Max(0, InventoryManager.MaxSlots - slots.Count);
+            remaining -= uncreatedSlotCount * item.MaxStack;
+
+            return remaining <= 0;
         }
 
         private int GetPlayerLevel()
