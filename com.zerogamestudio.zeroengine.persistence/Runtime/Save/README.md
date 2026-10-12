@@ -210,6 +210,17 @@ public class AutoSaveController : MonoBehaviour
 
 ## ScreenshotCapture.cs (v1.8.0+)
 
+`CaptureAsync` captures the completed screen, including overlay UI. On supported
+devices it crops and scales on the GPU before an asynchronous thumbnail readback;
+it does not synchronously read the full screen. GPU UV orientation is normalized
+to the existing upright screenshot convention before readback. Requests are serialized so a
+render target remains valid until native completion. Unsupported devices retain
+the synchronous compatibility path. A failed readback returns null once, allowing
+`SaveSlotManager` to keep the previous preview while completing the saved data.
+Disabling or destroying the component settles outstanding callbacks; in-flight
+render targets are released by the native completion callback. `CaptureSync`
+remains available and restores the caller's render target and camera target.
+
 **用途**: 截图捕获组件
 
 ```csharp

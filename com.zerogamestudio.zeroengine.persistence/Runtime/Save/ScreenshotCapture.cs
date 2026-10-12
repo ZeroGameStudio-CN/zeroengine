@@ -1,6 +1,7 @@
 using System;
 using System.Collections;
 using UnityEngine;
+using UnityEngine.Rendering;
 using ZeroEngine.Utils;
 
 namespace ZeroEngine.Save
@@ -26,6 +27,15 @@ namespace ZeroEngine.Save
         private RenderTexture _scaleRT;
         private Texture2D _captureTexture;
         private Texture2D _screenTexture;
+        private RenderTexture _screenRT;
+        private Texture2D _readbackTexture;
+        private readonly WaitForEndOfFrame _endOfFrame = new WaitForEndOfFrame();
+        private readonly System.Collections.Generic.Queue<Action<byte[]>> _callbacks =
+            new System.Collections.Generic.Queue<Action<byte[]>>();
+        private Coroutine _captureCoroutine;
+        private bool _readbackPending;
+        private bool _destroyed;
+        private int _readbackQuality;
 
         // Camera 缓存
         private Camera _cachedCamera;
@@ -41,7 +51,7 @@ namespace ZeroEngine.Save
             _initialized = true;
 
             // 预创建纹理
-            EnsureTextures();
+            if (!_readbackPending) EnsureTextures();
         }
 
         /// <summary>
@@ -67,7 +77,15 @@ namespace ZeroEngine.Save
                 return;
             }
 
-            StartCoroutine(CaptureCoroutine(callback));
+            if (_destroyed || !isActiveAndEnabled)
+            {
+                callback?.Invoke(null);
+                return;
+            }
+
+            _callbacks.Enqueue(callback);
+            if (_captureCoroutine == null && !_readbackPending)
+                _captureCoroutine = StartCoroutine(CaptureCoroutine());
         }
 
         /// <summary>
@@ -75,7 +93,11 @@ namespace ZeroEngine.Save
         /// </summary>
         public byte[] CaptureSync()
         {
-            if (!_initialized) return null;
+            if (!_initialized || _destroyed) return null;
+
+            var previousRT = RenderTexture.active;
+            RenderTexture originalCameraRT = null;
+            Camera camera = null;
 
             try
             {
@@ -94,7 +116,8 @@ namespace ZeroEngine.Save
                 }
 
                 // 保存原始设置
-                var originalRT = _cachedCamera.targetTexture;
+                camera = _cachedCamera;
+                originalCameraRT = camera.targetTexture;
 
                 // 渲染到 RenderTexture
                 _cachedCamera.targetTexture = _renderTexture;
@@ -106,9 +129,6 @@ namespace ZeroEngine.Save
                 _captureTexture.Apply();
 
                 // 恢复设置
-                _cachedCamera.targetTexture = originalRT;
-                RenderTexture.active = null;
-
                 return _captureTexture.EncodeToJPG(_quality);
             }
             catch (Exception e)
@@ -116,40 +136,170 @@ namespace ZeroEngine.Save
                 Debug.LogError($"[ScreenshotCapture] Capture failed: {e.Message}");
                 return null;
             }
+            finally
+            {
+                if (camera != null) camera.targetTexture = originalCameraRT;
+                RenderTexture.active = previousRT;
+            }
         }
 
-        private IEnumerator CaptureCoroutine(Action<byte[]> callback)
+        private IEnumerator CaptureCoroutine()
         {
-            yield return new WaitForEndOfFrame();
+            while (_callbacks.Count > 0)
+            {
+                yield return _endOfFrame;
 
+                bool asynchronous = false;
+                if (SystemInfo.supportsAsyncGPUReadback)
+                {
+                    try
+                    {
+                        EnsureAsyncTextures();
+                        int srcX, srcY, srcWidth, srcHeight;
+                        CalculateCaptureRegion(out srcX, out srcY, out srcWidth, out srcHeight);
+                        var previousRT = RenderTexture.active;
+                        try
+                        {
+                            ScreenCapture.CaptureScreenshotIntoRenderTexture(_screenRT);
+                            var scale = new Vector2((float)srcWidth / Screen.width, (float)srcHeight / Screen.height);
+                            var offset = new Vector2((float)srcX / Screen.width, (float)srcY / Screen.height);
+                            // Readback rows must retain ReadPixels' bottom-up image convention.
+                            if (SystemInfo.graphicsUVStartsAtTop)
+                            {
+                                scale.y = -scale.y;
+                                offset.y = 1f - offset.y;
+                            }
+                            Graphics.Blit(_screenRT, _scaleRT, scale, offset);
+                        }
+                        finally { RenderTexture.active = previousRT; }
+
+                        // Keep both render targets alive until the request completes.
+                        _readbackQuality = _quality;
+                        _readbackPending = true;
+                        AsyncGPUReadback.Request(_scaleRT, 0, TextureFormat.RGBA32, CompleteReadback);
+                        asynchronous = true;
+                    }
+                    catch (Exception e)
+                    {
+                        _readbackPending = false;
+                        ZeroLog.Warning(ZeroLog.Modules.Save, $"Async screenshot unavailable: {e.Message}");
+                    }
+                }
+
+                if (asynchronous)
+                {
+                    while (_readbackPending) yield return null;
+                }
+                else
+                {
+                    CompleteCapture(CaptureScreenSync());
+                }
+            }
+            _captureCoroutine = null;
+        }
+
+        private void CompleteReadback(AsyncGPUReadbackRequest request)
+        {
             byte[] result = null;
-
             try
             {
-                EnsureCaptureTexture();
-
-                // 计算捕获区域
-                int srcX, srcY, srcWidth, srcHeight;
-                CalculateCaptureRegion(out srcX, out srcY, out srcWidth, out srcHeight);
-
-                // 复用或重建屏幕纹理
-                EnsureScreenTexture(srcWidth, srcHeight);
-
-                // 读取屏幕像素
-                _screenTexture.ReadPixels(new Rect(srcX, srcY, srcWidth, srcHeight), 0, 0);
-                _screenTexture.Apply();
-
-                // GPU 缩放
-                ScaleTextureGPU(_screenTexture, _captureTexture);
-
-                result = _captureTexture.EncodeToJPG(_quality);
+                if (!_destroyed && !request.hasError)
+                {
+                    _readbackTexture.LoadRawTextureData(request.GetData<byte>());
+                    // Encoding uses CPU pixels; uploading them back to the GPU is unnecessary.
+                    result = _readbackTexture.EncodeToJPG(_readbackQuality);
+                }
+                else if (!_destroyed)
+                {
+                    ZeroLog.Warning(ZeroLog.Modules.Save, "Async screenshot readback failed; keeping prior preview.");
+                }
             }
             catch (Exception e)
             {
-                Debug.LogError($"[ScreenshotCapture] Capture failed: {e.Message}");
+                ZeroLog.Warning(ZeroLog.Modules.Save, $"Async screenshot encoding failed: {e.Message}");
             }
+            finally
+            {
+                _readbackPending = false;
+                if (_destroyed) ReleaseAsyncTextures();
+            }
+            if (!_destroyed) CompleteCapture(result);
+            if (!_destroyed)
+            {
+                if (!isActiveAndEnabled)
+                    while (_callbacks.Count > 0) CompleteCapture(null);
+                else if (_captureCoroutine == null && _callbacks.Count > 0)
+                    _captureCoroutine = StartCoroutine(CaptureCoroutine());
+            }
+        }
 
-            callback?.Invoke(result);
+        private void CompleteCapture(byte[] bytes)
+        {
+            if (_callbacks.Count == 0) return;
+            var callback = _callbacks.Dequeue();
+            try { callback?.Invoke(bytes); }
+            catch (Exception e) { Debug.LogException(e); }
+        }
+
+        private byte[] CaptureScreenSync()
+        {
+            var previousRT = RenderTexture.active;
+            try
+            {
+                EnsureCaptureTexture();
+                int srcX, srcY, srcWidth, srcHeight;
+                CalculateCaptureRegion(out srcX, out srcY, out srcWidth, out srcHeight);
+                EnsureScreenTexture(srcWidth, srcHeight);
+                RenderTexture.active = null;
+                _screenTexture.ReadPixels(new Rect(srcX, srcY, srcWidth, srcHeight), 0, 0);
+                _screenTexture.Apply();
+                ScaleTextureGPU(_screenTexture, _captureTexture);
+                return _captureTexture.EncodeToJPG(_quality);
+            }
+            catch (Exception e)
+            {
+                ZeroLog.Warning(ZeroLog.Modules.Save, $"Screenshot capture failed: {e.Message}");
+                return null;
+            }
+            finally { RenderTexture.active = previousRT; }
+        }
+
+        private void EnsureAsyncTextures()
+        {
+            if (_screenRT == null || _screenRT.width != Screen.width || _screenRT.height != Screen.height)
+            {
+                ReleaseRenderTexture(ref _screenRT);
+                _screenRT = new RenderTexture(Screen.width, Screen.height, 0, RenderTextureFormat.ARGB32);
+                _screenRT.Create();
+            }
+            if (_scaleRT == null || _scaleRT.width != _width || _scaleRT.height != _height)
+            {
+                ReleaseRenderTexture(ref _scaleRT);
+                _scaleRT = new RenderTexture(_width, _height, 0, RenderTextureFormat.ARGB32);
+                _scaleRT.filterMode = FilterMode.Bilinear;
+                _scaleRT.Create();
+            }
+            if (_readbackTexture == null || _readbackTexture.width != _width || _readbackTexture.height != _height)
+            {
+                if (_readbackTexture != null) Destroy(_readbackTexture);
+                _readbackTexture = new Texture2D(_width, _height, TextureFormat.RGBA32, false);
+            }
+        }
+
+        private void ReleaseRenderTexture(ref RenderTexture texture)
+        {
+            if (texture == null) return;
+            texture.Release();
+            Destroy(texture);
+            texture = null;
+        }
+
+        private void ReleaseAsyncTextures()
+        {
+            ReleaseRenderTexture(ref _screenRT);
+            ReleaseRenderTexture(ref _scaleRT);
+            if (_readbackTexture != null) Destroy(_readbackTexture);
+            _readbackTexture = null;
         }
 
         private void CalculateCaptureRegion(out int srcX, out int srcY, out int srcWidth, out int srcHeight)
@@ -244,16 +394,16 @@ namespace ZeroEngine.Save
 
         private void OnDestroy()
         {
+            _destroyed = true;
+            StopAllCoroutines();
+            _captureCoroutine = null;
+            while (_callbacks.Count > 0) CompleteCapture(null);
+            // The native completion callback owns destruction of any in-flight target.
+            if (!_readbackPending) ReleaseAsyncTextures();
             if (_renderTexture != null)
             {
                 _renderTexture.Release();
                 Destroy(_renderTexture);
-            }
-
-            if (_scaleRT != null)
-            {
-                _scaleRT.Release();
-                Destroy(_scaleRT);
             }
 
             if (_captureTexture != null)
@@ -265,6 +415,14 @@ namespace ZeroEngine.Save
             {
                 Destroy(_screenTexture);
             }
+        }
+
+        private void OnDisable()
+        {
+            StopAllCoroutines();
+            _captureCoroutine = null;
+            if (!_readbackPending)
+                while (_callbacks.Count > 0) CompleteCapture(null);
         }
     }
 }
