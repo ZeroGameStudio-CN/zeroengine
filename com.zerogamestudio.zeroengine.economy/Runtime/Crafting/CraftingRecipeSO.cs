@@ -100,18 +100,11 @@ namespace ZeroEngine.Crafting
         /// </summary>
         public bool CheckIngredients(Inventory.InventoryManager inventory, int batchCount = 1)
         {
-            if (inventory == null) return false;
-
-            for (int i = 0; i < Ingredients.Count; i++)
+            if (inventory == null || !CraftingBatchPlan.TryIngredients(this, batchCount, out var required, out _))
+                return false;
+            foreach (var item in required)
             {
-                var ingredient = Ingredients[i];
-                if (ingredient.Item == null) continue;
-
-                int required = ingredient.Amount * batchCount;
-                if (inventory.GetItemCount(ingredient.Item) < required)
-                {
-                    return false;
-                }
+                if (inventory.GetItemCount(item.Item) < item.Amount) return false;
             }
             return true;
         }
@@ -121,16 +114,9 @@ namespace ZeroEngine.Crafting
         /// </summary>
         public void ConsumeIngredients(Inventory.InventoryManager inventory, int batchCount = 1)
         {
-            if (inventory == null) return;
-
-            for (int i = 0; i < Ingredients.Count; i++)
-            {
-                var ingredient = Ingredients[i];
-                if (ingredient.Item == null || !ingredient.IsConsumed) continue;
-
-                int amount = ingredient.Amount * batchCount;
-                inventory.RemoveItem(ingredient.Item, amount);
-            }
+            if (CheckIngredients(inventory, batchCount)
+                && CraftingBatchPlan.TryIngredients(this, batchCount, out _, out var consumed))
+                inventory.TryExchangeItems(consumed, null);
         }
 
         /// <summary>
@@ -147,20 +133,20 @@ namespace ZeroEngine.Crafting
         /// </summary>
         public int CalculateMaxCraftCount(Inventory.InventoryManager inventory)
         {
-            if (inventory == null) return 0;
-
-            int maxCount = int.MaxValue;
-
-            for (int i = 0; i < Ingredients.Count; i++)
+            if (inventory == null || !CraftingBatchPlan.TryIngredients(this, 1, out var required, out var consumed))
+                return 0;
+            var maxCount = int.MaxValue;
+            foreach (var item in required)
             {
-                var ingredient = Ingredients[i];
-                if (ingredient.Item == null || !ingredient.IsConsumed) continue;
-
-                int have = inventory.GetItemCount(ingredient.Item);
-                int canMake = have / ingredient.Amount;
-                maxCount = Mathf.Min(maxCount, canMake);
+                var amountConsumed = 0;
+                foreach (var input in consumed)
+                {
+                    if (input.Item.Id == item.Item.Id) amountConsumed = input.Amount;
+                }
+                var available = inventory.GetItemCount(item.Item) - (item.Amount - amountConsumed);
+                if (available < 0) return 0;
+                if (amountConsumed > 0) maxCount = Math.Min(maxCount, available / amountConsumed);
             }
-
             return maxCount == int.MaxValue ? 0 : maxCount;
         }
 

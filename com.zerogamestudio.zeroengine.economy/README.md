@@ -42,3 +42,32 @@ var results = LootTableManager.Instance.Roll(lootTable);
 // 合成
 CraftingManager.Instance.StartCraft(recipe);
 ```
+
+## Crafting transactions and consumer ownership
+
+Before `Start`, a consumer with its own save pipeline calls
+`InventoryManager.ConfigurePersistence(...)` and
+`CraftingManager.ConfigureDependencies(inventory, registerSave, unregisterSave, unlockCondition)`.
+Registration/unregistration delegates must belong to the same save owner. Null paired delegates
+select explicitly external save ownership. Configured operations do not create legacy save owners
+or write the default save file; restore inventory through `ImportSaveData`.
+Unconfigured consumers retain the legacy startup route, while destruction only unregisters
+from the owner that actually registered the component.
+
+`CanCraft` validates positive checked batches, aggregate duplicate ingredients, reusable tools,
+recipe data, workbench, skill and final inventory capacity. `StartCraft` accepts an optional
+explicit request ID overload; repeating an identical committed request returns its receipt.
+A different payload using the same ID is rejected. Materials, result, experience and pending
+state commit before observers receive events. A capacity rejection leaves slots unchanged.
+
+Timed work stores the rolled outcome and consumed/output item IDs and amounts. Full inventory
+at completion retains the pending work without rerolling or awarding experience. Cancel always
+refunds consumed escrow independently of the failed-craft material policy; an incomplete refund
+leaves the craft pending. Use the stable progress ID overload for UI requests; the index overload
+remains for older callers. Save exports and progress views are detached copies. Restore validates
+duplicate identities and pending/receipt consistency before replacing live state; older progress
+is upgraded once when its recipe is available. Its serialized list position distinguishes identical concurrent legacy rows; migrated IDs remain unchanged on later saves. Missing external unlock predicates fail closed.
+
+Retained package regressions cover transactions in `Tests/Editor/CraftingTransactionTests.cs` and real Start/Update/OnDestroy ownership in `Tests/PlayMode/CraftingLifecycleTests.cs`. Enable the
+`com.zerogamestudio.zeroengine.economy` package in a consumer's UPM `testables` for Unity Test
+Framework execution. Real consumer UI, save/continue and device evidence remain separate gates.

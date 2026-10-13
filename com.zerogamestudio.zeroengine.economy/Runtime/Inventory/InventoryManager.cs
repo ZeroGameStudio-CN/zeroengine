@@ -7,7 +7,7 @@ using ZeroEngine.Utils;
 
 namespace ZeroEngine.Inventory
 {
-    public class InventoryManager : Singleton<InventoryManager>, ISaveable
+    public partial class InventoryManager : Singleton<InventoryManager>, ISaveable
     {
         public const int MaxSlots = 30;
         private List<InventorySlot> _slots = new List<InventorySlot>();
@@ -16,6 +16,26 @@ namespace ZeroEngine.Inventory
 
         // Database of all items to re-link on load
         private Dictionary<string, InventoryItemSO> _itemDatabase = new Dictionary<string, InventoryItemSO>();
+
+        private bool _persistenceConfigured;
+        private bool _persistenceRegistered;
+        private Action<ISaveable> _registerPersistence;
+        private Action<ISaveable> _unregisterPersistence;
+        private Action<ISaveable> _registeredPersistenceOwner;
+        private Action _persistInventory;
+
+        /// <summary>Bind a consumer-owned save lifecycle before Start; null callbacks mean externally managed saves.</summary>
+        public void ConfigurePersistence(Action<ISaveable> register = null,
+            Action<ISaveable> unregister = null, Action persist = null)
+        {
+            if (_persistenceRegistered) throw new InvalidOperationException("Inventory save owner is already registered.");
+            if ((register == null) != (unregister == null))
+                throw new ArgumentException("Save registration and unregistration must have the same owner.");
+            _persistenceConfigured = true;
+            _registerPersistence = register;
+            _unregisterPersistence = unregister;
+            _persistInventory = persist;
+        }
 
         #region Events (v1.2.0+)
 
@@ -43,14 +63,28 @@ namespace ZeroEngine.Inventory
 
         private void Start()
         {
-            // 注册到存档系统
-            SaveSlotManager.Instance?.Register(this);
+            if (_persistenceConfigured)
+            {
+                _registerPersistence?.Invoke(this);
+                _registeredPersistenceOwner = _unregisterPersistence;
+            }
+            else
+            {
+                var owner = SaveSlotManager.Instance;
+                if (owner == null) return;
+                owner.Register(this);
+                _registeredPersistenceOwner = saveable => { if (owner != null) owner.Unregister(saveable); };
+            }
+            _persistenceRegistered = true;
         }
 
         protected override void OnDestroy()
         {
-            base.OnDestroy();
-            SaveSlotManager.Instance?.Unregister(this);
+            var unregister = _registeredPersistenceOwner;
+            _registeredPersistenceOwner = null;
+            _persistenceRegistered = false;
+            try { unregister?.Invoke(this); }
+            finally { base.OnDestroy(); }
         }
 
         #region ISaveable Implementation
@@ -331,7 +365,7 @@ namespace ZeroEngine.Inventory
 
         public int GetItemCount(string itemId)
         {
-            int count = 0;
+            long count = 0;
             foreach (var slot in _slots)
             {
                 if (!slot.IsEmpty && slot.ItemId == itemId)
@@ -339,7 +373,7 @@ namespace ZeroEngine.Inventory
                     count += slot.Amount;
                 }
             }
-            return count;
+            return (int)Math.Min(int.MaxValue, count);
         }
 
         /// <summary>
@@ -619,6 +653,11 @@ namespace ZeroEngine.Inventory
         /// </summary>
         private void SaveInventory()
         {
+            if (_persistenceConfigured)
+            {
+                _persistInventory?.Invoke();
+                return;
+            }
             // 如果使用槽位系统，则跳过直接保存（由 SaveSlotManager 统一管理）
             if (SaveSlotManager.Instance != null && SaveSlotManager.Instance.HasLoadedSave)
             {
@@ -633,6 +672,8 @@ namespace ZeroEngine.Inventory
         /// </summary>
         public void LoadInventory()
         {
+            if (_persistenceConfigured)
+                throw new InvalidOperationException("Configured inventory saves must be restored through ImportSaveData.");
             _slots = SaveManager.Instance.Load("PlayerInventory", new List<InventorySlot>());
 
             if (_slots.Count == 0)

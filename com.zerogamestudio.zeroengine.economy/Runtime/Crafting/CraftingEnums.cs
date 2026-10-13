@@ -82,7 +82,14 @@ namespace ZeroEngine.Crafting
         RecipeLocked,
 
         /// <summary>工作台不匹配</summary>
-        WrongWorkbench
+        WrongWorkbench,
+
+        InvalidRequest,
+        InvalidRecipe,
+        InventoryUnavailable,
+        InventoryFull,
+        Busy,
+        Cancelled
     }
 
     /// <summary>
@@ -103,7 +110,9 @@ namespace ZeroEngine.Crafting
         RecipeUnlocked,
 
         /// <summary>技能升级</summary>
-        SkillLevelUp
+        SkillLevelUp,
+        Cancelled,
+        Blocked
     }
 
     /// <summary>
@@ -176,6 +185,14 @@ namespace ZeroEngine.Crafting
     [Serializable]
     public class CraftingProgress
     {
+        public string ProgressId;
+        public bool OutcomePrepared;
+        public CraftingResult Result;
+        public CraftingResult LastResult;
+        public List<CraftingItemAmount> ConsumedItems;
+        public List<CraftingItemAmount> OutputItems;
+        public string SkillId;
+        public int ExperienceReward;
         /// <summary>配方ID</summary>
         public string RecipeId;
 
@@ -225,6 +242,7 @@ namespace ZeroEngine.Crafting
         public CraftingResult Result;
         public List<RecipeOutput> Outputs;
         public int BatchCount;
+        public string ProgressId;
 
         public static CraftingEventArgs Started(CraftingRecipeSO recipe, int batchCount)
         {
@@ -283,15 +301,16 @@ namespace ZeroEngine.Crafting
         public int Experience;
 
         /// <summary>升级所需经验</summary>
-        public int ExpToNextLevel => Level * 100;
+        public int ExpToNextLevel => (int)Math.Min(int.MaxValue, (long)Math.Max(1, Level) * 100);
 
         /// <summary>添加经验</summary>
         public bool AddExperience(int exp, out int levelUps)
         {
             levelUps = 0;
+            if (exp < 0 || Experience < 0 || (long)Experience + exp > int.MaxValue) return false;
             Experience += exp;
 
-            while (Experience >= ExpToNextLevel)
+            while (Level < int.MaxValue && Experience >= ExpToNextLevel)
             {
                 Experience -= ExpToNextLevel;
                 Level++;

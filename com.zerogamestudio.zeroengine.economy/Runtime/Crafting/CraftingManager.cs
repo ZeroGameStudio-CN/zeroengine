@@ -10,7 +10,7 @@ namespace ZeroEngine.Crafting
     /// 合成系统管理器
     /// 负责配方解锁、合成逻辑和技能经验
     /// </summary>
-    public class CraftingManager : MonoSingleton<CraftingManager>, ISaveable
+    public partial class CraftingManager : MonoSingleton<CraftingManager>, ISaveable
     {
         [Header("配置")]
         [Tooltip("所有配方")]
@@ -41,7 +41,6 @@ namespace ZeroEngine.Crafting
             new Dictionary<RecipeCategory, List<CraftingRecipeSO>>();
 
         // 临时列表
-        private readonly List<RecipeOutput> _tempOutputList = new List<RecipeOutput>(8);
         private readonly List<CraftingRecipeSO> _tempRecipeList = new List<CraftingRecipeSO>(32);
 
         #region Events
@@ -70,58 +69,31 @@ namespace ZeroEngine.Crafting
 
         public void Register()
         {
-            SaveSlotManager.Instance?.Register(this);
+            RegisterWithSaveProvider();
         }
 
         public void Unregister()
         {
-            SaveSlotManager.Instance?.Unregister(this);
+            ReleaseSaveRegistration();
         }
 
         public object ExportSaveData()
         {
-            return new CraftingSaveData
-            {
-                UnlockedRecipes = new List<string>(_unlockedRecipes),
-                ActiveProgress = new List<CraftingProgress>(_activeProgress),
-                SkillData = new Dictionary<string, CraftingSkillData>(_skillData)
-            };
+            return CaptureState();
         }
 
         public void ImportSaveData(object data)
         {
-            if (data is not CraftingSaveData saveData) return;
-
-            _unlockedRecipes.Clear();
-            if (saveData.UnlockedRecipes != null)
-            {
-                foreach (var id in saveData.UnlockedRecipes)
-                {
-                    _unlockedRecipes.Add(id);
-                }
-            }
-
-            _activeProgress.Clear();
-            if (saveData.ActiveProgress != null)
-            {
-                _activeProgress.AddRange(saveData.ActiveProgress);
-            }
-
-            _skillData.Clear();
-            if (saveData.SkillData != null)
-            {
-                foreach (var kvp in saveData.SkillData)
-                {
-                    _skillData[kvp.Key] = kvp.Value;
-                }
-            }
+            if (data is CraftingSaveData saveData) RestoreState(saveData);
         }
 
         public void ResetToDefault()
         {
+            if (_isMutating) throw new InvalidOperationException("Cannot reset during a crafting transaction.");
             _unlockedRecipes.Clear();
             _activeProgress.Clear();
             _skillData.Clear();
+            _receipts.Clear();
 
             // 解锁默认配方
             foreach (var recipe in _allRecipes)
@@ -148,7 +120,7 @@ namespace ZeroEngine.Crafting
             Register();
 
             // 初始化默认解锁
-            if (_unlockedRecipes.Count == 0)
+            if (!_stateImported && _unlockedRecipes.Count == 0 && _activeProgress.Count == 0 && _receipts.Count == 0)
             {
                 ResetToDefault();
             }
@@ -162,8 +134,8 @@ namespace ZeroEngine.Crafting
 
         protected override void OnDestroy()
         {
-            Unregister();
-            base.OnDestroy();
+            try { Unregister(); }
+            finally { base.OnDestroy(); }
         }
 
         #endregion
@@ -175,7 +147,7 @@ namespace ZeroEngine.Crafting
         /// </summary>
         public void RegisterRecipe(CraftingRecipeSO recipe)
         {
-            if (recipe == null) return;
+            if (recipe == null || string.IsNullOrWhiteSpace(recipe.RecipeId)) return;
             if (_recipeLookup.ContainsKey(recipe.RecipeId)) return;
 
             _allRecipes.Add(recipe);
@@ -212,20 +184,11 @@ namespace ZeroEngine.Crafting
         /// </summary>
         public bool TryUnlockRecipe(CraftingRecipeSO recipe)
         {
-            if (recipe == null) return false;
-            if (_unlockedRecipes.Contains(recipe.RecipeId)) return false;
-
-            // 检查解锁条件
-            if (!CheckUnlockCondition(recipe))
-            {
-                Log($"配方解锁条件未满足: {recipe.DisplayName}");
-                return false;
-            }
-
+            if (_isMutating || recipe == null || IsUnlocked(recipe) || !CheckUnlockCondition(recipe)) return false;
+            RegisterRecipe(recipe);
+            if (GetRecipe(recipe.RecipeId) != recipe) return false;
             _unlockedRecipes.Add(recipe.RecipeId);
-            OnCraftingEvent?.Invoke(CraftingEventArgs.RecipeUnlocked(recipe));
-            Log($"配方解锁: {recipe.DisplayName}");
-
+            PublishCrafting(CraftingEventArgs.RecipeUnlocked(recipe));
             return true;
         }
 
@@ -234,33 +197,24 @@ namespace ZeroEngine.Crafting
         /// </summary>
         public bool LearnRecipeFromItem(Inventory.InventoryItemSO learnItem)
         {
-            if (learnItem == null) return false;
-
-            var inventory = Inventory.InventoryManager.Instance;
-            if (inventory == null || inventory.GetItemCount(learnItem) <= 0)
-            {
-                return false;
-            }
-
-            // 查找可学习的配方
+            if (_isMutating || learnItem == null) return false;
+            var inventory = ResolveInventory();
+            if (inventory == null || inventory.GetItemCount(learnItem) <= 0) return false;
             foreach (var recipe in _allRecipes)
             {
-                if (recipe.UnlockType == RecipeUnlockType.Item &&
-                    recipe.UnlockItem == learnItem &&
-                    !IsUnlocked(recipe))
+                if (recipe == null || recipe.UnlockType != RecipeUnlockType.Item || recipe.UnlockItem != learnItem
+                    || IsUnlocked(recipe)) continue;
+                _isMutating = true;
+                try
                 {
-                    // 消耗学习物品
-                    inventory.RemoveItem(learnItem, 1);
-
-                    // 解锁配方
-                    _unlockedRecipes.Add(recipe.RecipeId);
-                    OnCraftingEvent?.Invoke(CraftingEventArgs.RecipeUnlocked(recipe));
-                    Log($"学习配方: {recipe.DisplayName}");
-
+                    if (!inventory.TryExchangeItems(
+                        new[] { new Inventory.InventoryItemAmount(learnItem, 1) }, null, !_dependenciesConfigured,
+                        () => _unlockedRecipes.Add(recipe.RecipeId))) return false;
+                    PublishCrafting(CraftingEventArgs.RecipeUnlocked(recipe));
                     return true;
                 }
+                finally { _isMutating = false; }
             }
-
             return false;
         }
 
@@ -269,38 +223,29 @@ namespace ZeroEngine.Crafting
         /// </summary>
         public CraftingResult CanCraft(CraftingRecipeSO recipe, string currentWorkbench = null, int batchCount = 1)
         {
-            if (recipe == null)
+            if (batchCount <= 0) return CraftingResult.InvalidRequest;
+            if (recipe == null || !IsUnlocked(recipe) || GetRecipe(recipe.RecipeId) != recipe)
                 return CraftingResult.RecipeLocked;
-
-            // 检查解锁
-            if (!IsUnlocked(recipe))
-                return CraftingResult.RecipeLocked;
-
-            // 检查工作台
-            if (!string.IsNullOrEmpty(recipe.RequiredWorkbench) &&
-                recipe.RequiredWorkbench != currentWorkbench)
-            {
+            if (!CraftingBatchPlan.TryCreate(recipe, batchCount, out var plan)) return CraftingResult.InvalidRecipe;
+            if (!string.IsNullOrEmpty(recipe.RequiredWorkbench) && recipe.RequiredWorkbench != currentWorkbench)
                 return CraftingResult.WrongWorkbench;
-            }
-
-            // 检查技能等级
-            if (recipe.RequiredSkillLevel > 0 && !string.IsNullOrEmpty(recipe.SkillId))
+            if (recipe.RequiredSkillLevel > 0 && !string.IsNullOrEmpty(recipe.SkillId)
+                && GetSkillLevel(recipe.SkillId) < recipe.RequiredSkillLevel)
+                return CraftingResult.RecipeLocked;
+            if (!CanAwardExperience(recipe.SkillId, plan.Experience)) return CraftingResult.InvalidRequest;
+            var inventory = ResolveInventory();
+            if (inventory == null) return CraftingResult.InventoryUnavailable;
+            foreach (var item in plan.Required)
             {
-                int level = GetSkillLevel(recipe.SkillId);
-                if (level < recipe.RequiredSkillLevel)
-                {
-                    return CraftingResult.RecipeLocked;
-                }
+                if (inventory.GetItemData(item.Item.Id) != item.Item) return CraftingResult.InvalidRecipe;
+                if (inventory.GetItemCount(item.Item) < item.Amount) return CraftingResult.InsufficientMaterials;
             }
-
-            // 检查材料
-            var inventory = Inventory.InventoryManager.Instance;
-            if (!recipe.CheckIngredients(inventory, batchCount))
+            foreach (var item in plan.MaximumOutputs)
             {
-                return CraftingResult.InsufficientMaterials;
+                if (inventory.GetItemData(item.Item.Id) != item.Item) return CraftingResult.InvalidRecipe;
             }
-
-            return CraftingResult.Success;
+            return inventory.CanExchangeItems(plan.Consumed, plan.MaximumOutputs)
+                ? CraftingResult.Success : CraftingResult.InventoryFull;
         }
 
         /// <summary>
@@ -308,39 +253,7 @@ namespace ZeroEngine.Crafting
         /// </summary>
         public CraftingResult StartCraft(CraftingRecipeSO recipe, string currentWorkbench = null, int batchCount = 1)
         {
-            // 检查是否可以合成
-            var canCraft = CanCraft(recipe, currentWorkbench, batchCount);
-            if (canCraft != CraftingResult.Success)
-            {
-                return canCraft;
-            }
-
-            var inventory = Inventory.InventoryManager.Instance;
-
-            // 消耗材料
-            recipe.ConsumeIngredients(inventory, batchCount);
-
-            // 即时合成
-            if (recipe.CraftTime <= 0)
-            {
-                return CompleteCraft(recipe, batchCount);
-            }
-
-            // 延时合成
-            long now = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
-            var progress = new CraftingProgress
-            {
-                RecipeId = recipe.RecipeId,
-                StartTime = now,
-                EndTime = now + (long)(recipe.CraftTime * batchCount),
-                BatchCount = batchCount
-            };
-
-            _activeProgress.Add(progress);
-            OnCraftingEvent?.Invoke(CraftingEventArgs.Started(recipe, batchCount));
-            Log($"开始合成: {recipe.DisplayName} x{batchCount}");
-
-            return CraftingResult.Success;
+            return StartCraft(recipe, currentWorkbench, batchCount, Guid.NewGuid().ToString("N"));
         }
 
         /// <summary>
@@ -348,33 +261,8 @@ namespace ZeroEngine.Crafting
         /// </summary>
         public bool CancelCraft(int progressIndex)
         {
-            if (progressIndex < 0 || progressIndex >= _activeProgress.Count)
-                return false;
-
-            var progress = _activeProgress[progressIndex];
-            var recipe = GetRecipe(progress.RecipeId);
-
-            // 返还材料（如果配置了）
-            if (recipe != null && recipe.KeepMaterialsOnFail)
-            {
-                var inventory = Inventory.InventoryManager.Instance;
-                if (inventory != null)
-                {
-                    for (int i = 0; i < recipe.Ingredients.Count; i++)
-                    {
-                        var ingredient = recipe.Ingredients[i];
-                        if (ingredient.Item != null && ingredient.IsConsumed)
-                        {
-                            inventory.AddItem(ingredient.Item, ingredient.Amount * progress.BatchCount);
-                        }
-                    }
-                }
-            }
-
-            _activeProgress.RemoveAt(progressIndex);
-            Log($"取消合成: {recipe?.DisplayName}");
-
-            return true;
+            return progressIndex >= 0 && progressIndex < _activeProgress.Count
+                && TryCancelCraft(_activeProgress[progressIndex].ProgressId, out _);
         }
 
         /// <summary>
@@ -406,6 +294,7 @@ namespace ZeroEngine.Crafting
         /// </summary>
         public CraftingRecipeSO GetRecipe(string recipeId)
         {
+            if (string.IsNullOrEmpty(recipeId)) return null;
             _recipeLookup.TryGetValue(recipeId, out var recipe);
             return recipe;
         }
@@ -445,7 +334,7 @@ namespace ZeroEngine.Crafting
         /// <summary>
         /// 获取进行中的合成列表
         /// </summary>
-        public IReadOnlyList<CraftingProgress> GetActiveProgress() => _activeProgress;
+        public IReadOnlyList<CraftingProgress> GetActiveProgress() => _activeProgress.ConvertAll(CloneProgress);
 
         /// <summary>
         /// 获取配方书列表
@@ -457,8 +346,9 @@ namespace ZeroEngine.Crafting
         /// </summary>
         public void ForceUnlock(CraftingRecipeSO recipe)
         {
-            if (recipe == null) return;
-            _unlockedRecipes.Add(recipe.RecipeId);
+            if (recipe == null || _isMutating) return;
+            RegisterRecipe(recipe);
+            if (GetRecipe(recipe.RecipeId) == recipe) _unlockedRecipes.Add(recipe.RecipeId);
         }
 
         #endregion
@@ -487,153 +377,25 @@ namespace ZeroEngine.Crafting
 
         private bool CheckUnlockCondition(CraftingRecipeSO recipe)
         {
-            switch (recipe.UnlockType)
-            {
-                case RecipeUnlockType.Default:
-                    return true;
-
-                case RecipeUnlockType.Level:
-                    // 需要外部等级系统
-                    return true;
-
-                case RecipeUnlockType.Quest:
-                    // 需要外部任务系统
-                    return true;
-
-                case RecipeUnlockType.Achievement:
-#if ZEROENGINE_NARRATIVE
-                    var achievementMgr = Achievement.AchievementManager.Instance;
-                    if (achievementMgr != null && !string.IsNullOrEmpty(recipe.UnlockAchievementId))
-                    {
-                        return achievementMgr.IsUnlocked(recipe.UnlockAchievementId);
-                    }
-#endif
-                    return true;
-
-                case RecipeUnlockType.Item:
-                    // 物品解锁需要通过 LearnRecipeFromItem 方法
-                    return false;
-
-                case RecipeUnlockType.Relationship:
-                    // 需要 RelationshipManager
-                    return true;
-
-                case RecipeUnlockType.Custom:
-                    if (_customUnlockChecks.TryGetValue(recipe.CustomUnlockId, out var check))
-                    {
-                        return check();
-                    }
-                    return true;
-
-                default:
-                    return true;
-            }
-        }
-
-        private CraftingResult CompleteCraft(CraftingRecipeSO recipe, int batchCount)
-        {
-            _tempOutputList.Clear();
-
-            // 计算成功/失败
-            bool success = UnityEngine.Random.value <= recipe.SuccessRate;
-            bool greatSuccess = success && UnityEngine.Random.value <= recipe.GreatSuccessRate;
-
-            CraftingResult result;
-
-            if (!success)
-            {
-                result = recipe.KeepMaterialsOnFail
-                    ? CraftingResult.FailedKeepMaterials
-                    : CraftingResult.FailedLoseMaterials;
-
-                // 返还材料
-                if (recipe.KeepMaterialsOnFail)
-                {
-                    var inventory = Inventory.InventoryManager.Instance;
-                    if (inventory != null)
-                    {
-                        for (int i = 0; i < recipe.Ingredients.Count; i++)
-                        {
-                            var ingredient = recipe.Ingredients[i];
-                            if (ingredient.Item != null && ingredient.IsConsumed)
-                            {
-                                inventory.AddItem(ingredient.Item, ingredient.Amount * batchCount);
-                            }
-                        }
-                    }
-                }
-
-                OnCraftingEvent?.Invoke(CraftingEventArgs.Failed(recipe, result));
-                Log($"合成失败: {recipe.DisplayName}");
-                return result;
-            }
-
-            result = greatSuccess ? CraftingResult.GreatSuccess : CraftingResult.Success;
-
-            // 发放产出
-            var inventoryMgr = Inventory.InventoryManager.Instance;
-            if (inventoryMgr != null)
-            {
-                for (int i = 0; i < recipe.Outputs.Count; i++)
-                {
-                    var output = recipe.Outputs[i];
-                    if (output.Item == null) continue;
-
-                    // 概率产出
-                    if (output.Probability < 1f && UnityEngine.Random.value > output.Probability)
-                    {
-                        continue;
-                    }
-
-                    int amount = output.BaseAmount * batchCount;
-                    if (greatSuccess)
-                    {
-                        amount += output.BonusAmount * batchCount;
-                    }
-
-                    inventoryMgr.AddItem(output.Item, amount);
-                    _tempOutputList.Add(output);
-                }
-            }
-
-            // 添加技能经验
-            if (!string.IsNullOrEmpty(recipe.SkillId) && recipe.ExpReward > 0)
-            {
-                var skill = GetSkillData(recipe.SkillId);
-                int totalExp = recipe.ExpReward * batchCount;
-                if (skill.AddExperience(totalExp, out int levelUps))
-                {
-                    Log($"技能升级: {recipe.SkillId} -> Lv.{skill.Level}");
-                }
-            }
-
-            // 触发成就事件
-#if ZEROENGINE_NARRATIVE
-            var achievementMgr = Achievement.AchievementManager.Instance;
-            achievementMgr?.TriggerEvent("Craft", recipe.RecipeId);
-            achievementMgr?.TriggerEvent("CraftCategory", recipe.Category.ToString());
-#endif
-
-            OnCraftingEvent?.Invoke(CraftingEventArgs.Completed(recipe, result, _tempOutputList));
-            Log($"合成完成: {recipe.DisplayName} x{batchCount} ({result})");
-
-            return result;
+            if (recipe.UnlockType == RecipeUnlockType.Default) return true;
+            if (recipe.UnlockType == RecipeUnlockType.Item) return false;
+            if (recipe.UnlockType == RecipeUnlockType.Custom && !string.IsNullOrEmpty(recipe.CustomUnlockId)
+                && _customUnlockChecks.TryGetValue(recipe.CustomUnlockId, out var check))
+                return check != null && check();
+            // External conditions must be proven by the consumer; missing providers fail closed.
+            return Enum.IsDefined(typeof(RecipeUnlockType), recipe.UnlockType) && _unlockCondition?.Invoke(recipe) == true;
         }
 
         private void CheckCompletedCrafting()
         {
-            for (int i = _activeProgress.Count - 1; i >= 0; i--)
+            if (_isMutating) return;
+            for (var i = _activeProgress.Count - 1; i >= 0; i--)
             {
                 var progress = _activeProgress[i];
-                if (progress.IsComplete)
-                {
-                    var recipe = GetRecipe(progress.RecipeId);
-                    if (recipe != null)
-                    {
-                        CompleteCraft(recipe, progress.BatchCount);
-                    }
-                    _activeProgress.RemoveAt(i);
-                }
+                if (!progress.IsComplete) continue;
+                _isMutating = true;
+                try { TryComplete(progress); }
+                finally { _isMutating = false; }
             }
         }
 
@@ -672,6 +434,7 @@ namespace ZeroEngine.Crafting
         public List<string> UnlockedRecipes;
         public List<CraftingProgress> ActiveProgress;
         public Dictionary<string, CraftingSkillData> SkillData;
+        public List<CraftingReceipt> Receipts;
     }
 
     #endregion
