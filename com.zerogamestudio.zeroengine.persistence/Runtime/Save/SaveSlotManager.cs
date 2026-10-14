@@ -226,9 +226,9 @@ namespace ZeroEngine.Save
             EnsureSlotMetas();
         }
 
-        private void SaveSlotMetas()
+        private void SaveSlotMetas(ISaveProvider provider)
         {
-            SaveManager.Instance.Save(MetaListKey, _slotMetas, MetaListFile);
+            provider.Save(MetaListKey, _slotMetas, MetaListFile);
         }
 
         private void EnsureSlotMetas()
@@ -346,29 +346,32 @@ namespace ZeroEngine.Save
                         {
                             provider.SaveBytes(ScreenshotKey, bytes, fileName);
                         }
-                        FinalizeSave(slotIndex, meta, true, callback);
+                        FinalizeSave(slotIndex, meta, true, callback, provider);
                     });
                 }
                 else
                 {
-                    FinalizeSave(slotIndex, meta, true, callback);
+                    FinalizeSave(slotIndex, meta, true, callback, provider);
                 }
             }
             catch (Exception e)
             {
                 ZeroLog.Error(ZeroLog.Modules.Save, $"Save failed for slot {slotIndex}: {e.Message}");
                 var meta = new SaveSlotMeta(slotIndex);
-                FinalizeSave(slotIndex, meta, false, callback, e.Message);
+                FinalizeSave(slotIndex, meta, false, callback, null, e.Message);
             }
         }
 
-        private void FinalizeSave(int slotIndex, SaveSlotMeta meta, bool success, Action<bool> callback, string error = null)
+        private void FinalizeSave(int slotIndex, SaveSlotMeta meta, bool success, Action<bool> callback,
+            ISaveProvider provider, string error = null)
         {
             if (success)
             {
                 // 更新缓存
                 UpdateSlotMeta(slotIndex, meta);
-                SaveSlotMetas();
+                // Complete on the provider that wrote the data, even if its Unity host
+                // has been destroyed while the optional screenshot was pending.
+                SaveSlotMetas(provider);
 
                 _currentSlotIndex = slotIndex;
                 ZeroLog.Info(ZeroLog.Modules.Save, $"Saved to slot {slotIndex}");
@@ -492,14 +495,15 @@ namespace ZeroEngine.Save
             try
             {
                 var fileName = _config.GetSlotFileName(slotIndex);
-                SaveManager.Instance.Provider.DeleteFile(fileName);
+                var provider = SaveManager.Instance.Provider;
+                provider.DeleteFile(fileName);
 
                 // 更新元信息
                 var meta = GetSlotMeta(slotIndex);
                 if (meta != null)
                 {
                     meta.IsValid = false;
-                    SaveSlotMetas();
+                    SaveSlotMetas(provider);
                 }
 
                 if (_currentSlotIndex == slotIndex)
