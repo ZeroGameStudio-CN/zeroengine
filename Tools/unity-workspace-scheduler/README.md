@@ -222,3 +222,10 @@ checks original task-start lineage, structured terminal reports and exact
 source preservation, then retains all claims in `outcome_unknown`. Ordinary
 active-task release rules remain unchanged. See [the bounded recovery
 contract](docs/setup.md#lost-token-custody-164); unknown work is never replayed.
+
+Version 1.6.5 preserves owner-cancelled restorations in terminal park receipts.
+Backup/verification accepts the writer's legitimate released/cancelled combination
+only when every state matches that exact task's actual terminal claim. It rejects
+substituted states and foreign claims without editing immutable receipts. Use the
+same quiet-window, verified-backup and Router-first maintenance procedure; protocol
+and state schema remain 3.

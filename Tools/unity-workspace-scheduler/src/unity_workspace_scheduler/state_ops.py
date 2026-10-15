@@ -2207,16 +2207,34 @@ def _validate_operation_receipts(connection: sqlite3.Connection, resolved: Path)
                                 "cancelled",
                                 "parked",
                             },
-                            "task-released": {"released"},
+                            "task-released": {"released", "cancelled"},
                             "task-released-outcome-unknown": {
                                 "active",
                                 "cancelled",
                                 "parked",
                             },
-                            "task-recovery-resolved": {"released"},
+                            "task-recovery-resolved": {"released", "cancelled"},
                         }[result["reason"]]
                         if any(state not in expected_states for state in result["states"].values()):
                             raise ValueError("aborted park receipt has invalid claim states")
+                        if result["reason"] in {"task-released", "task-recovery-resolved"}:
+                            # An owner can cancel a queued restoration before ending its task.
+                            # Closed-task claims never reopen: retain the immutable result and
+                            # bind each terminal state to that exact task's actual claim.
+                            for claim_id, state in result["states"].items():
+                                claim = connection.execute(
+                                    "SELECT task_id, workspace_id, state FROM claims WHERE id = ?",
+                                    (claim_id,),
+                                ).fetchone()
+                                if (
+                                    claim is None
+                                    or claim["task_id"] != task_id
+                                    or claim["workspace_id"] != workspace_id
+                                    or claim["state"] != state
+                                ):
+                                    raise ValueError(
+                                        "aborted park receipt does not match its terminal claims"
+                                    )
             elif action not in {"claim.acquire", "freeze.acquire", "task.park"}:
                 raise ValueError("non-waiting receipt is not finalized")
             elif (
