@@ -217,6 +217,9 @@ to the existing upright screenshot convention before readback. Requests are seri
 render target remains valid until native completion. Unsupported devices retain
 the synchronous compatibility path. A failed readback returns null once, allowing
 `SaveSlotManager` to keep the previous preview while completing the saved data.
+Batch Editors do not resume `WaitForEndOfFrame`; they complete the callback
+with null immediately, preserving the stored preview and completing the save.
+Interactive Editors and Players retain the rendered frame-end capture path.
 Disabling or destroying the component settles outstanding callbacks; in-flight
 render targets are released by the native completion callback. `CaptureSync`
 remains available and restores the caller's render target and camera target.

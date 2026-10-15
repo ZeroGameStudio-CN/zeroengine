@@ -71,6 +71,15 @@ namespace ZeroEngine.Save
         /// </summary>
         public void CaptureAsync(Action<byte[]> callback)
         {
+#if UNITY_EDITOR
+            // A batch Editor never resumes WaitForEndOfFrame. Complete the save
+            // without replacing its existing preview instead of leaving it pending.
+            if (Application.isBatchMode)
+            {
+                callback?.Invoke(null);
+                return;
+            }
+#endif
             if (!_initialized)
             {
                 callback?.Invoke(null);
