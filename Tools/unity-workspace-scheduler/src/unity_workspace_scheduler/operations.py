@@ -22,6 +22,7 @@ PUBLIC_MUTATION_ACTIONS = frozenset(
         "queue.cancel",
         "freeze.acquire",
         "recovery.resolve",
+        "recovery.fence-missing-token",
     }
 )
 
