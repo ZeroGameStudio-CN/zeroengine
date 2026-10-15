@@ -199,7 +199,7 @@ start with a 100 ms observation and back off to at most 2 seconds between
 observations. This leaves writer capacity for owners finishing or releasing work.
 The original operation receipt, absolute deadline, FIFO order, priority and all
 recovery fences remain unchanged. It adds no index, migration or schema change.
-Use 1.6.3 for this maintenance route, including state written by the 1.5 cohort.
+Use 1.6.4 for this maintenance route, including state written by the 1.5 cohort.
 
 Do not copy `scheduler.sqlite3` with a filesystem copy command: committed data may still live in
 its WAL. Before directly invoking either Scheduler executable, stop admission at the Router entry,
@@ -236,7 +236,7 @@ staged_scheduler="$stage_root/bin/unity-scheduler"
 Keep `$stagedScheduler` or `$staged_scheduler` as the exact
 `<absolute-staged-1.6-executable>` for every later staged command. The isolated uv environment
 variables must not remain set during the canonical install; require the parsed version to equal
-exactly `1.6.3`:
+exactly `1.6.4`:
 
 ```text
 <absolute-staged-1.6-executable> --version
@@ -388,6 +388,60 @@ are rebased while preserving at most their remaining 86400-second lease, and ove
 clamped to the same current-time horizon. A future heartbeat with no positive lease expires safely
 and becomes `outcome_unknown` when an active claim exists. Existing `outcome_unknown` timing is
 never rewritten automatically because it is an evidence-bearing manual recovery fence.
+
+## Lost token custody (1.6.4)
+
+`recovery fence-missing-token` is an explicit same-user operator path, not a
+force-release or a replacement for the ordinary owner token. Agents invoke it
+only through the installed Router. The default `recovery resolve` still refuses
+active tasks. The new operation first changes the exact active task to
+`outcome_unknown` while retaining **all** active, queued and parked claims.
+Only the existing separately journaled recovery resolution can settle custody.
+
+The request binds the exact workspace/task/owner, original `task.start`
+operation and token-path lineage, every retained claim, and the SHA256 of a
+preserved manifest. The original token must actually be absent. Existing tokens,
+unfinalized original operations, different lineage and incomplete scope fail
+closed. No credential is reissued and no original executor command is replayed.
+
+The version-1 manifest contains `workspace`, `task_id`, `owner`,
+`start_operation_id`, `token_path`, sorted `claim_ids`, `terminal_evidence`,
+`preserved_sources`, `absent_sources`, `unavailable_evidence`, and
+`operator_note`. Each terminal entry has `kind`, `state=terminal`, `path` and
+lowercase `sha256`. Its structured report binds the same original identity and
+observation time, `terminal=true`, and hashed source `references`:
+
+- `clients`: every original client ID and integer terminal `exit_code`.
+- `writers`: `stopped`, `writes_paused`, `coordinator_calls_paused` true and
+  `detached_writers` false. This attests the original source-writing clients;
+  the coordinating chat can remain active for read-only recovery.
+- `native`: completed/cancelled state, exact `executor_id`, and hashed `artifact`
+  and `starter` records. Router currently narrows this to completed official
+  Unity test chains: the original starter must target the exact task/project,
+  its nonempty NUnit result must match the filter and original task time range,
+  and fresh fixed native inspection must show the same Editor PID with no jobs,
+  callbacks, launcher, compile, import or PlayMode activity.
+
+Preservation covers the exact complete write-claim set. Every existing regular
+leaf needs a matching project-external backup; every absent owned scratch path
+is enumerated and rechecked. Directories, links, missing backups, new files at
+an absent path, unrelated substitutions or omissions are refused. Source and
+evidence files are bounded to 16 MiB per record. Freeze/source custody also
+requires preserved files; unsupported scope stays fenced.
+
+The reports are explicit operator attestations with preserved source records,
+not autonomous discovery of arbitrary external clients. Missing historical
+material must be listed honestly; a stable source hash or idle Editor alone
+cannot establish writer termination. Preserve the manifest until delivery is
+settled. Exact finalized replay returns its original receipt before re-reading
+terminal reports, and does not repeat native dispatch or release claims.
+
+The addition keeps protocol/state schema 3 and introduces no database migration.
+This action requires SDK 1.6.4; older operations retain their prior version floor.
+Use the stopped-admission, WAL-consistent backup and Router-first install order
+above. After new action receipts exist, keep SDK 1.6.4 or later; do not install
+an older receipt validator over this live state or roll back a stale whole-state
+snapshot after admission resumes.
 
 ## Unknown outcomes
 

@@ -214,3 +214,11 @@ finishing work. It does not cancel a request, move its FIFO position, change
 priority, or make an unknown executor safe to replay. Protocol 3 and schema 3 are
 unchanged. Use the existing stopped-admission backup/install procedure in
 [Setup and protocol](docs/setup.md#offline-state-maintenance).
+
+## Missing credentials
+
+SDK 1.6.4 adds an explicit same-user lost-token fence through the Router. It
+checks original task-start lineage, structured terminal reports and exact
+source preservation, then retains all claims in `outcome_unknown`. Ordinary
+active-task release rules remain unchanged. See [the bounded recovery
+contract](docs/setup.md#lost-token-custody-164); unknown work is never replayed.

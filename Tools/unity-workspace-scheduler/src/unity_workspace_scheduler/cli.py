@@ -187,6 +187,14 @@ def build_parser() -> SchedulerArgumentParser:
     resolve.add_argument("--resolution", choices=("completed", "failed"), required=True)
     resolve.add_argument("--evidence", required=True)
     resolve.set_defaults(handler=_recovery_resolve)
+    fence = recovery_commands.add_parser("fence-missing-token")
+    _workspace_argument(fence)
+    _operation_arguments(fence)
+    fence.add_argument("--task-id", required=True)
+    fence.add_argument("--evidence-file", type=Path, required=True)
+    fence.add_argument("--evidence-sha256", required=True)
+    fence.add_argument("--operator-confirmed", action="store_true", required=True)
+    fence.set_defaults(handler=_recovery_fence_missing_token)
 
     maintenance = groups.add_parser(
         "maintenance", help="Inspect bounded scheduler maintenance history."
@@ -628,6 +636,26 @@ def _claim_assert(
         writes=args.write,
         resources=args.resource,
         freeze=args.freeze,
+    )
+
+
+def _recovery_fence_missing_token(
+    coordinator: WorkspaceCoordinator, args: argparse.Namespace
+) -> tuple[str, dict[str, Any]]:
+    try:
+        raw = args.evidence_file.read_bytes()
+        if len(raw) > 4 * 1024 * 1024 or hashlib.sha256(raw).hexdigest() != args.evidence_sha256:
+            raise UsageError("Missing-token manifest digest or size is invalid.")
+        evidence = json.loads(raw)
+    except (OSError, ValueError) as exc:
+        raise UsageError("Missing-token manifest is unavailable or malformed.") from exc
+    return "Exact task fenced; all claims retained.", coordinator.fence_missing_token(
+        args.workspace,
+        args.task_id,
+        operation_id=args.operation_id,
+        evidence=evidence,
+        operator_confirmed=args.operator_confirmed,
+        receipt_only=args.receipt_only,
     )
 
 

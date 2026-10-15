@@ -24,6 +24,8 @@ from .errors import (
     StateError,
     UsageError,
 )
+from .missing_token import ACTION as MISSING_TOKEN_ACTION
+from .missing_token import validate_attestation
 from .operations import (
     CLAIM_RELEASE_STATES,
     LIFECYCLE_ACTIONS,
@@ -45,6 +47,7 @@ from .state import (
     _has_control_characters,
     _is_normalized_recovery_evidence,
     _platform_case_identity,
+    canonical_missing_token_file_path,
     canonical_token_file_path,
     canonical_workspace,
     open_database,
@@ -6626,6 +6629,147 @@ class WorkspaceCoordinator:
                 "resources": list(normalized_resources),
                 "freeze": freeze,
             }
+
+    def fence_missing_token(
+        self,
+        workspace: Path | str,
+        task_id: str,
+        *,
+        operation_id: str,
+        evidence: dict[str, Any],
+        operator_confirmed: bool = False,
+        receipt_only: bool = False,
+    ) -> dict[str, Any]:
+        """Fence one active owner with lost custody; never release its claims."""
+        if operator_confirmed is not True:
+            raise UsageError("Missing-token fencing requires explicit operator confirmation.")
+        validate_attestation(evidence)
+        root = canonical_workspace(workspace)
+        if evidence["workspace"] != root or evidence["task_id"] != task_id:
+            raise AuthorizationError("Missing-token evidence names another workspace or task.")
+        operation = _operation(
+            operation_id,
+            _workspace_id(root),
+            MISSING_TOKEN_ACTION,
+            {
+                "workspace": root,
+                "task_id": task_id,
+                "evidence": evidence,
+                "operator_confirmed": True,
+            },
+            None,
+        )
+        # The same canonical token-path lock serializes task.start and fencing.
+        # Replay precedes filesystem checks so a lost response remains deliverable.
+        with self._transaction() as connection:
+            replay = self._replay_or_missing(connection, operation, receipt_only=receipt_only)
+            if replay is not None:
+                return replay
+        token_path = canonical_missing_token_file_path(Path(evidence["token_path"]))
+        with task_token_path_lock(self.paths, token_path), self._transaction() as connection:
+            replay = self._replay_or_missing(connection, operation, receipt_only=receipt_only)
+            if replay is not None:
+                return replay
+            registered = self._workspace(connection, root)
+            task = connection.execute(
+                "SELECT * FROM tasks WHERE id = ? AND workspace_id = ?",
+                (task_id, registered["id"]),
+            ).fetchone()
+            if task is None or task["state"] != "active":
+                raise StateError("Only an exact active task can enter missing-token fencing.")
+            if (
+                task["owner"] != evidence["owner"]
+                or task["start_operation_id"] != evidence["start_operation_id"]
+                or task["token_file_path"] != str(token_path)
+                or task["token_file_identity"] != _token_path_identity(str(token_path))
+            ):
+                raise AuthorizationError(
+                    "Missing-token evidence does not match task.start lineage."
+                )
+            start = connection.execute(
+                "SELECT * FROM operation_receipts WHERE operation_id = ? AND task_id = ? "
+                "AND workspace_id = ? AND action = 'task.start'",
+                (evidence["start_operation_id"], task_id, registered["id"]),
+            ).fetchone()
+            if (
+                start is None
+                or start["owner_token_hash"] != task["token_hash"]
+                or parse_canonical_json(start["parameters_json"])["token_file_path"]
+                != str(token_path)
+            ):
+                raise StateError("Original task.start receipt is required; lineage is unavailable.")
+            claims = connection.execute(
+                "SELECT id, kind FROM claims WHERE task_id = ? "
+                "AND state IN ('active', 'queued', 'parked') ORDER BY id",
+                (task_id,),
+            ).fetchall()
+            if [row["id"] for row in claims] != evidence["claim_ids"]:
+                raise AuthorizationError("Missing-token evidence does not match all open claims.")
+            source_scope = (
+                any(row["kind"] == "freeze" for row in claims)
+                or connection.execute(
+                    "SELECT 1 FROM claim_scopes WHERE scope_type = 'write' AND claim_id IN "
+                    "(SELECT id FROM claims WHERE task_id = ? AND state IN ('active','queued','parked'))",
+                    (task_id,),
+                ).fetchone()
+                is not None
+            )
+            if source_scope and not evidence["preserved_sources"]:
+                raise UsageError("Source or freeze custody requires preserved source files.")
+            if (
+                connection.execute(
+                    "SELECT 1 FROM operation_receipts WHERE task_id = ? AND finalized_at IS NULL",
+                    (task_id,),
+                ).fetchone()
+                is not None
+            ):
+                raise StateError(
+                    "Pending original operations require their existing recovery route."
+                )
+            write_rows = connection.execute(
+                "SELECT value FROM claim_scopes WHERE scope_type = 'write' AND claim_id IN "
+                "(SELECT id FROM claims WHERE task_id = ? AND state IN ('active','queued','parked'))",
+                (task_id,),
+            ).fetchall()
+            required = {
+                os.path.normcase(os.path.normpath(str(Path(root) / row["value"])))
+                for row in write_rows
+            }
+            preserved = {os.path.normcase(item["path"]) for item in evidence["preserved_sources"]}
+            absent = {os.path.normcase(item) for item in evidence["absent_sources"]}
+            if required != preserved | absent:
+                raise AuthorizationError("Preservation must cover the exact complete write scope.")
+            validate_attestation(evidence, read_files=True, not_before=task["created_at"])
+            canonical_missing_token_file_path(token_path)
+            capacity = self._operation_capacity(connection)["reserved_capacity"]
+            now = self._task_transition_time(connection, task_id, time.time())
+            connection.execute(
+                "UPDATE tasks SET state = 'outcome_unknown', result = 'outcome-unknown', "
+                "finished_at = ?, note = ? WHERE id = ?",
+                (now, evidence["operator_note"], task_id),
+            )
+            self._finalize_task_lifecycle_operations(
+                connection,
+                task_id,
+                registered["id"],
+                now,
+                reason="task-released-outcome-unknown",
+            )
+            self._touch(connection, registered["id"])
+            return self._record_operation(
+                connection,
+                operation,
+                {
+                    "task_id": task_id,
+                    "state": "outcome_unknown",
+                    "retained_claim_ids": evidence["claim_ids"],
+                    "evidence_sha256": hashlib.sha256(
+                        canonical_json(evidence).encode()
+                    ).hexdigest(),
+                    "claims_released": False,
+                },
+                capacity_before=capacity,
+            )
 
     def resolve_unknown(
         self,

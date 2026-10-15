@@ -24,6 +24,8 @@ from .coordinator import (
     _workspace_id,
 )
 from .errors import StateError, UsageError
+from .missing_token import ACTION as MISSING_TOKEN_ACTION
+from .missing_token import validate_attestation
 from .operations import (
     CLAIM_RELEASE_STATES,
     LIFECYCLE_ACTIONS,
@@ -31,6 +33,7 @@ from .operations import (
     LIFECYCLE_TERMINAL_ACTIONS,
     PUBLIC_MUTATION_ACTIONS,
     QUEUE_CANCEL_STATES,
+    canonical_json,
     is_sha256_hex,
     operation_fingerprint,
     parse_canonical_json,
@@ -1221,6 +1224,9 @@ _OWNER_AUTHENTICATED_ACTIONS = frozenset(
     }
 )
 _ACTION_RESULT_REQUIRED_KEYS = {
+    MISSING_TOKEN_ACTION: frozenset(
+        {"task_id", "state", "retained_claim_ids", "claims_released", "evidence_sha256"}
+    ),
     "workspace.register": frozenset({"id", "root", "registered_at", "epoch", "created"}),
     "workspace.unregister": frozenset({"id", "root", "removed"}),
     "task.start": frozenset({"id", "state", "created_at", "expires_at"}),
@@ -1498,6 +1504,17 @@ def _validate_receipt_result(
 ) -> None:
     if "operation" in result or "token_cleanup_pending" in result:
         raise ValueError("stored receipt result includes delivery metadata")
+    if action == MISSING_TOKEN_ACTION:
+        if (
+            result.get("task_id") != parameters["task_id"]
+            or result.get("state") != "outcome_unknown"
+            or result.get("retained_claim_ids") != parameters["evidence"]["claim_ids"]
+            or result.get("claims_released") is not False
+            or result.get("evidence_sha256")
+            != hashlib.sha256(canonical_json(parameters["evidence"]).encode()).hexdigest()
+        ):
+            raise ValueError("missing-token fence receipt is malformed")
+        return
     if action == "workspace.register":
         if (
             result.get("id") != _workspace_id(parameters["workspace"])
@@ -1619,6 +1636,7 @@ def _validate_receipt_result(
 
 def _validate_receipt_parameters(action: str, parameters: dict[str, Any]) -> None:
     expected_keys = {
+        MISSING_TOKEN_ACTION: {"workspace", "task_id", "evidence", "operator_confirmed"},
         "workspace.register": {"workspace"},
         "workspace.unregister": {"workspace"},
         "task.start": {
@@ -1654,6 +1672,14 @@ def _validate_receipt_parameters(action: str, parameters: dict[str, Any]) -> Non
     if set(parameters) != expected_keys:
         raise ValueError("receipt parameter keys are not canonical")
     workspace = parameters["workspace"]
+    if action == MISSING_TOKEN_ACTION:
+        validate_attestation(parameters["evidence"])
+        if (
+            parameters["operator_confirmed"] is not True
+            or parameters["evidence"]["workspace"] != workspace
+            or parameters["evidence"]["task_id"] != parameters["task_id"]
+        ):
+            raise ValueError("missing-token fence parameters are malformed")
     if (
         not _receipt_text(workspace)
         or not os.path.isabs(workspace)
