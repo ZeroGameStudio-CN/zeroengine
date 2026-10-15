@@ -199,7 +199,14 @@ start with a 100 ms observation and back off to at most 2 seconds between
 observations. This leaves writer capacity for owners finishing or releasing work.
 The original operation receipt, absolute deadline, FIFO order, priority and all
 recovery fences remain unchanged. It adds no index, migration or schema change.
-Use 1.6.4 for this maintenance route, including state written by the 1.5 cohort.
+Version 1.6.5 accepts a finalized aborted task-park receipt when its owner cancelled
+one queued restoration before completing or failing the task. Such records can
+legitimately contain both released and cancelled claims. Offline validation binds
+each recorded terminal state to the exact task, workspace and actual claim state;
+forged states or foreign claims remain invalid. It changes no receipt, scheduling
+transition, protocol or schema and performs no repair of existing database rows.
+
+Use 1.6.5 for this maintenance route, including state written by the 1.5 cohort.
 
 Do not copy `scheduler.sqlite3` with a filesystem copy command: committed data may still live in
 its WAL. Before directly invoking either Scheduler executable, stop admission at the Router entry,
@@ -236,7 +243,7 @@ staged_scheduler="$stage_root/bin/unity-scheduler"
 Keep `$stagedScheduler` or `$staged_scheduler` as the exact
 `<absolute-staged-1.6-executable>` for every later staged command. The isolated uv environment
 variables must not remain set during the canonical install; require the parsed version to equal
-exactly `1.6.4`:
+exactly `1.6.5`:
 
 ```text
 <absolute-staged-1.6-executable> --version
@@ -266,7 +273,7 @@ These staged invocations are limited to `--version`, `state backup`, and `state 
 not open the database through the scheduling path or migrate schema 1 or 2. After the backup,
 ordinary verification, and applicable migration gate succeed, install the canonical Router version that requires 1.6
 first, so it fails closed while canonical Scheduler is still older. Then install canonical Scheduler
-1.6, require canonical `unity-scheduler --version` to report version `1.6.3`, run the
+1.6, require canonical `unity-scheduler --version` to report version `1.6.5`, run the
 `workspace list` maintenance read-back, exact-workspace status read-backs, and Router protocol
 canary, and only then reopen Router admission.
 
