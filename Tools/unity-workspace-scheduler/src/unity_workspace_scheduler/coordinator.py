@@ -3260,7 +3260,11 @@ class WorkspaceCoordinator:
         now: float,
     ) -> None:
         receipts = connection.execute(
-            "SELECT * FROM operation_receipts WHERE workspace_id = ? "
+            # The workspace/recency index reads every retained heartbeat payload
+            # before testing finalized_at. Restrict the scan to wait actions using
+            # the existing index, without changing eligibility or adding a schema.
+            "SELECT * FROM operation_receipts INDEXED BY operation_receipts_action_task "
+            "WHERE workspace_id = ? "
             "AND finalized_at IS NULL "
             "AND action IN ('claim.acquire', 'freeze.acquire', 'task.park')",
             (workspace_id,),

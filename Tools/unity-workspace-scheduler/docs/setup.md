@@ -186,6 +186,16 @@ an older snapshot, but loses aging fairness; never run mixed old/new scheduling 
 
 ## Offline state maintenance
 
+Version 1.6.8 selects wait-deadline candidates through the existing
+`operation_receipts_action_task` index. This avoids reading unrelated retained
+heartbeat payloads while holding `BEGIN IMMEDIATE`; wait predicates, result
+proofs and scheduling transitions are unchanged. It introduces no schema or
+index migration. Qualify concurrent status, heartbeats and FIFO release with
+retained history before pairing it with a Router cohort. Existing wait loops
+sleep outside their write transaction; a long-lived CLI process alone is not
+evidence that it holds a write lock. Do not extend timeouts or stop live owners
+to hide contention. SDK activation still requires the drained route below.
+
 Version 1.6.1 validates receipt lease expiry using the same timestamp-plus-duration
 calculation as the writer. Subtracting large epoch timestamps could reject valid
 fractional TTLs in task-start ACK/replay and offline backup/verification. This fix
@@ -243,7 +253,7 @@ staged_scheduler="$stage_root/bin/unity-scheduler"
 Keep `$stagedScheduler` or `$staged_scheduler` as the exact
 `<absolute-staged-1.6-executable>` for every later staged command. The isolated uv environment
 variables must not remain set during the canonical install; require the parsed version to equal
-exactly `1.6.7`:
+exactly `1.6.8`:
 
 ```text
 <absolute-staged-1.6-executable> --version
@@ -273,7 +283,7 @@ These staged invocations are limited to `--version`, `state backup`, and `state 
 not open the database through the scheduling path or migrate schema 1 or 2. After the backup,
 ordinary verification, and applicable migration gate succeed, install the canonical Router version that requires 1.6
 first, so it fails closed while canonical Scheduler is still older. Then install canonical Scheduler
-1.6, require canonical `unity-scheduler --version` to report version `1.6.7`, run the
+1.6, require canonical `unity-scheduler --version` to report version `1.6.8`, run the
 `workspace list` maintenance read-back, exact-workspace status read-backs, and Router protocol
 canary, and only then reopen Router admission.
 
