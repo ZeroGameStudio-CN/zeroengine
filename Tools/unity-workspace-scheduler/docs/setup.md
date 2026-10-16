@@ -243,7 +243,7 @@ staged_scheduler="$stage_root/bin/unity-scheduler"
 Keep `$stagedScheduler` or `$staged_scheduler` as the exact
 `<absolute-staged-1.6-executable>` for every later staged command. The isolated uv environment
 variables must not remain set during the canonical install; require the parsed version to equal
-exactly `1.6.5`:
+exactly `1.6.6`:
 
 ```text
 <absolute-staged-1.6-executable> --version
@@ -273,7 +273,7 @@ These staged invocations are limited to `--version`, `state backup`, and `state 
 not open the database through the scheduling path or migrate schema 1 or 2. After the backup,
 ordinary verification, and applicable migration gate succeed, install the canonical Router version that requires 1.6
 first, so it fails closed while canonical Scheduler is still older. Then install canonical Scheduler
-1.6, require canonical `unity-scheduler --version` to report version `1.6.5`, run the
+1.6, require canonical `unity-scheduler --version` to report version `1.6.6`, run the
 `workspace list` maintenance read-back, exact-workspace status read-backs, and Router protocol
 canary, and only then reopen Router admission.
 
@@ -451,6 +451,38 @@ an older receipt validator over this live state or roll back a stale whole-state
 snapshot after admission resumes.
 
 ## Unknown outcomes
+
+### Editor-only recovery (1.6.6)
+
+The Router's user-directed `control-editor --action release|cancel` can settle one
+proven-terminal Editor resource while retaining an unknown source task:
+
+```text
+unity-scheduler recovery release-editor --workspace <root> --task-id <id> --claim-id <id> --evidence <text> --operator-confirmed --operation-id <uuid-v4> [--receipt-only]
+```
+
+This private operation accepts only an active normal pure `unity-live` claim
+belonging to that exact `outcome_unknown` task. Every remaining open claim must
+be normal source-only. It atomically releases that resource, preserves the source
+claims, task state, token custody and source evidence, then resumes ordinary FIFO
+scheduling. It does not resolve the source task or create a task-recovery event.
+The immutable operation receipt records the released claim, retained claim IDs,
+timestamp and evidence digest. Same-ID replay/acknowledgement and offline semantic
+verification share the same contract, including after later full task recovery.
+
+The Router must prove the old execution terminal, compare the exact operation
+binding, obtain its task lock, and observe two fresh native cleanup samples from
+the same Editor PID/session before requesting this operation. Idle alone is not
+terminal evidence. Queued requests, active tasks, mixed write/resource claims,
+freezes, foreign claims, another held resource and missing confirmation remain
+refused. Native stop and resource settlement remain separate gates.
+
+Protocol and schema stay at 3; no migration or whole-state restore is introduced.
+Use the existing stopped-admission, verified WAL backup and Router-first cohort
+installation below. This action requires SDK 1.6.6. Once its receipts exist, keep
+a 1.6.6+ receipt validator; an older SDK cannot validate the new action. Revert
+Router behavior rather than downgrading the SDK or restoring an old database
+over subsequent work. Existing action version floors remain unchanged.
 
 An active task whose TTL expires while it owns a claim, or a task explicitly released as
 `outcome-unknown`, preserves active claims as a scoped recovery fence. Overlapping normal claims

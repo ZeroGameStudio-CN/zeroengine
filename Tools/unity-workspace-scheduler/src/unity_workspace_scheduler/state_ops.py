@@ -17,6 +17,7 @@ from dataclasses import dataclass
 from pathlib import Path, PurePosixPath
 from typing import Any
 
+from . import editor_recovery
 from .coordinator import (
     REPLAY_REQUIRED_OPERATION_LIMIT,
     TOKEN_CLEANUP_BACKLOG_LIMIT,
@@ -1224,6 +1225,7 @@ _OWNER_AUTHENTICATED_ACTIONS = frozenset(
     }
 )
 _ACTION_RESULT_REQUIRED_KEYS = {
+    editor_recovery.ACTION: editor_recovery.RESULT_KEYS,
     MISSING_TOKEN_ACTION: frozenset(
         {"task_id", "state", "retained_claim_ids", "claims_released", "evidence_sha256"}
     ),
@@ -1504,6 +1506,9 @@ def _validate_receipt_result(
 ) -> None:
     if "operation" in result or "token_cleanup_pending" in result:
         raise ValueError("stored receipt result includes delivery metadata")
+    if action == editor_recovery.ACTION:
+        editor_recovery.validate_result(parameters, result)
+        return
     if action == MISSING_TOKEN_ACTION:
         if (
             result.get("task_id") != parameters["task_id"]
@@ -1636,6 +1641,13 @@ def _validate_receipt_result(
 
 def _validate_receipt_parameters(action: str, parameters: dict[str, Any]) -> None:
     expected_keys = {
+        editor_recovery.ACTION: {
+            "workspace",
+            "task_id",
+            "claim_id",
+            "evidence",
+            "operator_confirmed",
+        },
         MISSING_TOKEN_ACTION: {"workspace", "task_id", "evidence", "operator_confirmed"},
         "workspace.register": {"workspace"},
         "workspace.unregister": {"workspace"},
@@ -1672,6 +1684,8 @@ def _validate_receipt_parameters(action: str, parameters: dict[str, Any]) -> Non
     if set(parameters) != expected_keys:
         raise ValueError("receipt parameter keys are not canonical")
     workspace = parameters["workspace"]
+    if action == editor_recovery.ACTION:
+        editor_recovery.validate_parameters(parameters)
     if action == MISSING_TOKEN_ACTION:
         validate_attestation(parameters["evidence"])
         if (

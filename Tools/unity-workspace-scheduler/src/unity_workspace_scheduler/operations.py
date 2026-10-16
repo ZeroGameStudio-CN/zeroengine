@@ -23,6 +23,7 @@ PUBLIC_MUTATION_ACTIONS = frozenset(
         "freeze.acquire",
         "recovery.resolve",
         "recovery.fence-missing-token",
+        "recovery.release-editor",
     }
 )
 
