@@ -4,6 +4,14 @@
 
 It does not start or inspect Unity, run tests, call MCP, inspect version control, or install anything into a Unity project. The package has no runtime dependencies. The Router uses only the command's JSON process protocol; it does not import the Python package or depend on its installation layout.
 
+Version 1.6.8 shortens the write transaction used by status, admission and park
+polling: deadline maintenance uses the existing action index instead of scanning
+every retained heartbeat through the workspace-history index. It retains the
+same pending-receipt predicates, absolute deadlines, FIFO, expiry and cleanup
+proofs. Protocol/schema remain 3; no index or data migration is added. SDK
+activation still uses the drained Router update gate, never an in-place live
+package replacement.
+
 This README is Router-private protocol and maintainer documentation, not an
 Agent entrypoint. Normal Agent and Unity registration, task, claim, queue,
 freeze, recovery, and live work must use `unity-workspace-router`. The sole
