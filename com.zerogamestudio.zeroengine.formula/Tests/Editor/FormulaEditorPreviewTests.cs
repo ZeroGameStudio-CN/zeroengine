@@ -279,6 +279,41 @@ namespace ZeroEngine.Formula.Tests.Editor
             }
         }
 
+        [Test]
+        public void GetProviderPreviewInputKey_ObjectParameter_TracksIdentityAndDestroyedNull()
+        {
+            var first = ScriptableObject.CreateInstance<FormulaAsset>();
+            var second = ScriptableObject.CreateInstance<FormulaAsset>();
+            var parameter = FormulaParameter.Object("owner", first);
+
+            try
+            {
+                first.name = second.name = "same-name";
+                var firstKey = FormulaEditorPreview.GetProviderPreviewInputKey("owner.value", new[] { parameter });
+                var secondKey = FormulaEditorPreview.GetProviderPreviewInputKey(
+                    "owner.value", new[] { FormulaParameter.Object("owner", second) });
+                var nullKey = FormulaEditorPreview.GetProviderPreviewInputKey(
+                    "owner.value", new[] { FormulaParameter.Object("owner", null) });
+
+                Assert.AreNotEqual(firstKey, secondKey);
+                Assert.AreNotEqual(firstKey, nullKey);
+                first.name = "renamed";
+                Assert.AreEqual(firstKey, FormulaEditorPreview.GetProviderPreviewInputKey("owner.value", new[] { parameter }));
+
+                UnityObject.DestroyImmediate(first);
+                Assert.AreEqual(nullKey, FormulaEditorPreview.GetProviderPreviewInputKey("owner.value", new[] { parameter }));
+                Assert.AreEqual(secondKey, FormulaEditorPreview.GetProviderPreviewInputKey(
+                    "owner.value", new[] { FormulaParameter.Object("owner", second) }));
+            }
+            finally
+            {
+                if (first != null)
+                    UnityObject.DestroyImmediate(first);
+                if (second != null)
+                    UnityObject.DestroyImmediate(second);
+            }
+        }
+
         private static void SetFormulaAsset(FormulaAsset formula, float initialValue, FormulaStep[] steps)
         {
             const BindingFlags flags = BindingFlags.Instance | BindingFlags.NonPublic;

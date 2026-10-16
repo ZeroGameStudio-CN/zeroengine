@@ -1,6 +1,12 @@
 using System.Collections.Generic;
 using UnityEngine;
 
+#if UNITY_6000_6_OR_NEWER
+using SpawnObjectId = UnityEngine.EntityId;
+#else
+using SpawnObjectId = System.Int32;
+#endif
+
 namespace ZeroEngine.Spawner
 {
     /// <summary>
@@ -31,7 +37,18 @@ namespace ZeroEngine.Spawner
         private int _triggerCount;
         private float _lastTriggerTime;
         private bool _hasTriggered;
-        private HashSet<int> _entitiesInTrigger = new();
+        private HashSet<SpawnObjectId> _entitiesInTrigger = new();
+
+        private static SpawnObjectId GetRuntimeObjectId(UnityEngine.Object value)
+        {
+#if UNITY_6000_6_OR_NEWER
+            return value.GetEntityId();
+#else
+            return value.GetInstanceID();
+#endif
+        }
+
+
 
         #region Properties
 
@@ -68,7 +85,7 @@ namespace ZeroEngine.Spawner
         {
             if (!IsValidTrigger(other)) return;
 
-            _entitiesInTrigger.Add(other.GetInstanceID());
+            _entitiesInTrigger.Add(GetRuntimeObjectId(other));
 
             if (_triggerMode == TriggerMode.OnEnter || _triggerMode == TriggerMode.OnEnterOrExit)
             {
@@ -80,7 +97,7 @@ namespace ZeroEngine.Spawner
         {
             if (!IsValidTrigger(other)) return;
 
-            _entitiesInTrigger.Remove(other.GetInstanceID());
+            _entitiesInTrigger.Remove(GetRuntimeObjectId(other));
 
             if (_triggerMode == TriggerMode.OnExit || _triggerMode == TriggerMode.OnEnterOrExit)
             {
@@ -286,7 +303,7 @@ namespace ZeroEngine.Spawner
             if (entity == null) return false;
 
             var collider = entity.GetComponent<Collider>();
-            return collider != null && _entitiesInTrigger.Contains(collider.GetInstanceID());
+            return collider != null && _entitiesInTrigger.Contains(GetRuntimeObjectId(collider));
         }
 
         #endregion

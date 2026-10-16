@@ -1,6 +1,12 @@
 using System.Collections.Generic;
 using UnityEngine;
 
+#if UNITY_6000_6_OR_NEWER
+using SpawnObjectId = UnityEngine.EntityId;
+#else
+using SpawnObjectId = System.Int32;
+#endif
+
 namespace ZeroEngine.Spawner
 {
     /// <summary>
@@ -17,9 +23,19 @@ namespace ZeroEngine.Spawner
         [SerializeField] private bool _showDebugInfo = false;
 
         // 对象池
-        private readonly Dictionary<int, Queue<GameObject>> _pools = new();
-        private readonly Dictionary<int, int> _poolSizes = new();
-        private readonly Dictionary<int, GameObject> _prefabLookup = new();
+        private static SpawnObjectId GetRuntimeObjectId(UnityEngine.Object value)
+        {
+#if UNITY_6000_6_OR_NEWER
+            return value.GetEntityId();
+#else
+            return value.GetInstanceID();
+#endif
+        }
+
+
+        private readonly Dictionary<SpawnObjectId, Queue<GameObject>> _pools = new();
+        private readonly Dictionary<SpawnObjectId, int> _poolSizes = new();
+        private readonly Dictionary<SpawnObjectId, GameObject> _prefabLookup = new();
 
         // 注册的生成器
         private readonly List<SpawnerBase> _spawners = new();
@@ -268,7 +284,7 @@ namespace ZeroEngine.Spawner
         {
             if (prefab == null) return;
 
-            int prefabId = prefab.GetInstanceID();
+            SpawnObjectId prefabId = GetRuntimeObjectId(prefab);
             var children = new List<Transform>();
 
             foreach (Transform child in transform)
@@ -301,7 +317,7 @@ namespace ZeroEngine.Spawner
             if (prefab == null || !_enablePooling) return;
 
             int warmupCount = count > 0 ? count : _defaultPoolSize;
-            int prefabId = prefab.GetInstanceID();
+            SpawnObjectId prefabId = GetRuntimeObjectId(prefab);
 
             if (!_pools.ContainsKey(prefabId))
             {
@@ -330,7 +346,7 @@ namespace ZeroEngine.Spawner
         {
             if (!_enablePooling) return null;
 
-            int prefabId = prefab.GetInstanceID();
+            SpawnObjectId prefabId = GetRuntimeObjectId(prefab);
 
             if (_pools.TryGetValue(prefabId, out var pool) && pool.Count > 0)
             {
@@ -354,17 +370,19 @@ namespace ZeroEngine.Spawner
             if (instance == null) return;
 
             // 尝试找到对应的池
-            int poolKey = -1;
+            SpawnObjectId poolKey = default;
+            bool foundPool = false;
             foreach (var kvp in _prefabLookup)
             {
                 if (instance.name.Contains(kvp.Value.name))
                 {
                     poolKey = kvp.Key;
+                    foundPool = true;
                     break;
                 }
             }
 
-            if (poolKey == -1)
+            if (!foundPool)
             {
                 // 未找到池，直接销毁
                 Destroy(instance);
