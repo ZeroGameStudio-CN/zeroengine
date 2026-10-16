@@ -251,6 +251,57 @@ def test_cli_same_request_replays_and_offline_state_remains_valid(case, capsys):
     assert verify_state(s.paths.database)["integrity_check"] == "ok"
 
 
+@pytest.mark.parametrize("case", ["active"], indirect=True)
+def test_expired_queued_peer_is_not_granted_a_new_editor_fence(case, monkeypatch):
+    from unity_workspace_scheduler import coordinator
+
+    s, p, owner, token, source_claim, _, _ = case
+    expired, expired_token = s.start_task(p, "expired", "past admission TTL", ttl_seconds=1)
+    _, following_token = s.start_task(p, "following", "valid next waiter")
+    expired_claim = s.acquire_claim(p, expired_token, resources=["unity-live"], keep_queued=True)
+    following = s.acquire_claim(p, following_token, resources=["unity-live"], keep_queued=True)
+    s.release_task(p, token, result="outcome-unknown")
+    before = rows(s, owner["id"])
+    monkeypatch.setattr(coordinator.time, "time", lambda: expired["expires_at"] + 1)
+    release(case)
+    with closing(sqlite3.connect(s.paths.database)) as db:
+        assert (
+            db.execute("SELECT state FROM claims WHERE id=?", (expired_claim["id"],)).fetchone()[0]
+            == "cancelled"
+        )
+        assert (
+            db.execute("SELECT state FROM tasks WHERE id=?", (expired["id"],)).fetchone()[0]
+            == "expired"
+        )
+        assert (
+            db.execute("SELECT state FROM claims WHERE id=?", (following["id"],)).fetchone()[0]
+            == "active"
+        )
+    after = rows(s, owner["id"])
+    assert before[0] == after[0] and before[2] == after[2]
+    assert next(c for c in before[1] if c[0] == source_claim["id"]) == next(
+        c for c in after[1] if c[0] == source_claim["id"]
+    )
+    assert verify_state(s.paths.database)["integrity_check"] == "ok"
+
+
+@pytest.mark.parametrize("case", ["active"], indirect=True)
+def test_receipt_replay_does_not_maintain_the_already_admitted_peer(case, monkeypatch):
+    from unity_workspace_scheduler import coordinator
+
+    s, p, _, token, _, _, _ = case
+    peer, secret = s.start_task(p, "peer", "new Editor owner", ttl_seconds=1)
+    s.acquire_claim(p, secret, resources=["unity-live"], keep_queued=True)
+    s.release_task(p, token, result="outcome-unknown")
+    operation = str(uuid.uuid4())
+    original = release(case, operation_id=operation)
+    before = rows(s, peer["id"])
+    monkeypatch.setattr(coordinator.time, "time", lambda: peer["expires_at"] + 1)
+    replay = release(case, operation_id=operation, receipt_only=True)
+    assert replay["released_at"] == original["released_at"]
+    assert rows(s, peer["id"]) == before
+
+
 @pytest.mark.parametrize(
     "field,value",
     [
