@@ -6814,6 +6814,7 @@ class WorkspaceCoordinator:
             replay = self._replay_or_missing(connection, operation, receipt_only=receipt_only)
             if replay is not None:
                 return replay
+            self._maintain(connection, identifier)
             self._workspace(connection, root)
             task = connection.execute(
                 "SELECT * FROM tasks WHERE id = ? AND workspace_id = ?", (task_id, identifier)

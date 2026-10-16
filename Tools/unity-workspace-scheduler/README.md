@@ -223,6 +223,10 @@ source preservation, then retains all claims in `outcome_unknown`. Ordinary
 active-task release rules remain unchanged. See [the bounded recovery
 contract](docs/setup.md#lost-token-custody-164); unknown work is never replayed.
 
+Version 1.6.7 maintains expired waiters before an Editor-only handoff, preventing
+an expired queue entry from receiving the newly freed resource. Receipt replay
+remains mutation-free and source ownership stays fenced.
+
 Version 1.6.6 adds exact Editor-only recovery for an unknown source task. The
 Router first proves terminal native cleanup; Scheduler releases only its pure
 Editor claim, keeps source claims and the unknown task, and resumes the queue.
