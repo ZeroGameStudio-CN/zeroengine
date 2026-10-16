@@ -16,6 +16,7 @@ from dataclasses import dataclass
 from pathlib import Path, PurePosixPath
 from typing import Any
 
+from . import editor_recovery
 from .errors import (
     AuthorizationError,
     BusyError,
@@ -484,6 +485,13 @@ class WorkspaceCoordinator:
                     "operation_id": receipt["operation_id"],
                 },
             )
+        if receipt["action"] == editor_recovery.ACTION:
+            try:
+                editor_recovery.validate_result(
+                    parse_canonical_json(receipt["parameters_json"]), result
+                )
+            except (TypeError, ValueError, KeyError) as exc:
+                raise StateError("Editor recovery receipt is invalid.") from exc
         terminal_proof = WorkspaceCoordinator._operation_terminal_proof(receipt, result)
         if terminal_proof is not None:
             if "resolution_reason" in terminal_proof:
@@ -600,6 +608,11 @@ class WorkspaceCoordinator:
                 details={"reason": "operation-receipt-invalid", "operation_id": operation_id},
             )
         receipt_task_id = receipt["task_id"]
+        if action == editor_recovery.ACTION:
+            try:
+                editor_recovery.validate_result(parameters, stored_result)
+            except (TypeError, ValueError, KeyError) as exc:
+                raise StateError("Editor recovery receipt is invalid.") from exc
         expected_task_id = (
             stored_result.get("id")
             if action in {"task.start", "task.heartbeat", "task.release", "recovery.resolve"}
@@ -6767,6 +6780,87 @@ class WorkspaceCoordinator:
                         canonical_json(evidence).encode()
                     ).hexdigest(),
                     "claims_released": False,
+                },
+                capacity_before=capacity,
+            )
+
+    def release_unknown_editor(
+        self,
+        workspace: Path | str,
+        task_id: str,
+        claim_id: str,
+        *,
+        operation_id: str,
+        evidence: str,
+        operator_confirmed: bool = False,
+        receipt_only: bool = False,
+    ) -> dict[str, Any]:
+        """Release one pure Editor claim; the unknown source task stays fenced."""
+        root = canonical_workspace(workspace)
+        parameters = {
+            "workspace": root,
+            "task_id": task_id,
+            "claim_id": claim_id,
+            "evidence": evidence.strip() if isinstance(evidence, str) else evidence,
+            "operator_confirmed": operator_confirmed,
+        }
+        try:
+            editor_recovery.validate_parameters(parameters)
+        except (TypeError, ValueError, KeyError) as exc:
+            raise UsageError(str(exc)) from exc
+        identifier = _workspace_id(root)
+        operation = _operation(operation_id, identifier, editor_recovery.ACTION, parameters, None)
+        with self._transaction() as connection:
+            replay = self._replay_or_missing(connection, operation, receipt_only=receipt_only)
+            if replay is not None:
+                return replay
+            self._workspace(connection, root)
+            task = connection.execute(
+                "SELECT * FROM tasks WHERE id = ? AND workspace_id = ?", (task_id, identifier)
+            ).fetchone()
+            if task is None or task["state"] != "outcome_unknown":
+                raise StateError("Only an exact unknown-outcome task can release its Editor fence.")
+            claims = connection.execute(
+                "SELECT * FROM claims WHERE task_id = ? AND workspace_id = ? "
+                "AND state IN ('active','queued','parked') ORDER BY id",
+                (task_id, identifier),
+            ).fetchall()
+            selected = next((c for c in claims if c["id"] == claim_id), None)
+            if selected is None or selected["kind"] != "normal" or selected["state"] != "active":
+                raise StateError("The exact active normal Editor claim is required.")
+            scopes = self._claim_scopes(connection, claim_id)
+            if scopes["write"] or scopes["resource"] != ("unity-live",) or scopes["parked_for"]:
+                raise StateError("Recovery can release only a pure unity-live claim.")
+            retained = [c for c in claims if c["id"] != claim_id]
+            if not retained or any(
+                c["kind"] != "normal"
+                or self._claim_scopes(connection, c["id"])["resource"]
+                or not self._claim_scopes(connection, c["id"])["write"]
+                for c in retained
+            ):
+                raise StateError(
+                    "All retained claims must be source-only; freezes and other resources remain protected."
+                )
+            capacity = self._operation_capacity(connection)["reserved_capacity"]
+            now = self._claim_transition_time(selected, time.time())
+            connection.execute(
+                "UPDATE claims SET state = 'released', released_at = ? WHERE id = ?",
+                (now, claim_id),
+            )
+            self._touch(connection, identifier)
+            self._schedule_workspace(connection, identifier, now)
+            return self._record_operation(
+                connection,
+                operation,
+                {
+                    "task_id": task_id,
+                    "claim_id": claim_id,
+                    "state": "released",
+                    "released_at": now,
+                    "retained_claim_ids": [c["id"] for c in retained],
+                    "task_state": "outcome_unknown",
+                    "source_claims_released": False,
+                    "evidence_sha256": hashlib.sha256(parameters["evidence"].encode()).hexdigest(),
                 },
                 capacity_before=capacity,
             )

@@ -223,6 +223,11 @@ source preservation, then retains all claims in `outcome_unknown`. Ordinary
 active-task release rules remain unchanged. See [the bounded recovery
 contract](docs/setup.md#lost-token-custody-164); unknown work is never replayed.
 
+Version 1.6.6 adds exact Editor-only recovery for an unknown source task. The
+Router first proves terminal native cleanup; Scheduler releases only its pure
+Editor claim, keeps source claims and the unknown task, and resumes the queue.
+See `docs/setup.md#editor-only-recovery-166` for receipt and cohort boundaries.
+
 Version 1.6.5 preserves owner-cancelled restorations in terminal park receipts.
 Backup/verification accepts the writer's legitimate released/cancelled combination
 only when every state matches that exact task's actual terminal claim. It rejects

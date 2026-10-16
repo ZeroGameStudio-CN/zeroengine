@@ -187,6 +187,14 @@ def build_parser() -> SchedulerArgumentParser:
     resolve.add_argument("--resolution", choices=("completed", "failed"), required=True)
     resolve.add_argument("--evidence", required=True)
     resolve.set_defaults(handler=_recovery_resolve)
+    editor = recovery_commands.add_parser("release-editor")
+    _workspace_argument(editor)
+    _operation_arguments(editor)
+    editor.add_argument("--task-id", required=True)
+    editor.add_argument("--claim-id", required=True)
+    editor.add_argument("--evidence", required=True)
+    editor.add_argument("--operator-confirmed", action="store_true", required=True)
+    editor.set_defaults(handler=_recovery_release_editor)
     fence = recovery_commands.add_parser("fence-missing-token")
     _workspace_argument(fence)
     _operation_arguments(fence)
@@ -659,6 +667,21 @@ def _recovery_fence_missing_token(
     )
 
 
+def _recovery_release_editor(coordinator: WorkspaceCoordinator, args: argparse.Namespace):
+    return (
+        "Exact Editor released; source claims and unknown task retained.",
+        coordinator.release_unknown_editor(
+            args.workspace,
+            args.task_id,
+            args.claim_id,
+            operation_id=args.operation_id,
+            evidence=args.evidence,
+            operator_confirmed=args.operator_confirmed,
+            receipt_only=args.receipt_only,
+        ),
+    )
+
+
 def _recovery_resolve(
     coordinator: WorkspaceCoordinator, args: argparse.Namespace
 ) -> tuple[str, dict[str, Any]]:
@@ -748,6 +771,7 @@ def run(argv: Sequence[str] | None = None) -> int:
                 _state_backup,
                 _state_restore,
                 _workspace_status,
+                _recovery_release_editor,
             }
             and not getattr(args, "receipt_only", False)
         ):
