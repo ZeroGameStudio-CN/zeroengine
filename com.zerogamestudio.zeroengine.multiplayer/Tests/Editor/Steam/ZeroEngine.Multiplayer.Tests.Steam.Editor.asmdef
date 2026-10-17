@@ -1,0 +1,32 @@
+{
+  "name": "ZeroEngine.Multiplayer.Tests.Steam.Editor",
+  "rootNamespace": "ZeroEngine.Multiplayer.Tests.Steam",
+  "references": [
+    "ZeroEngine.Multiplayer.Core",
+    "ZeroEngine.Multiplayer.Steam",
+    "UnityEngine.TestRunner",
+    "UnityEditor.TestRunner"
+  ],
+  "includePlatforms": [
+    "Editor"
+  ],
+  "excludePlatforms": [],
+  "allowUnsafeCode": false,
+  "overrideReferences": true,
+  "precompiledReferences": [
+    "nunit.framework.dll"
+  ],
+  "autoReferenced": false,
+  "defineConstraints": [
+    "UNITY_INCLUDE_TESTS",
+    "ZEROENGINE_MULTIPLAYER_STEAM_TESTS"
+  ],
+  "versionDefines": [
+    {
+      "name": "com.rlabrecque.steamworks.net",
+      "expression": "[2024.8.0,2025.0.0)",
+      "define": "ZEROENGINE_MULTIPLAYER_STEAM_TESTS"
+    }
+  ],
+  "noEngineReferences": false
+}
