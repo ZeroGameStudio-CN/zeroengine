@@ -1,5 +1,15 @@
 # Changelog
 
+## 2.1.1 - 2026-08-13
+
+- Added project-configurable Data Toolkit UI text with compatible English defaults.
+
+## 2.1.0 - 2026-08-13
+
+- Added a reusable `DataToolkitWorkspacePanel` for in-place Dashboard embedding.
+- Preserved type, asset, search, column width, and scroll state across embedded panel recreation.
+- Kept the standalone window API for compatible external consumers without sharing its hidden embedded host.
+
 ## 2.0.1 - 2026-08-10
 
 - Localized the Dashboard host label and description to Simplified Chinese.
