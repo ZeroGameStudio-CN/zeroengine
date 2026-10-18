@@ -200,6 +200,23 @@ def _path_conflicts(left: str, right: str) -> bool:
     )
 
 
+def _write_scopes_conflict(left: tuple[str, ...], right: tuple[str, ...]) -> bool:
+    """Compare exact paths and ancestors once per scope, not every path pair."""
+    if not left or not right:
+        return False
+    left_units = {_platform_case_identity(path).removesuffix(".meta") for path in left}
+    right_units = {_platform_case_identity(path).removesuffix(".meta") for path in right}
+    if "." in left_units or "." in right_units or left_units & right_units:
+        return True
+    for paths, other in ((left_units, right_units), (right_units, left_units)):
+        for path in paths:
+            while "/" in path:
+                path = path.rsplit("/", 1)[0]
+                if path in other:
+                    return True
+    return False
+
+
 class WorkspaceCoordinator:
     def __init__(self, paths: StatePaths) -> None:
         self.paths = paths
@@ -3247,11 +3264,7 @@ class WorkspaceCoordinator:
             return True
         if set(left_scopes["resource"]) & set(right_scopes["resource"]):
             return True
-        return any(
-            _path_conflicts(left_path, right_path)
-            for left_path in left_scopes["write"]
-            for right_path in right_scopes["write"]
-        )
+        return _write_scopes_conflict(left_scopes["write"], right_scopes["write"])
 
     @staticmethod
     def _finalize_due_wait_operations(
