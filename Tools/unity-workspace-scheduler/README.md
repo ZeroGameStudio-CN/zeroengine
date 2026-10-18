@@ -4,6 +4,12 @@
 
 It does not start or inspect Unity, run tests, call MCP, inspect version control, or install anything into a Unity project. The package has no runtime dependencies. The Router uses only the command's JSON process protocol; it does not import the Python package or depend on its installation layout.
 
+Version 1.6.9 removes pairwise write-path comparisons from scheduling. Normalized
+sets and ancestor lookups keep the same path, `.meta`, root and host case rules
+while reducing write-lock occupancy for many simultaneous source claims. It
+does not change FIFO, priority, ownership, recovery, protocol or state schema.
+Activate only through the existing drained SDK gate; never interrupt waiters.
+
 Version 1.6.8 shortens the write transaction used by status, admission and park
 polling: deadline maintenance uses the existing action index instead of scanning
 every retained heartbeat through the workspace-history index. It retains the
