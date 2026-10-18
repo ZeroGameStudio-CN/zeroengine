@@ -4508,7 +4508,6 @@ class WorkspaceCoordinator:
                     and terminal_proof is None
                     and receipt["terminal_json"] is None
                     and receipt["retired_at"] is None
-                    and receipt["delivered_at"] is not None
                     and stored_result.get("state") in {"completed", "failed"}
                     and stored_result.get("result") == stored_result.get("state")
                 )
@@ -4764,7 +4763,11 @@ class WorkspaceCoordinator:
                                 and release_result.get("state") == task["state"]
                                 and release_result.get("result") == task["result"]
                                 and release_result.get("finished_at") == task["finished_at"]
-                                and release_receipt["delivered_at"] is not None
+                                and (
+                                    release_receipt["delivered_at"] is not None
+                                    or normal_release_replay
+                                    and release_receipt["operation_id"] == validated_id
+                                )
                                 and (
                                     release_proof is None
                                     or (
@@ -4813,7 +4816,6 @@ class WorkspaceCoordinator:
                             pending_release_cleanup_replay = (
                                 action == "task.release"
                                 and release_receipt["operation_id"] == validated_id
-                                and release_receipt["delivered_at"] is not None
                                 and release_receipt["terminal_json"] is None
                                 and release_receipt["retired_at"] is None
                                 and release_receipt["token_cleanup_path"] == release_path
@@ -4952,6 +4954,24 @@ class WorkspaceCoordinator:
                             "Missing task token path is still bound to another live cleanup obligation.",
                             details={
                                 "reason": "task-token-path-in-use",
+                                "operation_id": validated_id,
+                                "recovery_required": True,
+                            },
+                        )
+                # A lost token before delivery is recoverable only for this exact
+                # completed/failed release. Recheck retained path custody and the
+                # absence of live claims; this probe never ACKs or changes state.
+                if normal_release_replay and receipt["delivered_at"] is None:
+                    live_claim = connection.execute(
+                        "SELECT 1 FROM claims WHERE task_id = ? "
+                        "AND state IN ('active', 'queued', 'parked') LIMIT 1",
+                        (receipt["task_id"],),
+                    ).fetchone()
+                    if not pending_release_cleanup_replay or live_claim is not None:
+                        raise StateError(
+                            "Undelivered release has no exclusive terminal cleanup custody.",
+                            details={
+                                "reason": "task-token-missing",
                                 "operation_id": validated_id,
                                 "recovery_required": True,
                             },
