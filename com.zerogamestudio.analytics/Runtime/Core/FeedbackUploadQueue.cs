@@ -2,6 +2,8 @@ using System;
 using System.Collections;
 using System.Collections.Generic;
 using System.IO;
+using System.Security.Cryptography;
+using System.Text;
 using UnityEngine;
 using UnityEngine.Networking;
 
@@ -16,7 +18,11 @@ namespace ZGS.Analytics
         private const int MaxPendingCount = 10;
         private const int MaxPendingAgeDays = 7;
         private const int MaxRetries = 3;
+        private const int QueueSchemaVersion = 1;
+        private const long NonRetryableRecheckDelaySeconds = 6 * 60 * 60;
         private const string UploadSecretHeaderName = "X-Upload-Secret";
+        private const string IdempotencyHeaderName = "Idempotency-Key";
+        private const string SubmissionIdHeaderName = "X-Feedback-Submission-Id";
         private static readonly int[] RetryDelays = { 2, 4, 8 }; // 秒
         private static readonly float[] BackgroundRetryDelays = { 60f, 300f, 900f, 1800f };
 
@@ -27,11 +33,14 @@ namespace ZGS.Analytics
         private static Func<string, bool> _persistQueueOverride;
         private static Action<string> _deleteFileOverride;
         private static Func<PendingUpload, Action<bool>, IEnumerator> _tryUploadOverride;
+        private static Func<PendingUpload, Action<FeedbackUploadAttempt>, IEnumerator> _tryUploadDetailedOverride;
         private static string _queueKeyOverride;
         private static string _feedbackDirectoryOverride;
 
         private static string QueueStorageKey =>
             string.IsNullOrEmpty(_queueKeyOverride) ? QueueKey : _queueKeyOverride;
+
+        private static string QueueBackupStorageKey => QueueStorageKey + ".backup";
 
         /// <summary>
         /// 队列项收到 HTTP 成功响应，并已从持久队列移除后触发。
@@ -52,11 +61,19 @@ namespace ZGS.Analytics
         public class PendingUpload
         {
             public string submissionId;
+            public string idempotencyKey;
             public string zipPath;
             public string version;
             public string userName;
             public long createdAt;
             public int retryCount;
+            public long fileSize;
+            public string fileSha256;
+            public bool blocked;
+            public long blockedUntil;
+            public string lastFailureCode;
+            public string lastFailureReason;
+            public long lastAttemptAt;
         }
 
         /// <summary>
@@ -66,6 +83,14 @@ namespace ZGS.Analytics
         private class QueueWrapper
         {
             public List<PendingUpload> items = new();
+        }
+
+        [Serializable]
+        private class QueueEnvelope
+        {
+            public int schemaVersion;
+            public string payload;
+            public string checksum;
         }
 
         /// <summary>
@@ -114,7 +139,7 @@ namespace ZGS.Analytics
         /// </summary>
         public static bool TryEnqueue(string zipPath, string version, string userName)
         {
-            return TryEnqueue(string.Empty, zipPath, version, userName);
+            return TryEnqueueCore(string.Empty, string.Empty, zipPath, version, userName);
         }
 
         /// <summary>
@@ -122,6 +147,16 @@ namespace ZGS.Analytics
         /// </summary>
         public static bool TryEnqueue(
             string submissionId,
+            string zipPath,
+            string version,
+            string userName)
+        {
+            return TryEnqueueCore(submissionId, submissionId, zipPath, version, userName);
+        }
+
+        private static bool TryEnqueueCore(
+            string submissionId,
+            string idempotencyKey,
             string zipPath,
             string version,
             string userName)
@@ -139,6 +174,15 @@ namespace ZGS.Analytics
             if (_pendingUploads.Exists(p => p.zipPath == zipPath))
                 return true;
 
+            if (!TryComputeFileFingerprint(zipPath, out long fileSize, out string fileSha256, out string fingerprintFailure))
+            {
+                AnalyticsLog.LogWarning($"[FeedbackQueue] 入队失败，文件校验失败: {SafeLogValue(fingerprintFailure)}");
+                return false;
+            }
+
+            if (string.IsNullOrEmpty(idempotencyKey))
+                idempotencyKey = Guid.NewGuid().ToString("N");
+
             var candidate = new List<PendingUpload>(_pendingUploads);
             var evicted = new List<PendingUpload>();
 
@@ -152,11 +196,19 @@ namespace ZGS.Analytics
             var pending = new PendingUpload
             {
                 submissionId = submissionId ?? string.Empty,
+                idempotencyKey = idempotencyKey,
                 zipPath = zipPath,
                 version = version,
                 userName = userName,
                 createdAt = DateTimeOffset.UtcNow.ToUnixTimeSeconds(),
-                retryCount = 0
+                retryCount = 0,
+                fileSize = fileSize,
+                fileSha256 = fileSha256,
+                blocked = false,
+                blockedUntil = 0,
+                lastFailureCode = string.Empty,
+                lastFailureReason = string.Empty,
+                lastAttemptAt = 0
             };
 
             candidate.Add(pending);
@@ -190,6 +242,11 @@ namespace ZGS.Analytics
         /// </summary>
         public static IEnumerator ProcessPendingUploads()
         {
+            return ProcessPendingUploadsInternal(false);
+        }
+
+        private static IEnumerator ProcessPendingUploadsInternal(bool respectBlockedUntil)
+        {
             if (AnalyticsBootstrap.IsAutomationIsolated) yield break;
             if (_isProcessing) yield break;
             if (_pendingUploads == null) LoadQueue();
@@ -204,7 +261,10 @@ namespace ZGS.Analytics
 
                 while (true)
                 {
-                    PendingUpload pending = _pendingUploads.Find(item => !processedPaths.Contains(item.zipPath));
+                    long now = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
+                    PendingUpload pending = _pendingUploads.Find(item =>
+                        !processedPaths.Contains(item.zipPath) &&
+                        (!respectBlockedUntil || IsEligibleForAttempt(item, now)));
                     if (pending == null)
                         break;
 
@@ -212,19 +272,49 @@ namespace ZGS.Analytics
 
                     if (!File.Exists(pending.zipPath))
                     {
-                        ReportUploadFailure(pending.submissionId, FeedbackFailureCodes.FileRead, "file_missing");
+                        ReportUploadFailure(
+                            pending.submissionId,
+                            FeedbackFailureCodes.FileRead,
+                            "file_missing",
+                            attempt: pending.retryCount + 1);
                         TryRemovePersisted(pending);
                         continue;
                     }
 
-                    bool success = false;
-                    yield return TryUpload(pending, result => success = result);
+                    if (!TryValidatePendingFile(pending, out string validationReason))
+                    {
+                        ReportUploadFailure(
+                            pending.submissionId,
+                            FeedbackFailureCodes.FileRead,
+                            validationReason,
+                            attempt: pending.retryCount + 1);
+                        PersistFailedAttempt(
+                            pending,
+                            new FeedbackUploadAttempt(
+                                false,
+                                FeedbackFailureCodes.FileRead,
+                                reason: validationReason));
+                        continue;
+                    }
 
-                    if (success)
+                    FeedbackUploadAttempt attempt = new FeedbackUploadAttempt(false, FeedbackFailureCodes.Unknown);
+                    yield return TryUpload(pending, result => attempt = result);
+
+                    if (attempt.Succeeded)
                     {
                         if (!TryRemovePersisted(pending))
                         {
-                            ReportUploadFailure(pending.submissionId, FeedbackFailureCodes.QueuePersistence, "queue_ack_persistence_failed");
+                            ReportUploadFailure(
+                                pending.submissionId,
+                                FeedbackFailureCodes.QueuePersistence,
+                                "queue_ack_persistence_failed",
+                                attempt: pending.retryCount + 1);
+                            PersistFailedAttempt(
+                                pending,
+                                new FeedbackUploadAttempt(
+                                    false,
+                                    FeedbackFailureCodes.QueuePersistence,
+                                    reason: "queue_ack_persistence_failed"));
                             continue;
                         }
 
@@ -235,8 +325,9 @@ namespace ZGS.Analytics
                     }
                     else
                     {
-                        int retryCount = TryIncrementRetryCount(pending);
-                        AnalyticsLog.LogWarning($"[FeedbackQueue] 上传失败，重试次数: {retryCount}");
+                        int retryCount = PersistFailedAttempt(pending, attempt);
+                        AnalyticsLog.LogWarning(
+                            $"[FeedbackQueue] 上传失败 code={attempt.FailureCode} retryable={attempt.Retryable} 重试次数: {retryCount}");
                     }
                 }
             }
@@ -256,7 +347,8 @@ namespace ZGS.Analytics
                 onComplete?.Invoke(false);
                 yield break;
             }
-            bool success = false;
+            string idempotencyKey = Guid.NewGuid().ToString("N");
+            FeedbackUploadAttempt lastAttempt = new FeedbackUploadAttempt(false, FeedbackFailureCodes.Unknown);
 
             for (int i = 0; i <= MaxRetries; i++)
             {
@@ -267,31 +359,47 @@ namespace ZGS.Analytics
                     yield return new WaitForSecondsRealtime(delay);
                 }
 
-                yield return DoUpload(zipPath, version, result => success = result);
+                yield return DoUpload(
+                    zipPath,
+                    version,
+                    result => lastAttempt = result,
+                    submissionId: string.Empty,
+                    idempotencyKey: idempotencyKey,
+                    attempt: i + 1);
 
-                if (success)
+                if (lastAttempt.Succeeded)
                 {
                     AnalyticsLog.Log($"[FeedbackQueue] 上传成功: {Path.GetFileName(zipPath)}");
                     onComplete?.Invoke(true);
                     yield break;
                 }
+
+                if (!lastAttempt.Retryable)
+                    break;
             }
 
             // 所有重试都失败，加入队列
             AnalyticsLog.LogWarning($"[FeedbackQueue] 重试 {MaxRetries} 次后仍失败，加入离线队列");
-            Enqueue(zipPath, version, userName);
+            TryEnqueueCore(string.Empty, idempotencyKey, zipPath, version, userName);
             onComplete?.Invoke(false);
         }
 
         /// <summary>
         /// 执行单次上传
         /// </summary>
-        private static IEnumerator DoUpload(string zipPath, string version, Action<bool> onComplete, string submissionId = null)
+        private static IEnumerator DoUpload(
+            string zipPath,
+            string version,
+            Action<FeedbackUploadAttempt> onComplete,
+            string submissionId = null,
+            string idempotencyKey = null,
+            int attempt = 1)
         {
             if (!AnalyticsConfig.IsUploadConfigured)
             {
-                ReportUploadFailure(submissionId, FeedbackFailureCodes.NotConfigured, "not_configured");
-                onComplete?.Invoke(false);
+                const string code = FeedbackFailureCodes.NotConfigured;
+                ReportUploadFailure(submissionId, code, "not_configured", attempt: attempt);
+                onComplete?.Invoke(new FeedbackUploadAttempt(false, code, reason: "not_configured"));
                 yield break;
             }
 
@@ -307,8 +415,8 @@ namespace ZGS.Analytics
             }
             catch (Exception e)
             {
-                ReportUploadFailure(submissionId, FeedbackFailureCodes.FileRead, e.GetType().Name);
-                onComplete?.Invoke(false);
+                ReportUploadFailure(submissionId, FeedbackFailureCodes.FileRead, e.GetType().Name, attempt: attempt);
+                onComplete?.Invoke(new FeedbackUploadAttempt(false, FeedbackFailureCodes.FileRead, reason: e.GetType().Name));
                 yield break;
             }
 
@@ -316,17 +424,31 @@ namespace ZGS.Analytics
             UnityWebRequestAsyncOperation operation = null;
             try
             {
-                request = CreateUploadRequest(uploadUrl, version, timestamp, fileName, fileData);
+                request = CreateUploadRequest(
+                    uploadUrl,
+                    version,
+                    timestamp,
+                    fileName,
+                    fileData,
+                    submissionId,
+                    idempotencyKey);
                 operation = request.SendWebRequest();
             }
             catch (Exception exception)
             {
                 request?.Dispose();
-                ReportUploadFailure(submissionId, FeedbackFailureCodes.Connection, exception.GetType().Name);
+                ReportUploadFailure(
+                    submissionId,
+                    FeedbackFailureCodes.Connection,
+                    exception.GetType().Name,
+                    attempt: attempt);
             }
             if (operation == null)
             {
-                onComplete?.Invoke(false);
+                onComplete?.Invoke(new FeedbackUploadAttempt(
+                    false,
+                    FeedbackFailureCodes.Connection,
+                    reason: "request_creation_failed"));
                 yield break;
             }
 
@@ -336,19 +458,29 @@ namespace ZGS.Analytics
                 bool success = request.result == UnityWebRequest.Result.Success;
                 if (!success)
                 {
+                    string failureCode = FeedbackFailureCodes.FromTransport(request.result, request.responseCode, request.error);
+                    string requestId = request.GetResponseHeader("X-Request-ID") ?? request.GetResponseHeader("CF-RAY");
+                    string reason = FeedbackFailureCodes.TransportReason(request.result, request.responseCode, request.error);
                     ReportUploadFailure(
                         submissionId,
-                        FeedbackFailureCodes.FromTransport(request.result, request.responseCode, request.error),
-                        FeedbackFailureCodes.TransportReason(request.result, request.responseCode, request.error),
+                        failureCode,
+                        reason,
                         request.responseCode,
-                        request.GetResponseHeader("X-Request-ID") ?? request.GetResponseHeader("CF-RAY"));
+                        requestId,
+                        attempt);
+                    onComplete?.Invoke(new FeedbackUploadAttempt(
+                        false,
+                        failureCode,
+                        request.responseCode,
+                        requestId,
+                        reason));
                 }
                 else
                 {
                     string requestId = FeedbackFailureCodes.SafeDiagnosticId(request.GetResponseHeader("X-Request-ID") ?? request.GetResponseHeader("CF-RAY"));
                     Debug.Log($"[FeedbackUpload] confirmed submission={FeedbackFailureCodes.SafeDiagnosticId(submissionId)} http={request.responseCode} request={requestId}");
+                    onComplete?.Invoke(new FeedbackUploadAttempt(true, httpStatusCode: request.responseCode, requestId: requestId));
                 }
-                onComplete?.Invoke(success);
             }
         }
 
@@ -357,15 +489,25 @@ namespace ZGS.Analytics
             string version,
             string timestamp,
             string fileName,
-            byte[] fileData)
+            byte[] fileData,
+            string submissionId,
+            string idempotencyKey)
         {
             var form = new WWWForm();
             form.AddField("version", version);
             form.AddField("timestamp", timestamp);
+            if (!string.IsNullOrEmpty(submissionId))
+                form.AddField("submission_id", submissionId);
             form.AddBinaryData("file", fileData, fileName, "application/zip");
 
             UnityWebRequest request = UnityWebRequest.Post(uploadUrl, form);
             request.SetRequestHeader(UploadSecretHeaderName, AnalyticsConfig.UploadSecret);
+            if (!string.IsNullOrEmpty(idempotencyKey))
+            {
+                request.SetRequestHeader(IdempotencyHeaderName, idempotencyKey);
+                if (!string.IsNullOrEmpty(submissionId))
+                    request.SetRequestHeader(SubmissionIdHeaderName, submissionId);
+            }
             request.timeout = 60;
             return request;
         }
@@ -373,15 +515,32 @@ namespace ZGS.Analytics
         /// <summary>
         /// 尝试上传单个待处理项
         /// </summary>
-        private static IEnumerator TryUpload(PendingUpload pending, Action<bool> onComplete)
+        private static IEnumerator TryUpload(PendingUpload pending, Action<FeedbackUploadAttempt> onComplete)
         {
-            if (_tryUploadOverride != null)
+            if (_tryUploadDetailedOverride != null)
             {
-                yield return _tryUploadOverride(pending, onComplete);
+                yield return _tryUploadDetailedOverride(pending, onComplete);
                 yield break;
             }
 
-            yield return DoUpload(pending.zipPath, pending.version, onComplete, pending.submissionId);
+            if (_tryUploadOverride != null)
+            {
+                bool success = false;
+                yield return _tryUploadOverride(pending, result => success = result);
+                onComplete?.Invoke(new FeedbackUploadAttempt(
+                    success,
+                    success ? null : FeedbackFailureCodes.Unknown,
+                    reason: success ? null : "test_or_legacy_override"));
+                yield break;
+            }
+
+            yield return DoUpload(
+                pending.zipPath,
+                pending.version,
+                onComplete,
+                pending.submissionId,
+                pending.idempotencyKey,
+                pending.retryCount + 1);
         }
 
         /// <summary>
@@ -403,9 +562,20 @@ namespace ZGS.Analytics
                     if (_pendingUploads.Count == 0)
                         yield break;
 
+                    if (!HasEligiblePendingUploads())
+                    {
+                        float blockedDelay = GetNextBlockedDelaySeconds();
+                        if (blockedDelay < 0f)
+                            yield break;
+
+                        int observedMutationVersion = _queueMutationVersion;
+                        yield return WaitForRetryOrQueueMutation(blockedDelay, observedMutationVersion);
+                        continue;
+                    }
+
                     int countBefore = _pendingUploads.Count;
                     if (!_isProcessing)
-                        yield return ProcessPendingUploads();
+                        yield return ProcessPendingUploadsInternal(true);
 
                     if (_pendingUploads == null)
                         LoadQueue();
@@ -413,11 +583,25 @@ namespace ZGS.Analytics
                     if (_pendingUploads.Count == 0)
                         yield break;
 
+                    if (!HasEligiblePendingUploads())
+                    {
+                        float blockedDelay = GetNextBlockedDelaySeconds();
+                        if (blockedDelay < 0f)
+                            yield break;
+
+                        int observedMutationVersion = _queueMutationVersion;
+                        yield return WaitForRetryOrQueueMutation(blockedDelay, observedMutationVersion);
+                        continue;
+                    }
+
                     bool madeProgress = _pendingUploads.Count < countBefore;
                     if (madeProgress)
                         retryDelayIndex = 0;
 
                     float delay = GetBackgroundRetryDelaySeconds(retryDelayIndex);
+                    float blockedDelay = GetNextBlockedDelaySeconds();
+                    if (blockedDelay >= 0f)
+                        delay = Math.Min(delay, blockedDelay);
                     retryDelayIndex = Math.Min(retryDelayIndex + 1, BackgroundRetryDelays.Length - 1);
                     int observedMutationVersion = _queueMutationVersion;
 
@@ -446,6 +630,44 @@ namespace ZGS.Analytics
                 yield return new WaitForSecondsRealtime(slice);
                 remaining -= slice;
             }
+        }
+
+        private static bool HasEligiblePendingUploads()
+        {
+            if (_pendingUploads == null || _pendingUploads.Count == 0)
+                return false;
+
+            long now = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
+            foreach (PendingUpload item in _pendingUploads)
+            {
+                if (IsEligibleForAttempt(item, now))
+                    return true;
+            }
+
+            return false;
+        }
+
+        private static bool IsEligibleForAttempt(PendingUpload item, long now)
+        {
+            return item != null && (!item.blocked || item.blockedUntil <= now);
+        }
+
+        private static float GetNextBlockedDelaySeconds()
+        {
+            if (_pendingUploads == null)
+                return -1f;
+
+            long now = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
+            long soonest = long.MaxValue;
+            foreach (PendingUpload item in _pendingUploads)
+            {
+                if (item == null || !item.blocked || item.blockedUntil <= now)
+                    continue;
+
+                soonest = Math.Min(soonest, item.blockedUntil);
+            }
+
+            return soonest == long.MaxValue ? -1f : Math.Max(0f, soonest - now);
         }
 
         /// <summary>
@@ -492,14 +714,21 @@ namespace ZGS.Analytics
             return true;
         }
 
-        private static int TryIncrementRetryCount(PendingUpload item)
+        private static int PersistFailedAttempt(PendingUpload item, FeedbackUploadAttempt attempt)
         {
             var candidate = ClonePendingUploads(_pendingUploads);
             PendingUpload candidateItem = candidate.Find(p => p.zipPath == item.zipPath);
             if (candidateItem == null)
                 return item.retryCount;
 
-            candidateItem.retryCount++;
+            candidateItem.retryCount = Math.Min(int.MaxValue, candidateItem.retryCount + 1);
+            candidateItem.lastFailureCode = FeedbackFailureCodes.Normalize(attempt.FailureCode);
+            candidateItem.lastFailureReason = FeedbackFailureCodes.SafeDiagnosticId(attempt.Reason);
+            candidateItem.lastAttemptAt = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
+            candidateItem.blocked = !attempt.Retryable;
+            candidateItem.blockedUntil = attempt.Retryable
+                ? 0
+                : candidateItem.lastAttemptAt + NonRetryableRecheckDelaySeconds;
             if (TryPersistQueue(candidate))
             {
                 _pendingUploads = candidate;
@@ -517,15 +746,92 @@ namespace ZGS.Analytics
                 clone.Add(new PendingUpload
                 {
                     submissionId = item.submissionId,
+                    idempotencyKey = item.idempotencyKey,
                     zipPath = item.zipPath,
                     version = item.version,
                     userName = item.userName,
                     createdAt = item.createdAt,
-                    retryCount = item.retryCount
+                    retryCount = item.retryCount,
+                    fileSize = item.fileSize,
+                    fileSha256 = item.fileSha256,
+                    blocked = item.blocked,
+                    blockedUntil = item.blockedUntil,
+                    lastFailureCode = item.lastFailureCode,
+                    lastFailureReason = item.lastFailureReason,
+                    lastAttemptAt = item.lastAttemptAt
                 });
             }
 
             return clone;
+        }
+
+        private static bool TryValidatePendingFile(PendingUpload pending, out string reason)
+        {
+            reason = string.Empty;
+            if (!TryComputeFileFingerprint(pending.zipPath, out long fileSize, out string fileSha256, out reason))
+                return false;
+
+            if (pending.fileSize > 0 && pending.fileSize != fileSize)
+            {
+                reason = "file_size_changed";
+                return false;
+            }
+
+            if (!string.IsNullOrEmpty(pending.fileSha256) &&
+                !string.Equals(pending.fileSha256, fileSha256, StringComparison.OrdinalIgnoreCase))
+            {
+                reason = "file_checksum_changed";
+                return false;
+            }
+
+            return true;
+        }
+
+        private static bool TryComputeFileFingerprint(
+            string path,
+            out long fileSize,
+            out string fileSha256,
+            out string reason)
+        {
+            fileSize = 0;
+            fileSha256 = string.Empty;
+            reason = string.Empty;
+
+            try
+            {
+                using (var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read))
+                using (var sha = SHA256.Create())
+                {
+                    fileSize = stream.Length;
+                    if (fileSize <= 0)
+                    {
+                        reason = "file_empty";
+                        return false;
+                    }
+
+                    fileSha256 = ToLowerHex(sha.ComputeHash(stream));
+                }
+
+                return true;
+            }
+            catch (Exception exception) when (exception is IOException || exception is UnauthorizedAccessException)
+            {
+                reason = exception.GetType().Name;
+                return false;
+            }
+        }
+
+        private static string ToLowerHex(byte[] bytes)
+        {
+            var builder = new StringBuilder(bytes.Length * 2);
+            foreach (byte value in bytes)
+                builder.Append(value.ToString("x2"));
+            return builder.ToString();
+        }
+
+        private static string SafeLogValue(string value)
+        {
+            return FeedbackFailureCodes.SafeDiagnosticId(value) ?? string.Empty;
         }
 
         private static void DeleteFileBestEffort(string zipPath)
@@ -589,11 +895,23 @@ namespace ZGS.Analytics
             }
         }
 
-        internal static void ReportUploadFailure(string submissionId, string code, string reason, long httpStatusCode = 0, string requestId = null)
+        internal static void ReportUploadFailure(
+            string submissionId,
+            string code,
+            string reason,
+            long httpStatusCode = 0,
+            string requestId = null,
+            int attempt = 0)
         {
-            var failure = new FeedbackUploadFailure(submissionId, code, httpStatusCode, requestId);
+            var failure = new FeedbackUploadFailure(
+                submissionId,
+                code,
+                httpStatusCode,
+                requestId,
+                reason,
+                attempt);
             // Always available in release Players; never log URLs, credentials, paths, bodies or player input.
-            Debug.LogWarning($"[FeedbackUpload] failed code={failure.FailureCode} submission={FeedbackFailureCodes.SafeDiagnosticId(submissionId)} http={failure.HttpStatusCode} request={failure.RequestId} reason={FeedbackFailureCodes.SafeDiagnosticId(reason)}");
+            Debug.LogWarning($"[FeedbackUpload] failed code={failure.FailureCode} retryable={failure.Retryable} submission={FeedbackFailureCodes.SafeDiagnosticId(submissionId)} http={failure.HttpStatusCode} request={failure.RequestId} reason={failure.Reason} attempt={failure.Attempt}");
             if (string.IsNullOrEmpty(submissionId))
                 return;
             Action<FeedbackUploadFailure> handlers = QueuedSubmissionFailed;
@@ -617,18 +935,25 @@ namespace ZGS.Analytics
             _pendingUploads = new List<PendingUpload>();
 
             string json = PlayerPrefs.GetString(QueueStorageKey, "");
-            if (string.IsNullOrEmpty(json)) return;
-
-            try
+            if (TryDeserializeQueue(json, out List<PendingUpload> items, out bool legacy))
             {
-                var wrapper = JsonUtility.FromJson<QueueWrapper>(json);
-                if (wrapper?.items != null)
-                    _pendingUploads = wrapper.items;
+                _pendingUploads = items;
+                if (legacy)
+                    TryPersistQueue(_pendingUploads);
+                return;
             }
-            catch (Exception e)
+
+            string backup = PlayerPrefs.GetString(QueueBackupStorageKey, "");
+            if (TryDeserializeQueue(backup, out items, out _))
             {
-                AnalyticsLog.LogWarning($"[FeedbackQueue] 加载队列失败: {e.GetType().Name}");
-                _pendingUploads = new List<PendingUpload>();
+                _pendingUploads = items;
+                AnalyticsLog.LogWarning("[FeedbackQueue] 主队列校验失败，已恢复备份队列");
+                return;
+            }
+
+            if (!string.IsNullOrEmpty(json) || !string.IsNullOrEmpty(backup))
+            {
+                AnalyticsLog.LogWarning("[FeedbackQueue] 主队列和备份队列均无法通过校验，保留原始数据供诊断");
             }
         }
 
@@ -637,11 +962,18 @@ namespace ZGS.Analytics
         /// </summary>
         private static bool TryPersistQueue(List<PendingUpload> items)
         {
+            string payload;
             string json;
             try
             {
                 var wrapper = new QueueWrapper { items = items };
-                json = JsonUtility.ToJson(wrapper);
+                payload = JsonUtility.ToJson(wrapper);
+                json = JsonUtility.ToJson(new QueueEnvelope
+                {
+                    schemaVersion = QueueSchemaVersion,
+                    payload = payload,
+                    checksum = ComputeChecksum(payload)
+                });
             }
             catch (Exception e)
             {
@@ -665,11 +997,26 @@ namespace ZGS.Analytics
             string storageKey = QueueStorageKey;
             bool hadOriginal = PlayerPrefs.HasKey(storageKey);
             string originalJson = PlayerPrefs.GetString(storageKey, string.Empty);
+            bool hadBackup = PlayerPrefs.HasKey(QueueBackupStorageKey);
+            string originalBackup = PlayerPrefs.GetString(QueueBackupStorageKey, string.Empty);
 
             try
             {
                 PlayerPrefs.SetString(storageKey, json);
                 PlayerPrefs.Save();
+
+                string persisted = PlayerPrefs.GetString(storageKey, string.Empty);
+                if (!string.Equals(persisted, json, StringComparison.Ordinal) ||
+                    !TryDeserializeQueue(persisted, out _, out _))
+                    throw new IOException("queue_readback_mismatch");
+
+                PlayerPrefs.SetString(QueueBackupStorageKey, json);
+                PlayerPrefs.Save();
+                string persistedBackup = PlayerPrefs.GetString(QueueBackupStorageKey, string.Empty);
+                if (!string.Equals(persistedBackup, json, StringComparison.Ordinal) ||
+                    !TryDeserializeQueue(persistedBackup, out _, out _))
+                    throw new IOException("queue_backup_readback_mismatch");
+
                 return true;
             }
             catch (Exception e)
@@ -680,6 +1027,10 @@ namespace ZGS.Analytics
                         PlayerPrefs.SetString(storageKey, originalJson);
                     else
                         PlayerPrefs.DeleteKey(storageKey);
+                    if (hadBackup)
+                        PlayerPrefs.SetString(QueueBackupStorageKey, originalBackup);
+                    else
+                        PlayerPrefs.DeleteKey(QueueBackupStorageKey);
                     PlayerPrefs.Save();
                 }
                 catch
@@ -690,6 +1041,53 @@ namespace ZGS.Analytics
                 AnalyticsLog.LogWarning($"[FeedbackQueue] 保存队列失败: {e.GetType().Name}");
                 return false;
             }
+        }
+
+        private static bool TryDeserializeQueue(
+            string json,
+            out List<PendingUpload> items,
+            out bool legacy)
+        {
+            items = null;
+            legacy = false;
+            if (string.IsNullOrEmpty(json))
+                return false;
+
+            try
+            {
+                QueueEnvelope envelope = JsonUtility.FromJson<QueueEnvelope>(json);
+                if (envelope != null && !string.IsNullOrEmpty(envelope.payload))
+                {
+                    if (envelope.schemaVersion != QueueSchemaVersion ||
+                        !string.Equals(envelope.checksum, ComputeChecksum(envelope.payload), StringComparison.OrdinalIgnoreCase))
+                        return false;
+
+                    QueueWrapper wrapped = JsonUtility.FromJson<QueueWrapper>(envelope.payload);
+                    if (wrapped?.items == null)
+                        return false;
+
+                    items = wrapped.items;
+                    return true;
+                }
+
+                QueueWrapper legacyWrapper = JsonUtility.FromJson<QueueWrapper>(json);
+                if (legacyWrapper?.items == null)
+                    return false;
+
+                items = legacyWrapper.items;
+                legacy = true;
+                return true;
+            }
+            catch (Exception)
+            {
+                return false;
+            }
+        }
+
+        private static string ComputeChecksum(string value)
+        {
+            using (var sha = SHA256.Create())
+                return ToLowerHex(sha.ComputeHash(Encoding.UTF8.GetBytes(value ?? string.Empty)));
         }
 
         /// <summary>
@@ -725,6 +1123,7 @@ namespace ZGS.Analytics
 
             _pendingUploads.Clear();
             PlayerPrefs.DeleteKey(QueueStorageKey);
+            PlayerPrefs.DeleteKey(QueueBackupStorageKey);
             PlayerPrefs.Save();
             _queueMutationVersion++;
             AnalyticsLog.Log("[FeedbackQueue] 队列已清空");

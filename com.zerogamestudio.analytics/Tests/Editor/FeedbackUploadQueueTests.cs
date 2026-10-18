@@ -75,9 +75,27 @@ namespace ZGS.Analytics.Tests.Editor
 
             Assert.IsTrue(FeedbackUploadQueue.TryEnqueue(zipPath, "POB_v1", "Tester"));
             Assert.AreEqual(1, FeedbackUploadQueue.PendingCount);
+            StringAssert.Contains("checksum", PlayerPrefs.GetString(_queueKey));
+            Assert.AreEqual(
+                PlayerPrefs.GetString(_queueKey),
+                PlayerPrefs.GetString(_queueKey + ".backup"));
 
             SetStaticField("_pendingUploads", null);
             Assert.AreEqual(1, FeedbackUploadQueue.PendingCount);
+        }
+
+        [Test]
+        public void QueuePersistence_CorruptPrimary_RecoversVerifiedBackup()
+        {
+            string zipPath = CreateZip("backup-recovery.zip");
+            Assert.IsTrue(FeedbackUploadQueue.TryEnqueue(zipPath, "POB_v1", "Tester"));
+
+            PlayerPrefs.SetString(_queueKey, "{corrupt");
+            PlayerPrefs.Save();
+            SetStaticField("_pendingUploads", null);
+
+            Assert.AreEqual(1, FeedbackUploadQueue.PendingCount);
+            Assert.IsTrue(File.Exists(zipPath));
         }
 
         [Test]
@@ -193,6 +211,30 @@ namespace ZGS.Analytics.Tests.Editor
 
             SetStaticField("_pendingUploads", null);
             Assert.AreEqual(0, FeedbackUploadQueue.PendingCount);
+        }
+
+        [Test]
+        public void ProcessPendingUploads_NonRetryableFailure_BlocksBackgroundRetryButPreservesQueue()
+        {
+            const string id = "0123456789abcdef0123456789abcdef";
+            string zipPath = CreateZip("forbidden.zip");
+            Assert.IsTrue(FeedbackUploadQueue.TryEnqueue(id, zipPath, "POB_v1", "Tester"));
+
+            SetStaticField(
+                "_tryUploadDetailedOverride",
+                (Func<FeedbackUploadQueue.PendingUpload, Action<FeedbackUploadAttempt>, IEnumerator>)
+                ((_, callback) => CompleteUploadAttempt(
+                    callback,
+                    new FeedbackUploadAttempt(false, "F403", 403, "synthetic-forbidden", "server_forbidden"))));
+
+            Exhaust(FeedbackUploadQueue.ProcessPendingUploads());
+
+            var pending = (List<FeedbackUploadQueue.PendingUpload>)GetStaticField("_pendingUploads");
+            Assert.AreEqual(1, pending.Count);
+            Assert.IsTrue(pending[0].blocked);
+            Assert.AreEqual("F403", pending[0].lastFailureCode);
+            Assert.Greater(pending[0].blockedUntil, DateTimeOffset.UtcNow.ToUnixTimeSeconds());
+            Assert.IsTrue(File.Exists(zipPath));
         }
 
         [Test]
@@ -468,6 +510,14 @@ namespace ZGS.Analytics.Tests.Editor
             yield break;
         }
 
+        private static IEnumerator CompleteUploadAttempt(
+            Action<FeedbackUploadAttempt> callback,
+            FeedbackUploadAttempt result)
+        {
+            callback(result);
+            yield break;
+        }
+
         private string CreateZip(string fileName)
         {
             string path = Path.Combine(_root, fileName);
@@ -489,6 +539,7 @@ namespace ZGS.Analytics.Tests.Editor
             SetStaticField("_persistQueueOverride", null);
             SetStaticField("_deleteFileOverride", null);
             SetStaticField("_tryUploadOverride", null);
+            SetStaticField("_tryUploadDetailedOverride", null);
             SetStaticField("QueuedUploadSucceeded", null);
             SetStaticField("QueuedSubmissionSucceeded", null);
             SetStaticField("QueuedSubmissionFailed", null);

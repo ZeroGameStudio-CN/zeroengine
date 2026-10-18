@@ -125,11 +125,13 @@ namespace ZGS.Analytics
             string prefixDir = zipEntryPrefix + "/";
             string feedbackDirectory = FeedbackUploadQueue.FeedbackDirectory;
             zipPath = Path.Combine(feedbackDirectory, BuildZipFileName(zipEntryPrefix));
+            string temporaryZipPath = zipPath + ".tmp-" + Guid.NewGuid().ToString("N");
             DeleteIfExists(zipPath);
+            DeleteIfExists(temporaryZipPath);
 
             string legacyTimeline = FeedbackTimelineSerializer.BoundLegacyText(request.LegacyTimelineJson);
             string effectiveTimeline = string.IsNullOrEmpty(legacyTimeline) ? timelineJson : legacyTimeline;
-            return TryCreateZip(
+            bool created = TryCreateZip(
                 request.UserName,
                 request.Contact,
                 request.UserMessage,
@@ -138,11 +140,49 @@ namespace ZGS.Analytics
                 Array.Empty<string>(),
                 collector,
                 submissionId,
-                zipPath,
+                temporaryZipPath,
                 zipEntryPrefix,
                 prefixDir,
                 Application.temporaryCachePath,
                 feedbackDirectory);
+
+            if (!created || !IsValidZip(temporaryZipPath))
+            {
+                DeleteIfExists(temporaryZipPath);
+                return false;
+            }
+
+            try
+            {
+                File.Move(temporaryZipPath, zipPath);
+                return true;
+            }
+            catch (Exception e) when (e is IOException || e is UnauthorizedAccessException)
+            {
+                AnalyticsLog.LogWarning($"[ZipAttachmentUploader] 反馈 ZIP 落盘失败: {e.GetType().Name}");
+                DeleteIfExists(temporaryZipPath);
+                DeleteIfExists(zipPath);
+                return false;
+            }
+        }
+
+        private static bool IsValidZip(string path)
+        {
+            try
+            {
+                if (!File.Exists(path) || new FileInfo(path).Length <= 0)
+                    return false;
+
+                using (ZipArchive archive = ZipFile.OpenRead(path))
+                {
+                    return archive.Entries.Count > 0;
+                }
+            }
+            catch (Exception e) when (e is IOException || e is InvalidDataException || e is UnauthorizedAccessException)
+            {
+                AnalyticsLog.LogWarning($"[ZipAttachmentUploader] 反馈 ZIP 校验失败: {e.GetType().Name}");
+                return false;
+            }
         }
 
         private static bool TryCreateZip(

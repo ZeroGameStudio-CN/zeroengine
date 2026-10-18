@@ -288,6 +288,7 @@ namespace ZGS.Analytics
 
         private static void HandleQueuedSubmissionFailed(FeedbackUploadFailure failure)
         {
+            LogUploadFailureDiagnostic(failure);
             Action<FeedbackUploadFailure> handlers = UploadFailed;
             if (handlers == null)
                 return;
@@ -298,6 +299,39 @@ namespace ZGS.Analytics
                 {
                     Debug.LogWarning($"[FeedbackSubmission] status_callback_failed code={failure.FailureCode} submission={FeedbackFailureCodes.SafeDiagnosticId(failure.SubmissionId)} stage=failure reason={exception.GetType().Name}");
                 }
+            }
+        }
+
+        private static void LogUploadFailureDiagnostic(FeedbackUploadFailure failure)
+        {
+            if (string.IsNullOrEmpty(failure.SubmissionId))
+                return;
+
+            var properties = new Dictionary<string, object>
+            {
+                ["submission_id"] = failure.SubmissionId,
+                ["failure_code"] = failure.FailureCode,
+                ["retryable"] = failure.Retryable,
+                ["attempt"] = failure.Attempt,
+                ["reason"] = failure.Reason
+            };
+
+            if (failure.HttpStatusCode > 0)
+                properties["http_status"] = failure.HttpStatusCode;
+            if (!string.IsNullOrEmpty(failure.RequestId))
+                properties["request_id"] = failure.RequestId;
+
+            bool accepted = AnalyticsService.TryLogEvent(
+                "feedback_upload_failure",
+                properties,
+                new AnalyticsEventOptions(
+                    "feedback.upload.failure." + failure.SubmissionId + "." + failure.Attempt,
+                    0,
+                    true));
+            if (!accepted)
+            {
+                AnalyticsLog.LogWarning(
+                    $"[FeedbackSubmission] Upload failure diagnostic was not accepted code={failure.FailureCode} submission={FeedbackFailureCodes.SafeDiagnosticId(failure.SubmissionId)}");
             }
         }
 

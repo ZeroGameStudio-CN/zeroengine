@@ -268,13 +268,22 @@ namespace ZGS.Analytics.Tests.Editor
                         "POB_vEA0.7.7.4",
                         "20260714_215146",
                         "feedback.zip",
-                        new byte[] { 1, 2, 3 }
+                        new byte[] { 1, 2, 3 },
+                        "0123456789abcdef0123456789abcdef",
+                        "0123456789abcdef0123456789abcdef"
                     });
 
                 Assert.AreEqual("upload-secret", request.GetRequestHeader("X-Upload-Secret"));
+                Assert.AreEqual(
+                    "0123456789abcdef0123456789abcdef",
+                    request.GetRequestHeader("Idempotency-Key"));
+                Assert.AreEqual(
+                    "0123456789abcdef0123456789abcdef",
+                    request.GetRequestHeader("X-Feedback-Submission-Id"));
                 string formBody = Encoding.UTF8.GetString(request.uploadHandler.data);
                 StringAssert.DoesNotContain("upload-secret", formBody);
                 StringAssert.DoesNotContain("name=\"secret\"", formBody);
+                StringAssert.Contains("name=\"submission_id\"", formBody);
             }
             finally
             {

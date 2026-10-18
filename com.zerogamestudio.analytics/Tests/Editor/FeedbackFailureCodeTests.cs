@@ -31,5 +31,29 @@ namespace ZGS.Analytics.Tests.Editor
                 UnityWebRequest.Result.ConnectionError, 0, "Cannot resolve destination host https://user:secret@invalid/player"));
         }
 
+        [TestCase("F201", 0, true)]
+        [TestCase("F202", 0, true)]
+        [TestCase("F204", 0, true)]
+        [TestCase("F299", 0, true)]
+        [TestCase("F403", 403, false)]
+        [TestCase("F413", 413, false)]
+        [TestCase("F429", 429, true)]
+        [TestCase("F503", 503, true)]
+        public void FailureCode_ClassifiesRetryDisposition(
+            string code,
+            long status,
+            bool expectedRetryable)
+        {
+            Assert.AreEqual(expectedRetryable, FeedbackFailureCodes.IsRetryable(code, status));
+        }
+
+        [Test]
+        public void ForbiddenTransport_UsesActionableInternalReason()
+        {
+            Assert.AreEqual(
+                "server_forbidden",
+                FeedbackFailureCodes.TransportReason(UnityWebRequest.Result.ProtocolError, 403, "Forbidden"));
+        }
+
     }
 }

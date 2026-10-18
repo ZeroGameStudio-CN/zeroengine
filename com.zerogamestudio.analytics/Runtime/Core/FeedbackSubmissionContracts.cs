@@ -79,13 +79,50 @@ namespace ZGS.Analytics
         public string FailureCode { get; }
         public long HttpStatusCode { get; }
         public string RequestId { get; }
+        public string Reason { get; }
+        public bool Retryable { get; }
+        public int Attempt { get; }
 
-        public FeedbackUploadFailure(string submissionId, string failureCode, long httpStatusCode = 0, string requestId = null)
+        public FeedbackUploadFailure(
+            string submissionId,
+            string failureCode,
+            long httpStatusCode = 0,
+            string requestId = null,
+            string reason = null,
+            int attempt = 0)
         {
             SubmissionId = submissionId ?? string.Empty;
             FailureCode = FeedbackFailureCodes.Normalize(failureCode);
             HttpStatusCode = httpStatusCode;
             RequestId = FeedbackFailureCodes.SafeDiagnosticId(requestId);
+            Reason = FeedbackFailureCodes.SafeDiagnosticId(reason);
+            Retryable = FeedbackFailureCodes.IsRetryable(FailureCode, httpStatusCode);
+            Attempt = Math.Max(0, attempt);
+        }
+    }
+
+    internal readonly struct FeedbackUploadAttempt
+    {
+        public bool Succeeded { get; }
+        public string FailureCode { get; }
+        public long HttpStatusCode { get; }
+        public string RequestId { get; }
+        public string Reason { get; }
+        public bool Retryable { get; }
+
+        public FeedbackUploadAttempt(
+            bool succeeded,
+            string failureCode = null,
+            long httpStatusCode = 0,
+            string requestId = null,
+            string reason = null)
+        {
+            Succeeded = succeeded;
+            FailureCode = FeedbackFailureCodes.Normalize(failureCode);
+            HttpStatusCode = httpStatusCode;
+            RequestId = FeedbackFailureCodes.SafeDiagnosticId(requestId);
+            Reason = FeedbackFailureCodes.SafeDiagnosticId(reason);
+            Retryable = !succeeded && FeedbackFailureCodes.IsRetryable(FailureCode, httpStatusCode);
         }
     }
 
@@ -128,6 +165,36 @@ namespace ZGS.Analytics
             return result == UnityWebRequest.Result.ConnectionError ? Connection : Unknown;
         }
 
+        public static bool IsRetryable(string code, long httpStatusCode = 0)
+        {
+            code = Normalize(code);
+
+            if (httpStatusCode == 408 || httpStatusCode == 425 || httpStatusCode == 429 ||
+                (httpStatusCode >= 500 && httpStatusCode <= 599))
+                return true;
+
+            if (httpStatusCode >= 400 && httpStatusCode <= 499)
+                return false;
+
+            switch (code)
+            {
+                case Connection:
+                case Timeout:
+                case ResponseProcessing:
+                case Unknown:
+                    return true;
+                case Certificate:
+                case InvalidRequest:
+                case NotConfigured:
+                case PackageCreation:
+                case QueuePersistence:
+                case FileRead:
+                    return false;
+                default:
+                    return false;
+            }
+        }
+
         internal static string Normalize(string code)
         {
             if (code != null && code.Length == 4 && code[0] == 'F' &&
@@ -141,6 +208,13 @@ namespace ZGS.Analytics
             string code = FromTransport(result, status, error);
             if (code == Timeout) return "timeout";
             if (code == Certificate) return "certificate_tls";
+            if (status == 401) return "server_unauthorized";
+            if (status == 403) return "server_forbidden";
+            if (status == 404) return "server_endpoint_missing";
+            if (status == 408) return "server_timeout";
+            if (status == 413) return "payload_too_large";
+            if (status == 429) return "rate_limited";
+            if (status >= 500 && status <= 599) return "server_unavailable";
             if (result == UnityWebRequest.Result.ConnectionError)
             {
                 if (Contains(error, "resolve")) return "dns_resolution_failed";

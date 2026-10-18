@@ -10,6 +10,19 @@ tracked in each package's `package.json`.
 - Added MIT licensing.
 - Normalized package repository metadata for UPM Git dependencies.
 
+## com.zerogamestudio.analytics 2.1.0
+
+- Classify feedback transport failures as retryable or non-retryable and keep
+  non-retryable items in a long-cooldown queue instead of retrying immediately.
+- Add checksum-verified queue envelopes, backup readback, ZIP atomic finalization,
+  file fingerprints, and idempotency headers/fields for feedback uploads.
+- Emit sanitized upload failure diagnostics, including actionable F403 reasons,
+  through the durable analytics event path.
+
+## com.zerogamestudio.zeroengine.feedback 1.1.0
+
+- Require Analytics 2.1.0 for the stable feedback upload and diagnostic contract.
+
 ## com.zerogamestudio.analytics 1.6.1
 
 - Expose `AnalyticsService.Flush()` so callers can trigger delivery of events
