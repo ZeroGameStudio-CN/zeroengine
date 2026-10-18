@@ -4130,6 +4130,78 @@ class WorkspaceCoordinator:
         finally:
             connection.close()
 
+    def maintenance_receipts(self, workspace: Path | str, *, limit: int = 20) -> dict[str, Any]:
+        """List bounded unresolved receipt metadata; never deliver, ACK or maintain."""
+        if type(limit) is not int or not 1 <= limit <= 100:
+            raise UsageError("Receipt inspection limit must be between 1 and 100.")
+        root = canonical_workspace(workspace)
+        connection = open_database(self.paths)
+        try:
+            registered = self._workspace(connection, root)
+            rows = connection.execute(
+                "SELECT r.*, t.owner AS task_owner, t.state AS task_state, "
+                "t.result AS task_result FROM operation_receipts AS r "
+                "LEFT JOIN tasks AS t ON t.id = r.task_id AND t.workspace_id = r.workspace_id "
+                "WHERE r.workspace_id = ? AND ((r.finalized_at IS NOT NULL "
+                "AND r.delivered_at IS NULL AND r.retired_at IS NULL) "
+                "OR r.token_cleanup_path IS NOT NULL) "
+                "ORDER BY r.created_at, r.operation_id LIMIT ?",
+                (registered["id"], limit + 1),
+            ).fetchall()
+            receipts = []
+            for row in rows[:limit]:
+                try:
+                    result = json.loads(row["result_json"])
+                    terminal = json.loads(row["terminal_json"]) if row["terminal_json"] else {}
+                    valid = isinstance(result, dict) and isinstance(terminal, dict)
+                except (TypeError, ValueError):
+                    result, terminal, valid = {}, {}, False
+                if not valid:
+                    result, terminal = {}, {}
+                cleanup_path = row["token_cleanup_path"]
+                path_key = (
+                    str(cleanup_path).replace("\\", "/").rstrip("/") if cleanup_path else None
+                )
+                if path_key and os.name == "nt":
+                    path_key = path_key.casefold()
+                receipts.append(
+                    {
+                        "operation_id": row["operation_id"],
+                        "action": row["action"],
+                        "task_id": row["task_id"],
+                        "owner": row["task_owner"],
+                        "task_state": row["task_state"],
+                        "task_result": row["task_result"],
+                        "created_at": row["created_at"],
+                        "finalized_at": row["finalized_at"],
+                        "delivered_at": row["delivered_at"],
+                        "retired_at": row["retired_at"],
+                        "cleanup_pending": cleanup_path is not None,
+                        "cleanup_path_hash": hashlib.sha256(path_key.encode()).hexdigest()
+                        if path_key
+                        else None,
+                        "result_valid": valid,
+                        "result_id": result.get("id")
+                        if isinstance(result.get("id"), str)
+                        else None,
+                        "result_state": result.get("state")
+                        if isinstance(result.get("state"), str)
+                        else None,
+                        "terminal_reason": terminal.get("reason")
+                        if isinstance(terminal.get("reason"), str)
+                        else None,
+                    }
+                )
+            return {
+                "schema_version": SCHEMA_VERSION,
+                "workspace": {"id": registered["id"], "root": registered["root"]},
+                "limit": limit,
+                "truncated": len(rows) > limit,
+                "receipts": receipts,
+            }
+        finally:
+            connection.close()
+
     def identify_task(self, workspace: Path | str, token: str) -> dict[str, Any]:
         """Identify one open task without maintenance, scheduling, or lease renewal."""
 

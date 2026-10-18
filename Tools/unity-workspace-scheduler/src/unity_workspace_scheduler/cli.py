@@ -212,6 +212,10 @@ def build_parser() -> SchedulerArgumentParser:
     _workspace_argument(history)
     history.add_argument("--limit", type=int, default=20)
     history.set_defaults(handler=_maintenance_history)
+    receipts = maintenance_commands.add_parser("receipts")
+    _workspace_argument(receipts)
+    receipts.add_argument("--limit", type=int, default=20)
+    receipts.set_defaults(handler=_maintenance_receipts)
 
     identify = task_commands.add_parser("identify")
     _workspace_argument(identify)
@@ -702,6 +706,14 @@ def _task_identify(
     return "Open task identified.", coordinator.identify_task(args.workspace, token)
 
 
+def _maintenance_receipts(
+    coordinator: WorkspaceCoordinator, args: argparse.Namespace
+) -> tuple[str, dict[str, Any]]:
+    return "Unresolved receipt metadata inspected.", coordinator.maintenance_receipts(
+        args.workspace, limit=args.limit
+    )
+
+
 def _receipt_ack(
     coordinator: WorkspaceCoordinator, args: argparse.Namespace
 ) -> tuple[str, dict[str, Any]]:
@@ -768,6 +780,7 @@ def run(argv: Sequence[str] | None = None) -> int:
                 _receipt_ack,
                 _task_identify,
                 _maintenance_history,
+                _maintenance_receipts,
                 _state_backup,
                 _state_restore,
                 _workspace_status,
