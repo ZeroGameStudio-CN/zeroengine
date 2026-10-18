@@ -258,3 +258,5 @@ only when every state matches that exact task's actual terminal claim. It reject
 substituted states and foreign claims without editing immutable receipts. Use the
 same quiet-window, verified-backup and Router-first maintenance procedure; protocol
 and state schema remain 3.
+
+SDK1.6.11 permits same-ID delivery of a finalized completed/failed release after its token is lost, only with exact retained path custody, immutable terminal task identity and no live claims or conflicting cleanup. The receipt probe stays read-only; normal validated ACK performs delivery/cleanup. No lease is recreated.
