@@ -912,6 +912,7 @@ namespace ZGS.Analytics
                 attempt);
             // Always available in release Players; never log URLs, credentials, paths, bodies or player input.
             Debug.LogWarning($"[FeedbackUpload] failed code={failure.FailureCode} retryable={failure.Retryable} submission={FeedbackFailureCodes.SafeDiagnosticId(submissionId)} http={failure.HttpStatusCode} request={failure.RequestId} reason={failure.Reason} attempt={failure.Attempt}");
+            LogFailureDiagnostic(failure);
             if (string.IsNullOrEmpty(submissionId))
                 return;
             Action<FeedbackUploadFailure> handlers = QueuedSubmissionFailed;
@@ -924,6 +925,39 @@ namespace ZGS.Analytics
                 {
                     Debug.LogWarning($"[FeedbackUpload] failure_callback_failed code={failure.FailureCode} submission={FeedbackFailureCodes.SafeDiagnosticId(submissionId)} reason={exception.GetType().Name}");
                 }
+            }
+        }
+
+        private static void LogFailureDiagnostic(FeedbackUploadFailure failure)
+        {
+            if (string.IsNullOrEmpty(failure.SubmissionId))
+                return;
+
+            var properties = new Dictionary<string, object>
+            {
+                ["submission_id"] = failure.SubmissionId,
+                ["failure_code"] = failure.FailureCode,
+                ["retryable"] = failure.Retryable,
+                ["attempt"] = failure.Attempt,
+                ["reason"] = failure.Reason
+            };
+
+            if (failure.HttpStatusCode > 0)
+                properties["http_status"] = failure.HttpStatusCode;
+            if (!string.IsNullOrEmpty(failure.RequestId))
+                properties["request_id"] = failure.RequestId;
+
+            bool accepted = AnalyticsService.TryLogEvent(
+                "feedback_upload_failure",
+                properties,
+                new AnalyticsEventOptions(
+                    "feedback.upload.failure." + failure.SubmissionId + "." + failure.Attempt,
+                    0,
+                    true));
+            if (!accepted)
+            {
+                AnalyticsLog.LogWarning(
+                    $"[FeedbackUpload] failure diagnostic not accepted code={failure.FailureCode} submission={FeedbackFailureCodes.SafeDiagnosticId(failure.SubmissionId)}");
             }
         }
 
