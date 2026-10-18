@@ -28,6 +28,7 @@ namespace ZGS.Analytics
         private static Action<string> _deleteFileOverride;
         private static Func<PendingUpload, Action<bool>, IEnumerator> _tryUploadOverride;
         private static string _queueKeyOverride;
+        private static string _feedbackDirectoryOverride;
 
         private static string QueueStorageKey =>
             string.IsNullOrEmpty(_queueKeyOverride) ? QueueKey : _queueKeyOverride;
@@ -41,6 +42,8 @@ namespace ZGS.Analytics
         /// 带提交 ID 的队列项收到 HTTP 成功响应，并已从持久队列移除后触发。
         /// </summary>
         internal static event Action<FeedbackUploadCompletion> QueuedSubmissionSucceeded;
+
+        internal static event Action<FeedbackUploadFailure> QueuedSubmissionFailed;
 
         /// <summary>
         /// 待上传项
@@ -74,7 +77,7 @@ namespace ZGS.Analytics
             {
                 if (AnalyticsBootstrap.IsAutomationIsolated)
                     throw new InvalidOperationException("Feedback storage is unavailable during isolated automation.");
-                string dir = Path.Combine(Application.persistentDataPath, "PendingFeedback");
+                string dir = _feedbackDirectoryOverride ?? Path.Combine(Application.persistentDataPath, "PendingFeedback");
                 if (!Directory.Exists(dir))
                     Directory.CreateDirectory(dir);
                 return dir;
@@ -209,7 +212,7 @@ namespace ZGS.Analytics
 
                     if (!File.Exists(pending.zipPath))
                     {
-                        AnalyticsLog.LogWarning("[FeedbackQueue] 文件不存在，移除队列项");
+                        ReportUploadFailure(pending.submissionId, FeedbackFailureCodes.FileRead, "file_missing");
                         TryRemovePersisted(pending);
                         continue;
                     }
@@ -221,7 +224,7 @@ namespace ZGS.Analytics
                     {
                         if (!TryRemovePersisted(pending))
                         {
-                            AnalyticsLog.LogWarning($"[FeedbackQueue] 上传成功但队列移除持久化失败: {Path.GetFileName(pending.zipPath)}");
+                            ReportUploadFailure(pending.submissionId, FeedbackFailureCodes.QueuePersistence, "queue_ack_persistence_failed");
                             continue;
                         }
 
@@ -283,10 +286,11 @@ namespace ZGS.Analytics
         /// <summary>
         /// 执行单次上传
         /// </summary>
-        private static IEnumerator DoUpload(string zipPath, string version, Action<bool> onComplete)
+        private static IEnumerator DoUpload(string zipPath, string version, Action<bool> onComplete, string submissionId = null)
         {
             if (!AnalyticsConfig.IsUploadConfigured)
             {
+                ReportUploadFailure(submissionId, FeedbackFailureCodes.NotConfigured, "not_configured");
                 onComplete?.Invoke(false);
                 yield break;
             }
@@ -303,22 +307,49 @@ namespace ZGS.Analytics
             }
             catch (Exception e)
             {
-                AnalyticsLog.LogWarning($"[FeedbackQueue] 读取文件失败: {e.GetType().Name}");
+                ReportUploadFailure(submissionId, FeedbackFailureCodes.FileRead, e.GetType().Name);
                 onComplete?.Invoke(false);
                 yield break;
             }
 
-            using var request = CreateUploadRequest(uploadUrl, version, timestamp, fileName, fileData);
-
-            yield return request.SendWebRequest();
-
-            bool success = request.result == UnityWebRequest.Result.Success;
-            if (!success)
+            UnityWebRequest request = null;
+            UnityWebRequestAsyncOperation operation = null;
+            try
             {
-                AnalyticsLog.LogWarning($"[FeedbackQueue] 上传失败: {request.result}");
+                request = CreateUploadRequest(uploadUrl, version, timestamp, fileName, fileData);
+                operation = request.SendWebRequest();
+            }
+            catch (Exception exception)
+            {
+                request?.Dispose();
+                ReportUploadFailure(submissionId, FeedbackFailureCodes.Connection, exception.GetType().Name);
+            }
+            if (operation == null)
+            {
+                onComplete?.Invoke(false);
+                yield break;
             }
 
-            onComplete?.Invoke(success);
+            using (request)
+            {
+                yield return operation;
+                bool success = request.result == UnityWebRequest.Result.Success;
+                if (!success)
+                {
+                    ReportUploadFailure(
+                        submissionId,
+                        FeedbackFailureCodes.FromTransport(request.result, request.responseCode, request.error),
+                        FeedbackFailureCodes.TransportReason(request.result, request.responseCode, request.error),
+                        request.responseCode,
+                        request.GetResponseHeader("X-Request-ID") ?? request.GetResponseHeader("CF-RAY"));
+                }
+                else
+                {
+                    string requestId = FeedbackFailureCodes.SafeDiagnosticId(request.GetResponseHeader("X-Request-ID") ?? request.GetResponseHeader("CF-RAY"));
+                    Debug.Log($"[FeedbackUpload] confirmed submission={FeedbackFailureCodes.SafeDiagnosticId(submissionId)} http={request.responseCode} request={requestId}");
+                }
+                onComplete?.Invoke(success);
+            }
         }
 
         private static UnityWebRequest CreateUploadRequest(
@@ -350,7 +381,7 @@ namespace ZGS.Analytics
                 yield break;
             }
 
-            yield return DoUpload(pending.zipPath, pending.version, onComplete);
+            yield return DoUpload(pending.zipPath, pending.version, onComplete, pending.submissionId);
         }
 
         /// <summary>
@@ -362,6 +393,8 @@ namespace ZGS.Analytics
 
             try
             {
+                // Let the caller register its local acceptance before a synchronous read/config failure.
+                yield return null;
                 while (AnalyticsConfig.IsUploadConfigured)
                 {
                     if (_pendingUploads == null)
@@ -552,6 +585,26 @@ namespace ZGS.Analytics
                 catch (Exception e)
                 {
                     AnalyticsLog.LogWarning($"[FeedbackQueue] 提交成功回调失败: {e.GetType().Name}");
+                }
+            }
+        }
+
+        internal static void ReportUploadFailure(string submissionId, string code, string reason, long httpStatusCode = 0, string requestId = null)
+        {
+            var failure = new FeedbackUploadFailure(submissionId, code, httpStatusCode, requestId);
+            // Always available in release Players; never log URLs, credentials, paths, bodies or player input.
+            Debug.LogWarning($"[FeedbackUpload] failed code={failure.FailureCode} submission={FeedbackFailureCodes.SafeDiagnosticId(submissionId)} http={failure.HttpStatusCode} request={failure.RequestId} reason={FeedbackFailureCodes.SafeDiagnosticId(reason)}");
+            if (string.IsNullOrEmpty(submissionId))
+                return;
+            Action<FeedbackUploadFailure> handlers = QueuedSubmissionFailed;
+            if (handlers == null)
+                return;
+            foreach (Action<FeedbackUploadFailure> handler in handlers.GetInvocationList())
+            {
+                try { handler(failure); }
+                catch (Exception exception)
+                {
+                    Debug.LogWarning($"[FeedbackUpload] failure_callback_failed code={failure.FailureCode} submission={FeedbackFailureCodes.SafeDiagnosticId(submissionId)} reason={exception.GetType().Name}");
                 }
             }
         }

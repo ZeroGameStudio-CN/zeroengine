@@ -162,7 +162,11 @@ namespace ZeroEngine.Feedback
             _attachmentArea.gameObject.AddComponent<ContentSizeFitter>().verticalFit = ContentSizeFitter.FitMode.PreferredSize;
             _attachmentButton = CreateButton("AddAttachment", _attachmentArea, _theme.SecondaryColor);
             _attachmentSummary = CreateText("AttachmentSummary", _attachmentArea, 22f, TextAlignmentOptions.TopLeft);
+#if UNITY_2023_2_OR_NEWER
+            _attachmentSummary.textWrappingMode = TMPro.TextWrappingModes.Normal;
+#else
             _attachmentSummary.enableWordWrapping = true;
+#endif
             _attachmentSummary.gameObject.AddComponent<LayoutElement>().minHeight = 28f;
             _attachmentArea.gameObject.SetActive(_configuration.AttachmentPicker != null);
 
@@ -224,7 +228,11 @@ namespace ZeroEngine.Feedback
 
             TMP_Text text = CreateText("Text", viewport, 24f, TextAlignmentOptions.TopLeft);
             Stretch(text.rectTransform);
+#if UNITY_2023_2_OR_NEWER
+            text.textWrappingMode = TMPro.TextWrappingModes.Normal;
+#else
             text.enableWordWrapping = true;
+#endif
 
             var input = root.gameObject.AddComponent<TMP_InputField>();
             input.textViewport = viewport;
@@ -253,7 +261,11 @@ namespace ZeroEngine.Feedback
 
             TMP_Text label = CreateText("Label", root, 24f, TextAlignmentOptions.Center);
             Stretch(label.rectTransform, new Vector2(12f, 6f), new Vector2(-12f, -6f));
+#if UNITY_2023_2_OR_NEWER
+            label.textWrappingMode = TMPro.TextWrappingModes.Normal;
+#else
             label.enableWordWrapping = true;
+#endif
             label.raycastTarget = false;
             return button;
         }
@@ -271,7 +283,11 @@ namespace ZeroEngine.Feedback
             text.fontSize = fontSize;
             text.color = _theme.TextColor;
             text.alignment = alignment;
+#if UNITY_2023_2_OR_NEWER
+            text.textWrappingMode = TMPro.TextWrappingModes.Normal;
+#else
             text.enableWordWrapping = true;
+#endif
             return text;
         }
 

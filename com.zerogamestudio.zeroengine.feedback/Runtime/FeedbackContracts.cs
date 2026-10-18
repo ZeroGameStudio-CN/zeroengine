@@ -56,6 +56,8 @@ namespace ZeroEngine.Feedback
         public RectTransform Parent;
         public DefaultFeedbackPanelView PanelPrefab;
         [Range(1, 3)] public int MaxAttachments = 3;
+        public bool ShowUploadingStatus = true;
+        public bool ShowUploadFailureCodes;
 
         internal int AttachmentLimit => Mathf.Clamp(MaxAttachments, 1, 3);
     }

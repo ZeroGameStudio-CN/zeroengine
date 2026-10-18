@@ -2,12 +2,23 @@
 
 ZeroGameStudio 游戏分析 SDK，支持自建 ClickHouse 数据平台。
 
-**版本**: 2.0.1
+**版本**: 2.0.2
 **Unity**: 2021.3+
 
 2.0.0 起 Editor 面板使用 `com.zerogamestudio.zeroengine.editor-ui@1.0.0`。通过 Git URL 安装时，消费工程必须把 Analytics 与 editor-ui 直接 pin 到同一 ZeroEngine commit；Unity 2022.3 不会自动解析同仓 sibling package。
 
 2.0.1 将 Dashboard 模块名称、说明和入口 tooltip 统一为简体中文，不改现有菜单路径。
+
+2.0.2 增加 `FeedbackSubmissionResult.FailureCode` 和
+`FeedbackSubmissionService.UploadFailed`（`FeedbackUploadFailure`）。失败事件只描述一次尝试，
+传输失败仍保留持久队列，失败事件也不代替成功事件。回调异常相互隔离；后台首次尝试延后一帧，保证调用方先收到本地接受结果。
+
+反馈失败诊断在正式 Player 中也写入日志，仅包含短码、提交编号、HTTP 状态、服务端请求编号和原因类别，
+不记录请求 URL、密钥、正文、联系方式或文件路径。`F001` 为无效输入，`F002` 为未配置，
+`F101` 为打包失败，`F102` 为队列保存失败，`F103` 为附件读取失败；`F201` 为连接失败，
+`F202` 为超时，`F203` 为证书/TLS，`F204` 为响应处理失败，`F299` 为未分类失败。
+HTTP 4xx/5xx 保留实际状态，例如 `F403`、`F413`、`F429`、`F503`。
+正式版也记录本地入队和 HTTP 确认节点，用提交编号区分“仍未送达”和“服务器收到但界面未提示”。
 
 ## 特性
 

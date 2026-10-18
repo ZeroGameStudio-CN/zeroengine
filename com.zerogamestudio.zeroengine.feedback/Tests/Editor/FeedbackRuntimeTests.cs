@@ -58,13 +58,32 @@ namespace ZeroEngine.Feedback.Tests.Editor
                 FeedbackTextCatalog.Resolve(FeedbackTextId.Uploading, SystemLanguage.Unknown));
         }
 
+        [TestCase("zh-CN", SystemLanguage.ChineseSimplified)]
+        [TestCase("zh-TW", SystemLanguage.ChineseTraditional)]
+        [TestCase("zh-Hant", SystemLanguage.ChineseTraditional)]
+        [TestCase("en-US", SystemLanguage.English)]
+        [TestCase("ja-JP", SystemLanguage.Japanese)]
+        [TestCase("ko-KR", SystemLanguage.Korean)]
+        [TestCase("de-DE", SystemLanguage.German)]
+        [TestCase("fr-FR", SystemLanguage.French)]
+        [TestCase("es-ES", SystemLanguage.Spanish)]
+        [TestCase("ru-RU", SystemLanguage.Russian)]
+        [TestCase("pt-BR", SystemLanguage.Portuguese)]
+        [TestCase("it-IT", SystemLanguage.Italian)]
+        [TestCase("nl-NL", SystemLanguage.Dutch)]
+        [TestCase("pl-PL", SystemLanguage.Polish)]
+        public void ShortFailure_UsesSelectedProjectLanguage(string code, SystemLanguage expected)
+        {
+            Assert.AreEqual(FeedbackTextCatalog.ResolveShortFailure(expected), FeedbackTextCatalog.ResolveShortFailure(code));
+        }
+
         [Test]
         public void StatusCoordinator_OnlyShowsSuccessForCurrentProcessSubmission()
         {
             var presenter = new RecordingPresenter();
             FeedbackStatusCoordinator.Configure(new FeedbackUiConfiguration
             {
-                StatusPresenter = presenter
+                TextResolver = new SyntheticTextResolver(), StatusPresenter = presenter
             });
 
             FeedbackStatusCoordinator.HandleUploadSucceeded(
@@ -100,7 +119,7 @@ namespace ZeroEngine.Feedback.Tests.Editor
                 var controller = new FeedbackSubmissionController(new FeedbackUiConfiguration
                 {
                     RequestDecorator = decorator,
-                    StatusPresenter = presenter
+                    TextResolver = new SyntheticTextResolver(), StatusPresenter = presenter
                 });
                 FeedbackSubmissionResult result = default;
 
@@ -123,6 +142,56 @@ namespace ZeroEngine.Feedback.Tests.Editor
             }
         }
 
+        // Core contract: two-outcome UX never treats queue acceptance as delivery or a retry as a new submission.
+        [Test]
+        public void TwoOutcomeMode_ReportsFirstFailureThenOneConfirmedSuccess()
+        {
+            var presenter = new RecordingPresenter();
+            var configuration = new FeedbackUiConfiguration
+            {
+                TextResolver = new SyntheticTextResolver(), StatusPresenter = presenter,
+                ShowUploadingStatus = false,
+                ShowUploadFailureCodes = true
+            };
+            FeedbackStatusCoordinator.Configure(configuration);
+            FeedbackStatusCoordinator.HandleUploadFailed(new FeedbackUploadFailure("old-queue", "F403"));
+            FeedbackStatusCoordinator.HandleLocalResult(new FeedbackSubmissionResult("current", true, FeedbackSubmissionFailure.None));
+            Assert.AreEqual(0, presenter.Count);
+            FeedbackStatusCoordinator.HandleUploadFailed(new FeedbackUploadFailure("current", "F202"));
+            StringAssert.EndsWith(" (F202)", presenter.Texts[0]);
+            FeedbackStatusCoordinator.Configure(configuration);
+            FeedbackStatusCoordinator.HandleUploadFailed(new FeedbackUploadFailure("current", "F503"));
+            Assert.AreEqual(1, presenter.Count);
+            Assert.AreEqual(1, FeedbackStatusCoordinator.TrackedSubmissionCount);
+            FeedbackStatusCoordinator.HandleUploadSucceeded(new FeedbackUploadCompletion("current"));
+            FeedbackStatusCoordinator.HandleUploadSucceeded(new FeedbackUploadCompletion("current"));
+            FeedbackStatusCoordinator.HandleUploadFailed(new FeedbackUploadFailure("current", "F403"));
+            FeedbackStatusCoordinator.HandleUploadSucceeded(new FeedbackUploadCompletion("old-queue"));
+            CollectionAssert.AreEqual(new[] { FeedbackTextId.UploadFailed, FeedbackTextId.Uploaded }, presenter.Statuses);
+            Assert.AreEqual(0, FeedbackStatusCoordinator.TrackedSubmissionCount);
+        }
+
+        [Test]
+        public void TwoOutcomeMode_LocalPersistenceFailure_ShowsCodeWithoutTrackingAsAccepted()
+        {
+            var presenter = new RecordingPresenter();
+            FeedbackStatusCoordinator.Configure(new FeedbackUiConfiguration { TextResolver = new SyntheticTextResolver(), StatusPresenter = presenter, ShowUploadingStatus = false, ShowUploadFailureCodes = true });
+            FeedbackStatusCoordinator.HandleLocalResult(new FeedbackSubmissionResult("failed-local", false, FeedbackSubmissionFailure.QueuePersistenceFailed));
+            CollectionAssert.AreEqual(new[] { FeedbackTextId.UploadFailed }, presenter.Statuses);
+            StringAssert.EndsWith(" (F102)", presenter.Texts[0]);
+            Assert.AreEqual(0, FeedbackStatusCoordinator.TrackedSubmissionCount);
+        }
+
+        [Test]
+        public void DefaultMode_KeepsNetworkRetriesSilentForExistingConsumers()
+        {
+            var presenter = new RecordingPresenter();
+            FeedbackStatusCoordinator.Configure(new FeedbackUiConfiguration { TextResolver = new SyntheticTextResolver(), StatusPresenter = presenter });
+            FeedbackStatusCoordinator.HandleLocalResult(new FeedbackSubmissionResult("current", true, FeedbackSubmissionFailure.None));
+            FeedbackStatusCoordinator.HandleUploadFailed(new FeedbackUploadFailure("current", "F403"));
+            CollectionAssert.AreEqual(new[] { FeedbackTextId.Uploading }, presenter.Statuses);
+        }
+
         private static void Exhaust(IEnumerator coroutine)
         {
             while (coroutine.MoveNext())
@@ -132,14 +201,21 @@ namespace ZeroEngine.Feedback.Tests.Editor
             }
         }
 
+        private sealed class SyntheticTextResolver : IFeedbackTextResolver
+        {
+            public string Resolve(FeedbackTextId textId) => textId.ToString();
+        }
+
         private sealed class RecordingPresenter : IFeedbackStatusPresenter
         {
             public readonly System.Collections.Generic.List<FeedbackTextId> Statuses = new();
+            public readonly System.Collections.Generic.List<string> Texts = new();
             public int Count => Statuses.Count;
 
             public void Show(FeedbackTextId status, string text)
             {
                 Statuses.Add(status);
+                Texts.Add(text);
             }
         }
 

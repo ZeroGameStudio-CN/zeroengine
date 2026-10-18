@@ -3,8 +3,51 @@ using UnityEngine;
 
 namespace ZeroEngine.Feedback
 {
-    internal static class FeedbackTextCatalog
+    public static class FeedbackTextCatalog
     {
+        private static readonly Dictionary<SystemLanguage, string> ShortFailures = new()
+        {
+            [SystemLanguage.English] = "Upload failed",
+            [SystemLanguage.ChineseSimplified] = "上传失败",
+            [SystemLanguage.ChineseTraditional] = "上傳失敗",
+            [SystemLanguage.Japanese] = "アップロード失敗",
+            [SystemLanguage.Korean] = "업로드 실패",
+            [SystemLanguage.German] = "Upload fehlgeschlagen",
+            [SystemLanguage.French] = "Échec de l’envoi",
+            [SystemLanguage.Spanish] = "Error al subir",
+            [SystemLanguage.Russian] = "Не удалось загрузить",
+            [SystemLanguage.Portuguese] = "Falha no envio",
+            [SystemLanguage.Italian] = "Caricamento non riuscito",
+            [SystemLanguage.Dutch] = "Upload mislukt",
+            [SystemLanguage.Polish] = "Nie udało się przesłać"
+        };
+
+        /// <summary>Short failure text for projects whose selected language differs from the OS language.</summary>
+        public static string ResolveShortFailure(string languageCode)
+        {
+            string code = (languageCode ?? "en").Replace('_', '-').ToLowerInvariant();
+            SystemLanguage language;
+            switch (code.Split('-')[0])
+            {
+                case "zh": language = code.Contains("-tw") || code.Contains("-hant") || code.Contains("-hk") ? SystemLanguage.ChineseTraditional : SystemLanguage.ChineseSimplified; break;
+                case "ja": language = SystemLanguage.Japanese; break;
+                case "ko": language = SystemLanguage.Korean; break;
+                case "de": language = SystemLanguage.German; break;
+                case "fr": language = SystemLanguage.French; break;
+                case "es": language = SystemLanguage.Spanish; break;
+                case "ru": language = SystemLanguage.Russian; break;
+                case "pt": language = SystemLanguage.Portuguese; break;
+                case "it": language = SystemLanguage.Italian; break;
+                case "nl": language = SystemLanguage.Dutch; break;
+                case "pl": language = SystemLanguage.Polish; break;
+                default: language = SystemLanguage.English; break;
+            }
+            return ResolveShortFailure(language);
+        }
+
+        internal static string ResolveShortFailure(SystemLanguage language) =>
+            ShortFailures.TryGetValue(language == SystemLanguage.Chinese ? SystemLanguage.ChineseSimplified : language, out string text) ? text : ShortFailures[SystemLanguage.English];
+
         private static readonly Dictionary<SystemLanguage, string[]> Texts = new()
         {
             [SystemLanguage.English] = Values("Feedback", "Describe the problem", "Contact (optional)", "Attach image (optional)", "Send", "Cancel", "Uploading", "Uploaded", "Upload failed. Try again."),

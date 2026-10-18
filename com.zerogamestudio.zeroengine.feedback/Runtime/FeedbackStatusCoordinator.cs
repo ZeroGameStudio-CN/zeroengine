@@ -8,6 +8,7 @@ namespace ZeroEngine.Feedback
     internal static class FeedbackStatusCoordinator
     {
         private static readonly HashSet<string> CurrentSubmissions = new();
+        private static readonly HashSet<string> FailureNotifications = new();
         private static FeedbackUiConfiguration _configuration = new FeedbackUiConfiguration();
         private static bool _subscribed;
 
@@ -15,10 +16,14 @@ namespace ZeroEngine.Feedback
         private static void ResetRuntimeState()
         {
             if (_subscribed)
+            {
                 FeedbackSubmissionService.UploadSucceeded -= HandleUploadSucceeded;
+                FeedbackSubmissionService.UploadFailed -= HandleUploadFailed;
+            }
 
             _subscribed = false;
             CurrentSubmissions.Clear();
+            FailureNotifications.Clear();
             _configuration = new FeedbackUiConfiguration();
         }
 
@@ -33,13 +38,14 @@ namespace ZeroEngine.Feedback
             EnsureSubscribed();
             if (!result.AcceptedLocally)
             {
-                Present(FeedbackTextId.UploadFailed);
+                Present(FeedbackTextId.UploadFailed, result.FailureCode);
                 return;
             }
 
             if (!string.IsNullOrEmpty(result.SubmissionId))
                 CurrentSubmissions.Add(result.SubmissionId);
-            Present(FeedbackTextId.Uploading);
+            if (_configuration.ShowUploadingStatus)
+                Present(FeedbackTextId.Uploading);
         }
 
         internal static void HandleUploadSucceeded(FeedbackUploadCompletion completion)
@@ -50,7 +56,18 @@ namespace ZeroEngine.Feedback
                 return;
             }
 
+            FailureNotifications.Remove(completion.SubmissionId);
             Present(FeedbackTextId.Uploaded);
+        }
+
+        internal static void HandleUploadFailed(FeedbackUploadFailure failure)
+        {
+            if (!_configuration.ShowUploadFailureCodes ||
+                string.IsNullOrEmpty(failure.SubmissionId) ||
+                !CurrentSubmissions.Contains(failure.SubmissionId) ||
+                !FailureNotifications.Add(failure.SubmissionId))
+                return;
+            Present(FeedbackTextId.UploadFailed, failure.FailureCode);
         }
 
         internal static int TrackedSubmissionCount => CurrentSubmissions.Count;
@@ -61,12 +78,20 @@ namespace ZeroEngine.Feedback
                 return;
 
             FeedbackSubmissionService.UploadSucceeded += HandleUploadSucceeded;
+            FeedbackSubmissionService.UploadFailed += HandleUploadFailed;
             _subscribed = true;
         }
 
-        private static void Present(FeedbackTextId status)
+        private static void Present(FeedbackTextId status, string failureCode = null)
         {
-            string text = FeedbackTextCatalog.Resolve(status, _configuration.TextResolver);
+            bool codedFailure = status == FeedbackTextId.UploadFailed && _configuration.ShowUploadFailureCodes;
+            string text = codedFailure ? _configuration.TextResolver?.Resolve(status) : FeedbackTextCatalog.Resolve(status, _configuration.TextResolver);
+            if (codedFailure)
+            {
+                if (string.IsNullOrWhiteSpace(text))
+                    text = FeedbackTextCatalog.ResolveShortFailure(Application.systemLanguage);
+                text += " (" + (string.IsNullOrEmpty(failureCode) ? FeedbackFailureCodes.Unknown : failureCode) + ")";
+            }
             if (_configuration.StatusPresenter != null)
             {
                 _configuration.StatusPresenter.Show(status, text);

@@ -3,8 +3,14 @@ using System.Collections;
 using System.Collections.Generic;
 using System.IO;
 using System.Reflection;
+using System.Net;
+using System.Net.Sockets;
+using System.Text;
+using System.Threading.Tasks;
 using NUnit.Framework;
 using UnityEngine;
+using UnityEngine.Networking;
+using UnityEngine.TestTools;
 
 namespace ZGS.Analytics.Tests.Editor
 {
@@ -190,13 +196,15 @@ namespace ZGS.Analytics.Tests.Editor
         }
 
         [Test]
-        public void ProcessPendingUploads_WhenRemovalPersistenceFails_DoesNotDeleteOrNotify()
+        public void ProcessPendingUploads_WhenRemovalPersistenceFails_ReportsCodeWithoutDeletingOrNotifyingSuccess()
         {
             string zipPath = CreateZip("removal-save-fails.zip");
-            Assert.IsTrue(FeedbackUploadQueue.TryEnqueue(zipPath, "POB_v1", "Tester"));
+            Assert.IsTrue(FeedbackUploadQueue.TryEnqueue("current-submission", zipPath, "POB_v1", "Tester"));
 
             int eventCount = 0;
             FeedbackUploadQueue.QueuedUploadSucceeded += _ => eventCount++;
+            string failureCode = null;
+            FeedbackUploadQueue.QueuedSubmissionFailed += failure => failureCode = failure.FailureCode;
             SetStaticField(
                 "_tryUploadOverride",
                 (Func<FeedbackUploadQueue.PendingUpload, Action<bool>, IEnumerator>)
@@ -207,6 +215,7 @@ namespace ZGS.Analytics.Tests.Editor
 
             Assert.AreEqual(1, FeedbackUploadQueue.PendingCount);
             Assert.AreEqual(0, eventCount);
+            Assert.AreEqual("F102", failureCode);
             Assert.IsTrue(File.Exists(zipPath));
         }
 
@@ -287,6 +296,160 @@ namespace ZGS.Analytics.Tests.Editor
             Assert.AreEqual(1, FeedbackUploadQueue.PendingCount);
         }
 
+        [Test]
+        public void ProcessPendingUploads_ReadFailure_ReportsInReleaseModeAndPreservesRetryableItem()
+        {
+            const string id = "0123456789abcdef0123456789abcdef";
+            string path = CreateZip("locked.zip");
+            SetStaticField("_backgroundRunning", true);
+            AnalyticsConfig.ServerUrl = "http://127.0.0.1:1";
+            AnalyticsConfig.UploadSecret = "synthetic-test-secret";
+            Assert.IsTrue(FeedbackUploadQueue.TryEnqueue(id, path, "TEST_v1", "Synthetic"));
+            bool previousDebugMode = AnalyticsConfig.DebugMode;
+            int observed = 0;
+            FeedbackUploadQueue.QueuedSubmissionFailed += _ => throw new InvalidOperationException();
+            FeedbackUploadQueue.QueuedSubmissionFailed += failure =>
+            {
+                observed++;
+                Assert.AreEqual(id, failure.SubmissionId);
+                Assert.AreEqual(FeedbackFailureCodes.FileRead, failure.FailureCode);
+            };
+            try
+            {
+                AnalyticsConfig.DebugMode = false;
+                using (var locked = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.None))
+                {
+                    for (int attempt = 0; attempt < 2; attempt++)
+                    {
+                        LogAssert.Expect(LogType.Warning, new System.Text.RegularExpressions.Regex("\\[FeedbackUpload\\] failed code=F103.*"));
+                        LogAssert.Expect(LogType.Warning, new System.Text.RegularExpressions.Regex("\\[FeedbackUpload\\] failure_callback_failed code=F103.*"));
+                        Exhaust(FeedbackUploadQueue.ProcessPendingUploads());
+                    }
+                }
+                Assert.AreEqual(2, observed, "A bad observer must not stop later observers or the next retry.");
+                Assert.AreEqual(1, FeedbackUploadQueue.PendingCount);
+                Assert.IsTrue(File.Exists(path));
+                SetStaticField("_pendingUploads", null);
+                Assert.AreEqual(1, FeedbackUploadQueue.PendingCount, "Failed attempts must survive queue reload.");
+            }
+            finally { AnalyticsConfig.DebugMode = previousDebugMode; }
+        }
+
+        [Test]
+        public void BackgroundStart_DefersTransportUntilCallerCanRegisterLocalAcceptance()
+        {
+            MethodInfo method = typeof(FeedbackUploadQueue).GetMethod("BackgroundProcessLoop", BindingFlags.NonPublic | BindingFlags.Static);
+            var loop = (IEnumerator)method.Invoke(null, null);
+            try
+            {
+                Assert.IsTrue(loop.MoveNext());
+                Assert.IsNull(loop.Current);
+                Assert.IsFalse((bool)GetStaticField("_isProcessing"));
+            }
+            finally { (loop as IDisposable)?.Dispose(); }
+        }
+
+        [UnityTest]
+        public IEnumerator HttpFailureThenRecovery_PreservesQueueAndPublishesActualResponse()
+        {
+            const string id = "0123456789abcdef0123456789abcdef";
+            string path = CreateZip("http-recovery.zip");
+            var listener = new TcpListener(IPAddress.Loopback, 0);
+            listener.Start();
+            int port = ((IPEndPoint)listener.LocalEndpoint).Port;
+            Task server = Task.Run(() =>
+            {
+                for (int attempt = 0; attempt < 2; attempt++)
+                {
+                    using (TcpClient client = listener.AcceptTcpClient())
+                    using (NetworkStream stream = client.GetStream())
+                    {
+                        stream.ReadTimeout = 5000;
+                        var header = new StringBuilder();
+                        while (header.Length < 32768 && !header.ToString().EndsWith("\r\n\r\n", StringComparison.Ordinal))
+                        {
+                            int value = stream.ReadByte();
+                            if (value < 0) throw new IOException("Incomplete synthetic upload header.");
+                            header.Append((char)value);
+                        }
+                        var match = System.Text.RegularExpressions.Regex.Match(header.ToString(), @"(?im)^Content-Length:\s*(\d+)");
+                        if (!match.Success) throw new IOException("Synthetic upload has no content length.");
+                        int remaining = int.Parse(match.Groups[1].Value);
+                        byte[] buffer = new byte[4096];
+                        while (remaining > 0)
+                        {
+                            int read = stream.Read(buffer, 0, Math.Min(buffer.Length, remaining));
+                            if (read == 0) throw new IOException("Incomplete synthetic upload body.");
+                            remaining -= read;
+                        }
+                        string status = attempt == 0 ? "403 Forbidden" : "200 OK";
+                        byte[] response = Encoding.ASCII.GetBytes($"HTTP/1.1 {status}\r\nContent-Length: 2\r\nContent-Type: application/json\r\nX-Request-ID: synthetic-{attempt}\r\nConnection: close\r\n\r\n{{}}");
+                        stream.Write(response, 0, response.Length);
+                    }
+                }
+            });
+            try
+            {
+                SetStaticField("_backgroundRunning", true);
+                AnalyticsConfig.ServerUrl = "http://127.0.0.1:" + port;
+                AnalyticsConfig.UploadSecret = "synthetic-test-secret";
+                var failures = new List<FeedbackUploadFailure>();
+                int successCount = 0;
+                FeedbackUploadQueue.QueuedSubmissionFailed += failures.Add;
+                FeedbackUploadQueue.QueuedSubmissionSucceeded += completion => { Assert.AreEqual(id, completion.SubmissionId); successCount++; };
+                Assert.IsTrue(FeedbackUploadQueue.TryEnqueue(id, path, "TEST_v1", "Synthetic"));
+                LogAssert.Expect(LogType.Warning, new System.Text.RegularExpressions.Regex("\\[FeedbackUpload\\] failed code=F403.*"));
+                yield return DriveRequest(FeedbackUploadQueue.ProcessPendingUploads());
+                Assert.AreEqual(1, failures.Count);
+                Assert.AreEqual("F403", failures[0].FailureCode);
+                Assert.AreEqual(403, failures[0].HttpStatusCode);
+                Assert.AreEqual("synthetic-0", failures[0].RequestId);
+                Assert.AreEqual(0, successCount);
+                SetStaticField("_pendingUploads", null);
+                Assert.AreEqual(1, FeedbackUploadQueue.PendingCount);
+                Assert.IsTrue(File.Exists(path));
+                yield return DriveRequest(FeedbackUploadQueue.ProcessPendingUploads());
+                Assert.AreEqual(1, successCount);
+                Assert.AreEqual(1, failures.Count);
+                SetStaticField("_pendingUploads", null);
+                Assert.AreEqual(0, FeedbackUploadQueue.PendingCount);
+                Assert.IsFalse(File.Exists(path));
+                Assert.IsTrue(server.Wait(1000), "Synthetic receiver did not finish.");
+            }
+            finally
+            {
+                listener.Stop();
+                try { server.Wait(1000); } catch (AggregateException) { }
+            }
+        }
+
+        private static IEnumerator DriveRequest(IEnumerator root)
+        {
+            var stack = new Stack<IEnumerator>();
+            stack.Push(root);
+            float deadline = Time.realtimeSinceStartup + 15f;
+            try
+            {
+                while (stack.Count > 0)
+                {
+                    Assert.Less(Time.realtimeSinceStartup, deadline, "Synthetic upload exceeded its deadline.");
+                    IEnumerator current = stack.Peek();
+                    if (!current.MoveNext()) { (stack.Pop() as IDisposable)?.Dispose(); continue; }
+                    if (current.Current is IEnumerator nested) { stack.Push(nested); continue; }
+                    if (current.Current is AsyncOperation operation)
+                    {
+                        while (!operation.isDone)
+                        {
+                            Assert.Less(Time.realtimeSinceStartup, deadline, "Synthetic request did not finish.");
+                            yield return null;
+                        }
+                    }
+                    else yield return null;
+                }
+            }
+            finally { while (stack.Count > 0) (stack.Pop() as IDisposable)?.Dispose(); }
+        }
+
         private IEnumerator CompleteUploadWithEnqueue(
             Action<bool> callback,
             string secondPath)
@@ -328,6 +491,7 @@ namespace ZGS.Analytics.Tests.Editor
             SetStaticField("_tryUploadOverride", null);
             SetStaticField("QueuedUploadSucceeded", null);
             SetStaticField("QueuedSubmissionSucceeded", null);
+            SetStaticField("QueuedSubmissionFailed", null);
             SetStaticField("_backgroundRunning", false);
             SetStaticField("_isProcessing", false);
             SetStaticField("_pendingUploads", null);
