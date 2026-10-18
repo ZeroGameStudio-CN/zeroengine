@@ -186,6 +186,17 @@ an older snapshot, but loses aging fairness; never run mixed old/new scheduling 
 
 ## Offline state maintenance
 
+Version 1.6.10 adds bounded `maintenance receipts --workspace <root> --limit 20`.
+Use it through the qualified Router coordination entry. It lists only finalized
+undelivered or cleanup-pending receipt metadata, with task/owner/lifecycle and
+an opaque cleanup-path hash. It exposes no token, raw result, fingerprint or
+ACK digest. The command does not maintain, renew, ACK, retire or delete anything;
+ordinary pending execution receipts are excluded. `truncated=true` means the
+bounded result is incomplete, never that other receipts are settled. Normal
+coordination and protocol/state schema 3 remain unchanged. Exact-package code
+coexistence requires the separately reviewed Router runtime qualification; this
+addition does not relax canonical installation's maintenance/backup gates.
+
 Version 1.6.9 compares claimed write paths with normalized sets and ancestor
 lookups instead of every pair of paths. This bounds scheduling work inside the
 write transaction when many source scopes wait together. Exact paths, `.meta`
@@ -225,7 +236,7 @@ each recorded terminal state to the exact task, workspace and actual claim state
 forged states or foreign claims remain invalid. It changes no receipt, scheduling
 transition, protocol or schema and performs no repair of existing database rows.
 
-Use 1.6.9 for this maintenance route, including state written by the 1.5 cohort.
+Use 1.6.10 for this maintenance route, including state written by the 1.5 cohort.
 
 Do not copy `scheduler.sqlite3` with a filesystem copy command: committed data may still live in
 its WAL. Before directly invoking either Scheduler executable, stop admission at the Router entry,
@@ -262,7 +273,7 @@ staged_scheduler="$stage_root/bin/unity-scheduler"
 Keep `$stagedScheduler` or `$staged_scheduler` as the exact
 `<absolute-staged-1.6-executable>` for every later staged command. The isolated uv environment
 variables must not remain set during the canonical install; require the parsed version to equal
-exactly `1.6.9`:
+exactly `1.6.10`:
 
 ```text
 <absolute-staged-1.6-executable> --version
@@ -292,7 +303,7 @@ These staged invocations are limited to `--version`, `state backup`, and `state 
 not open the database through the scheduling path or migrate schema 1 or 2. After the backup,
 ordinary verification, and applicable migration gate succeed, install the canonical Router version that requires 1.6
 first, so it fails closed while canonical Scheduler is still older. Then install canonical Scheduler
-1.6, require canonical `unity-scheduler --version` to report version `1.6.9`, run the
+1.6, require canonical `unity-scheduler --version` to report version `1.6.10`, run the
 `workspace list` maintenance read-back, exact-workspace status read-backs, and Router protocol
 canary, and only then reopen Router admission.
 

@@ -4,6 +4,12 @@
 
 It does not start or inspect Unity, run tests, call MCP, inspect version control, or install anything into a Unity project. The package has no runtime dependencies. The Router uses only the command's JSON process protocol; it does not import the Python package or depend on its installation layout.
 
+Version 1.6.10 adds bounded `maintenance receipts --workspace <root> --limit 20`
+metadata inspection for finalized undelivered and cleanup-pending receipts. It
+does not expose credentials, fingerprints, delivery digests or raw results, and
+never acknowledges, replays, renews, deletes tokens or schedules work. Protocol
+and state schema remain 3; ordinary coordination is unchanged.
+
 Version 1.6.9 removes pairwise write-path comparisons from scheduling. Normalized
 sets and ancestor lookups keep the same path, `.meta`, root and host case rules
 while reducing write-lock occupancy for many simultaneous source claims. It
