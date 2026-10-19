@@ -349,6 +349,7 @@ namespace ZGS.Analytics
             }
             string idempotencyKey = Guid.NewGuid().ToString("N");
             FeedbackUploadAttempt lastAttempt = new FeedbackUploadAttempt(false, FeedbackFailureCodes.Unknown);
+            int attemptsMade = 0;
 
             for (int i = 0; i <= MaxRetries; i++)
             {
@@ -359,13 +360,14 @@ namespace ZGS.Analytics
                     yield return new WaitForSecondsRealtime(delay);
                 }
 
-                yield return DoUpload(
-                    zipPath,
-                    version,
-                    result => lastAttempt = result,
-                    submissionId: string.Empty,
-                    idempotencyKey: idempotencyKey,
-                    attempt: i + 1);
+                attemptsMade++;
+                yield return TryUpload(new PendingUpload
+                {
+                    zipPath = zipPath,
+                    version = version,
+                    idempotencyKey = idempotencyKey,
+                    retryCount = i
+                }, result => lastAttempt = result);
 
                 if (lastAttempt.Succeeded)
                 {
@@ -378,9 +380,12 @@ namespace ZGS.Analytics
                     break;
             }
 
-            // 所有重试都失败，加入队列
-            AnalyticsLog.LogWarning($"[FeedbackQueue] 重试 {MaxRetries} 次后仍失败，加入离线队列");
-            TryEnqueueCore(string.Empty, idempotencyKey, zipPath, version, userName);
+            AnalyticsLog.LogWarning($"[FeedbackQueue] 上传尝试 {attemptsMade} 次后失败，加入离线队列");
+            if (TryEnqueueCore(string.Empty, idempotencyKey, zipPath, version, userName))
+            {
+                PendingUpload queued = _pendingUploads.Find(item => item.zipPath == zipPath);
+                PersistFailedAttempt(queued, lastAttempt, attemptsMade);
+            }
             onComplete?.Invoke(false);
         }
 
@@ -714,14 +719,14 @@ namespace ZGS.Analytics
             return true;
         }
 
-        private static int PersistFailedAttempt(PendingUpload item, FeedbackUploadAttempt attempt)
+        private static int PersistFailedAttempt(PendingUpload item, FeedbackUploadAttempt attempt, int attempts = 1)
         {
             var candidate = ClonePendingUploads(_pendingUploads);
             PendingUpload candidateItem = candidate.Find(p => p.zipPath == item.zipPath);
             if (candidateItem == null)
                 return item.retryCount;
 
-            candidateItem.retryCount = Math.Min(int.MaxValue, candidateItem.retryCount + 1);
+            candidateItem.retryCount = (int)Math.Min(int.MaxValue, (long)candidateItem.retryCount + attempts);
             candidateItem.lastFailureCode = FeedbackFailureCodes.Normalize(attempt.FailureCode);
             candidateItem.lastFailureReason = FeedbackFailureCodes.SafeDiagnosticId(attempt.Reason);
             candidateItem.lastAttemptAt = DateTimeOffset.UtcNow.ToUnixTimeSeconds();

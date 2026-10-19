@@ -339,6 +339,68 @@ namespace ZGS.Analytics.Tests.Editor
         }
 
         [Test]
+        public void UploadWithRetry_NonRetryableFailure_AttemptsOnceAndPersistsCooldown()
+        {
+            // Permanent regression: legacy callers must preserve the same retry classification.
+            int attempts = 0;
+            int callbacks = 0;
+            SetStaticField(
+                "_tryUploadDetailedOverride",
+                (Func<FeedbackUploadQueue.PendingUpload, Action<FeedbackUploadAttempt>, IEnumerator>)
+                ((_, callback) =>
+                {
+                    attempts++;
+                    return CompleteUploadAttempt(callback,
+                        new FeedbackUploadAttempt(false, "F403", 403, reason: "server_forbidden"));
+                }));
+
+            Exhaust(FeedbackUploadQueue.UploadWithRetry(
+                CreateZip("legacy-forbidden.zip"), "TEST_v1", "Synthetic", success =>
+                {
+                    callbacks++;
+                    Assert.IsFalse(success);
+                }));
+
+            Assert.AreEqual(1, attempts);
+            Assert.AreEqual(1, callbacks);
+            SetStaticField("_pendingUploads", null);
+            Assert.AreEqual(1, FeedbackUploadQueue.PendingCount);
+            var pending = (List<FeedbackUploadQueue.PendingUpload>)GetStaticField("_pendingUploads");
+            Assert.IsTrue(pending[0].blocked);
+            Assert.AreEqual("F403", pending[0].lastFailureCode);
+            Assert.AreEqual(1, pending[0].retryCount);
+            Assert.IsNotEmpty(pending[0].idempotencyKey);
+        }
+
+        [Test]
+        public void UploadWithRetry_RetryableFailure_KeepsOneIdempotencyKeyThroughQueueReload()
+        {
+            var keys = new List<string>();
+            SetStaticField(
+                "_tryUploadDetailedOverride",
+                (Func<FeedbackUploadQueue.PendingUpload, Action<FeedbackUploadAttempt>, IEnumerator>)
+                ((pending, callback) =>
+                {
+                    keys.Add(pending.idempotencyKey);
+                    return CompleteUploadAttempt(callback,
+                        new FeedbackUploadAttempt(false, FeedbackFailureCodes.Connection));
+                }));
+
+            Exhaust(FeedbackUploadQueue.UploadWithRetry(
+                CreateZip("legacy-offline.zip"), "TEST_v1", "Synthetic", _ => { }));
+
+            Assert.AreEqual(4, keys.Count);
+            Assert.IsNotEmpty(keys[0]);
+            Assert.IsTrue(keys.TrueForAll(key => key == keys[0]));
+            SetStaticField("_pendingUploads", null);
+            Assert.AreEqual(1, FeedbackUploadQueue.PendingCount);
+            var pendingItems = (List<FeedbackUploadQueue.PendingUpload>)GetStaticField("_pendingUploads");
+            Assert.AreEqual(keys[0], pendingItems[0].idempotencyKey);
+            Assert.AreEqual(4, pendingItems[0].retryCount);
+            Assert.IsFalse(pendingItems[0].blocked);
+        }
+
+        [Test]
         public void ProcessPendingUploads_ReadFailure_ReportsInReleaseModeAndPreservesRetryableItem()
         {
             const string id = "0123456789abcdef0123456789abcdef";

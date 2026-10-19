@@ -10,6 +10,15 @@ tracked in each package's `package.json`.
 - Added MIT licensing.
 - Normalized package repository metadata for UPM Git dependencies.
 
+## com.zerogamestudio.analytics 2.1.2
+
+- Keep legacy upload retry attempts, cooldown and idempotency aligned with the queue.
+- Isolate the realtime retry regression from the user's feedback storage.
+
+## com.zerogamestudio.zeroengine.feedback 1.1.2
+
+- Require Analytics 2.1.2 for the verified legacy retry contract.
+
 ## com.zerogamestudio.analytics 2.1.1
 
 - Fix C# local variable scope conflicts in the feedback retry loop.

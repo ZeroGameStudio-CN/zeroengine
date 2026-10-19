@@ -4,6 +4,8 @@ Minimal player feedback UI on top of the queue-first ZGS Analytics submission se
 
 Version 1.0.2 localizes the Dashboard setup label, tooltip, and write confirmation to Simplified Chinese without changing the installer route.
 
+Version 1.1.2 requires Analytics 2.1.2 for consistent legacy retry classification and idempotency.
+
 Version 1.1.1 requires Analytics 2.1.1, which fixes compilation of the retry loop.
 
 Version 1.1.0 adds an opt-in two-outcome presentation with short failure codes and requires Analytics 2.1.0.
