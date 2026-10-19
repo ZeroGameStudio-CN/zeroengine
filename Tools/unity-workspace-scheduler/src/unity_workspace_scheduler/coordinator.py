@@ -224,11 +224,26 @@ class WorkspaceCoordinator:
     @contextmanager
     def _transaction(self) -> Iterator[sqlite3.Connection]:
         connection = open_database(self.paths)
+        began = time.perf_counter()
+        acquired = None
+        phase = "begin"
         try:
             connection.execute("BEGIN IMMEDIATE")
+            acquired = time.perf_counter()
+            phase = "body"
             yield connection
+            phase = "commit"
             connection.commit()
-        except Exception:
+        except Exception as exc:
+            if isinstance(exc, sqlite3.DatabaseError):
+                ended = time.perf_counter()
+                exc.scheduler_transaction_timing = {
+                    "phase": phase,
+                    "writer_wait_ms": round(
+                        ((ended if acquired is None else acquired) - began) * 1000, 3
+                    ),
+                    "writer_held_ms": round((ended - acquired) * 1000, 3) if acquired else 0.0,
+                }
             connection.rollback()
             raise
         finally:
@@ -6189,27 +6204,22 @@ class WorkspaceCoordinator:
             return recorded
 
     def _unchanged_queued_wait(
-        self, operation: _Operation, claim_id: str, workspace_id: str, epoch: int
+        self, operation: _Operation, claim_id: str, workspace_id: str
     ) -> bool:
-        """An unchanged pending waiter needs no writer lock or maintenance pass."""
+        """A still-blocked pending waiter needs no writer maintenance pass."""
         connection = open_database(self.paths)
         try:
             receipt = self._matching_operation_receipt(connection, operation)
             if receipt is None or receipt["finalized_at"] is not None:
                 return False
             claim = connection.execute(
-                "SELECT state FROM claims WHERE id = ? AND workspace_id = ?",
+                "SELECT * FROM claims WHERE id = ? AND workspace_id = ?",
                 (claim_id, workspace_id),
             ).fetchone()
             workspace = connection.execute(
-                "SELECT epoch FROM workspaces WHERE id = ?", (workspace_id,)
+                "SELECT id FROM workspaces WHERE id = ?", (workspace_id,)
             ).fetchone()
-            if (
-                claim is None
-                or claim["state"] != "queued"
-                or workspace is None
-                or workspace["epoch"] != epoch
-            ):
+            if claim is None or claim["state"] != "queued" or workspace is None:
                 return False
             now = time.time()
             if not math.isfinite(now):
@@ -6233,7 +6243,19 @@ class WorkspaceCoordinator:
                     or expires > now + MAX_TASK_TTL_SECONDS
                 ):
                     return False
-            return True
+            scopes = self._claim_scopes(connection, claim_id)
+            for active in connection.execute(
+                "SELECT * FROM claims WHERE workspace_id = ? AND state = 'active'",
+                (workspace_id,),
+            ):
+                if self._claims_conflict(
+                    claim, scopes, active, self._claim_scopes(connection, active["id"])
+                ):
+                    # Heartbeats may change the workspace epoch without removing
+                    # this blocker. Release/park already schedule atomically;
+                    # absent a blocker, use normal maintenance for queue aging.
+                    return True
+            return False
         finally:
             connection.close()
 
@@ -6401,9 +6423,6 @@ class WorkspaceCoordinator:
                 ).fetchone()
                 assert created_row is not None
                 receipt_created_at = float(created_row["created_at"])
-            wait_epoch = connection.execute(
-                "SELECT epoch FROM workspaces WHERE id = ?", (identifier,)
-            ).fetchone()["epoch"]
 
         remaining_wait = _remaining_operation_wait(
             receipt_created_at,
@@ -6418,7 +6437,7 @@ class WorkspaceCoordinator:
             # Unchanged waiters must leave writer capacity for owners finishing
             # work. Keep the first observation fast, then bound idle polling.
             poll_delay = min(2.0, poll_delay * 2)
-            if self._unchanged_queued_wait(operation, claim_id, identifier, wait_epoch):
+            if self._unchanged_queued_wait(operation, claim_id, identifier):
                 continue
             with self._transaction() as connection:
                 self._maintain(connection, identifier)
@@ -6445,9 +6464,6 @@ class WorkspaceCoordinator:
                     result["granted"] = result["state"] == "active"
                     result["timed_out"] = False
                     return self._update_operation_result(connection, operation, result)
-                wait_epoch = connection.execute(
-                    "SELECT epoch FROM workspaces WHERE id = ?", (identifier,)
-                ).fetchone()["epoch"]
         with self._transaction() as connection:
             self._maintain(connection, identifier)
             receipt = self._matching_operation_receipt(connection, operation)

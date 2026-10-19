@@ -208,6 +208,17 @@ It adds no index, protocol or schema migration. Qualify large mixed scopes and
 concurrent status/renewal/release before the same drained SDK activation below;
 never cancel healthy waiters or extend timeouts to install it.
 
+Version 1.6.15 skips writer maintenance while the original pending receipt
+and queued claim remain blocked by a valid active claim. Other tasks' heartbeats
+may change the workspace epoch without changing that conflict. No blocker,
+changed results, due expiry, clock anomalies and the original deadline retain
+normal write maintenance, including time-driven queue aging. It does not return
+an uncommitted grant, change receipts, extend waits or bypass FIFO. Database
+errors report the failing transaction's lock-wait and held durations separately;
+these do not measure other callers or cumulative command duration. Qualify
+concurrent retained waits, heartbeat churn, WAL writer contention, FIFO handoff,
+expiry and lost replies with the exact artifact before Router activation.
+
 Version 1.6.14 adds exact read-only retained claim metadata, addressed by original
 acquisition operation ID and claim ID, through the paired qualified Router.
 It returns acquisition and current terminal state separately, never current
