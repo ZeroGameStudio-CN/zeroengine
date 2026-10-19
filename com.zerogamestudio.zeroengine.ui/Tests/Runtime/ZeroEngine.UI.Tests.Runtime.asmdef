@@ -13,6 +13,5 @@
   "precompiledReferences": ["nunit.framework.dll"],
   "autoReferenced": false,
   "defineConstraints": ["UNITY_INCLUDE_TESTS"],
-  "noEngineReferences": false,
-  "optionalUnityReferences": ["TestAssemblies"]
+  "noEngineReferences": false
 }
