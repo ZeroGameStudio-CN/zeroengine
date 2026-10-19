@@ -11,6 +11,17 @@ transaction; the original deadline always settles there. Queue identity, FIFO,
 receipts, protocol and schema remain unchanged. Qualify the exact package with
 the Router coexistence gate; never replace code used by an existing caller.
 
+Version 1.6.14 adds `maintenance claim --workspace <root> --claim-id <id>
+--acquire-operation-id <original-acquire-id>` diagnostic binds one retained
+acquisition receipt to its current retained claim, including release time. It
+can inspect delivered receipts without replay or ACK and never grants authority,
+runs maintenance, renews leases, schedules work, or performs token cleanup. It
+does not expose raw results, credentials, source paths, or delivery capabilities.
+Unavailable records are reported explicitly; neither missing records nor a
+terminal timestamp establishes the closing actor or cause. This is a private
+protocol requiring paired Router validation and SDK release
+qualification before any live use; it is not an Agent operational entrypoint.
+
 Version 1.6.10 adds bounded `maintenance receipts --workspace <root> --limit 20`
 metadata inspection for finalized undelivered and cleanup-pending receipts. It
 does not expose credentials, fingerprints, delivery digests or raw results, and

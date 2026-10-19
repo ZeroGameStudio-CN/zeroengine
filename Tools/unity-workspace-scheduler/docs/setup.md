@@ -208,6 +208,15 @@ It adds no index, protocol or schema migration. Qualify large mixed scopes and
 concurrent status/renewal/release before the same drained SDK activation below;
 never cancel healthy waiters or extend timeouts to install it.
 
+Version 1.6.14 adds exact read-only retained claim metadata, addressed by original
+acquisition operation ID and claim ID, through the paired qualified Router.
+It returns acquisition and current terminal state separately, never current
+authority. No raw result, credentials, scope paths or ACK capabilities are
+exposed. Missing records and unavailable closing cause remain explicit; it
+does not replay, maintain, schedule, renew, expire or clean up anything. Protocol
+and state schema remain 3. Qualify the exact artifact and retained older waiters
+before enabling the new Router action; do not run development source on live state.
+
 Version 1.6.13 skips writer maintenance for an unchanged pending claim/freeze
 observation. Each short WAL read verifies the original receipt, queued claim,
 workspace epoch and active-task timing. A changed epoch/result, due expiry,
