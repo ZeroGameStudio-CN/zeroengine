@@ -224,22 +224,24 @@ class WorkspaceCoordinator:
     @contextmanager
     def _transaction(self) -> Iterator[sqlite3.Connection]:
         connection = open_database(self.paths)
-        began = time.monotonic()
+        began = time.perf_counter()
         acquired = None
         phase = "begin"
         try:
             connection.execute("BEGIN IMMEDIATE")
-            acquired = time.monotonic()
+            acquired = time.perf_counter()
             phase = "body"
             yield connection
             phase = "commit"
             connection.commit()
         except Exception as exc:
             if isinstance(exc, sqlite3.DatabaseError):
-                ended = time.monotonic()
+                ended = time.perf_counter()
                 exc.scheduler_transaction_timing = {
                     "phase": phase,
-                    "writer_wait_ms": round(((acquired or ended) - began) * 1000, 3),
+                    "writer_wait_ms": round(
+                        ((ended if acquired is None else acquired) - began) * 1000, 3
+                    ),
                     "writer_held_ms": round((ended - acquired) * 1000, 3) if acquired else 0.0,
                 }
             connection.rollback()
