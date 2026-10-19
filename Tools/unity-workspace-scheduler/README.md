@@ -4,6 +4,13 @@
 
 It does not start or inspect Unity, run tests, call MCP, inspect version control, or install anything into a Unity project. The package has no runtime dependencies. The Router uses only the command's JSON process protocol; it does not import the Python package or depend on its installation layout.
 
+Version 1.6.16 preserves an already granted pure Editor lease and an earlier
+queued Editor request when a later maintenance freeze arrives. Status, renewal
+and authorization let the original bounded work finish; new claims still use
+the drain admission guard. Releasing that Editor claim restores ordinary source
+parking and maintenance admission. No claim is cancelled, aged, reordered or
+resurrected, and no protocol/schema change is introduced.
+
 Version 1.6.15 observes pending claim/freeze waits through short WAL reads
 while a valid active claim still blocks them. Unrelated heartbeats no longer
 force waiting callers back into writer maintenance. Missing blockers, receipt
