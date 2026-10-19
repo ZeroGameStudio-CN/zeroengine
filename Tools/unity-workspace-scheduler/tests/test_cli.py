@@ -55,6 +55,34 @@ def run(arguments: list[str]) -> int:
     return _cli_run(_with_operation(arguments))
 
 
+def test_status_without_cleanup_uses_one_maintenance_snapshot(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    state = tmp_path / "state"
+    workspace = tmp_path / "workspace"
+    workspace.mkdir()
+    coordinator = WorkspaceCoordinator(resolve_state_paths(state))
+    coordinator.register(workspace)
+    snapshots = 0
+    original = WorkspaceCoordinator.status
+
+    def observed(self, root):
+        nonlocal snapshots
+        snapshots += 1
+        return original(self, root)
+
+    def unexpected_drain(*args, **kwargs):
+        raise AssertionError("No cleanup jobs exist in this snapshot")
+
+    monkeypatch.setattr(WorkspaceCoordinator, "status", observed)
+    monkeypatch.setattr(WorkspaceCoordinator, "drain_token_cleanup_jobs", unexpected_drain)
+    assert (
+        run(["--state-dir", str(state), "workspace", "status", "--workspace", str(workspace)]) == 0
+    )
+    assert snapshots == 1
+    assert json.loads(capsys.readouterr().out)["result"]["token_cleanup_jobs"] == []
+
+
 def _create_private_windows_directory(path: Path) -> None:
     """Atomically create a test-only directory with the token allowlist DACL."""
 

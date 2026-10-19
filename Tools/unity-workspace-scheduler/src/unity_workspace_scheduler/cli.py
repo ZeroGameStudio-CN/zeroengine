@@ -272,7 +272,9 @@ def _workspace_unregister(
 def _workspace_status(
     coordinator: WorkspaceCoordinator, args: argparse.Namespace
 ) -> tuple[str, dict[str, Any]]:
-    coordinator.status(args.workspace)
+    result = coordinator.status(args.workspace)
+    if not any(job["completed_at"] is None for job in result["token_cleanup_jobs"]):
+        return "Workspace status inspected.", result
     cleanup = coordinator.drain_token_cleanup_jobs(
         limit=TOKEN_CLEANUP_DRAIN_LIMIT,
         workspace=args.workspace,

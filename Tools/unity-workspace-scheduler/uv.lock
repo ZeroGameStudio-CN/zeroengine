@@ -247,7 +247,7 @@ wheels = [
 
 [[package]]
 name = "unity-workspace-scheduler"
-version = "1.6.11"
+version = "1.6.12"
 source = { editable = "." }
 
 [package.dev-dependencies]
