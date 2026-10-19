@@ -5,7 +5,7 @@
     "ZeroEngine.UI",
     "ZeroEngine.Core",
     "UnityEngine.TestRunner",
-    "Unity.ugui"
+    "UnityEngine.UI"
   ],
   "includePlatforms": [],
   "excludePlatforms": [],
