@@ -70,6 +70,7 @@ namespace ZGS.DataToolkit.Editor
         private string activeResizeKey;
         private bool isWarmingAssetCounts;
         private bool allowFullInspectorForSelectedAsset;
+        private bool compactHeaderLayout = true;
         private bool embeddedHost;
         private Action repaintRequested;
 
@@ -335,9 +336,13 @@ namespace ZGS.DataToolkit.Editor
             return true;
         }
 
-        private static float CalculateHeaderHeight(int visibleToolbarCount, float availableWidth)
+        private float CalculateHeaderHeight(int visibleToolbarCount, float availableWidth)
         {
-            float baseHeight = availableWidth < CompactHeaderWidth ? CompactHeaderHeight : HeaderRowHeight;
+            // A resize can change the resolved width after Layout. Keep the same
+            // control tree until the next Layout, including during Repaint.
+            if (Event.current.type == EventType.Layout)
+                compactHeaderLayout = availableWidth < CompactHeaderWidth;
+            float baseHeight = compactHeaderLayout ? CompactHeaderHeight : HeaderRowHeight;
             return baseHeight + visibleToolbarCount * ProjectToolbarRowHeight;
         }
 
@@ -403,7 +408,7 @@ namespace ZGS.DataToolkit.Editor
             GUILayout.BeginArea(rect);
             using (new EditorGUILayout.VerticalScope(EditorStyles.helpBox, GUILayout.ExpandWidth(true), GUILayout.ExpandHeight(true)))
             {
-                if (rect.width < CompactHeaderWidth)
+                if (compactHeaderLayout)
                 {
                     using (new EditorGUILayout.HorizontalScope())
                     {
@@ -1401,6 +1406,7 @@ namespace ZGS.DataToolkit.Editor
     {
         private readonly Func<DataToolkitProjectProfile> profileFactory;
         private DataToolkitWindow embeddedView;
+        private float resolvedWidth = -1f;
 
         public DataToolkitWorkspacePanel(Func<DataToolkitProjectProfile> profileFactory)
         {
@@ -1414,6 +1420,7 @@ namespace ZGS.DataToolkit.Editor
             if (context == null)
                 throw new ArgumentNullException(nameof(context));
             DisposeView();
+            resolvedWidth = -1f;
             embeddedView = DataToolkitWindow.CreateEmbedded(profileFactory(), context.RequestRepaint);
         }
 
@@ -1439,6 +1446,18 @@ namespace ZGS.DataToolkit.Editor
                 height,
                 GUILayout.ExpandWidth(true),
                 GUILayout.Height(height));
+            if (Event.current.type == EventType.Layout)
+            {
+                // GetRect returns a placeholder here. Areas need real dimensions
+                // during Layout too, so their controls are sized before Repaint.
+                rect.width = resolvedWidth >= 0f ? resolvedWidth : Mathf.Max(0f, context.AvailableWidth);
+                rect.height = height;
+            }
+            else if (Event.current.type == EventType.Repaint && !Mathf.Approximately(resolvedWidth, rect.width))
+            {
+                resolvedWidth = rect.width;
+                context.RequestRepaint();
+            }
             embeddedView.DrawEmbedded(rect);
         }
 

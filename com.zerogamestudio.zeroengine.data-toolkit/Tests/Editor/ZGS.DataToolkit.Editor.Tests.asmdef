@@ -4,6 +4,7 @@
   "references": [
     "ZGS.DataToolkit",
     "ZGS.DataToolkit.Editor",
+    "ZeroEngine.EditorUI.Editor",
     "UnityEngine.TestRunner",
     "UnityEditor.TestRunner"
   ],

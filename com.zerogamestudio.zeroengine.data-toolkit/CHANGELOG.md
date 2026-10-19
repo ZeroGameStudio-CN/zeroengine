@@ -1,5 +1,10 @@
 # Changelog
 
+## 2.1.2 - 2026-10-19
+
+- Fixed embedded headers choosing different control trees during Layout and Repaint on Unity 6.6, which disabled project header actions and prevented Dashboard data panels from opening.
+- Kept the responsive header layout stable through resizing and panel recreation.
+
 ## 2.1.1 - 2026-08-13
 
 - Added project-configurable Data Toolkit UI text with compatible English defaults.
