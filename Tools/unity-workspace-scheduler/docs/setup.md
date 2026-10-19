@@ -208,13 +208,16 @@ It adds no index, protocol or schema migration. Qualify large mixed scopes and
 concurrent status/renewal/release before the same drained SDK activation below;
 never cancel healthy waiters or extend timeouts to install it.
 
-Version 1.6.13 skips writer maintenance for an unchanged pending claim/freeze
-observation. Each short WAL read verifies the original receipt, queued claim,
-workspace epoch and active-task timing. A changed epoch/result, due expiry,
-clock anomaly or original wait deadline retains the existing write transaction
-and finalization rules. It does not return an uncommitted grant, alter a receipt,
-extend a wait or bypass FIFO. Test concurrent retained waiters, heartbeats,
-release, lost replies and TTL transitions before qualifying its exact artifact.
+Version 1.6.15 skips writer maintenance while the original pending receipt
+and queued claim remain blocked by a valid active claim. Other tasks' heartbeats
+may change the workspace epoch without changing that conflict. No blocker,
+changed results, due expiry, clock anomalies and the original deadline retain
+normal write maintenance, including time-driven queue aging. It does not return
+an uncommitted grant, change receipts, extend waits or bypass FIFO. Database
+errors report the failing transaction's lock-wait and held durations separately;
+these do not measure other callers or cumulative command duration. Qualify
+concurrent retained waits, heartbeat churn, WAL writer contention, FIFO handoff,
+expiry and lost replies with the exact artifact before Router activation.
 
 Version 1.6.8 selects wait-deadline candidates through the existing
 `operation_receipts_action_task` index. This avoids reading unrelated retained

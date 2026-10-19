@@ -821,7 +821,9 @@ def run(argv: Sequence[str] | None = None) -> int:
                 "code": error.code,
                 "message": error.message,
                 "duration_ms": round((time.monotonic() - started) * 1000, 3),
-                "details": {},
+                "details": {"transaction": exc.scheduler_transaction_timing}
+                if hasattr(exc, "scheduler_transaction_timing")
+                else {},
             }
         )
         return error.exit_code

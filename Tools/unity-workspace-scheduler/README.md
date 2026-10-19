@@ -4,12 +4,14 @@
 
 It does not start or inspect Unity, run tests, call MCP, inspect version control, or install anything into a Unity project. The package has no runtime dependencies. The Router uses only the command's JSON process protocol; it does not import the Python package or depend on its installation layout.
 
-Version 1.6.13 observes unchanged pending claim/freeze waits through short WAL
-reads, without repeatedly requesting a writer transaction. Epoch changes,
-claim/receipt transitions, expiry and clock anomalies fall back to the existing
-transaction; the original deadline always settles there. Queue identity, FIFO,
-receipts, protocol and schema remain unchanged. Qualify the exact package with
-the Router coexistence gate; never replace code used by an existing caller.
+Version 1.6.15 observes pending claim/freeze waits through short WAL reads
+while a valid active claim still blocks them. Unrelated heartbeats no longer
+force waiting callers back into writer maintenance. Missing blockers, receipt
+transitions, expiry, clock anomalies and the original deadline retain the
+existing transaction. Database errors separate writer-lock wait time from time
+held inside that transaction; total command duration is not lock occupancy.
+Queue identity, FIFO, receipts, protocol and schema remain unchanged. Qualify
+the exact package with the Router coexistence gate before activation.
 
 Version 1.6.10 adds bounded `maintenance receipts --workspace <root> --limit 20`
 metadata inspection for finalized undelivered and cleanup-pending receipts. It
