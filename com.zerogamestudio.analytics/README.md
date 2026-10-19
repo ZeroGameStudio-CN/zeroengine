@@ -2,12 +2,14 @@
 
 ZeroGameStudio 游戏分析 SDK，支持自建 ClickHouse 数据平台。
 
-**版本**: 2.1.0
+**版本**: 2.1.1
 **Unity**: 2021.3+
 
 2.0.0 起 Editor 面板使用 `com.zerogamestudio.zeroengine.editor-ui@1.0.0`。通过 Git URL 安装时，消费工程必须把 Analytics 与 editor-ui 直接 pin 到同一 ZeroEngine commit；Unity 2022.3 不会自动解析同仓 sibling package。
 
 2.0.1 将 Dashboard 模块名称、说明和入口 tooltip 统一为简体中文，不改现有菜单路径。
+
+2.1.1 修正后台退避循环的局部变量作用域冲突，保持原重试与冷却行为。
 
 2.1.0 增加失败可重试分类、队列校验和稳定幂等提交标识。临时网络/服务端错误自动重试，
 鉴权、请求格式和附件完整性错误进入长冷却并保留队列；反馈 ZIP 先写临时文件并完成结构校验，再原子落盘。

@@ -10,6 +10,14 @@ tracked in each package's `package.json`.
 - Added MIT licensing.
 - Normalized package repository metadata for UPM Git dependencies.
 
+## com.zerogamestudio.analytics 2.1.1
+
+- Fix C# local variable scope conflicts in the feedback retry loop.
+
+## com.zerogamestudio.zeroengine.feedback 1.1.1
+
+- Require Analytics 2.1.1 for the compiling retry-loop implementation.
+
 ## com.zerogamestudio.analytics 2.1.0
 
 - Classify feedback transport failures as retryable or non-retryable and keep
