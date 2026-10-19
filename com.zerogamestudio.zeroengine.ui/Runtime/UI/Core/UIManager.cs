@@ -493,6 +493,9 @@ namespace ZeroEngine.UI
                     return null;
                 }
 
+                // Cached views retain their old sibling position; raise them before aligning the modal mask.
+                view.transform.SetAsLastSibling();
+
                 var modalSideEffectDecision = UIManagerModalSideEffectPolicy.Resolve(
                     showMask: config.showMask,
                     pauseGame: config.pauseGame);

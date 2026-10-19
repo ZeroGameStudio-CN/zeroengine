@@ -11,6 +11,9 @@ session generation 清理、按生命周期管理的 Addressables handle cache�
 刷新，以及可注入的暂停/日志 hook。未注入日志 hook 时，UIManager 会按日志级别回退到带
 `[UIManager]` 上下文的 Unity Debug 输出；取消输入由宿主显式转发。
 
+缓存视图每次重新打开都会移到所属层的最上方，再把共享遮罩放到该视图正下方，
+保证后来创建的同层面板不会遮住再次打开的确认弹窗；关闭弹窗后遮罩回到下一个 owner。
+
 2.2.0 增加 `ScreenTransitionPresenter` 与 `IScreenTransitionService`。服务只负责
 全屏遮挡、注入的 blackout action 和清屏，不加载场景，也不依赖项目业务类型。presenter
 会自行向 `ZeroEngine.Core.ServiceRegistry` 注册和注销 `IScreenTransitionService`；宿主安装器

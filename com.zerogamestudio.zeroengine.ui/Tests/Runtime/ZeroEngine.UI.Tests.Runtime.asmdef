@@ -1,0 +1,18 @@
+{
+  "name": "ZeroEngine.UI.Tests.Runtime",
+  "rootNamespace": "ZeroEngine.UI.Tests.Runtime",
+  "references": [
+    "ZeroEngine.UI",
+    "ZeroEngine.Core",
+    "UnityEngine.TestRunner",
+    "Unity.ugui"
+  ],
+  "includePlatforms": [],
+  "excludePlatforms": [],
+  "overrideReferences": true,
+  "precompiledReferences": ["nunit.framework.dll"],
+  "autoReferenced": false,
+  "defineConstraints": ["UNITY_INCLUDE_TESTS"],
+  "noEngineReferences": false,
+  "optionalUnityReferences": ["TestAssemblies"]
+}
