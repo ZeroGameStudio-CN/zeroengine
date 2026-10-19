@@ -17,6 +17,8 @@ namespace ZGS.DataToolkit.Editor.Tests
         [UnityTest]
         public IEnumerator EmbeddedPanel_HeaderSurvivesOpenResizeAndReactivation()
         {
+            if (Application.isBatchMode)
+                Assert.Ignore("Native IMGUI event verification requires an interactive Editor view.");
             var provider = new LayoutHeaderActions();
             string prefsPrefix = "ZGS_DataToolkitLayoutProbe_" + Guid.NewGuid().ToString("N");
             var settings = new DataToolkitProjectSettings("ZGS", "Data Toolkit Layout Probe", "", prefsPrefix,
