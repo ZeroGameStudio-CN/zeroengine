@@ -219,6 +219,23 @@ these do not measure other callers or cumulative command duration. Qualify
 concurrent retained waits, heartbeat churn, WAL writer contention, FIFO handoff,
 expiry and lost replies with the exact artifact before Router activation.
 
+Version 1.6.14 adds exact read-only retained claim metadata, addressed by original
+acquisition operation ID and claim ID, through the paired qualified Router.
+It returns acquisition and current terminal state separately, never current
+authority. No raw result, credentials, scope paths or ACK capabilities are
+exposed. Missing records and unavailable closing cause remain explicit; it
+does not replay, maintain, schedule, renew, expire or clean up anything. Protocol
+and state schema remain 3. Qualify the exact artifact and retained older waiters
+before enabling the new Router action; do not run development source on live state.
+
+Version 1.6.13 skips writer maintenance for an unchanged pending claim/freeze
+observation. Each short WAL read verifies the original receipt, queued claim,
+workspace epoch and active-task timing. A changed epoch/result, due expiry,
+clock anomaly or original wait deadline retains the existing write transaction
+and finalization rules. It does not return an uncommitted grant, alter a receipt,
+extend a wait or bypass FIFO. Test concurrent retained waiters, heartbeats,
+release, lost replies and TTL transitions before qualifying its exact artifact.
+
 Version 1.6.8 selects wait-deadline candidates through the existing
 `operation_receipts_action_task` index. This avoids reading unrelated retained
 heartbeat payloads while holding `BEGIN IMMEDIATE`; wait predicates, result

@@ -4242,6 +4242,94 @@ class WorkspaceCoordinator:
         finally:
             connection.close()
 
+    def maintenance_claim(
+        self, workspace: Path | str, *, claim_id: str, acquire_operation_id: str
+    ) -> dict[str, Any]:
+        """Inspect one retained acquisition and claim without replay or maintenance."""
+        operation_id = validate_operation_id(acquire_operation_id)
+        if not isinstance(claim_id, str) or len(claim_id) != 32:
+            raise UsageError("Claim ID must be a canonical lowercase UUID hex string.")
+        try:
+            valid_id = uuid.UUID(claim_id).hex == claim_id
+        except ValueError:
+            valid_id = False
+        if not valid_id:
+            raise UsageError("Claim ID must be a canonical lowercase UUID hex string.")
+        root = canonical_workspace(workspace)
+        connection = open_database(self.paths)
+        try:
+            registered = self._workspace(connection, root)
+            # Both primary-key lookups are scoped to this exact workspace. Do not
+            # scan history, run expiry, or disclose raw receipt/credential data.
+            receipt = connection.execute(
+                "SELECT * FROM operation_receipts WHERE operation_id = ? AND workspace_id = ?",
+                (operation_id, registered["id"]),
+            ).fetchone()
+            claim = connection.execute(
+                "SELECT * FROM claims WHERE id = ? AND workspace_id = ?",
+                (claim_id, registered["id"]),
+            ).fetchone()
+            result = None
+            if receipt is not None:
+                try:
+                    result = json.loads(receipt["result_json"])
+                except (TypeError, ValueError):
+                    pass
+            if receipt is None:
+                binding = "receipt_unavailable"
+            elif not isinstance(result, dict) or result.get("state") not in (
+                "active",
+                "queued",
+                "parked",
+                "released",
+                "cancelled",
+            ):
+                binding = "invalid_result"
+            elif (
+                receipt["action"] not in {"claim.acquire", "freeze.acquire"}
+                or result.get("id") != claim_id
+                or result.get("task_id") != receipt["task_id"]
+                or (claim is not None and claim["task_id"] != receipt["task_id"])
+            ):
+                binding = "mismatch"
+            else:
+                binding = "matched" if claim is not None else "claim_unavailable"
+            matched = binding in {"matched", "claim_unavailable"}
+            return {
+                "schema_version": SCHEMA_VERSION,
+                "workspace": {"id": registered["id"], "root": registered["root"]},
+                "claim_id": claim_id,
+                "acquire_operation_id": operation_id,
+                "binding": binding,
+                "grants_authority": False,
+                # State and transition time do not identify the closing actor
+                # or cause. Missing retained records cannot establish data loss.
+                "closure_cause": None,
+                "acquisition": {
+                    "action": receipt["action"],
+                    "task_id": receipt["task_id"],
+                    "result_state": result.get("state"),
+                    "created_at": receipt["created_at"],
+                    "finalized_at": receipt["finalized_at"],
+                    "delivered_at": receipt["delivered_at"],
+                    "retired_at": receipt["retired_at"],
+                }
+                if matched
+                else None,
+                "claim": {
+                    "task_id": claim["task_id"],
+                    "kind": claim["kind"],
+                    "state": claim["state"],
+                    "created_at": claim["created_at"],
+                    "granted_at": claim["granted_at"],
+                    "released_at": claim["released_at"],
+                }
+                if binding == "matched"
+                else None,
+            }
+        finally:
+            connection.close()
+
     def identify_task(self, workspace: Path | str, token: str) -> dict[str, Any]:
         """Identify one open task without maintenance, scheduling, or lease renewal."""
 

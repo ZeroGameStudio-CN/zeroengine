@@ -216,6 +216,11 @@ def build_parser() -> SchedulerArgumentParser:
     _workspace_argument(receipts)
     receipts.add_argument("--limit", type=int, default=20)
     receipts.set_defaults(handler=_maintenance_receipts)
+    claim_audit = maintenance_commands.add_parser("claim")
+    _workspace_argument(claim_audit)
+    claim_audit.add_argument("--claim-id", required=True)
+    claim_audit.add_argument("--acquire-operation-id", required=True, type=validate_operation_id)
+    claim_audit.set_defaults(handler=_maintenance_claim)
 
     identify = task_commands.add_parser("identify")
     _workspace_argument(identify)
@@ -716,6 +721,14 @@ def _maintenance_receipts(
     )
 
 
+def _maintenance_claim(
+    coordinator: WorkspaceCoordinator, args: argparse.Namespace
+) -> tuple[str, dict[str, Any]]:
+    return "Exact retained claim metadata inspected.", coordinator.maintenance_claim(
+        args.workspace, claim_id=args.claim_id, acquire_operation_id=args.acquire_operation_id
+    )
+
+
 def _receipt_ack(
     coordinator: WorkspaceCoordinator, args: argparse.Namespace
 ) -> tuple[str, dict[str, Any]]:
@@ -783,6 +796,7 @@ def run(argv: Sequence[str] | None = None) -> int:
                 _task_identify,
                 _maintenance_history,
                 _maintenance_receipts,
+                _maintenance_claim,
                 _state_backup,
                 _state_restore,
                 _workspace_status,
