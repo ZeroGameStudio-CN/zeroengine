@@ -599,14 +599,14 @@ namespace ZGS.Analytics
                         retryDelayIndex = 0;
 
                     float delay = GetBackgroundRetryDelaySeconds(retryDelayIndex);
-                    float blockedDelay = GetNextBlockedDelaySeconds();
-                    if (blockedDelay >= 0f)
-                        delay = Math.Min(delay, blockedDelay);
+                    float nextBlockedDelay = GetNextBlockedDelaySeconds();
+                    if (nextBlockedDelay >= 0f)
+                        delay = Math.Min(delay, nextBlockedDelay);
                     retryDelayIndex = Math.Min(retryDelayIndex + 1, BackgroundRetryDelays.Length - 1);
-                    int observedMutationVersion = _queueMutationVersion;
+                    int retryMutationVersion = _queueMutationVersion;
 
                     AnalyticsLog.Log($"[FeedbackQueue] 后台补传仍有 {_pendingUploads.Count} 个待上传文件，{delay:0} 秒后重试");
-                    yield return WaitForRetryOrQueueMutation(delay, observedMutationVersion);
+                    yield return WaitForRetryOrQueueMutation(delay, retryMutationVersion);
                 }
             }
             finally
