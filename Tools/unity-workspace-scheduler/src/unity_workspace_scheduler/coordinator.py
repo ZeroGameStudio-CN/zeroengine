@@ -1318,6 +1318,21 @@ class WorkspaceCoordinator:
 
     @staticmethod
     def _prune_delivered_operations(connection: sqlite3.Connection) -> None:
+        # These covering indexes give a conservative upper bound without reading
+        # retained payload pages. Double-counting a delivered-and-retired receipt
+        # is safe: it only falls through to the exact eligibility check below.
+        if (
+            connection.execute(
+                "SELECT 1 FROM ("
+                "SELECT operation_id FROM operation_receipts WHERE delivered_at IS NOT NULL "
+                "UNION ALL "
+                "SELECT operation_id FROM operation_receipts WHERE retired_at IS NOT NULL"
+                ") LIMIT 1 OFFSET ?",
+                (DELIVERED_OPERATION_RETENTION,),
+            ).fetchone()
+            is None
+        ):
+            return
         eligible = (
             "FROM operation_receipts AS receipt "
             "WHERE (receipt.delivered_at IS NOT NULL OR receipt.retired_at IS NOT NULL) "
@@ -1666,6 +1681,17 @@ class WorkspaceCoordinator:
 
     @staticmethod
     def _prune_terminal_claims(connection: sqlite3.Connection) -> None:
+        # Claims inside the retention limit need neither sorting nor a DELETE.
+        # The existing covering index also avoids reading historical scope pages.
+        if (
+            connection.execute(
+                "SELECT 1 FROM claims INDEXED BY claims_task_state "
+                "WHERE state IN ('released', 'cancelled') LIMIT 1 OFFSET ?",
+                (TERMINAL_CLAIM_RETENTION,),
+            ).fetchone()
+            is None
+        ):
+            return
         connection.execute(
             "DELETE FROM claims WHERE id IN ("
             "SELECT id FROM claims WHERE state IN ('released', 'cancelled') "
@@ -2567,6 +2593,7 @@ class WorkspaceCoordinator:
         return list(
             connection.execute(
                 "SELECT claims.*, tasks.id AS owner_task_id FROM claims "
+                "INDEXED BY claims_open_global "
                 "JOIN tasks ON tasks.id = claims.task_id "
                 "WHERE claims.workspace_id = ? AND tasks.state = 'outcome_unknown' "
                 "AND claims.state IN ('queued', 'active', 'parked') "

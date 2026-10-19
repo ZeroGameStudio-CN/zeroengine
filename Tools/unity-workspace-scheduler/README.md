@@ -260,3 +260,5 @@ same quiet-window, verified-backup and Router-first maintenance procedure; proto
 and state schema remain 3.
 
 SDK1.6.11 permits same-ID delivery of a finalized completed/failed release after its token is lost, only with exact retained path custody, immutable terminal task identity and no live claims or conflicting cleanup. The receipt probe stays read-only; normal validated ACK performs delivery/cleanup. No lease is recreated.
+
+SDK1.6.12 narrows recurring write-transaction maintenance to open-claim indexes and covering retention checks. History within the retention budget avoids sorting or reading receipt payloads; overflow still uses the same exact eligibility, ordering and cleanup protection. Status skips its redundant second maintenance pass when its first snapshot has no pending token cleanup; pending cleanup retains the existing bounded drain and fresh readback. FIFO, original wait deadlines, receipt delivery, schema 3 and protocol 3 remain unchanged.
