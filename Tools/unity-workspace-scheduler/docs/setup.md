@@ -208,6 +208,18 @@ It adds no index, protocol or schema migration. Qualify large mixed scopes and
 concurrent status/renewal/release before the same drained SDK activation below;
 never cancel healthy waiters or extend timeouts to install it.
 
+Version 1.6.16 prevents a later queued freeze from revoking an existing pure
+`unity-live` lease, or forcing an earlier equal/effective-priority Editor waiter
+to cancel and requeue. The existing Scheduler sort key determines precedence;
+a queued normal request still yields to a higher-priority freeze. Only status,
+renewal and assertion of the existing task use this finish-first observation.
+New claim admission and unsafe-resource parking keep the existing refusal.
+After the live claim finishes, the source owner receives its normal drain and
+parks the same source scopes; the freeze and source restoration then proceed.
+This adds no state, receipt fields, schema, queue-age credit or priority change.
+Qualify old/new real CLI calls, retained IDs, exact source bytes and the full
+Editor-release → source-park → maintenance → source-restore chain before use.
+
 Version 1.6.15 skips writer maintenance while the original pending receipt
 and queued claim remain blocked by a valid active claim. Other tasks' heartbeats
 may change the workspace epoch without changing that conflict. No blocker,

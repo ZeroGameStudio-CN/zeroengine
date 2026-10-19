@@ -573,14 +573,10 @@ def test_park_refuses_unsafe_claims_and_requires_a_freeze(
 
     scheduler.acquire_claim(workspace, owner_token, resources=("unity-live",))
     _, freeze_token = start(scheduler, workspace, "maintenance")
-    freeze = scheduler.acquire_claim(workspace, freeze_token, freeze=True)
+    scheduler.acquire_claim(workspace, freeze_token, freeze=True)
     heartbeat = scheduler.heartbeat(workspace, owner_token)
-    assert heartbeat["drain_requested"] == {
-        "freeze_id": freeze["id"],
-        "queue_order": freeze["queue_order"],
-        "priority": "normal",
-        "park_ready": False,
-    }
+    assert "drain_requested" not in heartbeat
+    assert scheduler.assert_claims(workspace, owner_token, resources=("unity-live",))["authorized"]
     with pytest.raises(BusyError) as unsafe:
         scheduler.park_task(workspace, owner_token)
     assert unsafe.value.details["reason"] == "task-holds-unsafe-claims"
@@ -596,7 +592,7 @@ def test_resource_only_drain_becomes_claimless_after_release(
     resource = scheduler.acquire_claim(workspace, owner_token, resources=("unity-live",))
     freeze = scheduler.acquire_claim(workspace, freeze_token, freeze=True)
 
-    assert scheduler.heartbeat(workspace, owner_token)["drain_requested"]["park_ready"] is False
+    assert "drain_requested" not in scheduler.heartbeat(workspace, owner_token)
     scheduler.release_claim(workspace, owner_token, str(resource["id"]))
     rechecked = scheduler.heartbeat(workspace, owner_token)
     assert rechecked["restoration_pending_claim_ids"] == []
@@ -615,7 +611,7 @@ def test_resource_and_path_drain_rechecks_before_parking(
     resource = scheduler.acquire_claim(workspace, owner_token, resources=("unity-live",))
     freeze = scheduler.acquire_claim(workspace, freeze_token, freeze=True)
 
-    assert scheduler.heartbeat(workspace, owner_token)["drain_requested"]["park_ready"] is False
+    assert "drain_requested" not in scheduler.heartbeat(workspace, owner_token)
     scheduler.release_claim(workspace, owner_token, str(resource["id"]))
     rechecked = scheduler.heartbeat(workspace, owner_token)
     assert rechecked["drain_requested"]["park_ready"] is True

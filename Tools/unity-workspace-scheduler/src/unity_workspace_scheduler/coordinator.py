@@ -3222,7 +3222,12 @@ class WorkspaceCoordinator:
 
     @staticmethod
     def _task_drain_request(
-        connection: sqlite3.Connection, workspace_id: str, task_id: str, *, now: float | None = None
+        connection: sqlite3.Connection,
+        workspace_id: str,
+        task_id: str,
+        *,
+        now: float | None = None,
+        finish_existing_live: bool = False,
     ) -> dict[str, Any] | None:
         if now is None:
             now = time.time()
@@ -3253,6 +3258,21 @@ class WorkspaceCoordinator:
             "AND state IN ('queued', 'active')",
             (workspace_id, task_id),
         ).fetchall()
+        if finish_existing_live and any(
+            claim["kind"] == "normal"
+            and (scopes := WorkspaceCoordinator._claim_scopes(connection, claim["id"]))["resource"]
+            == ("unity-live",)
+            and not scopes["write"]
+            and (
+                claim["state"] == "active"
+                or WorkspaceCoordinator._claim_sort_key(claim, scopes, now) < freeze_key
+            )
+            for claim in owned_claims
+        ):
+            # A later drain must not force cancellation/requeue of earlier live
+            # work, or revoke a granted lease between its prepared checks.
+            # New admission still uses the ordinary drain refusal below.
+            return None
         # A lower-priority freeze cannot immediately drain the urgent live
         # lease which legitimately overtook it. Its owner releases the bounded
         # operation normally; source claims then cooperate with maintenance.
@@ -4045,7 +4065,11 @@ class WorkspaceCoordinator:
             for task in tasks:
                 public_task = self._public_task(task)
                 drain = self._task_drain_request(
-                    connection, registered["id"], task["id"], now=observed_at
+                    connection,
+                    registered["id"],
+                    task["id"],
+                    now=observed_at,
+                    finish_existing_live=True,
                 )
                 if drain is not None:
                     public_task["drain_requested"] = drain
@@ -6001,7 +6025,9 @@ class WorkspaceCoordinator:
             ).fetchall()
             result["restoration_pending_claim_ids"] = [claim["id"] for claim in restoration_pending]
             if not restoration_pending:
-                drain = self._task_drain_request(connection, registered["id"], task["id"])
+                drain = self._task_drain_request(
+                    connection, registered["id"], task["id"], finish_existing_live=True
+                )
                 if drain is not None:
                     result["drain_requested"] = drain
             return self._record_operation(connection, operation, result)
@@ -6896,7 +6922,9 @@ class WorkspaceCoordinator:
                         "claim_ids": [claim["id"] for claim in restoration_pending],
                     },
                 )
-            drain = self._task_drain_request(connection, registered["id"], task["id"])
+            drain = self._task_drain_request(
+                connection, registered["id"], task["id"], finish_existing_live=True
+            )
             if drain is not None:
                 raise BusyError(
                     "Workspace freeze is waiting for this task to park its claims.",
