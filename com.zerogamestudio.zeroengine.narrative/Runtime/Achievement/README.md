@@ -51,6 +51,11 @@ Achievements are always saved locally using `ZeroEngine.Save` (JSON). This ensur
 
 ### Steam Integration
 Requires `com.rlabrecque.steamworks.net` package.
+Steam calls compile only for Windows, Linux and macOS Standalone targets. Other
+targets, including Android in the Editor, keep the provider API but return
+`false` from `Initialize()` without referencing the Steam SDK. Installing the
+Steam package alone does not make its SDK available on mobile platforms.
+
 1. Install Steamworks.NET.
 2. Add `STEAMWORKS_NET` to Scripting Define Symbols.
 3. Ensure `SteamManager` is initialized in your scene.

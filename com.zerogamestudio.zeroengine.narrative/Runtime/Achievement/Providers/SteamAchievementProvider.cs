@@ -1,6 +1,6 @@
 using UnityEngine;
 
-#if STEAMWORKS_NET
+#if STEAMWORKS_NET && (UNITY_STANDALONE_WIN || UNITY_STANDALONE_LINUX || UNITY_STANDALONE_OSX)
 using Steamworks;
 #endif
 
@@ -16,7 +16,7 @@ namespace ZeroEngine.Achievement.Providers
 
         public bool Initialize()
         {
-#if STEAMWORKS_NET
+#if STEAMWORKS_NET && (UNITY_STANDALONE_WIN || UNITY_STANDALONE_LINUX || UNITY_STANDALONE_OSX)
             // Check if SteamManager is present and initialized
             // Note: SteamManager is the standard singleton from Steamworks.NET
             if (SteamManager.Initialized)
@@ -32,7 +32,7 @@ namespace ZeroEngine.Achievement.Providers
                 return false;
             }
 #else
-            Debug.LogWarning("[SteamAchievementProvider] STEAMWORKS_NET define is missing.");
+            Debug.LogWarning("[SteamAchievementProvider] Steam achievements require a supported desktop target and Steamworks.NET.");
             return false;
 #endif
         }
@@ -41,7 +41,7 @@ namespace ZeroEngine.Achievement.Providers
         {
             if (!_isInitialized) return;
 
-#if STEAMWORKS_NET
+#if STEAMWORKS_NET && (UNITY_STANDALONE_WIN || UNITY_STANDALONE_LINUX || UNITY_STANDALONE_OSX)
             // Check if already unlocked on Steam to avoid redundant calls
             if (SteamUserStats.GetAchievement(id, out bool achieved))
             {
@@ -70,7 +70,7 @@ namespace ZeroEngine.Achievement.Providers
         {
             if (!_isInitialized) return;
 
-#if STEAMWORKS_NET
+#if STEAMWORKS_NET && (UNITY_STANDALONE_WIN || UNITY_STANDALONE_LINUX || UNITY_STANDALONE_OSX)
             // Steam achievements based on stats are handled automatically by Steam when stats change.
             // However, we can use IndicateAchievementProgress to show a notification popup
             // for achievements that have a "Progress Stat" configured in Steamworks.
