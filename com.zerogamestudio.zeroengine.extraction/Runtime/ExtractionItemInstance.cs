@@ -28,6 +28,8 @@ namespace POB.Extraction
         public int CurrentDurability;
         public int EnhancementLevel;
         public int ForgeTier;
+        // Empty with ForgeTier > 0 denotes a legacy item whose effects still need resolving.
+        public List<string> ForgeIds = new();
         public List<string> AffixIds = new();
         public ExtractionItemInstanceFlags Flags = DefaultLegacyFlags;
 
@@ -67,6 +69,7 @@ namespace POB.Extraction
             CurrentDurability = source.CurrentDurability;
             EnhancementLevel = source.EnhancementLevel;
             ForgeTier = source.ForgeTier;
+            ForgeIds = source.ForgeIds != null ? new List<string>(source.ForgeIds) : new List<string>();
             Flags = source.Flags;
             AffixIds = source.AffixIds != null
                 ? new List<string>(source.AffixIds)
@@ -82,6 +85,7 @@ namespace POB.Extraction
         internal void EnsureInitialized()
         {
             AffixIds ??= new List<string>();
+            ForgeIds ??= new List<string>();
             if (!HasFlag(ExtractionItemInstanceFlags.PolicyInitialized))
                 Flags |= DefaultLegacyFlags;
         }
