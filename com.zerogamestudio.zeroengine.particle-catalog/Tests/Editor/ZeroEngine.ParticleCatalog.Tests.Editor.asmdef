@@ -1,0 +1,23 @@
+{
+  "name": "ZeroEngine.ParticleCatalog.Tests.Editor",
+  "rootNamespace": "ZeroEngine.ParticleCatalog.Tests",
+  "references": [
+    "ZeroEngine.ParticleCatalog.Editor"
+  ],
+  "includePlatforms": [
+    "Editor"
+  ],
+  "excludePlatforms": [],
+  "allowUnsafeCode": false,
+  "overrideReferences": false,
+  "precompiledReferences": [],
+  "autoReferenced": false,
+  "defineConstraints": [
+    "UNITY_INCLUDE_TESTS"
+  ],
+  "versionDefines": [],
+  "noEngineReferences": false,
+  "optionalUnityReferences": [
+    "TestAssemblies"
+  ]
+}

@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.6.0
+
+- Added a profile-aware embedded Formula Studio view for typed Dashboard workspace panels.
+- Kept the compatibility Formula window and public open APIs unchanged.
+- Updated the Editor UI dependency to 1.4.0.
+
 ## 0.5.1
 
 - Localized Formula Studio labels and actionable-control tooltips to Simplified Chinese.
