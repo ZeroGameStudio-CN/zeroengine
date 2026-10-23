@@ -10,7 +10,8 @@
     "com.zerogamestudio.zeroengine.data": "2.0.0",
     "com.zerogamestudio.zeroengine.persistence": "2.0.0",
     "com.zerogamestudio.zeroengine.economy": "2.0.0",
-    "com.zerogamestudio.zeroengine.formula": "0.6.0"
+    "com.zerogamestudio.zeroengine.formula": "0.6.0",
+    "com.unity.nuget.newtonsoft-json": "3.2.2"
   },
   "keywords": [
     "zeroengine",

@@ -11,6 +11,7 @@
 ### Inventory (背包系统)
 - `InventoryManager` - 背包管理器
 - `InventoryItemSO` - 物品数据
+- `InventoryInstanceData` - 稳定实例身份与领域载荷；普通定义项与不可堆叠实例共用槽位、原子交换和保存合同
 - 多容器、堆叠、过滤
 
 ### Loot (掉落系统)
@@ -71,3 +72,9 @@ is upgraded once when its recipe is available. Its serialized list position dist
 Retained package regressions cover transactions in `Tests/Editor/CraftingTransactionTests.cs` and real Start/Update/OnDestroy ownership in `Tests/PlayMode/CraftingLifecycleTests.cs`. Enable the
 `com.zerogamestudio.zeroengine.economy` package in a consumer's UPM `testables` for Unity Test
 Framework execution. Real consumer UI, save/continue and device evidence remain separate gates.
+
+Inventory instance regressions are in `Tests/Editor/InventoryInstanceTests.cs`. Definition count,
+consumption and recipe queries exclude instances. Instance exchange requires an exact definition,
+identity and payload match; capacity is evaluated after consumption. Save import validates every
+slot against registered definitions before replacing live state, and exports/imports clone lists,
+slots and instance payloads. See `Runtime/Inventory/README.md` for the public contracts.

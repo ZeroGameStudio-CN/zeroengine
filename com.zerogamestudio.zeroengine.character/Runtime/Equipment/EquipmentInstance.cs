@@ -378,15 +378,15 @@ namespace ZeroEngine.Equipment
         /// </summary>
         public EquipmentSaveData ExportSaveData()
         {
-            return new EquipmentSaveData
+            return CloneSaveData(new EquipmentSaveData
             {
                 DataId = _data != null ? _data.Id : null,
                 InstanceId = InstanceId,
                 EnhanceLevel = EnhanceLevel,
                 RefineLevel = RefineLevel,
-                Enchantments = new List<EnchantmentData>(Enchantments),
-                GemSlots = new List<GemSlot>(GemSlots)
-            };
+                Enchantments = Enchantments,
+                GemSlots = GemSlots
+            });
         }
 
         /// <summary>
@@ -394,13 +394,126 @@ namespace ZeroEngine.Equipment
         /// </summary>
         public void ImportSaveData(EquipmentSaveData data, EquipmentDataSO dataSO)
         {
+            if (data == null) throw new ArgumentNullException(nameof(data));
+            if (dataSO == null) throw new ArgumentNullException(nameof(dataSO));
+            if (!IsValidSaveData(data, dataSO))
+                throw new ArgumentException("Equipment state does not match its definition or contains invalid values.", nameof(data));
+
+            // Validate and copy before changing the live instance: rejected imports are atomic.
+            var snapshot = CloneSaveData(data);
             _data = dataSO;
-            InstanceId = data.InstanceId;
-            EnhanceLevel = data.EnhanceLevel;
-            RefineLevel = data.RefineLevel;
-            Enchantments = data.Enchantments ?? new List<EnchantmentData>();
-            GemSlots = data.GemSlots ?? new List<GemSlot>();
+            InstanceId = snapshot.InstanceId;
+            EnhanceLevel = snapshot.EnhanceLevel;
+            RefineLevel = snapshot.RefineLevel;
+            Enchantments = snapshot.Enchantments;
+            GemSlots = snapshot.GemSlots;
             MarkModifiersDirty();
+        }
+
+        internal static bool IsValidSaveData(EquipmentSaveData data, EquipmentDataSO definition)
+        {
+            if (data == null || definition == null || string.IsNullOrWhiteSpace(definition.Id) ||
+                !string.Equals(data.DataId, definition.Id, StringComparison.Ordinal) ||
+                string.IsNullOrWhiteSpace(data.InstanceId) ||
+                definition.MaxEnhanceLevel < 0 || definition.MaxRefineLevel < 0 ||
+                definition.GemSlotCount < 0 || definition.GemSlotsPerRefine < 0 ||
+                data.EnhanceLevel < 0 || data.EnhanceLevel > definition.MaxEnhanceLevel ||
+                data.RefineLevel < 0 || data.RefineLevel > definition.MaxRefineLevel ||
+                data.Enchantments == null || data.GemSlots == null ||
+                data.GemSlots.Count != definition.GemSlotCount || definition.BaseStats == null)
+                return false;
+
+            foreach (var modifier in definition.BaseStats)
+            {
+                if (!IsValidModifier(modifier) || !IsFinite(modifier.GetValue(data.EnhanceLevel))) return false;
+            }
+            foreach (var enchantment in data.Enchantments)
+            {
+                if (enchantment == null || string.IsNullOrWhiteSpace(enchantment.EnchantmentId) ||
+                    enchantment.Tier < 0 || !IsValidModifier(enchantment.Effect)) return false;
+            }
+
+            var unlockedCount = Math.Min(1L + (long)data.RefineLevel * definition.GemSlotsPerRefine,
+                definition.GemSlotCount);
+            for (var i = 0; i < data.GemSlots.Count; i++)
+            {
+                var slot = data.GemSlots[i];
+                // Runtime APIs address slots by list index; preserve that canonical ordering.
+                if (slot == null || slot.SlotIndex != i || !Enum.IsDefined(typeof(GemSlotState), slot.State)) return false;
+                if ((i >= unlockedCount) != slot.IsLocked) return false;
+                if (slot.State != GemSlotState.Socketed)
+                {
+                    if (slot.SocketedGem != null) return false;
+                    continue;
+                }
+
+                var gem = slot.SocketedGem;
+                if (gem == null || string.IsNullOrWhiteSpace(gem.GemId) || gem.Effects == null) return false;
+                foreach (var modifier in gem.Effects)
+                {
+                    if (!IsValidModifier(modifier)) return false;
+                }
+            }
+            return true;
+        }
+
+        private static bool IsValidModifier(StatModifierData modifier)
+        {
+            return modifier != null && modifier.StatType != StatType.None &&
+                Enum.IsDefined(typeof(StatType), modifier.StatType) &&
+                Enum.IsDefined(typeof(StatModType), modifier.ModType) &&
+                IsFinite(modifier.BaseValue) && IsFinite(modifier.ValuePerLevel);
+        }
+
+        private static bool IsFinite(float value) => !float.IsNaN(value) && !float.IsInfinity(value);
+
+        private static EquipmentSaveData CloneSaveData(EquipmentSaveData data)
+        {
+            return new EquipmentSaveData
+            {
+                DataId = data.DataId,
+                InstanceId = data.InstanceId,
+                EnhanceLevel = data.EnhanceLevel,
+                RefineLevel = data.RefineLevel,
+                Enchantments = CloneList(data.Enchantments, enchantment => enchantment == null ? null : new EnchantmentData
+                {
+                    EnchantmentId = enchantment.EnchantmentId,
+                    Effect = CloneModifier(enchantment.Effect),
+                    Tier = enchantment.Tier
+                }),
+                GemSlots = CloneList(data.GemSlots, slot => slot == null ? null : new GemSlot
+                {
+                    SlotIndex = slot.SlotIndex,
+                    State = slot.State,
+                    SocketedGem = slot.SocketedGem == null ? null : new GemData
+                    {
+                        GemId = slot.SocketedGem.GemId,
+                        GemName = slot.SocketedGem.GemName,
+                        // Asset references belong to presentation; snapshots retain but never clone the asset.
+                        Icon = slot.SocketedGem.Icon,
+                        Effects = CloneList(slot.SocketedGem.Effects, CloneModifier)
+                    }
+                })
+            };
+        }
+
+        private static List<T> CloneList<T>(List<T> source, Func<T, T> clone)
+        {
+            if (source == null) return null;
+            var result = new List<T>(source.Count);
+            foreach (var item in source) result.Add(clone(item));
+            return result;
+        }
+
+        private static StatModifierData CloneModifier(StatModifierData modifier)
+        {
+            return modifier == null ? null : new StatModifierData
+            {
+                StatType = modifier.StatType,
+                ModType = modifier.ModType,
+                BaseValue = modifier.BaseValue,
+                ValuePerLevel = modifier.ValuePerLevel
+            };
         }
 
         #endregion

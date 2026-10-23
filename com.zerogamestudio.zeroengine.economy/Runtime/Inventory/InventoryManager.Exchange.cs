@@ -56,7 +56,8 @@ namespace ZeroEngine.Inventory
             {
                 var before = i < previous.Count ? previous[i] : null;
                 var after = staged[i];
-                if (before != null && before.ItemId == after.ItemId && before.Amount == after.Amount)
+                if (before != null && before.ItemId == after.ItemId && before.Amount == after.Amount
+                    && InventoryInstanceData.SameState(before.InstanceData, after.InstanceData))
                     continue;
                 Publish(OnSlotChanged, new SlotChangedEventArgs(i, after, InventoryEventType.SlotChanged,
                     after.ItemData ?? before?.ItemData, before?.Amount ?? 0, after.Amount));
@@ -85,26 +86,29 @@ namespace ZeroEngine.Inventory
             staged = null;
             removed = null;
             added = null;
-            if (!TryAggregateExchange(consumed, out removed) || !TryAggregateExchange(produced, out added))
+            if (!TryAggregateExchange(consumed, out var inputs) || !TryAggregateExchange(produced, out var outputs))
                 return false;
-            foreach (var pair in added)
+            removed = inputs.Totals;
+            added = outputs.Totals;
+            foreach (var pair in outputs.Totals)
             {
-                if (removed.TryGetValue(pair.Key, out var input) && input.Item != pair.Value.Item)
+                if (inputs.Totals.TryGetValue(pair.Key, out var input) && input.Item != pair.Value.Item)
+                    return false;
+            }
+            foreach (var pair in outputs.Instances)
+            {
+                if (inputs.Instances.TryGetValue(pair.Key, out var input)
+                    && input.Item.Id != pair.Value.Item.Id)
                     return false;
             }
 
-            staged = new List<InventorySlot>(_slots.Count);
-            foreach (var slot in _slots)
-            {
-                if (slot == null) return false;
-                staged.Add(slot.Clone());
-            }
-            foreach (var pair in removed)
+            if (!TryCloneSlots(_slots, slot => slot.ItemData, false, out staged, out _)) return false;
+            foreach (var pair in inputs.Definitions)
             {
                 var remaining = pair.Value.Amount;
                 foreach (var slot in staged)
                 {
-                    if (slot.IsEmpty || slot.ItemId != pair.Key) continue;
+                    if (slot.IsEmpty || slot.HasInstance || slot.ItemId != pair.Key) continue;
                     var count = Math.Min(slot.Amount, remaining);
                     slot.RemoveAmount(count);
                     remaining -= count;
@@ -112,7 +116,14 @@ namespace ZeroEngine.Inventory
                 }
                 if (remaining != 0) return false;
             }
-            foreach (var pair in added)
+            foreach (var entry in inputs.Instances.Values)
+            {
+                var slot = staged.Find(candidate => !candidate.IsEmpty && candidate.ItemId == entry.Item.Id
+                    && candidate.HasInstance && candidate.InstanceData.InstanceId == entry.InstanceData.InstanceId);
+                if (slot == null || !InventoryInstanceData.SameState(slot.InstanceData, entry.InstanceData)) return false;
+                slot.Clear();
+            }
+            foreach (var pair in outputs.Definitions)
             {
                 var item = pair.Value.Item;
                 var remaining = pair.Value.Amount;
@@ -121,7 +132,7 @@ namespace ZeroEngine.Inventory
                 {
                     foreach (var slot in staged)
                     {
-                        if (slot.IsEmpty || slot.ItemId != pair.Key) continue;
+                        if (slot.IsEmpty || slot.HasInstance || slot.ItemId != pair.Key) continue;
                         var count = Math.Min(Math.Max(0, limit - slot.Amount), remaining);
                         slot.Amount += count;
                         remaining -= count;
@@ -130,41 +141,83 @@ namespace ZeroEngine.Inventory
                 }
                 while (remaining > 0)
                 {
-                    var slot = staged.Find(candidate => candidate.IsEmpty);
-                    if (slot == null)
-                    {
-                        if (staged.Count >= MaxSlots) return false;
-                        slot = new InventorySlot { SlotIndex = staged.Count };
-                        staged.Add(slot);
-                    }
+                    var slot = GetStagedEmptySlot(staged);
+                    if (slot == null) return false;
                     var count = Math.Min(limit, remaining);
                     slot.Set(item, count);
                     remaining -= count;
                 }
             }
+            var instanceIds = new HashSet<string>(StringComparer.Ordinal);
+            foreach (var slot in staged)
+                if (slot.HasInstance && !instanceIds.Add(slot.InstanceData.InstanceId)) return false;
+            foreach (var entry in outputs.Instances.Values)
+            {
+                if (!instanceIds.Add(entry.InstanceData.InstanceId)) return false;
+                var slot = GetStagedEmptySlot(staged);
+                if (slot == null) return false;
+                slot.Set(entry.Item, entry.InstanceData);
+            }
             return true;
+        }
+
+        private static InventorySlot GetStagedEmptySlot(List<InventorySlot> staged)
+        {
+            var slot = staged.Find(candidate => candidate.IsEmpty);
+            if (slot == null && staged.Count < MaxSlots)
+            {
+                slot = new InventorySlot { SlotIndex = staged.Count };
+                staged.Add(slot);
+            }
+            return slot;
+        }
+
+        private sealed class ExchangeItems
+        {
+            internal readonly Dictionary<string, InventoryItemAmount> Definitions =
+                new Dictionary<string, InventoryItemAmount>(StringComparer.Ordinal);
+            internal readonly Dictionary<string, InventoryItemAmount> Instances =
+                new Dictionary<string, InventoryItemAmount>(StringComparer.Ordinal);
+            // Acquisition/removal events describe the net item count, including instances.
+            internal readonly Dictionary<string, InventoryItemAmount> Totals =
+                new Dictionary<string, InventoryItemAmount>(StringComparer.Ordinal);
         }
 
         private static bool TryAggregateExchange(
             IReadOnlyList<InventoryItemAmount> entries,
-            out Dictionary<string, InventoryItemAmount> totals)
+            out ExchangeItems result)
         {
-            totals = new Dictionary<string, InventoryItemAmount>(StringComparer.Ordinal);
+            result = new ExchangeItems();
             if (entries == null) return true;
             foreach (var entry in entries)
             {
                 var item = entry.Item;
                 if (item == null || string.IsNullOrWhiteSpace(item.Id) || item.MaxStack <= 0 || entry.Amount <= 0)
                     return false;
-                var amount = (long)entry.Amount;
-                if (totals.TryGetValue(item.Id, out var current))
+                if (entry.InstanceData != null && (!entry.InstanceData.IsValid || entry.Amount != 1
+                    || result.Instances.ContainsKey(entry.InstanceData.InstanceId)))
+                    return false;
+                if (!TryAddDefinitionTotal(result.Totals, entry)) return false;
+                if (entry.InstanceData != null)
                 {
-                    if (current.Item != item) return false;
-                    amount += current.Amount;
+                    result.Instances.Add(entry.InstanceData.InstanceId, entry);
                 }
-                if (amount > int.MaxValue) return false;
-                totals[item.Id] = new InventoryItemAmount(item, (int)amount);
+                else if (!TryAddDefinitionTotal(result.Definitions, entry)) return false;
             }
+            return true;
+        }
+
+        private static bool TryAddDefinitionTotal(Dictionary<string, InventoryItemAmount> totals,
+            InventoryItemAmount entry)
+        {
+            var amount = (long)entry.Amount;
+            if (totals.TryGetValue(entry.Item.Id, out var current))
+            {
+                if (current.Item != entry.Item) return false;
+                amount += current.Amount;
+            }
+            if (amount > int.MaxValue) return false;
+            totals[entry.Item.Id] = new InventoryItemAmount(entry.Item, (int)amount);
             return true;
         }
 

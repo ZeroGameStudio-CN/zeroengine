@@ -433,6 +433,23 @@ EquipmentManager.Instance.TryEnhance(weaponSlot, out var result);
 var setEffects = EquipmentManager.Instance.GetActiveSetEffects();
 ```
 
+唯一装备放入背包时使用 `EquipmentInventoryStateCodec`，保留实例身份与强化、精炼、附魔、宝石状态：
+
+```csharp
+var payload = EquipmentInventoryStateCodec.Capture(equipment);
+if (EquipmentInventoryStateCodec.TryRestore(weaponData, payload, out var restored))
+{
+    // restored.InstanceId 与入包前相同，可交给角色的 EquipmentLoadout。
+}
+```
+
+载荷类型固定为 `zeroengine.equipment`，版本为 `1`，不包含 CLR 类型名或 Unity 对象 ID。
+编解码使用包内显式声明的 Newtonsoft Json.NET 依赖，按纯 DTO 合同拒绝缺失必需字段和未知字段，区分合法空集合与缺失集合。
+恢复必须匹配定义 ID 与外层实例 ID；未知格式、缺失身份、越界等级、非法宝石槽和非有限属性均拒绝，
+不会降级为模板物品。`Capture` 遇到无效活状态抛出 `ArgumentException`；`TryRestore` 返回 `false` 和空实例。
+`ExportSaveData` / `ImportSaveData` 深复制嵌套可变状态；导入先验证后替换，不修改无效导入的目标对象。
+直接快照保留宝石 `Icon` 的资产引用，但字符串载荷仅保存宝石 ID、名称和效果；图标需由展示层按定义解析。
+
 ---
 
 ## TalentTree System

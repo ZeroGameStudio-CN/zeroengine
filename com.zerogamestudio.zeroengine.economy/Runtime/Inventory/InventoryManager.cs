@@ -99,7 +99,9 @@ namespace ZeroEngine.Inventory
         /// </summary>
         public object ExportSaveData()
         {
-            return _slots;
+            var snapshot = new List<InventorySlot>(_slots.Count);
+            foreach (var slot in _slots) snapshot.Add(slot.Clone());
+            return snapshot;
         }
 
         /// <summary>
@@ -107,40 +109,11 @@ namespace ZeroEngine.Inventory
         /// </summary>
         public void ImportSaveData(object data)
         {
-            if (data is List<InventorySlot> slots)
-            {
-                _slots = slots;
-            }
-            else
-            {
-                _slots = new List<InventorySlot>();
-            }
-
-            // 确保最少槽位数
-            while (_slots.Count < 10)
-            {
-                _slots.Add(new InventorySlot { SlotIndex = _slots.Count });
-            }
-
-            // 重新链接 SO 引用
-            for (int i = 0; i < _slots.Count; i++)
-            {
-                var slot = _slots[i];
-                slot.SlotIndex = i;
-
-                if (!string.IsNullOrEmpty(slot.ItemId))
-                {
-                    if (_itemDatabase.TryGetValue(slot.ItemId, out var so))
-                    {
-                        slot.ItemData = so;
-                    }
-                    else
-                    {
-                        ZeroLog.Warning(ZeroLog.Modules.Inventory, $"Item ID {slot.ItemId} not found in database.");
-                    }
-                }
-            }
-
+            if (!(data is List<InventorySlot> slots))
+                throw new ArgumentException("Inventory state must be a List<InventorySlot>.", nameof(data));
+            if (!TryCloneSlots(slots, ResolveSavedItem, true, out var restored, out var error))
+                throw new ArgumentException(error, nameof(data));
+            _slots = restored;
             TriggerInventoryUpdated();
         }
 
@@ -197,7 +170,7 @@ namespace ZeroEngine.Inventory
 
         public bool AddItem(InventoryItemSO item, int amount = 1)
         {
-            if (item == null || amount <= 0) return false;
+            if (item == null || string.IsNullOrWhiteSpace(item.Id) || item.MaxStack <= 0 || amount <= 0) return false;
 
             int originalAmount = amount;
             _affectedSlotsBuffer.Clear();
@@ -207,7 +180,7 @@ namespace ZeroEngine.Inventory
             {
                 foreach (var slot in _slots)
                 {
-                    if (!slot.IsEmpty && slot.ItemId == item.Id && !slot.IsFull)
+                    if (!slot.IsEmpty && !slot.HasInstance && slot.ItemId == item.Id && !slot.IsFull)
                     {
                         int oldAmount = slot.Amount;
                         int space = slot.AvailableSpace;
@@ -283,7 +256,7 @@ namespace ZeroEngine.Inventory
             for (int i = 0; i < _slots.Count && amount > 0; i++)
             {
                 var slot = _slots[i];
-                if (!slot.IsEmpty && slot.ItemId == itemId)
+                if (!slot.IsEmpty && !slot.HasInstance && slot.ItemId == itemId)
                 {
                     int oldAmount = slot.Amount;
                     int toRemove = Mathf.Min(slot.Amount, amount);
@@ -368,10 +341,22 @@ namespace ZeroEngine.Inventory
             long count = 0;
             foreach (var slot in _slots)
             {
-                if (!slot.IsEmpty && slot.ItemId == itemId)
+                if (!slot.IsEmpty && !slot.HasInstance && slot.ItemId == itemId)
                 {
                     count += slot.Amount;
                 }
+            }
+            return (int)Math.Min(int.MaxValue, count);
+        }
+
+        /// <summary>Total ownership for presentation/facts, including non-consumable instance items.</summary>
+        public int GetOwnedItemCount(string itemId)
+        {
+            long count = 0;
+            foreach (var slot in _slots)
+            {
+                if (!slot.IsEmpty && slot.ItemId == itemId)
+                    count += slot.Amount;
             }
             return (int)Math.Min(int.MaxValue, count);
         }
@@ -483,7 +468,7 @@ namespace ZeroEngine.Inventory
             for (int i = 0; i < _slots.Count; i++)
             {
                 var slot = _slots[i];
-                if (!slot.IsEmpty && slot.ItemId == itemId)
+                if (!slot.IsEmpty && !slot.HasInstance && slot.ItemId == itemId)
                     return slot;
             }
             return null;
@@ -532,7 +517,7 @@ namespace ZeroEngine.Inventory
             if (slotIndex < 0 || slotIndex >= _slots.Count) return false;
 
             var slot = _slots[slotIndex];
-            if (slot.IsEmpty || slot.ItemData == null) return false;
+            if (slot.IsEmpty || slot.HasInstance || slot.ItemData == null) return false;
 
             var item = slot.ItemData;
             if (!item.Use()) return false;
@@ -674,36 +659,7 @@ namespace ZeroEngine.Inventory
         {
             if (_persistenceConfigured)
                 throw new InvalidOperationException("Configured inventory saves must be restored through ImportSaveData.");
-            _slots = SaveManager.Instance.Load("PlayerInventory", new List<InventorySlot>());
-
-            if (_slots.Count == 0)
-            {
-                for (int i = 0; i < 10; i++)
-                {
-                    _slots.Add(new InventorySlot { SlotIndex = i });
-                }
-            }
-
-            // Re-link SO references and set indices
-            for (int i = 0; i < _slots.Count; i++)
-            {
-                var slot = _slots[i];
-                slot.SlotIndex = i;
-
-                if (!string.IsNullOrEmpty(slot.ItemId))
-                {
-                    if (_itemDatabase.TryGetValue(slot.ItemId, out var so))
-                    {
-                        slot.ItemData = so;
-                    }
-                    else
-                    {
-                        ZeroLog.Warning(ZeroLog.Modules.Inventory, $"Item ID {slot.ItemId} not found in database.");
-                    }
-                }
-            }
-
-            TriggerInventoryUpdated();
+            ImportSaveData(SaveManager.Instance.Load("PlayerInventory", new List<InventorySlot>()));
         }
 
         #endregion
