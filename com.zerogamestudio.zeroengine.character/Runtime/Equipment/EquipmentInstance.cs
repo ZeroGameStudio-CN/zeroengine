@@ -94,6 +94,7 @@ namespace ZeroEngine.Equipment
 
         // 缓存的修饰器列表（避免重复计算）
         private readonly List<StatModifier> _cachedModifiers = new List<StatModifier>();
+        private readonly List<EquipmentStatModifier> _cachedStatModifiers = new List<EquipmentStatModifier>();
         private bool _modifiersDirty = true;
 
         public EquipmentInstance() { }
@@ -155,33 +156,62 @@ namespace ZeroEngine.Equipment
             return _cachedModifiers;
         }
 
+        /// <summary>Calculated base, enchantment and gem modifiers with their exact target stat.</summary>
+        public IReadOnlyList<EquipmentStatModifier> GetStatModifiers()
+        {
+            if (_modifiersDirty)
+            {
+                RecalculateModifiers();
+            }
+            return _cachedStatModifiers;
+        }
+
         private void RecalculateModifiers()
         {
             _cachedModifiers.Clear();
+            _cachedStatModifiers.Clear();
+
+            if (_data == null)
+            {
+                _modifiersDirty = false;
+                return;
+            }
 
             // 1. 基础属性
             for (int i = 0; i < _data.BaseStats.Count; i++)
             {
-                _cachedModifiers.Add(_data.BaseStats[i].CreateModifier(EnhanceLevel, this));
+                AddCalculatedModifier(_data.BaseStats[i], EnhanceLevel);
             }
 
             // 2. 附魔效果
             for (int i = 0; i < Enchantments.Count; i++)
             {
-                _cachedModifiers.Add(Enchantments[i].CreateModifier(this));
+                AddCalculatedModifier(Enchantments[i]?.Effect, 0);
             }
 
             // 3. 宝石效果（使用零分配版本）
             for (int i = 0; i < GemSlots.Count; i++)
             {
                 var slot = GemSlots[i];
-                if (slot.HasGem)
+                if (slot != null && slot.HasGem)
                 {
-                    slot.SocketedGem.GetModifiers(this, _cachedModifiers);
+                    foreach (var effect in slot.SocketedGem.Effects)
+                    {
+                        AddCalculatedModifier(effect, 0);
+                    }
                 }
             }
 
             _modifiersDirty = false;
+        }
+
+        private void AddCalculatedModifier(StatModifierData data, int enhanceLevel)
+        {
+            if (data == null) return;
+            var modifier = data.CreateModifier(enhanceLevel, this);
+            _cachedModifiers.Add(modifier);
+            var statId = data.StatType == StatType.None ? default : new StatId(data.StatType.ToString());
+            _cachedStatModifiers.Add(new EquipmentStatModifier(statId, modifier));
         }
 
         /// <summary>

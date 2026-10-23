@@ -14,6 +14,30 @@
 
 ---
 
+## EquipmentLoadout（逐角色装备内核）
+
+`ZeroEngine.Equipment.EquipmentLoadout<TSlot, TEquipment>` 是普通 C# 对象，每个角色持有一份；不创建 GameObject，不依赖全局角色、存档服务或项目业务类型。`EquipmentManager` 组件也使用该内核管理槽位和装备属性，组件额外提供套装、强化事件和存档适配。
+
+构造时由宿主提供可用槽位、装备到槽位的映射、`IEnumerable<EquipmentStatModifier>` 属性映射、`Func<StatId, Stat>` 属性查找，以及可选的穿戴资格判断。宿主保留等级、门派、内容 ID、背包转移和事件/存档映射；槽位状态和属性增删只由内核维护。查找/映射函数必须只读，所有装备属性必须能解析到角色已初始化的 `Stat`；不存在的属性、不可用槽位、无效修饰器或资格拒绝均保留旧装备。
+
+- `Equipped` / `GetEquipped(slot)`：唯一槽位状态的只读视图；空槽位不写入字典。
+- `TryEquip(item, out replaced, commitExternal = null)` / `Unequip(slot, commitExternal = null)`：替换和卸装；重复穿戴不累加。内核复制修饰器并按精确对象移除，不会误删共享来源的其他效果。
+- `TryRestore(items)`：先解析全部内容，原子替换整个装备集合；重复槽位或无效内容不会清空旧集合。
+- `RefreshStats()`：强化或宿主重建属性对象后重新绑定现有装备，保留已有装备资格，不重复穿戴。返回 `false` 时保留此前的属性贡献。
+- `Clear()` / `Dispose()`：清除本内核持有的贡献。`Dispose()` 后拒绝后续变更；运行时所有权方应在角色退场时调用。
+
+变更保持受影响 `CurrentStat` 的当前百分比；属性应用异常时撤回本次贡献并恢复旧贡献和当前值。自定义 `Stat` 实现必须支持添加/移除精确修饰器；回滚本身异常会向调用方传播，不能把不可恢复的目标错误当作成功。读取内容或映射函数抛出的异常发生在变更前，同样不会清空旧装备。
+
+可选的 `Func<bool> commitExternal` 用于同线程背包交换：回调可读取暂存的新槽位和属性，返回 `false` 时内核恢复旧槽位、旧修饰器与原始当前资源值。资格或属性预检失败时不调用回调；回调期间拒绝重入写入。回调必须保证失败或抛出异常时外部状态没有变化，成功后不得再抛出异常；这是同步提交边界，不是分布式事务。宿主在整个调用成功返回之后发布业务事件。
+
+`EquipmentInstance.GetStatModifiers()` 与 `GetCalculatedModifiers()` 共用一次基础/强化、附魔和宝石计算；前者保留每条修饰器对应的 `StatId`，避免把某个属性错误地添加到全部基础属性。内置 `StatType` 转为规范化名称（例如 `Attack` → `attack`）；消费项目若使用领域化 ID，应在内容映射时转换到自己的稳定 ID。
+
+组件存档恢复通过 `ResolveEquipmentData` 或 `TryRestore(saveData, resolver)` 解析定义；解析失败保留当前装备，不再先清空后跳过未实现的恢复。
+
+定向 EditMode 程序集：`ZeroEngine.Character.Tests.Editor`。测试 fixture：`ZeroEngine.Tests.Character.EquipmentLoadoutTests`、`ZeroEngine.Tests.Character.EquipmentInstanceStatModifierTests`，覆盖两角色隔离、替换去重、拒绝/部分失败回滚、资源百分比、清理恢复、属性重建和三类属性来源映射。消费项目运行包测试时需将 `com.zerogamestudio.zeroengine.character` 加入测试可见包列表（`testables`）。
+
+---
+
 ## Job System (职业系统) v2.5.0
 
 八方旅人风格的职业系统，支持主职业+副职业、技能学习、JP 经验。
@@ -439,6 +463,10 @@ var mods = talentController.GetAllStatModifiers();
 - `com.zerogamestudio.zeroengine.core` (2.0.0) - Core utilities
 - `com.zerogamestudio.zeroengine.data` (2.0.0) - StatSystem, BuffSystem
 - `com.zerogamestudio.zeroengine.persistence` (2.0.0) - Save/Load support
+- `com.zerogamestudio.zeroengine.economy` (2.0.0) - Equipment item definitions and inventory contracts
+- `com.zerogamestudio.zeroengine.formula` (0.6.0) - Preserves formula-backed equipment modifiers
+
+消费项目需在同一 Git commit 显式引用这些 ZE 包；P5 已沿该合同固定全部 ZE 引用，本地 `file:` 验证不作为交付配置。
 
 ---
 

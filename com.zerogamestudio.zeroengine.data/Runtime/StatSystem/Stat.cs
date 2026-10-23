@@ -210,7 +210,7 @@ namespace ZeroEngine.StatSystem
         /// <summary>
         /// Clears all event subscribers. Call when disposing the stat owner.
         /// </summary>
-        public void ClearEventListeners()
+        public virtual void ClearEventListeners()
         {
             OnValueChanged = null;
         }

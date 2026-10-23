@@ -174,7 +174,7 @@ namespace ZeroEngine.StatSystem
         /// <summary>
         /// 清除事件监听
         /// </summary>
-        public new void ClearEventListeners()
+        public override void ClearEventListeners()
         {
             base.ClearEventListeners();
             OnValueChange = null;
