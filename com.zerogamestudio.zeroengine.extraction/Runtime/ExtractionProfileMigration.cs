@@ -47,6 +47,8 @@ namespace POB.Extraction
             profile.DifficultySettings ??= new ExtractionDifficultySettings();
             profile.Character ??= new ExtractionCharacterProfile();
             profile.Character.EnsureInitialized();
+            profile.Growth ??= new ExtractionTalentProgressionState();
+            profile.Growth.EnsureInitialized();
             profile.Equipment ??= new ExtractionEquipmentState();
             profile.Equipment.EnsureInitialized();
             profile.Merchant ??= new ExtractionMerchantState();

@@ -9,7 +9,7 @@ namespace POB.Extraction
     [MovedFrom(true, sourceAssembly: "POB.Runtime")]
     public class ExtractionProfileSaveData
     {
-        public const int CurrentSchemaVersion = 5;
+        public const int CurrentSchemaVersion = 6;
 
         public int SchemaVersion;
         public string activeRaidId;
@@ -31,6 +31,7 @@ namespace POB.Extraction
         public List<string> UnlockedBlueprintIds = new();
         public ExtractionDifficultySettings DifficultySettings = new();
         public ExtractionCharacterProfile Character = new();
+        public ExtractionTalentProgressionState Growth = new();
         public ExtractionEquipmentState Equipment = new();
         public ExtractionMerchantState Merchant = new();
         public ExtractionOperationJournal OperationJournal = new();

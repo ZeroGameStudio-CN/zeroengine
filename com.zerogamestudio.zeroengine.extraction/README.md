@@ -34,6 +34,15 @@
 - 通用行为先在包内测试；消费者项目随后运行自己的 adapter 回归测试。
 - 发布前检查包内不存在 `POB` 项目路径、Unity 场景/Prefab 或本机绝对路径依赖。
 
+## 独立成长存档
+
+Profile schema v6 新增 `Growth`：`NodeLevels` 保存节点 ID 和等级，`TargetNodeId` 保存当前目标，
+`PurchaseReceipts` 保存购买的操作 ID、节点、预期/目标等级及配置版本。旧档迁移为空成长，
+保留原有 `Character.UnlockedTalentIds` 等状态，不推断或赠送已购买节点。
+成长和库存共用 Profile 草稿及 revision 提交；节点目录、费用、购买校验和效果投影属于消费者。
+消费者若手工构造 Profile 投影或时钟快照，必须保留 `Growth`，不能只复制旧字段。
+旧版本客户端不得覆盖 schema v6 存档；回退需使用兼容客户端或已验证备份。
+
 ## 迁移基线
 
 - 来源：POB Plastic `cs:16334` 的 `Packages/com.zerogamestudio.zeroengine.extraction`。
