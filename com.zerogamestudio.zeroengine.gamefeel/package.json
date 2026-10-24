@@ -1,0 +1,19 @@
+{
+  "name": "com.zerogamestudio.zeroengine.gamefeel",
+  "version": "0.1.0",
+  "displayName": "ZeroEngine Game Feel",
+  "description": "Bounded, explicit-clock coordination of feedback identities with consumer-owned channel policies.",
+  "unity": "2022.3",
+  "dependencies": {},
+  "keywords": ["zeroengine", "gamefeel", "feedback"],
+  "author": {
+    "name": "ZeroGameStudio",
+    "url": "https://github.com/ZeroGameStudio-CN"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/ZeroGameStudio-CN/zeroengine.git",
+    "directory": "com.zerogamestudio.zeroengine.gamefeel"
+  },
+  "license": "MIT"
+}
