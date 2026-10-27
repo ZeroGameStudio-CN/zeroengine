@@ -95,6 +95,7 @@ namespace ZeroEngine.GameFeel
     {
         private sealed class VariantState
         {
+            internal bool Occupied;
             internal TVariant Variant;
             internal double LastAccepted;
             internal int PendingCount;
@@ -108,6 +109,7 @@ namespace ZeroEngine.GameFeel
             internal FeedbackKey Key;
             internal double Strength;
             internal long Token;
+            internal int Next, Previous, NextFree;
         }
 
         private static long nextOwnerId;
@@ -123,6 +125,7 @@ namespace ZeroEngine.GameFeel
         private int frameAccepted;
         private int framePending;
         private int inFlight;
+        private int firstPending = -1, firstFreePending;
 
         public FeedbackReservationCoordinator(
             int variantCapacity,
@@ -140,6 +143,7 @@ namespace ZeroEngine.GameFeel
             if (ownerId <= 0) throw new InvalidOperationException("Feedback reservation identity space exhausted.");
             variants = new VariantState[variantCapacity];
             pending = new PendingState[reservationCapacity];
+            InitializePendingSlots();
             this.identityCapacity = identityCapacity;
             this.retentionSeconds = retentionSeconds;
         }
@@ -201,6 +205,7 @@ namespace ZeroEngine.GameFeel
                 return Reject(FeedbackReservationDecision.FrameBudgetExceeded);
 
             long token = ++nextToken;
+            int nextFree = pending[pendingSlot].NextFree;
             pending[pendingSlot] = new PendingState
             {
                 Occupied = true,
@@ -208,7 +213,12 @@ namespace ZeroEngine.GameFeel
                 Key = key,
                 Strength = strength,
                 Token = token,
+                Previous = -1,
+                Next = firstPending,
             };
+            firstFreePending = nextFree;
+            if (firstPending >= 0) pending[firstPending].Previous = pendingSlot;
+            firstPending = pendingSlot;
             if (tracked) variants[variantSlot].PendingCount++;
             inFlight++;
             framePending++;
@@ -245,7 +255,7 @@ namespace ZeroEngine.GameFeel
             ref PendingState pendingState = ref pending[reservation.PendingSlot];
             if (!pendingState.Occupied || pendingState.Token != reservation.Token)
                 return FeedbackReservationCommitResult.StaleReservation;
-            pendingState = default;
+            ReleasePending(reservation.PendingSlot);
             inFlight--;
             if (reservation.FrameIndex == frameIndex) framePending--;
 
@@ -275,8 +285,17 @@ namespace ZeroEngine.GameFeel
 
         public void Reset()
         {
-            Array.Clear(variants, 0, variants.Length);
+            foreach (var state in variants)
+            {
+                if (state == null) continue;
+                state.Occupied = false;
+                state.Variant = default;
+                state.LastAccepted = 0;
+                state.PendingCount = 0;
+                state.Ledger.Reset();
+            }
             Array.Clear(pending, 0, pending.Length);
+            InitializePendingSlots();
             generation = checked(generation + 1);
             lastObservedTime = double.NegativeInfinity;
             frameIndex = -1;
@@ -291,7 +310,7 @@ namespace ZeroEngine.GameFeel
             for (int i = 0; i < variants.Length; i++)
             {
                 VariantState state = variants[i];
-                if (state == null)
+                if (state == null || !state.Occupied)
                 {
                     if (free < 0) free = i;
                     continue;
@@ -299,18 +318,20 @@ namespace ZeroEngine.GameFeel
                 if (state.Variant.Equals(variant)) return i;
                 if (state.PendingCount == 0 && now - state.LastAccepted >= retentionSeconds)
                 {
-                    variants[i] = null;
+                    state.Occupied = false;
+                    state.Variant = default;
+                    state.Ledger.Reset();
                     ActiveVariantCount--;
                     if (free < 0) free = i;
                 }
             }
             if (free < 0) return -1;
-            variants[free] = new VariantState
-            {
-                Variant = variant,
-                LastAccepted = now,
-                Ledger = new FeedbackCoordinator(identityCapacity),
-            };
+            var available = variants[free];
+            if (available == null)
+                variants[free] = available = new VariantState { Ledger = new FeedbackCoordinator(identityCapacity) };
+            available.Occupied = true;
+            available.Variant = variant;
+            available.LastAccepted = now;
             ActiveVariantCount++;
             return free >= 0 ? free : -2;
         }
@@ -318,25 +339,37 @@ namespace ZeroEngine.GameFeel
         private int FindExistingVariant(TVariant variant)
         {
             for (int i = 0; i < variants.Length; i++)
-                if (variants[i] != null && variants[i].Variant.Equals(variant)) return i;
+                if (variants[i] != null && variants[i].Occupied && variants[i].Variant.Equals(variant)) return i;
             return -1;
         }
 
         private int FindPendingSlot(TVariant variant, FeedbackKey key, double strength)
         {
-            int free = -1;
-            for (int i = 0; i < pending.Length; i++)
+            for (int i = firstPending; i >= 0; i = pending[i].Next)
             {
                 PendingState state = pending[i];
-                if (!state.Occupied)
-                {
-                    if (free < 0) free = i;
-                    continue;
-                }
                 if (state.Variant.Equals(variant) && state.Key == key && state.Strength >= strength)
                     return -1;
             }
-            return free >= 0 ? free : -2;
+            return firstFreePending >= 0 ? firstFreePending : -2;
+        }
+
+        private void InitializePendingSlots()
+        {
+            for (int i = 0; i < pending.Length; i++)
+                pending[i].NextFree = i + 1 < pending.Length ? i + 1 : -1;
+            firstFreePending = 0;
+            firstPending = -1;
+        }
+
+        private void ReleasePending(int slot)
+        {
+            var state = pending[slot];
+            if (state.Previous >= 0) pending[state.Previous].Next = state.Next;
+            else firstPending = state.Next;
+            if (state.Next >= 0) pending[state.Next].Previous = state.Previous;
+            pending[slot] = new PendingState { NextFree = firstFreePending };
+            firstFreePending = slot;
         }
 
         private void ObserveClock(double now)

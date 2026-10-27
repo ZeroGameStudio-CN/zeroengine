@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Threading;
 
 namespace ZeroEngine.GameFeel
@@ -19,11 +20,17 @@ namespace ZeroEngine.GameFeel
             public double Strength;
             public double RetainUntil;
             public long Version;
+            public int HeapIndex;
+            public int NextFree;
         }
 
         private static long _nextOwnerId;
         private readonly long _ownerId;
         private readonly Entry[] _entries;
+        private readonly Dictionary<FeedbackKey, int> _slots;
+        private readonly int[] _expiryHeap;
+        private int _heapCount;
+        private int _firstFree;
         private long _generation = 1;
         private long _revision;
         private double _lastObservedTime = double.NegativeInfinity;
@@ -43,6 +50,9 @@ namespace ZeroEngine.GameFeel
             if (_ownerId <= 0)
                 throw new InvalidOperationException("Feedback coordinator identity space exhausted.");
             _entries = new Entry[capacity];
+            _slots = new Dictionary<FeedbackKey, int>(capacity);
+            _expiryHeap = new int[capacity];
+            InitializeFreeSlots();
         }
 
         /// <summary>
@@ -62,33 +72,17 @@ namespace ZeroEngine.GameFeel
                 return Reject(FeedbackDecision.ClockMovedBackwards, key, strength, now);
 
             _lastObservedTime = now;
-            int freeSlot = -1;
-            int matchingSlot = -1;
             bool expired = false;
-            for (int i = 0; i < _entries.Length; i++)
+            while (_heapCount > 0 && _entries[_expiryHeap[0]].RetainUntil <= now)
             {
-                if (_entries[i].Occupied && _entries[i].RetainUntil <= now)
-                {
-                    _entries[i].Occupied = false;
-                    _count--;
-                    expired = true;
-                }
-
-                if (!_entries[i].Occupied)
-                {
-                    if (freeSlot < 0)
-                        freeSlot = i;
-                }
-                else if (_entries[i].Key == key)
-                {
-                    matchingSlot = i;
-                }
+                RemoveEntry(_expiryHeap[0]);
+                expired = true;
             }
 
             if (expired)
                 _revision = checked(_revision + 1);
 
-            if (matchingSlot >= 0)
+            if (_slots.TryGetValue(key, out int matchingSlot))
             {
                 Entry entry = _entries[matchingSlot];
                 FeedbackDecision decision = strength > entry.Strength
@@ -98,8 +92,8 @@ namespace ZeroEngine.GameFeel
                     entry.FirstAcceptedAt, entry.Strength);
             }
 
-            return freeSlot >= 0
-                ? Proposal(FeedbackDecision.New, key, strength, now, freeSlot, now, 0)
+            return _firstFree >= 0
+                ? Proposal(FeedbackDecision.New, key, strength, now, _firstFree, now, 0)
                 : Reject(FeedbackDecision.CapacityExceeded, key, strength, now);
         }
 
@@ -128,10 +122,14 @@ namespace ZeroEngine.GameFeel
             Entry entry = _entries[slot];
             if (evaluation.Decision == FeedbackDecision.New)
             {
+                _firstFree = entry.NextFree;
                 entry.Key = evaluation.Key;
                 entry.FirstAcceptedAt = evaluation.FirstAcceptedAt;
                 entry.RetainUntil = retainUntil;
                 entry.Occupied = true;
+                entry.HeapIndex = _heapCount;
+                _slots.Add(entry.Key, slot);
+                _expiryHeap[_heapCount++] = slot;
                 _count++;
             }
             else
@@ -142,6 +140,10 @@ namespace ZeroEngine.GameFeel
             entry.Strength = evaluation.Strength;
             entry.Version = checked(entry.Version + 1);
             _entries[slot] = entry;
+            if (evaluation.Decision == FeedbackDecision.New)
+                SiftUp(entry.HeapIndex);
+            else
+                SiftDown(entry.HeapIndex);
             _revision = checked(_revision + 1);
             handle = new FeedbackHandle(_ownerId, _generation, entry.Version, slot);
             return FeedbackCommitResult.Committed;
@@ -161,8 +163,7 @@ namespace ZeroEngine.GameFeel
             if (!entry.Occupied || entry.Version != handle.EntryVersion)
                 return false;
 
-            _entries[handle.Slot].Occupied = false;
-            _count--;
+            RemoveEntry(handle.Slot);
             _revision = checked(_revision + 1);
             return true;
         }
@@ -175,9 +176,82 @@ namespace ZeroEngine.GameFeel
         {
             _generation = checked(_generation + 1);
             Array.Clear(_entries, 0, _entries.Length);
+            _slots.Clear();
+            _heapCount = 0;
+            InitializeFreeSlots();
             _count = 0;
             _revision = 0;
             _lastObservedTime = double.NegativeInfinity;
+        }
+
+        private void InitializeFreeSlots()
+        {
+            for (int i = 0; i < _entries.Length; i++)
+            {
+                _entries[i].NextFree = i + 1 < _entries.Length ? i + 1 : -1;
+                _entries[i].HeapIndex = -1;
+            }
+            _firstFree = 0;
+        }
+
+        private void RemoveEntry(int slot)
+        {
+            ref Entry entry = ref _entries[slot];
+            _slots.Remove(entry.Key);
+            int position = entry.HeapIndex;
+            int lastSlot = _expiryHeap[--_heapCount];
+            if (position < _heapCount)
+            {
+                _expiryHeap[position] = lastSlot;
+                _entries[lastSlot].HeapIndex = position;
+                if (position > 0 && Earlier(lastSlot, _expiryHeap[(position - 1) / 2]))
+                    SiftUp(position);
+                else
+                    SiftDown(position);
+            }
+            entry.Occupied = false;
+            entry.HeapIndex = -1;
+            entry.NextFree = _firstFree;
+            _firstFree = slot;
+            _count--;
+        }
+
+        private bool Earlier(int left, int right) =>
+            _entries[left].RetainUntil < _entries[right].RetainUntil;
+
+        private void SwapHeap(int first, int second)
+        {
+            int a = _expiryHeap[first], b = _expiryHeap[second];
+            _expiryHeap[first] = b;
+            _expiryHeap[second] = a;
+            _entries[a].HeapIndex = second;
+            _entries[b].HeapIndex = first;
+        }
+
+        private void SiftUp(int position)
+        {
+            while (position > 0)
+            {
+                int parent = (position - 1) / 2;
+                if (!Earlier(_expiryHeap[position], _expiryHeap[parent])) break;
+                SwapHeap(position, parent);
+                position = parent;
+            }
+        }
+
+        private void SiftDown(int position)
+        {
+            while (true)
+            {
+                int left = position * 2 + 1;
+                if (left >= _heapCount) return;
+                int smallest = left;
+                int right = left + 1;
+                if (right < _heapCount && Earlier(_expiryHeap[right], _expiryHeap[left])) smallest = right;
+                if (!Earlier(_expiryHeap[smallest], _expiryHeap[position])) return;
+                SwapHeap(position, smallest);
+                position = smallest;
+            }
         }
 
         private FeedbackEvaluation Proposal(FeedbackDecision decision, FeedbackKey key,
