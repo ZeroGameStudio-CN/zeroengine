@@ -75,6 +75,26 @@ a pushed ZeroEngine commit.
 
 ## Troubleshooting
 
+### Unity 6 pixel rim lighting
+
+`com.zerogamestudio.zeroengine.render.urp` is a separate Unity 6000.6 / URP 17.6
+package. Add its official Git UPM URL pinned to the tested commit and reference
+`ZeroEngine.Render.Urp` from the consumer's runtime assembly. It has no dependency
+on consumer gameplay or on the UnityEngine-only `zeroengine.render` primitives.
+
+Register `SpriteRimRendererFeature` on each game Renderer. At the consumer's actor
+enable/renderer-change entry, configure `SpriteRimLighting` with the body renderers;
+disable it on return to the pool. Add `SpriteRimLightSource` only to native Point
+and Spot lights intended to affect actor contours. Unmarked illumination,
+Directional lights and sky ambience retain their base-material lighting only.
+The consumer owns default activation, its global switch and actor discovery.
+See the package README for explicit 2D lights, supported material queues and tests.
+
+Add the package to `testables` for its EditMode and Render Graph PlayMode checks.
+Verify real actor entry and reuse in the consumer before adopting the tested pin.
+
+### Package resolution
+
 - Confirm the package path matches a top-level package directory in this repo.
 - Use the same commit for related ZeroEngine packages.
 - If a package cannot be resolved, check for an internal
