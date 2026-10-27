@@ -57,6 +57,13 @@ commit; never mix these package versions across different Git revisions.
 
 ## Temporary Local Development
 
+`com.zerogamestudio.zeroengine.qte` provides a standalone, engine-independent
+`ZeroEngine.Qte` runtime. It has no sibling-package, UI, input-system or save
+dependency. Games resolve difficulty and randomness, supply input and gameplay
+delta, and bind an immutable snapshot to their own HUD. Add its tested Git pin
+only when consuming that runtime; do not install the Gameplay or UI package
+merely to use a challenge session. Its package README lists the focused tests.
+
 Use `file:` dependencies only for short local debugging when you need to edit
 ZeroEngine and a consumer project together before a ZeroEngine commit exists:
 
