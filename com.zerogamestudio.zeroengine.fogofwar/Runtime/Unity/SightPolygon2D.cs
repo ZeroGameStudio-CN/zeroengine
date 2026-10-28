@@ -14,13 +14,29 @@ namespace ZeroEngine.FogOfWar.Unity
         }
 
         private static readonly Comparison<float> CompareAngles = (left, right) => left.CompareTo(right);
+        // Pure immutable math data; initialized only when the prepared path is requested.
+        private static class UniformRing
+        {
+            internal static readonly float[] Angles = new float[128];
+            internal static readonly Vector2[] Directions = new Vector2[128];
+            static UniformRing()
+            {
+                for (int i = 0; i < 128; i++)
+                {
+                    float angle = i * (Mathf.PI * 2 / 128);
+                    Angles[i] = angle;
+                    Directions[i] = new Vector2(Mathf.Cos(angle), Mathf.Sin(angle));
+                }
+            }
+        }
         private readonly List<float> angles = new();
         private readonly List<float> orderedAngles = new();
         private readonly HashSet<Vector2> endpoints = new();
         [UnityEngine.Scripting.Preserve]
         public bool EndpointDeduplicationEnabled { get; set; } = true;
+        private int uniformAngleCount;
         [UnityEngine.Scripting.Preserve]
-        public int InputAngleCount => angles.Count;
+        public int InputAngleCount => angles.Count + uniformAngleCount;
         public readonly List<Vector2> Points = new();
         public Vector2 Origin { get; private set; }
         public Vector2 Radius { get; private set; }
@@ -52,6 +68,8 @@ namespace ZeroEngine.FogOfWar.Unity
         private int sectorMask;
         private int SectorCount => sectorSegments.Length;
         public int CandidateChecks { get; private set; }
+        [UnityEngine.Scripting.Preserve]
+        public int UniformDirectionReuses { get; private set; }
         public int SectorEntries { get; private set; }
         private int inputSegments;
         public SightPolygon2D()
@@ -139,7 +157,7 @@ namespace ZeroEngine.FogOfWar.Unity
         public void Rebuild(Vector2 origin, Vector2 radius, float facing, float forward,
             IReadOnlyList<Segment> segments)
         {
-            CandidateChecks = SectorEntries = 0; inputSegments = segments.Count;
+            CandidateChecks = SectorEntries = UniformDirectionReuses = 0; inputSegments = segments.Count;
             unchecked { Revision++; }
             Origin = origin;
             Radius = new Vector2(Mathf.Max(.25f, radius.x), Mathf.Max(.25f, radius.y));
@@ -147,12 +165,13 @@ namespace ZeroEngine.FogOfWar.Unity
             Forward = Mathf.Max(0, forward);
             reach = Mathf.Max(Radius.x + Forward, Radius.y) + 2;
             bool prepare = PreparedIntersectionsEnabled;
+            uniformAngleCount = prepare ? 128 : 0;
             if (prepare && preparedSegments.Length < segments.Count)
                 Array.Resize(ref preparedSegments, Math.Max(segments.Count, preparedSegments.Length * 2));
             angles.Clear(); orderedAngles.Clear(); Points.Clear(); endpoints.Clear();
             for (int i = 0; i < SectorCount; i++) sectorSegments[i].Clear();
             // Uniform samples bound the distant ring; wall endpoints supply exact silhouettes.
-            for (int i = 0; i < 128; i++) angles.Add(i * (Mathf.PI * 2 / 128));
+            if (!prepare) for (int i = 0; i < 128; i++) angles.Add(i * (Mathf.PI * 2 / 128));
             for (int i = 0; i < segments.Count; i++)
             {
                 var segment = segments[i];
@@ -161,6 +180,7 @@ namespace ZeroEngine.FogOfWar.Unity
                 if (prepare) preparedSegments[i] = new RaySegment(origin, segment);
             }
             angles.Sort(CompareAngles);
+            if (prepare) { RebuildPrepared(origin); return; }
             foreach (float angle in angles)
             {
                 if (orderedAngles.Count > 0 && angle - orderedAngles[orderedAngles.Count - 1] < .000001f) continue;
@@ -168,15 +188,31 @@ namespace ZeroEngine.FogOfWar.Unity
                 float distance = reach;
                 var candidates = sectorSegments[Mathf.Min(SectorCount - 1, (int)(angle * sectorScale))];
                 CandidateChecks += candidates.Count;
-                if (prepare)
-                {
-                    for (int i = 0; i < candidates.Count; i++)
-                        if (IntersectPrepared(direction, in preparedSegments[candidates[i]], out float hit))
-                            distance = Mathf.Min(distance, hit);
-                }
-                else
-                    for (int i = 0; i < candidates.Count; i++)
-                        if (Intersect(origin, direction, segments[candidates[i]], out float hit)) distance = Mathf.Min(distance, hit);
+                for (int i = 0; i < candidates.Count; i++)
+                    if (Intersect(origin, direction, segments[candidates[i]], out float hit)) distance = Mathf.Min(distance, hit);
+                orderedAngles.Add(angle);
+                Points.Add(origin + direction * distance);
+            }
+        }
+
+        private void RebuildPrepared(Vector2 origin)
+        {
+            int endpoint = 0, uniform = 0;
+            while (endpoint < angles.Count || uniform < 128)
+            {
+                bool fromRing = uniform < 128
+                    && (endpoint == angles.Count || UniformRing.Angles[uniform] <= angles[endpoint]);
+                float angle = fromRing ? UniformRing.Angles[uniform++] : angles[endpoint++];
+                if (orderedAngles.Count > 0 && angle - orderedAngles[orderedAngles.Count - 1] < .000001f) continue;
+                var direction = fromRing ? UniformRing.Directions[uniform - 1]
+                    : new Vector2(Mathf.Cos(angle), Mathf.Sin(angle));
+                if (fromRing) UniformDirectionReuses++;
+                float distance = reach;
+                var candidates = sectorSegments[Mathf.Min(SectorCount - 1, (int)(angle * sectorScale))];
+                CandidateChecks += candidates.Count;
+                for (int i = 0; i < candidates.Count; i++)
+                    if (IntersectPrepared(direction, in preparedSegments[candidates[i]], out float hit))
+                        distance = Mathf.Min(distance, hit);
                 orderedAngles.Add(angle);
                 Points.Add(origin + direction * distance);
             }
@@ -222,8 +258,9 @@ namespace ZeroEngine.FogOfWar.Unity
             distance = 0;
             if (Mathf.Abs(denominator) < .0000001f) return false;
             float along = Cross(segment.Offset, direction) / denominator;
+            if (!(along >= -.000001f && along <= 1.000001f)) return false;
             distance = segment.DistanceNumerator / denominator;
-            return distance >= 0 && along >= -.000001f && along <= 1.000001f;
+            return distance >= 0;
         }
 
         private static float Normalize(float angle) => Mathf.Repeat(angle, Mathf.PI * 2);

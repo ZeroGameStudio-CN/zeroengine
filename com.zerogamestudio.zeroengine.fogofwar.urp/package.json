@@ -1,11 +1,11 @@
 {
   "name": "com.zerogamestudio.zeroengine.fogofwar.urp",
-  "version": "0.2.2",
+  "version": "0.2.3",
   "displayName": "ZeroEngine Fog Of War URP",
   "description": "Camera-sized sight/terrain masks and presentation-only separable soft edges for URP.",
   "unity": "6000.6",
   "dependencies": {
-    "com.zerogamestudio.zeroengine.fogofwar": "0.2.2",
+    "com.zerogamestudio.zeroengine.fogofwar": "0.2.3",
     "com.unity.render-pipelines.universal": "17.6.0"
   },
   "author": {

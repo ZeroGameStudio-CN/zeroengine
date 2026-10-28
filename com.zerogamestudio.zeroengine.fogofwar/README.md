@@ -137,3 +137,22 @@ callback that may change it, and dispose with the owner. Ordinary motion is not 
 membership change. Unsupported or failed bindings return a reason; consumers must
 retain their uncached policy. No POB type, storage, activation rule or gameplay
 clock enters the package.
+
+## Prepared sight and spatial segment queries (0.2.3)
+
+`SightPolygon2D.PreparedIntersectionsEnabled` remains opt-in. The prepared path
+merges the fixed 128-angle ring with sorted current endpoint angles, reuses only
+the exact fixed-angle directions, and retains the existing ordered ray/intersection
+calculations. `InputAngleCount` includes both sources; `UniformDirectionReuses`
+reports actual fixed-direction reuse in the latest rebuild. Dynamic eye positions,
+endpoints, silhouettes and tolerances remain current. The public `Intersect`
+contract is unchanged.
+
+`SegmentQueryIndex2D` is an optional caller-owned broad phase for a stable segment
+snapshot. Call `Rebuild(segments)` whenever that snapshot changes, then
+`TryQuery(min, max, reusableIndices)`. Successful queries return unique indices in
+original input order, with conservative float-bound padding. Apply the original
+exact geometric predicate to these candidates. An unsupported/non-finite query
+returns false and clears the output; use the original full query as fallback.
+The index owns only managed math data and has no scene, collider, actor or clock
+references. Rebuild and query it synchronously under its owner's input lifetime.
