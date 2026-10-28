@@ -3,6 +3,8 @@ using System.Text.RegularExpressions;
 using NUnit.Framework;
 using UnityEngine;
 using UnityEngine.TestTools;
+using UnityEngine.TestTools.Constraints;
+using Is = NUnit.Framework.Is;
 using ZeroEngine.Activity.Unity;
 
 namespace ZeroEngine.Activity.Tests
@@ -18,6 +20,53 @@ namespace ZeroEngine.Activity.Tests
             var child = new GameObject(name);
             child.transform.SetParent(root.transform);
             return child.AddComponent<T>();
+        }
+
+        [TestCase(0)] [TestCase(1)] [TestCase(2)] [TestCase(3)] [TestCase(4)] [TestCase(5)]
+        public void ObserverReadBatch_MatchesLiveDistanceAndInvalidInputs(int variant)
+        {
+            var world = root.AddComponent<ActivityWorldDriver>();
+            var first = Child<ActivityObserver>("first"); first.transform.position = new Vector3(12, 3, 0); first.InfluenceRadius = 4; first.Configure(world);
+            var second = Child<ActivityObserver>("second"); second.transform.position = new Vector3(-5, 6, 0); second.InfluenceRadius = 2; second.Configure(world);
+            Vector3 position = new Vector3(2, -1, 0);
+            if (variant == 1) first.enabled = false;
+            if (variant == 2) second.InfluenceRadius = float.NaN;
+            if (variant == 3) first.InfluenceRadius = -2;
+            if (variant == 4) position.x = float.NaN;
+            if (variant == 5) { first.enabled = false; second.enabled = false; }
+            var snapshot = new ActivityObservationSnapshot();
+            world.CaptureObservers(snapshot);
+            bool expected = world.TryGetDistance(position, out double live);
+            Assert.That(snapshot.TryGetDistance(position, out double captured), Is.EqualTo(expected));
+            Assert.That(captured, Is.EqualTo(live));
+        }
+
+        [Test]
+        public void ObserverReadBatch_RecapturePublishesMovementAndMembership()
+        {
+            var world = root.AddComponent<ActivityWorldDriver>();
+            var observer = Child<ActivityObserver>("moving"); observer.Configure(world);
+            var snapshot = new ActivityObservationSnapshot(); world.CaptureObservers(snapshot);
+            observer.transform.position = new Vector3(50, 0, 0);
+            Assert.That(snapshot.TryGetDistance(Vector3.zero, out double old), Is.True);
+            Assert.That(old, Is.Zero);
+            world.CaptureObservers(snapshot);
+            snapshot.TryGetDistance(Vector3.zero, out double current); Assert.That(current, Is.EqualTo(50));
+            observer.enabled = false; world.CaptureObservers(snapshot);
+            Assert.That(snapshot.TryGetDistance(Vector3.zero, out _), Is.False);
+            observer.enabled = true; world.CaptureObservers(snapshot);
+            Assert.That(snapshot.TryGetDistance(Vector3.zero, out _), Is.True);
+            snapshot.Clear(); Assert.That(snapshot.Count, Is.Zero);
+        }
+
+        [Test]
+        public void ObserverReadBatch_WarmedCaptureAndQueriesDoNotAllocate()
+        {
+            var world = root.AddComponent<ActivityWorldDriver>();
+            var observer = Child<ActivityObserver>("warm"); observer.Configure(world);
+            var snapshot = new ActivityObservationSnapshot(); world.CaptureObservers(snapshot);
+            Assert.That(() => { world.CaptureObservers(snapshot); snapshot.TryGetDistance(Vector3.one, out _); },
+                UnityEngine.TestTools.Constraints.Is.Not.AllocatingGCMemory());
         }
 
         [Test]
