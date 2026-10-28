@@ -58,6 +58,7 @@ namespace ZeroEngine.FogOfWar.Unity
                 internal Component CanvasScope;
                 internal ContentOwner Owner;
                 internal bool Dirty = true;
+                internal bool Active;
                 internal readonly List<Transform> Ancestors = new();
                 internal readonly List<int> Order = new();
                 internal int RootRank, ComponentRank;
@@ -76,6 +77,7 @@ namespace ZeroEngine.FogOfWar.Unity
             private readonly NativeVisibilityChanges changes;
             private readonly Dictionary<EntityId, Binding> bindings = new();
             private readonly Dictionary<Transform, Ancestor> descendants = new();
+            private readonly HashSet<Binding> ancestryDirty = new();
             private readonly Dictionary<Component, bool> ownerVisibility = new();
             private readonly Dictionary<Transform, Bucket> buckets = new();
             private readonly Dictionary<Transform, int> rootRanks = new();
@@ -88,6 +90,7 @@ namespace ZeroEngine.FogOfWar.Unity
             private Transform player;
             private IVisibilityQuery2D grid;
             private ulong revision;
+            private int layers = int.MinValue;
             private bool orderDirty = true, disposed, assemblyChanged;
             internal bool Active => !disposed && Failure == null;
             internal int Count => bindings.Count;
@@ -112,24 +115,25 @@ namespace ZeroEngine.FogOfWar.Unity
                 if (args.LoadedAssembly.GetName().Name.StartsWith("UnityEngine", StringComparison.Ordinal)) assemblyChanged = true;
             }
 
+            private static void RefreshActive(Binding binding)
+            {
+                binding.Active = binding.GameObject && binding.GameObject.activeInHierarchy;
+            }
+
             private void Register(Object graphic)
             {
-                if (!graphic) return;
-                var component = graphic as Component;
-                if (!component || !component.gameObject.scene.IsValid() || !component.gameObject.scene.isLoaded) return;
-                if (graphic is Renderer renderer && renderer is not TilemapRenderer)
-                {
-                    if (!bindings.ContainsKey(renderer.GetEntityId()))
-                        bindings.Add(renderer.GetEntityId(), new Binding { Graphic = renderer, Renderer = renderer, Transform = renderer.transform, GameObject = renderer.gameObject });
-                    else return;
-                }
-                else if (graphic is Canvas canvas)
-                {
-                    if (!bindings.ContainsKey(canvas.GetEntityId()))
-                        bindings.Add(canvas.GetEntityId(), new Binding { Graphic = canvas, Canvas = canvas, Transform = canvas.transform, GameObject = canvas.gameObject });
-                    else return;
-                }
-                else return;
+                if (!graphic || graphic is not Component component) return;
+                var gameObject = component.gameObject;
+                if (!gameObject.scene.IsValid() || !gameObject.scene.isLoaded || graphic is TilemapRenderer) return;
+                if (graphic is not Renderer && graphic is not Canvas) return;
+                var identity = graphic.GetEntityId();
+                if (bindings.TryGetValue(identity, out var existing)) { RefreshActive(existing); return; }
+                var binding = new Binding { Graphic = graphic, Renderer = graphic as Renderer, Canvas = graphic as Canvas,
+                    Transform = component.transform, GameObject = gameObject };
+                bindings.Add(identity, binding);
+                // Index inactive pooled descendants too, so an ancestor activation is
+                // published before a later root's snapshot without scanning the pool.
+                Index(binding); RefreshActive(binding);
                 if (bindings.Count > 32768) { Failure = "Registered visibility graphic limit exceeded."; return; }
                 orderDirty = true;
             }
@@ -143,13 +147,14 @@ namespace ZeroEngine.FogOfWar.Unity
                     var parent = transform.parent;
                     int sibling = transform.GetSiblingIndex();
                     bool reparented = !ReferenceEquals(ancestor.Parent, parent);
-                    if (reparented) foreach (var binding in ancestor.Graphics) binding.Dirty = true;
+                    if (reparented) foreach (var binding in ancestor.Graphics)
+                    { binding.Dirty = true; ancestryDirty.Add(binding); RefreshActive(binding); }
                     if (reparented || ancestor.Sibling != sibling) orderDirty = true;
                     ancestor.Parent = parent; ancestor.Sibling = sibling;
                     return;
                 }
                 if (item is GameObject gameObject && descendants.TryGetValue(gameObject.transform, out var affected))
-                    foreach (var binding in affected.Graphics) binding.Dirty = true;
+                    foreach (var binding in affected.Graphics) { binding.Dirty = true; RefreshActive(binding); }
             }
 
             private void Destroyed(EntityId identity)
@@ -162,7 +167,12 @@ namespace ZeroEngine.FogOfWar.Unity
             {
                 using var sample = owner.DiscoveryMarker.Auto();
                 if (assemblyChanged) { Failure = "Engine assembly set changed; rebuild through synchronous discovery."; return false; }
-                try { changes.Drain(changed, destroyed); }
+                try
+                {
+                    changes.Drain(changed, destroyed);
+                    foreach (var binding in ancestryDirty) if (binding.Graphic) Index(binding);
+                    ancestryDirty.Clear();
+                }
                 catch (Exception error) { Failure = (error.InnerException ?? error).Message; return false; }
                 return Failure == null;
             }
@@ -186,20 +196,26 @@ namespace ZeroEngine.FogOfWar.Unity
                 binding.Ancestors.Clear();
             }
 
-            private void Resolve(Binding binding)
+            private void Index(Binding binding)
             {
-                BindingResolutions++;
                 Unlink(binding);
-                Component primary = null, secondary = null;
-                bool content = false, actualPlayer = false;
                 for (var current = binding.Transform; current; current = current.parent)
                 {
                     binding.Ancestors.Add(current);
-                    if (!descendants.TryGetValue(current, out var set))
-                    {
-                        descendants.Add(current, set = new Ancestor { Parent = current.parent, Sibling = current.GetSiblingIndex() });
-                    }
-                    set.Graphics.Add(binding);
+                    if (!descendants.TryGetValue(current, out var ancestor))
+                        descendants.Add(current, ancestor = new Ancestor { Parent = current.parent, Sibling = current.GetSiblingIndex() });
+                    ancestor.Graphics.Add(binding);
+                }
+            }
+
+            private void Resolve(Binding binding)
+            {
+                BindingResolutions++;
+                Component primary = null, secondary = null;
+                bool content = false, actualPlayer = false;
+                foreach (var current in binding.Ancestors)
+                {
+                    if (!current) continue;
                     actualPlayer |= current == player;
                     if (!primary && !secondary)
                     {
@@ -290,20 +306,28 @@ namespace ZeroEngine.FogOfWar.Unity
 
             private void Snapshot(List<Binding> graphics)
             {
+                using var sample = owner.DiscoveryMarker.Auto();
                 snapshot.Clear();
                 // Match the original active-only per-root native query snapshot. A
                 // callback may activate another child later in this same root.
                 foreach (var binding in graphics)
-                    if (binding.Graphic && binding.GameObject && binding.GameObject.activeInHierarchy) snapshot.Add(binding);
+                    {
+                    if (!binding.Active || !binding.Graphic) continue;
+                    // A stable non-content graphic cannot acquire a fog override. Dirty
+                    // structure/membership and owned releases always retain evaluation.
+                    if (!binding.Dirty && !binding.Owner.HasOwner && !binding.Owner.Content
+                        && !(binding.Renderer ? owner.hiddenRenderers.Contains(binding.Renderer) : owner.hiddenCanvases.Contains(binding.Canvas))) continue;
+                    snapshot.Add(binding);
+                }
             }
 
             internal bool Apply(IVisibilityQuery2D grid, Transform player)
             {
                 this.grid = grid; ownerVisibility.Clear();
                 ulong currentRevision = owner.policy.OwnerCreationRevision;
-                if (this.player != player || revision != currentRevision)
+                if (this.player != player || revision != currentRevision || layers != owner.contentLayers)
                 {
-                    this.player = player; revision = currentRevision;
+                    this.player = player; revision = currentRevision; layers = owner.contentLayers;
                     foreach (var binding in bindings.Values) binding.Dirty = true;
                 }
                 RefreshRoots();
@@ -349,7 +373,7 @@ namespace ZeroEngine.FogOfWar.Unity
             {
                 if (disposed) return;
                 disposed = true; AppDomain.CurrentDomain.AssemblyLoad -= AssemblyLoaded;
-                changes.Dispose(); bindings.Clear(); descendants.Clear(); ownerVisibility.Clear(); buckets.Clear();
+                changes.Dispose(); bindings.Clear(); descendants.Clear(); ancestryDirty.Clear(); ownerVisibility.Clear(); buckets.Clear();
                 roots.Clear(); previousRoots.Clear(); snapshot.Clear(); members.Clear();
             }
         }

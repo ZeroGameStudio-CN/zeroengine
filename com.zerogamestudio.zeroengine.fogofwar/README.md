@@ -115,3 +115,8 @@ Rendering can soften an edge without weakening authoritative sight tests.
 `ZeroEngine.FogOfWar.Tests.Editor` covers synchronous membership/callbacks, stale
 handles, pool cleanup, allocation-free warmed core evaluation, sub-cell walls,
 atomic memory restore, authored presentation state and assembly dependencies.
+
+0.2.1 retains an ancestor index for inactive pool entries. Activation and reparent
+notifications update cached participation; warmed snapshots skip inactive and known
+non-content graphics without per-entry native active-state queries. Current sight
+and positions still refresh on every Apply.
