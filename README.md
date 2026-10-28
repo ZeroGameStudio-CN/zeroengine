@@ -31,6 +31,8 @@ mixing in game-specific content.
 | `com.zerogamestudio.zeroengine.gameplay` | Reusable gameplay mechanics and trigger helpers. |
 | `com.zerogamestudio.zeroengine.narrative` | Quest and narrative runtime services. |
 | `com.zerogamestudio.zeroengine.pathfinding2d` | 2D platform navigation, graph generation, jump links, route costs, and diagnostics. |
+| `com.zerogamestudio.zeroengine.fogofwar` | XY sight, exploration memory, explicit presentation targets, and policy-driven discovery; engine-free registration core. |
+| `com.zerogamestudio.zeroengine.fogofwar.urp` | Optional camera-sized sight/terrain masks and soft edges, independent of gameplay and map UI. |
 | `com.zerogamestudio.zeroengine.persistence` | Save and persistence infrastructure. |
 | `com.zerogamestudio.zeroengine.ui` | Runtime UI framework and toast notification systems. |
 | `com.zerogamestudio.analytics` | Self-hostable analytics and bug feedback SDK. |

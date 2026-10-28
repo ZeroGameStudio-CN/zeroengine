@@ -1,0 +1,9 @@
+{
+  "name": "ZeroEngine.FogOfWar.Unity",
+  "rootNamespace": "ZeroEngine.FogOfWar.Unity",
+  "references": [
+    "ZeroEngine.FogOfWar"
+  ],
+  "autoReferenced": true,
+  "noEngineReferences": false
+}
