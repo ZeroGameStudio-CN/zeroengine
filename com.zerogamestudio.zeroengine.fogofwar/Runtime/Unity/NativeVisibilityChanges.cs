@@ -22,7 +22,7 @@ namespace ZeroEngine.FogOfWar.Unity
         private readonly List<Object> changes = new();
         private bool tracking, disposed;
 
-        private NativeVisibilityChanges(Type type)
+        private NativeVisibilityChanges(Type type, bool structureOnly)
         {
             dispatcher = Activator.CreateInstance(type, true);
             lifetime = (IDisposable)dispatcher;
@@ -42,7 +42,7 @@ namespace ZeroEngine.FogOfWar.Unity
                     throw new NotSupportedException("Synchronous visibility type-change bindings are unavailable.");
                 readTypes = (ReadTypes)drain.CreateDelegate(typeof(ReadTypes), dispatcher);
                 var types = new List<Type>();
-                foreach (var assembly in AppDomain.CurrentDomain.GetAssemblies())
+                if (!structureOnly) foreach (var assembly in AppDomain.CurrentDomain.GetAssemblies())
                 {
                     if (!assembly.GetName().Name.StartsWith("UnityEngine", StringComparison.Ordinal)) continue;
                     Type[] candidates;
@@ -52,8 +52,9 @@ namespace ZeroEngine.FogOfWar.Unity
                         if (candidate != null && !candidate.IsAbstract && candidate.IsSubclassOf(typeof(Renderer)) && !types.Contains(candidate))
                             types.Add(candidate);
                 }
-                if (types.Count == 0) throw new NotSupportedException("No concrete engine renderer types found.");
-                types.Add(typeof(Canvas)); types.Add(typeof(GameObject));
+                if (!structureOnly && types.Count == 0) throw new NotSupportedException("No concrete engine renderer types found.");
+                if (!structureOnly) types.Add(typeof(Canvas));
+                types.Add(typeof(GameObject));
                 types.Add(typeof(Transform)); types.Add(typeof(RectTransform));
                 trackedTypes = types.ToArray();
                 // Qualified TypeTrackingFlags.SceneObjects value; retain no asset/Editor roster.
@@ -65,6 +66,12 @@ namespace ZeroEngine.FogOfWar.Unity
         }
 
         internal static bool TryCreate(out NativeVisibilityChanges result, out string reason)
+            => TryCreateCore(false, out result, out reason);
+
+        internal static bool TryCreateStructure(out NativeVisibilityChanges result, out string reason)
+            => TryCreateCore(true, out result, out reason);
+
+        private static bool TryCreateCore(bool structureOnly, out NativeVisibilityChanges result, out string reason)
         {
             result = null; reason = null;
             if (!Application.unityVersion.StartsWith("6000.6.", StringComparison.Ordinal))
@@ -73,7 +80,7 @@ namespace ZeroEngine.FogOfWar.Unity
             {
                 var type = typeof(Object).Assembly.GetType("UnityEngine.ObjectDispatcher", false);
                 if (type == null) throw new NotSupportedException("Engine change tracking was stripped or is unavailable.");
-                result = new NativeVisibilityChanges(type);
+                result = new NativeVisibilityChanges(type, structureOnly);
                 return true;
             }
             catch (Exception error) { reason = (error.InnerException ?? error).Message; return false; }

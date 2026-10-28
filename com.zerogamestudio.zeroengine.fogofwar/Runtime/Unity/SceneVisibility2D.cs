@@ -11,6 +11,7 @@ namespace ZeroEngine.FogOfWar.Unity
     public partial class SceneVisibility2D : IDisposable
     {
         private readonly ProfilerMarker DiscoveryMarker, RendererMarker, CanvasMarker;
+        private readonly ProfilerMarker RegistrationSyncMarker, RegistrationOrderMarker, RegistrationSnapshotMarker;
         private readonly VisibilityScenePolicy2D policy;
         private int contentLayers;
         public SceneVisibility2D(VisibilityScenePolicy2D policy, string profilerPrefix = "ZeroEngine.FogOfWar.Visibility")
@@ -19,6 +20,9 @@ namespace ZeroEngine.FogOfWar.Unity
             DiscoveryMarker = new ProfilerMarker(profilerPrefix + ".Discovery");
             RendererMarker = new ProfilerMarker(profilerPrefix + ".Renderers");
             CanvasMarker = new ProfilerMarker(profilerPrefix + ".Canvases");
+            RegistrationSyncMarker = new ProfilerMarker(profilerPrefix + ".Registration.Sync");
+            RegistrationOrderMarker = new ProfilerMarker(profilerPrefix + ".Registration.Order");
+            RegistrationSnapshotMarker = new ProfilerMarker(profilerPrefix + ".Registration.Snapshot");
         }
         // Only record overrides we actually own. Authored disabled/hidden state is never enabled.
         private readonly HashSet<Renderer> hiddenRenderers = new();
@@ -519,12 +523,12 @@ namespace ZeroEngine.FogOfWar.Unity
             {
                 renderer.forceRenderingOff = true;
                 hiddenRenderers.Add(renderer);
-                InvalidateAfterPresentationChange();
+                InvalidateAfterPresentationChange(mayInvokeCallbacks: false);
             }
             else if (!hide && hiddenRenderers.Remove(renderer))
             {
                 renderer.forceRenderingOff = false;
-                InvalidateAfterPresentationChange();
+                InvalidateAfterPresentationChange(mayInvokeCallbacks: false);
             }
         }
 
@@ -571,8 +575,13 @@ namespace ZeroEngine.FogOfWar.Unity
             }
         }
 
-        private void InvalidateAfterPresentationChange()
+        private void InvalidateAfterPresentationChange(bool mayInvokeCallbacks = true)
         {
+            // forceRenderingOff only changes this renderer's culling override. Policy
+            // queries are pure; unlike enabling a Canvas, this write has no synchronous
+            // lifecycle callback. Consume its notifications at the next phase boundary.
+            if (!mayInvokeCallbacks && LocalRosterUpdatesEnabled && RegisteredVisibilityActive)
+            { RegisteredFastRendererUpdates++; return; }
             if (detailedDiagnostics) diagnostics.presentationInvalidations++;
             hierarchySnapshotValid = false;
             // Presentation callbacks can reparent later contents or change their bindings.

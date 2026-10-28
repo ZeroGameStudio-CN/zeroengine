@@ -19,6 +19,14 @@ namespace ZeroEngine.FogOfWar.Unity
         public long RegisteredBootstrapQueries => registeredRoster?.BootstrapQueries ?? 0;
         [UnityEngine.Scripting.Preserve]
         public long RegisteredBindingResolutions => registeredRoster?.BindingResolutions ?? 0;
+        [UnityEngine.Scripting.Preserve]
+        public bool LocalRosterUpdatesEnabled { get; set; } = true;
+        [UnityEngine.Scripting.Preserve]
+        public long RegisteredOrderEntries => registeredRoster?.OrderEntries ?? 0;
+        [UnityEngine.Scripting.Preserve]
+        public long RegisteredFastRendererUpdates { get; private set; }
+        [UnityEngine.Scripting.Preserve]
+        public long RegisteredSnapshotEntries => registeredRoster?.SnapshotEntries ?? 0;
         public string RegistrationUnavailableReason { get; private set; }
         private RegisteredRoster registeredRoster;
         private RegisteredRoster.Binding currentRegisteredBinding;
@@ -59,6 +67,7 @@ namespace ZeroEngine.FogOfWar.Unity
                 internal ContentOwner Owner;
                 internal bool Dirty = true;
                 internal bool Active;
+                internal Transform Root;
                 internal readonly List<Transform> Ancestors = new();
                 internal readonly List<int> Order = new();
                 internal int RootRank, ComponentRank;
@@ -71,7 +80,10 @@ namespace ZeroEngine.FogOfWar.Unity
             }
             private sealed class Bucket
             {
+                internal readonly HashSet<Binding> Members = new();
                 internal readonly List<Binding> Renderers = new(), Canvases = new();
+                internal readonly List<Binding> ActiveRenderers = new(), ActiveCanvases = new();
+                internal bool OrderDirty = true, ActiveDirty = true;
             }
             private readonly SceneVisibility2D owner;
             private readonly NativeVisibilityChanges changes;
@@ -92,11 +104,14 @@ namespace ZeroEngine.FogOfWar.Unity
             private ulong revision;
             private int layers = int.MinValue;
             private bool orderDirty = true, disposed, assemblyChanged;
+            private bool localUpdates;
             internal bool Active => !disposed && Failure == null;
             internal int Count => bindings.Count;
             internal string Failure { get; private set; }
             internal long BootstrapQueries { get; private set; }
             internal long BindingResolutions { get; private set; }
+            internal long OrderEntries { get; private set; }
+            internal long SnapshotEntries { get; private set; }
 
             internal RegisteredRoster(SceneVisibility2D owner, NativeVisibilityChanges changes)
             {
@@ -115,9 +130,35 @@ namespace ZeroEngine.FogOfWar.Unity
                 if (args.LoadedAssembly.GetName().Name.StartsWith("UnityEngine", StringComparison.Ordinal)) assemblyChanged = true;
             }
 
-            private static void RefreshActive(Binding binding)
+            private void RefreshActive(Binding binding)
             {
-                binding.Active = binding.GameObject && binding.GameObject.activeInHierarchy;
+                bool active = binding.GameObject && binding.GameObject.activeInHierarchy;
+                if (binding.Active == active) return;
+                binding.Active = active;
+                if (binding.Root && buckets.TryGetValue(binding.Root, out var bucket)) bucket.ActiveDirty = true;
+            }
+
+            private void RefreshRoot(Binding binding)
+            {
+                var root = binding.Transform ? binding.Transform.root : null;
+                if (ReferenceEquals(root, binding.Root)) return;
+                if (!ReferenceEquals(binding.Root, null) && buckets.TryGetValue(binding.Root, out var previous))
+                {
+                    previous.Members.Remove(binding);
+                    previous.OrderDirty = previous.ActiveDirty = true;
+                    if (previous.Members.Count == 0) buckets.Remove(binding.Root);
+                }
+                binding.Root = root;
+                if (!root) return;
+                if (!buckets.TryGetValue(root, out var bucket)) buckets.Add(root, bucket = new Bucket());
+                bucket.Members.Add(binding);
+                bucket.OrderDirty = bucket.ActiveDirty = true;
+            }
+
+            private void MarkOrder(Binding binding)
+            {
+                orderDirty = true;
+                if (binding.Root && buckets.TryGetValue(binding.Root, out var bucket)) bucket.OrderDirty = true;
             }
 
             private void Register(Object graphic)
@@ -133,7 +174,7 @@ namespace ZeroEngine.FogOfWar.Unity
                 bindings.Add(identity, binding);
                 // Index inactive pooled descendants too, so an ancestor activation is
                 // published before a later root's snapshot without scanning the pool.
-                Index(binding); RefreshActive(binding);
+                Index(binding); RefreshRoot(binding); RefreshActive(binding);
                 if (bindings.Count > 32768) { Failure = "Registered visibility graphic limit exceeded."; return; }
                 orderDirty = true;
             }
@@ -149,7 +190,8 @@ namespace ZeroEngine.FogOfWar.Unity
                     bool reparented = !ReferenceEquals(ancestor.Parent, parent);
                     if (reparented) foreach (var binding in ancestor.Graphics)
                     { binding.Dirty = true; ancestryDirty.Add(binding); RefreshActive(binding); }
-                    if (reparented || ancestor.Sibling != sibling) orderDirty = true;
+                    if (reparented || ancestor.Sibling != sibling)
+                        foreach (var binding in ancestor.Graphics) MarkOrder(binding);
                     ancestor.Parent = parent; ancestor.Sibling = sibling;
                     return;
                 }
@@ -160,17 +202,23 @@ namespace ZeroEngine.FogOfWar.Unity
             private void Destroyed(EntityId identity)
             {
                 if (!bindings.TryGetValue(identity, out var binding)) return;
-                Unlink(binding); bindings.Remove(identity); orderDirty = true;
+                Unlink(binding); bindings.Remove(identity); MarkOrder(binding);
+                if (!ReferenceEquals(binding.Root, null) && buckets.TryGetValue(binding.Root, out var bucket))
+                {
+                    bucket.Members.Remove(binding); bucket.ActiveDirty = true;
+                    if (bucket.Members.Count == 0) buckets.Remove(binding.Root);
+                }
             }
 
             private bool Sync()
             {
                 using var sample = owner.DiscoveryMarker.Auto();
+                using var syncSample = owner.RegistrationSyncMarker.Auto();
                 if (assemblyChanged) { Failure = "Engine assembly set changed; rebuild through synchronous discovery."; return false; }
                 try
                 {
                     changes.Drain(changed, destroyed);
-                    foreach (var binding in ancestryDirty) if (binding.Graphic) Index(binding);
+                    foreach (var binding in ancestryDirty) if (binding.Graphic) { Index(binding); RefreshRoot(binding); }
                     ancestryDirty.Clear();
                 }
                 catch (Exception error) { Failure = (error.InnerException ?? error).Message; return false; }
@@ -274,26 +322,59 @@ namespace ZeroEngine.FogOfWar.Unity
                 else for (int i=0; i<roots.Count; i++) if (roots[i] != previousRoots[i]) { orderDirty = true; break; }
             }
 
-            private void Order()
+            private void Order(Transform requestedRoot)
             {
+                if (localUpdates)
+                {
+                    if (!buckets.TryGetValue(requestedRoot, out var bucket)) return;
+                    if (bucket.OrderDirty)
+                    {
+                        using var discovery = owner.DiscoveryMarker.Auto();
+                        using var timing = owner.RegistrationOrderMarker.Auto();
+                        bucket.Renderers.Clear(); bucket.Canvases.Clear();
+                        foreach (var binding in bucket.Members)
+                        {
+                            if (!binding.Graphic || !binding.Transform) continue;
+                            PrepareOrder(binding, requestedRoot);
+                            (binding.Renderer ? bucket.Renderers : bucket.Canvases).Add(binding);
+                        }
+                        bucket.Renderers.Sort(compare); bucket.Canvases.Sort(compare);
+                        bucket.OrderDirty = false; bucket.ActiveDirty = true;
+                    }
+                    if (bucket.ActiveDirty)
+                    {
+                        bucket.ActiveRenderers.Clear(); bucket.ActiveCanvases.Clear();
+                        foreach (var binding in bucket.Renderers) if (binding.Active) bucket.ActiveRenderers.Add(binding);
+                        foreach (var binding in bucket.Canvases) if (binding.Active) bucket.ActiveCanvases.Add(binding);
+                        bucket.ActiveDirty = false;
+                    }
+                    return;
+                }
                 if (!orderDirty) return;
                 using var sample = owner.DiscoveryMarker.Auto();
+                using var orderSample = owner.RegistrationOrderMarker.Auto();
                 foreach (var bucket in buckets.Values) { bucket.Renderers.Clear(); bucket.Canvases.Clear(); }
                 foreach (var binding in bindings.Values)
                 {
                     if (!binding.Graphic || !binding.Transform) continue;
                     var root = binding.Transform.root;
                     if (!rootRanks.TryGetValue(root, out binding.RootRank)) continue;
-                    binding.Order.Clear();
-                    for (var item = binding.Transform; item && item != root; item = item.parent) binding.Order.Add(item.GetSiblingIndex());
-                    binding.Order.Reverse();
-                    members.Clear(); binding.Transform.GetComponents(members);
-                    binding.ComponentRank = members.IndexOf((Component)binding.Graphic);
+                    PrepareOrder(binding, root);
                     if (!buckets.TryGetValue(root, out var bucket)) buckets.Add(root, bucket = new Bucket());
                     (binding.Renderer ? bucket.Renderers : bucket.Canvases).Add(binding);
                 }
                 foreach (var bucket in buckets.Values) { bucket.Renderers.Sort(compare); bucket.Canvases.Sort(compare); }
                 orderDirty = false;
+            }
+
+            private void PrepareOrder(Binding binding, Transform root)
+            {
+                OrderEntries++;
+                binding.Order.Clear();
+                for (var item = binding.Transform; item && item != root; item = item.parent) binding.Order.Add(item.GetSiblingIndex());
+                binding.Order.Reverse();
+                members.Clear(); binding.Transform.GetComponents(members);
+                binding.ComponentRank = members.IndexOf((Component)binding.Graphic);
             }
 
             private static int Compare(Binding left, Binding right)
@@ -307,11 +388,13 @@ namespace ZeroEngine.FogOfWar.Unity
             private void Snapshot(List<Binding> graphics)
             {
                 using var sample = owner.DiscoveryMarker.Auto();
+                using var snapshotSample = owner.RegistrationSnapshotMarker.Auto();
                 snapshot.Clear();
                 // Match the original active-only per-root native query snapshot. A
                 // callback may activate another child later in this same root.
                 foreach (var binding in graphics)
                     {
+                    SnapshotEntries++;
                     if (!binding.Active || !binding.Graphic) continue;
                     // A stable non-content graphic cannot acquire a fog override. Dirty
                     // structure/membership and owned releases always retain evaluation.
@@ -324,6 +407,12 @@ namespace ZeroEngine.FogOfWar.Unity
             internal bool Apply(IVisibilityQuery2D grid, Transform player)
             {
                 this.grid = grid; ownerVisibility.Clear();
+                if (localUpdates != owner.LocalRosterUpdatesEnabled)
+                {
+                    localUpdates = owner.LocalRosterUpdatesEnabled;
+                    orderDirty = true;
+                    foreach (var bucket in buckets.Values) bucket.OrderDirty = bucket.ActiveDirty = true;
+                }
                 ulong currentRevision = owner.policy.OwnerCreationRevision;
                 if (this.player != player || revision != currentRevision || layers != owner.contentLayers)
                 {
@@ -335,9 +424,9 @@ namespace ZeroEngine.FogOfWar.Unity
                 foreach (var root in roots)
                 {
                     if (!root || !root.gameObject.activeInHierarchy) continue;
-                    Order();
+                    Order(root);
                     if (!buckets.TryGetValue(root, out var bucket)) continue;
-                    Snapshot(bucket.Renderers);
+                    Snapshot(localUpdates ? bucket.ActiveRenderers : bucket.Renderers);
                     using var sample = owner.RendererMarker.Auto();
                     foreach (var binding in snapshot)
                     {
@@ -352,9 +441,9 @@ namespace ZeroEngine.FogOfWar.Unity
                 foreach (var root in roots)
                 {
                     if (!root || !root.gameObject.activeInHierarchy) continue;
-                    Order();
+                    Order(root);
                     if (!buckets.TryGetValue(root, out var bucket)) continue;
-                    Snapshot(bucket.Canvases);
+                    Snapshot(localUpdates ? bucket.ActiveCanvases : bucket.Canvases);
                     using var sample = owner.CanvasMarker.Auto();
                     foreach (var binding in snapshot)
                     {

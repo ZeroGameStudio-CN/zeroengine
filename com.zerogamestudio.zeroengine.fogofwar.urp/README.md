@@ -30,3 +30,6 @@ This package supplies masks, not a particular game's atmospheric style/minimap U
 The consumer composites them with its own art and explored-memory texture. Android,
 WebGL and Linux are supported code paths; platform-specific runtime performance
 requires measurement on those targets.
+
+Version 0.2.2 pairs with the base fog package 0.2.2. Mask rendering and shader
+passes are unchanged; the base package adds localized scene-roster maintenance.

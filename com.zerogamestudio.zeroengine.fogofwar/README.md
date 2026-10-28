@@ -120,3 +120,20 @@ atomic memory restore, authored presentation state and assembly dependencies.
 notifications update cached participation; warmed snapshots skip inactive and known
 non-content graphics without per-entry native active-state queries. Current sight
 and positions still refresh on every Apply.
+
+0.2.2 keeps ordering and active lists per scene root. Structural edits rebuild only
+that root; stable snapshots visit its active entries. `LocalRosterUpdatesEnabled`
+defaults to true inside the opt-in registered path; false retains the 0.2.1 roster
+work for matched diagnostics. `RegisteredOrderEntries`, `RegisteredSnapshotEntries`
+and `RegisteredFastRendererUpdates` expose actual work without a scene census.
+Pure Renderer culling-override writes retain the current query results and consume
+notifications at the next phase boundary. Canvas changes still invalidate and drain
+synchronously before evaluating later graphics. Policy queries must remain pure.
+
+`SceneStructureObserver2D.TryCreate` supplies disposable, synchronous GameObject,
+Transform and RectTransform membership/hierarchy notifications for consumer-owned
+presentation caches. Call `TryDrain` before reusing a cache, invalidate after any
+callback that may change it, and dispose with the owner. Ordinary motion is not a
+membership change. Unsupported or failed bindings return a reason; consumers must
+retain their uncached policy. No POB type, storage, activation rule or gameplay
+clock enters the package.
