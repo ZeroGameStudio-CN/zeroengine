@@ -54,3 +54,23 @@ configuration/material/settings files unchanged; its temporary fixture was remov
 Godot counterparts passed their own 468 tests and 20 GPU vectors, and the independent
 game's pinned adoption passed 292 tests after its separate naming/asset cleanup.
 These results do not qualify other render pipelines, platforms or exported Players.
+
+## Caller-clocked body visuals
+
+`BodyVisual` renders a borrowed Sprite/Mesh/SkinnedMesh pose supplied through
+`IRenderPoseSource`. `RenderPoseSnapshot` owns copied meshes, while sprites,
+textures and authored materials remain borrowed. `RenderPoseRenderer` owns only
+its overlay views. The current body plane is XY; this API does not promise an
+arbitrary 3D skin-surface effect.
+
+`BodyVisualHost` merges appearances by kind while retaining independent source
+leases and clock functions. Call `Advance` after the pose producer; dispose a
+lease when its logical source ends. Timed views, retirement tails, shared small
+particle budgets and resource-retain callbacks use the supplied clocks. The
+host has no Buff/Core/Addressables/Spine SDK or wall-time dependency. A frozen
+actor may supply an independent gameplay-domain clock for its ice appearance.
+
+`BodyVisualSettings` and `VisualPalette` describe appearance only; they never
+apply damage, freeze controls, stats or save settings. Pipeline shaders are
+supplied by `BodyVisualResources`. The URP package provides ready-made resources.
+Authoring presets and game-specific lifetime/loading adapters remain consumers.

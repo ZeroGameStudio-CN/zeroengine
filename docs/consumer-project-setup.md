@@ -101,3 +101,12 @@ Verify real actor entry and reuse in the consumer before adopting the tested pin
   `com.zerogamestudio.*` dependency that also needs a manifest entry.
 - Do not edit `Library` or cached package contents; change the manifest, then
   let Unity resolve again.
+
+### Body visuals
+
+Install `com.zerogamestudio.zeroengine.render` and
+`com.zerogamestudio.zeroengine.render.urp` from the same tested official Git
+commit. The core accepts explicit pose, clock and resource inputs. The URP
+backend supplies shaders; Buff/Ability lifecycle binding and game asset loading
+remain consumer adapters. Body appearance does not require replacing a project's
+Buff implementation. Do not ship temporary absolute `file:` dependencies.

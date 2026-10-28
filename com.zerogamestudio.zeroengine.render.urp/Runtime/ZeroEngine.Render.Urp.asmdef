@@ -3,7 +3,8 @@
   "rootNamespace": "ZeroEngine.Render.Urp",
   "references": [
     "Unity.RenderPipelines.Core.Runtime",
-    "Unity.RenderPipelines.Universal.Runtime"
+    "Unity.RenderPipelines.Universal.Runtime",
+    "ZeroEngine.Render"
   ],
   "includePlatforms": [],
   "excludePlatforms": [],

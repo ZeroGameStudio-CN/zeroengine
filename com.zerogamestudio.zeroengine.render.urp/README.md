@@ -66,3 +66,22 @@ keep consumer-specific save adapters outside this package.
 Use the official Git UPM URL pinned to the tested commit. A local `file:` URL is
 for temporary verification only. Add this package to the consumer's `testables`
 list when running the package tests.
+
+## Body visual backend
+
+The optional body visual resources are independent of rim-light registration.
+`BodyVisualResourcesLoader.Load()` returns namespaced body/surface/speck shaders.
+Authored sample/final variants keep their material property names and mask pass
+indices. The backend depends on `ZeroEngine.Render` 0.2.0 and URP 17.6; there is
+no POB, Buff, Addressables or third-party shader dependency.
+
+Consumers may retain compatibility shader assets using the named `UsePass`
+entries so existing material GUID references remain valid. Blood palette math
+uses the render package's neutral `VisualPalette.hlsl` with caller-provided
+material values, never a game-specific include or setting. Original palette
+mode is the default. Install this package and the render package from the same
+tested commit. Local file paths are verification-only pins.
+
+The package body tests cover caller-clocked playback, current-pose masks, fixed
+pixel emission, source composition and borrowed asset cleanup. A consumer must
+also check real game-camera output before adopting an extraction.
