@@ -77,6 +77,27 @@ roots. This path intentionally still pays for scene discovery; moving it into a 
 does not make that cost disappear. Use registration where the lifecycle contract can
 be guaranteed, and keep discovery for unregistered/dynamic legacy content.
 
+In 0.2, `SceneVisibility2D.RegisteredVisibilityEnabled` opts into an incremental
+graphic roster on Unity 6000.6. It bootstraps Renderer/Canvas membership once,
+then consumes synchronous engine creation, destruction, component, layer and
+hierarchy notifications. An ancestor dependency index refreshes only affected
+ownership bindings; ordinary motion still reads current positions and sight.
+Structural Transform and RectTransform type notifications cover sibling edits and
+ancestor reparenting without per-Apply ancestor scans or TransformChangeDispatch
+listeners. The warmed reader reuses its managed object list and disposes native
+temporary arrays; no managed change array is returned.
+Presentation callbacks drain changes before later graphics are evaluated. Inactive
+pooled graphics remain registered, and disposal releases only owned overrides.
+
+This version-qualified bridge uses internal `UnityEngine.ObjectDispatcher`
+through an isolated reflection binding, with a linker preservation entry. Check
+`RegisteredVisibilityActive` and `RegistrationUnavailableReason` in the actual
+Player. Unsupported/stripped bindings, engine assembly changes or roster capacity
+overflow retain synchronous compatibility discovery. The package default stays
+off; each consumer must qualify its engine/platform before enabling it.
+`RegisteredBootstrapQueries`, `RegisteredBindingResolutions` and
+`RegisteredGraphicCount` expose roster maintenance without doing a diagnostic scan.
+
 ## Exploration and persistence
 
 `ExplorationGrid2D` stores explored cells and last-observed terrain separately from

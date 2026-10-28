@@ -8,7 +8,7 @@ using UnityEngine.Tilemaps;
 namespace ZeroEngine.FogOfWar.Unity
 {
     /// <summary>Hides scene contents independently of the translucent atmosphere over the terrain.</summary>
-    public class SceneVisibility2D : IDisposable
+    public partial class SceneVisibility2D : IDisposable
     {
         private readonly ProfilerMarker DiscoveryMarker, RendererMarker, CanvasMarker;
         private readonly VisibilityScenePolicy2D policy;
@@ -364,6 +364,11 @@ namespace ZeroEngine.FogOfWar.Unity
             BeginHierarchyApply(FusedHierarchyEnabled && Application.isPlaying && player && !NativeRendererDiscoveryEnabled);
             // The caller resolves project layers on the main thread.
             contentLayers = policy.ContentLayers;
+            if (ApplyRegistered(grid, player))
+            {
+                ReleaseInactiveOverrides();
+                return;
+            }
             // Keep synchronous discovery, including pooled/reparented content. During gameplay
             // reusable scene/component lists replace the two fresh native Object[] results.
             // EditMode and a missing player retain the original global discovery contract.
@@ -455,6 +460,19 @@ namespace ZeroEngine.FogOfWar.Unity
                 foreach (Canvas canvas in UnityEngine.Object.FindObjectsByType(typeof(Canvas), FindObjectsInactive.Exclude, FindObjectsSortMode.None))
                     ApplyCanvas(canvas, grid, player);
             }
+            ReleaseInactiveOverrides();
+            if (!boundedCache)
+            {
+                // Legacy mode is retained as the per-world opt-out and same-revision audit arm.
+                obsoleteLocalOwners.Clear();
+                foreach (var pair in localOwners)
+                    if (!visitedOwners.Contains(pair.Key)) obsoleteLocalOwners.Add(pair.Key);
+                foreach (var item in obsoleteLocalOwners) localOwners.Remove(item);
+            }
+        }
+
+        private void ReleaseInactiveOverrides()
+        {
             // Return overrides promptly on despawn, even before a pooled object is reused.
             releasedRenderers.Clear();
             foreach (var renderer in hiddenRenderers)
@@ -471,14 +489,6 @@ namespace ZeroEngine.FogOfWar.Unity
             {
                 if (canvas) canvas.enabled = true;
                 hiddenCanvases.Remove(canvas);
-            }
-            if (!boundedCache)
-            {
-                // Legacy mode is retained as the per-world opt-out and same-revision audit arm.
-                obsoleteLocalOwners.Clear();
-                foreach (var pair in localOwners)
-                    if (!visitedOwners.Contains(pair.Key)) obsoleteLocalOwners.Add(pair.Key);
-                foreach (var item in obsoleteLocalOwners) localOwners.Remove(item);
             }
         }
 
@@ -534,14 +544,16 @@ namespace ZeroEngine.FogOfWar.Unity
                 {
                     // Only hidden contents need the focused-door exception. Door ancestry
                     // remains fresh, independently of the nearest owner.
-                    var door = hierarchySnapshotValid && currentHierarchyNode != null
+                    var door = currentRegisteredBinding != null ? registeredRoster.CanvasScope(currentRegisteredBinding)
+                        : hierarchySnapshotValid && currentHierarchyNode != null
                         ? currentHierarchyNode.NearestCanvasScope : policy.FindCanvasScope(canvas.transform);
                     hide = !(door && policy.IsCanvasExempt(door, canvas));
                 }
             }
             else
             {
-                var door = hierarchySnapshotValid && currentHierarchyNode != null
+                var door = currentRegisteredBinding != null ? registeredRoster.CanvasScope(currentRegisteredBinding)
+                        : hierarchySnapshotValid && currentHierarchyNode != null
                         ? currentHierarchyNode.NearestCanvasScope : policy.FindCanvasScope(canvas.transform);
                 hide = !(door && policy.IsCanvasExempt(door, canvas))
                     && ShouldHide(canvas.transform, null, canvas, grid, player);
@@ -567,6 +579,7 @@ namespace ZeroEngine.FogOfWar.Unity
             // Only exact-Transform components persist; their creation revisions still invalidate absences.
             contentOwners.Clear();
             visiblePositions.Clear();
+            registeredRoster?.PresentationChanged();
             if (ownerCreationRevision != policy.OwnerCreationRevision)
             {
                 if (detailedDiagnostics) diagnostics.creationInvalidations++;
@@ -577,6 +590,7 @@ namespace ZeroEngine.FogOfWar.Unity
 
         private bool ShouldHide(Transform item, Renderer renderer, Canvas canvas, IVisibilityQuery2D grid, Transform player)
         {
+            if (currentRegisteredBinding != null) return registeredRoster.ShouldHide(currentRegisteredBinding);
             var owner = hierarchySnapshotValid && currentHierarchyNode != null
                 ? ResolveHierarchyOwner(currentHierarchyNode, grid)
                 : ResolveContentOwner(item, grid, player, player, renderer is SpriteRenderer || canvas);
@@ -691,6 +705,7 @@ namespace ZeroEngine.FogOfWar.Unity
 
         public void Dispose()
         {
+            registeredRoster?.Dispose(); registeredRoster = null; currentRegisteredBinding = null;
             foreach (var renderer in hiddenRenderers) if (renderer) renderer.forceRenderingOff = false;
             foreach (var canvas in hiddenCanvases) if (canvas) canvas.enabled = true;
             hiddenRenderers.Clear();
