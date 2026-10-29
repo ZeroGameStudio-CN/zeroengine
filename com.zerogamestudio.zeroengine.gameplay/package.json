@@ -12,7 +12,8 @@
         "com.unity.inputsystem": "1.7.0",
         "com.unity.textmeshpro": "3.0.6",
         "com.unity.modules.video": "1.0.0",
-        "com.unity.modules.director": "1.0.0"
+        "com.unity.modules.director": "1.0.0",
+        "com.unity.modules.screencapture": "1.0.0"
     },
     "keywords": ["zeroengine", "interaction", "tutorial", "command"],
     "author": { "name": "ZeroGameStudio" },

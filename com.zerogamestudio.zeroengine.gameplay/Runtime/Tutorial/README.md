@@ -10,7 +10,7 @@ Consumers install the official package at a tested commit:
 "com.zerogamestudio.zeroengine.gameplay": "https://github.com/ZeroGameStudio-CN/zeroengine.git?path=com.zerogamestudio.zeroengine.gameplay#<tested-commit>"
 ```
 
-Gameplay depends on ZE Core/Persistence, uGUI, Input System, TextMeshPro and the built-in Video/Director modules. A consumer pins the ZE dependencies under its repository policy. Local file bindings are for validation only. Consumers select a verified Git commit from the official repository.
+Gameplay depends on ZE Core/Persistence, uGUI, Input System, TextMeshPro and the built-in Video/Director/ScreenCapture modules. ScreenCapture is used by optional native-frame verification recordings. A consumer pins the ZE dependencies under its repository policy. Local file bindings are for validation only. Consumers select a verified Git commit from the official repository.
 
 The package contains no POB, Pixel Crushers or Odin dependency. Quests, inventories, feature access, save-slot selection and authored level generation stay with the consuming game. Tutorial completion is not proof of a business objective: use native operation callbacks and project result events for that objective.
 
