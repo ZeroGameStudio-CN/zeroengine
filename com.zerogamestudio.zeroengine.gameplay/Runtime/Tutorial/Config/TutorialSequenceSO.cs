@@ -197,6 +197,10 @@ namespace ZeroEngine.Tutorial
                     {
                         errors.Add($"Step {i} ({step.StepType}): {stepError}");
                     }
+                    else if (!step.SupportsAutomaticCompletion && step.AutoCompleteDelay > 0)
+                    {
+                        errors.Add($"Step {i}: an operation cannot be completed by an automatic delay.");
+                    }
                 }
             }
 
@@ -248,13 +252,7 @@ namespace ZeroEngine.Tutorial
 
         public override void Grant()
         {
-#if ZEROENGINE_INVENTORY
-            var inventory = ZeroEngine.Inventory.InventoryManager.Instance;
-            if (inventory != null)
-            {
-                inventory.AddItemById(ItemId, Amount);
-            }
-#endif
+            throw new InvalidOperationException("Item tutorial rewards are granted by the project's ITutorialRewardService.");
         }
 
         public override string GetDescription()
@@ -275,13 +273,7 @@ namespace ZeroEngine.Tutorial
 
         public override void Grant()
         {
-#if ZEROENGINE_ACHIEVEMENT
-            var achievements = ZeroEngine.Achievement.AchievementManager.Instance;
-            if (achievements != null)
-            {
-                achievements.UnlockAchievement(AchievementId);
-            }
-#endif
+            throw new InvalidOperationException("Achievement tutorial rewards are granted by the project's ITutorialRewardService.");
         }
 
         public override string GetDescription()

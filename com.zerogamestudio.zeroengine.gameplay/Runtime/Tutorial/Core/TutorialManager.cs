@@ -58,6 +58,35 @@ namespace ZeroEngine.Tutorial
         private TutorialSequenceSO _currentSequence;
         private int _currentStepIndex = -1;
         private bool _isRunning;
+        private TutorialStep _enteredStep;
+        private string _checkpointSequenceId, _checkpointStepId;
+        private int _checkpointStepIndex;
+        private bool _skippingStep;
+        private uint _runVersion;
+        private readonly List<TutorialStartRequest> _pendingStarts = new List<TutorialStartRequest>();
+        private long _requestOrder;
+#if ZEROENGINE_SAVE
+        private SaveSlotManager _saveOwner;
+#endif
+        public string LastError { get; private set; }
+        public event Action<TutorialSequenceSO, string> OnSequenceInterrupted;
+
+        public void Configure(TutorialConfigSO config)
+        {
+            _config = config;
+            _context.Config = config;
+            _context.Manager = this;
+            _context.UseUnscaledTime = !config || config.UseUnscaledTime;
+            if (config) Enabled = config.EnableTutorials;
+        }
+
+        public void CancelCurrentSequence()
+        {
+            if (!_isRunning) return;
+            var sequence = _currentSequence;
+            StopCurrentSequence(false);
+            OnSequenceInterrupted?.Invoke(sequence, null);
+        }
 
         #endregion
 
@@ -67,7 +96,7 @@ namespace ZeroEngine.Tutorial
         public bool Enabled
         {
             get => _enabled;
-            set => _enabled = value;
+            set { if (!value && _isRunning) CancelCurrentSequence(); _enabled = value; }
         }
 
         /// <summary>是否正在运行教程</summary>
@@ -122,8 +151,10 @@ namespace ZeroEngine.Tutorial
             {
                 CompletedSequences = new List<string>(_completedSequences).ToArray(),
                 SkippedSequences = new List<string>(_skippedSequences).ToArray(),
-                CurrentSequenceId = _currentSequence?.SequenceId,
-                CurrentStepIndex = _currentStepIndex,
+                TriggeredMarkers = new List<string>(_triggeredMarkers).ToArray(),
+                CurrentSequenceId = _checkpointSequenceId,
+                CurrentStepIndex = _checkpointStepIndex,
+                CurrentStepId = _checkpointStepId,
                 GlobalVariables = ExportGlobalVariablesInternal()
             };
         }
@@ -151,6 +182,8 @@ namespace ZeroEngine.Tutorial
                 }
 
                 ImportGlobalVariables(saveData.GlobalVariables);
+                _triggeredMarkers.Clear();
+                foreach (var marker in saveData.TriggeredMarkers ?? Array.Empty<string>()) _triggeredMarkers.Add(marker);
 
                 // 恢复进行中的教程
                 if (!string.IsNullOrEmpty(saveData.CurrentSequenceId))
@@ -158,7 +191,11 @@ namespace ZeroEngine.Tutorial
                     var sequence = GetSequence(saveData.CurrentSequenceId);
                     if (sequence != null)
                     {
-                        StartSequence(sequence, saveData.CurrentStepIndex);
+                        _checkpointSequenceId = saveData.CurrentSequenceId;
+                        _checkpointStepId = saveData.CurrentStepId;
+                        int stableIndex = string.IsNullOrEmpty(saveData.CurrentStepId) ? saveData.CurrentStepIndex : sequence.Steps.FindIndex(step => step?.StepId == saveData.CurrentStepId);
+                        _checkpointStepIndex = Mathf.Max(0, stableIndex);
+                        if (_enabled) StartSequence(sequence, _checkpointStepIndex);
                     }
                 }
             }
@@ -166,6 +203,7 @@ namespace ZeroEngine.Tutorial
 
         public void ResetToDefault()
         {
+            _checkpointSequenceId = _checkpointStepId = null; _checkpointStepIndex = 0;
             _completedSequences.Clear();
             _skippedSequences.Clear();
             _triggeredMarkers.Clear();
@@ -228,6 +266,7 @@ namespace ZeroEngine.Tutorial
         protected override void Awake()
         {
             base.Awake();
+            Configure(_config);
             BuildSequenceIndex();
         }
 
@@ -235,22 +274,73 @@ namespace ZeroEngine.Tutorial
         {
             // 注册到存档系统
 #if ZEROENGINE_SAVE
-            SaveSlotManager.Instance?.RegisterSaveable(this);
+            _saveOwner = UnityEngine.Object.FindObjectOfType<SaveSlotManager>();
+            _saveOwner?.RegisterSaveable(this);
 #endif
         }
 
         private void Update()
         {
-            if (!_enabled || !_isRunning) return;
+            Tick();
+        }
+
+        public void Tick()
+        {
+            if (!_enabled) return;
+            ProcessRequests();
+            if (!_isRunning) return;
 
             // 更新当前步骤
             UpdateCurrentStep();
         }
 
+        private void OnDisable()
+        {
+            if (_isRunning) CancelCurrentSequence();
+            foreach (var request in _pendingStarts) request.Dispose();
+            _pendingStarts.Clear();
+        }
+
+        public TutorialStartRequest QueueSequence(TutorialSequenceSO sequence, Func<bool> valid = null, float lifetimeSeconds = 60)
+        {
+            if (!sequence || lifetimeSeconds <= 0) throw new ArgumentException("A queued tutorial needs a sequence and positive lifetime.");
+            var request = new TutorialStartRequest { Sequence = sequence, IsValid = valid,
+                Deadline = _context.Focus.Realtime() + lifetimeSeconds, Order = ++_requestOrder };
+            if (!_enabled || _pendingStarts.Exists(item => item.State == TutorialRequestState.Pending && item.Sequence.SequenceId == sequence.SequenceId))
+                request.State = TutorialRequestState.Rejected;
+            else { RegisterSequence(sequence); _pendingStarts.Add(request); }
+            return request;
+        }
+
+        private void ProcessRequests()
+        {
+            double now = _context.Focus.Realtime();
+            foreach (var request in _pendingStarts)
+            {
+                if (request.State != TutorialRequestState.Pending) continue;
+                if (!request.Sequence || (request.IsValid != null && !request.IsValid())) request.State = TutorialRequestState.Cancelled;
+                else if (now >= request.Deadline) request.State = TutorialRequestState.Expired;
+                else if ((!request.Sequence.Replayable && IsSequenceCompleted(request.Sequence.SequenceId)) || IsSequenceSkipped(request.Sequence.SequenceId))
+                    request.State = TutorialRequestState.Rejected;
+            }
+            _pendingStarts.RemoveAll(item => item.State != TutorialRequestState.Pending);
+            if (_isRunning) return;
+            TutorialStartRequest best = null;
+            foreach (var request in _pendingStarts)
+                if (CheckPrerequisites(request.Sequence) && request.Sequence.CanStart(_context) &&
+                    (best == null || request.Sequence.Priority > best.Sequence.Priority ||
+                    (request.Sequence.Priority == best.Sequence.Priority && request.Order < best.Order))) best = request;
+            if (best == null) return;
+            _pendingStarts.Remove(best); best.State = TutorialRequestState.Started;
+            StartSequence(best.Sequence);
+        }
+
         protected override void OnDestroy()
         {
+            StopCurrentSequence(false);
 #if ZEROENGINE_SAVE
-            SaveSlotManager.Instance?.UnregisterSaveable(this);
+            if (_saveOwner) _saveOwner.UnregisterSaveable(this);
+            _saveOwner = null;
 #endif
             base.OnDestroy();
         }
@@ -277,6 +367,9 @@ namespace ZeroEngine.Tutorial
             }
 
             // 已完成且不可重播
+            if (!sequence.Validate(out var validationErrors) || startStep < 0 || startStep >= sequence.StepCount)
+            { LastError = string.Join("\n", validationErrors) + " Invalid checkpoint index."; return; }
+
             if (IsSequenceCompleted(sequence.SequenceId) && !sequence.Replayable)
             {
                 LogDebug($"Sequence {sequence.SequenceId} already completed");
@@ -294,12 +387,17 @@ namespace ZeroEngine.Tutorial
             _currentSequence = sequence;
             _currentStepIndex = startStep - 1; // 会在 AdvanceStep 中 +1
             _isRunning = true;
+            _runVersion++;
+            LastError = null;
+            _context.Config = _config;
+            _context.UseUnscaledTime = !_config || _config.UseUnscaledTime;
 
             // 初始化上下文
             _context.Initialize(sequence, FindPlayer());
 
             // 触发事件
             OnSequenceStarted?.Invoke(sequence);
+            if (!_isRunning || _currentSequence != sequence) return;
 
             // 开始第一个步骤
             AdvanceStep();
@@ -330,10 +428,12 @@ namespace ZeroEngine.Tutorial
 
             var currentStep = CurrentStep;
             if (currentStep != null && !currentStep.CanSkip) return;
+            if (_config && !_config.AllowSkipping) return;
 
             LogDebug($"Skipping step {_currentStepIndex}");
 
             // 触发步骤跳过
+            _skippingStep = true;
             currentStep?.OnSkip(_context);
             OnStepSkipped?.Invoke(currentStep, _currentStepIndex);
 
@@ -348,6 +448,7 @@ namespace ZeroEngine.Tutorial
         {
             if (!_isRunning || _currentSequence == null) return;
             if (!_currentSequence.Skippable) return;
+            if (_config && !_config.AllowSkipping) return;
 
             LogDebug($"Skipping sequence: {_currentSequence.SequenceId}");
 
@@ -356,11 +457,9 @@ namespace ZeroEngine.Tutorial
 
             var sequence = _currentSequence;
 
-            // 清理当前步骤
-            CurrentStep?.OnExit(_context);
-
             // 停止
             StopCurrentSequence(false);
+            _checkpointSequenceId = _checkpointStepId = null; _checkpointStepIndex = 0;
 
             // 触发事件
             OnSequenceSkipped?.Invoke(sequence);
@@ -384,11 +483,21 @@ namespace ZeroEngine.Tutorial
             var currentStep = CurrentStep;
             if (currentStep == null) return;
 
-            // 更新步骤
-            currentStep.OnUpdate(_context);
+            try { currentStep.OnUpdate(_context); }
+            catch (Exception exception) { _context.Fail(exception.Message); }
+            if (!string.IsNullOrEmpty(_context.Failure) || _context.CancelRequested)
+            {
+                LastError = _context.Failure;
+                var interrupted = _currentSequence;
+                StopCurrentSequence(false);
+                OnSequenceInterrupted?.Invoke(interrupted, LastError);
+                return;
+            }
+            if (_context.StepSkipRequested) { SkipCurrentStep(); return; }
+            if (!_isRunning || CurrentStep != currentStep) return;
 
             // 检查自动完成
-            if (currentStep.AutoCompleteDelay > 0 &&
+            if (currentStep.SupportsAutomaticCompletion && currentStep.AutoCompleteDelay > 0 &&
                 _context.StepElapsedTime >= currentStep.AutoCompleteDelay)
             {
                 AdvanceStep();
@@ -404,13 +513,26 @@ namespace ZeroEngine.Tutorial
 
         private void AdvanceStep()
         {
+            uint version = _runVersion;
+            int previousIndex = _currentStepIndex;
             // 退出当前步骤
-            var previousStep = CurrentStep;
+            var previousStep = _enteredStep;
+            _enteredStep = null;
             if (previousStep != null)
             {
-                previousStep.OnExit(_context);
-                OnStepCompleted?.Invoke(previousStep, _currentStepIndex);
+                try { previousStep.OnExit(_context); }
+                catch (Exception exception)
+                {
+                    LastError = exception.Message;
+                    var interrupted = _currentSequence;
+                    StopCurrentSequence(false);
+                    OnSequenceInterrupted?.Invoke(interrupted, LastError);
+                    return;
+                }
+                if (!_skippingStep) OnStepCompleted?.Invoke(previousStep, _currentStepIndex);
             }
+            _skippingStep = false;
+            if (!_isRunning || _runVersion != version || _currentStepIndex != previousIndex) return;
 
             // 推进索引
             _currentStepIndex++;
@@ -427,7 +549,19 @@ namespace ZeroEngine.Tutorial
             if (newStep != null)
             {
                 _context.SetCurrentStep(newStep, _currentStepIndex);
-                newStep.OnEnter(_context);
+                _checkpointSequenceId = _currentSequence.SequenceId;
+                _checkpointStepId = newStep.StepId;
+                _checkpointStepIndex = _currentStepIndex;
+                _enteredStep = newStep;
+                try { newStep.OnEnter(_context); }
+                catch (Exception exception)
+                {
+                    LastError = exception.Message;
+                    var interrupted = _currentSequence;
+                    StopCurrentSequence(false);
+                    OnSequenceInterrupted?.Invoke(interrupted, LastError);
+                    return;
+                }
                 OnStepStarted?.Invoke(newStep, _currentStepIndex);
 
                 LogDebug($"Step {_currentStepIndex}: {newStep.StepType}");
@@ -440,22 +574,34 @@ namespace ZeroEngine.Tutorial
 
             LogDebug($"Sequence completed: {_currentSequence.SequenceId}");
 
-            _completedSequences.Add(_currentSequence.SequenceId);
-            _context.MarkCompleted();
-
             var sequence = _currentSequence;
 
-            // 发放奖励
-            GrantRewards(sequence);
+            if (sequence.CompletionRewards != null && sequence.CompletionRewards.Count > 0)
+            {
+                string error = "Completion rewards require a project reward service.";
+                bool accepted = false;
+                try { accepted = _context.Rewards != null && _context.Rewards.TryGrant(sequence.SequenceId, sequence.CompletionRewards, out error); }
+                catch (Exception exception) { error = exception.Message; }
+                if (!accepted)
+                {
+                    LastError = string.IsNullOrEmpty(error) ? "The project rejected tutorial rewards." : error;
+                    StopCurrentSequence(false);
+                    OnSequenceInterrupted?.Invoke(sequence, LastError);
+                    return;
+                }
+            }
+            _completedSequences.Add(sequence.SequenceId);
+            _context.MarkCompleted();
 
             // 停止
             StopCurrentSequence(true);
+            _checkpointSequenceId = _checkpointStepId = null; _checkpointStepIndex = 0;
 
             // 触发事件
             OnSequenceCompleted?.Invoke(sequence);
 
             // 自动触发下一个教程
-            if (!string.IsNullOrEmpty(sequence.NextSequenceId))
+            if (!_isRunning && !string.IsNullOrEmpty(sequence.NextSequenceId))
             {
                 StartSequence(sequence.NextSequenceId);
             }
@@ -463,30 +609,19 @@ namespace ZeroEngine.Tutorial
 
         private void StopCurrentSequence(bool completed)
         {
+            _runVersion++;
+            var entered = _enteredStep;
+            _enteredStep = null;
             _isRunning = false;
+            try { entered?.OnExit(_context); }
+            catch (Exception exception) { LastError = exception.Message; Debug.LogException(exception, this); }
             _currentSequence = null;
             _currentStepIndex = -1;
+            _skippingStep = false;
 
             if (!completed)
             {
                 _context.Reset();
-            }
-        }
-
-        private void GrantRewards(TutorialSequenceSO sequence)
-        {
-            if (sequence.CompletionRewards == null) return;
-
-            foreach (var reward in sequence.CompletionRewards)
-            {
-                try
-                {
-                    reward?.Grant();
-                }
-                catch (Exception e)
-                {
-                    LogWarning($"Failed to grant reward: {e.Message}");
-                }
             }
         }
 
@@ -699,6 +834,8 @@ namespace ZeroEngine.Tutorial
         /// </summary>
         public void RegisterSequence(TutorialSequenceSO sequence)
         {
+            if (sequence && _sequenceIndex.TryGetValue(sequence.SequenceId, out var owner) && owner != sequence)
+                throw new InvalidOperationException("A different tutorial already owns sequence ID: " + sequence.SequenceId);
             if (sequence != null && !_registeredSequences.Contains(sequence))
             {
                 _registeredSequences.Add(sequence);

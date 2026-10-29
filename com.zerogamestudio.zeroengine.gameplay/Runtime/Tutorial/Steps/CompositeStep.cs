@@ -1,252 +1,89 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using UnityEngine;
 
 namespace ZeroEngine.Tutorial
 {
-    /// <summary>
-    /// 组合步骤 (v1.14.0+)
-    /// 包含多个子步骤，支持顺序或并行执行
-    /// </summary>
     [Serializable]
     public class CompositeStep : TutorialStep
     {
-        /// <summary>执行模式</summary>
-        public enum ExecutionMode
-        {
-            Sequential,     // 顺序执行
-            Parallel,       // 并行执行
-            Any             // 任一完成即可
-        }
-
-        [Header("Composite Settings")]
-        [Tooltip("执行模式")]
+        public enum ExecutionMode { Sequential = 0, Parallel = 1, Any = 2 }
         public ExecutionMode Mode = ExecutionMode.Sequential;
-
-        [Tooltip("子步骤列表")]
-        [SerializeReference]
-        public List<TutorialStep> SubSteps = new();
-
-        // 运行时状态
-        [NonSerialized]
-        private int _currentSubStepIndex;
-        [NonSerialized]
-        private bool[] _subStepCompleted;
-        [NonSerialized]
-        private bool _isCompleted;
-
-        public override string StepType => $"Composite ({Mode})";
+        [SerializeReference] public List<TutorialStep> SubSteps = new List<TutorialStep>();
+        [NonSerialized] private bool[] entered, completed;
+        [NonSerialized] private int index;
+        [NonSerialized] private bool done;
+        public override string StepType => "Composite (" + Mode + ")";
+        public override bool OwnsBlockingPresentation => SubSteps != null && SubSteps.Any(step => step != null && step.OwnsBlockingPresentation);
+        public override bool SupportsAutomaticCompletion => SubSteps != null && SubSteps.All(step => step != null && step.SupportsAutomaticCompletion);
 
         public override void OnEnter(TutorialContext ctx)
         {
-            _currentSubStepIndex = 0;
-            _isCompleted = false;
-            _subStepCompleted = new bool[SubSteps.Count];
-
-            switch (Mode)
-            {
-                case ExecutionMode.Sequential:
-                    // 开始第一个子步骤
-                    if (SubSteps.Count > 0)
-                    {
-                        SubSteps[0]?.OnEnter(ctx);
-                    }
-                    else
-                    {
-                        _isCompleted = true;
-                    }
-                    break;
-
-                case ExecutionMode.Parallel:
-                case ExecutionMode.Any:
-                    // 同时开始所有子步骤
-                    foreach (var step in SubSteps)
-                    {
-                        step?.OnEnter(ctx);
-                    }
-                    break;
-            }
+            entered = new bool[SubSteps.Count]; completed = new bool[SubSteps.Count]; index = 0; done = SubSteps.Count == 0;
+            if (Mode == ExecutionMode.Sequential) { if (!done) Enter(0, ctx); }
+            else for (int i = 0; i < SubSteps.Count; i++) Enter(i, ctx);
         }
-
+        private void Enter(int item, TutorialContext ctx)
+        {
+            if (SubSteps[item] == null) { completed[item] = true; return; }
+            entered[item] = true;
+            SubSteps[item].OnEnter(ctx);
+        }
+        private void Exit(int item, TutorialContext ctx)
+        {
+            if (entered == null || !entered[item]) return;
+            entered[item] = false;
+            SubSteps[item]?.OnExit(ctx);
+        }
         public override void OnUpdate(TutorialContext ctx)
         {
-            if (_isCompleted) return;
-
-            switch (Mode)
+            if (done) return;
+            int first = Mode == ExecutionMode.Sequential ? index : 0;
+            int end = Mode == ExecutionMode.Sequential ? Math.Min(index + 1, SubSteps.Count) : SubSteps.Count;
+            for (int i = first; i < end; i++)
             {
-                case ExecutionMode.Sequential:
-                    UpdateSequential(ctx);
-                    break;
-
-                case ExecutionMode.Parallel:
-                    UpdateParallel(ctx);
-                    break;
-
-                case ExecutionMode.Any:
-                    UpdateAny(ctx);
-                    break;
+                if (completed[i]) continue;
+                var step = SubSteps[i]; step?.OnUpdate(ctx);
+                if (!string.IsNullOrEmpty(ctx.Failure) || ctx.CancelRequested || ctx.StepSkipRequested) return;
+                if (step != null && !step.IsCompleted(ctx)) continue;
+                Exit(i, ctx); completed[i] = true;
+                if (Mode == ExecutionMode.Any) { done = true; OnExit(ctx); return; }
             }
+            if (Mode == ExecutionMode.Sequential && completed[index])
+            {
+                index++;
+                if (index < SubSteps.Count) Enter(index, ctx); else done = true;
+            }
+            else if (Mode != ExecutionMode.Sequential) done = completed.All(value => value);
         }
-
-        private void UpdateSequential(TutorialContext ctx)
-        {
-            if (_currentSubStepIndex >= SubSteps.Count)
-            {
-                _isCompleted = true;
-                return;
-            }
-
-            var currentStep = SubSteps[_currentSubStepIndex];
-            if (currentStep == null)
-            {
-                AdvanceToNextSubStep(ctx);
-                return;
-            }
-
-            // 更新当前子步骤
-            currentStep.OnUpdate(ctx);
-
-            // 检查完成
-            if (currentStep.IsCompleted(ctx))
-            {
-                currentStep.OnExit(ctx);
-                AdvanceToNextSubStep(ctx);
-            }
-        }
-
-        private void AdvanceToNextSubStep(TutorialContext ctx)
-        {
-            _currentSubStepIndex++;
-
-            if (_currentSubStepIndex >= SubSteps.Count)
-            {
-                _isCompleted = true;
-            }
-            else
-            {
-                SubSteps[_currentSubStepIndex]?.OnEnter(ctx);
-            }
-        }
-
-        private void UpdateParallel(TutorialContext ctx)
-        {
-            bool allCompleted = true;
-
-            for (int i = 0; i < SubSteps.Count; i++)
-            {
-                if (_subStepCompleted[i]) continue;
-
-                var step = SubSteps[i];
-                if (step == null)
-                {
-                    _subStepCompleted[i] = true;
-                    continue;
-                }
-
-                step.OnUpdate(ctx);
-
-                if (step.IsCompleted(ctx))
-                {
-                    step.OnExit(ctx);
-                    _subStepCompleted[i] = true;
-                }
-                else
-                {
-                    allCompleted = false;
-                }
-            }
-
-            _isCompleted = allCompleted;
-        }
-
-        private void UpdateAny(TutorialContext ctx)
-        {
-            for (int i = 0; i < SubSteps.Count; i++)
-            {
-                var step = SubSteps[i];
-                if (step == null) continue;
-
-                step.OnUpdate(ctx);
-
-                if (step.IsCompleted(ctx))
-                {
-                    // 任一完成即可
-                    _isCompleted = true;
-
-                    // 退出所有子步骤
-                    foreach (var s in SubSteps)
-                    {
-                        s?.OnExit(ctx);
-                    }
-                    return;
-                }
-            }
-        }
-
         public override void OnExit(TutorialContext ctx)
         {
-            // 确保所有子步骤都已退出
-            switch (Mode)
-            {
-                case ExecutionMode.Sequential:
-                    // 当前步骤已在循环中退出
-                    break;
-
-                case ExecutionMode.Parallel:
-                case ExecutionMode.Any:
-                    // 已在 UpdateAny 中退出
-                    break;
-            }
+            if (entered == null) return;
+            Exception failure = null;
+            for (int i = 0; i < entered.Length; i++)
+                try { Exit(i, ctx); } catch (Exception exception) { failure = failure ?? exception; }
+            if (failure != null) throw failure;
         }
-
-        public override bool IsCompleted(TutorialContext ctx)
-        {
-            return _isCompleted;
-        }
-
+        public override bool IsCompleted(TutorialContext ctx) => done;
         public override void OnSkip(TutorialContext ctx)
         {
-            // 跳过所有子步骤
-            foreach (var step in SubSteps)
-            {
-                step?.OnSkip(ctx);
-            }
-            _isCompleted = true;
+            if (entered == null) return;
+            for (int i = 0; i < entered.Length; i++) if (entered[i]) SubSteps[i]?.OnSkip(ctx);
         }
-
-        public override string GetDisplayText()
-        {
-            return !string.IsNullOrEmpty(Description)
-                ? Description
-                : $"{Mode} ({SubSteps.Count} steps)";
-        }
-
+        public override string GetDisplayText() => string.IsNullOrEmpty(Description) ? Mode + " (" + SubSteps.Count + " steps)" : Description;
         public override bool Validate(out string error)
         {
-            if (SubSteps == null || SubSteps.Count == 0)
-            {
-                error = "At least one sub-step is required";
-                return false;
-            }
-
-            for (int i = 0; i < SubSteps.Count; i++)
-            {
-                var step = SubSteps[i];
-                if (step == null)
-                {
-                    error = $"Sub-step {i} is null";
-                    return false;
-                }
-
-                if (!step.Validate(out string subError))
-                {
-                    error = $"Sub-step {i}: {subError}";
-                    return false;
-                }
-            }
-
             error = null;
-            return true;
+            if (SubSteps == null || SubSteps.Count == 0) error = "At least one sub-step is required.";
+            else if (Mode != ExecutionMode.Sequential && SubSteps.Count(step => step != null && step.OwnsBlockingPresentation) > 1)
+                error = "Parallel steps may have only one blocking presenter. Put corner coaching on the Focus step.";
+            else for (int i = 0; i < SubSteps.Count; i++)
+            {
+                if (SubSteps[i] == null) { error = "A sub-step is null."; break; }
+                if (!SubSteps[i].Validate(out var problem)) { error = "Sub-step " + i + ": " + problem; break; }
+            }
+            return error == null;
         }
     }
 }

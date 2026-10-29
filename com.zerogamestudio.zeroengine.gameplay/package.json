@@ -1,14 +1,26 @@
 {
     "name": "com.zerogamestudio.zeroengine.gameplay",
-    "version": "2.0.0",
+    "version": "2.1.0",
     "displayName": "ZeroEngine.Gameplay",
     "description": "Gameplay mechanics for ZeroEngine. Includes Interaction System, Tutorial System (sequences, steps), and Command Pattern (undo/redo).",
     "unity": "2022.3",
     "unityRelease": "0f1",
     "dependencies": {
         "com.zerogamestudio.zeroengine.core": "2.0.0",
-        "com.zerogamestudio.zeroengine.persistence": "2.0.0"
+        "com.zerogamestudio.zeroengine.persistence": "2.0.0",
+        "com.unity.ugui": "1.0.0",
+        "com.unity.inputsystem": "1.7.0",
+        "com.unity.textmeshpro": "3.0.6",
+        "com.unity.modules.video": "1.0.0",
+        "com.unity.modules.director": "1.0.0"
     },
     "keywords": ["zeroengine", "interaction", "tutorial", "command"],
-    "author": { "name": "ZeroGameStudio" }
+    "author": { "name": "ZeroGameStudio" },
+    "samples": [
+        {
+            "displayName": "Guidance Playground",
+            "description": "Standalone targets, gestures and dialogue with no project save or quest dependency.",
+            "path": "Samples~/GuidancePlayground"
+        }
+    ]
 }

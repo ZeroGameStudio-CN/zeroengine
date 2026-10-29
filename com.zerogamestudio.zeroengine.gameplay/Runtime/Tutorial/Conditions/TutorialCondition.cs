@@ -43,8 +43,7 @@ namespace ZeroEngine.Tutorial
             if (string.IsNullOrEmpty(Key)) return true;
 
             // 检查是否首次
-            return TutorialManager.Instance != null &&
-                   !TutorialManager.Instance.HasTriggered(Key);
+            return ctx?.Manager && !ctx.Manager.HasTriggered(Key);
         }
 
         public override string GetDescription()
@@ -59,6 +58,7 @@ namespace ZeroEngine.Tutorial
     [Serializable]
     public class LevelCondition : TutorialCondition
     {
+        public string StateKey = "level";
         [Tooltip("最低等级")]
         public int MinLevel = 1;
 
@@ -69,19 +69,12 @@ namespace ZeroEngine.Tutorial
 
         public override bool IsSatisfied(TutorialContext ctx)
         {
-            // 获取玩家等级 (需要与游戏系统集成)
-            int playerLevel = GetPlayerLevel();
+            if (ctx == null || !ctx.TryReadNumber(StateKey, out var playerLevel)) return false;
 
             if (playerLevel < MinLevel) return false;
             if (MaxLevel > 0 && playerLevel > MaxLevel) return false;
 
             return true;
-        }
-
-        private int GetPlayerLevel()
-        {
-            // TODO: 与 StatSystem 或游戏系统集成
-            return 1;
         }
 
         public override string GetDescription()
@@ -115,8 +108,8 @@ namespace ZeroEngine.Tutorial
                 return true;
             }
 
-            var manager = TutorialManager.Instance;
-            if (manager == null) return true;
+            var manager = ctx?.Manager;
+            if (manager == null) return false;
 
             if (RequireAll)
             {
@@ -222,21 +215,7 @@ namespace ZeroEngine.Tutorial
 
         public override bool IsSatisfied(TutorialContext ctx)
         {
-#if ZEROENGINE_QUEST
-            var questManager = ZeroEngine.Quest.QuestManager.Instance;
-            if (questManager != null)
-            {
-                var state = questManager.GetQuestState(QuestId);
-                return RequiredState switch
-                {
-                    QuestRequiredState.NotStarted => state == ZeroEngine.Quest.QuestState.NotStarted,
-                    QuestRequiredState.InProgress => state == ZeroEngine.Quest.QuestState.Active,
-                    QuestRequiredState.Completed => state == ZeroEngine.Quest.QuestState.Completed,
-                    _ => true
-                };
-            }
-#endif
-            return true;
+            return ctx?.QueryQuestState != null && ctx.QueryQuestState(QuestId) == RequiredState;
         }
 
         public override string GetDescription()
@@ -273,8 +252,10 @@ namespace ZeroEngine.Tutorial
         {
             if (ctx == null || string.IsNullOrEmpty(VariableKey))
             {
-                return true;
+                return false;
             }
+
+            if (!ctx.HasVariable(VariableKey)) return false;
 
             var value = ctx.GetVariable<string>(VariableKey, "");
             return Compare(value, CompareValue);

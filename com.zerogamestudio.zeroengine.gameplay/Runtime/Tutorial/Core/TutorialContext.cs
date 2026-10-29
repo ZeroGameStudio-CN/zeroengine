@@ -1,6 +1,8 @@
 using System;
 using System.Collections.Generic;
 using UnityEngine;
+using ZeroEngine.Tutorial.Guidance;
+using ZeroEngine.Tutorial.Presentation;
 
 namespace ZeroEngine.Tutorial
 {
@@ -28,10 +30,10 @@ namespace ZeroEngine.Tutorial
         public float StepStartTime { get; private set; }
 
         /// <summary>步骤已运行时间</summary>
-        public float StepElapsedTime => Time.time - StepStartTime;
+        public float StepElapsedTime => Now - StepStartTime;
 
         /// <summary>教程已运行时间</summary>
-        public float TotalElapsedTime => Time.time - StartTime;
+        public float TotalElapsedTime => Now - StartTime;
 
         /// <summary>是否已完成</summary>
         public bool IsCompleted { get; private set; }
@@ -41,6 +43,36 @@ namespace ZeroEngine.Tutorial
 
         /// <summary>玩家 GameObject (如果可用)</summary>
         public GameObject Player { get; set; }
+
+        public TutorialFocusContext Focus { get; } = new TutorialFocusContext();
+        public TutorialFocusView FocusView { get; set; }
+        public TutorialPresentationRegistry Presentations { get; } = new TutorialPresentationRegistry();
+        public ITutorialRewardService Rewards { get; set; }
+        public Func<string, object> QueryState { get; set; }
+        public Func<Func<Vector3>, IDisposable> CreateWorldMarker { get; set; }
+        public TutorialConfigSO Config { get; internal set; }
+        public TutorialManager Manager { get; internal set; }
+        public Func<string, QuestRequiredState?> QueryQuestState { get; set; }
+        public bool UseUnscaledTime { get; set; } = true;
+        public string Failure { get; private set; }
+        public bool CancelRequested { get; private set; }
+        public bool StepSkipRequested { get; private set; }
+        private float Now => UseUnscaledTime ? (float)Focus.Realtime() : Time.time;
+        public void Fail(string reason) => Failure = string.IsNullOrWhiteSpace(reason) ? "The tutorial step failed." : reason;
+        public void Cancel() => CancelRequested = true;
+        public void RequestStepSkip() => StepSkipRequested = true;
+        public void Signal(string key, string value = null) => Focus.Signals.Publish(key, value);
+        public bool TryReadNumber(string key, out double value)
+        {
+            object source = QueryState != null ? QueryState(key) : _localVariables.TryGetValue(key, out var local) ? local : null;
+            try
+            {
+                if (source == null) { value = 0; return false; }
+                value = Convert.ToDouble(source, System.Globalization.CultureInfo.InvariantCulture);
+                return !double.IsNaN(value) && !double.IsInfinity(value);
+            }
+            catch (Exception) { value = 0; return false; }
+        }
 
         #endregion
 
@@ -195,11 +227,13 @@ namespace ZeroEngine.Tutorial
             CurrentSequence = sequence;
             CurrentStep = null;
             CurrentStepIndex = -1;
-            StartTime = Time.time;
-            StepStartTime = Time.time;
+            StartTime = Now;
+            StepStartTime = Now;
+            Failure = null; CancelRequested = StepSkipRequested = false;
             IsCompleted = false;
             IsSkipped = false;
             Player = player;
+            if (player) Focus.Actor = player.transform;
 
             _localVariables.Clear();
             _targetCache.Clear();
@@ -209,7 +243,8 @@ namespace ZeroEngine.Tutorial
         {
             CurrentStep = step;
             CurrentStepIndex = index;
-            StepStartTime = Time.time;
+            StepStartTime = Now;
+            Failure = null; CancelRequested = StepSkipRequested = false;
         }
 
         internal void MarkCompleted()
