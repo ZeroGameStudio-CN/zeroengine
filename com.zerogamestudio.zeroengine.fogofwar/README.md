@@ -156,3 +156,19 @@ exact geometric predicate to these candidates. An unsupported/non-finite query
 returns false and clears the output; use the original full query as fallback.
 The index owns only managed math data and has no scene, collider, actor or clock
 references. Rebuild and query it synchronously under its owner's input lifetime.
+
+
+## Synchronous scene object observations (0.2.4)
+
+SceneObjectSnapshot2D observes only components explicitly registered by the caller.
+TryCreate returns false when the qualified synchronous engine bindings are unavailable;
+retain live reads in that case. Track returns an owner-bound handle; TryRead returns
+current alive/active flags and world position. BeginObservation starts each synchronous
+read sequence. Call Invalidate before and after any presentation callback or setter that
+can change later participants, including reentrant reads. Untrack retired handles and
+dispose with the owner. No cached observation survives the next sequence without draining
+structure and GlobalTRS notifications; parent motion, activation, membership and pool
+reparenting remain synchronous. Ordinary motion uses its separate transform stream.
+The API never activates objects, changes transforms, discovers gameplay components,
+reads storage, or chooses visibility. StateReads and SnapshotHits expose actual work;
+no allocation-free or Player performance guarantee is implied by these counts.

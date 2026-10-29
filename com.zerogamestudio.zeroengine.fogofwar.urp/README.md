@@ -31,7 +31,7 @@ The consumer composites them with its own art and explored-memory texture. Andro
 WebGL and Linux are supported code paths; platform-specific runtime performance
 requires measurement on those targets.
 
-Version 0.2.3 pairs with the base fog package 0.2.3. Mask rendering and shader
+Version 0.2.4 pairs with the base fog package 0.2.4. Mask rendering and shader
 passes are unchanged; the base package adds opt-in prepared sight reuse and
 caller-owned ordered spatial segment queries. Logical visibility and rendering
 ownership remain separate.
