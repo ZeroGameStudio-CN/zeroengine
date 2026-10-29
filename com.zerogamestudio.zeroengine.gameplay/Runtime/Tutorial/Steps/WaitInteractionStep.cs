@@ -10,6 +10,7 @@ namespace ZeroEngine.Tutorial
     [Serializable]
     public class WaitInteractionStep : TutorialStep
     {
+        public override bool SupportsAutomaticCompletion => false;
         [Header("Interaction Settings")]
         [Tooltip("目标交互对象 ID")]
         public string InteractableId;
@@ -75,7 +76,7 @@ namespace ZeroEngine.Tutorial
             // 超时检查
             if (Timeout > 0 && ctx.StepElapsedTime >= Timeout)
             {
-                _interactionCompleted = true;
+                ctx.Fail("The required interaction timed out.");
                 return;
             }
 

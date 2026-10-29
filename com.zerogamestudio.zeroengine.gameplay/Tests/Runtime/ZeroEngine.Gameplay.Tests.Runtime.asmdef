@@ -1,0 +1,7 @@
+{
+  "name": "ZeroEngine.Gameplay.Tests.Runtime",
+  "rootNamespace": "ZeroEngine.Tutorial.Tests.Runtime",
+  "references": ["ZeroEngine.Gameplay", "Unity.InputSystem", "UnityEngine.UI", "Unity.TextMeshPro"],
+  "optionalUnityReferences": ["TestAssemblies"],
+  "autoReferenced": false
+}
