@@ -22,6 +22,13 @@ namespace ZeroEngine.FogOfWar.Unity
             { Alive = alive; ActiveSelf = activeSelf; ActiveInHierarchy = active; Position = position; }
         }
 
+        public readonly struct ActivationState
+        {
+            public readonly bool Alive, ActiveSelf, ActiveInHierarchy;
+            internal ActivationState(State value)
+            { Alive = value.Alive; ActiveSelf = value.ActiveSelf; ActiveInHierarchy = value.ActiveInHierarchy; }
+        }
+
         public sealed class Target
         {
             internal SceneObjectSnapshot2D Owner;
@@ -46,16 +53,18 @@ namespace ZeroEngine.FogOfWar.Unity
         private readonly Action<EntityId> destroyed;
         private bool synchronized, disposed;
         public bool IsActive => !disposed;
+        public bool TracksMotion => !disposed && dispatcher != null;
         public string Failure { get; private set; }
         public int Count => targets.Count;
         public long StateReads { get; private set; }
         public long SnapshotHits { get; private set; }
         public long Synchronizations { get; private set; }
 
-        private SceneObjectSnapshot2D(NativeVisibilityChanges structure)
+        private SceneObjectSnapshot2D(NativeVisibilityChanges structure, bool trackMotion)
         {
             this.structure = structure;
             changed = Changed; destroyed = Destroyed;
+            if (!trackMotion) return;
             var type = typeof(Object).Assembly.GetType("UnityEngine.ObjectDispatcher", true);
             var methods = type.GetMethods(BindingFlags.Public | BindingFlags.Instance);
             MethodInfo enable = null;
@@ -81,11 +90,18 @@ namespace ZeroEngine.FogOfWar.Unity
             catch { ((IDisposable)dispatcher).Dispose(); throw; }
         }
 
-        public static bool TryCreate(out SceneObjectSnapshot2D result, out string reason)
+        public static bool TryCreate(out SceneObjectSnapshot2D result, out string reason) =>
+            TryCreate(true, out result, out reason);
+
+        /// <summary>Observe activation and hierarchy without a global motion queue. TryRead still returns live positions.</summary>
+        public static bool TryCreateActivation(out SceneObjectSnapshot2D result, out string reason) =>
+            TryCreate(false, out result, out reason);
+
+        private static bool TryCreate(bool trackMotion, out SceneObjectSnapshot2D result, out string reason)
         {
             result = null;
             if (!NativeVisibilityChanges.TryCreateStructure(out var structure, out reason)) return false;
-            try { result = new SceneObjectSnapshot2D(structure); return true; }
+            try { result = new SceneObjectSnapshot2D(structure, trackMotion); return true; }
             catch (Exception error)
             { structure.Dispose(); reason = (error.InnerException ?? error).Message; return false; }
         }
@@ -121,7 +137,17 @@ namespace ZeroEngine.FogOfWar.Unity
             state = default;
             if (disposed || target == null || !ReferenceEquals(target.Owner, this) || !Synchronize()) return false;
             state = target.Value;
+            if (dispatcher == null && state.Alive)
+            { state = new State(state.Alive, state.ActiveSelf, state.ActiveInHierarchy, target.Transform.position); StateReads++; }
             SnapshotHits++;
+            return true;
+        }
+
+        public bool TryReadActivation(Target target, out ActivationState state)
+        {
+            state = default;
+            if (disposed || target == null || !ReferenceEquals(target.Owner, this) || !Synchronize()) return false;
+            state = new ActivationState(target.Value); SnapshotHits++;
             return true;
         }
 
@@ -131,7 +157,7 @@ namespace ZeroEngine.FogOfWar.Unity
             try
             {
                 structure.Drain(changed, destroyed);
-                foreach (var type in transformTypes)
+                if (dispatcher != null) foreach (var type in transformTypes)
                 {
                     readArguments[0] = type;
                     var moved = (Component[])readTransforms.Invoke(dispatcher, readArguments);
@@ -182,7 +208,7 @@ namespace ZeroEngine.FogOfWar.Unity
                 }
                 target.HierarchyDirty = false;
             }
-            target.Value = new State(true, target.Node.activeSelf, target.Node.activeInHierarchy, target.Transform.position);
+            target.Value = new State(true, target.Node.activeSelf, target.Node.activeInHierarchy, dispatcher != null ? target.Transform.position : default);
         }
 
         private void Unlink(Target target)
@@ -203,7 +229,7 @@ namespace ZeroEngine.FogOfWar.Unity
                 try { disableTransforms?.Invoke(dispatcher, transformTypesArguments); }
                 finally
                 {
-                    ((IDisposable)dispatcher).Dispose();
+                    ((IDisposable)dispatcher)?.Dispose();
                     foreach (var target in targets) target.Owner = null;
                     targets.Clear(); dirty.Clear(); descendants.Clear(); transforms.Clear();
                 }

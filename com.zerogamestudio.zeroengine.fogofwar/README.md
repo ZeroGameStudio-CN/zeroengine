@@ -158,7 +158,7 @@ The index owns only managed math data and has no scene, collider, actor or clock
 references. Rebuild and query it synchronously under its owner's input lifetime.
 
 
-## Synchronous scene object observations (0.2.4)
+## Synchronous scene object observations (0.2.5)
 
 SceneObjectSnapshot2D observes only components explicitly registered by the caller.
 TryCreate returns false when the qualified synchronous engine bindings are unavailable;
@@ -172,3 +172,7 @@ reparenting remain synchronous. Ordinary motion uses its separate transform stre
 The API never activates objects, changes transforms, discovers gameplay components,
 reads storage, or chooses visibility. StateReads and SnapshotHits expose actual work;
 no allocation-free or Player performance guarantee is implied by these counts.
+
+### Activation without global motion tracking
+
+For activation and hierarchy state, use `SceneObjectSnapshot2D.TryCreateActivation` and `TryReadActivation`. It subscribes only to structural changes and does not create a global motion queue. Continue to read moving positions live; `TryRead` from this factory also returns a live position. Begin each synchronous read sequence with `BeginObservation`, and invalidate before and after callbacks that can mutate observed state. Unsupported engines return false so callers can retain their live path. `TracksMotion` distinguishes this mode from the existing full observation factory.

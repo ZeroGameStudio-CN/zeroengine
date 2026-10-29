@@ -85,6 +85,53 @@ namespace ZeroEngine.FogOfWar.Tests
             Match(two, second); Match(one, first);
         }
 
+        [TestCase(false)]
+        [TestCase(true)]
+        public void ActivationOnly_PreservesHierarchyCallbacksLifetimeAndLivePose(bool rect)
+        {
+            snapshot.Dispose();
+            Assert.That(SceneObjectSnapshot2D.TryCreateActivation(out snapshot, out string reason), Is.True, reason);
+            Assert.That(snapshot.TracksMotion, Is.False);
+            var parent = Item(); var other = Item(); var item = Item(parent.transform, rect);
+            var target = snapshot.Track(item);
+            foreach (Action mutate in new Action[] {
+                () => item.transform.position += Vector3.one,
+                () => parent.transform.localScale = new Vector3(2, 3, 1),
+                () => parent.gameObject.SetActive(false),
+                () => item.transform.SetParent(other.transform, true),
+                () => item.gameObject.SetActive(false),
+                () => item.gameObject.SetActive(true) })
+            {
+                mutate(); snapshot.Invalidate(); Match(target, item);
+                Assert.That(snapshot.TryReadActivation(target, out var flags), Is.True);
+                Assert.That(flags.ActiveSelf, Is.EqualTo(item.gameObject.activeSelf));
+                Assert.That(flags.ActiveInHierarchy, Is.EqualTo(item.gameObject.activeInHierarchy));
+            }
+            Object.DestroyImmediate(item); snapshot.Invalidate();
+            Assert.That(snapshot.TryReadActivation(target, out var removed), Is.True);
+            Assert.That(removed.Alive, Is.False);
+            snapshot.Dispose(); Assert.That(snapshot.TryReadActivation(target, out _), Is.False);
+        }
+
+        [Test]
+        public void ActivationOnly_OrdinaryMotionDoesNotRebuildActivationState()
+        {
+            snapshot.Dispose();
+            Assert.That(SceneObjectSnapshot2D.TryCreateActivation(out snapshot, out string reason), Is.True, reason);
+            var parent = Item(); var item = Item(parent.transform); var target = snapshot.Track(item);
+            snapshot.BeginObservation(); Assert.That(snapshot.TryReadActivation(target, out _), Is.True);
+            long reads = snapshot.StateReads;
+            for (int i = 0; i < 100; i++)
+            {
+                parent.transform.position += Vector3.one;
+                item.transform.position += Vector3.right;
+                snapshot.BeginObservation(); Assert.That(snapshot.TryReadActivation(target, out var state), Is.True);
+                Assert.That(state.ActiveInHierarchy, Is.True);
+            }
+            Assert.That(snapshot.StateReads, Is.EqualTo(reads));
+            Match(target, item); // A full read from this mode still returns the current pose.
+        }
+
         [Test]
         public void UnchangedTargetsReuseStateAndUntrackedDisposedHandlesFailClosed()
         {

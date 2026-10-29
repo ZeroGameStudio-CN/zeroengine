@@ -1,6 +1,6 @@
 {
   "name": "com.zerogamestudio.zeroengine.fogofwar",
-  "version": "0.2.4",
+  "version": "0.2.5",
   "displayName": "ZeroEngine Fog Of War",
   "description": "Caller-driven XY sight, exploration memory and presentation visibility; engine-free registration core.",
   "unity": "6000.6",
