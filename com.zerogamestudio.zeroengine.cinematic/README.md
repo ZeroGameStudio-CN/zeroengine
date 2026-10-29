@@ -69,3 +69,10 @@ Run the package EditMode fixtures through Unity Test Runner or Unity MCP:
 - `ZeroEngine.Cinematic.Tests.CinematicValidationKernelTests`
 
 For MCP-based validation, confirm the selected Unity instance is the intended ZeroEngine editor and that each run reports `total > 0` with `failed=0`.
+
+
+## Shared presentation timing
+
+`CinematicPerformanceTimingPattern` describes ordered contacts, typed actor/audio cues and light pulse envelopes independently of gameplay results. `Validate()` rejects invalid duration, ordering, cue identities and pulse bounds; overlapping light pulses use the strongest envelope value. Consumers retain their rule authority and apply playback speed externally.
+
+The serialized fields and numeric cue channels are stable for native Unity author assets. Product-specific rendering, accessibility settings, actor-light adapters and battle outcomes remain in consumer projects.
