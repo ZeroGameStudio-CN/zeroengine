@@ -114,6 +114,13 @@ The optional Dashboard exposes the package-owned typed installer action as a con
 服务端问题应修服务；确认客户端兼容问题后再修反馈 SDK，随后用原失败环境回归。
 Dashboard 中的报错说明只提供排查信息，不改变上传行为。
 
+接入新增诊断日志的客户端会在同一条 `[FeedbackUpload] failed` 和原有 `feedback_upload_failure`
+事件中记录时间、传输结果、可提取的 curl 编号及 Unity / 应用 / 平台版本。Windows 还记录系统 API
+报告的数字版本。`reason` 可出现 `certificate_validity_error`、`certificate_hostname_mismatch`、
+`certificate_trust_failed`、`tls_handshake_failed`，无法细分时仍为 `certificate_tls`。
+`curl_error=0` 表示未提取到编号。上述内容都是客户端报告的线索，不代表已验证服务器证书的具体问题。
+新日志仍不保存完整 URL、错误原文、证书或玩家路径；旧包无法补采，也不能保证下一次一定定位根因。
+
 ### 完整短码对照
 
 | 报错码 | 含义 | 建议处理 |

@@ -31,6 +31,14 @@ HTTP 4xx/5xx 保留实际状态，例如 `F403`、`F413`、`F429`、`F503`。
 完整码表、F203 排查步骤和重试规则见 [玩家反馈手册：反馈报错码与排查](../com.zerogamestudio.zeroengine.feedback/README.md#反馈报错码与排查)；安装 Feedback 包后也可从 Dashboard「玩家反馈」的文档入口打开。
 正式版也记录本地入队和 HTTP 确认节点，用提交编号区分“仍未送达”和“服务器收到但界面未提示”。
 
+上传失败日志和原有 `feedback_upload_failure` 事件额外记录 `diagnostic_schema`、`observed_utc`、
+`transport_result`、`curl_error`、`unity_version`、`app_version`、`platform`、`os_version`。
+Windows 的 `os_version` 是系统 API 报告的数字版本，可能受兼容模式影响；其他平台不采集此字段的实际版本。
+`curl_error=0` 表示传输错误文本中没有可提取的有效编号，并不表示没有底层错误。
+证书错误的 `reason` 按客户端返回文本细分为有效期、域名不匹配、信任校验、握手或通用 TLS 提示，
+这些提示不等于已核实根因。完整错误文本、URL、证书内容和本机路径均不写入该日志或事件。
+这些新增字段仅在升级后的客户端产生；旧包历史现场无法补采，Unity 仅返回通用 TLS 错误时仍需进一步调查。
+
 ## 特性
 
 - **零代码初始化** - `[RuntimeInitializeOnLoadMethod]` 自动启动

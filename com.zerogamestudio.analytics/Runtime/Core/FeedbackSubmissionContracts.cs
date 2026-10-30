@@ -207,7 +207,19 @@ namespace ZGS.Analytics
         {
             string code = FromTransport(result, status, error);
             if (code == Timeout) return "timeout";
-            if (code == Certificate) return "certificate_tls";
+            if (code == Certificate)
+            {
+                // Hints reported by the transport, not an independently verified certificate diagnosis.
+                if (Contains(error, "certificate has expired") || Contains(error, "certificate expired") ||
+                    Contains(error, "not yet valid")) return "certificate_validity_error";
+                if (Contains(error, "hostname mismatch") || Contains(error, "host name mismatch") ||
+                    Contains(error, "certificate does not match")) return "certificate_hostname_mismatch";
+                if (Contains(error, "self signed certificate") || Contains(error, "self-signed certificate") ||
+                    Contains(error, "local issuer certificate") || Contains(error, "certificate verify failed") ||
+                    Contains(error, "ca certificate error")) return "certificate_trust_failed";
+                if (Contains(error, "handshake") || Contains(error, "ssl connect error")) return "tls_handshake_failed";
+                return "certificate_tls";
+            }
             if (status == 401) return "server_unauthorized";
             if (status == 403) return "server_forbidden";
             if (status == 404) return "server_endpoint_missing";
@@ -223,6 +235,37 @@ namespace ZGS.Analytics
                 if (Contains(error, "connect")) return "connection_failed";
             }
             return result.ToString();
+        }
+
+        internal static int TransportCurlErrorCode(string error)
+        {
+            // Never retain or print the raw error: it can contain URLs, credentials and player paths.
+            var match = System.Text.RegularExpressions.Regex.Match(error ?? string.Empty,
+                @"\bcurl error\s*:?\s*(\d{1,3})(?!\d)",
+                System.Text.RegularExpressions.RegexOptions.IgnoreCase |
+                System.Text.RegularExpressions.RegexOptions.CultureInvariant);
+            return match.Success && int.TryParse(match.Groups[1].Value, out int code) ? code : 0;
+        }
+
+        internal static Dictionary<string, object> FailureEnvironment(UnityWebRequest.Result? result, int curlErrorCode)
+        {
+            string osVersion = "not_collected";
+            if (Application.platform == RuntimePlatform.WindowsPlayer || Application.platform == RuntimePlatform.WindowsEditor)
+            {
+                try { osVersion = Environment.OSVersion.Version.ToString(); }
+                catch (PlatformNotSupportedException) { osVersion = "unavailable"; }
+            }
+            return new Dictionary<string, object>
+            {
+                ["diagnostic_schema"] = 1,
+                ["observed_utc"] = DateTime.UtcNow.ToString("O", System.Globalization.CultureInfo.InvariantCulture),
+                ["transport_result"] = result.HasValue ? SafeDiagnosticId(result.Value.ToString()) : "not_available",
+                ["curl_error"] = curlErrorCode > 0 && curlErrorCode <= 999 ? curlErrorCode : 0,
+                ["unity_version"] = SafeDiagnosticId(Application.unityVersion),
+                ["app_version"] = SafeDiagnosticId(Application.version?.Replace(' ', '_')),
+                ["platform"] = Application.platform.ToString(),
+                ["os_version"] = osVersion
+            };
         }
 
         internal static string SafeDiagnosticId(string value)

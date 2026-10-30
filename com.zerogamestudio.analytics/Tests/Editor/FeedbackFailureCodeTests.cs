@@ -55,5 +55,50 @@ namespace ZGS.Analytics.Tests.Editor
                 FeedbackFailureCodes.TransportReason(UnityWebRequest.Result.ProtocolError, 403, "Forbidden"));
         }
 
+        [TestCase("SSL certificate has expired", "certificate_validity_error")]
+        [TestCase("SSL certificate is not yet valid", "certificate_validity_error")]
+        [TestCase("TLS certificate hostname mismatch", "certificate_hostname_mismatch")]
+        [TestCase("SSL CA certificate error", "certificate_trust_failed")]
+        [TestCase("SSL certificate verify failed", "certificate_trust_failed")]
+        [TestCase("TLS handshake failed", "tls_handshake_failed")]
+        [TestCase("SSL connect error", "tls_handshake_failed")]
+        [TestCase("SSL error", "certificate_tls")]
+        public void CertificateReason_PreservesOnlyAnAllowlistedTransportHint(string error, string expected)
+        {
+            const string privateSuffix = " https://alice:password@private.invalid/player?token=secret\r\ninjected=value";
+            Assert.AreEqual("F203", FeedbackFailureCodes.FromTransport(UnityWebRequest.Result.ConnectionError, 0, error + privateSuffix));
+            Assert.AreEqual(expected, FeedbackFailureCodes.TransportReason(UnityWebRequest.Result.ConnectionError, 0, error + privateSuffix));
+        }
+
+        [TestCase("Curl error 60: SSL CA certificate error https://alice:password@private.invalid", 60)]
+        [TestCase("curl error: 35 TLS handshake failed", 35)]
+        [TestCase("SSL CA certificate error", 0)]
+        [TestCase("Curl error 1234", 0)]
+        [TestCase(null, 0)]
+        public void NativeError_ExtractsOnlyBoundedCurlNumber(string error, int expected)
+        {
+            Assert.AreEqual(expected, FeedbackFailureCodes.TransportCurlErrorCode(error));
+        }
+
+        [Test]
+        public void FailureEnvironment_IsBoundedAndContainsNoRawTransportInput()
+        {
+            var fields = FeedbackFailureCodes.FailureEnvironment(UnityWebRequest.Result.ConnectionError, 60);
+            Assert.AreEqual(8, fields.Count);
+            Assert.AreEqual(1, fields["diagnostic_schema"]);
+            Assert.AreEqual("ConnectionError", fields["transport_result"]);
+            Assert.AreEqual(60, fields["curl_error"]);
+            Assert.IsTrue(System.DateTimeOffset.TryParse((string)fields["observed_utc"], out _));
+            Assert.AreEqual(UnityEngine.Application.platform.ToString(), fields["platform"]);
+            Assert.AreEqual(0, FeedbackFailureCodes.FailureEnvironment(null, 1000)["curl_error"]);
+            Assert.AreEqual("not_available", FeedbackFailureCodes.FailureEnvironment(null, -1)["transport_result"]);
+            foreach (object value in fields.Values)
+            {
+                StringAssert.DoesNotContain("://", value.ToString());
+                StringAssert.DoesNotContain("\r", value.ToString());
+                StringAssert.DoesNotContain("\n", value.ToString());
+            }
+        }
+
     }
 }

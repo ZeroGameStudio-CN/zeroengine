@@ -472,7 +472,9 @@ namespace ZGS.Analytics
                         reason,
                         request.responseCode,
                         requestId,
-                        attempt);
+                        attempt,
+                        request.result,
+                        FeedbackFailureCodes.TransportCurlErrorCode(request.error));
                     onComplete?.Invoke(new FeedbackUploadAttempt(
                         false,
                         failureCode,
@@ -906,7 +908,9 @@ namespace ZGS.Analytics
             string reason,
             long httpStatusCode = 0,
             string requestId = null,
-            int attempt = 0)
+            int attempt = 0,
+            UnityWebRequest.Result? transportResult = null,
+            int curlErrorCode = 0)
         {
             var failure = new FeedbackUploadFailure(
                 submissionId,
@@ -916,8 +920,9 @@ namespace ZGS.Analytics
                 reason,
                 attempt);
             // Always available in release Players; never log URLs, credentials, paths, bodies or player input.
-            Debug.LogWarning($"[FeedbackUpload] failed code={failure.FailureCode} retryable={failure.Retryable} submission={FeedbackFailureCodes.SafeDiagnosticId(submissionId)} http={failure.HttpStatusCode} request={failure.RequestId} reason={failure.Reason} attempt={failure.Attempt}");
-            LogFailureDiagnostic(failure);
+            var diagnostics = FeedbackFailureCodes.FailureEnvironment(transportResult, curlErrorCode);
+            Debug.LogWarning($"[FeedbackUpload] failed code={failure.FailureCode} retryable={failure.Retryable} submission={FeedbackFailureCodes.SafeDiagnosticId(submissionId)} http={failure.HttpStatusCode} request={failure.RequestId} reason={failure.Reason} attempt={failure.Attempt} diagnostic_schema={diagnostics["diagnostic_schema"]} observed_utc={diagnostics["observed_utc"]} transport_result={diagnostics["transport_result"]} curl_error={diagnostics["curl_error"]} unity_version={diagnostics["unity_version"]} app_version={diagnostics["app_version"]} platform={diagnostics["platform"]} os_version={diagnostics["os_version"]}");
+            LogFailureDiagnostic(failure, diagnostics);
             if (string.IsNullOrEmpty(submissionId))
                 return;
             Action<FeedbackUploadFailure> handlers = QueuedSubmissionFailed;
@@ -933,7 +938,7 @@ namespace ZGS.Analytics
             }
         }
 
-        private static void LogFailureDiagnostic(FeedbackUploadFailure failure)
+        private static void LogFailureDiagnostic(FeedbackUploadFailure failure, Dictionary<string, object> diagnostics)
         {
             if (string.IsNullOrEmpty(failure.SubmissionId))
                 return;
@@ -946,6 +951,8 @@ namespace ZGS.Analytics
                 ["attempt"] = failure.Attempt,
                 ["reason"] = failure.Reason
             };
+            foreach (var diagnostic in diagnostics)
+                properties[diagnostic.Key] = diagnostic.Value;
 
             if (failure.HttpStatusCode > 0)
                 properties["http_status"] = failure.HttpStatusCode;
