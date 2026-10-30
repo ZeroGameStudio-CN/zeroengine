@@ -1,0 +1,19 @@
+{
+  "name": "ZeroEngine.Render.Tests.Editor",
+  "rootNamespace": "ZeroEngine.Render.Tests.Editor",
+  "references": [
+    "ZeroEngine.Render"
+  ],
+  "includePlatforms": [
+    "Editor"
+  ],
+  "overrideReferences": false,
+  "autoReferenced": false,
+  "defineConstraints": [
+    "UNITY_INCLUDE_TESTS"
+  ],
+  "optionalUnityReferences": [
+    "TestAssemblies"
+  ],
+  "noEngineReferences": false
+}

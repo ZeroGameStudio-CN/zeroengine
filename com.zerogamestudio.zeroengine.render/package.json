@@ -1,0 +1,17 @@
+{
+  "name": "com.zerogamestudio.zeroengine.render",
+  "version": "0.3.0",
+  "displayName": "ZeroEngine Render",
+  "description": "Caller-clocked pose snapshots, composited body visuals and portable shading primitives.",
+  "unity": "2022.3",
+  "author": {
+    "name": "ZeroGameStudio",
+    "url": "https://github.com/ZeroGameStudio-CN"
+  },
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/ZeroGameStudio-CN/zeroengine.git",
+    "directory": "com.zerogamestudio.zeroengine.render"
+  }
+}

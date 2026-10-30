@@ -1,0 +1,18 @@
+{
+  "name": "ZeroEngine.Render.Urp.Editor",
+  "rootNamespace": "ZeroEngine.Render.Urp.Editor",
+  "references": [
+    "ZeroEngine.Render.Urp"
+  ],
+  "includePlatforms": [
+    "Editor"
+  ],
+  "excludePlatforms": [],
+  "allowUnsafeCode": false,
+  "overrideReferences": false,
+  "precompiledReferences": [],
+  "autoReferenced": false,
+  "defineConstraints": [],
+  "versionDefines": [],
+  "noEngineReferences": false
+}

@@ -512,3 +512,19 @@ var mods = talentController.GetAllStatModifiers();
 - 初始模块化发布 (从 ZeroEngine v1.17.0 拆分)
 - Equipment System
 - TalentTree System
+
+## Exploration contact and walked-path primitives
+
+`ExplorationTrailBuffer` owns a fixed-capacity position/distance ring (2–4096 points).
+Append rejects nonfinite, tiny or discontinuous segments without changing history.
+Sampling interpolates the actual polyline, clamps to retained endpoints, and can project
+a point onto its closest retained segment, optionally restricted to a local progress range
+to avoid jumping across an older crossing or chasing an overshot sample. Relocation is an explicit `Reset`; this
+package does not move characters, choose party members, detect collisions or pin scenes.
+
+`FootstepDistanceSampler` implements `zero.character.footstep_sample.v1`, adapting POB's
+spatial sampling to a caller-projected Vector2 ground plane. The caller supplies contact
+enablement, spacing (0.05–10 units) and a relocation limit; output reuses the caller's list,
+is bounded to eight contacts and drops overflow rather than replaying a backlog.
+Disabled/nonfinite inputs reset, relocation emits nothing, and reversed travel resets
+residual distance. Animation contacts, actor clocks, sound/FX and physics remain consumers.

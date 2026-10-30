@@ -27,3 +27,16 @@ Presentation coordinators are not thread-safe and must be called serially by the
 ## Version
 
 2.0.0 - Initial modular release (split from ZeroEngine v1.17.0)
+
+## Surface wetness and snow
+
+`SurfaceWeatherEvolution` is `zero.environment.surface_weather.v1`: immutable bounded
+wetness/snow state, six explicit rates, rain/snow intensity, exposure and clock delta.
+Rain wets exposed terrain, snow accumulates, clear weather dries/melts, and rain melting
+can add moisture. Covered regions do not accumulate precipitation; they can still dry
+or melt existing coverage. Invalid inputs preserve state; delta zero freezes it.
+
+This contains no engine clock, material, physics sampler, camera or weather singleton.
+Consumers own region identity, unloaded-time history, thermal/rate policy, serialization
+and whether a surface can carry snow. Camera relocation clears transient particles; it
+never implicitly resets this independent ground state.
