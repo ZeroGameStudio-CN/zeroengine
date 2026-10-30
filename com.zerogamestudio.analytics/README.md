@@ -2,7 +2,7 @@
 
 ZeroGameStudio 游戏分析 SDK，支持自建 ClickHouse 数据平台。
 
-**版本**: 2.1.2
+**版本**: 2.2.0
 **Unity**: 2021.3+
 
 2.0.0 起 Editor 面板使用 `com.zerogamestudio.zeroengine.editor-ui@1.0.0`。通过 Git URL 安装时，消费工程必须把 Analytics 与 editor-ui 直接 pin 到同一 ZeroEngine commit；Unity 2022.3 不会自动解析同仓 sibling package。
@@ -77,6 +77,51 @@ SDK 自动收集以下数据（无需写代码）：
 | 崩溃日志 | 自动捕获 Unity 异常 |
 
 ## API 使用
+
+### 项目诊断自动上报
+
+`AnalyticsService.TryReportDiagnostic` 是各项目复用的诊断入口。项目负责发现异常并生成
+允许上传的 JSON 现场；SDK 不扫描日志、存档、目录或游戏对象。必须在 Unity 主线程调用。
+
+```csharp
+var incidentId = System.Guid.NewGuid().ToString("N");
+var result = AnalyticsService.TryReportDiagnostic(new DiagnosticReport
+{
+    IncidentId = incidentId,
+    Kind = "asset-load",
+    Fingerprint = "asset-load.failed",
+    Revision = 0,
+    SnapshotJson = "{\"schema\":1,\"state\":\"load-failed\"}",
+    Context = new Dictionary<string, object> { ["content_key"] = "enemy-example" }
+});
+```
+
+- `AcceptedLocally` 只表示持久入队，不能显示为服务端收到。调用方检查 `Failure`；失败不能
+  当作成功。项目应保留本地现场作为反馈补证，不能在每帧重复生成故障。
+- 事件名称固定为 `diagnostic_incident`，事件编号为 `diag.<IncidentId>.<Revision>`。
+  资源核对等后续结果用同一个 `IncidentId`、递增 `Revision`，不要覆盖原事件或复用编号发送不同内容。
+- 摘要、`snapshot_data`、UTF-8 字节数和 SHA-256 同处一个事件信封，断网重启后补传原信封。
+  `snapshot_encoding=gzip-base64`；`TryDecodeSnapshot` 有界解压并核对 SHA-256。Analytics 按项目、
+  版本、事件名和会话查询，使用结果中的 `diagnostic_id` 关联各阶段。搜索框只匹配事件名。
+- JSON 现场最大 128 KiB，Context 最多 32 个标量字段，字符串值最大 1024 UTF-8 字节。
+  Context 的键值合计最多 512 UTF-8 字节且不能有控制字符。压缩现场最多 7 KiB，确保普通
+  Analytics 16,000 字符的详情响应可容纳诊断。超限明确拒绝；由项目缩减现场并说明省略内容，
+  SDK 不静默截断 JSON。
+- 诊断事件沿用匿名 user/session 关联，不附加平台账号 identity 列表；整个事件信封最大
+  15,000 UTF-8 字节。Provider 在持久化前拒绝超限信封，避免后台详情静默截断。
+- 每个会话最多接受 16 个诊断事件。相同编号、相同内容在会话内去重；修改内容返回
+  `IdentityConflict`。诊断队列按项目独立保存，最多 32 个待发送事件，不被普通事件队首失败阻塞。
+- 已配置的运行时每 5 秒检查发送队列，网络失败保留事件并指数退避，最长 5 分钟。
+  服务端收到后才移出队列；离线、队列满、未配置及未触发诊断均不能解释为没有故障。
+- 通用字段仅描述观测事实。文件差异、加载失败、引用释放和业务恢复分别记录，不能从一个释放
+  事件自动推断根因。不要自动上传个人信息、完整路径、密钥、存档或未经筛选的日志。
+
+包内 `DiagnosticReporterTests` 使用独立队列；连接拒绝后重载队列，再用本地 HTTP 接收端核对
+补传字节和清队结果，不修改系统网络或正式反馈队列。
+
+调查时用已授权 Analytics 事件详情查询读取 `diagnostic_incident`，筛选项目、版本和会话，
+将响应保存为 JSON 后执行 `python Tools~/diagnostic_snapshot.py response.json --incident <故障编号>`。
+工具不访问网络、不读取凭据；会拒绝截断、哈希不一致和解压超限的现场。
 
 ```csharp
 using ZGS.Analytics;
