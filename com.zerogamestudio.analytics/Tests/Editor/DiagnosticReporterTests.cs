@@ -30,6 +30,7 @@ namespace ZGS.Analytics.Tests.Editor
         {
             AnalyticsService.ResetForTests();
             PlayerPrefs.DeleteKey(key);
+            PlayerPrefs.DeleteKey(key + ".rejected.v1");
             PlayerPrefs.Save();
         }
 
@@ -177,6 +178,64 @@ namespace ZGS.Analytics.Tests.Editor
             Assert.That(receive.IsCompleted, Is.True);
             Assert.That(receive.Result, Is.EqualTo("{\"secret\":\"fixture\",\"body\":" + original + "}"));
             Assert.That(reloaded.Count, Is.Zero);
+            Assert.That(new OfflineQueue(32, key).Count, Is.Zero);
+        }
+
+        [TestCase(400, true), TestCase(409, true), TestCase(413, true), TestCase(415, true), TestCase(422, true)]
+        [TestCase(0, false), TestCase(401, false), TestCase(403, false), TestCase(404, false)]
+        [TestCase(408, false), TestCase(429, false), TestCase(503, false)]
+        public void Delivery_OnlyEventSpecificRejectionsArePermanent(int status, bool permanent)
+            => Assert.That(OfflineQueue.IsPermanentEventFailure(status), Is.EqualTo(permanent));
+
+        [UnityTest, Timeout(30000)]
+        public IEnumerator Delivery_PermanentRejectionPreservesBadRecordAndDeliversNext()
+        {
+            const string bad = "{\"event\":\"bad-fixture\"}", good = "{\"event\":\"good-fixture\"}";
+            Assert.That(queue.Enqueue(bad, true), Is.True);
+            Assert.That(queue.Enqueue(good, true), Is.True);
+            var probe = new TcpListener(IPAddress.Loopback, 0);
+            probe.Start(); int port = ((IPEndPoint)probe.LocalEndpoint).Port; probe.Stop();
+            using var listener = new HttpListener();
+            string prefix = "http://127.0.0.1:" + port + "/";
+            listener.Prefixes.Add(prefix); listener.Start();
+            var bodies = new List<string>();
+            Task receive = Task.Run(async () =>
+            {
+                for (int i = 0; i < 2; i++)
+                {
+                    var request = await listener.GetContextAsync();
+                    using var reader = new StreamReader(request.Request.InputStream, Encoding.UTF8);
+                    bodies.Add(await reader.ReadToEndAsync());
+                    request.Response.StatusCode = i == 0 ? 400 : 200;
+                    request.Response.Close();
+                }
+            });
+            yield return SendInEditMode(queue.FlushCoroutine(prefix + "events", "fixture"));
+            Assert.That(receive.IsCompleted, Is.True);
+            Assert.That(bodies.Count, Is.EqualTo(2));
+            StringAssert.Contains(good, bodies[1]);
+            Assert.That(queue.Count, Is.Zero);
+            var reloaded = new OfflineQueue(32, key);
+            Assert.That(reloaded.Count, Is.Zero);
+            StringAssert.Contains("bad-fixture", reloaded.GetRejectedSnapshot());
+            StringAssert.Contains("\"httpStatus\":400", reloaded.GetRejectedSnapshot());
+            StringAssert.DoesNotContain("good-fixture", reloaded.GetRejectedSnapshot());
+        }
+
+        [Test]
+        public void Quarantine_EscapingOverBudgetStillPreservesRejectionDigest()
+        {
+            const System.Reflection.BindingFlags flags = System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic;
+            // Valid JSON below the raw limit can exceed the quarantine budget after JSON escaping.
+            string json = "{\"event\":\"bad-fixture\",\"payload\":\"" + new string('\\', 65490) + "\"}";
+            Assert.That(Encoding.UTF8.GetByteCount(json), Is.LessThanOrEqualTo(64 * 1024));
+            Assert.That(queue.Enqueue(json, true), Is.True);
+            var items = (IList)typeof(OfflineQueue).GetField("_memoryQueue", flags).GetValue(queue);
+            Assert.That((bool)typeof(OfflineQueue).GetMethod("TryQuarantine", flags).Invoke(queue, new[] { items[0], (object)413L }), Is.True);
+            string rejected = queue.GetRejectedSnapshot();
+            Assert.That(Encoding.UTF8.GetByteCount(rejected), Is.LessThanOrEqualTo(128 * 1024));
+            StringAssert.Contains("\"payloadOmitted\":true", rejected);
+            StringAssert.Contains("\"sha256\":", rejected);
             Assert.That(new OfflineQueue(32, key).Count, Is.Zero);
         }
 
