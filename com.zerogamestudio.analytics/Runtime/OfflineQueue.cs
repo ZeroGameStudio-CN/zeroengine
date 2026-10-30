@@ -1,6 +1,7 @@
 using System;
 using System.Collections;
 using System.Collections.Generic;
+using System.Security.Cryptography;
 using System.Text;
 using UnityEngine;
 using UnityEngine.Networking;
@@ -25,6 +26,8 @@ namespace ZGS.Analytics
         private const float SaveInterval = 5f; // 批量保存间隔（秒）
         private const string DurablePrefix = "D\t";
         private const string BufferedPrefix = "B\t";
+        private const int MaximumRejectedRecords = 8;
+        private const int MaximumRejectedBytes = 128 * 1024;
 
         private readonly List<QueueItem> _memoryQueue = new();
         private readonly string _queueKey;
@@ -201,6 +204,12 @@ namespace ZGS.Analytics
                             SaveToStorageLocked();
                         }
                     }
+                    else if (IsPermanentEventFailure(request.responseCode) && TryQuarantine(item, request.responseCode))
+                    {
+                        _failures = 0;
+                        _notBefore = 0;
+                        AnalyticsLog.LogWarning($"[ZGS.Analytics] Rejected event quarantined (HTTP {request.responseCode}); delivery continues.");
+                    }
                     else
                     {
                         // Server bodies may contain credentials or submitted player data.
@@ -215,6 +224,64 @@ namespace ZGS.Analytics
             }
             finally { _isFlushing = false; }
         }
+
+        // Authentication, routing, throttling and server/network failures may recover without
+        // changing the event. Only event-specific permanent rejections leave the send queue.
+        internal static bool IsPermanentEventFailure(long status) => status is 400 or 409 or 413 or 415 or 422;
+
+        [Serializable] private sealed class RejectedRecord
+        {
+            public long httpStatus;
+            public string sha256, json;
+            public bool payloadOmitted;
+        }
+
+        private bool TryQuarantine(QueueItem item, long status)
+        {
+            lock (_memoryQueue)
+            {
+                int index = _memoryQueue.IndexOf(item);
+                if (index < 0) return true;
+                string storageKey = _queueKey + ".rejected.v1";
+                string previous = PlayerPrefs.GetString(storageKey, "");
+                try
+                {
+                    using var sha = SHA256.Create();
+                    byte[] bytes = Encoding.UTF8.GetBytes(item.Json);
+                    var record = new RejectedRecord
+                    {
+                        httpStatus = status,
+                        sha256 = BitConverter.ToString(sha.ComputeHash(bytes)).Replace("-", "").ToLowerInvariant(),
+                        json = bytes.Length <= MaximumRejectedBytes / 2 ? item.Json : null,
+                        payloadOmitted = bytes.Length > MaximumRejectedBytes / 2
+                    };
+                    var records = new List<string>(previous.Split(new[] { '\n' }, StringSplitOptions.RemoveEmptyEntries));
+                    string serialized = JsonUtility.ToJson(record);
+                    if (Encoding.UTF8.GetByteCount(serialized) > MaximumRejectedBytes)
+                    {
+                        record.json = null; record.payloadOmitted = true;
+                        serialized = JsonUtility.ToJson(record);
+                    }
+                    records.Add(serialized);
+                    while (records.Count > MaximumRejectedRecords || Encoding.UTF8.GetByteCount(string.Join("\n", records)) > MaximumRejectedBytes)
+                        records.RemoveAt(0);
+                    PlayerPrefs.SetString(storageKey, string.Join("\n", records));
+                    _memoryQueue.RemoveAt(index);
+                    if (SaveToStorageLocked()) return true;
+                    _memoryQueue.Insert(index, item);
+                }
+                catch (Exception)
+                {
+                    // Never discard the only copy when quarantine persistence fails.
+                    if (!_memoryQueue.Contains(item)) _memoryQueue.Insert(index, item);
+                }
+                if (string.IsNullOrEmpty(previous)) PlayerPrefs.DeleteKey(storageKey);
+                else PlayerPrefs.SetString(storageKey, previous);
+                return false;
+            }
+        }
+
+        internal string GetRejectedSnapshot() => PlayerPrefs.GetString(_queueKey + ".rejected.v1", "");
 
         private bool TryEvictOldestBufferedLocked()
         {

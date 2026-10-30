@@ -2,7 +2,7 @@
 
 ZeroGameStudio 游戏分析 SDK，支持自建 ClickHouse 数据平台。
 
-**版本**: 2.2.0
+**版本**: 2.2.1
 **Unity**: 2021.3+
 
 2.0.0 起 Editor 面板使用 `com.zerogamestudio.zeroengine.editor-ui@1.0.0`。通过 Git URL 安装时，消费工程必须把 Analytics 与 editor-ui 直接 pin 到同一 ZeroEngine commit；Unity 2022.3 不会自动解析同仓 sibling package。
@@ -121,7 +121,12 @@ var result = AnalyticsService.TryReportDiagnostic(new DiagnosticReport
 - 每个会话最多接受 16 个诊断事件。相同编号、相同内容在会话内去重；修改内容返回
   `IdentityConflict`。诊断队列按项目独立保存，最多 32 个待发送事件，不被普通事件队首失败阻塞。
 - 已配置的运行时每 5 秒检查发送队列，网络失败保留事件并指数退避，最长 5 分钟。
-  服务端收到后才移出队列；离线、队列满、未配置及未触发诊断均不能解释为没有故障。
+  只有 `QueueRejected` 适合用原输入重试；无效输入、超限、编号冲突须修正或保存本地现场，
+  `RateLimited` 是本会话预算耗尽，不能靠循环重试恢复。
+- HTTP 400/409/413/415/422 表示单条事件永久拒收，隔离后继续发送后续事件；网络、鉴权、
+  路由、限流和服务端失败仍保留待发送记录。隔离区为原队列键的 `.rejected.v1`，最多保留
+  最近 8 条、合计 128 KiB；单条正文超过 64 KiB，或转义后超过隔离区上限时，只保留 SHA-256、HTTP 状态和省略标记。
+  正常成功收到才清除待发送记录；离线、队列满、未配置及未触发诊断均不能解释为没有故障。
 - 通用字段仅描述观测事实。文件差异、加载失败、引用释放和业务恢复分别记录，不能从一个释放
   事件自动推断根因。不要自动上传个人信息、完整路径、密钥、存档或未经筛选的日志。
 
@@ -277,6 +282,10 @@ Streamlit Dashboard (可视化)
    - 格式：`- [模块] 修改内容描述`。
 
 ## 更新日志
+
+### v2.2.1
+- OfflineQueue: 单条永久拒收持久隔离，不阻塞后续事件；网络、鉴权、限流与服务端失败保持补传。
+- Diagnostics: 明确调用方重试边界，增加真实 HTTP 拒收后继续发送及隔离重载回归。
 
 ### v1.6.2
 - FeedbackUploadQueue: 新增可靠 `TryEnqueue`、队列成功事件和退避期间新反馈快速唤醒
