@@ -88,3 +88,10 @@ a pushed ZeroEngine commit.
   `com.zerogamestudio.*` dependency that also needs a manifest entry.
 - Do not edit `Library` or cached package contents; change the manifest, then
   let Unity resolve again.
+
+
+## Fishing core
+
+`com.zerogamestudio.zeroengine.fishing` exposes `ZeroEngine.Fishing` without engine-object, sibling-package, input, UI or save dependencies. Hosts retain species/reward selection and presentation. Supply `System.Numerics` positions, corrected mouth contacts and one gameplay delta. Use `FishPerception` and snapshot-based `SchoolSteering` for local interest/avoidance, `FishMotion` for movement, and `BaitEncounter` for landed-bait inspection/nibble gates. `FishFight` is a continuous resistance model; choose one catch/loss authority when combining it with a host QTE.
+
+Validate the standalone core and the real consumer adapter before publication under explicit source authority. Consume the tested Git commit using the standard UPM route above. Temporary local references are verification-only and must be replaced by the published commit before the consumer handoff. POB keeps QTE as the sole outcome authority and uses continuous resistance for presentation; it does not grant an additional catch or loss from `FishFight`.
