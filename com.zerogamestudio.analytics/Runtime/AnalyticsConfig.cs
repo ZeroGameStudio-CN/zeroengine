@@ -14,6 +14,9 @@ namespace ZGS.Analytics
         /// <summary>应用/游戏标识（用于事件与反馈上传路由）</summary>
         public static string AppId { get; set; }
 
+        /// <summary>Opt in only after the receiver supports versioned feedback receipts.</summary>
+        public static bool RequireFeedbackReceipt { get; set; }
+
         /// <summary>认证密钥</summary>
         public static string Secret { get; set; }
 

@@ -2,11 +2,12 @@
 
 Minimal player feedback UI on top of the queue-first ZGS Analytics submission service.
 
-## Confirmed delivery presentation (1.2.0)
+## Confirmed delivery presentation (1.2.1)
 
-Requires Analytics 2.3.0 and the receiver's version-1 feedback receipt protocol.
-Deploy the compatible receiver to both edges before upgrading a game. Existing
-receivers returning only `status: ok` cannot confirm a named submission to this SDK.
+Requires Analytics 2.3.1. Existing receivers returning `status: ok` with the
+uploaded ZIP URL are supported without a server upgrade. Strict version-1 receipt
+validation/querying is optional through `AnalyticsConfig.RequireFeedbackReceipt`;
+enable it only after both receiver edges support that protocol.
 
 ```csharp
 FeedbackPanel.Configure(new FeedbackUiConfiguration

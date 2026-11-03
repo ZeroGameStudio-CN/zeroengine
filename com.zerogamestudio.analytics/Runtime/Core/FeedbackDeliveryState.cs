@@ -213,6 +213,27 @@ namespace ZGS.Analytics
             public string original_sha256;
             public string receipt_id;
             public bool partial;
+            public string url;
+        }
+
+        private static bool TryReadUploadAcknowledgement(string json, PendingUpload pending, out bool partial)
+        {
+            partial = false;
+            try
+            {
+                UploadReceipt response = JsonUtility.FromJson<UploadReceipt>(json);
+                if (response == null) return false;
+                if (response.receipt_version != 0 || AnalyticsConfig.RequireFeedbackReceipt)
+                    return TryReadReceipt(json, pending, out partial);
+                // Existing receivers acknowledge durable acceptance with status + download URL.
+                // An HTTP 200, empty response or intermediary HTML alone is insufficient.
+                if (response.status != "ok" || !Uri.TryCreate(response.url, UriKind.Absolute, out Uri url) ||
+                    (url.Scheme != Uri.UriSchemeHttps && url.Scheme != Uri.UriSchemeHttp) ||
+                    !url.AbsolutePath.EndsWith(".zip", StringComparison.OrdinalIgnoreCase)) return false;
+                partial = response.partial;
+                return true;
+            }
+            catch (ArgumentException) { return false; }
         }
 
         private static bool TryReadReceipt(string json, PendingUpload pending, out bool partial)
@@ -234,7 +255,7 @@ namespace ZGS.Analytics
 
         private static IEnumerator QueryReceipt(PendingUpload pending, Action<bool, bool> completed)
         {
-            if (!AnalyticsConfig.IsUploadConfigured || string.IsNullOrEmpty(pending.submissionId) ||
+            if (!AnalyticsConfig.RequireFeedbackReceipt || !AnalyticsConfig.IsUploadConfigured || string.IsNullOrEmpty(pending.submissionId) ||
                 string.IsNullOrEmpty(pending.fileSha256) || string.IsNullOrEmpty(ProjectIdentity(pending)))
             {
                 completed(false, false);

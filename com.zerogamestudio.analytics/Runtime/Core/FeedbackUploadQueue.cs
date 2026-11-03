@@ -509,7 +509,7 @@ namespace ZGS.Analytics
                 yield return operation;
                 bool success = request.result == UnityWebRequest.Result.Success;
                 bool partial = false;
-                if (success && !string.IsNullOrEmpty(submissionId) && !TryReadReceipt(
+                if (success && !string.IsNullOrEmpty(submissionId) && !TryReadUploadAcknowledgement(
                         request.downloadHandler.text,
                         new PendingUpload { submissionId = submissionId, fileSha256 = fileSha256, project = project },
                         out partial))

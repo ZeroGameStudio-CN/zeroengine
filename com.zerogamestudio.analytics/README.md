@@ -315,10 +315,15 @@ Streamlit Dashboard (可视化)
 ## ZeroEngine Dashboard
 
 安装可选的 `com.zerogamestudio.zeroengine.dashboard` 后，工作台会从本包 schema v2 描述符发现数据分析入口，并通过本包 typed provider 打开窗口；本包不依赖 Dashboard。入口位于 `ZGS > 工作台 > 检查与调试`。
-## Confirmed feedback delivery (2.3.0)
+## Confirmed feedback delivery (2.3.1)
 
-Named feedback submissions require the version-1 receipt protocol from the
-Analytics receiver. Upload success must echo the submission ID, original ZIP
+Existing receivers remain supported by default: their successful JSON response
+must contain `status: ok` and an absolute HTTP(S) ZIP download URL. HTTP success
+or an intermediary HTML page alone is not enough. This mode retries with the
+existing submission identity and does not call the new receipt endpoint.
+
+Set `AnalyticsConfig.RequireFeedbackReceipt = true` only after the receiver
+supports the version-1 receipt protocol. In that mode success must echo the submission ID, original ZIP
 SHA-256, resolved project and canonical receipt ID. HTTP success alone is not
 delivery evidence. A retry first queries `GET /upload/receipt` using the upload
 secret and identity/content headers; a missing or unavailable receipt is unknown,

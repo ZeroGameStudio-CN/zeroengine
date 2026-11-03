@@ -25,6 +25,7 @@ namespace ZGS.Analytics.Tests.Editor
         private string _previousSecret;
         private string _previousUploadSecret;
         private int _uploadCalls;
+        private bool _previousRequireReceipt;
 
         [SetUp]
         public void SetUp()
@@ -36,6 +37,8 @@ namespace ZGS.Analytics.Tests.Editor
             _previousServerUrl = AnalyticsConfig.ServerUrl;
             _previousSecret = AnalyticsConfig.Secret;
             _previousUploadSecret = AnalyticsConfig.UploadSecret;
+            _previousRequireReceipt = AnalyticsConfig.RequireFeedbackReceipt;
+            AnalyticsConfig.RequireFeedbackReceipt = false;
             AnalyticsConfig.ServerUrl = string.Empty;
             AnalyticsConfig.Secret = string.Empty;
             AnalyticsConfig.UploadSecret = string.Empty;
@@ -59,6 +62,7 @@ namespace ZGS.Analytics.Tests.Editor
             AnalyticsConfig.ServerUrl = _previousServerUrl;
             AnalyticsConfig.Secret = _previousSecret;
             AnalyticsConfig.UploadSecret = _previousUploadSecret;
+            AnalyticsConfig.RequireFeedbackReceipt = _previousRequireReceipt;
 
             try
             {
@@ -84,6 +88,35 @@ namespace ZGS.Analytics.Tests.Editor
 
             SetStaticField("_pendingUploads", null);
             Assert.AreEqual(1, FeedbackUploadQueue.PendingCount);
+        }
+
+        [TestCase("{\"status\":\"ok\",\"url\":\"https://feedback.example/feedback.zip\"}", false, true)]
+        [TestCase("{\"status\":\"ok\",\"url\":\"https://feedback.example/feedback.zip\"}", true, false)]
+        [TestCase("{\"status\":\"ok\"}", false, false)]
+        [TestCase("{}", false, false)]
+        [TestCase("<html>proxy</html>", false, false)]
+        [TestCase("{\"receipt_version\":1,\"status\":\"ok\",\"url\":\"https://feedback.example/feedback.zip\"}", false, false)]
+        public void UploadAcknowledgement_LegacyCompatibilityDoesNotAcceptUnprovenResponses(string json, bool strict, bool expected)
+        {
+            AnalyticsConfig.RequireFeedbackReceipt = strict;
+            var method = typeof(FeedbackUploadQueue).GetMethod("TryReadUploadAcknowledgement", BindingFlags.NonPublic | BindingFlags.Static);
+            object[] args = { json, new FeedbackUploadQueue.PendingUpload { submissionId = "1234567890abcdef1234567890abcdef" }, false };
+            Assert.AreEqual(expected, method.Invoke(null, args));
+        }
+
+        [Test]
+        public void LegacyMode_DoesNotQueryUnsupportedReceiptEndpoint()
+        {
+            AnalyticsConfig.RequireFeedbackReceipt = false;
+            AnalyticsConfig.ServerUrl = "http://127.0.0.1:1";
+            AnalyticsConfig.UploadSecret = "synthetic-test-secret";
+            var method = typeof(FeedbackUploadQueue).GetMethod("QueryReceipt", BindingFlags.NonPublic | BindingFlags.Static);
+            bool called = false;
+            var query = (IEnumerator)method.Invoke(null, new object[] { new FeedbackUploadQueue.PendingUpload {
+                    submissionId = "1234567890abcdef1234567890abcdef", fileSha256 = new string('a', 64), project = "TEST" },
+                (Action<bool, bool>)((received, partial) => { called = true; Assert.IsFalse(received); }) });
+            Assert.IsFalse(query.MoveNext(), "Legacy servers must not be probed for the new endpoint.");
+            Assert.IsTrue(called);
         }
 
         [Test]
@@ -565,7 +598,15 @@ namespace ZGS.Analytics.Tests.Editor
 
         [UnityTest]
         public IEnumerator HttpFailureThenRecovery_PreservesQueueAndPublishesActualResponse()
+            => HttpFailureThenRecovery(true);
+
+        [UnityTest]
+        public IEnumerator LegacyHttpFailureThenRecovery_UsesExistingServerWithoutReceiptEndpoint()
+            => HttpFailureThenRecovery(false);
+
+        private IEnumerator HttpFailureThenRecovery(bool strict)
         {
+            AnalyticsConfig.RequireFeedbackReceipt = strict;
             const string id = "0123456789abcdef0123456789abcdef";
             string path = CreateZip("http-recovery.zip");
             string fileHash = Sha256("zip");
@@ -576,7 +617,7 @@ namespace ZGS.Analytics.Tests.Editor
             int port = ((IPEndPoint)listener.LocalEndpoint).Port;
             Task server = Task.Run(() =>
             {
-                for (int attempt = 0; attempt < 3; attempt++)
+                for (int attempt = 0; attempt < (strict ? 3 : 2); attempt++)
                 {
                     using (TcpClient client = listener.AcceptTcpClient())
                     using (NetworkStream stream = client.GetStream())
@@ -590,7 +631,10 @@ namespace ZGS.Analytics.Tests.Editor
                             header.Append((char)value);
                         }
                         var match = System.Text.RegularExpressions.Regex.Match(header.ToString(), @"(?im)^Content-Length:\s*(\d+)");
-                        if (!match.Success && attempt != 1) throw new IOException("Synthetic upload has no content length.");
+                        bool querying = strict && attempt == 1;
+                        if (!header.ToString().StartsWith(querying ? "GET /upload/receipt " : "POST /upload ", StringComparison.Ordinal))
+                            throw new IOException("Unexpected synthetic request path or method.");
+                        if (!match.Success && !querying) throw new IOException("Synthetic upload has no content length.");
                         int remaining = match.Success ? int.Parse(match.Groups[1].Value) : 0;
                         byte[] buffer = new byte[4096];
                         while (remaining > 0)
@@ -600,7 +644,9 @@ namespace ZGS.Analytics.Tests.Editor
                             remaining -= read;
                         }
                         string status = attempt == 0 ? "403 Forbidden" : "200 OK";
-                        string body = attempt == 0 ? "{}" : attempt == 1
+                        string body = attempt == 0 ? "{}" : !strict
+                            ? "{\"status\":\"ok\",\"url\":\"https://feedback.example/feedback.zip\"}"
+                            : attempt == 1
                             ? "{\"receipt_version\":1,\"status\":\"unknown\"}"
                             : "{\"receipt_version\":1,\"status\":\"ok\",\"project\":\"TEST\",\"submission_id\":\"" + id +
                               "\",\"original_sha256\":\"" + fileHash + "\",\"receipt_id\":\"" + receiptId + "\"}";
