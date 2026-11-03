@@ -115,3 +115,53 @@ Footstep style IDs are stable: 0 ripple, 1 splash, 2 dust, 3 spark, 4 leaf,
 expiration stay with the caller; a teleport resets the sampling/emitter origin
 and retires live particles without resetting regional ground state. The generic
 Render package contains no product audio, textures or extracted game assets.
+
+## Automatic scene surface weather
+
+`AutomaticSurfaceWeather` owns one project-level `SurfaceWeatherSceneProfileSO`.
+Initialize the profile with `SceneWeatherLit`, `SceneWeatherTerrain` and
+`Hidden/ZeroEngine/SurfaceWeatherExposure`, then feed `Field.DefaultValue` and
+`Field.SetRegions` from the existing world-weather owner. Disabling/destroying
+the component releases its scope. Ordinary placed, copied, moved and pooled
+objects require no weather component, receiver list or per-instance material edit.
+
+The adapter discovers MeshRenderers and Terrain from resident scenes and the
+persistent scene. Initial/scene-load discovery and bounded periodic hierarchy
+visits register new instances. Materials are borrowed once per shared source;
+textures, UVs, normal maps, keywords, transparency and original material references
+remain with their owners. Native shader families opt in through the hidden
+`_ZeroSceneWeatherReceiver` property and `SceneSurfaceWeather.hlsl`; native hooks
+must gate their weather branch on that per-material value. A consumer with a
+separate appearance overlay can use `SurfaceWeatherMaterialSources.Resolve`.
+
+The supplied Lit and Terrain wrappers adapt the URP 17.6.0 forward/deferred
+surface fragments while retaining upstream vertex, lighting, splat, hole, depth
+and shadow paths. Upstream source attribution/license accompanies these adapters
+in `Runtime/Shaders/SceneWeather/UPSTREAM-LICENSE.md`. Other custom/vegetation
+shader families require one family adapter; unsupported families retain their
+original materials and are listed by `UnsupportedShaders`. Terrain trees/details
+using their own shaders are not claimed as supported by the Terrain surface wrapper.
+
+Exposure is rasterized from the real mesh geometry, including non-readable meshes,
+and a bounded Terrain height proxy. Roof and indoor parts of a combined mesh are
+sampled separately. Visually disabled cutaway renderers remain physical geometry;
+inactive pooled objects and shadow-only actor proxies do not act as roofs. Texture
+cutouts are respected. Transparent Lit glass can still block precipitation.
+The profile can classify known liquid/effect shaders as non-receivers and generated
+nonphysical backdrop materials as non-occluding, once for the project.
+
+Two fixed-size, double-buffered exposure maps support the rain direction and
+vertical snow. Each async result is copied in its completion callback, since a
+readback's data expires after its serviced frame; both are published together.
+There is no per-frame scene-wide search, unbounded material history, synchronous
+per-frame readback or independent weather evolution. Discovery, object counts,
+map resolution (64–1024) and rebuild interval are bounded by the profile. Exposure
+precision depends on the resident geometry extent and configured resolution.
+GPU capability/readback or capacity failure is exposed by `LastFailure` and does
+not masquerade as complete coverage. Moving geometry has a bounded refresh latency.
+
+The permanent contract fixtures are `SurfaceWeatherFieldTests` and
+`AutomaticSurfaceWeatherTests`. Enable the two packages in a validation project's
+testables, and run only these fixtures for this feature. A product must also inspect
+actual game-camera output and verify its regional weather, cutaway, contact and
+session/streaming adapters before adopting the candidate.

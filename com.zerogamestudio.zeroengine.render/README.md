@@ -1,7 +1,27 @@
 # ZeroEngine Render
 
 Small UnityEngine-only rendering primitives. No TCE, gameplay, pooling service,
-singleton, project asset or third-party plugin dependency.
+project asset or third-party plugin dependency.
+
+## Automatic scene surface weather contracts
+
+`Weather/SurfaceWeatherField` is a read-only world-space projection of a consumer's
+existing wetness/snow state. It has no weather clock, camera target or save format.
+Up to 32 stable XZ regions blend with normalized weights; equal-priority neighbours
+do not introduce a dry strip. Higher priorities override lower priorities. Invalid
+replacement leaves the previous field intact.
+
+`SurfaceWeatherProjection` and `SurfaceWeatherExposureFrame` share the same bounded
+projection, surface bias and four-tap exposure sampling as `SceneSurfaceWeather.hlsl`.
+The URP adapter publishes its CPU pixels and GPU textures as one generation. Callers
+sample actual contact positions, including any product-owned visual-ground offset.
+`SurfaceWeatherExposure.Current` exposes the one scoped geometry publisher to
+contacts and precipitation without giving those readers a rendering dependency.
+
+The consumer retains world state and artistic choices. `SurfaceWeatherMaterialSources`
+lets another presentation layer identify an original material behind a temporary
+weather borrow; the URP owner unregisters that mapping when releasing the borrow.
+There is no dependency on a product scene, actor, material library or content name.
 
 ## SpritePoseHistory
 
