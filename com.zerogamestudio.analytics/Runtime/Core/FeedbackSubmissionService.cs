@@ -14,6 +14,21 @@ namespace ZGS.Analytics
         public static event Action<FeedbackUploadCompletion> UploadSucceeded;
         public static event Action<FeedbackUploadFailure> UploadFailed;
 
+        public static event Action<FeedbackSubmissionStatus> StatusChanged
+        {
+            add => FeedbackUploadQueue.SubmissionStateChanged += value;
+            remove => FeedbackUploadQueue.SubmissionStateChanged -= value;
+        }
+
+        public static IReadOnlyList<FeedbackSubmissionStatus> GetRecentSubmissions() =>
+            FeedbackUploadQueue.GetRecentSubmissions();
+
+        public static bool RetrySubmission(string submissionId) =>
+            FeedbackUploadQueue.RetrySubmission(submissionId);
+
+        public static void MarkSuccessNotified(string submissionId) =>
+            FeedbackUploadQueue.MarkSuccessNotified(submissionId);
+
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
         private static void ResetRuntimeState()
         {
@@ -99,7 +114,9 @@ namespace ZGS.Analytics
                                 new FeedbackSubmissionResult(
                                     submissionId,
                                     false,
-                                    FeedbackSubmissionFailure.QueuePersistenceFailed));
+                                    FeedbackUploadQueue.IsFull
+                                        ? FeedbackSubmissionFailure.QueueFull
+                                        : FeedbackSubmissionFailure.QueuePersistenceFailed));
                         }
                         else
                         {

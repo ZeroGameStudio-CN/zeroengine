@@ -2,6 +2,8 @@ using System;
 using System.Collections;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
+using System.Security.Cryptography;
 using System.Reflection;
 using System.Net;
 using System.Net.Sockets;
@@ -131,6 +133,102 @@ namespace ZGS.Analytics.Tests.Editor
         }
 
         [Test]
+        public void DeliveryState_RetryThenReceipt_SurvivesReloadAndKeepsIdentity()
+        {
+            const string id = "1234567890abcdef1234567890abcdef";
+            string path = CreateZip("delivery-state.zip");
+            Assert.IsTrue(FeedbackUploadQueue.TryEnqueue(id, path, "POB_v1", "Synthetic"));
+            int calls = 0;
+            SetStaticField("_tryUploadDetailedOverride",
+                (Func<FeedbackUploadQueue.PendingUpload, Action<FeedbackUploadAttempt>, IEnumerator>)((item, completed) =>
+                {
+                    Assert.AreEqual(id, item.idempotencyKey);
+                    return CompleteUploadAttempt(completed, ++calls == 1
+                        ? new FeedbackUploadAttempt(false, FeedbackFailureCodes.Timeout)
+                        : new FeedbackUploadAttempt(true, partialAttachments: true));
+                }));
+            Exhaust(FeedbackUploadQueue.ProcessPendingUploads());
+            Assert.AreEqual(FeedbackDeliveryState.Retrying, FeedbackUploadQueue.GetRecentSubmissions().Single().State);
+            SetStaticField("_pendingUploads", null);
+            FeedbackUploadQueue.Initialize();
+            Assert.AreEqual(FeedbackDeliveryState.Retrying, FeedbackUploadQueue.GetRecentSubmissions().Single().State);
+            Exhaust(FeedbackUploadQueue.ProcessPendingUploads());
+            Assert.AreEqual(0, FeedbackUploadQueue.PendingCount);
+            FeedbackUploadQueue.MarkSuccessNotified(id);
+            SetStaticField("_pendingUploads", null);
+            FeedbackSubmissionStatus received = FeedbackUploadQueue.GetRecentSubmissions().Single();
+            Assert.AreEqual(FeedbackDeliveryState.Received, received.State);
+            Assert.IsTrue(received.PartialAttachments);
+            Assert.IsTrue(received.SuccessNotified);
+            Assert.AreEqual(id, received.SubmissionId);
+            Assert.AreEqual(2, calls);
+        }
+
+        [Test]
+        public void DeliveryState_LaterRejectionCannotDisproveEarlierUnknownAttempt()
+        {
+            Assert.IsTrue(FeedbackUploadQueue.TryEnqueue("current", CreateZip("unknown-then-rejected.zip"), "POB_v1", "Synthetic"));
+            int calls = 0;
+            SetStaticField("_tryUploadDetailedOverride",
+                (Func<FeedbackUploadQueue.PendingUpload, Action<FeedbackUploadAttempt>, IEnumerator>)((_, completed) =>
+                    CompleteUploadAttempt(completed, ++calls == 1
+                        ? new FeedbackUploadAttempt(false, FeedbackFailureCodes.Timeout)
+                        : new FeedbackUploadAttempt(false, "F403", 403))));
+            Exhaust(FeedbackUploadQueue.ProcessPendingUploads());
+            Exhaust(FeedbackUploadQueue.ProcessPendingUploads());
+            FeedbackSubmissionStatus status = FeedbackUploadQueue.GetRecentSubmissions().Single();
+            Assert.AreEqual(FeedbackDeliveryState.NeedsAction, status.State);
+            Assert.Greater(status.NextAttemptAt, DateTimeOffset.UtcNow.ToUnixTimeSeconds());
+            Assert.IsFalse(status.AutomaticRetryScheduled, "An unconfigured receiver cannot promise an automatic retry.");
+            Assert.AreEqual("F403", status.FailureCode);
+        }
+
+        [Test]
+        public void DeliveryState_ExpiryStopsRetriesWithoutInventingFailure()
+        {
+            string path = CreateZip("expired-status.zip");
+            Assert.IsTrue(FeedbackUploadQueue.TryEnqueue("expiring", path, "POB_v1", "Synthetic"));
+            var pending = (List<FeedbackUploadQueue.PendingUpload>)GetStaticField("_pendingUploads");
+            pending[0].createdAt -= 8 * 24 * 60 * 60;
+            pending[0].uncertainDelivery = true;
+            int failures = 0;
+            FeedbackUploadQueue.QueuedSubmissionFailed += _ => failures++;
+            Exhaust(FeedbackUploadQueue.ProcessPendingUploads());
+            Assert.AreEqual(0, FeedbackUploadQueue.PendingCount);
+            FeedbackSubmissionStatus stopped = FeedbackUploadQueue.GetRecentSubmissions().Single();
+            Assert.AreEqual(FeedbackDeliveryState.Stopped, stopped.State);
+            Assert.IsFalse(stopped.AutomaticRetryScheduled);
+            Assert.AreEqual(0, failures);
+            Assert.IsFalse(File.Exists(path));
+        }
+
+        [Test]
+        public void DeliveryState_DuplicateIdentityCannotCreateAnotherQueueItem()
+        {
+            const string id = "1234567890abcdef1234567890abcdef";
+            string first = CreateZip("first-identity.zip");
+            string second = CreateZip("second-identity.zip");
+            Assert.IsTrue(FeedbackUploadQueue.TryEnqueue(id, first, "POB_v1", "Synthetic"));
+            Assert.IsFalse(FeedbackUploadQueue.TryEnqueue(id, second, "POB_v1", "Synthetic"));
+            Assert.AreEqual(1, FeedbackUploadQueue.PendingCount);
+            Assert.IsTrue(File.Exists(first));
+            Assert.IsTrue(File.Exists(second));
+        }
+
+        [Test]
+        public void QueuePersistence_UnreadableRecordsCannotBeOverwrittenByNewSubmission()
+        {
+            PlayerPrefs.SetString(_queueKey, "{damaged-primary");
+            PlayerPrefs.SetString(_queueKey + ".backup", "{damaged-backup");
+            PlayerPrefs.Save();
+            SetStaticField("_pendingUploads", null);
+            Assert.IsFalse(FeedbackUploadQueue.TryEnqueue(CreateZip("new-after-damage.zip"), "POB_v1", "Synthetic"));
+            Assert.IsFalse(FeedbackUploadQueue.StorageReadable);
+            Assert.AreEqual("{damaged-primary", PlayerPrefs.GetString(_queueKey));
+            Assert.AreEqual("{damaged-backup", PlayerPrefs.GetString(_queueKey + ".backup"));
+        }
+
+        [Test]
         public void LegacyQueueItem_DoesNotPublishTypedSuccess()
         {
             Assert.IsTrue(FeedbackUploadQueue.TryEnqueue(
@@ -168,7 +266,7 @@ namespace ZGS.Analytics.Tests.Editor
         }
 
         [Test]
-        public void TryEnqueue_WhenFullAndPersistenceFails_PreservesQueueAndEveryZip()
+        public void TryEnqueue_WhenFull_PreservesQueueAndEveryZip()
         {
             var originalPaths = new List<string>();
             for (int i = 0; i < 10; i++)
@@ -180,7 +278,6 @@ namespace ZGS.Analytics.Tests.Editor
 
             string originalJson = PlayerPrefs.GetString(_queueKey);
             string candidatePath = CreateZip("candidate.zip");
-            SetStaticField("_persistQueueOverride", (Func<string, bool>)(_ => false));
 
             Assert.IsFalse(FeedbackUploadQueue.TryEnqueue(candidatePath, "POB_v1", "Tester"));
             Assert.AreEqual(10, FeedbackUploadQueue.PendingCount);
@@ -238,7 +335,7 @@ namespace ZGS.Analytics.Tests.Editor
         }
 
         [Test]
-        public void ProcessPendingUploads_WhenRemovalPersistenceFails_ReportsCodeWithoutDeletingOrNotifyingSuccess()
+        public void ProcessPendingUploads_WhenRemovalPersistenceFails_KeepsConfirmedSuccessAndOnlyRetriesCleanup()
         {
             string zipPath = CreateZip("removal-save-fails.zip");
             Assert.IsTrue(FeedbackUploadQueue.TryEnqueue("current-submission", zipPath, "POB_v1", "Tester"));
@@ -246,19 +343,32 @@ namespace ZGS.Analytics.Tests.Editor
             int eventCount = 0;
             FeedbackUploadQueue.QueuedUploadSucceeded += _ => eventCount++;
             string failureCode = null;
+            int uploadCalls = 0;
             FeedbackUploadQueue.QueuedSubmissionFailed += failure => failureCode = failure.FailureCode;
             SetStaticField(
                 "_tryUploadOverride",
                 (Func<FeedbackUploadQueue.PendingUpload, Action<bool>, IEnumerator>)
-                ((_, callback) => CompleteUpload(callback, true)));
-            SetStaticField("_persistQueueOverride", (Func<string, bool>)(_ => false));
+                ((_, callback) =>
+                {
+                    uploadCalls++;
+                    SetStaticField("_persistQueueOverride", (Func<string, bool>)(_ => false));
+                    return CompleteUpload(callback, true);
+                }));
 
             Exhaust(FeedbackUploadQueue.ProcessPendingUploads());
 
             Assert.AreEqual(1, FeedbackUploadQueue.PendingCount);
-            Assert.AreEqual(0, eventCount);
-            Assert.AreEqual("F102", failureCode);
+            Assert.AreEqual(1, eventCount);
+            Assert.IsNull(failureCode);
+            Assert.AreEqual(FeedbackDeliveryState.Received, FeedbackUploadQueue.GetRecentSubmissions().Single().State);
             Assert.IsTrue(File.Exists(zipPath));
+            Exhaust(FeedbackUploadQueue.ProcessPendingUploads());
+            Assert.AreEqual(1, eventCount);
+            Assert.AreEqual(1, uploadCalls);
+            SetStaticField("_persistQueueOverride", null);
+            Exhaust(FeedbackUploadQueue.ProcessPendingUploads());
+            Assert.AreEqual(0, FeedbackUploadQueue.PendingCount);
+            Assert.IsFalse(File.Exists(zipPath));
         }
 
         [Test]
@@ -458,12 +568,15 @@ namespace ZGS.Analytics.Tests.Editor
         {
             const string id = "0123456789abcdef0123456789abcdef";
             string path = CreateZip("http-recovery.zip");
+            string fileHash = Sha256("zip");
+            string receiptId = Sha256("feedback-submission-v1\0TEST\0" + id);
+            string previousAppId = AnalyticsConfig.AppId;
             var listener = new TcpListener(IPAddress.Loopback, 0);
             listener.Start();
             int port = ((IPEndPoint)listener.LocalEndpoint).Port;
             Task server = Task.Run(() =>
             {
-                for (int attempt = 0; attempt < 2; attempt++)
+                for (int attempt = 0; attempt < 3; attempt++)
                 {
                     using (TcpClient client = listener.AcceptTcpClient())
                     using (NetworkStream stream = client.GetStream())
@@ -477,8 +590,8 @@ namespace ZGS.Analytics.Tests.Editor
                             header.Append((char)value);
                         }
                         var match = System.Text.RegularExpressions.Regex.Match(header.ToString(), @"(?im)^Content-Length:\s*(\d+)");
-                        if (!match.Success) throw new IOException("Synthetic upload has no content length.");
-                        int remaining = int.Parse(match.Groups[1].Value);
+                        if (!match.Success && attempt != 1) throw new IOException("Synthetic upload has no content length.");
+                        int remaining = match.Success ? int.Parse(match.Groups[1].Value) : 0;
                         byte[] buffer = new byte[4096];
                         while (remaining > 0)
                         {
@@ -487,7 +600,11 @@ namespace ZGS.Analytics.Tests.Editor
                             remaining -= read;
                         }
                         string status = attempt == 0 ? "403 Forbidden" : "200 OK";
-                        byte[] response = Encoding.ASCII.GetBytes($"HTTP/1.1 {status}\r\nContent-Length: 2\r\nContent-Type: application/json\r\nX-Request-ID: synthetic-{attempt}\r\nConnection: close\r\n\r\n{{}}");
+                        string body = attempt == 0 ? "{}" : attempt == 1
+                            ? "{\"receipt_version\":1,\"status\":\"unknown\"}"
+                            : "{\"receipt_version\":1,\"status\":\"ok\",\"project\":\"TEST\",\"submission_id\":\"" + id +
+                              "\",\"original_sha256\":\"" + fileHash + "\",\"receipt_id\":\"" + receiptId + "\"}";
+                        byte[] response = Encoding.ASCII.GetBytes($"HTTP/1.1 {status}\r\nContent-Length: {body.Length}\r\nContent-Type: application/json\r\nX-Request-ID: synthetic-{attempt}\r\nConnection: close\r\n\r\n{body}");
                         stream.Write(response, 0, response.Length);
                     }
                 }
@@ -496,6 +613,7 @@ namespace ZGS.Analytics.Tests.Editor
             {
                 SetStaticField("_backgroundRunning", true);
                 AnalyticsConfig.ServerUrl = "http://127.0.0.1:" + port;
+                AnalyticsConfig.AppId = "TEST";
                 AnalyticsConfig.UploadSecret = "synthetic-test-secret";
                 var failures = new List<FeedbackUploadFailure>();
                 int successCount = 0;
@@ -523,6 +641,7 @@ namespace ZGS.Analytics.Tests.Editor
             finally
             {
                 listener.Stop();
+                AnalyticsConfig.AppId = previousAppId;
                 try { server.Wait(1000); } catch (AggregateException) { }
             }
         }
@@ -596,6 +715,12 @@ namespace ZGS.Analytics.Tests.Editor
             }
         }
 
+        private static string Sha256(string text)
+        {
+            using (var hash = SHA256.Create())
+                return BitConverter.ToString(hash.ComputeHash(Encoding.UTF8.GetBytes(text))).Replace("-", "").ToLowerInvariant();
+        }
+
         private static void ResetHooksAndSubscribers()
         {
             SetStaticField("_persistQueueOverride", null);
@@ -605,6 +730,7 @@ namespace ZGS.Analytics.Tests.Editor
             SetStaticField("QueuedUploadSucceeded", null);
             SetStaticField("QueuedSubmissionSucceeded", null);
             SetStaticField("QueuedSubmissionFailed", null);
+            SetStaticField("SubmissionStateChanged", null);
             SetStaticField("_backgroundRunning", false);
             SetStaticField("_isProcessing", false);
             SetStaticField("_pendingUploads", null);

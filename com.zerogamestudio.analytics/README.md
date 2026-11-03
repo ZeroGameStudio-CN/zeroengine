@@ -315,3 +315,31 @@ Streamlit Dashboard (可视化)
 ## ZeroEngine Dashboard
 
 安装可选的 `com.zerogamestudio.zeroengine.dashboard` 后，工作台会从本包 schema v2 描述符发现数据分析入口，并通过本包 typed provider 打开窗口；本包不依赖 Dashboard。入口位于 `ZGS > 工作台 > 检查与调试`。
+## Confirmed feedback delivery (2.3.0)
+
+Named feedback submissions require the version-1 receipt protocol from the
+Analytics receiver. Upload success must echo the submission ID, original ZIP
+SHA-256, resolved project and canonical receipt ID. HTTP success alone is not
+delivery evidence. A retry first queries `GET /upload/receipt` using the upload
+secret and identity/content headers; a missing or unavailable receipt is unknown,
+not proof of rejection. Both receiver edges must support this protocol before a
+game upgrades. Legacy unnamed upload calls keep their existing response contract.
+
+`FeedbackSubmissionService.GetRecentSubmissions()` exposes immutable delivery
+snapshots separately from `UploadFailed`, which remains an individual-attempt
+diagnostic event. `StatusChanged` reports lifecycle transitions. A confirmed
+receipt never regresses to failure because local queue acknowledgement or file
+cleanup failed. The queue retries local cleanup without uploading the ZIP again.
+
+`RetrySubmission(id)` addresses the existing identity. A full queue rejects the new
+item without evicting older feedback (`F104`). Unreadable primary and backup queue
+records are retained instead of overwritten. Seven-day expiry stops automatic
+delivery attempts and retains a minimal unconfirmed result. Recent result records
+retain no contact, message, ZIP path or username. Notification flags are persisted
+when storage is available; a storage failure/crash can repeat a success notice,
+but must not create another business submission or report delivery failure.
+
+Lifecycle diagnostics use `feedback_submission_state` with an observation time and
+submission ID. Previous attempt errors remain in `feedback_upload_failure`; they
+are not final submission-failure counts. This is independent of server receipt,
+notification and internal handoff state.

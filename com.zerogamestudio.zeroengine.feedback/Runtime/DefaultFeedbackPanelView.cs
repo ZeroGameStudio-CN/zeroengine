@@ -27,6 +27,9 @@ namespace ZeroEngine.Feedback
         private readonly List<string> _attachments = new();
         [SerializeField] private bool _built;
         private Rect _lastSafeArea;
+        private UnityEngine.UI.Button _historyButton;
+        private FeedbackSubmissionResult? _lastLocalFailure;
+        private FeedbackSubmissionHistoryView _ownedDetails;
 
         public bool IsSubmitting => _controller != null && _controller.IsSubmitting;
 
@@ -59,6 +62,12 @@ namespace ZeroEngine.Feedback
 
             if (!_built)
                 BuildLayout();
+
+            if (_configuration.UseDeliveryStatus && _historyButton == null && _descriptionInput != null)
+            {
+                _historyButton = CreateButton("RecentSubmissions", _descriptionInput.transform.parent, _theme.SecondaryColor);
+                _historyButton.onClick.AddListener(() => _ownedDetails = FeedbackPanel.OpenSubmissionDetails(_lastLocalFailure));
+            }
 
             BindEvents();
             _attachmentArea.gameObject.SetActive(_configuration.AttachmentPicker != null);
@@ -299,6 +308,10 @@ namespace ZeroEngine.Feedback
             ButtonText(_attachmentButton, FeedbackTextId.AttachmentOptional);
             ButtonText(_sendButton, FeedbackTextId.Send);
             ButtonText(_cancelButton, FeedbackTextId.Cancel);
+            if (_historyButton != null)
+                _historyButton.GetComponentInChildren<TMP_Text>().text = FeedbackTextCatalog.ResolveDetail(
+                    FeedbackDetailTextId.Recent, _configuration.LanguageCodeResolver?.Invoke() ??
+                    System.Globalization.CultureInfo.CurrentUICulture.Name);
         }
 
         private void PickAttachments()
@@ -354,8 +367,13 @@ namespace ZeroEngine.Feedback
             if (result.AcceptedLocally)
                 FeedbackPanel.CloseAfterAccepted();
             else
+            {
+                _lastLocalFailure = result;
                 SetSubmitting(false);
+            }
         }
+
+        private void OnDestroy() => FeedbackPanel.CloseSubmissionDetails(_ownedDetails);
 
         private void SetSubmitting(bool submitting)
         {

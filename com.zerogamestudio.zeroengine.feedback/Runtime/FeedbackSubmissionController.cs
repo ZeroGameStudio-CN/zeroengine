@@ -32,6 +32,7 @@ namespace ZeroEngine.Feedback
             }
 
             IsSubmitting = true;
+            FeedbackStatusCoordinator.HandleSubmitting();
             FeedbackSubmissionResult result = default;
             bool hasResult = false;
             FeedbackSubmissionRequest request = null;

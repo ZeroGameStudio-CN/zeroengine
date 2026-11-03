@@ -11,7 +11,8 @@ namespace ZGS.Analytics
         InvalidRequest,
         NotConfigured,
         PackageCreationFailed,
-        QueuePersistenceFailed
+        QueuePersistenceFailed,
+        QueueFull
     }
 
     public enum FeedbackAttachmentKind
@@ -109,13 +110,15 @@ namespace ZGS.Analytics
         public string RequestId { get; }
         public string Reason { get; }
         public bool Retryable { get; }
+        public bool PartialAttachments { get; }
 
         public FeedbackUploadAttempt(
             bool succeeded,
             string failureCode = null,
             long httpStatusCode = 0,
             string requestId = null,
-            string reason = null)
+            string reason = null,
+            bool partialAttachments = false)
         {
             Succeeded = succeeded;
             FailureCode = FeedbackFailureCodes.Normalize(failureCode);
@@ -123,6 +126,7 @@ namespace ZGS.Analytics
             RequestId = FeedbackFailureCodes.SafeDiagnosticId(requestId);
             Reason = FeedbackFailureCodes.SafeDiagnosticId(reason);
             Retryable = !succeeded && FeedbackFailureCodes.IsRetryable(FailureCode, httpStatusCode);
+            PartialAttachments = partialAttachments;
         }
     }
 
@@ -133,6 +137,7 @@ namespace ZGS.Analytics
         public const string PackageCreation = "F101";
         public const string QueuePersistence = "F102";
         public const string FileRead = "F103";
+        public const string QueueFull = "F104";
         public const string Connection = "F201";
         public const string Timeout = "F202";
         public const string Certificate = "F203";
@@ -148,6 +153,7 @@ namespace ZGS.Analytics
                 case FeedbackSubmissionFailure.NotConfigured: return NotConfigured;
                 case FeedbackSubmissionFailure.PackageCreationFailed: return PackageCreation;
                 case FeedbackSubmissionFailure.QueuePersistenceFailed: return QueuePersistence;
+                case FeedbackSubmissionFailure.QueueFull: return QueueFull;
                 default: return Unknown;
             }
         }

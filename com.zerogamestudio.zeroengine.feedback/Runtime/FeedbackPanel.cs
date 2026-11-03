@@ -1,6 +1,7 @@
 using UnityEngine;
 using UnityEngine.EventSystems;
 using UnityEngine.UI;
+using ZGS.Analytics;
 
 namespace ZeroEngine.Feedback
 {
@@ -9,6 +10,8 @@ namespace ZeroEngine.Feedback
         private static FeedbackUiConfiguration _configuration = new FeedbackUiConfiguration();
         private static DefaultFeedbackPanelView _view;
         private static GameObject _ownedCanvas;
+        private static GameObject _detailsCanvas;
+        private static FeedbackSubmissionHistoryView _details;
 
         internal static FeedbackUiConfiguration CurrentConfiguration => _configuration;
 
@@ -18,6 +21,8 @@ namespace ZeroEngine.Feedback
             _configuration = new FeedbackUiConfiguration();
             _view = null;
             _ownedCanvas = null;
+            _detailsCanvas = null;
+            _details = null;
         }
 
         public static void Configure(FeedbackUiConfiguration configuration)
@@ -73,6 +78,42 @@ namespace ZeroEngine.Feedback
                 _view = Object.Instantiate(_configuration.PanelPrefab, parent, false);
                 _view.Initialize(_configuration);
             }
+        }
+
+        public static FeedbackSubmissionHistoryView OpenSubmissionDetails(FeedbackSubmissionResult? localFailure = null)
+        {
+            CloseSubmissionDetails();
+            RectTransform parent = _configuration.Parent;
+            if (parent == null)
+            {
+                _detailsCanvas = new GameObject("Feedback Details Canvas", typeof(RectTransform),
+                    typeof(Canvas), typeof(UnityEngine.UI.CanvasScaler), typeof(UnityEngine.UI.GraphicRaycaster));
+                Object.DontDestroyOnLoad(_detailsCanvas);
+                var canvas = _detailsCanvas.GetComponent<Canvas>();
+                canvas.renderMode = RenderMode.ScreenSpaceOverlay;
+                canvas.sortingOrder = 32001;
+                var scaler = _detailsCanvas.GetComponent<UnityEngine.UI.CanvasScaler>();
+                scaler.uiScaleMode = UnityEngine.UI.CanvasScaler.ScaleMode.ScaleWithScreenSize;
+                scaler.referenceResolution = new Vector2(1920, 1080);
+                scaler.matchWidthOrHeight = 0.5f;
+                parent = (RectTransform)_detailsCanvas.transform;
+            }
+            _details = FeedbackSubmissionHistoryView.Create(parent, _configuration, localFailure, CloseSubmissionDetails);
+            return _details;
+        }
+
+        public static void CloseSubmissionDetails(FeedbackSubmissionHistoryView owner)
+        {
+            if (owner != null && _details == owner) CloseSubmissionDetails();
+        }
+
+        public static void CloseSubmissionDetails()
+        {
+            if (_details != null) _details.ReleaseSelection();
+            if (_details != null) Object.Destroy(_details.gameObject);
+            if (_detailsCanvas != null) Object.Destroy(_detailsCanvas);
+            _details = null;
+            _detailsCanvas = null;
         }
 
         public static void Close()

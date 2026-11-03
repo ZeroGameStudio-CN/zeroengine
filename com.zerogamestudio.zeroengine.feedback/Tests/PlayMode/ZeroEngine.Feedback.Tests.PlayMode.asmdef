@@ -3,6 +3,9 @@
   "rootNamespace": "ZeroEngine.Feedback.Tests.PlayMode",
   "references": [
     "ZeroEngine.Feedback",
+    "ZeroEngine.UI",
+    "ZGS.Analytics",
+    "Unity.TextMeshPro",
     "UnityEngine.UI",
     "UnityEngine.TestRunner"
   ],

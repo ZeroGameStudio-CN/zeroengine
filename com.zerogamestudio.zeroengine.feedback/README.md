@@ -2,6 +2,40 @@
 
 Minimal player feedback UI on top of the queue-first ZGS Analytics submission service.
 
+## Confirmed delivery presentation (1.2.0)
+
+Requires Analytics 2.3.0 and the receiver's version-1 feedback receipt protocol.
+Deploy the compatible receiver to both edges before upgrading a game. Existing
+receivers returning only `status: ok` cannot confirm a named submission to this SDK.
+
+```csharp
+FeedbackPanel.Configure(new FeedbackUiConfiguration
+{
+    UseDeliveryStatus = true,
+    ShowUploadingStatus = true,
+    ShowUploadFailureCodes = true,
+    LanguageCodeResolver = () => selectedLanguageCode,
+    StatusPresenter = projectStatusPresenter
+});
+```
+
+The four Simplified Chinese notifications are `提交中…`, `自动重试中…`,
+`提交成功，感谢反馈。`, and `提交失败（Fxxx）`. Thirteen locales are included.
+`IFeedbackTextResolver` may override them; return `null` for shared-catalog fallback.
+Automatic retries are notified once, not once per network attempt. A raw transport
+failure never directly produces the failure notification in this mode. A rejection
+after a lost acknowledgement remains unconfirmed until delivery can be established.
+
+The default form offers recent submissions. Custom forms can call
+`FeedbackPanel.OpenSubmissionDetails(lastLocalFailure)`; retain the returned view
+and call `CloseSubmissionDetails(view)` when the owning form exits. This preserves
+focus and prevents a stale owner from closing a newer view. Details show receipt
+state, retained error hints, partial attachments and stopped retries. Their Retry
+action reuses the original queue identity and ZIP. No extra status notifications
+are added for these details.
+
+See [delivery contract and verification](../docs/specs/2026-11-02-feedback-delivery-state.md).
+
 Version 1.0.2 localizes the Dashboard setup label, tooltip, and write confirmation to Simplified Chinese without changing the installer route.
 
 Version 1.1.2 requires Analytics 2.1.2 for consistent legacy retry classification and idempotency.
@@ -63,8 +97,12 @@ FeedbackPanel.Configure(new FeedbackUiConfiguration
 });
 ```
 
-In this mode local acceptance is silent. The first failed upload attempt for each
-current-process submission shows `UploadFailed (Fxxx)`; later retries remain silent.
+In this mode local acceptance is silent. Retryable upload failures (including lost
+connections, timeouts and temporary server errors) stay silent while the persistent
+queue retries with the same submission identity. A retryable attempt is not proof
+that the server did not receive the feedback; exhausting a foreground wait does not
+turn it into a confirmed failure. The first non-retryable failure for each
+current-process submission shows `UploadFailed (Fxxx)`; repeated failures remain silent.
 A confirmed success still shows `Uploaded` exactly once. Restored queues show neither
 failure nor success notifications. A local packaging/persistence failure shows its
 short code and keeps the form available. `IFeedbackStatusPresenter` receives the

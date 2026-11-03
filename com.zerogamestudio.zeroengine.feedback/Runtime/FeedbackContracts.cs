@@ -15,7 +15,8 @@ namespace ZeroEngine.Feedback
         Cancel,
         Uploading,
         Uploaded,
-        UploadFailed
+        UploadFailed,
+        Retrying
     }
 
     public sealed class FeedbackFormData
@@ -58,6 +59,8 @@ namespace ZeroEngine.Feedback
         [Range(1, 3)] public int MaxAttachments = 3;
         public bool ShowUploadingStatus = true;
         public bool ShowUploadFailureCodes;
+        public bool UseDeliveryStatus;
+        public Func<string> LanguageCodeResolver;
 
         internal int AttachmentLimit => Mathf.Clamp(MaxAttachments, 1, 3);
     }

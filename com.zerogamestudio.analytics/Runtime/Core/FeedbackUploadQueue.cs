@@ -12,7 +12,7 @@ namespace ZGS.Analytics
     /// <summary>
     /// 反馈上传队列 - 持久化管理未成功上传的 ZIP 文件
     /// </summary>
-    public static class FeedbackUploadQueue
+    public static partial class FeedbackUploadQueue
     {
         private const string QueueKey = "zgs_feedback_queue";
         private const int MaxPendingCount = 10;
@@ -27,6 +27,7 @@ namespace ZGS.Analytics
         private static readonly float[] BackgroundRetryDelays = { 60f, 300f, 900f, 1800f };
 
         private static List<PendingUpload> _pendingUploads;
+        private static bool _queueReadFailed;
         private static bool _isProcessing;
         private static bool _backgroundRunning;
         private static int _queueMutationVersion;
@@ -43,12 +44,12 @@ namespace ZGS.Analytics
         private static string QueueBackupStorageKey => QueueStorageKey + ".backup";
 
         /// <summary>
-        /// 队列项收到 HTTP 成功响应，并已从持久队列移除后触发。
+        /// 队列项收到可靠的服务器接收回执后触发；本地清理失败不撤销接收成功。
         /// </summary>
         public static event Action<string> QueuedUploadSucceeded;
 
         /// <summary>
-        /// 带提交 ID 的队列项收到 HTTP 成功响应，并已从持久队列移除后触发。
+        /// 带提交 ID 的队列项收到可靠的服务器接收回执后触发。
         /// </summary>
         internal static event Action<FeedbackUploadCompletion> QueuedSubmissionSucceeded;
 
@@ -74,6 +75,17 @@ namespace ZGS.Analytics
             public string lastFailureCode;
             public string lastFailureReason;
             public long lastAttemptAt;
+            public string project;
+            public FeedbackDeliveryState deliveryState;
+            public bool hasServerReceipt;
+            public bool uncertainDelivery;
+            public bool partialAttachments;
+            public bool successNotified;
+            public long updatedAt;
+            public long nextAttemptAt;
+            public int attemptCount;
+
+            internal PendingUpload Copy() => (PendingUpload)MemberwiseClone();
         }
 
         /// <summary>
@@ -83,6 +95,7 @@ namespace ZGS.Analytics
         private class QueueWrapper
         {
             public List<PendingUpload> items = new();
+            public List<PendingUpload> recent = new();
         }
 
         [Serializable]
@@ -165,6 +178,8 @@ namespace ZGS.Analytics
             if (_pendingUploads == null)
                 LoadQueue();
 
+            if (_queueReadFailed) return false;
+
             if (string.IsNullOrWhiteSpace(zipPath) || !File.Exists(zipPath))
             {
                 AnalyticsLog.LogWarning("[FeedbackQueue] 入队失败，文件不存在");
@@ -173,6 +188,11 @@ namespace ZGS.Analytics
 
             if (_pendingUploads.Exists(p => p.zipPath == zipPath))
                 return true;
+
+            if (!string.IsNullOrEmpty(submissionId) &&
+                (_pendingUploads.Exists(p => p.submissionId == submissionId) ||
+                 _recentSubmissions.Exists(p => p.submissionId == submissionId)))
+                return false; // Existing submissions use RetrySubmission, never another queue item.
 
             if (!TryComputeFileFingerprint(zipPath, out long fileSize, out string fileSha256, out string fingerprintFailure))
             {
@@ -184,14 +204,8 @@ namespace ZGS.Analytics
                 idempotencyKey = Guid.NewGuid().ToString("N");
 
             var candidate = new List<PendingUpload>(_pendingUploads);
-            var evicted = new List<PendingUpload>();
-
-            while (candidate.Count >= MaxPendingCount)
-            {
-                var oldest = candidate[0];
-                candidate.RemoveAt(0);
-                evicted.Add(oldest);
-            }
+            if (candidate.Count >= MaxPendingCount)
+                return false;
 
             var pending = new PendingUpload
             {
@@ -210,6 +224,8 @@ namespace ZGS.Analytics
                 lastFailureReason = string.Empty,
                 lastAttemptAt = 0
             };
+            pending.project = ProjectIdentity(pending);
+            pending.updatedAt = pending.createdAt;
 
             candidate.Add(pending);
             if (!TryPersistQueue(candidate))
@@ -220,9 +236,6 @@ namespace ZGS.Analytics
 
             _pendingUploads = candidate;
             _queueMutationVersion++;
-
-            foreach (var item in evicted)
-                DeleteFileBestEffort(item.zipPath);
 
             AnalyticsLog.Log($"[FeedbackQueue] 已加入队列: {Path.GetFileName(zipPath)}");
             StartBackgroundProcessing();
@@ -252,6 +265,8 @@ namespace ZGS.Analytics
             if (_pendingUploads == null) LoadQueue();
             if (_pendingUploads.Count == 0) yield break;
 
+            CleanupExpired();
+
             _isProcessing = true;
 
             try
@@ -270,6 +285,35 @@ namespace ZGS.Analytics
 
                     processedPaths.Add(pending.zipPath);
 
+                    if (pending.hasServerReceipt)
+                    {
+                        CompleteReceived(pending, pending.partialAttachments);
+                        continue;
+                    }
+                    if (string.IsNullOrEmpty(pending.fileSha256) && File.Exists(pending.zipPath) &&
+                        TryComputeFileFingerprint(pending.zipPath, out long upgradedSize, out string upgradedHash, out _))
+                    {
+                        pending.fileSize = upgradedSize;
+                        pending.fileSha256 = upgradedHash;
+                        pending.project = ProjectIdentity(pending);
+                    }
+                    if ((pending.retryCount > 0 || pending.uncertainDelivery) &&
+                        _tryUploadOverride == null && _tryUploadDetailedOverride == null)
+                    {
+                        bool received = false;
+                        bool partial = false;
+                        yield return QueryReceipt(pending, (confirmed, incomplete) =>
+                        {
+                            received = confirmed;
+                            partial = incomplete;
+                        });
+                        if (received)
+                        {
+                            CompleteReceived(pending, partial);
+                            continue;
+                        }
+                    }
+
                     if (!File.Exists(pending.zipPath))
                     {
                         ReportUploadFailure(
@@ -277,7 +321,8 @@ namespace ZGS.Analytics
                             FeedbackFailureCodes.FileRead,
                             "file_missing",
                             attempt: pending.retryCount + 1);
-                        TryRemovePersisted(pending);
+                        PersistFailedAttempt(pending, new FeedbackUploadAttempt(false,
+                            FeedbackFailureCodes.FileRead, reason: "file_missing"));
                         continue;
                     }
 
@@ -298,33 +343,33 @@ namespace ZGS.Analytics
                     }
 
                     FeedbackUploadAttempt attempt = new FeedbackUploadAttempt(false, FeedbackFailureCodes.Unknown);
+                    bool previouslyUncertain = pending.uncertainDelivery;
+                    pending.uncertainDelivery = true;
+                    pending.attemptCount++;
+                    if (!TryPersistQueue(_pendingUploads))
+                    {
+                        pending.attemptCount--;
+                        pending.uncertainDelivery = previouslyUncertain;
+                        pending.lastFailureCode = FeedbackFailureCodes.QueuePersistence;
+                        pending.lastFailureReason = "attempt_checkpoint_failed";
+                        pending.blocked = true;
+                        pending.blockedUntil = DateTimeOffset.UtcNow.ToUnixTimeSeconds() + NonRetryableRecheckDelaySeconds;
+                        pending.nextAttemptAt = pending.blockedUntil;
+                        SetDeliveryState(pending, FeedbackDeliveryState.NeedsAction);
+                        ReportUploadFailure(pending.submissionId, FeedbackFailureCodes.QueuePersistence,
+                            "attempt_checkpoint_failed", attempt: pending.retryCount + 1);
+                        continue;
+                    }
+                    SetDeliveryState(pending, FeedbackDeliveryState.Uploading);
                     yield return TryUpload(pending, result => attempt = result);
 
                     if (attempt.Succeeded)
                     {
-                        if (!TryRemovePersisted(pending))
-                        {
-                            ReportUploadFailure(
-                                pending.submissionId,
-                                FeedbackFailureCodes.QueuePersistence,
-                                "queue_ack_persistence_failed",
-                                attempt: pending.retryCount + 1);
-                            PersistFailedAttempt(
-                                pending,
-                                new FeedbackUploadAttempt(
-                                    false,
-                                    FeedbackFailureCodes.QueuePersistence,
-                                    reason: "queue_ack_persistence_failed"));
-                            continue;
-                        }
-
-                        DeleteFileBestEffort(pending.zipPath);
-                        AnalyticsLog.Log($"[FeedbackQueue] 上传成功: {Path.GetFileName(pending.zipPath)}");
-                        NotifyQueuedUploadSucceeded(pending.zipPath);
-                        NotifyQueuedSubmissionSucceeded(pending.submissionId);
+                        CompleteReceived(pending, attempt.PartialAttachments);
                     }
                     else
                     {
+                        pending.uncertainDelivery = previouslyUncertain;
                         int retryCount = PersistFailedAttempt(pending, attempt);
                         AnalyticsLog.LogWarning(
                             $"[FeedbackQueue] 上传失败 code={attempt.FailureCode} retryable={attempt.Retryable} 重试次数: {retryCount}");
@@ -398,7 +443,9 @@ namespace ZGS.Analytics
             Action<FeedbackUploadAttempt> onComplete,
             string submissionId = null,
             string idempotencyKey = null,
-            int attempt = 1)
+            int attempt = 1,
+            string fileSha256 = null,
+            string project = null)
         {
             if (!AnalyticsConfig.IsUploadConfigured)
             {
@@ -461,6 +508,18 @@ namespace ZGS.Analytics
             {
                 yield return operation;
                 bool success = request.result == UnityWebRequest.Result.Success;
+                bool partial = false;
+                if (success && !string.IsNullOrEmpty(submissionId) && !TryReadReceipt(
+                        request.downloadHandler.text,
+                        new PendingUpload { submissionId = submissionId, fileSha256 = fileSha256, project = project },
+                        out partial))
+                {
+                    ReportUploadFailure(submissionId, FeedbackFailureCodes.ResponseProcessing,
+                        "receipt_unverified", httpStatusCode: request.responseCode, attempt: attempt);
+                    onComplete?.Invoke(new FeedbackUploadAttempt(false,
+                        FeedbackFailureCodes.ResponseProcessing, reason: "receipt_unverified"));
+                    yield break;
+                }
                 if (!success)
                 {
                     string failureCode = FeedbackFailureCodes.FromTransport(request.result, request.responseCode, request.error);
@@ -486,7 +545,8 @@ namespace ZGS.Analytics
                 {
                     string requestId = FeedbackFailureCodes.SafeDiagnosticId(request.GetResponseHeader("X-Request-ID") ?? request.GetResponseHeader("CF-RAY"));
                     Debug.Log($"[FeedbackUpload] confirmed submission={FeedbackFailureCodes.SafeDiagnosticId(submissionId)} http={request.responseCode} request={requestId}");
-                    onComplete?.Invoke(new FeedbackUploadAttempt(true, httpStatusCode: request.responseCode, requestId: requestId));
+                    onComplete?.Invoke(new FeedbackUploadAttempt(true, httpStatusCode: request.responseCode,
+                        requestId: requestId, partialAttachments: partial));
                 }
             }
         }
@@ -547,7 +607,9 @@ namespace ZGS.Analytics
                 onComplete,
                 pending.submissionId,
                 pending.idempotencyKey,
-                pending.retryCount + 1);
+                pending.retryCount + 1,
+                pending.fileSha256,
+                ProjectIdentity(pending));
         }
 
         /// <summary>
@@ -565,6 +627,8 @@ namespace ZGS.Analytics
                 {
                     if (_pendingUploads == null)
                         LoadQueue();
+
+                    if (!_isProcessing) CleanupExpired();
 
                     if (_pendingUploads.Count == 0)
                         yield break;
@@ -656,7 +720,8 @@ namespace ZGS.Analytics
 
         private static bool IsEligibleForAttempt(PendingUpload item, long now)
         {
-            return item != null && (!item.blocked || item.blockedUntil <= now);
+            return item != null && item.deliveryState != FeedbackDeliveryState.Failed &&
+                item.deliveryState != FeedbackDeliveryState.Stopped && (!item.blocked || item.blockedUntil <= now);
         }
 
         private static float GetNextBlockedDelaySeconds()
@@ -668,7 +733,8 @@ namespace ZGS.Analytics
             long soonest = long.MaxValue;
             foreach (PendingUpload item in _pendingUploads)
             {
-                if (item == null || !item.blocked || item.blockedUntil <= now)
+                if (item == null || item.deliveryState == FeedbackDeliveryState.Failed ||
+                    item.deliveryState == FeedbackDeliveryState.Stopped || !item.blocked || item.blockedUntil <= now)
                     continue;
 
                 soonest = Math.Min(soonest, item.blockedUntil);
@@ -687,13 +753,23 @@ namespace ZGS.Analytics
             long now = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
             long maxAge = MaxPendingAgeDays * 24 * 60 * 60;
 
-            var expired = _pendingUploads.FindAll(p => now - p.createdAt > maxAge);
+            var expired = _pendingUploads.FindAll(p => !p.hasServerReceipt && now - p.createdAt > maxAge);
             if (expired.Count == 0)
                 return;
 
             var candidate = _pendingUploads.FindAll(p => !expired.Contains(p));
+            var previousRecent = new List<PendingUpload>(_recentSubmissions);
+            foreach (PendingUpload item in expired)
+            {
+                PendingUpload record = item.Copy();
+                record.deliveryState = FeedbackDeliveryState.Stopped;
+                record.updatedAt = now;
+                record.nextAttemptAt = 0;
+                RememberResult(record);
+            }
             if (!TryPersistQueue(candidate))
             {
+                _recentSubmissions = previousRecent;
                 AnalyticsLog.LogWarning("[FeedbackQueue] 过期队列持久化失败，保留原队列");
                 return;
             }
@@ -701,6 +777,9 @@ namespace ZGS.Analytics
             _pendingUploads = candidate;
             foreach (var item in expired)
             {
+                item.deliveryState = FeedbackDeliveryState.Stopped;
+                item.nextAttemptAt = 0;
+                PublishDeliveryState(item);
                 AnalyticsLog.Log($"[FeedbackQueue] 清理过期文件: {Path.GetFileName(item.zipPath)}");
                 DeleteFileBestEffort(item.zipPath);
             }
@@ -736,13 +815,25 @@ namespace ZGS.Analytics
             candidateItem.blockedUntil = attempt.Retryable
                 ? 0
                 : candidateItem.lastAttemptAt + NonRetryableRecheckDelaySeconds;
-            if (TryPersistQueue(candidate))
-            {
-                _pendingUploads = candidate;
-                return candidateItem.retryCount;
-            }
-
-            return item.retryCount;
+            // A later rejection cannot disprove an earlier lost acknowledgement.
+            bool rejected = !candidateItem.uncertainDelivery &&
+                ((attempt.HttpStatusCode >= 400 && attempt.HttpStatusCode <= 499 &&
+                  attempt.HttpStatusCode != 409 && !attempt.Retryable) ||
+                 attempt.FailureCode == FeedbackFailureCodes.FileRead);
+            candidateItem.uncertainDelivery |= attempt.Retryable;
+            candidateItem.nextAttemptAt = rejected ? 0 : (attempt.Retryable
+                ? candidateItem.lastAttemptAt + (long)GetBackgroundRetryDelaySeconds(Math.Max(0, candidateItem.retryCount - 1))
+                : candidateItem.blockedUntil);
+            candidateItem.deliveryState = rejected ? FeedbackDeliveryState.Failed :
+                (attempt.Retryable || attempt.FailureCode == FeedbackFailureCodes.Certificate
+                    ? FeedbackDeliveryState.Retrying : FeedbackDeliveryState.NeedsAction);
+            candidateItem.updatedAt = candidateItem.lastAttemptAt;
+            bool persisted = TryPersistQueue(candidate);
+            _pendingUploads = candidate;
+            PublishDeliveryState(candidateItem);
+            if (!persisted)
+                AnalyticsLog.LogWarning($"[FeedbackQueue] attempt metadata persistence pending code=F102 submission={FeedbackFailureCodes.SafeDiagnosticId(item.submissionId)}");
+            return candidateItem.retryCount;
         }
 
         private static List<PendingUpload> ClonePendingUploads(List<PendingUpload> source)
@@ -750,23 +841,7 @@ namespace ZGS.Analytics
             var clone = new List<PendingUpload>(source.Count);
             foreach (var item in source)
             {
-                clone.Add(new PendingUpload
-                {
-                    submissionId = item.submissionId,
-                    idempotencyKey = item.idempotencyKey,
-                    zipPath = item.zipPath,
-                    version = item.version,
-                    userName = item.userName,
-                    createdAt = item.createdAt,
-                    retryCount = item.retryCount,
-                    fileSize = item.fileSize,
-                    fileSha256 = item.fileSha256,
-                    blocked = item.blocked,
-                    blockedUntil = item.blockedUntil,
-                    lastFailureCode = item.lastFailureCode,
-                    lastFailureReason = item.lastFailureReason,
-                    lastAttemptAt = item.lastAttemptAt
-                });
+                clone.Add(item.Copy());
             }
 
             return clone;
@@ -979,11 +1054,16 @@ namespace ZGS.Analytics
         private static void LoadQueue()
         {
             _pendingUploads = new List<PendingUpload>();
+            _recentSubmissions = new List<PendingUpload>();
+            _queueReadFailed = false;
 
             string json = PlayerPrefs.GetString(QueueStorageKey, "");
             if (TryDeserializeQueue(json, out List<PendingUpload> items, out bool legacy))
             {
                 _pendingUploads = items;
+                foreach (PendingUpload item in items)
+                    if (item.updatedAt == 0 && item.retryCount > 0) item.uncertainDelivery = true;
+                _recentSubmissions = ReadRecentSubmissions(json);
                 if (legacy)
                     TryPersistQueue(_pendingUploads);
                 return;
@@ -993,12 +1073,16 @@ namespace ZGS.Analytics
             if (TryDeserializeQueue(backup, out items, out _))
             {
                 _pendingUploads = items;
+                foreach (PendingUpload item in items)
+                    if (item.updatedAt == 0 && item.retryCount > 0) item.uncertainDelivery = true;
+                _recentSubmissions = ReadRecentSubmissions(backup);
                 AnalyticsLog.LogWarning("[FeedbackQueue] 主队列校验失败，已恢复备份队列");
                 return;
             }
 
             if (!string.IsNullOrEmpty(json) || !string.IsNullOrEmpty(backup))
             {
+                _queueReadFailed = true;
                 AnalyticsLog.LogWarning("[FeedbackQueue] 主队列和备份队列均无法通过校验，保留原始数据供诊断");
             }
         }
@@ -1012,7 +1096,7 @@ namespace ZGS.Analytics
             string json;
             try
             {
-                var wrapper = new QueueWrapper { items = items };
+                var wrapper = new QueueWrapper { items = items, recent = _recentSubmissions };
                 payload = JsonUtility.ToJson(wrapper);
                 json = JsonUtility.ToJson(new QueueEnvelope
                 {
@@ -1168,6 +1252,8 @@ namespace ZGS.Analytics
             }
 
             _pendingUploads.Clear();
+            _recentSubmissions.Clear();
+            _queueReadFailed = false;
             PlayerPrefs.DeleteKey(QueueStorageKey);
             PlayerPrefs.DeleteKey(QueueBackupStorageKey);
             PlayerPrefs.Save();

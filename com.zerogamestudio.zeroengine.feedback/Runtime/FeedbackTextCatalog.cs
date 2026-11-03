@@ -3,7 +3,7 @@ using UnityEngine;
 
 namespace ZeroEngine.Feedback
 {
-    public static class FeedbackTextCatalog
+    public static partial class FeedbackTextCatalog
     {
         private static readonly Dictionary<SystemLanguage, string> ShortFailures = new()
         {
@@ -24,6 +24,9 @@ namespace ZeroEngine.Feedback
 
         /// <summary>Short failure text for projects whose selected language differs from the OS language.</summary>
         public static string ResolveShortFailure(string languageCode)
+            => ResolveShortFailure(ParseLanguage(languageCode));
+
+        private static SystemLanguage ParseLanguage(string languageCode)
         {
             string code = (languageCode ?? "en").Replace('_', '-').ToLowerInvariant();
             SystemLanguage language;
@@ -42,7 +45,7 @@ namespace ZeroEngine.Feedback
                 case "pl": language = SystemLanguage.Polish; break;
                 default: language = SystemLanguage.English; break;
             }
-            return ResolveShortFailure(language);
+            return language;
         }
 
         internal static string ResolveShortFailure(SystemLanguage language) =>
@@ -79,6 +82,7 @@ namespace ZeroEngine.Feedback
 
         internal static string Resolve(FeedbackTextId id, SystemLanguage language)
         {
+            if (id == FeedbackTextId.Retrying) return ResolveSubmissionStatus(id, language);
             if (language == SystemLanguage.Chinese)
                 language = SystemLanguage.ChineseSimplified;
 
