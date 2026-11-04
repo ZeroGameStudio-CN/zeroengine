@@ -31,7 +31,7 @@ float2 ZeroSceneWeatherState(float3 p)
         sum += s.xy * weight;
         total += weight;
     }
-    return total > 0.0 ? saturate(sum / total) : _ZeroWeatherDefault.xy;
+    return total > 0.0 ? lerp(_ZeroWeatherDefault.xy, saturate(sum / total), saturate(total)) : _ZeroWeatherDefault.xy;
 }
 
 float ZeroExposureSample(float2 uv, float depth, int index)

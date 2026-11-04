@@ -114,3 +114,9 @@ identity. The caller retains UV mapping, pixel style, lighting, cutaway, alpha
 and resource lifetime. This layer does not replace a consumer's authored shader.
 Upward-facing snow blends continuously; vertical faces and sheltered ground do
 not receive coverage. The URP package also offers a plain opaque PBR wrapper.
+
+`SurfaceWeatherField` and `SceneSurfaceWeather.hlsl` use the same region weights.
+Overlapping regions at the highest participating priority are normalized together.
+When their total coverage is below one, the remaining coverage uses `DefaultValue`;
+an isolated region therefore fades into the background through its outer feather.
+Zero feather retains an explicit hard edge. The field owns no weather clock or save data.

@@ -39,7 +39,13 @@ namespace ZeroEngine.Render.Weather
                 snow += region.Value.Snow * weight;
                 total += weight;
             }
-            return total > 0f ? new SurfaceWeatherValue(Mathf.Clamp01(wet / total), Mathf.Clamp01(snow / total)) : DefaultValue;
+            if (total <= 0f) return DefaultValue;
+            // A lone feather still needs a background. Normalizing it alone would erase
+            // its coverage and keep the full state until the outer edge abruptly ends.
+            float coverage = Mathf.Clamp01(total);
+            return new SurfaceWeatherValue(
+                Mathf.Lerp(DefaultValue.Wetness, Mathf.Clamp01(wet / total), coverage),
+                Mathf.Lerp(DefaultValue.Snow, Mathf.Clamp01(snow / total), coverage));
         }
     }
 }

@@ -7,6 +7,49 @@ namespace ZeroEngine.Render.Tests.Editor
 {
     public sealed class SurfaceWeatherFieldTests
     {
+        [TestCase(0f, 0f, 1f)]
+        [TestCase(1.5f, .1f, .575f)]
+        [TestCase(3f, .2f, .15f)]
+        [TestCase(3.1f, .2f, .15f)]
+        public void SingleRegion_FeatherRetainsCoverageAgainstDefault(float outside, float wet, float snow)
+        {
+            var field = new SurfaceWeatherField { DefaultValue = new SurfaceWeatherValue(.2f, .15f) };
+            field.SetRegions(new[] { new SurfaceWeatherRegion("snow", new Bounds(Vector3.zero, new Vector3(10, 1, 10)), new SurfaceWeatherValue(0, 1), 3) });
+            var state = field.Sample(new Vector3(5 + outside, 20, 0));
+            Assert.That(state.Wetness, Is.EqualTo(wet).Within(.00001f));
+            Assert.That(state.Snow, Is.EqualTo(snow).Within(.00001f));
+        }
+
+        [TestCase(1f, 0f)]
+        [TestCase(-1f, 0f)]
+        [TestCase(0f, 1f)]
+        [TestCase(0f, -1f)]
+        public void SingleRegion_FeatherAppliesOnEveryWorldEdge(float x, float z)
+        {
+            var field = new SurfaceWeatherField();
+            field.SetRegions(new[] { new SurfaceWeatherRegion("snow", new Bounds(Vector3.zero, new Vector3(10, 1, 10)), new SurfaceWeatherValue(0, 1), 3) });
+            Assert.That(field.Sample(new Vector3(x * 6.5f, -20, z * 6.5f)).Snow, Is.EqualTo(.5f).Within(.00001f));
+        }
+
+        [Test]
+        public void SingleRegion_ApproachingOuterFeather_ConvergesToBackground()
+        {
+            var field = new SurfaceWeatherField { DefaultValue = new SurfaceWeatherValue(.2f, .15f) };
+            field.SetRegions(new[] { new SurfaceWeatherRegion("snow", new Bounds(Vector3.zero, new Vector3(10, 1, 10)), new SurfaceWeatherValue(0, 1), 3) });
+            Assert.That(field.Sample(new Vector3(7.999f, 0, 0)).Snow, Is.EqualTo(.15f).Within(.00001f));
+            Assert.That(field.Sample(new Vector3(8.001f, 0, 0)).Snow, Is.EqualTo(.15f).Within(.00001f));
+        }
+
+        [Test]
+        public void MatchingRegionAndDefault_RemainsUniformThroughFeather()
+        {
+            var value = new SurfaceWeatherValue(.4f, .7f);
+            var field = new SurfaceWeatherField { DefaultValue = value };
+            field.SetRegions(new[] { new SurfaceWeatherRegion("same", new Bounds(Vector3.zero, new Vector3(10, 1, 10)), value, 3) });
+            Assert.That(field.Sample(new Vector3(6.5f, 0, 0)), Is.EqualTo(value));
+            Assert.That(field.Sample(new Vector3(8.1f, 0, 0)), Is.EqualTo(value));
+        }
+
         [Test]
         public void AdjacentRegions_BlendAcrossWorldPosition_WithoutCreatingADryGap()
         {
