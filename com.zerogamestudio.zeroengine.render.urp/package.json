@@ -1,12 +1,12 @@
 {
   "name": "com.zerogamestudio.zeroengine.render.urp",
-  "version": "0.4.0",
+  "version": "0.4.1",
   "displayName": "ZeroEngine Render URP",
   "description": "URP actor lighting, body visuals, portable footstep shapes and weather-aware ground material adapters.",
   "unity": "6000.6",
   "dependencies": {
     "com.unity.render-pipelines.universal": "17.6.0",
-    "com.zerogamestudio.zeroengine.render": "0.4.0"
+    "com.zerogamestudio.zeroengine.render": "0.4.2"
   },
   "author": {
     "name": "ZeroGameStudio",

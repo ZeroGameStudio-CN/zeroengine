@@ -1,6 +1,6 @@
 {
   "name": "com.zerogamestudio.zeroengine.render",
-  "version": "0.4.1",
+  "version": "0.4.2",
   "displayName": "ZeroEngine Render",
   "description": "Caller-clocked pose snapshots, composited body visuals and portable shading primitives.",
   "unity": "2022.3",

@@ -44,6 +44,43 @@ namespace ZeroEngine.Render.Tests
         }
 
         [UnityTest]
+        public IEnumerator MaterialReplacement_RebindsTrackedRendererImmediatelyWithoutGlobalDiscovery()
+        {
+            Prepare();
+            var first = Cube("first", Vector3.zero, Vector3.one).GetComponent<Renderer>();
+            var second = Cube("second", Vector3.right * 3f, Vector3.one).GetComponent<Renderer>();
+            yield return Wait(() => _weather.IsReady);
+            var untouched = second.sharedMaterial;
+            var replacement = new Material(_source); _owned.Add(replacement);
+            replacement.SetFloat("_Smoothness", .63f);
+            Material recipe = null;
+            for (int cycle = 0; cycle < 4; cycle++)
+            {
+                recipe = cycle % 2 == 0 ? replacement : _source;
+                first.sharedMaterial = recipe;
+                SurfaceWeatherMaterialSources.NotifyRendererMaterialsChanged(first);
+                Assert.That(first.sharedMaterial.GetFloat("_ZeroSceneWeatherReceiver"), Is.EqualTo(1f));
+                Assert.That(SurfaceWeatherMaterialSources.Resolve(first.sharedMaterial), Is.SameAs(recipe));
+                Assert.That(second.sharedMaterial, Is.SameAs(untouched));
+                Assert.That(_weather.RegisteredObjects, Is.EqualTo(2));
+                Assert.That(_weather.OwnedMaterials, Is.LessThanOrEqualTo(2));
+            }
+            var late = Cube("not discovered yet", Vector3.left * 3f, Vector3.one).GetComponent<Renderer>();
+            SurfaceWeatherMaterialSources.NotifyRendererMaterialsChanged(late);
+            Assert.That(late.sharedMaterial, Is.SameAs(_source));
+            Assert.That(_weather.RegisteredObjects, Is.EqualTo(2));
+            _weather.DiscoverNow();
+            Assert.That(_weather.RegisteredObjects, Is.EqualTo(3));
+            _weather.enabled = false;
+            Assert.That(first.sharedMaterial, Is.SameAs(recipe));
+            Assert.That(second.sharedMaterial, Is.SameAs(_source));
+            Assert.That(late.sharedMaterial, Is.SameAs(_source));
+            first.sharedMaterial = replacement;
+            SurfaceWeatherMaterialSources.NotifyRendererMaterialsChanged(first);
+            Assert.That(first.sharedMaterial, Is.SameAs(replacement), "A disposed registry must not retain its callback.");
+        }
+
+        [UnityTest]
         public IEnumerator MergedNonReadableRoof_MovesAndCopiesWithoutAuthoredWeatherComponents()
         {
             Prepare();Cube("ground",new Vector3(0,-.1f,0),new Vector3(24,.2f,12));

@@ -8,8 +8,19 @@ namespace ZeroEngine.Render.Weather
     public static class SurfaceWeatherMaterialSources
     {
         private static readonly Dictionary<Material, Material> Sources = new();
+        public static event Action<Renderer> RendererMaterialsChanged;
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
-        private static void Reset() => Sources.Clear();
+        private static void Reset()
+        {
+            Sources.Clear();
+            RendererMaterialsChanged = null;
+        }
+
+        /// <summary>Rebinds active adapters after an owner changes a tracked renderer's material recipes.</summary>
+        public static void NotifyRendererMaterialsChanged(Renderer renderer)
+        {
+            if (renderer != null) RendererMaterialsChanged?.Invoke(renderer);
+        }
         public static Material Resolve(Material material)
         {
             for (int i = 0; i < 16 && material != null && Sources.TryGetValue(material, out Material source); i++) material = source;

@@ -49,11 +49,22 @@ namespace ZeroEngine.Render.Urp.Weather
                 UnityEngine.Object.DontDestroyOnLoad(_persistentWitness);
             }
             SceneManager.sceneLoaded += OnSceneLoaded;
+            SurfaceWeatherMaterialSources.RendererMaterialsChanged += OnRendererMaterialsChanged;
             TerrainCallbacks.heightmapChanged += OnTerrainChanged;
             BeginSweep();
         }
 
         private void OnSceneLoaded(Scene scene, LoadSceneMode mode) => QueueScene(scene);
+        private void OnRendererMaterialsChanged(Renderer renderer)
+        {
+            // New objects still use bounded discovery. Only an existing registration
+            // may rebind synchronously before the changed materials are rendered.
+            if (renderer is not MeshRenderer mesh || !_entries.Remove(mesh, out Entry previous)) return;
+            Release(previous);
+            Version++;
+            if (Failure == null && mesh != null && mesh.gameObject.activeInHierarchy)
+                DiscoverTransform(mesh.transform);
+        }
         private void OnTerrainChanged(Terrain terrain, RectInt rect, bool synced)
         {
             if (terrain != null && _entries.TryGetValue(terrain, out Entry entry))
@@ -98,6 +109,11 @@ namespace ZeroEngine.Render.Urp.Weather
             Transform node = _pending.Dequeue();
             if (node == null || !node.gameObject.activeInHierarchy) return;
             for (int i = 0; i < node.childCount; i++) Enqueue(node.GetChild(i));
+            DiscoverTransform(node);
+        }
+
+        private void DiscoverTransform(Transform node)
+        {
             if ((_profile.EnvironmentLayers & (1 << node.gameObject.layer)) == 0) return;
             bool unregisteredMesh = node.TryGetComponent(out MeshRenderer pendingRenderer) && !_entries.ContainsKey(pendingRenderer);
             bool unregisteredTerrain = node.TryGetComponent(out Terrain pendingTerrain) && !_entries.ContainsKey(pendingTerrain);
@@ -261,6 +277,7 @@ namespace ZeroEngine.Render.Urp.Weather
 
         public void Dispose()
         {
+            SurfaceWeatherMaterialSources.RendererMaterialsChanged -= OnRendererMaterialsChanged;
             SceneManager.sceneLoaded -= OnSceneLoaded;
             TerrainCallbacks.heightmapChanged -= OnTerrainChanged;
             foreach (Entry entry in _entries.Values) Release(entry);

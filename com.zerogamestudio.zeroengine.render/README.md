@@ -120,3 +120,7 @@ Overlapping regions at the highest participating priority are normalized togethe
 When their total coverage is below one, the remaining coverage uses `DefaultValue`;
 an isolated region therefore fades into the background through its outer feather.
 Zero feather retains an explicit hard edge. The field owns no weather clock or save data.
+
+### Presentation-owner material changes
+
+After replacing a renderer material recipe, call `SurfaceWeatherMaterialSources.NotifyRendererMaterialsChanged(renderer)`. Active adapters can immediately rebind renderers they already track. This notification does not discover new objects or mutate materials by itself. Resolve borrowed weather materials before retaining an authored source; never retain a temporary weather instance as another owner's restoration source.

@@ -165,3 +165,7 @@ The permanent contract fixtures are `SurfaceWeatherFieldTests` and
 testables, and run only these fixtures for this feature. A product must also inspect
 actual game-camera output and verify its regional weather, cutaway, contact and
 session/streaming adapters before adopting the candidate.
+
+### Material recipe changes
+
+Registered MeshRenderers react to `SurfaceWeatherMaterialSources.NotifyRendererMaterialsChanged(renderer)` synchronously. Only that tracked renderer is rebound through the existing material cache and released recipe; new objects keep the bounded discovery path. Registration budgets and authored shadow-proxy materials remain unchanged. Dispose removes the notification subscription.
