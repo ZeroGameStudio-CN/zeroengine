@@ -40,7 +40,13 @@ namespace ZGS.DataToolkit.Editor.Tests
             {
                 host.Initialize(profile);
                 host.position = new Rect(80f, 100f, 1200f, 660f);
-                host.ShowUtility();
+                // ShowUtility activates the desktop window, even for an automated
+                // layout check. Keep native IMGUI rendering without taking focus.
+                var mode = typeof(EditorWindow).Assembly.GetType("UnityEditor.ShowMode", true);
+                var show = typeof(EditorWindow).GetMethod("ShowPopupWithMode", BindingFlags.Instance | BindingFlags.NonPublic,
+                    null, new[] { mode, typeof(bool) }, null);
+                Assert.That(show, Is.Not.Null, "Unity background window API changed; do not fall back to focusing the Editor.");
+                show.Invoke(host, new[] { Enum.Parse(mode, "Utility"), (object)false });
                 foreach (float width in new[] { 1200f, 640f, 827f, 816f, 840f, 1200f })
                 {
                     int beforeLayout = host.LayoutCount;
