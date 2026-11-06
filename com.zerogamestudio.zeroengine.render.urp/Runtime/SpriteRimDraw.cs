@@ -1,11 +1,22 @@
 using System;
 using System.Collections.Generic;
-using Unity.Collections;
 using UnityEngine;
 using UnityEngine.Rendering;
 
 namespace ZeroEngine.Render.Urp
 {
+    internal readonly struct SpriteRimNativeSource
+    {
+        internal readonly Light Light;
+        internal readonly float DarkEdgeFill;
+
+        internal SpriteRimNativeSource(Light light, float darkEdgeFill)
+        {
+            Light = light;
+            DarkEdgeFill = darkEdgeFill;
+        }
+    }
+
     /// <summary>Owns only mask/override draws. Never replaces source materials or writes their property blocks.</summary>
     internal sealed class SpriteRimDraw : IDisposable
     {
@@ -80,19 +91,16 @@ namespace ZeroEngine.Render.Urp
             return selectedCount > 0;
         }
 
-        internal bool SelectLights(NativeArray<VisibleLight> sources)
+        internal bool SelectLights(List<SpriteRimNativeSource> sources)
         {
             selectedCount = 0;
             if (!Renderer) return false;
             var position = Renderer.bounds.center;
-            for (int i = 0; i < sources.Length; i++)
+            int layerMask = 1 << Renderer.gameObject.layer;
+            foreach (var source in sources)
             {
-                var light = sources[i].light;
-                if (!light || !light.isActiveAndEnabled || !float.IsFinite(light.intensity) || light.intensity <= 0 ||
-                    (light.cullingMask & (1 << Renderer.gameObject.layer)) == 0 ||
-                    (light.type != LightType.Point && light.type != LightType.Spot)) continue;
-                if (!light.TryGetComponent<SpriteRimLightSource>(out var source) || !source.isActiveAndEnabled) continue;
-                // Ordinary scene illumination and global daylight do not implicitly create actor rims.
+                var light = source.Light;
+                if ((light.cullingMask & layerMask) == 0) continue;
                 var toward = light.transform.position - position;
                 if (toward.sqrMagnitude < .0000001f) continue;
                 var away = new Vector2(-toward.x, -toward.y).normalized;
@@ -118,7 +126,7 @@ namespace ZeroEngine.Render.Urp
                     Row0 = matrix.GetRow(0), Row1 = matrix.GetRow(1), Row2 = matrix.GetRow(2),
                     // Keep hue separate from HDR intensity; native coverage is bounded in the shader.
                     Color = new Vector4(color.r / Mathf.Max(1, peak), color.g / Mathf.Max(1, peak), color.b / Mathf.Max(1, peak), light.intensity),
-                    Shape = new Vector4(light.type == LightType.Point ? 3 : 4, outer, inner, 0),
+                    Shape = new Vector4(light.type == LightType.Point ? 3 : 4, outer, inner, source.DarkEdgeFill),
                     Powers = Vector4.one
                 });
             }

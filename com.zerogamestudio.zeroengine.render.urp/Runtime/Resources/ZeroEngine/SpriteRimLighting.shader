@@ -68,7 +68,7 @@ Shader "Hidden/ZeroEngine/SpriteRimLighting"
             clip(MaskAlpha(uv) - .00001);
             return uv;
         }
-        float3 CompositeColor(float3 original, float4 light, float4 meta)
+        float3 CompositeColor(float3 original, float4 light, float3 darkEdgeLight, float4 meta)
         {
             bool gammaBlend = fmod(meta.z, 2) > .5;
             bool limitAddedHdr = meta.z >= 2;
@@ -81,11 +81,14 @@ Shader "Hidden/ZeroEngine/SpriteRimLighting"
             float3 color = min(lerp(baseColor, dodge, light.a), meta.y) * meta.x;
             if (limitAddedHdr) color = saturate(color);
             float3 response = gammaBlend ? SRGBToLinear(color) : color;
+            float incomingPeak = max(max(incomingBase.r, incomingBase.g), incomingBase.b);
+            // Dark art needs a colored contribution independent of the original channel values.
+            // Let it fade out before it reaches highlights, in the same color space as the scene.
+            response += darkEdgeLight * saturate(1 - incomingPeak * 4);
             if (limitAddedHdr)
             {
                 // Match the incoming highlight peak so white art does not acquire a glowing white border.
                 // The midtone floor still lets dark art receive light, while incoming HDR excess stays separate.
-                float incomingPeak = max(max(incomingBase.r, incomingBase.g), incomingBase.b);
                 float responsePeak = max(max(response.r, response.g), response.b);
                 response *= min(1, max(incomingPeak, .25) / max(responsePeak, .000001));
             }
@@ -119,12 +122,39 @@ Shader "Hidden/ZeroEngine/SpriteRimLighting"
             return distance >= 1 || angle > shape.y ? 0 :
                 EnhancedPower(1 - angle / max(shape.y, .00001), powers.w) * EnhancedPower(1 - distance, powers.x);
         }
+        struct RimColorMix
+        {
+            float3 weightedColor;
+            float weights;
+            float peak;
+        };
+
+        float AccumulateRimColor(inout RimColorMix mix, float3 color)
+        {
+            float peak = max(0, max(max(color.r, color.g), color.b));
+            mix.weightedColor += color * peak;
+            mix.weights += peak * peak;
+            mix.peak = max(mix.peak, peak);
+            return peak;
+        }
+
+        float3 ResolveRimColor(RimColorMix mix)
+        {
+            return mix.weightedColor * (mix.peak / max(mix.weights, .00000001));
+        }
+
         float4 EnhancedFrag(ActorVaryings input) : SV_Target
         {
             UNITY_SETUP_STEREO_EYE_INDEX_POST_VERTEX(input);
             float2 uv = CoveredArtCell(input);
             float2 texel = max(_RimRefMaskInfo.xy, .000001);
             float3 energy = 0; float blend = 0;
+            float3 darkEdgeLight = 0;
+            // Native lights can illuminate the same art cell. Bound brightness by the
+            // strongest contribution and let stronger colors lead a continuous hue mix.
+            bool mixNativeLights = _RimEnhanceLightCount > 1 && _RimEnhanceShapes[0].x > 2.5;
+            RimColorMix rimMix = (RimColorMix)0;
+            RimColorMix darkMix = (RimColorMix)0;
             [unroll] for (int i = 0; i < 4; i++)
             {
                 if (i >= _RimEnhanceLightCount) break;
@@ -156,13 +186,33 @@ Shader "Hidden/ZeroEngine/SpriteRimLighting"
                     modulation += _RimRefEdgeTint.rgb * _RimRefEdgeTint.a *
                         (_RimEnhanceInnerWrap.y * coverage / max(steps, 1));
                 }
-                energy += saturate(_RimEnhanceColors[i].rgb * amount) * modulation * band.w;
-                blend += amount;
+                float3 rimColor = saturate(_RimEnhanceColors[i].rgb * amount) * modulation * band.w;
+                // Native Shape.w opts into dark contour fill. Use the smooth field directly
+                // so dark edges remain readable as the actor approaches or leaves the light.
+                float3 darkColor = _RimEnhanceShapes[i].w > 0 ?
+                    _RimEnhanceColors[i].rgb * (alpha * _RimEnhanceShapes[i].w) * saturate(modulation) : 0;
+                if (mixNativeLights)
+                {
+                    if (AccumulateRimColor(rimMix, rimColor) > 0) blend = max(blend, amount);
+                    AccumulateRimColor(darkMix, darkColor);
+                }
+                else
+                {
+                    energy += rimColor;
+                    darkEdgeLight += darkColor;
+                    blend += amount;
+                }
+            }
+            if (mixNativeLights)
+            {
+                energy = ResolveRimColor(rimMix);
+                darkEdgeLight = ResolveRimColor(darkMix);
             }
             float2 sceneUV = GetNormalizedScreenSpaceUV(input.positionCS) * _RimEnhanceSceneScaleBias.xy + _RimEnhanceSceneScaleBias.zw;
             float4 original = SAMPLE_TEXTURE2D_X(_RimEnhanceSceneColor, sampler_PointClamp, sceneUV);
             float4 light = float4(saturate(energy), saturate(blend) * _RimRefStyle.z);
-            original.rgb = CompositeColor(original.rgb, light, float4(_RimRefStyle.x, _RimRefStyle.y, _RimRefStyle.w, 1));
+            original.rgb = CompositeColor(original.rgb, light, min(darkEdgeLight, .25) * _RimRefStyle.z,
+                float4(_RimRefStyle.x, _RimRefStyle.y, _RimRefStyle.w, 1));
             return original;
         }
         ENDHLSL

@@ -212,6 +212,8 @@ namespace ZeroEngine.Render.Tests.Runtime
                         nativeImage=Render(camera);
                         Assert.That(lighting.ActiveTargetCount,Is.EqualTo(1),"Native URP visible lights enroll the actor without a 2D-light component.");
                         Assert.That(nativeImage.GetPixel(13,28).g,Is.GreaterThan(nativeImage.GetPixel(13,28).r+.01f),"A native point light must tint the near contour.");
+                        VerifyDarkEdgeFill(camera, material, native, participation);
+                        VerifyNativeOverlap(camera, material, native, participation);
                         participation.enabled=false;unselectedImage=Render(camera);
                         Assert.That(lighting.ActiveTargetCount,Is.Zero,"The source component checkbox must remove participation immediately.");
                         AssertSameImage(baseline,unselectedImage,"Disabling rim participation must leave native source lighting alone.");
@@ -278,6 +280,113 @@ namespace ZeroEngine.Render.Tests.Runtime
             }
             yield return null;
         }
+        private static void VerifyNativeOverlap(Camera camera, Material material, Light primary, SpriteRimLightSource source)
+        {
+            var baseColor = material.GetVector("_BaseColor");
+            var originalColor = primary.color;
+            float originalIntensity = primary.intensity;
+            var host = new GameObject("Synthetic same-side local light");
+            SceneManager.MoveGameObjectToScene(host, primary.gameObject.scene);
+            host.transform.SetPositionAndRotation(primary.transform.position, primary.transform.rotation);
+            var secondary = host.AddComponent<Light>();
+            secondary.type = LightType.Point;
+            secondary.range = primary.range;
+            secondary.cullingMask = primary.cullingMask;
+            secondary.renderMode = primary.renderMode;
+            secondary.enabled = false;
+            host.AddComponent<SpriteRimLightSource>().DarkEdgeFill = .18f;
+            Texture2D single = null, duplicate = null;
+            try
+            {
+                material.SetVector("_BaseColor", new Vector4(.035f, .035f, .035f, 1f));
+                source.DarkEdgeFill = .18f;
+                primary.color = new Color(1f, .5f, .12f);
+                primary.intensity = .7f;
+                single = Render(camera);
+                secondary.color = primary.color;
+                secondary.intensity = primary.intensity;
+                secondary.enabled = true;
+                duplicate = Render(camera);
+                AssertSameImage(single, duplicate, "Equal same-side lights must share the single-light brightness budget.");
+
+                secondary.color = new Color(.08f, .66f, 1f);
+                float lastWarmth = float.PositiveInfinity;
+                for (int i = 0; i <= 4; i++)
+                {
+                    float t = i / 4f;
+                    primary.intensity = Mathf.Lerp(1.35f, .25f, t);
+                    secondary.intensity = Mathf.Lerp(.25f, 1.35f, t);
+                    var image = Render(camera);
+                    try
+                    {
+                        var edge = image.GetPixel(13, 28);
+                        float warmth = edge.r - edge.b;
+                        Assert.That(warmth, Is.LessThan(lastWarmth), "Changing the stronger light must smoothly transfer its hue.");
+                        if (i == 0) Assert.That(warmth, Is.GreaterThan(.06f));
+                        if (i == 4) Assert.That(warmth, Is.LessThan(-.06f));
+                        lastWarmth = warmth;
+                        Assert.That(Mathf.Max(edge.r, Mathf.Max(edge.g, edge.b)), Is.LessThanOrEqualTo(.251f));
+                    }
+                    finally { Object.DestroyImmediate(image); }
+                }
+            }
+            finally
+            {
+                primary.intensity = originalIntensity;
+                primary.color = originalColor;
+                source.DarkEdgeFill = 0f;
+                material.SetVector("_BaseColor", baseColor);
+                if (single) Object.DestroyImmediate(single);
+                if (duplicate) Object.DestroyImmediate(duplicate);
+                Object.DestroyImmediate(host);
+            }
+        }
+
+        private static void VerifyDarkEdgeFill(Camera camera, Material material, Light light, SpriteRimLightSource source)
+        {
+            var baseColor = material.GetVector("_BaseColor");
+            var lightColor = light.color;
+            var position = light.transform.position;
+            float intensity = light.intensity;
+            Texture2D legacy = null, near = null, far = null, whiteLegacy = null, whiteFilled = null;
+            try
+            {
+                light.color = new Color(1f, .5f, .12f);
+                light.intensity = .65f;
+                material.SetVector("_BaseColor", new Vector4(0f, 0f, 0f, 1f));
+                Assert.That(source.DarkEdgeFill, Is.Zero, "Existing marked lights keep their current response.");
+                legacy = Render(camera);
+                source.DarkEdgeFill = .18f;
+                near = Render(camera);
+                var edge = near.GetPixel(13, 28);
+                Assert.That(edge.r, Is.GreaterThan(legacy.GetPixel(13, 28).r + .05f));
+                Assert.That(edge.r, Is.GreaterThan(edge.g).And.LessThanOrEqualTo(.251f), "Dark contour fill is colored and bounded.");
+                Assert.That(near.GetPixel(29, 28).r, Is.EqualTo(legacy.GetPixel(29, 28).r).Within(.004f), "Dark fill stays out of the interior.");
+                Assert.That(near.GetPixel(13, 16).r, Is.EqualTo(legacy.GetPixel(13, 16).r).Within(.004f), "Occluded art does not get colored.");
+                light.transform.position = new Vector3(-2.6f, position.y, position.z);
+                far = Render(camera);
+                Assert.That(far.GetPixel(13, 28).r, Is.InRange(.01f, edge.r - .01f), "The added color fades with distance.");
+
+                light.transform.position = position;
+                material.SetVector("_BaseColor", Vector4.one);
+                source.DarkEdgeFill = 0f;
+                whiteLegacy = Render(camera);
+                source.DarkEdgeFill = .18f;
+                whiteFilled = Render(camera);
+                AssertSameImage(whiteLegacy, whiteFilled, "Dark fill must leave bright source pixels unchanged.");
+            }
+            finally
+            {
+                source.DarkEdgeFill = 0f;
+                light.color = lightColor;
+                light.intensity = intensity;
+                light.transform.position = position;
+                material.SetVector("_BaseColor", baseColor);
+                foreach (var image in new[] { legacy, near, far, whiteLegacy, whiteFilled })
+                    if (image) Object.DestroyImmediate(image);
+            }
+        }
+
         private static void VerifySpatialAndTransparentSources(Camera camera, SpriteRenderer actor, GameObject occluder,
             SpriteRimLighting lighting, SpriteRimLight light, SpriteRimLightingProfile profile, Texture2D texture, Material material)
         {

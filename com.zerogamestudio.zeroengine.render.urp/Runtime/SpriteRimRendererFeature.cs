@@ -25,6 +25,7 @@ namespace ZeroEngine.Render.Urp
         private sealed class RimPass : ScriptableRenderPass
         {
             private readonly List<SpriteRimDraw> draws = new();
+            private readonly List<SpriteRimNativeSource> nativeSources = new();
             private readonly Plane[] planes = new Plane[6];
             private static readonly int SceneColorId = Shader.PropertyToID("_RimEnhanceSceneColor");
             private static readonly int SceneScaleId = Shader.PropertyToID("_RimEnhanceSceneScaleBias");
@@ -37,8 +38,17 @@ namespace ZeroEngine.Render.Urp
             }
             internal bool Prepare(Camera camera, NativeArray<VisibleLight> lights)
             {
+                nativeSources.Clear();
+                foreach (var visible in lights)
+                {
+                    var light = visible.light;
+                    if (!light || !light.isActiveAndEnabled || !float.IsFinite(light.intensity) || light.intensity <= 0 ||
+                        (light.type != LightType.Point && light.type != LightType.Spot)) continue;
+                    if (light.TryGetComponent<SpriteRimLightSource>(out var source) && source.isActiveAndEnabled)
+                        nativeSources.Add(new SpriteRimNativeSource(light, source.DarkEdgeFill));
+                }
                 GeometryUtility.CalculateFrustumPlanes(camera, planes);
-                SpriteRimRegistry.Collect(camera, planes, lights, draws);
+                SpriteRimRegistry.Collect(camera, planes, nativeSources, draws);
                 return draws.Count > 0;
             }
             private sealed class PassData
@@ -84,7 +94,11 @@ namespace ZeroEngine.Render.Urp
                 }
                 resources.cameraColor = destination;
             }
-            internal void Dispose() => draws.Clear();
+            internal void Dispose()
+            {
+                nativeSources.Clear();
+                draws.Clear();
+            }
         }
     }
 }

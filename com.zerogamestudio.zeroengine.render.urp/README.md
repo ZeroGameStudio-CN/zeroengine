@@ -20,6 +20,13 @@ pooling and project assets stay in the consumer. The existing UnityEngine-only
    URP visibility, culling masks and the camera frustum select up to four marked
    local lights per actor. Directional lights and sky illumination remain excluded.
    HDR intensity controls coverage separately from hue, preserving colored edges.
+   Use `DarkEdgeFill` on a marked light to add a small colored contribution to
+   dark contour cells, with a faint inner wrap and a fade across the light's
+   range. Its default value is zero. It fades out on bright source pixels and
+   uses the existing composite pass and highlight limit.
+   Where native lights overlap on the same art cell, their hues blend with
+   greater weight on the stronger contribution. The brightest contribution
+   bounds that cell's response, so coincident lights do not wash its color out.
 
 For authored 2D fields, create `SpriteRimLight` components and pass their explicit
 array to `Configure(renderers, lights, profile)`. Both inputs use the same enhanced
@@ -49,6 +56,8 @@ it does not add normal maps or independently reproduce shadow attenuation.
 Only registered actors visible to a game base camera update their silhouette.
 Scene lights are captured from that camera's URP culling results. Disabling an
 actor or removing its light removes its contribution in the same camera render.
+Marked local lights are filtered once per camera. A camera with no eligible
+native sources skips native actor preparation, while explicit fields remain available.
 No optional legacy rendering path or automatic fallback is installed.
 
 ## Validation and consumption
