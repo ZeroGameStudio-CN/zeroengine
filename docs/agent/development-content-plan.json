@@ -72,6 +72,20 @@
         "D:\\Temp\\P5GrowthNpcPackages-20261105\\package-play-proof.json"
       ],
       "verificationScope": "Social 21、Economy 9、Gameplay 9 项原生规则，以及关系宿主真实 PlayMode 送礼／日历／保存参与者／销毁流程；临时输入均已归还，P5 玩家流程待接入。"
+    },
+    {
+      "id": "tool.development-content",
+      "title": "开发内容与版本计划",
+      "stage": "Ready",
+      "targetReleaseId": "",
+      "availability": "InternalOnly",
+      "nextAction": "在 P5 工作台验证 Git 包接入及清单扩展字段保存。",
+      "entrance": "Unity 工作台中的开发内容面板",
+      "resourcePath": "com.zerogamestudio.zeroengine.development-content/README.md",
+      "revision": "1.1.0",
+      "verificationEvidence": [
+        "Unity 6000.6.4f1，P5 Editor UI 基线，16 项包内测试与 3 项草稿复测无失败。"
+      ]
     }
   ]
 }
