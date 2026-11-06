@@ -1,10 +1,13 @@
 using System;
 
+using UnityEngine.Scripting.APIUpdating;
+
 namespace ZeroEngine.Achievement
 {
     /// <summary>
     /// 成就状态
     /// </summary>
+    [MovedFrom(true, "ZeroEngine.Achievement", "ZeroEngine.Narrative", "AchievementState")]
     public enum AchievementState
     {
         /// <summary>已锁定（前置未满足）</summary>
@@ -23,6 +26,7 @@ namespace ZeroEngine.Achievement
     /// <summary>
     /// 成就分类
     /// </summary>
+    [MovedFrom(true, "ZeroEngine.Achievement", "ZeroEngine.Narrative", "AchievementCategory")]
     public enum AchievementCategory
     {
         /// <summary>战斗</summary>
@@ -53,6 +57,7 @@ namespace ZeroEngine.Achievement
     /// <summary>
     /// 成就事件类型
     /// </summary>
+    [MovedFrom(true, "ZeroEngine.Achievement", "ZeroEngine.Narrative", "AchievementEventType")]
     public enum AchievementEventType
     {
         /// <summary>进度更新</summary>
@@ -66,29 +71,9 @@ namespace ZeroEngine.Achievement
     }
 
     /// <summary>
-    /// 条件检查类型
-    /// </summary>
-    public enum StateCheckType
-    {
-        /// <summary>玩家等级</summary>
-        PlayerLevel,
-
-        /// <summary>拥有物品</summary>
-        HasItem,
-
-        /// <summary>货币数量</summary>
-        CurrencyAmount,
-
-        /// <summary>属性值</summary>
-        StatValue,
-
-        /// <summary>自定义</summary>
-        Custom
-    }
-
-    /// <summary>
     /// 成就事件参数
     /// </summary>
+    [MovedFrom(true, "ZeroEngine.Achievement", "ZeroEngine.Narrative", "AchievementEventArgs")]
     public struct AchievementEventArgs
     {
         public AchievementEventType EventType;
@@ -134,6 +119,7 @@ namespace ZeroEngine.Achievement
     /// 成就进度数据
     /// </summary>
     [Serializable]
+    [MovedFrom(true, "ZeroEngine.Achievement", "ZeroEngine.Narrative", "AchievementProgress")]
     public class AchievementProgress
     {
         /// <summary>成就ID</summary>

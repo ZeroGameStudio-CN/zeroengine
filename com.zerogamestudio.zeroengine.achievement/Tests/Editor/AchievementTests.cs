@@ -70,7 +70,7 @@ namespace ZeroEngine.Tests.Achievement
 
             float progressValue = condition.GetProgress(progress, 0);
 
-            TestHelpers.AssertApproximatelyEqual(0.5f, progressValue);
+            Assert.That(progressValue, Is.EqualTo(0.5f).Within(0.0001f));
         }
 
         [Test]
@@ -86,7 +86,7 @@ namespace ZeroEngine.Tests.Achievement
 
             float progressValue = condition.GetProgress(progress, 0);
 
-            TestHelpers.AssertApproximatelyEqual(1.0f, progressValue);
+            Assert.That(progressValue, Is.EqualTo(1.0f).Within(0.0001f));
         }
 
         [Test]

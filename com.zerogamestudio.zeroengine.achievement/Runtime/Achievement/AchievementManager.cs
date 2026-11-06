@@ -1,8 +1,8 @@
 using System;
 using System.Collections.Generic;
 using UnityEngine;
+using UnityEngine.Scripting.APIUpdating;
 using ZeroEngine.Core;
-using ZeroEngine.Save;
 
 namespace ZeroEngine.Achievement
 {
@@ -11,7 +11,8 @@ namespace ZeroEngine.Achievement
     /// 负责成就的解锁、进度追踪和奖励发放
     /// 支持外部成就提供者（Steam 等）
     /// </summary>
-    public class AchievementManager : MonoSingleton<AchievementManager>, ISaveable
+    [MovedFrom(true, "ZeroEngine.Achievement", "ZeroEngine.Narrative", "AchievementManager")]
+    public class AchievementManager : MonoSingleton<AchievementManager>
     {
         [Header("配置")]
         [Tooltip("所有成就定义")]
@@ -19,10 +20,6 @@ namespace ZeroEngine.Achievement
 
         [Tooltip("成就组")]
         [SerializeField] private List<AchievementGroupSO> _achievementGroups = new List<AchievementGroupSO>();
-
-#if STEAMWORKS_NET
-        [SerializeField] private bool _autoInitializeSteam = true;
-#endif
 
         [Header("调试")]
         [SerializeField] private bool _debugMode;
@@ -52,7 +49,6 @@ namespace ZeroEngine.Achievement
 
         // 临时列表（零分配）
         private readonly List<AchievementSO> _tempAchievementList = new List<AchievementSO>(32);
-        private SaveSlotManager _registeredSaveSlotManager;
 
         #region Events
 
@@ -95,22 +91,9 @@ namespace ZeroEngine.Achievement
 
         #endregion
 
-        #region ISaveable
+        #region Save data
 
         public string SaveKey => "AchievementManager";
-
-        public void Register()
-        {
-            _registeredSaveSlotManager = SaveSlotManager.Instance;
-            _registeredSaveSlotManager?.Register(this);
-        }
-
-        public void Unregister()
-        {
-            if (_registeredSaveSlotManager != null)
-                _registeredSaveSlotManager.Unregister(this);
-            _registeredSaveSlotManager = null;
-        }
 
         public object ExportSaveData()
         {
@@ -151,45 +134,18 @@ namespace ZeroEngine.Achievement
         {
             base.Awake();
             BuildCaches();
-            InitializeProviders();
-        }
-
-        private void Start()
-        {
-            Register();
-        }
-
-        protected override void OnDestroy()
-        {
-            Unregister();
-            base.OnDestroy();
         }
 
         #endregion
 
         #region Provider Management
 
-        private void InitializeProviders()
-        {
-#if STEAMWORKS_NET
-            if (_autoInitializeSteam)
-            {
-                var steamProvider = new Providers.SteamAchievementProvider();
-                if (steamProvider.Initialize())
-                {
-                    _providers.Add(steamProvider);
-                    Log("Steam Provider initialized.");
-                }
-            }
-#endif
-        }
-
         /// <summary>
         /// 注册外部成就提供者
         /// </summary>
         public void RegisterProvider(IAchievementProvider provider)
         {
-            if (provider != null && provider.Initialize())
+            if (provider != null && !_providers.Contains(provider) && provider.Initialize())
             {
                 _providers.Add(provider);
             }
@@ -234,8 +190,9 @@ namespace ZeroEngine.Achievement
         /// </summary>
         public void RegisterAchievement(AchievementSO achievement)
         {
-            if (achievement == null) return;
-            if (_achievementLookup.ContainsKey(achievement.AchievementId)) return;
+            if (achievement == null || string.IsNullOrEmpty(achievement.AchievementId) ||
+                _achievementLookup.ContainsKey(achievement.AchievementId) ||
+                !PrepareAchievementForRegistration(achievement)) return;
 
             _allAchievements.Add(achievement);
             _achievementLookup[achievement.AchievementId] = achievement;
@@ -603,10 +560,18 @@ namespace ZeroEngine.Achievement
 
         #region Internal
 
+        /// <summary>
+        /// Allows the host to configure or reject a definition before it enters the runtime catalog.
+        /// Applies both to serialized definitions and explicit runtime registration.
+        /// </summary>
+        protected virtual bool PrepareAchievementForRegistration(AchievementSO achievement) => true;
+
         private void BuildCaches()
         {
             _achievementLookup.Clear();
             _categoryCache.Clear();
+            _allAchievements.RemoveAll(achievement => achievement != null &&
+                (string.IsNullOrEmpty(achievement.AchievementId) || !PrepareAchievementForRegistration(achievement)));
 
             foreach (var achievement in _allAchievements)
             {
@@ -685,6 +650,7 @@ namespace ZeroEngine.Achievement
     #region Save Data
 
     [Serializable]
+    [MovedFrom(true, "ZeroEngine.Achievement", "ZeroEngine.Narrative", "AchievementSaveData")]
     public class AchievementSaveData
     {
         public int TotalPoints;

@@ -1,0 +1,11 @@
+{
+    "name": "ZeroEngine.Achievement.Steam",
+    "rootNamespace": "ZeroEngine.Achievement.Providers",
+    "references": ["ZeroEngine.Achievement", "com.rlabrecque.steamworks.net"],
+    "includePlatforms": ["Editor", "LinuxStandalone64", "macOSStandalone", "WindowsStandalone32", "WindowsStandalone64"],
+    "defineConstraints": ["STEAMWORKS_NET"],
+    "versionDefines": [
+        { "name": "com.rlabrecque.steamworks.net", "expression": "", "define": "STEAMWORKS_NET" }
+    ],
+    "autoReferenced": true
+}

@@ -1,0 +1,13 @@
+{
+    "name": "com.zerogamestudio.zeroengine.achievement.steam",
+    "version": "1.0.0",
+    "displayName": "ZeroEngine.Achievement.Steam",
+    "description": "Optional legacy Steamworks.NET provider for ZeroEngine achievements.",
+    "unity": "2022.3",
+    "unityRelease": "0f1",
+    "dependencies": {
+        "com.zerogamestudio.zeroengine.achievement": "1.0.0"
+    },
+    "keywords": ["zeroengine", "achievement", "steam"],
+    "author": { "name": "ZeroGameStudio" }
+}

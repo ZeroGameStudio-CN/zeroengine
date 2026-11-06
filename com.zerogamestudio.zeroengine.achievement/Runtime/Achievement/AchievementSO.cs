@@ -2,12 +2,15 @@ using System;
 using System.Collections.Generic;
 using UnityEngine;
 
+using UnityEngine.Scripting.APIUpdating;
+
 namespace ZeroEngine.Achievement
 {
     /// <summary>
     /// 成就数据定义 ScriptableObject
     /// </summary>
     [CreateAssetMenu(fileName = "New Achievement", menuName = "ZeroEngine/Achievement/Achievement")]
+    [MovedFrom(true, "ZeroEngine.Achievement", "ZeroEngine.Narrative", "AchievementSO")]
     public class AchievementSO : ScriptableObject
     {
         [Header("基本信息")]
@@ -202,6 +205,7 @@ namespace ZeroEngine.Achievement
     /// 成就组（用于分类或成就链）
     /// </summary>
     [CreateAssetMenu(fileName = "New Achievement Group", menuName = "ZeroEngine/Achievement/Achievement Group")]
+    [MovedFrom(true, "ZeroEngine.Achievement", "ZeroEngine.Narrative", "AchievementGroupSO")]
     public class AchievementGroupSO : ScriptableObject
     {
         [Tooltip("组ID")]

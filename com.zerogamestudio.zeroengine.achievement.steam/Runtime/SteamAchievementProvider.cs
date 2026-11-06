@@ -7,8 +7,8 @@ using Steamworks;
 namespace ZeroEngine.Achievement.Providers
 {
     /// <summary>
-    /// Steam Achievement Provider.
-    /// Requires Unity-Steamworks (SteamManager) to be initialized.
+    /// Legacy Steam Achievement Provider. The host initializes the Steamworks.NET SDK
+    /// and registers the provider explicitly.
     /// </summary>
     public class SteamAchievementProvider : IAchievementProvider
     {
@@ -17,18 +17,15 @@ namespace ZeroEngine.Achievement.Providers
         public bool Initialize()
         {
 #if STEAMWORKS_NET && (UNITY_STANDALONE_WIN || UNITY_STANDALONE_LINUX || UNITY_STANDALONE_OSX)
-            // Check if SteamManager is present and initialized
-            // Note: SteamManager is the standard singleton from Steamworks.NET
-            if (SteamManager.Initialized)
+            try
             {
-                // Request current stats from Steam
-                SteamUserStats.RequestCurrentStats();
-                _isInitialized = true;
-                return true;
+                _isInitialized = SteamUserStats.RequestCurrentStats();
+                return _isInitialized;
             }
-            else
+            catch (System.InvalidOperationException)
             {
-                Debug.LogWarning("[SteamAchievementProvider] SteamManager is not initialized.");
+                _isInitialized = false;
+                Debug.LogWarning("[SteamAchievementProvider] Initialize the Steamworks.NET SDK before registration.");
                 return false;
             }
 #else

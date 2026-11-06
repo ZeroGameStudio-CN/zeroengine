@@ -30,6 +30,8 @@ mixing in game-specific content.
 | `com.zerogamestudio.zeroengine.data-toolkit` | Editor tooling for browsing, inspecting, and validating project data assets. |
 | `com.zerogamestudio.zeroengine.gameplay` | Reusable gameplay mechanics and trigger helpers. |
 | `com.zerogamestudio.zeroengine.narrative` | Quest and narrative runtime services. |
+| `com.zerogamestudio.zeroengine.achievement` | Achievement definitions, progress and provider contracts. |
+| `com.zerogamestudio.zeroengine.achievement.steam` | Optional desktop Steamworks.NET provider. |
 | `com.zerogamestudio.zeroengine.pathfinding2d` | 2D platform navigation, graph generation, jump links, route costs, and diagnostics. |
 | `com.zerogamestudio.zeroengine.persistence` | Save and persistence infrastructure. |
 | `com.zerogamestudio.zeroengine.ui` | Runtime UI framework and toast notification systems. |

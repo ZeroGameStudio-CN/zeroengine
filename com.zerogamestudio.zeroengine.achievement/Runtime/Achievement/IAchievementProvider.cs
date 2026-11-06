@@ -1,8 +1,11 @@
+using UnityEngine.Scripting.APIUpdating;
+
 namespace ZeroEngine.Achievement
 {
     /// <summary>
     /// Interface for external achievement providers (e.g. Steam, Epic, Custom Server).
     /// </summary>
+    [MovedFrom(true, "ZeroEngine.Achievement", "ZeroEngine.Narrative", "IAchievementProvider")]
     public interface IAchievementProvider
     {
         /// <summary>

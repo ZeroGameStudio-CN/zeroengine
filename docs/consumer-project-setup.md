@@ -43,6 +43,28 @@ Unity 2022.3. Dashboard 3.1 and Formula 0.5 consumers must therefore declare
 commit. Legacy ZeroEngine 2.1 consumers must also declare Dashboard 3.1 at that
 commit; never mix these package versions across different Git revisions.
 
+## Achievement split
+
+When upgrading to Narrative 3.0, add
+`com.zerogamestudio.zeroengine.achievement` to the project manifest at the same
+tested commit as Narrative. Add `ZeroEngine.Achievement` to each asmdef that
+directly uses an achievement type. Keep `ZeroEngine.Narrative` where the assembly
+also uses quests, dialogue, or the legacy state/reward adapters. An installation
+that only needs new achievement assets can use Achievement and Core without
+Narrative.
+
+Existing assets keep their GUIDs; the moved managed references and saved data
+retain the `ZeroEngine.Achievement` namespace. Keep Narrative installed while
+reading saves whose type names still refer to its old assembly. Unity's managed
+reference migration and Narrative's CLR type forwarders cover different formats.
+
+Register platform providers in the host after its SDK is ready. Bind
+`AchievementSaveSlotAdapter` to the host's `SaveSlotManager` before reading a
+slot, or use the project's existing save bridge. The old auto-Steam and
+auto-registration behavior no longer runs. POB retains its own Steam and save
+adapters. Install the separate `com.zerogamestudio.zeroengine.achievement.steam`
+package only when a host needs ZE's legacy provider.
+
 ## Upgrade Flow
 
 1. Make the ZeroEngine change in this repository.

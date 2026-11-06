@@ -10,6 +10,7 @@
         "ZeroEngine.Economy",
         "ZeroEngine.AI",
         "ZeroEngine.Narrative",
+        "ZeroEngine.Achievement",
         "ZeroEngine.World",
         "ZeroEngine.Gameplay",
         "ZeroEngine.Social",

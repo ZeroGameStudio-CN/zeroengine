@@ -4,6 +4,7 @@
   "references": [
     "ZeroEngine.Core",
     "ZeroEngine.Narrative",
+    "ZeroEngine.Achievement",
     "UnityEditor.TestRunner",
     "UnityEngine.TestRunner"
   ],
