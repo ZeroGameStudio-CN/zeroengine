@@ -44,6 +44,16 @@ commit. Legacy ZeroEngine 2.1.1 consumers declare editor-ui 1.3.0 directly;
 Dashboard remains optional. Never mix these package versions across different
 Git revisions.
 
+## Social package dependencies
+
+Social's gift definitions and runtime assembly require Economy as well as Core and
+Persistence. Consumers selecting Social must declare all four sibling Git packages
+at the same tested commit. The 3.0 candidate requires Economy 2.1 and Persistence
+2.1.1 for joined in-memory commits and explicit participant registration. The
+dependency declaration does not establish that a
+consumer's save and inventory integration is ready; validate those domain contracts
+before adopting the relationship runtime.
+
 ## Upgrade Flow
 
 1. Make the ZeroEngine change in this repository.

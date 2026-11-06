@@ -47,8 +47,15 @@ namespace ZeroEngine.Interaction
         /// <summary>交互发起时间</summary>
         public readonly float Timestamp;
 
+        public readonly IInteractionRelationshipQuery Relationships;
+
         public InteractionContext(GameObject interactor, Vector3 position, float distance)
+            : this(interactor, position, distance, null) { }
+
+        public InteractionContext(GameObject interactor, Vector3 position, float distance,
+            IInteractionRelationshipQuery relationships)
         {
+            Relationships = relationships;
             Interactor = interactor;
             Position = position;
             Distance = distance;

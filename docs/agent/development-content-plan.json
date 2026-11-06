@@ -1,0 +1,77 @@
+{
+  "schemaVersion": 1,
+  "projectId": "zeroengine",
+  "currentReleaseId": "",
+  "releases": [],
+  "records": [
+    {
+      "id": "ze.character.actor-martial-state",
+      "title": "按角色独立持有的武学状态与装配",
+      "stage": "Previewable",
+      "targetReleaseId": "",
+      "availability": "TestOnly",
+      "responsibleChat": "01a14d22-2dbb-7313-a0ae-34366b9c3862",
+      "chatUrl": "",
+      "nextAction": "取得包含显式 RecipientId 的准确 ZE 新候选发布授权；P5 真实成员／奖励／NPC／磁盘保存沿同一状态合同迁移。",
+      "entrance": "受控临时 UPM 窗口加载本分支 Character 后运行 ZeroEngine.Tests.Character.MartialArtStateTests；历史窗口仅作证据，不重放。",
+      "resourcePath": "com.zerogamestudio.zeroengine.character/Runtime/MartialArts/Core/MartialArtState.cs",
+      "revision": "R38 actor state and explicit recipient candidate",
+      "releaseEvidence": "",
+      "candidatePackageVersion": "3.0.0",
+      "verificationEvidence": [
+        "D:\\Temp\\P5GrowthNpcPackages-20261105\\character-proof-v3.json",
+        "D:\\Temp\\P5GrowthNpcPackages-20261105\\package-play-proof.json",
+        "D:\\Temp\\P5GrowthNpcPackages-20261105\\p5-reward-recipient-proof.json"
+      ],
+      "relatedContent": [
+        {
+          "projectId": "p5",
+          "contentId": "p5.demo.party-growth-npc"
+        }
+      ],
+      "verificationScope": "Character 42 项包级合同与真实四角色 PlayMode 沿原输入证据；新增 Gameplay 接收者构造及目录到指定成员有 13 项 Editor＋1 项后台 PlayMode，0 失败。均为受控候选，不证明 P5 普通 Demo 或磁盘 Continue。"
+    },
+    {
+      "id": "ze.social.transactional-relationship",
+      "title": "关系状态、游戏时钟与原子送礼的现代化接入",
+      "stage": "Previewable",
+      "targetReleaseId": "",
+      "availability": "TestOnly",
+      "responsibleChat": "01a14d22-2dbb-7313-a0ae-34366b9c3862",
+      "chatUrl": "",
+      "nextAction": "准备并取得准确 ZE 发布授权；然后接 P5 关系／请教、上下文查询和保存消费者。",
+      "entrance": "受控临时 UPM 窗口加载本分支 Social／Economy，并启用 Social testables 后运行 ZeroEngine.Social.Tests.RelationshipStateTests；正常 P5 尚无此新版入口。",
+      "resourcePath": "com.zerogamestudio.zeroengine.social",
+      "revision": "R38 explicit-owner runtime candidate",
+      "releaseEvidence": "",
+      "candidatePackageVersion": "3.0.0",
+      "relatedContent": [
+        {
+          "projectId": "p5",
+          "contentId": "p5.demo.party-growth-npc"
+        }
+      ],
+      "supportingChanges": [
+        {
+          "package": "com.zerogamestudio.zeroengine.economy",
+          "candidatePackageVersion": "2.1.0",
+          "resourcePath": "com.zerogamestudio.zeroengine.economy/Runtime/Inventory/IInventoryExchangeParticipant.cs",
+          "validation": "9 exact native Editor cases; 0 failures; original package bytes and scene/data restored"
+        },
+        {
+          "package": "com.zerogamestudio.zeroengine.gameplay",
+          "candidatePackageVersion": "2.1.0",
+          "resourcePath": "com.zerogamestudio.zeroengine.gameplay/Runtime/Interaction/Core/IInteractionRelationshipQuery.cs",
+          "validation": "9 exact native Editor cases; 0 failures; exact original package/testable/data restoration"
+        }
+      ],
+      "verificationEvidence": [
+        "D:\\Temp\\P5GrowthNpcPackages-20261105\\social-proof.json",
+        "D:\\Temp\\P5GrowthNpcPackages-20261105\\economy-proof.json",
+        "D:\\Temp\\P5GrowthNpcPackages-20261105\\gameplay-proof.json",
+        "D:\\Temp\\P5GrowthNpcPackages-20261105\\package-play-proof.json"
+      ],
+      "verificationScope": "Social 21、Economy 9、Gameplay 9 项原生规则，以及关系宿主真实 PlayMode 送礼／日历／保存参与者／销毁流程；临时输入均已归还，P5 玩家流程待接入。"
+    }
+  ]
+}

@@ -1,6 +1,6 @@
 {
     "name": "com.zerogamestudio.zeroengine.economy",
-    "version": "2.0.0",
+    "version": "2.1.0",
     "displayName": "ZeroEngine.Economy",
     "description": "Economy and item systems for ZeroEngine. Includes Inventory (multi-container, stacking, filters), Loot Tables (weighted, pity, layered), Shop System, and Crafting System (recipes, skills).",
     "unity": "2022.3",

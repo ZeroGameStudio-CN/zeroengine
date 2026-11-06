@@ -26,26 +26,56 @@ namespace ZeroEngine.Inventory
             return TryExchangeItems(consumed, produced, persistImmediately, null);
         }
 
-        // Crafting joins its progress/experience state before observers can capture a save.
-        // The callback belongs to this assembly and must only update the owning in-memory state.
+        /// <summary>Joins a prepared domain change before any save or inventory notification is published.</summary>
+        public bool TryExchangeItems(
+            IReadOnlyList<InventoryItemAmount> consumed,
+            IReadOnlyList<InventoryItemAmount> produced,
+            IInventoryExchangeParticipant participant,
+            bool persistImmediately = true)
+        {
+            if (participant == null) throw new ArgumentNullException(nameof(participant));
+            return TryExchangeItemsCore(consumed, produced, persistImmediately, participant, null);
+        }
+
+        // Crafting already prepares its state inside this assembly; both paths share the same exchange.
         internal bool TryExchangeItems(
             IReadOnlyList<InventoryItemAmount> consumed,
             IReadOnlyList<InventoryItemAmount> produced,
             bool persistImmediately,
             Action commitState)
         {
+            return TryExchangeItemsCore(consumed, produced, persistImmediately, null, commitState);
+        }
+
+        private bool TryExchangeItemsCore(
+            IReadOnlyList<InventoryItemAmount> consumed,
+            IReadOnlyList<InventoryItemAmount> produced,
+            bool persistImmediately,
+            IInventoryExchangeParticipant participant,
+            Action commitState)
+        {
             if (!TryStageExchange(consumed, produced, out var staged, out var removed, out var added))
                 return false;
+            if (participant != null && !participant.TryPrepare()) return false;
 
             var previous = _slots;
             _slots = staged;
             try
             {
+                participant?.Commit();
                 commitState?.Invoke();
             }
-            catch
+            catch (Exception commitError)
             {
                 _slots = previous;
+                if (participant != null)
+                {
+                    try { participant.Rollback(); }
+                    catch (Exception rollbackError)
+                    {
+                        throw new AggregateException("Inventory participant rollback failed.", commitError, rollbackError);
+                    }
+                }
                 throw;
             }
 

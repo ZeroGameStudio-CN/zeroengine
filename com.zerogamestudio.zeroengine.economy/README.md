@@ -78,3 +78,15 @@ consumption and recipe queries exclude instances. Instance exchange requires an 
 identity and payload match; capacity is evaluated after consumption. Save import validates every
 slot against registered definitions before replacing live state, and exports/imports clone lists,
 slots and instance payloads. See `Runtime/Inventory/README.md` for the public contracts.
+
+## Joined in-memory exchange (2.1 candidate)
+
+The `IInventoryExchangeParticipant` overload stages the complete inventory result,
+then lets another domain validate and commit its prepared in-memory state before
+persistence and inventory observers. The participant must stage without mutation,
+commit without publishing/I/O, and restore its prior state if Commit throws.
+Inventory is restored before Rollback runs; a rollback failure preserves both
+exceptions. Callers must treat such failure as recovery-required rather than a
+successful or blindly retryable operation. Existing Crafting and public exchanges
+share the same execution path. Consumer save transactions can disable the legacy
+immediate persistence callback with `persistImmediately: false`.

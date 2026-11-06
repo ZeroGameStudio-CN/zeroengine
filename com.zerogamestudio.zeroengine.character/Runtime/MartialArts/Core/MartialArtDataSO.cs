@@ -216,19 +216,22 @@ namespace ZeroEngine.Character.MartialArts
         /// </summary>
         public bool IsMet(IMartialArtist artist)
         {
-            // 基础实现，具体逻辑由业务层扩展
+            // Unknown and compound conditions cannot silently grant an authored requirement.
             switch (type)
             {
-                case LearnRequirementType.Realm:
-                    // 需要检查境界等级
-                    return true; // 由 RealmManager 检查
-
-                case LearnRequirementType.PrerequisiteArt:
-                    // 检查前置武学
-                    return artist?.HasLearnedMartialArt(stringRequired) ?? false;
-
-                default:
+                case LearnRequirementType.None:
                     return true;
+                case LearnRequirementType.PrerequisiteArt:
+                    return !string.IsNullOrWhiteSpace(stringRequired)
+                        && (artist?.HasLearnedMartialArt(stringRequired) ?? false);
+                case LearnRequirementType.Realm:
+                case LearnRequirementType.Stat:
+                case LearnRequirementType.Sect:
+                case LearnRequirementType.Item:
+                case LearnRequirementType.Special:
+                    return artist is IMartialArtRequirementQuery query && query.IsRequirementMet(this);
+                default:
+                    return false;
             }
         }
     }

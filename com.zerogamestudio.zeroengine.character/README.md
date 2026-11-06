@@ -528,3 +528,33 @@ enablement, spacing (0.05–10 units) and a relocation limit; output reuses the 
 is bounded to eight contacts and drops overflow rather than replaying a backlog.
 Disabled/nonfinite inputs reset, relocation emits nothing, and reversed travel resets
 residual distance. Animation contacts, actor clocks, sound/FX and physics remain consumers.
+
+## Actor-owned martial arts
+
+`MartialArtState` implements `IMartialArtist` without a Unity singleton or global event bus.
+Create one state per stable actor id and inject the definition resolver and read-only learning
+requirement query. The Unity `MartialArtManager` delegates to the same implementation for
+existing single-actor scene consumers; parties use independent states directly.
+
+An art occupies one compatible slot. Moving it does not duplicate bonuses or cultivation.
+External realm/stat/sect/item/special requirements require an explicit actor query; missing,
+unknown and compound predicates refuse learning. Content-specific eligibility belongs to the
+consumer. Snapshots keep the existing `MartialArtManagerSaveData` DTO field identities, copy
+mutable arrays, and validate all identities/progress/slots before replacing live state.
+Call `Dispose` when the actor state is retired so retained art instances cannot notify it.
+
+### Prepared skills and snapshot boundary (3.0 candidate)
+
+Prepared skill ids are an explicit ordered selection, independent of learned arts.
+Use `TrySetPreparedSkills` and consume `GetEffectiveSkillIds`; an empty selection
+never expands to all learned skills. Availability comes from equipped/unlocked arts
+or the injected permanent intrinsic-skill query. Set the optional capacity in the
+consumer. Refresh selection after permanent intrinsic grants change; the effective
+view filters revoked ownership even before that refresh. Unequipping, forgetting
+and lowering an art prune invalid selections.
+
+The `preparedSkills` snapshot array is required, including when empty. Old global
+snapshots missing that field are rejected rather than filled from a current default.
+This is a breaking package snapshot contract and uses a 3.0 candidate version.
+Consumer-owned save-format adoption/migration is a separate explicit integration;
+changing this package does not change a consumer's save version or rewrite any saves.

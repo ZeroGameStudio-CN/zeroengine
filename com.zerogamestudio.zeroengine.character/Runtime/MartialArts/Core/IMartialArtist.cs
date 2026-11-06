@@ -59,4 +59,9 @@ namespace ZeroEngine.Character.MartialArts
         /// </summary>
         void AddMartialArtExp(string artId, int amount);
     }
+    /// <summary>Read-only actor-specific facts required by authored learning conditions.</summary>
+    public interface IMartialArtRequirementQuery
+    {
+        bool IsRequirementMet(LearnRequirement requirement);
+    }
 }
