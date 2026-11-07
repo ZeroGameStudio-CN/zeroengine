@@ -1,6 +1,6 @@
 # ZeroEngine.Data
 
-属性和 Buff 的通用运行时包。当前候选版本为 2.0.1，依赖 ZeroEngine.Core 2.0.0 与 ZeroEngine.Formula 0.1.0。
+属性和 Buff 的通用运行时包。当前候选版本为 2.2.0，依赖 ZeroEngine.Core 2.0.0、ZeroEngine.Formula 0.1.0 与已有的 ZeroEngine.Persistence 2.0.0 合同。
 
 ## 属性合同
 
@@ -42,6 +42,12 @@ handler.RemoveStacks(1);
 ```
 
 `target` 由消费者提供，属性修正通过 `IBuffStatTarget` 的添加／移除入口进入已有状态。角色、装备和具体成长规则由消费者配置。
+
+## 来源分组与时钟内核
+
+2.2.0 收敛 POB Data 2.1.0 的无引擎 `ZeroEngine.BuffSystem.Core`。`BuffStackState`、`BuffSourceGroup`、`BuffClock` 和 `BuffLifecycle` 提供来源层数、作用域移除、快照复制、时钟选择与代次；宿主持有数值、结算、存档与表现副作用。
+
+既有 `BuffHandler` 共用聚合层数和时钟算术，同时保留 `IBuffStatTarget`／`StatId`、时长覆盖、恢复、旧 signed count 算术及先过期后 Tick 的顺序。`StatBlock`、规范化标识与旧序列化不变。不为项目增加第二套属性或 Buff 兼容适配。
 
 ## 验证与采用
 

@@ -1,6 +1,6 @@
 # ZeroEngine Project Atlas
 
-Project Atlas 1.1.6 是可选、仅限 Unity Editor 的跨项目项目导航包。工作台中的“项目功能”只面向项目人员，按消费项目定义的领域和功能说明用途、可完成工作、适用岗位、配置状态和可用入口。程序与 Agent 使用的系统目录、引用覆盖、生成索引和改动合同继续保留在代码、JSON、Markdown 与自动门中，不复制到普通功能界面。
+Project Atlas 1.2 是可选的跨项目项目导航包，提供 Unity Editor 面板与共享模型的离线读取工具。工作台中的“项目功能”只面向项目人员，按消费项目定义的领域和功能说明用途、可完成工作、适用岗位、配置状态和可用入口。程序与 Agent 使用的系统目录、引用覆盖、生成索引和改动合同继续保留在代码、JSON、Markdown 与自动门中，不复制到普通功能界面。
 
 功能工作区保留工作领域、功能列表、功能说明三栏；窗口变窄时导航栏按可用宽度同步收缩，长标题显示省略号并通过 Tooltip 提供完整名称和说明。三栏在宿主为其保留的局部绘制区域内布局，不覆盖面板标题、说明或搜索栏；只有窄于三栏可读下限时才启用横向滚动。
 
@@ -12,7 +12,7 @@ Project Atlas 1.1.6 是可选、仅限 Unity Editor 的跨项目项目导航包�
 - configurable 功能必须有唯一可用配置入口；明确没有配置入口的功能使用 `none` 并说明原因。未知、重复或缺失 route 会 fail closed，但不阻断其他功能浏览。
 - 普通加载、搜索、岗位筛选、导航和返回只读。目标 owner panel 自己继续负责 project-write / destructive 确认。
 
-## 项目合同
+## 项目合同（schema 1；schema 2 见后文）
 
 - 根清单固定为 `docs/architecture/project-atlas.json`。
 - 领域碎片固定放在 `docs/architecture/project-atlas/*.json`，由根清单逐项显式引用；不支持 glob、绝对路径或 `..`。
@@ -29,3 +29,44 @@ Project Atlas 1.1.6 是可选、仅限 Unity Editor 的跨项目项目导航包�
 ## 安全边界
 
 目录 JSON 不包含菜单、方法、Shell、URL 执行或任意反射入口。所有路径在 resolver 运行前验证为项目根内的相对路径；resolver 异常隔离为诊断，不影响其他引用类型或 Dashboard。
+
+## 1.2 opt-in module sources / headless reading
+
+Existing schema-1 projects keep their explicit sources and tracked output unchanged.
+Migrated projects use root schemaVersion 2 with sourceDirectories, for example:
+
+```json
+{"schemaVersion":2,"project":{"id":"example","displayName":"Example","summary":"Project","rootAgentRule":"rules.agents"},"sourceDirectories":["docs/architecture/project-atlas/contracts","docs/architecture/project-atlas/modules"],"coverageExclusions":[]}
+```
+
+Only *.atlas.json below those exact roots is discovered. Root paths are validated,
+links and traversal rejected, files sorted and duplicate definitions fail closed.
+Fragments retain schemaVersion 1 and references/systems. They may additionally
+contain contributions with unique id, systemId and append-only entryRefs,
+structureRefs, verificationRefs and dataFlow arrays. Contributions cannot replace
+system ownership or policy. Keep module additions in their own file, not a shared
+array; never split by developer/task name.
+
+The schema-2 index is local output: .zeroengine/project-atlas/system-routing-index.md.
+Ignore this cache in Git/Plastic. Do not merge it or submit it. Use the command below
+to load fresh sources, validate authored structure, atomically refresh output and
+print it. A failed read exits nonzero; callers must not fall back to an old index.
+Requires .NET SDK 8 or newer; builds use the package's ignored Tools~/bin/obj dirs.
+No Unity Editor process is needed. The CLI uses the same C# sources as the Editor.
+
+```text
+dotnet run --project <package>/Tools~/Atlas.Cli -- read <absolute-project-root>
+dotnet run --project <package>/Tools~/Atlas.Cli -- check <absolute-project-root>
+dotnet test <package>/Tools~/Atlas.Tests/Atlas.Tests.csproj
+python <package>/Tools~/prepare_migration.py --project <root> --output <new-external-dir>
+```
+
+`check` validates authoring only; it does not run consumer resolver/coverage plugins.
+Keep full ProjectAtlasCatalogLoader.LoadProject coverage gates in Unity. Rendering
+in schema 2 describes authored routes consistently, while live diagnostics remain
+in the full graph. LoadAuthoringProject is the shared no-Editor API.
+
+Migration is explicit per project: review the external candidate, switch the root
+and sources, update Agent read entrypoints/tests/ignore rules, remove the tracked
+projection, and pin the tested released package. A package upgrade alone does not
+migrate other projects. See ../../docs/specs/2026-09-25-project-atlas-module-sources.md.

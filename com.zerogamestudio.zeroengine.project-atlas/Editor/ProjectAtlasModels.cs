@@ -318,8 +318,11 @@ namespace ZeroEngine.ProjectAtlas
             IDictionary<string, ProjectAtlasReferenceResolution> resolutions,
             IEnumerable<ProjectAtlasCoverageItem> coverage,
             IEnumerable<ProjectAtlasDiagnostic> diagnostics,
-            IEnumerable<ProjectAtlasCoverageExclusion> exclusions)
+            IEnumerable<ProjectAtlasCoverageExclusion> exclusions,
+            bool usesLocalIndex = false, string sourceFingerprint = "")
         {
+            UsesLocalIndex = usesLocalIndex;
+            SourceFingerprint = sourceFingerprint;
             ProjectRoot = projectRoot ?? string.Empty;
             Project = project;
             Systems = Array.AsReadOnly((systems ?? Array.Empty<ProjectAtlasSystem>())
@@ -343,6 +346,8 @@ namespace ZeroEngine.ProjectAtlas
         }
 
         public string ProjectRoot { get; }
+        public string SourceFingerprint { get; }
+        public bool UsesLocalIndex { get; }
         public ProjectAtlasProject Project { get; }
         public IReadOnlyList<ProjectAtlasSystem> Systems { get; }
         public IReadOnlyList<ProjectAtlasReference> References { get; }

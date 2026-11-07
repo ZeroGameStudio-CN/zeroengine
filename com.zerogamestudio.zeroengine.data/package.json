@@ -1,13 +1,14 @@
 {
   "name": "com.zerogamestudio.zeroengine.data",
-  "version": "2.0.1",
+  "version": "2.2.0",
   "displayName": "ZeroEngine.Data",
   "description": "Data systems for ZeroEngine. Includes StatSystem (attributes, modifiers, constraints) and BuffSystem (buff management, stacking, duration, stat integration).",
   "unity": "2022.3",
   "unityRelease": "0f1",
   "dependencies": {
     "com.zerogamestudio.zeroengine.core": "2.0.0",
-    "com.zerogamestudio.zeroengine.formula": "0.1.0"
+    "com.zerogamestudio.zeroengine.formula": "0.1.0",
+    "com.zerogamestudio.zeroengine.persistence": "2.0.0"
   },
   "keywords": [
     "zeroengine",

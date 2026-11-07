@@ -8,13 +8,15 @@ namespace ZeroEngine.ProjectAtlas
 {
     public static class ProjectAtlasValidator
     {
+        public static string GetIndexPath(ProjectAtlasGraph graph) => graph != null && graph.UsesLocalIndex
+            ? ProjectAtlasCatalogLoader.CacheIndexPath : ProjectAtlasCatalogLoader.GeneratedIndexPath;
         public static bool IsProjectionCurrent(ProjectAtlasGraph graph)
         {
             if (graph == null || graph.Project == null)
                 return false;
             string path = ProjectAtlasCatalogLoader.ResolveSafeProjectPath(
                 graph.ProjectRoot,
-                ProjectAtlasCatalogLoader.GeneratedIndexPath,
+                GetIndexPath(graph),
                 false);
             if (!File.Exists(path))
                 return false;
@@ -30,10 +32,10 @@ namespace ZeroEngine.ProjectAtlas
                 return "当前没有可生成的项目图谱。";
             string path = ProjectAtlasCatalogLoader.ResolveSafeProjectPath(
                 graph.ProjectRoot,
-                ProjectAtlasCatalogLoader.GeneratedIndexPath,
+                GetIndexPath(graph),
                 false);
             if (!File.Exists(path))
-                return "将新建 " + ProjectAtlasCatalogLoader.GeneratedIndexPath + "。";
+                return "将新建 " + GetIndexPath(graph) + "。";
 
             string current = File.ReadAllText(path).Replace("\r\n", "\n");
             string expected = ProjectAtlasMarkdownProjector.Render(graph);
@@ -41,7 +43,7 @@ namespace ZeroEngine.ProjectAtlas
                 return "生成索引已经是最新状态。";
             int currentLines = current.Split('\n').Length;
             int expectedLines = expected.Split('\n').Length;
-            return "将更新 " + ProjectAtlasCatalogLoader.GeneratedIndexPath +
+            return "将更新 " + GetIndexPath(graph) +
                    "（当前 " + currentLines + " 行，生成后 " + expectedLines + " 行）。";
         }
     }
@@ -56,18 +58,21 @@ namespace ZeroEngine.ProjectAtlas
                 throw new InvalidOperationException("当前图谱没有有效的 project 元数据。");
 
             var builder = new StringBuilder();
-            Line(builder, "<!-- GENERATED: Project Atlas schemaVersion=1; source=docs/architecture/project-atlas.json; DO NOT EDIT -->");
+            Line(builder, "<!-- GENERATED: Project Atlas schemaVersion=" + (graph.UsesLocalIndex ? "2" : "1") + "; source=docs/architecture/project-atlas.json; DO NOT EDIT -->");
+            if (graph.UsesLocalIndex) Line(builder, "<!-- authored-source-sha256: " + graph.SourceFingerprint + " -->");
             Line(builder, "# " + EscapeHeading(graph.Project.DisplayName) + " 系统路由索引");
             Line(builder);
             Line(builder, graph.Project.Summary);
             Line(builder);
-            Line(builder, "本文件由 Project Atlas 确定性生成。系统语义维护在 `docs/architecture/project-atlas.json` 及其显式碎片中；结构事实仍以各引用的权威源为准。");
+            Line(builder, graph.UsesLocalIndex
+                ? "本文件由 Project Atlas 根据根清单声明的目录、模块声明与系统合同确定性生成。此本地缓存不提交、不合并；结构事实仍以各引用的权威源为准。"
+                : "本文件由 Project Atlas 确定性生成。系统语义维护在 `docs/architecture/project-atlas.json` 及其显式碎片中；结构事实仍以各引用的权威源为准。");
             Line(builder);
             RenderSummary(builder, graph);
             RenderTeamView(builder, graph);
             RenderProgramView(builder, graph);
             RenderAgentView(builder, graph);
-            RenderDiagnostics(builder, graph);
+            if (!graph.UsesLocalIndex) RenderDiagnostics(builder, graph);
             return builder.ToString();
         }
 
@@ -188,7 +193,7 @@ namespace ZeroEngine.ProjectAtlas
             if (reference == null)
                 return "`" + id + "`（缺失）";
             string suffix = string.Empty;
-            if (graph.Resolutions.TryGetValue(id, out ProjectAtlasReferenceResolution resolution))
+            if (!graph.UsesLocalIndex && graph.Resolutions.TryGetValue(id, out ProjectAtlasReferenceResolution resolution))
             {
                 suffix = resolution.Status == ProjectAtlasResolutionStatus.Resolved
                     ? " → " + DescribeProjectionValue(reference, resolution.DisplayValue)
@@ -268,16 +273,19 @@ namespace ZeroEngine.ProjectAtlas
 
             string destination = ProjectAtlasCatalogLoader.ResolveSafeProjectPath(
                 graph.ProjectRoot,
-                ProjectAtlasCatalogLoader.GeneratedIndexPath,
+                ProjectAtlasValidator.GetIndexPath(graph),
                 false);
             string directory = Path.GetDirectoryName(destination);
+            if (graph.UsesLocalIndex && !string.IsNullOrEmpty(directory)) Directory.CreateDirectory(directory);
             if (string.IsNullOrEmpty(directory) || !Directory.Exists(directory))
                 throw new DirectoryNotFoundException("生成索引目录不存在：docs/architecture");
 
+            string rendered = ProjectAtlasMarkdownProjector.Render(graph);
+            if (File.Exists(destination) && File.ReadAllText(destination) == rendered) return destination;
             string temporary = Path.Combine(directory, ".system-routing-index." + Guid.NewGuid().ToString("N") + ".tmp");
             try
             {
-                File.WriteAllText(temporary, ProjectAtlasMarkdownProjector.Render(graph), new UTF8Encoding(false));
+                File.WriteAllText(temporary, rendered, new UTF8Encoding(false));
                 if (File.Exists(destination))
                     File.Replace(temporary, destination, null);
                 else

@@ -10,6 +10,7 @@
 
 ```
 BuffSystem/
+├── Core/            # 无引擎的来源层数、生命周期与时钟内核
 ├── BuffEnums.cs     # 枚举定义
 ├── BuffData.cs      # Buff配置（ScriptableObject）
 ├── BuffHandler.cs   # Buff运行时实例

@@ -3,15 +3,21 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Text.RegularExpressions;
+using System.Security.Cryptography;
+using System.Text;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
+#if UNITY_EDITOR
 using UnityEditor;
+#endif
 
 namespace ZeroEngine.ProjectAtlas
 {
     public static class ProjectAtlasCatalogLoader
     {
         public const int SchemaVersion = 1;
+        public const int ModuleSchemaVersion = 2;
+        public const string CacheIndexPath = ".zeroengine/project-atlas/system-routing-index.md";
         public const string RootCatalogPath = "docs/architecture/project-atlas.json";
         public const string GeneratedIndexPath = "docs/architecture/system-routing-index.md";
 
@@ -49,6 +55,17 @@ namespace ZeroEngine.ProjectAtlas
             IEnumerable<Type> resolverTypes,
             IEnumerable<Type> coverageProviderTypes,
             bool validateCoverage)
+        {
+            return LoadCore(projectRoot, resolverTypes, coverageProviderTypes, validateCoverage, true);
+        }
+
+        // No Editor or project extensions are required to read authored navigation.
+        // Full reference resolution and coverage remain the Editor verification gate.
+        public static ProjectAtlasGraph LoadAuthoringProject(string projectRoot) =>
+            LoadCore(projectRoot, Array.Empty<Type>(), Array.Empty<Type>(), false, false);
+
+        private static ProjectAtlasGraph LoadCore(string projectRoot, IEnumerable<Type> resolverTypes,
+            IEnumerable<Type> coverageProviderTypes, bool validateCoverage, bool resolveReferences)
         {
             string normalizedRoot = NormalizeRoot(projectRoot);
             var diagnostics = new List<ProjectAtlasDiagnostic>();
@@ -95,7 +112,7 @@ namespace ZeroEngine.ProjectAtlas
                 return EmptyGraph(normalizedRoot, diagnostics);
             }
 
-            if (root.schemaVersion != SchemaVersion)
+            if (root.schemaVersion != SchemaVersion && root.schemaVersion != ModuleSchemaVersion)
             {
                 diagnostics.Add(Error(
                     "unsupported-schema-version",
@@ -110,10 +127,12 @@ namespace ZeroEngine.ProjectAtlas
                 return EmptyGraph(normalizedRoot, diagnostics);
 
             ReadExclusions(root.coverageExclusions, exclusions, diagnostics);
-            ReadFragments(normalizedRoot, root.sources, references, systems, diagnostics);
+            var sourcePaths = DiscoverSources(normalizedRoot, root, diagnostics);
+            string fingerprint = SourceFingerprint(normalizedRoot, sourcePaths, diagnostics);
+            ReadFragments(normalizedRoot, sourcePaths, references, systems, diagnostics, root.schemaVersion);
             ValidateCombinedGraph(project, references, systems, diagnostics);
 
-            if (!diagnostics.Any(item => item.Severity == ProjectAtlasDiagnosticSeverity.Error))
+            if (resolveReferences && !diagnostics.Any(item => item.Severity == ProjectAtlasDiagnosticSeverity.Error))
             {
                 ProjectAtlasContext context = new ProjectAtlasContext(normalizedRoot, project.Id);
                 ResolveReferences(
@@ -135,6 +154,8 @@ namespace ZeroEngine.ProjectAtlas
                 }
             }
 
+            if (fingerprint != SourceFingerprint(normalizedRoot, DiscoverSources(normalizedRoot, root, diagnostics), diagnostics))
+                diagnostics.Add(Error("sources-changed-during-read", "Atlas sources changed during read; retry from a stable source snapshot."));
             return new ProjectAtlasGraph(
                 normalizedRoot,
                 project,
@@ -143,7 +164,8 @@ namespace ZeroEngine.ProjectAtlas
                 resolutions,
                 coverage,
                 diagnostics,
-                exclusions);
+                exclusions,
+                root.schemaVersion == ModuleSchemaVersion, fingerprint);
         }
 
         public static string ResolveSafeProjectPath(string projectRoot, string relativePath, bool mustExist)
@@ -240,12 +262,83 @@ namespace ZeroEngine.ProjectAtlas
             }
         }
 
+        private static string SourceFingerprint(string root, string[] sources,
+            ICollection<ProjectAtlasDiagnostic> diagnostics)
+        {
+            try
+            {
+                using (var sha = SHA256.Create())
+                using (var stream = new MemoryStream())
+                using (var writer = new BinaryWriter(stream, Encoding.UTF8, true))
+                {
+                    foreach (string source in new[] { RootCatalogPath }.Concat(sources ?? Array.Empty<string>()).OrderBy(x => x, StringComparer.Ordinal))
+                    {
+                        writer.Write(source ?? string.Empty);
+                        byte[] bytes = File.ReadAllBytes(ResolveSafeProjectPath(root, source, true));
+                        writer.Write(bytes.Length); writer.Write(bytes);
+                    }
+                    writer.Flush();
+                    return BitConverter.ToString(sha.ComputeHash(stream.ToArray())).Replace("-", "").ToLowerInvariant();
+                }
+            }
+            catch (Exception exception)
+            {
+                diagnostics.Add(Error("invalid-source-snapshot", exception.Message));
+                return string.Empty;
+            }
+        }
+
+        private static string[] DiscoverSources(string projectRoot, RootData root,
+            ICollection<ProjectAtlasDiagnostic> diagnostics)
+        {
+            if (root.schemaVersion == SchemaVersion)
+            {
+                if (root.sourceDirectories != null)
+                    diagnostics.Add(Error("unsupported-source-directories", "sourceDirectories requires schemaVersion 2."));
+                return root.sources;
+            }
+            var sources = new List<string>(root.sources ?? Array.Empty<string>());
+            var roots = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            foreach (string directory in root.sourceDirectories ?? Array.Empty<string>())
+            {
+                try
+                {
+                    if (string.IsNullOrWhiteSpace(directory) ||
+                        !directory.StartsWith(FragmentDirectory, StringComparison.Ordinal) ||
+                        directory.EndsWith("/", StringComparison.Ordinal) || !roots.Add(directory))
+                        throw new InvalidOperationException("Directory must be unique and below " + FragmentDirectory);
+                    string absolute = ResolveSafeProjectPath(projectRoot, directory, true);
+                    var pending = new Stack<string>();
+                    pending.Push(absolute);
+                    while (pending.Count > 0)
+                    {
+                        string current = pending.Pop();
+                        // Validate before traversal: do not follow linked directories or files.
+                        ResolveSafeProjectPath(projectRoot, MakeRelativePath(projectRoot, current), true);
+                        foreach (string file in Directory.GetFiles(current, "*.atlas.json", SearchOption.TopDirectoryOnly))
+                        {
+                            string relative = MakeRelativePath(projectRoot, file);
+                            ResolveSafeProjectPath(projectRoot, relative, true);
+                            sources.Add(relative);
+                        }
+                        foreach (string child in Directory.GetDirectories(current)) pending.Push(child);
+                    }
+                }
+                catch (Exception exception)
+                {
+                    diagnostics.Add(Error("invalid-source-directory", exception.Message, RootCatalogPath, directory));
+                }
+            }
+            return sources.OrderBy(path => path, StringComparer.Ordinal).ToArray();
+        }
+
         private static void ReadFragments(
             string projectRoot,
             string[] sourcePaths,
             ICollection<ProjectAtlasReference> references,
             ICollection<ProjectAtlasSystem> systems,
-            ICollection<ProjectAtlasDiagnostic> diagnostics)
+            ICollection<ProjectAtlasDiagnostic> diagnostics,
+            int schemaVersion)
         {
             if (sourcePaths == null || sourcePaths.Length == 0)
             {
@@ -253,6 +346,8 @@ namespace ZeroEngine.ProjectAtlas
                 return;
             }
 
+            var definitions = new List<KeyValuePair<string, SystemData>>();
+            var contributions = new List<KeyValuePair<string, ContributionData>>();
             var ordinalPaths = new HashSet<string>(StringComparer.Ordinal);
             var caseFoldedPaths = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
             for (int sourceIndex = 0; sourceIndex < sourcePaths.Length; sourceIndex++)
@@ -272,7 +367,7 @@ namespace ZeroEngine.ProjectAtlas
                     ? sourcePath.Substring(FragmentDirectory.Length)
                     : string.Empty;
                 if (string.IsNullOrEmpty(fragmentName) ||
-                    fragmentName.IndexOf('/') >= 0 ||
+                    (schemaVersion == SchemaVersion && fragmentName.IndexOf('/') >= 0) ||
                     !fragmentName.EndsWith(".json", StringComparison.Ordinal))
                 {
                     diagnostics.Add(Error(
@@ -316,9 +411,35 @@ namespace ZeroEngine.ProjectAtlas
                 }
 
                 ReadReferences(fragment.references, sourcePath, references, diagnostics);
-                ReadSystems(fragment.systems, sourcePath, systems, diagnostics);
+                foreach (var definition in fragment.systems ?? Array.Empty<SystemData>())
+                    definitions.Add(new KeyValuePair<string, SystemData>(sourcePath, definition));
+                if (schemaVersion == SchemaVersion && fragment.contributions != null)
+                    diagnostics.Add(Error("unsupported-contributions", "contributions requires root schemaVersion 2.", sourcePath));
+                else foreach (var contribution in fragment.contributions ?? Array.Empty<ContributionData>())
+                    contributions.Add(new KeyValuePair<string, ContributionData>(sourcePath, contribution));
             }
+            var contributionIds = new HashSet<string>(StringComparer.Ordinal);
+            foreach (var pair in contributions.OrderBy(value => value.Value?.id, StringComparer.Ordinal))
+            {
+                var contribution = pair.Value;
+                if (contribution == null) { diagnostics.Add(Error("invalid-contribution", "null contribution", pair.Key)); continue; }
+                ValidateStableId(contribution.id, "contributions.id", pair.Key, diagnostics);
+                if (!contributionIds.Add(contribution.id ?? string.Empty))
+                    diagnostics.Add(Error("duplicate-contribution-id", contribution.id, pair.Key));
+                var targets = definitions.Where(value => value.Value?.id == contribution.systemId).ToArray();
+                if (targets.Length != 1 || targets[0].Value?.program == null)
+                { diagnostics.Add(Error("invalid-contribution-owner", contribution.systemId, pair.Key)); continue; }
+                var program = targets[0].Value.program;
+                program.entryRefs = Append(program.entryRefs, contribution.entryRefs);
+                program.structureRefs = Append(program.structureRefs, contribution.structureRefs);
+                program.verificationRefs = Append(program.verificationRefs, contribution.verificationRefs);
+                program.dataFlow = Append(program.dataFlow, contribution.dataFlow);
+            }
+            foreach (var pair in definitions) ReadSystems(new[] { pair.Value }, pair.Key, systems, diagnostics);
         }
+
+        private static string[] Append(string[] original, string[] contribution) =>
+            (original ?? Array.Empty<string>()).Concat(contribution ?? Array.Empty<string>()).Distinct(StringComparer.Ordinal).ToArray();
 
         private static void ReadReferences(
             ReferenceData[] data,
@@ -954,9 +1075,13 @@ namespace ZeroEngine.ProjectAtlas
         {
             if (_cachedResolverTypes == null)
             {
+#if UNITY_EDITOR
                 _cachedResolverTypes = TypeCache.GetTypesDerivedFrom<IProjectAtlasReferenceResolver>()
                     .OrderBy(type => type.FullName, StringComparer.Ordinal)
                     .ToArray();
+#else
+                _cachedResolverTypes = Array.Empty<Type>();
+#endif
             }
             return _cachedResolverTypes;
         }
@@ -965,9 +1090,13 @@ namespace ZeroEngine.ProjectAtlas
         {
             if (_cachedCoverageProviderTypes == null)
             {
+#if UNITY_EDITOR
                 _cachedCoverageProviderTypes = TypeCache.GetTypesDerivedFrom<IProjectAtlasCoverageProvider>()
                     .OrderBy(type => type.FullName, StringComparer.Ordinal)
                     .ToArray();
+#else
+                _cachedCoverageProviderTypes = Array.Empty<Type>();
+#endif
             }
             return _cachedCoverageProviderTypes;
         }
@@ -1147,6 +1276,7 @@ namespace ZeroEngine.ProjectAtlas
             public int schemaVersion;
             public ProjectData project;
             public string[] sources;
+            public string[] sourceDirectories;
             public CoverageExclusionData[] coverageExclusions;
         }
 
@@ -1173,6 +1303,19 @@ namespace ZeroEngine.ProjectAtlas
             public int schemaVersion;
             public ReferenceData[] references;
             public SystemData[] systems;
+            public ContributionData[] contributions;
+        }
+
+        // Append-only module routing: cannot override system ownership, boundaries or policy.
+        [Serializable]
+        private sealed class ContributionData
+        {
+            public string id;
+            public string systemId;
+            public string[] entryRefs;
+            public string[] structureRefs;
+            public string[] verificationRefs;
+            public string[] dataFlow;
         }
 
         [Serializable]

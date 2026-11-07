@@ -4,9 +4,11 @@ using System.IO;
 using System.Linq;
 using System.Reflection;
 using NUnit.Framework;
+#if UNITY_EDITOR
 using UnityEditor;
 using UnityEngine;
 using ZeroEngine.EditorUI;
+#endif
 
 namespace ZeroEngine.ProjectAtlas.Tests
 {
@@ -304,6 +306,7 @@ namespace ZeroEngine.ProjectAtlas.Tests
             Assert.That(graph.Diagnostics.Single().Code, Is.EqualTo("catalog-not-configured"));
         }
 
+#if UNITY_EDITOR
         [Test]
         public void WorkspaceProvider_KnownPanel_IsFullWidthAndUnknownPanelIsRejected()
         {
@@ -371,9 +374,15 @@ namespace ZeroEngine.ProjectAtlas.Tests
 
             Assert.That(elideLabel, Is.Not.Null);
             const string longLabel = "地图导航与小地图配置入口";
+            var measurementStyle = new GUIStyle
+            {
+                font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf"),
+                fontSize = 12
+            };
+            Assert.That(measurementStyle.font, Is.Not.Null);
             string elided = (string)elideLabel.Invoke(
                 null,
-                new object[] { longLabel, EditorStyles.miniButton, 72f });
+                new object[] { longLabel, measurementStyle, 72f });
             Assert.That(elided, Is.Not.EqualTo(longLabel));
             Assert.That(elided, Does.EndWith("…"));
             Assert.That(
@@ -396,6 +405,8 @@ namespace ZeroEngine.ProjectAtlas.Tests
 
             panel.Dispose();
         }
+
+#endif
 
         private static Type[] FixtureCoverageTypes => new[]
         {

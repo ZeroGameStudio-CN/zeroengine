@@ -1,0 +1,8 @@
+{
+    "name": "ZeroEngine.Achievement.Tests.Editor",
+    "rootNamespace": "ZeroEngine.Tests.Achievement",
+    "references": ["ZeroEngine.Achievement", "ZeroEngine.Core"],
+    "includePlatforms": ["Editor"],
+    "optionalUnityReferences": ["TestAssemblies"],
+    "autoReferenced": false
+}

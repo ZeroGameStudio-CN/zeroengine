@@ -1,0 +1,13 @@
+{
+    "name": "com.zerogamestudio.zeroengine.achievement",
+    "version": "1.0.0",
+    "displayName": "ZeroEngine.Achievement",
+    "description": "Achievement definitions, condition evaluation, progress snapshots and platform provider contracts.",
+    "unity": "2022.3",
+    "unityRelease": "0f1",
+    "dependencies": {
+        "com.zerogamestudio.zeroengine.core": "2.0.0"
+    },
+    "keywords": ["zeroengine", "achievement", "progress"],
+    "author": { "name": "ZeroGameStudio" }
+}

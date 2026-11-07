@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using UnityEngine;
 using ZeroEngine.StatSystem;
+using ZeroEngine.BuffSystem.Runtime;
 
 namespace ZeroEngine.BuffSystem
 {
@@ -19,7 +20,7 @@ namespace ZeroEngine.BuffSystem
         /// <summary>
         /// 当前层数
         /// </summary>
-        public int CurrentStacks => _currentStacks;
+        public int CurrentStacks => _stacks.TotalStacks;
 
         /// <summary>
         /// 剩余持续时间（秒）
@@ -29,9 +30,10 @@ namespace ZeroEngine.BuffSystem
         /// <summary>
         /// Buff 是否已过期
         /// </summary>
-        public bool IsExpired { get; private set; }
+        public bool IsExpired => _lifecycle.IsReleased;
 
-        private int _currentStacks;
+        private readonly BuffStackState _stacks = new BuffStackState();
+        private readonly BuffLifecycle _lifecycle = new BuffLifecycle();
         private float _tickTimer;
         private IBuffStatTarget _targetStats;
         private float? _durationOverride;
@@ -74,13 +76,12 @@ namespace ZeroEngine.BuffSystem
         {
             if (IsExpired) return;
 
-            var oldStacks = _currentStacks;
-            _currentStacks += count;
-            if (_currentStacks > Data.MaxStacks) _currentStacks = Data.MaxStacks;
+            var oldStacks = CurrentStacks;
+            _stacks.SetSourceStackCount(string.Empty, Math.Min(unchecked(oldStacks + count), Data.MaxStacks));
 
             if (Data.RefreshOnAddStack) RefreshDuration();
 
-            UpdateStatModifiers(oldStacks, _currentStacks);
+            UpdateStatModifiers(oldStacks, CurrentStacks);
         }
 
         /// <summary>
@@ -91,18 +92,18 @@ namespace ZeroEngine.BuffSystem
         {
             if (IsExpired) return;
 
-            var oldStacks = _currentStacks;
-            _currentStacks -= count;
+            var oldStacks = CurrentStacks;
+            _stacks.SetSourceStackCount(string.Empty, unchecked(oldStacks - count));
 
             if (Data.RefreshOnRemoveStack) RefreshDuration();
 
-            if (_currentStacks <= 0)
+            if (CurrentStacks <= 0)
             {
                 Expire();
             }
             else
             {
-                UpdateStatModifiers(oldStacks, _currentStacks);
+                UpdateStatModifiers(oldStacks, CurrentStacks);
             }
         }
 
@@ -116,21 +117,16 @@ namespace ZeroEngine.BuffSystem
 
             if (Data.Duration > 0)
             {
-                RemainingTime -= deltaTime;
+                RemainingTime = BuffClock.AdvanceDuration(RemainingTime, deltaTime);
                 if (RemainingTime <= 0)
                 {
                     HandleExpire();
                 }
             }
             
-            if (Data.TickInterval > 0)
+            if (BuffClock.TryAdvanceTick(deltaTime, ref _tickTimer, Data.TickInterval))
             {
-                _tickTimer += deltaTime;
-                if (_tickTimer >= Data.TickInterval)
-                {
-                    _tickTimer = 0;
-                    OnTick?.Invoke(this);
-                }
+                OnTick?.Invoke(this);
             }
         }
 
@@ -157,8 +153,8 @@ namespace ZeroEngine.BuffSystem
         public void ResetStacks()
         {
             if (IsExpired) return;
-            UpdateStatModifiers(_currentStacks, 0);
-            _currentStacks = 0;
+            UpdateStatModifiers(CurrentStacks, 0);
+            _stacks.Clear();
         }
 
         /// <summary>
@@ -182,9 +178,9 @@ namespace ZeroEngine.BuffSystem
             }
 
             RemainingTime = remainingTime;
-            var oldStacks = _currentStacks;
-            _currentStacks = Mathf.Clamp(stacks, 0, Data.MaxStacks);
-            UpdateStatModifiers(oldStacks, _currentStacks);
+            var oldStacks = CurrentStacks;
+            _stacks.SetSourceStackCount(string.Empty, Mathf.Clamp(stacks, 0, Data.MaxStacks));
+            UpdateStatModifiers(oldStacks, CurrentStacks);
         }
 
         private void HandleExpire()
@@ -203,8 +199,8 @@ namespace ZeroEngine.BuffSystem
         private void Expire()
         {
             if (IsExpired) return;
-            IsExpired = true;
-            _currentStacks = 0;
+            _lifecycle.Release();
+            _stacks.Clear();
             
             ClearModifiers();
             
