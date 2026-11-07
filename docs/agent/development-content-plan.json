@@ -92,21 +92,24 @@
       "title": "StatId 规范化的兼容性与分配优化",
       "stage": "Previewable",
       "targetReleaseId": "",
-      "availability": "TestOnly",
+      "availability": "DevelopmentOnly",
       "responsibleChat": "01a14d22-2dbb-7313-a0ae-34366b9c3862",
       "chatUrl": "",
-      "nextAction": "保持 Data 2.0.1 四文件独立候选；按准确范围发布后再统一消费者的固定 Git 引用。",
+      "nextAction": "P5 已采用统一固定 Git 图；保留旧序列化与旧构造入口。后续按真实消费者增量优化，用户版本发行仍沿消费项目。",
       "entrance": "隔离消费者运行 BuffHandlerStatIdTests 与 P5 CharacterStatsTests。",
       "resourcePath": "com.zerogamestudio.zeroengine.data/Runtime/StatSystem/StatId.cs",
       "revision": "StatId canonical ASCII reuse candidate",
-      "releaseEvidence": "",
+      "releaseEvidence": "Reviewed Git source publication: https://github.com/ZeroGameStudio-CN/zeroengine/commit/10bbc665a5d017be8f87a28cc1eb69dfd77fe8df",
       "candidatePackageVersion": "2.0.1",
       "verificationEvidence": [
         "D:\\Temp\\P5PresentationFoundation-20261107\\batch-2-statid\\consumer\\edit.xml",
         "D:\\Temp\\P5PresentationFoundation-20261107\\batch-2-statid\\consumer-proof.json",
         "D:\\Temp\\P5PresentationFoundation-20261107\\batch-2-statid\\restoration.json",
         "D:\\Temp\\P5PresentationFoundation-20261107\\batch-2-statid\\reused-performance-evidence.json",
-        "D:\\Temp\\P5PresentationFoundation-20261107\\batch-2-statid\\review.md"
+        "D:\\Temp\\P5PresentationFoundation-20261107\\batch-2-statid\\review.md",
+        "D:\\Temp\\P5PresentationFoundation-20261107\\ze-publication.json",
+        "D:\\Temp\\P5PresentationFoundation-20261107\\p5-package-adoption\\adoption-proof.json",
+        "D:\\Temp\\P5PresentationFoundation-20261107\\p5-package-adoption\\pinned-edit-warm\\edit.xml"
       ],
       "relatedContent": [
         {
@@ -121,14 +124,14 @@
       "title": "原生配置类型登记与隔离发现",
       "stage": "Previewable",
       "targetReleaseId": "",
-      "availability": "TestOnly",
+      "availability": "EditorOnly",
       "responsibleChat": "01a14d22-2dbb-7313-a0ae-34366b9c3862",
       "chatUrl": "",
-      "nextAction": "保持 Data Toolkit 2.2.0 独立候选；后续采用后验证实际面板与普通入口的配置替换生效。",
+      "nextAction": "P5 已采用统一固定 Git 图；保留旧序列化与旧构造入口。后续按真实消费者增量优化，用户版本发行仍沿消费项目。",
       "entrance": "隔离消费者运行 DataToolkitDiagnosticsTests、UI 文案合同及 P5 DataToolkitDiscoveryTests 的无焦点用例。",
       "resourcePath": "com.zerogamestudio.zeroengine.data-toolkit/Editor/Settings/DataToolkitProjectSettings.cs",
       "revision": "Editor-only additional types and scoped asset cache candidate",
-      "releaseEvidence": "",
+      "releaseEvidence": "Reviewed Git source publication: https://github.com/ZeroGameStudio-CN/zeroengine/commit/10bbc665a5d017be8f87a28cc1eb69dfd77fe8df",
       "candidatePackageVersion": "2.2.0",
       "verificationEvidence": [
         "D:\\Temp\\P5PresentationFoundation-20261107\\batch-3-authoring\\refined\\edit.xml",
@@ -138,7 +141,10 @@
         "D:\\Temp\\P5PresentationFoundation-20261107\\batch-3-authoring\\p5-scope.json",
         "D:\\Temp\\P5PresentationFoundation-20261107\\batch-3-authoring\\review.md",
         "D:\\Temp\\P5PresentationFoundation-20261107\\batch-3-authoring\\refined-v2\\edit.xml",
-        "D:\\Temp\\P5PresentationFoundation-20261107\\batch-3-authoring\\refined-v2\\source-scope.json"
+        "D:\\Temp\\P5PresentationFoundation-20261107\\batch-3-authoring\\refined-v2\\source-scope.json",
+        "D:\\Temp\\P5PresentationFoundation-20261107\\ze-publication.json",
+        "D:\\Temp\\P5PresentationFoundation-20261107\\p5-package-adoption\\adoption-proof.json",
+        "D:\\Temp\\P5PresentationFoundation-20261107\\p5-package-adoption\\pinned-edit-warm\\edit.xml"
       ],
       "relatedContent": [
         {
