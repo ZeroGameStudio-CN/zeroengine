@@ -38,6 +38,21 @@ namespace ZGS.DataToolkit.Editor
         public IReadOnlyList<DataToolkitSafeInspectorRule> SafeInspectorRules { get; }
         public DataToolkitUiText UiText { get; }
 
+        public IReadOnlyList<Type> AdditionalManageableTypes { get; private set; } = Array.Empty<Type>();
+
+        public DataToolkitProjectSettings WithAdditionalManageableTypes(IEnumerable<Type> types)
+        {
+            var settings = new DataToolkitProjectSettings(
+                ProjectId, WindowTitle, MenuPath, EditorPrefsPrefix, SearchRoots, ExcludedPaths,
+                DefaultInspectorMode, SafeInspectorRules, UiText);
+            settings.AdditionalManageableTypes = (types ?? Array.Empty<Type>())
+                .Where(type => type != null && type.IsClass && !type.IsAbstract && !type.ContainsGenericParameters &&
+                    type != typeof(UnityEngine.ScriptableObject) && typeof(UnityEngine.ScriptableObject).IsAssignableFrom(type))
+                .Distinct()
+                .ToArray();
+            return settings;
+        }
+
         public string PrefKey(string suffix)
         {
             return $"{EditorPrefsPrefix}_{suffix}";

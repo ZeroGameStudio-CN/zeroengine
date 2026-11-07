@@ -99,7 +99,21 @@ namespace ZeroEngine.StatSystem
 
         public static string Normalize(string value)
         {
-            return string.IsNullOrWhiteSpace(value) ? string.Empty : value.Trim().ToLowerInvariant();
+            if (string.IsNullOrWhiteSpace(value))
+            {
+                return string.Empty;
+            }
+
+            var trimmed = value.Trim();
+            foreach (var character in trimmed)
+            {
+                if (character > '\u007f' || character is >= 'A' and <= 'Z')
+                {
+                    return trimmed.ToLowerInvariant();
+                }
+            }
+
+            return trimmed;
         }
 
         private static string NormalizeForStatTypeMatch(string value)

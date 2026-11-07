@@ -169,7 +169,7 @@ namespace ZGS.DataToolkit.Editor
             bodyHorizontalScroll = new Vector2(
                 EditorPrefs.GetFloat(settings.PrefKey(BodyScrollXPrefSuffix), 0f),
                 0f);
-            typesToDisplay = ManageableDataTypeDiscovery.GetManageableScriptableObjectTypes().ToArray();
+            typesToDisplay = ManageableDataTypeDiscovery.GetManageableScriptableObjectTypes(settings).ToArray();
             if (!RestorePersistedSelection())
             {
                 EnsureSelectedType();
@@ -1039,7 +1039,7 @@ namespace ZGS.DataToolkit.Editor
             AssetDiscoveryService.ClearCaches();
             assetCountCache.Clear();
             pendingCountTypes.Clear();
-            typesToDisplay = ManageableDataTypeDiscovery.GetManageableScriptableObjectTypes().ToArray();
+            typesToDisplay = ManageableDataTypeDiscovery.GetManageableScriptableObjectTypes(context.Settings).ToArray();
             RestoreSelectionAfterRefresh(selectionSnapshot);
             SavePersistentState();
             StartAssetCountWarmup();

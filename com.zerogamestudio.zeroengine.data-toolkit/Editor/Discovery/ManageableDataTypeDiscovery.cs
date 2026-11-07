@@ -29,6 +29,20 @@ namespace ZGS.DataToolkit.Editor
             return cachedTypes;
         }
 
+        public static IReadOnlyList<Type> GetManageableScriptableObjectTypes(DataToolkitProjectSettings settings)
+        {
+            var attributedTypes = GetManageableScriptableObjectTypes();
+            if (settings == null || settings.AdditionalManageableTypes.Count == 0)
+            {
+                return attributedTypes;
+            }
+
+            return attributedTypes.Concat(settings.AdditionalManageableTypes)
+                .Distinct()
+                .OrderBy(type => type.Name, StringComparer.OrdinalIgnoreCase)
+                .ToArray();
+        }
+
         public static void ClearCache()
         {
             cachedTypes = null;

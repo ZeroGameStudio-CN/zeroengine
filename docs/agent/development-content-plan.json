@@ -86,6 +86,67 @@
       "verificationEvidence": [
         "Unity 6000.6.4f1，P5 Editor UI 基线，16 项包内测试与 3 项草稿复测无失败。"
       ]
+    },
+    {
+      "id": "ze.data.statid-normalization",
+      "title": "StatId 规范化的兼容性与分配优化",
+      "stage": "Previewable",
+      "targetReleaseId": "",
+      "availability": "TestOnly",
+      "responsibleChat": "01a14d22-2dbb-7313-a0ae-34366b9c3862",
+      "chatUrl": "",
+      "nextAction": "保持 Data 2.0.1 四文件独立候选；按准确范围发布后再统一消费者的固定 Git 引用。",
+      "entrance": "隔离消费者运行 BuffHandlerStatIdTests 与 P5 CharacterStatsTests。",
+      "resourcePath": "com.zerogamestudio.zeroengine.data/Runtime/StatSystem/StatId.cs",
+      "revision": "StatId canonical ASCII reuse candidate",
+      "releaseEvidence": "",
+      "candidatePackageVersion": "2.0.1",
+      "verificationEvidence": [
+        "D:\\Temp\\P5PresentationFoundation-20261107\\batch-2-statid\\consumer\\edit.xml",
+        "D:\\Temp\\P5PresentationFoundation-20261107\\batch-2-statid\\consumer-proof.json",
+        "D:\\Temp\\P5PresentationFoundation-20261107\\batch-2-statid\\restoration.json",
+        "D:\\Temp\\P5PresentationFoundation-20261107\\batch-2-statid\\reused-performance-evidence.json",
+        "D:\\Temp\\P5PresentationFoundation-20261107\\batch-2-statid\\review.md"
+      ],
+      "relatedContent": [
+        {
+          "projectId": "p5",
+          "contentId": "p5.demo.shared-rpg-performance"
+        }
+      ],
+      "verificationScope": "11 项包内标识／Buff 与 6 项 P5 属性合同；保留旧序列化、空白及 Unicode 规范化语义。既有实际探索／战斗分配对照仅在源码散列一致的范围内复用。临时包输入已归还，尚未发布或生产采用。"
+    },
+    {
+      "id": "tool.data-toolkit.explicit-types",
+      "title": "原生配置类型登记与隔离发现",
+      "stage": "Previewable",
+      "targetReleaseId": "",
+      "availability": "TestOnly",
+      "responsibleChat": "01a14d22-2dbb-7313-a0ae-34366b9c3862",
+      "chatUrl": "",
+      "nextAction": "保持 Data Toolkit 2.2.0 独立候选；后续采用后验证实际面板与普通入口的配置替换生效。",
+      "entrance": "隔离消费者运行 DataToolkitDiagnosticsTests、UI 文案合同及 P5 DataToolkitDiscoveryTests 的无焦点用例。",
+      "resourcePath": "com.zerogamestudio.zeroengine.data-toolkit/Editor/Settings/DataToolkitProjectSettings.cs",
+      "revision": "Editor-only additional types and scoped asset cache candidate",
+      "releaseEvidence": "",
+      "candidatePackageVersion": "2.2.0",
+      "verificationEvidence": [
+        "D:\\Temp\\P5PresentationFoundation-20261107\\batch-3-authoring\\refined\\edit.xml",
+        "D:\\Temp\\P5PresentationFoundation-20261107\\batch-3-authoring\\consumer-proof.json",
+        "D:\\Temp\\P5PresentationFoundation-20261107\\batch-3-authoring\\restoration.json",
+        "D:\\Temp\\P5PresentationFoundation-20261107\\batch-3-authoring\\toolkit-scope.json",
+        "D:\\Temp\\P5PresentationFoundation-20261107\\batch-3-authoring\\p5-scope.json",
+        "D:\\Temp\\P5PresentationFoundation-20261107\\batch-3-authoring\\review.md",
+        "D:\\Temp\\P5PresentationFoundation-20261107\\batch-3-authoring\\refined-v2\\edit.xml",
+        "D:\\Temp\\P5PresentationFoundation-20261107\\batch-3-authoring\\refined-v2\\source-scope.json"
+      ],
+      "relatedContent": [
+        {
+          "projectId": "p5",
+          "contentId": "p5.demo.shared-rpg-performance"
+        }
+      ],
+      "verificationScope": "19 项原生 EditMode 合同覆盖显式／旧特性发现、旧构造入口、原生 Inspector 诊断、配置缓存隔离、隐藏嵌入视图刷新及 P5 演出配置。未打开或置前窗口；未核对渲染面板或真实配置替换。P5 适配和包输入已归还，尚未发布或生产采用。 缓存以配置弱键持有；19 项结果已绑定最终源码散列并在 refined-v2 原生复核。"
     }
   ]
 }

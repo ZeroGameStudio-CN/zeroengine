@@ -66,6 +66,26 @@ public sealed class ItemData : ScriptableObject
 }
 ```
 
+### Editor-only type registration
+
+Version 2.2.0 adds explicit registration for project and vendor ScriptableObjects that cannot carry an attribute. Create a project settings copy with the additional types:
+
+```csharp
+var settings = new DataToolkitProjectSettings(
+    projectId: "Example", windowTitle: "Example Data Manager",
+    menuPath: "Tools/Data Manager", editorPrefsPrefix: "Example_DataManager",
+    searchRoots: new[] { "Assets/Data" }, excludedPaths: System.Array.Empty<string>())
+    .WithAdditionalManageableTypes(new[]
+    {
+        typeof(UnityEngine.Timeline.TimelineAsset),
+        typeof(UnityEngine.Rendering.VolumeProfile)
+    });
+```
+
+Register types in the project's Editor assembly, referencing each type's owning assembly there. The toolkit has no Timeline, render-pipeline or gameplay dependency. The type list is copied, filtered to concrete closed ScriptableObject types and deduplicated. It augments the existing attributed types in the window and diagnostics. Reapplying the method replaces the explicit list on a new settings copy; it does not modify the original settings or global attributed discovery. The original constructor and no-argument discovery API remain available.
+
+Asset searches continue to use the active settings' roots and exclusions. Their cache is scoped to the settings instance, so two profiles with the same project ID do not share results from different roots. Explicit registration does not expand asset search roots or provide a specialized inspector: existing providers and Unity's native fallback keep ownership of editing.
+
 ## Inspector Coverage
 
 Custom inspector providers can make high-value data types first-class. Types without custom providers fall back to the configured default inspector mode. Use **Diagnostics** in the window header to review current type coverage and asset counts.

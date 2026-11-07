@@ -22,7 +22,7 @@ namespace ZGS.DataToolkit.Editor
                 .ToArray();
             var rows = new List<DataToolkitTypeCoverageInfo>();
 
-            foreach (var type in ManageableDataTypeDiscovery.GetManageableScriptableObjectTypes())
+            foreach (var type in ManageableDataTypeDiscovery.GetManageableScriptableObjectTypes(context.Settings))
             {
                 var assetPaths = AssetDiscoveryService.GetAssetPathsForType(type, context.Settings);
                 var samplePath = assetPaths.FirstOrDefault();

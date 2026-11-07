@@ -26,6 +26,39 @@ namespace ZeroEngine.Tests.Data
             }
         }
 
+        [TestCase(null)]
+        [TestCase("")]
+        [TestCase(" \t\r\n\u2003")]
+        [TestCase("\U00010400.\u0130.\u03a3")]
+        [TestCase("core.max_hp")]
+        [TestCase(" \tCore.Max_HP\u2003")]
+        [TestCase("\u00c9l\u00c9MENT.\u212a.\u03a3")]
+        public void StatId_AuthoredAndLegacyValuesUseTheSameCanonicalKey(string raw)
+        {
+            var expected = string.IsNullOrWhiteSpace(raw) ? string.Empty : raw.Trim().ToLowerInvariant();
+            var constructed = new StatId(raw);
+            var legacyJson = JsonUtility.ToJson(new LegacyStatId { _value = raw });
+            var legacy = JsonUtility.FromJson<StatId>(legacyJson);
+
+            Assert.That(constructed.Value, Is.EqualTo(expected));
+            Assert.That(legacy.Value, Is.EqualTo(expected));
+            Assert.That(legacy, Is.EqualTo(constructed));
+            Assert.That(legacy.GetHashCode(), Is.EqualTo(constructed.GetHashCode()));
+        }
+
+        [Test]
+        public void StatId_CanonicalAsciiReusesInput()
+        {
+            var canonical = new string(new[] { 'h', 'p', '.', 'm', 'a', 'x' });
+            Assert.That(new StatId(canonical).Value, Is.SameAs(canonical));
+        }
+
+        [System.Serializable]
+        private struct LegacyStatId
+        {
+            public string _value;
+        }
+
         [Test]
         public void AddStacks_WithStatIdModifierConfig_CallsTargetAddModifierWithStatId()
         {
