@@ -14,7 +14,8 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   Strength: 0.85
   InnerWrapWidth: 2
-  InnerWrapStrength: 0.05
+  InnerWrapStrength: 0.22
+  DarkEdgeBrightness: 0.42
   WeakDistance: 2
   StrongDistance: 1
   ResponsePower: 0.5

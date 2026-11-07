@@ -9,8 +9,11 @@ pooling and project assets stay in the consumer. The existing UnityEngine-only
 
 1. Add `SpriteRimRendererFeature` to each URP Renderer used by the game cameras.
 2. Add `SpriteRimLighting` to an actor and call `Configure(renderers, profile)`.
-   A null profile keeps a clear contour with a faint inward transition over two
-   art cells. The deeper artwork retains its original exposure.
+   A null profile keeps a clear contour and a two-art-cell inward transition.
+   InnerWrapStrength controls that transition. DarkEdgeBrightness sets the
+   added-light cap on dark art, independently of the original bright pixels.
+   The shared default uses 0.22 inward strength and a 0.42 linear dark-art cap;
+   existing custom profiles keep their serialized settings and a 0.25 cap.
 3. Create a dedicated light with `GameObject > Light > 角色边缘点光` or
    `角色边缘聚光`; the Editor-only authoring assembly adds the native light and
    `SpriteRimLightSource` together, with ordinary Undo support. For an existing
@@ -19,6 +22,11 @@ pooling and project assets stay in the consumer. The existing UnityEngine-only
    continue to illuminate source materials without creating an actor rim.
    URP visibility, culling masks and the camera frustum select up to four marked
    local lights per actor. Directional lights and sky illumination remain excluded.
+   Assign an opaque door or wall MeshRenderer as the optional fallback occluder
+   on a shadow-casting marked light. When the camera has no packed URP shadow
+   index for the light, its oriented bounds block that light's rim per art cell.
+   The box tracks the rendered door transform and shadow-caster state. The
+   fallback uses the existing composite and requires no global shadow atlas.
    HDR intensity controls coverage separately from hue, preserving colored edges.
    Use `DarkEdgeFill` on a marked light to add a small colored contribution to
    dark contour cells, with a faint inner wrap and a fade across the light's
@@ -27,6 +35,10 @@ pooling and project assets stay in the consumer. The existing UnityEngine-only
    Where native lights overlap on the same art cell, their hues blend with
    greater weight on the stronger contribution. The brightest contribution
    bounds that cell's response, so coincident lights do not wash its color out.
+   Enable realtime shadows on a marked point or spot light to let existing
+   shadow casters block the rim. The pass samples URP's additional-light shadow
+   atlas at art-cell centres. The active renderer and quality tier must provide
+   additional-light shadows with forward-compatible light indices.
 
 For authored 2D fields, create `SpriteRimLight` components and pass their explicit
 array to `Configure(renderers, lights, profile)`. Both inputs use the same enhanced
@@ -50,8 +62,8 @@ The mask follows Sprite pixels-per-unit, pivot, flips and world transforms.
 For enlarged textures or custom/unreadable meshes, configure `SpriteRimPixelGrid`.
 Art cells retain point-sampled source color; only contour coverage is filtered.
 Incoming HDR/emission is preserved, and the profile controls added highlight
-limits and a weak inward light wrap. This is stylized depth-aware recoloring;
-it does not add normal maps or independently reproduce shadow attenuation.
+limits and a weak inward light wrap. The rim uses the same native realtime
+shadow visibility and distance fade as other additional-light receivers.
 
 Only registered actors visible to a game base camera update their silhouette.
 Scene lights are captured from that camera's URP culling results. Disabling an
