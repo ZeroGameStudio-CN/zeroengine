@@ -11,8 +11,10 @@ namespace ZeroEngine.Preview.Editor
     {
         private readonly PreviewController controller;
         private int selected,choice;
-        private string selectionId,message,plan;
-        public PreviewControlsPanel(PreviewController controller)=>this.controller=controller??throw new ArgumentNullException(nameof(controller));
+        private string selectionId,message,plan,selectedGroupName;
+        public PreviewControlsPanel(PreviewController controller):this(controller,null){}
+        public PreviewControlsPanel(PreviewController controller,string initialGroup)
+        {this.controller=controller??throw new ArgumentNullException(nameof(controller));selectedGroupName=initialGroup;}
         public float RefreshInterval=>.5f;
         public void Activate(EditorWorkspacePanelContext context){}
         public void Deactivate(){}
@@ -21,7 +23,16 @@ namespace ZeroEngine.Preview.Editor
         public void OnGUI(EditorWorkspacePanelContext context)
         {
             if(controller.Entries.Count==0){EditorGUILayout.HelpBox("没有登记的预览。",MessageType.Info);return;}
-            var entries=controller.Entries;
+            var all=controller.Entries;
+            var groups=all.Select(e=>e.Definition.Group??string.Empty).Distinct().ToArray();
+            int groupIndex=selectedGroupName==null?0:Array.IndexOf(groups,selectedGroupName)+1;
+            int nextGroupIndex=EditorGUILayout.Popup("预览分组",groupIndex,new[]{"全部分组"}.Concat(groups.Select(g=>string.IsNullOrEmpty(g)?"未分组":g)).ToArray());
+            string nextGroup=nextGroupIndex==0?null:groups[nextGroupIndex-1];
+            if(nextGroup!=selectedGroupName){selectedGroupName=nextGroup;selected=choice=0;selectionId=message=plan=null;}
+            var entries=all.Where(e=>selectedGroupName==null||e.Definition.Group==selectedGroupName).ToArray();
+            if(entries.Length==0){EditorGUILayout.HelpBox("当前分组没有预览功能。",MessageType.Info);return;}
+            selected=Mathf.Clamp(selected,0,entries.Length-1);
+            EditorGUILayout.LabelField("分组仅组织预览；组内功能独立启停，归组不会改变正式开放状态。",EditorStyles.wordWrappedMiniLabel);
             int next=EditorGUILayout.Popup("预览功能",selected,entries.Select(e=>e.Definition.Title).ToArray());
             if(next!=selected){selected=next;choice=0;selectionId=null;message=null;plan=null;}
             var entry=entries[selected];var definition=entry.Definition;
