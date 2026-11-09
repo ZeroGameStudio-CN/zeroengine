@@ -2,6 +2,7 @@
     "name": "ZeroEngine.Data",
     "rootNamespace": "ZeroEngine",
     "references": [
+        "ZeroEngine.StatSystem.Core",
         "ZeroEngine.BuffSystem.Core",
         "ZeroEngine.Core",
         "ZeroEngine.Persistence",

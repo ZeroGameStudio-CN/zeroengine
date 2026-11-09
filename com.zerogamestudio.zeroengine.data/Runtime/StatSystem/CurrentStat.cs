@@ -1,5 +1,6 @@
 using System;
 using UnityEngine;
+using ZeroEngine.StatSystem.Core;
 
 namespace ZeroEngine.StatSystem
 {
@@ -81,7 +82,7 @@ namespace ZeroEngine.StatSystem
             BaseValue = maxValue;
             _currentValue = currentValue < 0 ? maxValue : Mathf.Clamp(currentValue, 0, maxValue);
             _roundValues = round;
-            _isDirty = true;
+            NotifyModifiersChanged();
         }
 
         /// <summary>
@@ -124,24 +125,8 @@ namespace ZeroEngine.StatSystem
             base.AddModifier(modifier);
             float newMax = MaxValue;
 
-            // 根据增加类型调整当前值
-            if (increaseType == IncreaseType.Percent && oldMax > 0)
-            {
-                // 保持百分比
-                float percent = _currentValue / oldMax;
-                _currentValue = percent * newMax;
-            }
-            else
-            {
-                // 按差值调整
-                float delta = newMax - oldMax;
-                if (delta > 0)
-                {
-                    _currentValue += delta;
-                }
-            }
-
-            _currentValue = Mathf.Clamp(_currentValue, 0, newMax);
+            _currentValue = StatCurrentValue.AdjustLegacyMaximum(
+                _currentValue, oldMax, newMax, increaseType == IncreaseType.Percent);
             OnValueChange?.Invoke(_currentValue, newMax);
         }
 

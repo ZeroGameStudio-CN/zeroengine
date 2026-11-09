@@ -8,6 +8,40 @@ namespace ZeroEngine.Data.Tests
     // Core contracts: source ownership, callback ordering, detached recovery and injected clocks.
     public class BuffKernelTests
     {
+        [TestCase(19)]
+        [TestCase(499)]
+        [TestCase(4999)]
+        public void BulkState_MatchesPerLayerObservedPath(int count)
+        {
+            var bulk = new BuffStackState(); var observed = new BuffStackState();
+            var observer = new Observer();
+            foreach (var state in new[] { bulk, observed }) state.AddStacks("existing", 3, 9999, true);
+            Assert.That(bulk.AddStacks("growth", count, 9999, true), Is.EqualTo(observed.AddStacks("growth", count, 9999, true, observer)));
+            Assert.That(bulk.RemoveStacks(null, count / 2), Is.EqualTo(observed.RemoveStacks(null, count / 2, observer)));
+            Assert.That(bulk.SourceStacks, Is.EquivalentTo(observed.SourceStacks));
+            Assert.That(bulk.SourceLifetimeStacks, Is.EquivalentTo(observed.SourceLifetimeStacks));
+            Assert.That(bulk.RemoveStacks("growth", count), Is.EqualTo(observed.RemoveStacks("growth", count, observer)));
+            Assert.That(bulk.SourceStacks, Is.EquivalentTo(observed.SourceStacks));
+            Assert.That(bulk.SourceLifetimeStacks, Is.EquivalentTo(observed.SourceLifetimeStacks));
+        }
+
+        [Test]
+        public void BulkState_PublicMapAndSignedEntriesRemainVisible()
+        {
+            var bulk = new BuffStackState(); var observed = new BuffStackState();
+            foreach (var state in new[] { bulk, observed })
+            {
+                state.SourceStacks["negative"] = -2;
+                state.SourceStacks["zero"] = 0;
+                state.SourceStacks["positive"] = 9;
+                state.SourceLifetimeStacks["positive"] = 4;
+            }
+            Assert.That(bulk.TotalStacks, Is.EqualTo(7));
+            Assert.That(bulk.RemoveStacks(null, 6), Is.EqualTo(observed.RemoveStacks(null, 6, new Observer())));
+            Assert.That(bulk.SourceStacks, Is.EquivalentTo(observed.SourceStacks));
+            Assert.That(bulk.SourceLifetimeStacks, Is.EquivalentTo(observed.SourceLifetimeStacks));
+        }
+
         private sealed class Observer : IBuffStackObserver
         {
             public bool IsActive { get; set; } = true;

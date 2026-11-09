@@ -1,7 +1,7 @@
 {
   "name": "ZeroEngine.Data.BuffSystem.Tests.Editor",
   "rootNamespace": "ZeroEngine.Data.Tests",
-  "references": ["ZeroEngine.Data", "ZeroEngine.BuffSystem.Core", "UnityEngine.TestRunner", "UnityEditor.TestRunner"],
+  "references": ["ZeroEngine.Data", "ZeroEngine.StatSystem.Core", "ZeroEngine.BuffSystem.Core", "ZeroEngine.Formula", "UnityEngine.TestRunner", "UnityEditor.TestRunner"],
   "includePlatforms": ["Editor"],
   "overrideReferences": true,
   "precompiledReferences": ["nunit.framework.dll"],
