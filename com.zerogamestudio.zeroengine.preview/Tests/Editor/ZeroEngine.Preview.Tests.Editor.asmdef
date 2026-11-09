@@ -1,0 +1,21 @@
+{
+  "name": "ZeroEngine.Preview.Tests.Editor",
+  "references": [
+    "ZeroEngine.Preview",
+    "ZeroEngine.Preview.Editor"
+  ],
+  "includePlatforms": [
+    "Editor"
+  ],
+  "overrideReferences": true,
+  "precompiledReferences": [
+    "nunit.framework.dll"
+  ],
+  "autoReferenced": false,
+  "defineConstraints": [
+    "UNITY_INCLUDE_TESTS"
+  ],
+  "optionalUnityReferences": [
+    "TestAssemblies"
+  ]
+}
