@@ -34,3 +34,7 @@ lanes retain their separate installation contracts. The separate package-quality
 job audits every source package, including packages excluded from those Unity
 2022.3 lanes. A successful 2022.3 lane is not verification of Unity 6-only packages;
 verify those with the matching Editor and package-specific tests before publishing.
+
+The `lifecycle` lane selects Core, Audio and their required siblings. CI runs it
+in PlayMode so singleton shutdown and audio enable/disable ownership are exercised
+through real Unity lifecycle callbacks, independently of the EditMode lanes.

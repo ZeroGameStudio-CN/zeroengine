@@ -7,7 +7,7 @@ import re
 import shutil
 
 
-LANES = ("legacy", "modular", "dashboard-only", "dashboard-with-modules", "modules-only")
+LANES = ("legacy", "modular", "dashboard-only", "dashboard-with-modules", "modules-only", "lifecycle")
 PREFIX = "com.zerogamestudio.zeroengine"
 
 
@@ -44,6 +44,8 @@ def select_packages(packages, lane, editor_version):
     elif lane == "dashboard-with-modules":
         seeds = {PREFIX + suffix for suffix in (".dashboard", ".editor-ui", ".project-atlas", ".core", ".ui")}
         seeds.add("com.zerogamestudio.analytics")
+    elif lane == "lifecycle":
+        seeds = {PREFIX + ".core", PREFIX + ".audio"}
     elif lane in ("modular", "modules-only"):
         seeds = compatible - {PREFIX}
         if lane == "modules-only":

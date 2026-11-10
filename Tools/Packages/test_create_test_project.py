@@ -7,6 +7,20 @@ from create_test_project import create_project, select_packages
 
 
 class TestProjectSelectionTests(unittest.TestCase):
+    def test_lifecycle_keeps_audio_core_closure_without_unrelated_modules(self):
+        packages = {
+            "com.zerogamestudio.zeroengine.core": dict(unity="2022.3"),
+            "com.zerogamestudio.zeroengine.audio": dict(unity="2022.3", dependencies={"com.zerogamestudio.zeroengine.persistence": "2.0.0"}),
+            "com.zerogamestudio.zeroengine.persistence": dict(unity="2022.3", dependencies={"com.zerogamestudio.zeroengine.core": "2.0.0"}),
+            "com.zerogamestudio.zeroengine.dashboard": dict(unity="2022.3"),
+        }
+        selected, _ = select_packages(packages, "lifecycle", "2022.3.62f1")
+        self.assertCountEqual([
+            "com.zerogamestudio.zeroengine.core",
+            "com.zerogamestudio.zeroengine.audio",
+            "com.zerogamestudio.zeroengine.persistence",
+        ], selected)
+
     def test_legacy_keeps_required_modsystem_and_transitive_dependencies(self):
         packages = {
             "com.zerogamestudio.zeroengine": dict(unity="2022.3", dependencies={"com.zerogamestudio.zeroengine.modsystem": "0.4.0"}),

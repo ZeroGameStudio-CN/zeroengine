@@ -51,14 +51,22 @@ jobs:
         include:
           - lane: legacy
             name: Legacy package
+            test-mode: EditMode
           - lane: modular
             name: Modular packages
+            test-mode: EditMode
           - lane: dashboard-only
             name: Dashboard only
+            test-mode: EditMode
           - lane: dashboard-with-modules
             name: Dashboard with Analytics and UI
+            test-mode: EditMode
           - lane: modules-only
             name: Modules without Dashboard
+            test-mode: EditMode
+          - lane: lifecycle
+            name: Core and Audio lifecycles
+            test-mode: PlayMode
 
     steps:
       - name: Checkout repository
@@ -93,7 +101,7 @@ jobs:
         shell: bash
         run: rm -rf TestProject/Library
 
-      - name: Run EditMode Tests
+      - name: Run ${{ matrix.test-mode }} Tests
         uses: game-ci/unity-test-runner@v4
         id: testRunner
         env:
@@ -104,9 +112,9 @@ jobs:
         with:
           unityVersion: 2022.3.62f1
           projectPath: TestProject
-          testMode: EditMode
+          testMode: ${{ matrix.test-mode }}
           artifactsPath: TestResults
-          checkName: EditMode Test Results (${{ matrix.name }})
+          checkName: ${{ matrix.test-mode }} Test Results (${{ matrix.name }})
 
       - name: Upload Test Results
         uses: actions/upload-artifact@v4
