@@ -10,7 +10,7 @@ SpriteRenderers into exact native world-centre reuse within each existing Render
 pass. The default keeps the original native reads. Callers must reject custom
 world-bounds overrides, skinning/deformable buffers and unknown pose providers.
 `BodyVisualBoundsCache` rechecks renderer identity, exact transforms/local bounds,
-sprite geometry, flips, draw mode and size at every use, and resamples immediately
+sprite geometry bounds, flips, draw mode and size at every use, and resamples immediately
 when they change. It never skips pose capture, clocks, composition or callbacks,
 and begins fresh for each Render call, including synchronous Play/Remove calls.
 Legacy `BodyVisual.Update` and constructor signatures remain available.

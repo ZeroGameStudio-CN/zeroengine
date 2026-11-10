@@ -64,15 +64,19 @@ namespace ZeroEngine.Render.Tests.Editor
                 Assert.That(cache.NativeReadsThisPass, Is.EqualTo(reads));
             }
         }
-        [Test] public void InPlaceSpriteGeometryChange_IsObservedWithoutChangingSpriteReference()
+        [Test] public void InPlaceGeometryWithUnchangedBounds_KeepsTheExactNativeCenter()
         {
             var cache = new BodyVisualBoundsCache(); cache.SetEligibility(_ => true); cache.GetCenter(renderer);
             var vertices = first.vertices;
+            var originalVertex = vertices[0];
             for (int i = 0; i < vertices.Length; i++) vertices[i] = vertices[i] * .8f + new Vector2(.02f, .02f);
             first.OverrideGeometry(vertices, first.triangles);
+            Assert.That(first.vertices[0], Is.Not.EqualTo(originalVertex));
             var actual = cache.GetCenter(renderer);
             EqualBits(renderer.bounds.center, actual);
-            Assert.That(cache.NativeReadsThisPass, Is.EqualTo(2));
+            // Unity keeps this FullRect sprite's native bounds while its vertices
+            // change. Only bounds are reused; BodyVisual still captures every pose.
+            Assert.That(cache.NativeReadsThisPass, Is.EqualTo(1));
         }
         [Test] public void DefaultAndLiveOptOut_PreserveCustomWorldBoundsOnEveryRead()
         {
