@@ -36,9 +36,9 @@ without that SDK.
 | `com.zerogamestudio.zeroengine.cinematic` | 2.1.0 | 2022.3 | Keep Timeline playback and binding contracts; declare the Director module. |
 | `com.zerogamestudio.zeroengine.combat` | 2.1.0 | 2022.3 | Restore P6 shared effect-parameter contracts and declare Economy plus directly used engine modules. |
 | `com.zerogamestudio.zeroengine.config-pipeline` | 2.4.0 | 2022.3 | Merge composite keys and deterministic output with grouped authoring, inline lists and source-preserving candidates. |
-| `com.zerogamestudio.zeroengine.core` | 2.2.1 | 2022.3 | Fix persistent-singleton shutdown/ownership cleanup, including PoolManager; retain legacy EventManager API. |
+| `com.zerogamestudio.zeroengine.core` | 2.2.2 | 2022.3 | Fix persistent-singleton shutdown/ownership cleanup, including PoolManager; declare UIUtils' actual uGUI/UI dependencies and retain legacy EventManager API. |
 | `com.zerogamestudio.zeroengine.dashboard` | 4.7.1 | 2022.3 | Keep optional descriptor-driven navigation; it is not a required runtime or module dependency. |
-| `com.zerogamestudio.zeroengine.data` | 2.2.1 | 2022.3 | Keep StatId/StatBlock and persistence contracts; merge unobserved Buff batching while preserving observer callbacks. |
+| `com.zerogamestudio.zeroengine.data` | 2.2.2 | 2022.3 | Keep StatId/StatBlock, persistence, bounded sort-layout and repeated-input contracts; merge unobserved Buff batching while preserving observer callbacks. |
 | `com.zerogamestudio.zeroengine.data-toolkit` | 2.3.0 | 2022.3 | Keep asset browsing and inspection; restore P6 deterministic validation-report contracts. |
 | `com.zerogamestudio.zeroengine.development-content` | 1.1.0 | 2022.3 | Own content/release planning and guarded storage; project registries remain project-owned. |
 | `com.zerogamestudio.zeroengine.dlc` | 2.0.0 | 2022.3 | Keep neutral entitlement/content availability contracts; distinct from mod discovery/import. |
@@ -171,3 +171,18 @@ local cases), where OnEnable/OnDisable actually execute on both supported Editor
 lines. Source-lifecycle checks follow the new achievement save adapter, and the
 remaining scanner/label/boundary assertions match the current contracts without
 requiring a fixed patch version, an installed networking SDK or CJK font metrics.
+
+Read-only consumer API checks freeze actual Unity compiler inputs and rebuild the
+candidate package assemblies outside the production projects. P5's 53 direct
+production consumer assemblies compile against the candidate. Of POB's 51, the
+first run found its currently adopted sort-layout contract missing; that contract
+and repeated-input bulk-copy API are now restored from consumer pin `5066d01`.
+The formerly failing POB Runtime assembly compiles against the repair, and the
+other 50 original checks remain valid. Neither input set drifted during those
+checks. The restored Stat kernel has 18 successful native focused cases.
+These are API and package-behavior checks, not full consumer runtime acceptance.
+
+The new minimal Core/Audio PlayMode lane also exposed Core's undeclared uGUI/UI
+dependencies, which larger installations had supplied indirectly. Core 2.2.2
+declares the packages and assembly it actually uses. CI keeps this three-sibling
+runtime combination separate from the five EditMode installation combinations.

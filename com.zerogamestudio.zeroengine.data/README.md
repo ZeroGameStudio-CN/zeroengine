@@ -1,6 +1,8 @@
 # ZeroEngine.Data
 
-属性和 Buff 的通用运行时包。当前整合候选版本为 2.2.1，保留 StatId、StatBlock 与存档合同，并合入无观察者时的 Buff 批量计算；存在观察者时仍逐层通知。依赖 ZeroEngine.Core、ZeroEngine.Formula 与 ZeroEngine.Persistence，消费者需使用同一验证提交的包组合。候选尚未发布。
+属性和 Buff 的通用运行时包。当前整合候选版本为 2.2.2，保留 StatId、StatBlock 与存档合同，并合入无观察者时的 Buff 批量计算；存在观察者时仍逐层通知。依赖 ZeroEngine.Core、ZeroEngine.Formula 与 ZeroEngine.Persistence，消费者需使用同一验证提交的包组合。候选尚未发布。
+
+`RepeatedModifiers<T>` 保留 POB 已采用的只读 `ICollection<T>` 和稳定模板块复制合同。`StatSortLayoutCache<TModifier,TSource,TAdapter>` 只复用逐项引用和 Order 完全一致的排序排列，不缓存数值；首次排序使用当前运行时的真实 `List.Sort`。它有条目和引用槽上限，非线程安全，宿主须在世界或会话边界调用 `Clear()`。原 `StatKernel.Sort` 比较器入口不变。
 
 ## 属性合同
 

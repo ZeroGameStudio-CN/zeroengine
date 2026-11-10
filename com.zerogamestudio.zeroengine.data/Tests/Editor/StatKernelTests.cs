@@ -26,6 +26,115 @@ namespace ZeroEngine.Data.Tests
         }
         private static int Bits(float value) => BitConverter.ToInt32(BitConverter.GetBytes(value), 0);
 
+        [Test]
+        public void SortCache_ReusesOnlyExactReferencesAndOrdersWithLiveValues()
+        {
+            var cache = new StatSortLayoutCache<Modifier, string, Adapter>(8, 10000, 0);
+            var random = new Random(901);
+            for (int trial = 0; trial < 30; trial++)
+            {
+                var template = new Modifier[9];
+                for (int i = 0; i < template.Length; i++) template[i] = new Modifier {
+                    Order = random.Next(3), Kind = ModifierKind.AdditivePercent, Value = i * .00013f };
+                var input = new List<Modifier>(new RepeatedModifiers<Modifier>(template, 37));
+                for (int pass = 0; pass < 5; pass++)
+                {
+                    if (pass == 2) template[1].Value += .001f; // Value is never cached.
+                    if (pass == 3) template[2].Order += 2; // Same references, changed key.
+                    if (pass == 4) input[7] = new Modifier { Order = input[7].Order };
+                    var expected = new List<Modifier>(input);
+                    expected.Sort((a, b) => a.Order.CompareTo(b.Order));
+                    var actual = new List<Modifier>(input);
+                    var iterator = actual.GetEnumerator();
+                    iterator.MoveNext();
+                    cache.Sort(actual);
+                    Assert.That(actual, Is.EqualTo(expected));
+                    Assert.Throws<InvalidOperationException>(() => iterator.MoveNext());
+                    Assert.That(Bits(StatKernel<Modifier, string, Adapter>.EvaluateOrdered(123, actual, true, true)),
+                        Is.EqualTo(Bits(StatKernel<Modifier, string, Adapter>.EvaluateOrdered(123, expected, true, true))));
+                }
+                Assert.That(cache.Count, Is.LessThanOrEqualTo(8));
+                Assert.That(cache.RetainedModifierSlots, Is.LessThanOrEqualTo(10000));
+            }
+            cache.Clear();
+            Assert.That(cache.Count, Is.Zero);
+            Assert.That(cache.RetainedModifierSlots, Is.Zero);
+        }
+
+        [Test]
+        public void SortCache_NoOpAndBudgetKeepOriginalContract()
+        {
+            var cache = new StatSortLayoutCache<Modifier, string, Adapter>(1, 10, 0);
+            var a = new Modifier { Order = 0 };
+            var b = new Modifier { Order = 1 };
+            var list = new List<Modifier> { a, a, b, b };
+            var iterator = list.GetEnumerator(); iterator.MoveNext();
+            cache.Sort(list);
+            Assert.That(iterator.MoveNext(), Is.True);
+            Assert.That(cache.Count, Is.Zero);
+            for (int length = 2; length <= 10; length++)
+            {
+                var input = new List<Modifier>();
+                for (int i = 0; i < length; i++) input.Add(i % 2 == 0 ? b : a);
+                var expected = new List<Modifier>(input); expected.Sort((x, y) => x.Order.CompareTo(y.Order));
+                cache.Sort(input);
+                Assert.That(input, Is.EqualTo(expected));
+                Assert.That(cache.RetainedModifierSlots, Is.LessThanOrEqualTo(10));
+            }
+        }
+
+        [TestCase(0)]
+        [TestCase(1)]
+        [TestCase(19)]
+        [TestCase(4999)]
+        public void RepeatedCopy_PreservesEveryReferenceAndDestinationBoundary(int repetitions)
+        {
+            var a = new Modifier(); var b = new Modifier();
+            foreach (IReadOnlyList<Modifier> template in new IReadOnlyList<Modifier>[] {
+                new[] { a, b, a }, new List<Modifier> { a, b, a } })
+            {
+                var repeated = new RepeatedModifiers<Modifier>(template, repetitions);
+                var destination = new Modifier[repeated.Count + 4];
+                destination[0] = b; destination[destination.Length - 1] = b;
+                repeated.CopyTo(destination, 2);
+                for (int i = 0; i < repeated.Count; i++) Assert.That(destination[i + 2], Is.SameAs(template[i % 3]));
+                Assert.That(destination[0], Is.SameAs(b));
+                Assert.That(destination[destination.Length - 1], Is.SameAs(b));
+                Assert.That(new List<Modifier>(repeated), Is.EqualTo(repeated));
+                Assert.Throws<ArgumentNullException>(() => repeated.CopyTo(null, 0));
+                Assert.Throws<ArgumentOutOfRangeException>(() => repeated.CopyTo(destination, -1));
+                if (repetitions > 0) Assert.Throws<ArgumentException>(() => repeated.CopyTo(new Modifier[0], 0));
+                Assert.Throws<NotSupportedException>(() => ((ICollection<Modifier>)repeated).Clear());
+            }
+        }
+
+        [Test]
+        public void RepeatedCopy_ChangedListAndCustomIndexerRetainSequentialReads()
+        {
+            var a = new Modifier(); var b = new Modifier();
+            var source = new List<Modifier> { a, b };
+            var repeated = new RepeatedModifiers<Modifier>(source, 3);
+            source.RemoveAt(1);
+            Assert.That(repeated.TryGetStableTemplate(out _), Is.False);
+            Assert.That(new List<Modifier>(repeated), Is.EqualTo(new[] { a, a, a, a, a, a }));
+            var custom = new CountingTemplate(a, b);
+            var sequence = new RepeatedModifiers<Modifier>(custom, 3);
+            Assert.That(sequence.TryGetStableTemplate(out _), Is.False);
+            Assert.That(new List<Modifier>(sequence), Is.EqualTo(new[] { a, b, a, b, a, b }));
+            Assert.That(custom.Reads, Is.EqualTo(6));
+        }
+
+        private sealed class CountingTemplate : IReadOnlyList<Modifier>
+        {
+            readonly Modifier[] values;
+            public int Reads;
+            public CountingTemplate(params Modifier[] values) { this.values = values; }
+            public int Count => values.Length;
+            public Modifier this[int index] { get { Reads++; return values[index]; } }
+            public IEnumerator<Modifier> GetEnumerator() { throw new NotSupportedException(); }
+            System.Collections.IEnumerator System.Collections.IEnumerable.GetEnumerator() => GetEnumerator();
+        }
+
         [TestCase(19)]
         [TestCase(499)]
         [TestCase(4999)]

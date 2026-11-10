@@ -2,6 +2,7 @@
     "name": "ZeroEngine.Core",
     "rootNamespace": "ZeroEngine",
     "references": [
+        "UnityEngine.UI",
         "Unity.Addressables",
         "Unity.ResourceManager",
         "Unity.InputSystem",
