@@ -202,10 +202,10 @@
       "availability": "InternalOnly",
       "responsibleChat": "",
       "chatUrl": "",
-      "nextAction": "提交包整理候选至既有开发分支并核对 CI；保留 P6 的 major 迁移门槛，完成 POB／P5 消费验收和原请求收尾后，再进入统一 Console 与同步 Skill。",
+      "nextAction": "候选已提交草稿 PR #81；复核六种 CI 安装组合，继续单一临时工程的固定 Git 图与 POB／P5 原生消费流程验收。G3 出口前不进入 Console／Skill，不改正式消费者引用。",
       "entrance": "docs/specs/2026-11-10-package-consolidation.md",
       "resourcePath": "Tools/Packages/audit_packages.py",
-      "revision": "57 个通用源包及 POB 的 3 个项目接线包均有处置记录。POB／P5 功能与 P6 钱包、存档字典、配置校验合同合并；ModSystem／成就重复已归并，补齐引擎模块和 SDK 引用。静态审查 57 包无发现，工具验证 16 项；Config 248、Render 86＋11、Data 64、持久化 7、头像 28、WorldShift 21、钱包与 JSON 7、Core 生命周期 3 项局部证据无失败。中立 ModSystem 43 项成功，3 项旧总包存在性检查在独立工程跳过。两份可选 SDK 启用编译及工具入口实际打开读回已建立；未发布、未改正式消费者引用。",
+      "revision": "57 个通用源包及 POB 的 3 个项目接线包均有处置记录。候选保留 POB／P5 与 P6 独立合同，清理 ModSystem／成就重复。Core／Data 2.2.2 补齐最小 UI 依赖和 POB 已采用的排序缓存、批量复制合同。工具 17 项、全 57 包静态审查无发现；Config、Render、Data、持久化、Analytics、Extraction、反馈、教程、工具导航及生命周期均有匹配的局部原生证据。POB 51 与 P5 53 个直接生产消费程序集有冻结输入的 API 编译证据，POB 最初缺失的 Stat 合同已补回并复核。源码提交与草稿 PR 不代表采用或发布。",
       "releaseEvidence": "",
       "verificationEvidence": [
         "D:/CodexArtifacts/ze-package-audit-20261110/first-batch-health.json",
@@ -224,9 +224,23 @@
         "D:/CodexArtifacts/ze-package-audit-20261110/sdk-surface-profile-results.json",
         "D:/CodexArtifacts/ze-package-audit-20261110/native-legacy-historical-guid-proof.json",
         "D:/CodexArtifacts/ze-package-audit-20261110/navigation-native-smoke-readback.json",
-        "D:/CodexArtifacts/ze-package-audit-20261110/ci-descriptor-lane-verification.json"
+        "D:/CodexArtifacts/ze-package-audit-20261110/ci-descriptor-lane-verification.json",
+        "D:/CodexArtifacts/ze-package-audit-20261110/runtime-analytics-result.json",
+        "D:/CodexArtifacts/ze-package-audit-20261110/runtime-extraction-result.json",
+        "D:/CodexArtifacts/ze-package-audit-20261110/runtime-feedback-result.json",
+        "D:/CodexArtifacts/ze-package-audit-20261110/runtime-tutorial-result.json",
+        "D:/CodexArtifacts/ze-package-audit-20261110/runtime-toolkit-native-result.json",
+        "D:/CodexArtifacts/ze-package-audit-20261110/runtime-tutorial-dynamic-font-result.json",
+        "D:/CodexArtifacts/ze-package-audit-20261110/runtime-feedback-play-with-font-result.json",
+        "D:/CodexArtifacts/ze-package-audit-20261110/ci-fix-focused-summary.json",
+        "D:/CodexArtifacts/ze-package-audit-20261110/consumer-compile/POB/result.json",
+        "D:/CodexArtifacts/ze-package-audit-20261110/consumer-compile/ZGSProject_5/result.json",
+        "D:/CodexArtifacts/ze-package-audit-20261110/consumer-stat-contract-integration.json",
+        "D:/CodexArtifacts/ze-package-audit-20261110/consumer-stat-contract-repair-results.json",
+        "D:/CodexArtifacts/ze-package-audit-20261110/consumer-stat-settled-test-result.json",
+        "D:/CodexArtifacts/ze-package-audit-20261110/matrix-after-close-original-request.json"
       ],
-      "verificationScope": "证据限定对应冻结输入与安装组合；原 Core／旧总包挂起请求和 Localization／Newtonsoft 原清理失败请求继续保留，未重放或伪造收尾。Pathfinding 144 项无失败但请求因弹窗超预算保持失败；临时工程意外默认存档文件已保留，修正后内容未变。P6 三个 major 升级、Unity 2022.3 实跑、Player／可选 SDK 运行与 POB／P5 新候选采用仍未建立。",
+      "verificationScope": "Git 候选 3e814ca，草稿 PR #81；原生 Stat kernel 18 项、反馈 PlayMode 3 项、教程 UI 流程 1 项均有成功结果与清理证据；Unity 2022.3 最小 Core／Audio 组合有 10 项 PlayMode 成功。消费者 Roslyn 编译仅为辅助 API 证据，不代替固定包图与真实原生消费流程。完整 CI 当前仍在收敛；一次 Dashboard 作业在 Unity 启动前遇到 GameCI latest release API 403，保留失败并固定已观测的 CLI。Matrix 原清理请求在正常关闭后验证释放；旧 Core／legacy 线程无响应，正常关闭未结束，未强杀。临时默认存档原件和备份保留。P6 的三个 major 迁移、Player／可选 SDK 运行与正式采用不冒充已验证。",
       "relatedContent": [
         {
           "projectId": "pob",

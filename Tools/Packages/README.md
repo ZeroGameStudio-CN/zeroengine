@@ -38,3 +38,6 @@ verify those with the matching Editor and package-specific tests before publishi
 The `lifecycle` lane selects Core, Audio and their required siblings. CI runs it
 in PlayMode so singleton shutdown and audio enable/disable ownership are exercised
 through real Unity lifecycle callbacks, independently of the EditMode lanes.
+
+The test-runner CLI is pinned to the observed `v0.1.72` release; resolving a
+floating latest release is unnecessary and can fail before Unity starts.
