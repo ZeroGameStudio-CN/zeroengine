@@ -4,6 +4,11 @@ Consolidate the existing package set before implementing the native command
 system. The command system and its AI Skill start only after the package set
 has passed its consumer checks. No target user release is assigned yet.
 
+G3 engineering acceptance is frozen at `8441097`; the
+[acceptance record](../packages/2026-11-10-g3-acceptance.md) defines its evidence
+and explicit consumer/platform boundaries. The native Console can now proceed
+against that immutable source baseline.
+
 The [package review](../packages/2026-11-10-consolidation-review.md) records all
 57 reusable source packages and the three project-owned POB integration packages,
 including decisions, incompatible consumer upgrades and verification boundaries.

@@ -197,15 +197,15 @@
     {
       "id": "ze.maintenance.package-consolidation",
       "title": "ZE 全库包审查与整理（先于原生指令）",
-      "stage": "InProgress",
+      "stage": "Previewable",
       "targetReleaseId": "",
       "availability": "InternalOnly",
       "responsibleChat": "",
       "chatUrl": "",
-      "nextAction": "收敛最终 CI 的 Activity 分配检查并冻结 G3 验收范围；复用已固定 Git 图、POB／P5 实际调用者和渲染读回证据。包验收出口前不进入 Console／Skill，正式消费者引用保持未采用。",
+      "nextAction": "G3 源码基线冻结于 8441097；统一指令进入 ze.console.native 的 G4 纵向样片。消费者正式采用、P6 major 迁移、商业 SDK 运行及 Player 检查保持各自明确范围。",
       "entrance": "docs/specs/2026-11-10-package-consolidation.md",
       "resourcePath": "Tools/Packages/audit_packages.py",
-      "revision": "57 个通用源包及 POB 的 3 个项目接线包均有处置记录。候选保留 POB／P5 与 P6 独立合同，清理 ModSystem／成就重复。Core／Data 2.2.2 补齐最小 UI 依赖和 POB 已采用的排序缓存、批量复制合同。工具 17 项、全 57 包静态审查无发现；Config、Render、Data、持久化、Analytics、Extraction、反馈、教程、工具导航及生命周期均有匹配的局部原生证据。POB 51 与 P5 53 个直接生产消费程序集有冻结输入的 API 编译证据，POB 最初缺失的 Stat 合同已补回并复核。源码提交与草稿 PR 不代表采用或发布。",
+      "revision": "57 个通用源包及 POB 的 3 个项目接线包均有处置记录。候选保留 POB／P5 与 P6 独立合同，清理 ModSystem／成就重复。Core／Data 2.2.2 补齐最小 UI 依赖和 POB 已采用的排序缓存、批量复制合同。工具 17 项、全 57 包静态审查无发现；Config、Render、Data、持久化、Analytics、Extraction、反馈、教程、工具导航及生命周期均有匹配的局部原生证据。POB 51 与 P5 53 个直接生产消费程序集有冻结输入的 API 编译证据，POB 最初缺失的 Stat 合同已补回并复核。源码提交与草稿 PR 不代表采用或发布。 G3 基线 8441097：六种 Unity CI 安装组合及包质量作业均成功；22 包同一固定 Git 图、Activity 原生最终用例和实际调用者局部回归已建立。",
       "releaseEvidence": "",
       "verificationEvidence": [
         "D:/CodexArtifacts/ze-package-audit-20261110/first-batch-health.json",
@@ -248,9 +248,12 @@
         "D:/CodexArtifacts/ze-package-audit-20261110/core-legacy-close-review/authorization.json",
         "D:/CodexArtifacts/ze-package-audit-20261110/core-legacy-close-review/termination-result.json",
         "D:/CodexArtifacts/ze-package-audit-20261110/core-legacy-close-review/original-request-after-close-status.json",
-        "D:/CodexArtifacts/ze-package-audit-20261110/activity-recorder-probe-native-result.json"
+        "D:/CodexArtifacts/ze-package-audit-20261110/activity-recorder-probe-native-result.json",
+        "D:/CodexArtifacts/ze-package-audit-20261110/pinned-8441097-native-source-proof.json",
+        "D:/CodexArtifacts/ze-package-audit-20261110/activity-final-native-result.json",
+        "D:/CodexArtifacts/ze-package-audit-20261110/activity-final-native-status.json"
       ],
-      "verificationScope": "57 包与 17 项工具检查；POB 51／P5 53 个冻结生产消费程序集编译为辅助证据。单一临时 Editor 现加载 22 包同一固定 Git 提交；POB 实际 Stat、P5 实际属性与内存存档、对象池接线三项原生 PlayMode 成功，四份相机图已检查。Unity 2022.3 的 Core／Audio 10 项 PlayMode 和五个 EditMode 安装组合分别保留 CI 结果；最终 Activity 零分配门仍在复核，原生 ProfilerRecorder 的空操作、真实分配和 32 组零分配控制已成功。旧挂起 PID 56456 经用户准确批准后结束，原请求现 cleanupVerified=true；其他临时实例已正常关闭。临时默认存档原件与备份保留且哈希未变。全部失败原结果保留；未将 Player、商业 SDK 运行、P6 major 迁移或正式采用记为成功。",
+      "verificationScope": "57 包与 17 项工具检查；POB 51／P5 53 个冻结生产消费程序集编译为辅助证据。单一临时 Editor 现加载 22 包同一固定 Git 提交；POB 实际 Stat、P5 实际属性与内存存档、对象池接线三项原生 PlayMode 成功，四份相机图已检查。Unity 2022.3 的 Core／Audio 10 项 PlayMode 和五个 EditMode 安装组合分别保留 CI 结果；最终 Activity 零分配门仍在复核，原生 ProfilerRecorder 的空操作、真实分配和 32 组零分配控制已成功。旧挂起 PID 56456 经用户准确批准后结束，原请求现 cleanupVerified=true；其他临时实例已正常关闭。临时默认存档原件与备份保留且哈希未变。全部失败原结果保留；未将 Player、商业 SDK 运行、P6 major 迁移或正式采用记为成功。 最终 CI run 42827294116 六组合均成功，Activity 最终源码的原生检查亦成功且清理确认；G3 工程验收范围见 docs/packages/2026-11-10-g3-acceptance.md。",
       "relatedContent": [
         {
           "projectId": "pob",
