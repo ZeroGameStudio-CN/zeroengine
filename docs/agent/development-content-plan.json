@@ -260,6 +260,44 @@
           "contentId": "tool.zeroengine-package-audit-console"
         }
       ]
+    },
+    {
+      "id": "ze.console.native",
+      "title": "ZE 原生统一指令与可选 Quantum 前端",
+      "stage": "InProgress",
+      "targetReleaseId": "",
+      "availability": "InternalOnly",
+      "responsibleChat": "",
+      "chatUrl": "",
+      "nextAction": "继续 G4：用干净最小依赖图验证无 QC 导入与输入模式；验证公开响应 API 的可选 QC 自有实例、原生补全、卸载和统一结果。完成 AOT／对照记录前不做 G5 批量迁移。",
+      "entrance": "docs/specs/2026-11-10-native-console.md",
+      "resourcePath": "com.zerogamestudio.zeroengine.console/README.md",
+      "revision": "原生 Core／Unity host 与独立 uGUI 轻量界面已形成首版。22 项内核的 portable／原生结果、主线程及宿主生命周期 3 项、运行按钮／补全／暂停取消 UI 3 项成功并验证清理；1920×1080 实际 Game View 中的中文、帮助、输出已截图检查。有／无 Input System 的两份源码分支编译成功。尚未建立最小安装、QC 前端、真实项目迁移与 Player／AOT 完整证据。",
+      "releaseEvidence": "",
+      "verificationEvidence": [
+        "D:/CodexArtifacts/ze-package-audit-20261110/console-compat-baseline/input-hashes.json",
+        "D:/CodexArtifacts/ze-package-audit-20261110/console-compat-baseline/current-command-signatures.json",
+        "D:/CodexArtifacts/ze-package-audit-20261110/console-kernel-tests/results/kernel-v2.trx",
+        "D:/CodexArtifacts/ze-package-audit-20261110/console-core-native-step-1-result.json",
+        "D:/CodexArtifacts/ze-package-audit-20261110/console-core-native-step-2-result.json",
+        "D:/CodexArtifacts/ze-package-audit-20261110/console-ui-native-step-1-result.json",
+        "D:/CodexArtifacts/ze-package-audit-20261110/console-ui-draft-precheck-v2/SdkAbsent/result.txt",
+        "D:/CodexArtifacts/ze-package-audit-20261110/console-ui-draft-precheck-v2/SdkPresent/result.txt",
+        "D:/CodexArtifacts/ze-package-audit-20261110/console-visual-native-result.json",
+        "D:/CodexArtifacts/ze-package-audit-20261110/native-console-g4.png",
+        "D:/CodexArtifacts/ze-package-audit-20261110/native-console-g4.json"
+      ],
+      "relatedContent": [
+        {
+          "projectId": "zeroengine",
+          "contentId": "ze.maintenance.package-consolidation"
+        },
+        {
+          "projectId": "pob",
+          "contentId": "tool.zeroengine-package-audit-console"
+        }
+      ],
+      "verificationScope": "G3 包基线仍为独立 PR #81。G4 源码候选只在唯一自有临时 Editor 验证，未改正式 POB／P5 manifest／lock／场景资产；没有在公开仓库包含第三方 SDK 代码或图形资源。原生 UI 当前桌面样片不宣称移动端、全部 IME／输入模式或 QC 已验收。"
     }
   ]
 }
