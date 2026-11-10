@@ -3,7 +3,7 @@
 数值系统核心包，包含属性系统和 Buff 系统。
 
 ## 版本
-- **当前版本**: 2.2.0（源码候选；发布与采用以明确 Git pin 为准）
+- **当前版本**: 2.2.1（源码候选；发布与采用以明确 Git pin 为准）
 - **依赖**: ZeroEngine.Core、ZeroEngine.Formula；两个纯内核程序集可分别引用。
 
 ## 包含模块
@@ -20,6 +20,10 @@
 直接消费内核时引用 `ZeroEngine.StatSystem.Core`，实现 `IStatModifierAdapter<TModifier,TSource>`，以自己的枚举/字典定义属性键。来源 token、修正对象及宿主存储不迁移。`EvaluateOrdered` 按 float32 顺序计算连续 PercentAdd 分组，乘算使用 `1 + value`；`EvaluateGrouped` 保持旧 Data 的分组求和、原值乘算、Clamp 后 Round(4)。调用方明确选择，旧 `ZeroEngine.StatSystem.Stat` 默认仍走后者。
 
 `RepeatedModifiers<T>` 只压缩临时输入，宿主存储保留逻辑条目和原排序。`RemoveBatch` 对重复引用/互斥类型顺序组做一次稳定压缩；同组不同引用可能近似重叠时回退原贪心匹配，并返回 `usedGreedyFallback`。匹配器必须保证匹配仅发生在同一 `(TypeId, Order)` 分区内。无匹配不写回列表，不破坏已有读取器。跳过排序只适用于已排序且同 Order 为同一引用的列表，其余沿用原 `List.Sort`。
+
+`RepeatedModifiers<T>` 实现只读 `ICollection<T>`，具体数组/列表模板可通过块复制追加，条目数、引用和顺序不压缩。`TryGetStableTemplate` 可供宿主确认无需自定义索引器回调；公式、来源写入及异常时序仍由宿主决定。模板长度变化或自定义集合保留逐项读取。
+
+可选 `StatSortLayoutCache<TModifier,TSource,TAdapter>` 仅供纯 Order 比较使用：首次仍调用实际 `List.Sort`，以后逐项验证输入引用和 Order，复用原排列，绝不缓存数值。缓存有条目/引用槽上限，非线程安全；宿主在世界或会话边界调用 `Clear()` 释放保留的引用。原 `StatKernel.Sort` 比较器接口不变。
 
 `StatCalculationVersion` 记录每个属性的输入版本与真实计算次数，不扫描修正，也不缓存公开可变输入的指纹。旧接口保留字段/集合；经公开字段、保留的可变列表或修正对象直接写入后，宿主必须调用 `NotifyModifiersChanged()`，不要依赖集合 getter 自动追踪。基础值初始化、正常增删和来源清理会维护失效。`StatCurrentValue` 只提供比例 Ceil/旧差值策略的算术；事件顺序及非有限值诊断由宿主保留。
 
