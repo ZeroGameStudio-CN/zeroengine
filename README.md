@@ -89,9 +89,6 @@ com.zerogamestudio.zeroengine.<module>/
 Not every package has every folder; small runtime-only packages stay minimal.
 
 Repository tooling that is not a general runtime package lives under `Tools/`.
-`Tools/unity-workspace-scheduler` contains the independent `unity-scheduler`
-control plane for coordinating shared Unity workspaces. It is not a UPM package
-and has no Unity project integration.
 
 ## Testing
 

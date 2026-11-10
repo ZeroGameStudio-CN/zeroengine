@@ -8,9 +8,7 @@ on:
       - 'com.zerogamestudio.analytics/**'
       - 'Tools/Tests/**'
       - 'Tools/Packages/**'
-      - 'Tools/unity-workspace-scheduler/**'
       - '.github/workflows/tests.yml'
-      - '.github/workflows/unity-workspace-scheduler.yml'
   pull_request:
     branches: [main, develop]
     paths:
@@ -19,9 +17,7 @@ on:
       - 'com.zerogamestudio.analytics/**'
       - 'Tools/Tests/**'
       - 'Tools/Packages/**'
-      - 'Tools/unity-workspace-scheduler/**'
       - '.github/workflows/tests.yml'
-      - '.github/workflows/unity-workspace-scheduler.yml'
   workflow_dispatch:
 
 permissions:
