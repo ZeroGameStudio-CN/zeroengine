@@ -6,6 +6,30 @@ namespace ZeroEngine.Render.Tests
     public sealed class RendererOpacityBindingTests
     {
         [Test]
+        public void MaterialAssignedWhileHidden_IsDiscoveredOnFirstPartialApply()
+        {
+            var root = new GameObject("Lazy opacity contract");
+            var renderer = root.AddComponent<MeshRenderer>();
+            var material = new Material(Shader.Find("Sprites/Default"));
+            var binding = new RendererOpacityBinding(renderer);
+            var block = new MaterialPropertyBlock();
+            int color = Shader.PropertyToID("_Color");
+            try
+            {
+                binding.Apply(1f);
+                binding.Apply(0f);
+                material.SetColor(color, new Color(.2f, .4f, .6f, .6f));
+                renderer.sharedMaterial = material;
+                binding.Apply(.5f); renderer.GetPropertyBlock(block);
+                Assert.That(renderer.forceRenderingOff, Is.False);
+                Assert.That(block.GetColor(color).a, Is.EqualTo(.3f).Within(.001f));
+                binding.Apply(1f); renderer.GetPropertyBlock(block);
+                Assert.That(block.GetColor(color).a, Is.EqualTo(.6f).Within(.001f));
+            }
+            finally { binding.Dispose(); Object.DestroyImmediate(root); Object.DestroyImmediate(material); }
+        }
+
+        [Test]
         public void PartialValuesAndZero_RestoreAuthoredInputsWithoutMutatingSharedMaterial()
         {
             var root = new GameObject("Opacity contract");

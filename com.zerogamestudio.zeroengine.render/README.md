@@ -28,6 +28,9 @@ Dedicated opacity properties take priority over color alpha. Particle, sprite,
 trail, line and mesh renderers share this path; zero suppresses rendering without
 disabling gameplay objects. `Restore`/`Dispose` returns only still-owned changes.
 The caller owns discovery, source classification, frame ordering and pool hooks.
+Untouched full-intensity bindings and hidden applications skip material discovery.
+Channels are created lazily on the first partial fade. Previously injected neutral
+values still follow material animation when full intensity is restored.
 
 Shaders without a usable opacity input, including cutout-only layers, can retain
 their appearance at intermediate values. The optional unsupported-material callback

@@ -29,8 +29,8 @@ namespace ZeroEngine.Render
             line = renderer as LineRenderer;
             trail = renderer as TrailRenderer;
             if (renderer is ParticleSystemRenderer) particle = renderer.GetComponent<ParticleSystem>();
-            if (sprite) return; // Sprite tint is an authored input, independent of shared material colors.
-            RefreshMaterials();
+            // Material channels are only needed by a partial fade. Full and hidden
+            // effects can stay on the pool's cached binding without querying materials.
         }
 
         private void RefreshMaterials()
@@ -65,9 +65,17 @@ namespace ZeroEngine.Render
             multiplier = float.IsNaN(multiplier) || float.IsInfinity(multiplier) ? 1f : Mathf.Clamp01(multiplier);
             Restore();
             if (!renderer) return;
-            RefreshMaterials();
-            foreach (var channel in materials) channel.FollowMaterial();
-            if (multiplier >= 1f) return;
+            if (multiplier >= 1f)
+            {
+                // A previous fade can leave a neutral MPB value. Keep it following
+                // animated material input; untouched bindings still do no material work.
+                if (materials.Count != 0)
+                {
+                    RefreshMaterials();
+                    foreach (var channel in materials) channel.FollowMaterial();
+                }
+                return;
+            }
             applied = true;
             if (multiplier <= 0f)
             {
@@ -76,6 +84,8 @@ namespace ZeroEngine.Render
                 hidden = true;
                 return;
             }
+            RefreshMaterials();
+            foreach (var channel in materials) channel.FollowMaterial();
             if (sprite)
             {
                 originalColor = sprite.color;
