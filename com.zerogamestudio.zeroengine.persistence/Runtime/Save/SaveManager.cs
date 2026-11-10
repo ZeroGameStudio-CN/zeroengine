@@ -4,6 +4,7 @@ using ZeroEngine.Utils;
 using System;
 using System.IO;
 using System.Collections.Generic;
+using System.Globalization;
 
 #if ES3
 using ES3Internal;
@@ -196,6 +197,9 @@ namespace ZeroEngine.Save
         {
             if (value == null) return "null";
 
+            if (value is Dictionary<string, object> objectDictionary)
+                return SerializeObjectDictionary(objectDictionary);
+
             var type = typeof(T);
 
             // Handle primitives and strings directly
@@ -219,6 +223,9 @@ namespace ZeroEngine.Save
 
             var type = typeof(T);
 
+            if (type == typeof(Dictionary<string, object>))
+                return (T)(object)DeserializeObjectDictionary(json);
+
             // Handle primitives
             if (type == typeof(string)) return (T)(object)json;
             if (type == typeof(int)) return (T)(object)int.Parse(json);
@@ -230,6 +237,84 @@ namespace ZeroEngine.Save
             // Complex types
             var wrapper = JsonUtility.FromJson<ValueWrapper<T>>(json);
             return wrapper.value;
+        }
+
+        private string SerializeObjectDictionary(Dictionary<string, object> values)
+        {
+            var wrapper = new ObjectDictionaryWrapper
+            {
+                entries = new List<ObjectDictionaryEntry>()
+            };
+
+            foreach (var kvp in values)
+            {
+                var entry = new ObjectDictionaryEntry { key = kvp.Key };
+                if (kvp.Value != null)
+                {
+                    var valueType = kvp.Value.GetType();
+                    entry.typeName = valueType.AssemblyQualifiedName;
+                    entry.value = SerializeBoxedValue(kvp.Value, valueType);
+                }
+
+                wrapper.entries.Add(entry);
+            }
+
+            return JsonUtility.ToJson(wrapper);
+        }
+
+        private Dictionary<string, object> DeserializeObjectDictionary(string json)
+        {
+            var result = new Dictionary<string, object>();
+            var wrapper = JsonUtility.FromJson<ObjectDictionaryWrapper>(json);
+            if (wrapper?.entries == null)
+                return result;
+
+            foreach (var entry in wrapper.entries)
+            {
+                if (string.IsNullOrEmpty(entry.key))
+                    continue;
+
+                if (string.IsNullOrEmpty(entry.typeName))
+                {
+                    result[entry.key] = null;
+                    continue;
+                }
+
+                var valueType = Type.GetType(entry.typeName);
+                if (valueType == null)
+                {
+                    ZeroLog.Warning(ZeroLog.Modules.Save, $"Failed to resolve save data type '{entry.typeName}' for key '{entry.key}'.");
+                    continue;
+                }
+
+                result[entry.key] = DeserializeBoxedValue(entry.value, valueType);
+            }
+
+            return result;
+        }
+
+        private string SerializeBoxedValue(object value, Type type)
+        {
+            if (type == typeof(string)) return value.ToString();
+            if (type == typeof(int) || type == typeof(float) || type == typeof(double) ||
+                type == typeof(bool) || type == typeof(long))
+            {
+                return Convert.ToString(value, CultureInfo.InvariantCulture);
+            }
+
+            return JsonUtility.ToJson(value);
+        }
+
+        private object DeserializeBoxedValue(string value, Type type)
+        {
+            if (type == typeof(string)) return value;
+            if (type == typeof(int)) return int.Parse(value, CultureInfo.InvariantCulture);
+            if (type == typeof(float)) return float.Parse(value, CultureInfo.InvariantCulture);
+            if (type == typeof(double)) return double.Parse(value, CultureInfo.InvariantCulture);
+            if (type == typeof(bool)) return bool.Parse(value);
+            if (type == typeof(long)) return long.Parse(value, CultureInfo.InvariantCulture);
+
+            return JsonUtility.FromJson(value, type);
         }
 
         [Serializable]
@@ -249,6 +334,20 @@ namespace ZeroEngine.Save
         private class ValueWrapper<T>
         {
             public T value;
+        }
+
+        [Serializable]
+        private class ObjectDictionaryWrapper
+        {
+            public List<ObjectDictionaryEntry> entries;
+        }
+
+        [Serializable]
+        private class ObjectDictionaryEntry
+        {
+            public string key;
+            public string typeName;
+            public string value;
         }
     }
 
