@@ -65,7 +65,10 @@ namespace ZeroEngine.Activity.Tests
             var world = root.AddComponent<ActivityWorldDriver>();
             var observer = Child<ActivityObserver>("warm"); observer.Configure(world);
             var snapshot = new ActivityObservationSnapshot(); world.CaptureObservers(snapshot);
-            Assert.That(() => { world.CaptureObservers(snapshot); snapshot.TryGetDistance(Vector3.one, out _); },
+            TestDelegate readBatch = () => { world.CaptureObservers(snapshot); snapshot.TryGetDistance(Vector3.one, out _); };
+            // Warm the complete measured path, including its first distance query.
+            for (int i = 0; i < 4; i++) readBatch();
+            Assert.That(readBatch,
                 UnityEngine.TestTools.Constraints.Is.Not.AllocatingGCMemory());
         }
 
