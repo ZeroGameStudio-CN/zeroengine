@@ -3,7 +3,6 @@ using System.Text.RegularExpressions;
 using NUnit.Framework;
 using UnityEngine;
 using UnityEngine.TestTools;
-using UnityEngine.TestTools.Constraints;
 using Is = NUnit.Framework.Is;
 using ZeroEngine.Activity.Unity;
 
@@ -65,11 +64,28 @@ namespace ZeroEngine.Activity.Tests
             var world = root.AddComponent<ActivityWorldDriver>();
             var observer = Child<ActivityObserver>("warm"); observer.Configure(world);
             var snapshot = new ActivityObservationSnapshot(); world.CaptureObservers(snapshot);
-            TestDelegate readBatch = () => { world.CaptureObservers(snapshot); snapshot.TryGetDistance(Vector3.one, out _); };
-            // Warm the complete measured path, including its first distance query.
-            for (int i = 0; i < 4; i++) readBatch();
-            Assert.That(readBatch,
-                UnityEngine.TestTools.Constraints.Is.Not.AllocatingGCMemory());
+            // Validate the thread counter before using it as a zero-allocation gate.
+            _ = GC.GetAllocatedBytesForCurrentThread();
+            long canaryBefore = GC.GetAllocatedBytesForCurrentThread();
+            var canary = new byte[16];
+            long canaryBytes = GC.GetAllocatedBytesForCurrentThread() - canaryBefore;
+            GC.KeepAlive(canary);
+            Assert.That(canaryBytes, Is.GreaterThan(0), "The allocation counter must observe a real managed allocation.");
+
+            // Warm both operations, then measure only the caller's complete read batches.
+            for (int i = 0; i < 4; i++)
+            {
+                world.CaptureObservers(snapshot);
+                snapshot.TryGetDistance(Vector3.one, out _);
+            }
+            long before = GC.GetAllocatedBytesForCurrentThread();
+            for (int i = 0; i < 32; i++)
+            {
+                world.CaptureObservers(snapshot);
+                snapshot.TryGetDistance(Vector3.one, out _);
+            }
+            long allocatedBytes = GC.GetAllocatedBytesForCurrentThread() - before;
+            Assert.That(allocatedBytes, Is.Zero, "32 warmed capture/query batches must allocate zero managed bytes on the calling thread.");
         }
 
         [Test]
