@@ -3,6 +3,21 @@
 Small UnityEngine-only rendering primitives. No TCE, gameplay, pooling service,
 singleton, project asset or third-party plugin dependency.
 
+## RendererOpacityBinding
+
+Create one binding for each caller-owned effect renderer. `Apply(multiplier)`
+restores the previous override before reading current authored inputs, preserving
+sprite/material animation, shared materials and unrelated property-block values.
+Dedicated opacity properties take priority over color alpha. Particle, sprite,
+trail, line and mesh renderers share this path; zero suppresses rendering without
+disabling gameplay objects. `Restore`/`Dispose` returns only still-owned changes.
+The caller owns discovery, source classification, frame ordering and pool hooks.
+
+Shaders without a usable opacity input, including cutout-only layers, can retain
+their appearance at intermediate values. The optional unsupported-material callback
+reports that boundary; the binding does not rewrite shaders or change render state.
+Use `RendererOpacityBindingTests` and the consumer's actual camera for verification.
+
 ## SpritePoseHistory
 
 Construct with distinct, caller-owned `SpriteRenderer` targets. `TryCapture`

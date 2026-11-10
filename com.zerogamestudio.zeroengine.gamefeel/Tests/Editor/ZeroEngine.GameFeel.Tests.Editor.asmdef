@@ -1,0 +1,15 @@
+{
+  "name": "ZeroEngine.GameFeel.Tests.Editor",
+  "rootNamespace": "ZeroEngine.GameFeel.Tests",
+  "references": ["ZeroEngine.GameFeel"],
+  "includePlatforms": ["Editor"],
+  "excludePlatforms": [],
+  "allowUnsafeCode": false,
+  "overrideReferences": true,
+  "precompiledReferences": ["nunit.framework.dll"],
+  "autoReferenced": false,
+  "defineConstraints": ["UNITY_INCLUDE_TESTS"],
+  "optionalUnityReferences": ["TestAssemblies"],
+  "versionDefines": [],
+  "noEngineReferences": true
+}
