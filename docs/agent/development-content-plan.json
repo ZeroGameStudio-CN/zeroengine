@@ -159,13 +159,13 @@
       "title": "POB 与 P5 共用包能力收敛",
       "stage": "Previewable",
       "targetReleaseId": "",
-      "availability": "TestOnly",
+      "availability": "DevelopmentOnly",
       "responsibleChat": "01a14d22-2dbb-7313-a0ae-34366b9c3862",
-      "nextAction": "按准确清单授权发布五包，然后在 P5 采用统一 35 包 Git 图；不迁移 P5 的玩法或存档结构。",
+      "nextAction": "已发布并由 P5 的统一固定 Git 图采用；后续按真实消费者增量维护，不改变开放中的玩法细节。",
       "entrance": "P5 私有隔离工程中的包内原生合同、指定 NPC 临时参战与实际对话流程。",
       "resourcePath": "com.zerogamestudio.zeroengine.data/README.md",
-      "revision": "Data 2.2.0；Narrative 3.1.0；Achievement 1.0.0；Project Atlas 1.2.0；Dashboard 4.7.0 项目归属修补。",
-      "releaseEvidence": "",
+      "revision": "Data 2.2.0；Narrative 3.1.0；Achievement 1.0.0；Project Atlas 1.2.0；Dashboard 4.7.0 项目归属修补。 Published 1b9c28cc.",
+      "releaseEvidence": "Reviewed Git package publication: https://github.com/ZeroGameStudio-CN/zeroengine/commit/1b9c28ccf344db7f37b2aab25e964a3fd40c9887",
       "verificationEvidence": [
         "D:\\Temp\\P5PobUiPackageAlignment-20261107\\ze-candidate\\native-results\\data\\results.xml",
         "D:\\Temp\\P5PobUiPackageAlignment-20261107\\ze-candidate\\native-results\\dashboard\\results.xml",
@@ -174,9 +174,12 @@
         "D:\\Temp\\P5PobUiPackageAlignment-20261107\\ze-candidate\\native-results\\narrative-async\\results.xml",
         "D:\\Temp\\P5PobUiPackageAlignment-20261107\\ze-candidate\\native-results\\play\\results.xml",
         "D:\\Temp\\P5PobUiPackageAlignment-20261107\\ze-candidate\\native-results\\narrative-play\\results.xml",
-        "D:\\Temp\\P5PobUiPackageAlignment-20261107\\ze-candidate\\retained-contracts.json"
+        "D:\\Temp\\P5PobUiPackageAlignment-20261107\\ze-candidate\\retained-contracts.json",
+        "D:/Temp/P5PobUiPackageAlignment-20261107/pinned-adoption/source-proof.json",
+        "D:/Temp/P5PobUiPackageAlignment-20261107/pinned-adoption/native-results/edit/results.xml",
+        "D:/Temp/P5PobUiPackageAlignment-20261107/startup-ui/flow-r6/play.xml"
       ],
-      "verificationScope": "Data 与 P5 属性 53 项、Dashboard 增量 6 项；Atlas 包内 38 项与最终 P5 四项；Narrative／Achievement 与原 Quest 服务 60 项及上传队列 4 项。指定 NPC 与对话各一项真实 Play Mode。首次 Atlas 索引过期已由作者生成器更新，最终新直接包图覆盖与新鲜度成功。仅 Editor／Play Mode；未发布、未作 Player 或内容构建。",
+      "verificationScope": "Data 与 P5 属性 53 项、Dashboard 增量 6 项；Atlas 包内 38 项与最终 P5 四项；Narrative／Achievement 与原 Quest 服务 60 项及上传队列 4 项。指定 NPC 与对话各一项真实 Play Mode。首次 Atlas 索引过期已由作者生成器更新，最终新直接包图覆盖与新鲜度成功。仅 Editor／Play Mode；未发布、未作 Player 或内容构建。 发布后 P5 35 包均为 Git，manifest／lock 同一提交，88 份改变且会进入 UPM 的包文件逐项匹配；正式图额外 12 项原生身份／Atlas／初始化与一次后台启动返回有成功结果。",
       "candidatePackageVersions": {
         "data": "2.2.0",
         "narrative": "3.1.0",
