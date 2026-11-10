@@ -134,6 +134,8 @@ namespace ZeroEngine.ProjectAtlas.Tests
         [TestCase("../outside.json")]
         [TestCase("docs/architecture/../../outside.json")]
         [TestCase("C:/outside.json")]
+        [TestCase("C:outside.json")]
+        [TestCase("z:/outside.json")]
         [TestCase("docs\\architecture\\project-atlas.json")]
         public void ResolveSafeProjectPath_UnsafePath_Throws(string path)
         {
@@ -373,7 +375,7 @@ namespace ZeroEngine.ProjectAtlas.Tests
             Assert.That(detailRect.xMax, Is.EqualTo(420f).Within(0.01f));
 
             Assert.That(elideLabel, Is.Not.Null);
-            const string longLabel = "地图导航与小地图配置入口";
+            const string longLabel = "Map navigation and minimap configuration entry";
             var measurementStyle = new GUIStyle
             {
                 font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf"),

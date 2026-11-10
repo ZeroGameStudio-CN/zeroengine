@@ -67,7 +67,7 @@ without that SDK.
 | `com.zerogamestudio.zeroengine.persistence` | 2.1.2 | 2022.3 | Preserve slot/participant/atomic promotion contracts; merge P6 typed dictionary payloads and isolate test storage. |
 | `com.zerogamestudio.zeroengine.portrait-speech` | 0.1.1 | 6000.0 | Promote generic embedded source with original GUIDs; keep POB composition and production art in POB. |
 | `com.zerogamestudio.zeroengine.preview` | 0.1.1 | 2022.3 | Keep adapter-driven preview lifetimes and explicit adoption plans; no production/save ownership. |
-| `com.zerogamestudio.zeroengine.project-atlas` | 1.2.0 | 2022.3 | Keep navigation and catalog/document projections; different responsibility from release planning. |
+| `com.zerogamestudio.zeroengine.project-atlas` | 1.2.1 | 2022.3 | Keep navigation and catalog/document projections; different responsibility from release planning. |
 | `com.zerogamestudio.zeroengine.pvp` | 1.0.1 | 2022.3 | Keep asynchronous snapshot/matchmaking/ranking contracts; distinct from real-time network sessions. |
 | `com.zerogamestudio.zeroengine.qte` | 0.1.0 | 2022.3 | Keep caller-owned timing/input challenges; no direct input-device or gameplay-clock coupling. |
 | `com.zerogamestudio.zeroengine.render` | 0.4.3 | 2022.3 | Keep portable pose/body/weather primitives and declare Particle System; no mandatory URP dependency. |
@@ -131,10 +131,11 @@ CI installation combinations.
 Additional native EditMode coverage includes Analytics (125), Extraction (215),
 Feedback (37), tutorial contracts (28), Data Toolkit (26) and two corrected Toast
 timing boundaries, with no failed cases after replacing the stale exact patch-
-version assertion. The Feedback and tutorial PlayMode host checks currently stop
-at missing TMP default font resources in the blank fixture. Their documented host
-font prerequisite is still being prepared; these failures are not recorded as
-completed runtime acceptance. The source remains an unpublished candidate.
+version assertion. Feedback PlayMode (3) and the full tutorial interaction
+scenario (1) now succeed after the blank fixture receives its documented TMP
+font prerequisite. The fixture uses imported SDK resources and a separate
+dynamic font with source data; production settings and fonts are unchanged.
+The source remains an unpublished candidate.
 
 SDK-present SpineSkin and legacy Localization branches also compile against
 frozen SDK binaries already installed on the development machine. Those checks
@@ -144,9 +145,12 @@ Localization's Editor references and installed-package define are connected.
 
 A broad Core/legacy run is retained after a synchronous async-wait deadlock in a
 persistence test; the corrected bounded-yield test now passes independently.
-A separate full-combination request completed package resolution but its cleanup
-probe encounters duplicate `JsonConvert` types from Localization and Newtonsoft.
-These original requests are not replayed or treated as successful handoffs.
+A separate full-combination request completed package resolution; its cleanup
+probe encountered duplicate `JsonConvert` types from Localization and Newtonsoft.
+The idle disposable Editor was normally closed after clean scene/status readback,
+and that original request subsequently verified cleanup. The hung Core/legacy
+request remains retained; normal close has not ended the unresponsive process.
+These original operations are not replayed or reclassified as passing tests.
 An imported wallet test also wrote the disposable fixture's default storage;
 that file was preserved and the test now injects external persistence ownership.
 Its content is unchanged after the corrected wallet and lifecycle checks.
@@ -157,3 +161,13 @@ behavior and real POB/P5 consumer acceptance remain unverified. Do not start the
 native Console or the synchronized AI Skill until the package acceptance gate is
 satisfied. This document records ownership and boundaries; active progress remains
 in the existing development-content registry.
+
+
+The first Linux CI run exposed a foreign-path validation gap in Project Atlas:
+Windows drive-qualified paths must be rejected on Linux as well as Windows. The
+1.2.1 candidate closes it. Its native focused suite has 52 successful cases.
+Audio service activation/ownership tests now run in PlayMode (two successful
+local cases), where OnEnable/OnDisable actually execute on both supported Editor
+lines. Source-lifecycle checks follow the new achievement save adapter, and the
+remaining scanner/label/boundary assertions match the current contracts without
+requiring a fixed patch version, an installed networking SDK or CJK font metrics.

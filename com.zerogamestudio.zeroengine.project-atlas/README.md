@@ -70,3 +70,8 @@ Migration is explicit per project: review the external candidate, switch the roo
 and sources, update Agent read entrypoints/tests/ignore rules, remove the tracked
 projection, and pin the tested released package. A package upgrade alone does not
 migrate other projects. See ../../docs/specs/2026-09-25-project-atlas-module-sources.md.
+
+
+The 1.2.1 consolidation candidate rejects Windows drive-qualified paths on every
+host OS, including Linux CI. Project-relative path validation does not depend on
+the current machine interpreting a foreign absolute path format.

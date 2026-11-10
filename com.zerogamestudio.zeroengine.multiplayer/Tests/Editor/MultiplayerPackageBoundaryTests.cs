@@ -80,9 +80,13 @@ namespace ZeroEngine.Multiplayer.Tests
         public void PackageManifest_KeepsNetworkingSdksOptional()
         {
             string manifest = File.ReadAllText(Path.Combine(PackageRoot, "package.json"));
-            Assert.That(
-                Regex.IsMatch(manifest, "\\\"dependencies\\\"\\s*:\\s*\\{\\s*\\}"),
-                Is.True);
+            Match dependencies = Regex.Match(manifest, "\\\"dependencies\\\"\\s*:\\s*\\{(?<body>[^}]*)\\}");
+            Assert.That(dependencies.Success, Is.True);
+            string body = dependencies.Groups["body"].Value;
+            Assert.That(body, Does.Contain("com.zerogamestudio.zeroengine.editor-ui"));
+            Assert.That(body, Does.Not.Contain("com.firstgeargames.fishnet"));
+            Assert.That(body, Does.Not.Contain("com.rlabrecque.steamworks.net"));
+            Assert.That(body, Does.Not.Contain("com.unity.netcode.gameobjects"));
         }
 
         private static void AssertVersionGate(

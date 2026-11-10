@@ -10,7 +10,8 @@ namespace ZeroEngine.Tests.Narrative
     {
         [TestCase("Runtime/Quest/QuestManager.cs", "OnDestroy")]
         [TestCase("Runtime/Dialog/DialogSaveAdapter.cs", "OnDestroy")]
-        [TestCase("Runtime/Achievement/AchievementManager.cs", "Unregister")]
+        [TestCase("Runtime/Achievement/AchievementSaveSlotAdapter.cs", "Unbind")]
+        [TestCase("Runtime/Achievement/AchievementSaveSlotAdapter.cs", "OnDestroy")]
         public void TeardownDoesNotResolveSaveSlotManagerSingleton(string relativePath, string methodName)
         {
             var source = File.ReadAllText(FindNarrativeSourcePath(relativePath));

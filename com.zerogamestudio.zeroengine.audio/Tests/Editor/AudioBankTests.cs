@@ -138,41 +138,6 @@ namespace ZeroEngine.Audio.Tests
             Assert.That(service.HasEvent(new AudioEventId("piece.pickup")), Is.False);
         }
 
-        [Test]
-        public void EventService_EnabledLifecycleRegistersAndUnregistersApplicationOwner()
-        {
-            var serviceObject = new GameObject("AudioEventServiceOwner");
-            _createdObjects.Add(serviceObject);
-            UnityAudioEventService service = serviceObject.AddComponent<UnityAudioEventService>();
-
-            Assert.That(ServiceRegistry.ResolveOrNull<IAudioEventService>(), Is.SameAs(service));
-
-            service.enabled = false;
-            Assert.That(ServiceRegistry.ResolveOrNull<IAudioEventService>(), Is.Null);
-
-            service.enabled = true;
-            Assert.That(ServiceRegistry.ResolveOrNull<IAudioEventService>(), Is.SameAs(service));
-        }
-
-        [Test]
-        public void EventService_SecondEnabledOwnerFailsClosed()
-        {
-            var firstObject = new GameObject("FirstAudioEventServiceOwner");
-            var secondObject = new GameObject("SecondAudioEventServiceOwner");
-            _createdObjects.Add(firstObject);
-            _createdObjects.Add(secondObject);
-            UnityAudioEventService first = firstObject.AddComponent<UnityAudioEventService>();
-
-            LogAssert.Expect(
-                LogType.Error,
-                "[UnityAudioEventService] Another IAudioEventService owner is already registered. " +
-                "Only one enabled application owner is allowed.");
-            UnityAudioEventService second = secondObject.AddComponent<UnityAudioEventService>();
-
-            Assert.That(second.enabled, Is.False);
-            Assert.That(ServiceRegistry.ResolveOrNull<IAudioEventService>(), Is.SameAs(first));
-        }
-
         private T Create<T>() where T : ScriptableObject
         {
             T instance = ScriptableObject.CreateInstance<T>();

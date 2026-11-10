@@ -175,7 +175,8 @@ namespace ZeroEngine.ProjectAtlas
                 throw new ArgumentException("项目根路径无效。", nameof(projectRoot));
             if (string.IsNullOrWhiteSpace(relativePath))
                 throw new ArgumentException("项目相对路径不能为空。", nameof(relativePath));
-            if (Path.IsPathRooted(relativePath))
+            if (Path.IsPathRooted(relativePath) ||
+                (relativePath.Length >= 2 && char.IsLetter(relativePath[0]) && relativePath[1] == ':'))
                 throw new InvalidOperationException("Project Atlas 路径不得是绝对路径：" + relativePath);
             if (relativePath.IndexOf('\\') >= 0)
                 throw new InvalidOperationException("Project Atlas 路径必须使用 /：" + relativePath);
