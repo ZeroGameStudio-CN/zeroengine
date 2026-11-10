@@ -85,7 +85,6 @@ namespace ZeroEngine.Render
                 return;
             }
             RefreshMaterials();
-            foreach (var channel in materials) channel.FollowMaterial();
             if (sprite)
             {
                 originalColor = sprite.color;
@@ -242,6 +241,16 @@ namespace ZeroEngine.Render
         {
             if (!renderer || !material) return;
             ReadBlock();
+            // Validate a previously injected neutral value using this same read.
+            // A partial fade immediately writes its new output, so a separate
+            // FollowMaterial read/write would be redundant here.
+            if (materialSource && injected)
+            {
+                bool exists = color ? block.HasColor(property) : block.HasFloat(property);
+                if (!exists) injected = false;
+                else if (color ? !SameColor(block.GetColor(property), neutralColor)
+                    : !Mathf.Approximately(block.GetFloat(property), neutralFloat)) materialSource = false;
+            }
             if (color)
             {
                 authoredColor = materialSource || !block.HasColor(property) ? material.GetColor(property) : block.GetColor(property);

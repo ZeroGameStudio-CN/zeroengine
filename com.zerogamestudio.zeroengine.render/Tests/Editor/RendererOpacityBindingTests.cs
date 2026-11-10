@@ -6,6 +6,28 @@ namespace ZeroEngine.Render.Tests
     public sealed class RendererOpacityBindingTests
     {
         [Test]
+        public void PropertyBlockAuthoredBetweenFrames_KeepsItsOwnAlphaAfterFade()
+        {
+            var root = new GameObject("Property-block animation contract");
+            var renderer = root.AddComponent<MeshRenderer>();
+            var material = new Material(Shader.Find("Sprites/Default"));
+            material.color = new Color(.2f, .4f, .6f, .8f); renderer.sharedMaterial = material;
+            var binding = new RendererOpacityBinding(renderer);
+            var block = new MaterialPropertyBlock(); int color = Shader.PropertyToID("_Color");
+            try
+            {
+                binding.Apply(.5f); binding.Restore();
+                block.SetColor(color, new Color(.7f, .2f, .3f, .6f)); renderer.SetPropertyBlock(block);
+                binding.Apply(.5f); renderer.GetPropertyBlock(block);
+                Assert.That(block.GetColor(color).a, Is.EqualTo(.3f).Within(.001f));
+                binding.Restore(); material.color = new Color(.2f, .4f, .6f, .1f);
+                binding.Apply(1f); renderer.GetPropertyBlock(block);
+                Assert.That(block.GetColor(color).a, Is.EqualTo(.6f).Within(.001f));
+            }
+            finally { binding.Dispose(); Object.DestroyImmediate(root); Object.DestroyImmediate(material); }
+        }
+
+        [Test]
         public void MaterialAssignedWhileHidden_IsDiscoveredOnFirstPartialApply()
         {
             var root = new GameObject("Lazy opacity contract");

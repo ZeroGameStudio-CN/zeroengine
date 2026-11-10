@@ -31,6 +31,8 @@ The caller owns discovery, source classification, frame ordering and pool hooks.
 Untouched full-intensity bindings and hidden applications skip material discovery.
 Channels are created lazily on the first partial fade. Previously injected neutral
 values still follow material animation when full intensity is restored.
+Partial fades validate ownership and apply the new tint in one property-block
+read, while retaining changes made by another writer between frames.
 
 Shaders without a usable opacity input, including cutout-only layers, can retain
 their appearance at intermediate values. The optional unsupported-material callback
