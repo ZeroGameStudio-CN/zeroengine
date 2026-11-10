@@ -5,6 +5,10 @@ depends only on Unity and URP. Gameplay classes, actor discovery, configuration,
 pooling and project assets stay in the consumer. The existing UnityEngine-only
 `com.zerogamestudio.zeroengine.render` package remains independent.
 
+Version 0.2.1 declares Render 0.3.1 and is intended to be pinned with Render to
+the same tested Git commit. Body bounds reuse is an explicit consumer-side opt-in;
+this dependency update does not change the URP passes, shaders or rim-light settings.
+
 ## Enable
 
 1. Add `SpriteRimRendererFeature` to each URP Renderer used by the game cameras.

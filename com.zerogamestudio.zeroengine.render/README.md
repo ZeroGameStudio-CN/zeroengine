@@ -3,6 +3,22 @@
 Small UnityEngine-only rendering primitives. No TCE, gameplay, pooling service,
 singleton, project asset or third-party plugin dependency.
 
+## Body visual bounds reuse (0.3.1)
+
+`BodyVisualHost.SetBodyBoundsCacheEligibility(predicate)` opts eligible ordinary
+SpriteRenderers into exact native world-centre reuse within each existing Render
+pass. The default keeps the original native reads. Callers must reject custom
+world-bounds overrides, skinning/deformable buffers and unknown pose providers.
+`BodyVisualBoundsCache` rechecks renderer identity, exact transforms/local bounds,
+sprite geometry, flips, draw mode and size at every use, and resamples immediately
+when they change. It never skips pose capture, clocks, composition or callbacks,
+and begins fresh for each Render call, including synchronous Play/Remove calls.
+Legacy `BodyVisual.Update` and constructor signatures remain available.
+The diagnostics method `GetBodyBoundsReadCount()` reports the latest pass.
+
+Run `BodyVisualBoundsCacheTests` plus the consumer's ordinary, skinned, custom-pose
+and pooled-lifetime cases. Bind performance claims to the measured caller/workload.
+
 ## RendererOpacityBinding
 
 Create one binding for each caller-owned effect renderer. `Apply(multiplier)`
