@@ -8,9 +8,7 @@
     "com.zerogamestudio.zeroengine.console": "0.1.0",
     "com.unity.ugui": "1.0.0",
     "com.unity.modules.ui": "1.0.0",
-    "com.unity.modules.textrendering": "1.0.0",
-    "com.unity.modules.imgui": "1.0.0",
-    "com.unity.modules.inputlegacy": "1.0.0"
+    "com.unity.modules.imgui": "1.0.0"
   },
   "author": { "name": "ZeroGameStudio" },
   "license": "MIT",

@@ -67,6 +67,12 @@ jobs:
           - lane: lifecycle
             name: Core and Audio lifecycles
             test-mode: PlayMode
+          - lane: console-core
+            name: Console core only
+            test-mode: all
+          - lane: console-native
+            name: Console native frontend only
+            test-mode: all
 
     steps:
       - name: Checkout repository
