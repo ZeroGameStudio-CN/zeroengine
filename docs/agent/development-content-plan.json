@@ -272,7 +272,7 @@
       "nextAction": "继续 G4：等待现有 Candidate 信任续期授权与受管构建入口的正式 CI；按现有已部署基线完成签名与上线，再执行 Mono Development、IL2CPP Development 和 IL2CPP 非开发包保护验证。G4 出口满足后才做 G5 批量迁移，G7 最后交付。",
       "entrance": "docs/specs/2026-11-10-native-console.md",
       "resourcePath": "com.zerogamestudio.zeroengine.console/README.md",
-      "revision": "原生内核23项、主线程/宿主3项、Native界面及回退5项、QC中文补全/单次执行/暂停取消/切换2项、物理移除SDK后的加载执行1项均无失败且清理已确认。Native和QC的1920×1080实际Game View画面已检查，修正补全残留、EventSystem切换、关闭后控件残留及中文字体接线。 同条件 Editor 补全样片 P50：Native 42.08ms、QC 42.36ms，包含40ms去抖，仅作诊断，不建立Player性能结论。固定ZE Git测试入口源码已合入构建系统主干f1ae6c1；构建机/控制面基线负载分别执行213/217项窄测无失败，尚未签名上线或生成Player。",
+      "revision": "原生内核23项、主线程/宿主3项、Native界面及回退5项、QC中文补全/单次执行/暂停取消/切换2项、物理移除SDK后的加载执行1项均无失败且清理已确认。Native和QC的1920×1080实际Game View画面已检查，修正补全残留、EventSystem切换、关闭后控件残留及中文字体接线。 同条件 Editor 补全样片 P50：Native 42.08ms、QC 42.36ms，包含40ms去抖，仅作诊断，不建立Player性能结论。固定ZE Git测试入口f1ae6c1及自包含元数据打包修正0f12279已合入构建系统主干。基于已部署版本的Windows/控制面源码分别执行213/217项窄测，打包修正另执行102项窄测，4项因宿主不适用而跳过。完整受管CI仍在等待共享Linux槽；尚未签名上线或生成Player。",
       "releaseEvidence": "",
       "verificationEvidence": [
         "D:/CodexArtifacts/ze-package-audit-20261110/console-compat-baseline/input-hashes.json",
@@ -291,9 +291,10 @@
         "docs/specs/2026-11-10-native-console.md",
         "D:/CodexArtifacts/ze-package-audit-20261110/takeover-frontend-cost.json",
         "https://github.com/ZeroGameStudio-CN/zgs-ops-workflow/commit/f1ae6c1b264afb6a29c20fba036a619fc1b4eb00",
-        "D:/CodexArtifacts/ze-package-audit-20261110/worker-runtime-source/source-provenance.json",
-        "D:/CodexArtifacts/ze-package-audit-20261110/controller-runtime-source/payload-plan.json",
-        "D:/CodexArtifacts/ze-package-audit-20261110/takeover-trust-renewal-plan.json"
+        "D:/CodexArtifacts/ze-package-audit-20261110/worker-runtime-source-v2/payload-plan.json",
+        "D:/CodexArtifacts/ze-package-audit-20261110/control-runtime-source-v2/payload-plan.json",
+        "D:/CodexArtifacts/ze-package-audit-20261110/takeover-trust-renewal-plan.json",
+        "https://github.com/ZeroGameStudio-CN/zgs-ops-workflow/commit/0f12279e668ac0398b191353d96297e50839a75d"
       ],
       "relatedContent": [
         {
@@ -305,7 +306,7 @@
           "contentId": "tool.zeroengine-package-audit-console"
         }
       ],
-      "verificationScope": "现有唯一临时验证工程；公开源码不含第三方SDK和临时验证fixture。Player/AOT、完整IME/平台与性能对照尚未验收；正式POB/P5包引用和场景保持原归属，尚未进入G5。 构建受现有已过期的Candidate信任集阻塞：续期候选保持既有两台Worker的密钥身份和权限范围，未签名、未安装，正在等待用户单独授权；未读取或输出私钥材料。"
+      "verificationScope": "现有唯一临时验证工程；公开源码不含第三方SDK和临时验证fixture。Player/AOT、完整IME/平台与性能对照尚未验收；正式POB/P5包引用和场景保持原归属，尚未进入G5。 构建受现有已过期的Candidate信任集阻塞：续期候选保持既有两台Worker的密钥身份和权限范围，未签名、未安装，正在等待用户单独授权；未读取或输出私钥材料。 新入口的无图形Player运行仅覆盖结构、生命周期和AOT；渲染画面与IME仍需单独目标环境验收。"
     }
   ]
 }
