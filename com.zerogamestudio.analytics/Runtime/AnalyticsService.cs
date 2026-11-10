@@ -24,6 +24,7 @@ namespace ZGS.Analytics
 
         public static void AddProvider(IAnalyticsProvider provider)
         {
+            if (AnalyticsBootstrap.IsAutomationIsolated) return;
             if (!_providers.Contains(provider))
                 _providers.Add(provider);
         }
@@ -33,6 +34,7 @@ namespace ZGS.Analytics
         /// </summary>
         public static void Initialize()
         {
+            if (AnalyticsBootstrap.IsAutomationIsolated) return;
             if (_initialized) return;
             _initialized = true;
 
@@ -62,6 +64,9 @@ namespace ZGS.Analytics
             TryLogEvent(eventName, parameters, default);
         }
 
+        /// <summary>Persist one explicit project diagnostic and its bounded snapshot as one event.</summary>
+        public static DiagnosticSubmissionResult TryReportDiagnostic(DiagnosticReport report) => DiagnosticReporter.TryReport(report);
+
         /// <summary>
         /// Builds one immutable event envelope and asks all configured providers to enqueue it.
         /// </summary>
@@ -71,7 +76,7 @@ namespace ZGS.Analytics
             Dictionary<string, object> parameters,
             AnalyticsEventOptions options)
         {
-            if (string.IsNullOrEmpty(eventName) || _providers.Count == 0)
+            if (AnalyticsBootstrap.IsAutomationIsolated || string.IsNullOrEmpty(eventName) || _providers.Count == 0)
                 return false;
 
             if (!options.TryFreezeEnvelope(out var frozenOptions))
@@ -269,6 +274,7 @@ namespace ZGS.Analytics
         {
             _providers.Clear();
             _initialized = false;
+            DiagnosticReporter.Reset();
         }
     }
 }

@@ -16,3 +16,14 @@ clear dirty state, restore scenes/Undo, acquire write permission or catch an own
 transaction failure. Capture the reviewed exact asset and metadata list before writing;
 keep those policies and error reporting in the authoring owner. Asset-path hints only
 help the owner choose its existing import route and never execute it automatically.
+
+
+## Consolidation dependency correction
+
+The 1.1.1 consolidation candidate explicitly declares Unity's built-in
+JSON Serialize module (`com.unity.modules.jsonserialize`) for this package's
+direct `JsonUtility` calls. Consumers no longer need an unrelated installed
+package to supply that module. This candidate is not a published release.
+
+The Editor assembly also requires Unity Test Framework 1.3.9 or later for its
+public test-runner tasks; this dependency is required when the tool is installed.

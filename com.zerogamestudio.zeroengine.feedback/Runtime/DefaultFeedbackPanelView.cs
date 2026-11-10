@@ -27,6 +27,9 @@ namespace ZeroEngine.Feedback
         private readonly List<string> _attachments = new();
         [SerializeField] private bool _built;
         private Rect _lastSafeArea;
+        private UnityEngine.UI.Button _historyButton;
+        private FeedbackSubmissionResult? _lastLocalFailure;
+        private FeedbackSubmissionHistoryView _ownedDetails;
 
         public bool IsSubmitting => _controller != null && _controller.IsSubmitting;
 
@@ -59,6 +62,12 @@ namespace ZeroEngine.Feedback
 
             if (!_built)
                 BuildLayout();
+
+            if (_configuration.UseDeliveryStatus && _historyButton == null && _descriptionInput != null)
+            {
+                _historyButton = CreateButton("RecentSubmissions", _descriptionInput.transform.parent, _theme.SecondaryColor);
+                _historyButton.onClick.AddListener(() => _ownedDetails = FeedbackPanel.OpenSubmissionDetails(_lastLocalFailure));
+            }
 
             BindEvents();
             _attachmentArea.gameObject.SetActive(_configuration.AttachmentPicker != null);
@@ -162,7 +171,11 @@ namespace ZeroEngine.Feedback
             _attachmentArea.gameObject.AddComponent<ContentSizeFitter>().verticalFit = ContentSizeFitter.FitMode.PreferredSize;
             _attachmentButton = CreateButton("AddAttachment", _attachmentArea, _theme.SecondaryColor);
             _attachmentSummary = CreateText("AttachmentSummary", _attachmentArea, 22f, TextAlignmentOptions.TopLeft);
+#if UNITY_2023_2_OR_NEWER
+            _attachmentSummary.textWrappingMode = TMPro.TextWrappingModes.Normal;
+#else
             _attachmentSummary.enableWordWrapping = true;
+#endif
             _attachmentSummary.gameObject.AddComponent<LayoutElement>().minHeight = 28f;
             _attachmentArea.gameObject.SetActive(_configuration.AttachmentPicker != null);
 
@@ -224,7 +237,11 @@ namespace ZeroEngine.Feedback
 
             TMP_Text text = CreateText("Text", viewport, 24f, TextAlignmentOptions.TopLeft);
             Stretch(text.rectTransform);
+#if UNITY_2023_2_OR_NEWER
+            text.textWrappingMode = TMPro.TextWrappingModes.Normal;
+#else
             text.enableWordWrapping = true;
+#endif
 
             var input = root.gameObject.AddComponent<TMP_InputField>();
             input.textViewport = viewport;
@@ -253,7 +270,11 @@ namespace ZeroEngine.Feedback
 
             TMP_Text label = CreateText("Label", root, 24f, TextAlignmentOptions.Center);
             Stretch(label.rectTransform, new Vector2(12f, 6f), new Vector2(-12f, -6f));
+#if UNITY_2023_2_OR_NEWER
+            label.textWrappingMode = TMPro.TextWrappingModes.Normal;
+#else
             label.enableWordWrapping = true;
+#endif
             label.raycastTarget = false;
             return button;
         }
@@ -271,7 +292,11 @@ namespace ZeroEngine.Feedback
             text.fontSize = fontSize;
             text.color = _theme.TextColor;
             text.alignment = alignment;
+#if UNITY_2023_2_OR_NEWER
+            text.textWrappingMode = TMPro.TextWrappingModes.Normal;
+#else
             text.enableWordWrapping = true;
+#endif
             return text;
         }
 
@@ -283,6 +308,10 @@ namespace ZeroEngine.Feedback
             ButtonText(_attachmentButton, FeedbackTextId.AttachmentOptional);
             ButtonText(_sendButton, FeedbackTextId.Send);
             ButtonText(_cancelButton, FeedbackTextId.Cancel);
+            if (_historyButton != null)
+                _historyButton.GetComponentInChildren<TMP_Text>().text = FeedbackTextCatalog.ResolveDetail(
+                    FeedbackDetailTextId.Recent, _configuration.LanguageCodeResolver?.Invoke() ??
+                    System.Globalization.CultureInfo.CurrentUICulture.Name);
         }
 
         private void PickAttachments()
@@ -338,8 +367,13 @@ namespace ZeroEngine.Feedback
             if (result.AcceptedLocally)
                 FeedbackPanel.CloseAfterAccepted();
             else
+            {
+                _lastLocalFailure = result;
                 SetSubmitting(false);
+            }
         }
+
+        private void OnDestroy() => FeedbackPanel.CloseSubmissionDetails(_ownedDetails);
 
         private void SetSubmitting(bool submitting)
         {

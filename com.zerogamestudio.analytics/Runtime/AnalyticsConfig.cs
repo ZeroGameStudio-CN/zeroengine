@@ -14,6 +14,9 @@ namespace ZGS.Analytics
         /// <summary>应用/游戏标识（用于事件与反馈上传路由）</summary>
         public static string AppId { get; set; }
 
+        /// <summary>Opt in only after the receiver supports versioned feedback receipts.</summary>
+        public static bool RequireFeedbackReceipt { get; set; }
+
         /// <summary>认证密钥</summary>
         public static string Secret { get; set; }
 
@@ -26,10 +29,12 @@ namespace ZGS.Analytics
 
         /// <summary>是否已配置服务器</summary>
         public static bool IsConfigured =>
+            !AnalyticsBootstrap.IsAutomationIsolated &&
             !string.IsNullOrEmpty(ServerUrl) && !string.IsNullOrEmpty(Secret);
 
         /// <summary>是否已配置反馈上传</summary>
         public static bool IsUploadConfigured =>
+            !AnalyticsBootstrap.IsAutomationIsolated &&
             !string.IsNullOrEmpty(ServerUrl) && !string.IsNullOrEmpty(UploadSecret);
     }
 }

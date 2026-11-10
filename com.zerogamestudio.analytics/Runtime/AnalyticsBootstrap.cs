@@ -4,9 +4,29 @@ namespace ZGS.Analytics
 {
     public static class AnalyticsBootstrap
     {
+        public static bool IsAutomationIsolated { get; private set; }
+        private static bool started;
+
+        // Configure from AfterAssembliesLoaded, before any SDK service is used.
+        public static void DisableForAutomation()
+        {
+            if (started)
+                throw new System.InvalidOperationException("Analytics isolation must precede initialization.");
+            IsAutomationIsolated = true;
+        }
+
+        [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
+        private static void ResetStartup()
+        {
+            IsAutomationIsolated = false;
+            started = false;
+        }
+
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.BeforeSceneLoad)]
         private static void AutoInitialize()
         {
+            started = true;
+            if (IsAutomationIsolated) return;
             var config = Resources.Load<ZGSAnalyticsConfig>("ZGSAnalyticsConfig");
             if (config == null)
             {
@@ -55,6 +75,7 @@ namespace ZGS.Analytics
 
             // 初始化所有 Provider (会触发 SessionInfo.Initialize)
             AnalyticsService.Initialize();
+            AnalyticsService.Flush();
 
             // 监听退出事件以释放资源
             Application.quitting += AnalyticsService.Shutdown;

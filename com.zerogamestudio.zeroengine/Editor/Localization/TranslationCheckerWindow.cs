@@ -5,6 +5,7 @@ using System.Linq;
 using System.Text;
 
 #if UNITY_LOCALIZATION
+using UnityEditor.Localization;
 using UnityEngine.Localization;
 using UnityEngine.Localization.Settings;
 using UnityEngine.Localization.Tables;

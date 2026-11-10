@@ -1,6 +1,6 @@
 # ZeroEngine.Data
 
-属性和 Buff 的通用运行时包。当前候选版本为 2.2.0，依赖 ZeroEngine.Core 2.0.0、ZeroEngine.Formula 0.1.0 与已有的 ZeroEngine.Persistence 2.0.0 合同。
+属性和 Buff 的通用运行时包。当前整合候选版本为 2.2.1，保留 StatId、StatBlock 与存档合同，并合入无观察者时的 Buff 批量计算；存在观察者时仍逐层通知。依赖 ZeroEngine.Core、ZeroEngine.Formula 与 ZeroEngine.Persistence，消费者需使用同一验证提交的包组合。候选尚未发布。
 
 ## 属性合同
 
@@ -54,3 +54,10 @@ handler.RemoveStacks(1);
 包内 `BuffHandlerStatIdTests` 覆盖 Buff 对标识的消费、作者／旧序列化标识等价，以及规范化 ASCII 的字符串复用。P5 的属性用例和真实探索／战斗调用用于验证消费者。
 
 消费者正式引用固定的 Git commit，并与同项目其他直接 ZE 包统一。隔离测试可临时选择本地候选，验证结束后恢复 manifest 与 lock。
+
+## 无 observer 的批量路径
+
+未提供 `IBuffStackObserver` 时，`BuffStackState` 按来源批量加层、按来源压缩减层；
+有 observer 时继续逐层回调，并在回调后核对宿主存活及重入状态。公开来源字典继续可变，
+`TotalStacks` 读取真实字典，不增加可能过期的隐式计数缓存。来源期子集、旧 signed 输入、
+独立快照及各自时钟顺序保留；批量路径与逐层路径的对照用例属于包级验证。

@@ -3,7 +3,11 @@
   "rootNamespace": "ZeroEngine.Tests.Data",
   "references": [
     "ZeroEngine.BuffSystem.Core",
-    "ZeroEngine.Data"
+    "ZeroEngine.Data",
+    "ZeroEngine.StatSystem.Core",
+    "ZeroEngine.Formula",
+    "UnityEngine.TestRunner",
+    "UnityEditor.TestRunner"
   ],
   "includePlatforms": [
     "Editor"

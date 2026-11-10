@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using UnityEngine;
+using UnityEngine.Scripting.APIUpdating;
 
 namespace ZeroEngine.ModSystem
 {
@@ -10,6 +11,7 @@ namespace ZeroEngine.ModSystem
     /// 监听窗口焦点变化，自动检测并重新加载变化的mod内容。
     /// 添加到场景中的GameObject上即可使用。
     /// </summary>
+    [MovedFrom(true, "ZeroEngine.ModSystem", "ZeroEngine.ModSystem", "ModHotReloader")]
     public class ModHotReloader : MonoBehaviour
     {
         [SerializeField]

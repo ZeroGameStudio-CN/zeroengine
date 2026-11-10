@@ -8,4 +8,8 @@ Thumbs.db
 *.suo
 *.user
 
+# Python package tooling
+__pycache__/
+*.pyc
+
 # Symlinks (不跟踪软链接的目标)

@@ -5,7 +5,8 @@
     "ZeroEngine.BuffSystem.Core",
     "ZeroEngine.Core",
     "ZeroEngine.Persistence",
-    "ZeroEngine.Formula"
+    "ZeroEngine.Formula",
+    "ZeroEngine.StatSystem.Core"
   ],
   "includePlatforms": [],
   "excludePlatforms": [],

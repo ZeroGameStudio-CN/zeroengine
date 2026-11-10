@@ -21,11 +21,14 @@ namespace POB.Extraction
             int raidSeed,
             bool rareLootDisabled,
             out ExtractionRaidLootManifest manifest,
-            out ExtractionRaidLootManifestFailure failure)
+            out ExtractionRaidLootManifestFailure failure,
+            ExtractionLootSelectionPolicy selectionPolicy = null)
         {
             manifest = null;
             failure = ExtractionRaidLootManifestFailure.None;
             if (config == null || map == null || !map.IsValid)
+                return Fail(ExtractionRaidLootManifestFailure.InvalidInput, out failure);
+            if (selectionPolicy != null && !selectionPolicy.IsValid)
                 return Fail(ExtractionRaidLootManifestFailure.InvalidInput, out failure);
 
             if (string.IsNullOrEmpty(map.ContentTierId) && string.IsNullOrEmpty(map.LootProfileId))
@@ -36,6 +39,8 @@ namespace POB.Extraction
 
             var result = new ExtractionRaidLootManifest
             {
+                SelectionPolicy = selectionPolicy?.Copy(),
+                LootSelectionVersion = selectionPolicy?.Version ?? 0,
                 ManifestId = ExtractionStableHash.ComputeSha256(
                     ManifestHashDomain,
                     map.MapId,
@@ -49,11 +54,27 @@ namespace POB.Extraction
             };
 
             var spawns = ResolveProfileSpawns(config, profile);
+            bool skippedCurrentDifficultyCandidate = false;
             foreach (var spawn in spawns)
             {
                 if (!ShouldSpawn(spawn, raidSeed)) continue;
-                if (!TrySelectContainer(config, spawn, raidSeed, out var definition))
-                    return Fail(ExtractionRaidLootManifestFailure.MissingContentConfiguration, out failure);
+                // A point may intentionally have no candidates for the
+                // current difficulty. It simply does not spawn at this
+                // difficulty; malformed references are rejected by the
+                // authoring validator before runtime generation.
+                if (!TrySelectContainer(config, spawn, raidSeed, map.ThreatLevel, out var definition))
+                {
+                    if (HasDifficultySpecificCandidate(spawn)
+                        && !HasConfiguredCandidateForDifficulty(spawn, map.ThreatLevel))
+                    {
+                        skippedCurrentDifficultyCandidate = true;
+                        continue;
+                    }
+
+                    return Fail(
+                        ExtractionRaidLootManifestFailure.MissingContentConfiguration,
+                        out failure);
+                }
 
                 int maximum = Math.Min(definition.Capacity, definition.MaximumContentCount);
                 int target = RollInclusive(
@@ -71,13 +92,15 @@ namespace POB.Extraction
                     maximum,
                     definition.SearchTimeMultiplier)
                 {
+                    Rows = definition.Rows,
+                    Columns = definition.Columns,
                     BonusGroupId = spawn.BonusGroupId,
                     Active = string.IsNullOrEmpty(spawn.BonusGroupId)
                 };
                 result.Containers.Add(manifestContainer);
             }
 
-            if (result.Containers.Count == 0)
+            if (result.Containers.Count == 0 && !skippedCurrentDifficultyCandidate)
                 return Fail(ExtractionRaidLootManifestFailure.NoSpawnedContainers, out failure);
 
             if (!TryAssignGuarantees(config, tier, profile, result, out failure))
@@ -116,22 +139,42 @@ namespace POB.Extraction
                             out failure);
                     }
 
-                    var container = candidates[0];
-                    if (!TrySelectLootEntry(
+                    ExtractionRaidContainerManifest container = null;
+                    ExtractionLootTableEntry tableEntry = null;
+                    ExtractionItemDefinition itemDefinition = null;
+                    bool hasWeightedCandidate = false;
+                    foreach (var candidate in candidates)
+                    {
+                        if (!ExtractionContainerLayoutService.TryBuildGenerationGrid(candidate, config,
+                                out var grid, out bool hasOverflow) || hasOverflow) continue;
+                        if (TrySelectLootEntry(
                             config,
                             tier,
-                            container.RegionId,
-                            container.ContainerTypeId,
+                            candidate.RegionId,
+                            candidate.ContainerTypeId,
                             rarity,
                             manifest.RaidSeed,
                             GuaranteeItemHashDomain,
-                            container.ContainerId,
+                            candidate.ContainerId,
                             index.ToString(CultureInfo.InvariantCulture),
-                            out var tableEntry,
-                            out var itemDefinition,
-                            rareLootDisabled: manifest.RareLootDisabled))
+                            out tableEntry,
+                            out itemDefinition,
+                            rareLootDisabled: manifest.RareLootDisabled,
+                            canFit: item => ExtractionContainerLayoutService.CanFit(grid, item)))
+                        {
+                            container = candidate;
+                            break;
+                        }
+                        hasWeightedCandidate |= TrySelectLootEntry(config, tier, candidate.RegionId,
+                            candidate.ContainerTypeId, rarity, manifest.RaidSeed, GuaranteeItemHashDomain,
+                            candidate.ContainerId, index.ToString(CultureInfo.InvariantCulture), out _, out _,
+                            rareLootDisabled: manifest.RareLootDisabled);
+                    }
+                    if (container == null)
                     {
-                        return Fail(ExtractionRaidLootManifestFailure.MissingRarityCandidate, out failure);
+                        return Fail(hasWeightedCandidate
+                            ? ExtractionRaidLootManifestFailure.InsufficientGuaranteedCapacity
+                            : ExtractionRaidLootManifestFailure.MissingRarityCandidate, out failure);
                     }
 
                     string entryId = CreateStableId(
@@ -233,8 +276,15 @@ namespace POB.Extraction
             out ExtractionItemDefinition selectedDefinition,
             int pityMisses = 0,
             ExtractionLootPityDefinition pity = null,
-            bool rareLootDisabled = false)
+            bool rareLootDisabled = false,
+            ExtractionLootSelectionPolicy selectionPolicy = null,
+            Func<ExtractionItemDefinition, bool> canFit = null)
         {
+            if (selectionPolicy != null)
+                return TrySelectTwoStage(config, tier, regionId, containerTypeId, exactRarity,
+                    raidSeed, hashDomain, identityA, identityB, selectionPolicy,
+                    pityMisses, pity, rareLootDisabled, out selectedEntry, out selectedDefinition, canFit);
+            // Save compatibility only: old raids keep the exact v1 hash and interval mapping.
             selectedEntry = null;
             selectedDefinition = null;
             if (!TryGetContainer(config, containerTypeId, out var container)
@@ -258,6 +308,7 @@ namespace POB.Extraction
                     if (entry == null || !entry.IsValid) continue;
                     if (!config.TryGetItemDefinition(entry.DefinitionId, out var definition) || definition == null)
                         continue;
+                    if (canFit != null && !canFit(definition)) continue;
                     if (exactRarity.HasValue && definition.Rarity != exactRarity.Value) continue;
                     if (!ExtractionLootContentPolicy.IsRarityEnabled(definition.Rarity, rareLootDisabled)) continue;
 
@@ -296,6 +347,66 @@ namespace POB.Extraction
             selectedEntry = fallback.Entry;
             selectedDefinition = fallback.Definition;
             return true;
+        }
+
+        private static bool TrySelectTwoStage(
+            ExtractionPlayableConfig config, ExtractionContentTierDefinition tier,
+            string regionId, string containerTypeId, ExtractionItemRarity? exactRarity,
+            int seed, string domain, string identityA, string identityB,
+            ExtractionLootSelectionPolicy policy, int pityMisses, ExtractionLootPityDefinition pity,
+            bool rareLootDisabled, out ExtractionLootTableEntry entry, out ExtractionItemDefinition item,
+            Func<ExtractionItemDefinition, bool> canFit)
+        {
+            entry = null;
+            item = null;
+            if (!policy.IsValid || !TryGetContainer(config, containerTypeId, out var container)
+                || !TryGetRegion(config, regionId, out var region)) return false;
+            var pools = new List<ExtractionLootTableEntry>[6];
+            for (int rank = 0; rank < pools.Length; rank++) pools[rank] = new();
+            foreach (string tableId in container.LootTableIds)
+            {
+                if (!config.TryGetLootTable(tableId, out var table)
+                    || !ExtractionLootContentPolicy.IsLootTableEnabled(table, rareLootDisabled)) continue;
+                foreach (var candidate in table.Entries)
+                {
+                    if (candidate == null || !candidate.IsValid
+                        || !config.TryGetItemDefinition(candidate.DefinitionId, out var definition)
+                        || definition == null || (int)definition.Rarity < 0 || (int)definition.Rarity >= 6
+                        || !ExtractionLootContentPolicy.IsRarityEnabled(definition.Rarity, rareLootDisabled)) continue;
+                    if (canFit != null && !canFit(definition)) continue;
+                    pools[(int)definition.Rarity].Add(candidate);
+                }
+            }
+            int selectedRank;
+            if (exactRarity.HasValue) selectedRank = (int)exactRarity.Value;
+            else
+            {
+                var ranks = new[] { 0, 1, 2, 3, 4, 5 };
+                double Weight(int rank)
+                {
+                    if (pools[rank].Count == 0) return 0;
+                    var rarity = (ExtractionItemRarity)rank;
+                    double value = policy.RarityWeights[rank]
+                        * (double)(tier?.RarityWeightMultipliers?.Get(rarity) ?? 1f)
+                        * (region.RarityWeightMultipliers?.Get(rarity) ?? 1f)
+                        * ZeroEngine.WeightedSelection.LuckMultiplier(rank, 6,
+                            policy.Luck, policy.LuckScale, policy.LuckStrength);
+                    if (pity != null && rarity >= pity.TargetRarity)
+                        value *= Math.Max(1, Math.Min(pity.MaximumWeightMultiplier,
+                            1d + pity.WeightMultiplierIncrementPerMiss * Math.Max(0, pityMisses)));
+                    return value;
+                }
+                if (!ZeroEngine.WeightedSelection.TrySelectIndex(ranks, Weight,
+                        StableUnit(domain + ":rarity:v2", seed.ToString(CultureInfo.InvariantCulture), identityA, identityB),
+                        out selectedRank)) return false;
+            }
+            if (selectedRank < 0 || selectedRank >= pools.Length) return false;
+            var pool = pools[selectedRank];
+            if (!ZeroEngine.WeightedSelection.TrySelectIndex(pool, value => value.Weight,
+                    StableUnit(domain + ":item:v2", seed.ToString(CultureInfo.InvariantCulture), identityA, identityB),
+                    out int selected)) return false;
+            entry = pool[selected];
+            return config.TryGetItemDefinition(entry.DefinitionId, out item);
         }
 
         private static bool ContainerHasRarityCandidate(
@@ -361,12 +472,27 @@ namespace POB.Extraction
             ExtractionPlayableConfig config,
             ExtractionContainerSpawnDefinition spawn,
             int raidSeed,
+            int difficultyLevel,
             out ExtractionContainerDefinition definition)
         {
             definition = null;
+            bool hasDifficultySpecificCandidate = HasDifficultySpecificCandidate(spawn);
+
             long totalWeight = 0;
             foreach (var candidate in spawn.Candidates)
-                if (candidate != null && candidate.Weight > 0) totalWeight += candidate.Weight;
+            {
+                if (!IsCandidateEligible(
+                        config,
+                        spawn,
+                        candidate,
+                        difficultyLevel,
+                        hasDifficultySpecificCandidate,
+                        out _))
+                {
+                    continue;
+                }
+                totalWeight += candidate.Weight;
+            }
             if (totalWeight <= 0) return false;
 
             long target = unchecked((uint)ExtractionStableHash.ComputeInt32(
@@ -376,13 +502,68 @@ namespace POB.Extraction
             long cursor = 0;
             foreach (var candidate in spawn.Candidates)
             {
-                if (candidate == null || candidate.Weight <= 0) continue;
+                if (!IsCandidateEligible(
+                        config,
+                        spawn,
+                        candidate,
+                        difficultyLevel,
+                        hasDifficultySpecificCandidate,
+                        out _))
+                {
+                    continue;
+                }
                 cursor += candidate.Weight;
                 if (target >= cursor) continue;
                 return TryGetContainer(config, candidate.ContainerTypeId, out definition);
             }
 
             return false;
+        }
+
+        private static bool HasDifficultySpecificCandidate(
+            ExtractionContainerSpawnDefinition spawn)
+        {
+            if (spawn?.Candidates == null) return false;
+            foreach (var candidate in spawn.Candidates)
+            {
+                if (candidate != null && candidate.DifficultyLevel > 0)
+                    return true;
+            }
+
+            return false;
+        }
+
+        private static bool HasConfiguredCandidateForDifficulty(
+            ExtractionContainerSpawnDefinition spawn,
+            int difficultyLevel)
+        {
+            if (spawn?.Candidates == null) return false;
+            foreach (var candidate in spawn.Candidates)
+            {
+                if (candidate != null && candidate.DifficultyLevel == difficultyLevel)
+                    return true;
+            }
+
+            return false;
+        }
+
+        private static bool IsCandidateEligible(
+            ExtractionPlayableConfig config,
+            ExtractionContainerSpawnDefinition spawn,
+            ExtractionWeightedContainerCandidate candidate,
+            int difficultyLevel,
+            bool hasDifficultySpecificCandidate,
+            out ExtractionContainerDefinition definition)
+        {
+            definition = null;
+            if (candidate == null || !candidate.IsValid) return false;
+            if (hasDifficultySpecificCandidate && candidate.DifficultyLevel != difficultyLevel)
+                return false;
+            if (!TryGetContainer(config, candidate.ContainerTypeId, out definition))
+                return false;
+            if (spawn.PointKind == ExtractionLootPointKind.Special && !definition.IsSpecial)
+                return false;
+            return true;
         }
 
         private static int RollInclusive(int minimum, int maximum, string domain, int seed, string identity)

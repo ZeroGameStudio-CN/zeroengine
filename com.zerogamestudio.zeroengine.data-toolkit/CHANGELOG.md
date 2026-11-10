@@ -1,5 +1,10 @@
 # Changelog
 
+## 2.1.2 - 2026-10-19
+
+- Fixed embedded headers choosing different control trees during Layout and Repaint on Unity 6.6, which disabled project header actions and prevented Dashboard data panels from opening.
+- Kept the responsive header layout stable through resizing and panel recreation.
+
 ## 2.1.1 - 2026-08-13
 
 - Added project-configurable Data Toolkit UI text with compatible English defaults.
@@ -21,8 +26,11 @@
 
 ## Unreleased
 
+- Measured per-row count labels instead of reserving a fixed-width column, and hid counts responsively when preserving the full row name requires the space.
+- Added row tooltips that retain the complete name and count even when either is clipped or hidden.
 - Changed full inspector fallback to prefer Unity native editors before Odin reflection, so project `[CustomEditor]` implementations are respected inside Data Toolkit.
 - Added diagnostics coverage for native inspector fallback.
+- Allowed the data type and asset columns to resize down to 64 pixels while long row labels remain clipped.
 
 ## 1.1.0 - 2026-06-06
 

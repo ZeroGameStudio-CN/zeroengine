@@ -7,6 +7,7 @@ Shader "Hidden/ZeroEngine/SpriteRimLighting"
         HLSLINCLUDE
         #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Core.hlsl"
         #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/DeclareDepthTexture.hlsl"
+        #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Shadows.hlsl"
         #include "Packages/com.unity.render-pipelines.core/ShaderLibrary/Color.hlsl"
         #include "Packages/com.unity.render-pipelines.core/Runtime/Utilities/Blit.hlsl"
         TEXTURE2D(_RimRefActorTexture); SAMPLER(sampler_RimRefActorTexture);
@@ -16,6 +17,10 @@ Shader "Hidden/ZeroEngine/SpriteRimLighting"
         int _RimEnhanceLightCount;
         float4 _RimEnhanceRows0[4], _RimEnhanceRows1[4], _RimEnhanceRows2[4], _RimEnhanceColors[4];
         float4 _RimEnhanceShapes[4], _RimEnhancePowers[4], _RimEnhanceBands[4];
+        // Positive w selects a URP shadow index. Negative w selects a box and encodes its opacity.
+        float4 _RimEnhanceShadows[4];
+        float4x4 _RimEnhanceFallbackBoxes[4];
+        float _RimEnhanceAdditionalShadowDistanceSq;
         float4 _RimRefActorST, _RimRefRow0, _RimRefRow1, _RimRefMaskInfo, _RimRefFrame, _RimRefStyle;
         float4 _RimRefEdgeTint, _RimRefInnerTint;
         struct ActorAttributes
@@ -53,7 +58,7 @@ Shader "Hidden/ZeroEngine/SpriteRimLighting"
             if (any(uv < 0) || any(uv >= 1)) return 0;
             return SAMPLE_TEXTURE2D_LOD(_RimRefMask, sampler_LinearClamp, uv, 0).r;
         }
-        float2 CoveredArtCell(ActorVaryings input)
+        float2 CoveredArtCell(ActorVaryings input, out float2 cellOffset)
         {
             float2 sourceUV = input.uv * _RimRefActorST.xy + _RimRefActorST.zw;
             float alpha = SAMPLE_TEXTURE2D(_RimRefActorTexture, sampler_RimRefActorTexture, sourceUV).a * input.alpha;
@@ -64,11 +69,12 @@ Shader "Hidden/ZeroEngine/SpriteRimLighting"
             clip(.00002 - abs(input.positionCS.z - sceneDepth));
             float2 texel = max(_RimRefMaskInfo.xy, .000001);
             float2 uv = float2(dot(float4(input.positionWS,1),_RimRefRow0), dot(float4(input.positionWS,1),_RimRefRow1));
-            uv = (floor(uv / texel) + .5) * texel;
-            clip(MaskAlpha(uv) - .00001);
-            return uv;
+            float2 cell = (floor(uv / texel) + .5) * texel;
+            cellOffset = cell - uv;
+            clip(MaskAlpha(cell) - .00001);
+            return cell;
         }
-        float3 CompositeColor(float3 original, float4 light, float4 meta)
+        float3 CompositeColor(float3 original, float4 light, float3 darkEdgeLight, float4 meta)
         {
             bool gammaBlend = fmod(meta.z, 2) > .5;
             bool limitAddedHdr = meta.z >= 2;
@@ -81,13 +87,16 @@ Shader "Hidden/ZeroEngine/SpriteRimLighting"
             float3 color = min(lerp(baseColor, dodge, light.a), meta.y) * meta.x;
             if (limitAddedHdr) color = saturate(color);
             float3 response = gammaBlend ? SRGBToLinear(color) : color;
+            float incomingPeak = max(max(incomingBase.r, incomingBase.g), incomingBase.b);
+            // Dark art needs a colored contribution independent of the original channel values.
+            // Let it fade out before it reaches highlights, in the same color space as the scene.
+            response += darkEdgeLight * saturate(1 - incomingPeak * 4);
             if (limitAddedHdr)
             {
-                // Match the incoming highlight peak so white art does not acquire a glowing white border.
-                // The midtone floor still lets dark art receive light, while incoming HDR excess stays separate.
-                float incomingPeak = max(max(incomingBase.r, incomingBase.g), incomingBase.b);
+                // The profile raises dark contours independently of incoming bright art and HDR emission.
+                float darkLimit = _RimEnhanceInnerWrap.z;
                 float responsePeak = max(max(response.r, response.g), response.b);
-                response *= min(1, max(incomingPeak, .25) / max(responsePeak, .000001));
+                response *= min(1, max(incomingPeak, darkLimit) / max(responsePeak, .000001));
             }
             return response + incomingHdr;
         }
@@ -119,12 +128,61 @@ Shader "Hidden/ZeroEngine/SpriteRimLighting"
             return distance >= 1 || angle > shape.y ? 0 :
                 EnhancedPower(1 - angle / max(shape.y, .00001), powers.w) * EnhancedPower(1 - distance, powers.x);
         }
+        struct RimColorMix
+        {
+            float3 weightedColor;
+            float weights;
+            float peak;
+        };
+
+        float AccumulateRimColor(inout RimColorMix mix, float3 color)
+        {
+            float peak = max(0, max(max(color.r, color.g), color.b));
+            mix.weightedColor += color * peak;
+            mix.weights += peak * peak;
+            mix.peak = max(mix.peak, peak);
+            return peak;
+        }
+
+        float3 ResolveRimColor(RimColorMix mix)
+        {
+            return mix.weightedColor * (mix.peak / max(mix.weights, .00000001));
+        }
+
+        float3 ArtCellWorldPosition(float3 positionWS, float2 cellOffset)
+        {
+            float3 axisX = TransformObjectToWorldDir(float3(1, 0, 0), false);
+            float3 axisY = TransformObjectToWorldDir(float3(0, 1, 0), false);
+            return positionWS +
+                axisX * (cellOffset.x / max(dot(axisX, _RimRefRow0.xyz), .000001)) +
+                axisY * (cellOffset.y / max(dot(axisY, _RimRefRow1.xyz), .000001));
+        }
+
+        bool IntersectsShadowBox(float3 source, float3 cell)
+        {
+            // Segment versus the unit box, using the box axes and their cross products with the segment.
+            float3 center = (source + cell) * .5;
+            float3 halfSegment = (cell - source) * .5;
+            float3 radius = abs(halfSegment);
+            return all(abs(center) <= 1 + radius) &&
+                all(abs(cross(center, halfSegment)) <= radius.yzx + radius.zxy);
+        }
+
         float4 EnhancedFrag(ActorVaryings input) : SV_Target
         {
             UNITY_SETUP_STEREO_EYE_INDEX_POST_VERTEX(input);
-            float2 uv = CoveredArtCell(input);
+            float2 cellOffset;
+            float2 uv = CoveredArtCell(input, cellOffset);
             float2 texel = max(_RimRefMaskInfo.xy, .000001);
             float3 energy = 0; float blend = 0;
+            float3 darkEdgeLight = 0;
+            // Native lights can illuminate the same art cell. Bound brightness by the
+            // strongest contribution and let stronger colors lead a continuous hue mix.
+            bool mixNativeLights = _RimEnhanceLightCount > 1 && _RimEnhanceShapes[0].x > 2.5;
+            RimColorMix rimMix = (RimColorMix)0;
+            RimColorMix darkMix = (RimColorMix)0;
+            float unshadowedAlpha = 0;
+            float visibleAlpha = 0;
             [unroll] for (int i = 0; i < 4; i++)
             {
                 if (i >= _RimEnhanceLightCount) break;
@@ -134,7 +192,35 @@ Shader "Hidden/ZeroEngine/SpriteRimLighting"
                 float falloff = EnhancedFalloff(q, _RimEnhanceShapes[i], _RimEnhancePowers[i]);
                 float alpha = falloff * _RimEnhanceColors[i].a;
                 if (_RimEnhanceShapes[i].x > 2.5) alpha = saturate(alpha);
-                float amount = alpha * alpha;
+                float visibility = 1;
+                float4 shadow = _RimEnhanceShadows[i];
+            #if defined(ADDITIONAL_LIGHT_CALCULATE_SHADOWS)
+                UNITY_BRANCH
+                if (_RimEnhanceAdditionalShadowDistanceSq > 0 && shadow.w > 0 && alpha > 0)
+                {
+                    float3 positionWS = ArtCellWorldPosition(input.positionWS, cellOffset);
+                    half3 direction = SafeNormalize(shadow.xyz - positionWS);
+                    half realtime = AdditionalLightRealtimeShadow((int)shadow.w - 1, positionWS, direction);
+                    // Keep projected art-cell shadows readable in wide gameplay cameras.
+                    // The rim fades over at most the last 8% of URP's existing shadow distance.
+                    float3 cameraOffset = positionWS - _WorldSpaceCameraPos;
+                    float distanceSq = dot(cameraOffset, cameraOffset);
+                    float rimFade = smoothstep(_RimEnhanceAdditionalShadowDistanceSq * (.92 * .92),
+                        _RimEnhanceAdditionalShadowDistanceSq, distanceSq);
+                    visibility = lerp(realtime, 1, min(rimFade, GetAdditionalLightShadowFade(positionWS)));
+                }
+            #endif
+                UNITY_BRANCH
+                if (shadow.w < 0 && alpha > 0)
+                {
+                    float3 positionWS = ArtCellWorldPosition(input.positionWS, cellOffset);
+                    float3 localCell = mul(_RimEnhanceFallbackBoxes[i], float4(positionWS, 1)).xyz;
+                    if (IntersectsShadowBox(shadow.xyz, localCell)) visibility += shadow.w;
+                }
+                unshadowedAlpha = max(unshadowedAlpha, alpha);
+                visibleAlpha = max(visibleAlpha, alpha * visibility);
+                if (visibility <= 0) continue;
+                float amount = alpha * alpha * visibility;
                 float4 band = _RimEnhanceBands[i];
                 float2 scale = (_RimRefFrame.zw + band.z) / max(_RimRefFrame.zw, 1);
                 float2 shifted = (uv - _RimRefFrame.xy) / max(scale, .00001) + _RimRefFrame.xy - band.xy * texel;
@@ -156,13 +242,39 @@ Shader "Hidden/ZeroEngine/SpriteRimLighting"
                     modulation += _RimRefEdgeTint.rgb * _RimRefEdgeTint.a *
                         (_RimEnhanceInnerWrap.y * coverage / max(steps, 1));
                 }
-                energy += saturate(_RimEnhanceColors[i].rgb * amount) * modulation * band.w;
-                blend += amount;
+                float3 rimColor = saturate(_RimEnhanceColors[i].rgb * amount) * modulation * band.w;
+                // Native Shape.w opts into dark contour fill. Use the smooth field directly
+                // so dark edges remain readable as the actor approaches or leaves the light.
+                float3 darkColor = _RimEnhanceShapes[i].w > 0 ?
+                    _RimEnhanceColors[i].rgb * (alpha * visibility * _RimEnhanceShapes[i].w) * saturate(modulation) : 0;
+                if (mixNativeLights)
+                {
+                    if (AccumulateRimColor(rimMix, rimColor) > 0) blend = max(blend, amount);
+                    AccumulateRimColor(darkMix, darkColor);
+                }
+                else
+                {
+                    energy += rimColor;
+                    darkEdgeLight += darkColor;
+                    blend += amount;
+                }
+            }
+            if (mixNativeLights)
+            {
+                energy = ResolveRimColor(rimMix);
+                darkEdgeLight = ResolveRimColor(darkMix);
             }
             float2 sceneUV = GetNormalizedScreenSpaceUV(input.positionCS) * _RimEnhanceSceneScaleBias.xy + _RimEnhanceSceneScaleBias.zw;
             float4 original = SAMPLE_TEXTURE2D_X(_RimEnhanceSceneColor, sampler_PointClamp, sceneUV);
+            float exposure = _RimRefStyle.x;
+            if (visibleAlpha < unshadowedAlpha)
+            {
+                if (visibleAlpha <= 0) return original;
+                exposure = lerp(1, exposure, visibleAlpha / unshadowedAlpha);
+            }
             float4 light = float4(saturate(energy), saturate(blend) * _RimRefStyle.z);
-            original.rgb = CompositeColor(original.rgb, light, float4(_RimRefStyle.x, _RimRefStyle.y, _RimRefStyle.w, 1));
+            original.rgb = CompositeColor(original.rgb, light, min(darkEdgeLight, .25) * _RimRefStyle.z,
+                float4(exposure, _RimRefStyle.y, _RimRefStyle.w, 1));
             return original;
         }
         ENDHLSL
@@ -174,6 +286,8 @@ Shader "Hidden/ZeroEngine/SpriteRimLighting"
             #pragma target 3.5
             #pragma vertex ActorVert
             #pragma fragment EnhancedFrag
+            #pragma multi_compile_fragment _ _ADDITIONAL_LIGHT_SHADOWS
+            #pragma multi_compile_fragment _ _SHADOWS_SOFT _SHADOWS_SOFT_LOW _SHADOWS_SOFT_MEDIUM _SHADOWS_SOFT_HIGH
             #pragma multi_compile_instancing
             ENDHLSL
         }

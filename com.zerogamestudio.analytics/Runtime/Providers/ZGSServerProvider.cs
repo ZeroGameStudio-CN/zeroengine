@@ -15,6 +15,7 @@ namespace ZGS.Analytics
         private readonly string _secret;
         private readonly string _appId;
         private readonly OfflineQueue _queue;
+        private readonly OfflineQueue _diagnosticQueue;
 
         /// <summary>
         /// 创建 ZGS 服务端 Provider
@@ -23,16 +24,18 @@ namespace ZGS.Analytics
         /// <param name="secret">密钥</param>
         /// <param name="appId">应用/游戏标识 (如 POB, LLS)</param>
         public ZGSServerProvider(string serverUrl, string secret, string appId = "default")
-            : this(serverUrl, secret, appId, new OfflineQueue())
+            : this(serverUrl, secret, appId, new OfflineQueue(),
+                new OfflineQueue(32, "zgs_analytics_diagnostics_v1." + appId))
         {
         }
 
-        internal ZGSServerProvider(string serverUrl, string secret, string appId, OfflineQueue queue)
+        internal ZGSServerProvider(string serverUrl, string secret, string appId, OfflineQueue queue, OfflineQueue diagnosticQueue = null)
         {
             _serverUrl = serverUrl.TrimEnd('/') + "/events";
             _secret = secret;
             _appId = appId;
             _queue = queue ?? throw new ArgumentNullException(nameof(queue));
+            _diagnosticQueue = diagnosticQueue ?? queue;
         }
 
         public void Initialize(string userId)
@@ -89,7 +92,7 @@ namespace ZGS.Analytics
                 props["platform"] = DeviceInfo.Platform;
             
             // 附加身份信息 (如果有)
-            if (IdentityManager.HasAnyIdentity && !props.ContainsKey("identities"))
+            if (eventName != DiagnosticReporter.EventName && IdentityManager.HasAnyIdentity && !props.ContainsKey("identities"))
             {
                 props["identities"] = IdentityManager.ToList();
             }
@@ -105,6 +108,14 @@ namespace ZGS.Analytics
                 Props = props
             };
             
+            if (eventName == DiagnosticReporter.EventName)
+            {
+                string json = payload.ToJson();
+                // The ordinary Analytics detail API returns at most 16,000 characters.
+                // Bound the entire UTF-8 envelope, including SDK metadata, before persistence.
+                if (Encoding.UTF8.GetByteCount(json) > 15000) return false;
+                return _diagnosticQueue.Enqueue(json, frozenOptions.Durable);
+            }
             return _queue.Enqueue(payload, frozenOptions.Durable);
         }
 
@@ -144,6 +155,8 @@ namespace ZGS.Analytics
         public void Flush()
         {
             _queue.FlushAll(_serverUrl, _secret);
+            if (!ReferenceEquals(_queue, _diagnosticQueue))
+                _diagnosticQueue.FlushAll(_serverUrl, _secret);
         }
 
         #region EventPayload

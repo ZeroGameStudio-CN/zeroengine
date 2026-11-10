@@ -39,11 +39,19 @@ namespace ZeroEngine.Editor.Dialog
         /// Double-click on DialogGraphSO to open in editor.
         /// </summary>
         [OnOpenAsset(1)]
+#if UNITY_6000_6_OR_NEWER
+        public static bool OnOpenAsset(EntityId instanceId, int line)
+#else
         public static bool OnOpenAsset(int instanceId, int line)
+#endif
         {
-#pragma warning disable CS0618 // InstanceIDToObject is deprecated in Unity 6, but we keep it for compatibility
+#if UNITY_6000_6_OR_NEWER
+            var asset = EditorUtility.EntityIdToObject(instanceId) as DialogGraphSO;
+#else
+#pragma warning disable CS0618
             var asset = EditorUtility.InstanceIDToObject(instanceId) as DialogGraphSO;
 #pragma warning restore CS0618
+#endif
             if (asset != null)
             {
                 Open(asset);

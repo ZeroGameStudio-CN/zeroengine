@@ -115,7 +115,7 @@ namespace ZGS.DataToolkit.Editor.Tests
                 BindingFlags.Static | BindingFlags.NonPublic);
             Assert.NotNull(contentWidthMethod);
 
-            Assert.AreEqual(550f, (float)contentWidthMethod.Invoke(null, new object[] { 400f }));
+            Assert.AreEqual(378f, (float)contentWidthMethod.Invoke(null, new object[] { 320f }));
             Assert.AreEqual(700f, (float)contentWidthMethod.Invoke(null, new object[] { 700f }));
 
             var window = Track(DataToolkitWindow.Open(CreateProfile()));
@@ -124,14 +124,14 @@ namespace ZGS.DataToolkit.Editor.Tests
                 BindingFlags.Instance | BindingFlags.NonPublic);
             Assert.NotNull(layoutMethod);
 
-            var layout = layoutMethod.Invoke(window, new object[] { new Rect(0f, 0f, 550f, 400f) });
+            var layout = layoutMethod.Invoke(window, new object[] { new Rect(0f, 0f, 378f, 400f) });
             var layoutType = layout.GetType();
             var typeColumn = (Rect)layoutType.GetProperty("TypeColumn").GetValue(layout);
             var assetColumn = (Rect)layoutType.GetProperty("AssetColumn").GetValue(layout);
             var inspectorColumn = (Rect)layoutType.GetProperty("InspectorColumn").GetValue(layout);
 
-            Assert.AreEqual(150f, typeColumn.width);
-            Assert.AreEqual(150f, assetColumn.width);
+            Assert.AreEqual(64f, typeColumn.width);
+            Assert.AreEqual(64f, assetColumn.width);
             Assert.AreEqual(240f, inspectorColumn.width);
         }
 
@@ -231,19 +231,53 @@ namespace ZGS.DataToolkit.Editor.Tests
         }
 
         [Test]
-        public void SelectableRowsWithoutCountText_UseAvailableTitleWidth()
+        public void SelectableRows_UseMeasuredCountWidthAndPrioritizeFullTitle()
         {
-            var method = typeof(DataToolkitWindow).GetMethod("BuildSelectableRowTitleRect", BindingFlags.Static | BindingFlags.NonPublic);
-            Assert.NotNull(method, "Selectable rows should calculate title width from whether count text is visible.");
+            var countWidthMethod = typeof(DataToolkitWindow).GetMethod(
+                "ResolveSelectableRowCountWidth",
+                BindingFlags.Static | BindingFlags.NonPublic);
+            var showCountMethod = typeof(DataToolkitWindow).GetMethod(
+                "ShouldShowSelectableRowCount",
+                BindingFlags.Static | BindingFlags.NonPublic);
+            var titleRectMethod = typeof(DataToolkitWindow).GetMethod(
+                "BuildSelectableRowTitleRect",
+                BindingFlags.Static | BindingFlags.NonPublic);
+            Assert.NotNull(countWidthMethod);
+            Assert.NotNull(showCountMethod);
+            Assert.NotNull(titleRectMethod);
 
             var rowRect = new Rect(10f, 20f, 240f, 24f);
-            var titleRectWithoutCount = (Rect)method.Invoke(null, new object[] { rowRect, false });
-            var titleRectWithCount = (Rect)method.Invoke(null, new object[] { rowRect, true });
+            var compactCountWidth = (float)countWidthMethod.Invoke(null, new object[] { 7f });
+            var showCompactCount = (bool)showCountMethod.Invoke(
+                null,
+                new object[] { rowRect.width, 80f, compactCountWidth, true });
+            var titleRectWithCount = (Rect)titleRectMethod.Invoke(
+                null,
+                new object[] { rowRect, showCompactCount, compactCountWidth });
+            var showCountInNarrowRow = (bool)showCountMethod.Invoke(
+                null,
+                new object[] { 80f, 68f, compactCountWidth, true });
+            var titleRectWithoutCount = (Rect)titleRectMethod.Invoke(
+                null,
+                new object[] { new Rect(10f, 20f, 80f, 24f), showCountInNarrowRow, compactCountWidth });
 
-            Assert.AreEqual(rowRect.x + 6f, titleRectWithoutCount.x);
-            Assert.AreEqual(rowRect.width - 12f, titleRectWithoutCount.width);
-            Assert.AreEqual(rowRect.width - 56f, titleRectWithCount.width);
-            Assert.Greater(titleRectWithoutCount.width, titleRectWithCount.width);
+            Assert.AreEqual(16f, compactCountWidth);
+            Assert.IsTrue(showCompactCount);
+            Assert.AreEqual(rowRect.width - 12f - 6f - compactCountWidth, titleRectWithCount.width);
+            Assert.IsFalse(showCountInNarrowRow);
+            Assert.AreEqual(68f, titleRectWithoutCount.width);
+        }
+
+        [Test]
+        public void SelectableRowTooltip_PreservesFullTitleAndCountWhenCountIsHidden()
+        {
+            var method = typeof(DataToolkitWindow).GetMethod(
+                "BuildSelectableRowTooltip",
+                BindingFlags.Static | BindingFlags.NonPublic);
+            Assert.NotNull(method);
+
+            Assert.AreEqual("ClassData · 9", method.Invoke(null, new object[] { "ClassData", "9" }));
+            Assert.AreEqual("ClassData", method.Invoke(null, new object[] { "ClassData", string.Empty }));
         }
 
         private static DataToolkitProjectProfile CreateProfile()

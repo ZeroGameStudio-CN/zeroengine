@@ -22,5 +22,9 @@ namespace ZeroEngine.Render.Urp
         [Range(1, 4), InspectorName("绕光宽度（美术像素）")] public int InnerWrapWidth = 2;
         [Tooltip("Filters only silhouette coverage. Source artwork remains point sampled."), Range(0f, .35f)]
         [InspectorName("内侧绕光强度")] public float InnerWrapStrength = .05f;
+
+        [Range(.01f, 1f), InspectorName("暗部受光亮度上限")]
+        [Tooltip("Linear-color cap for added light on dark art. Existing bright pixels retain their own highlight limit.")]
+        public float DarkEdgeBrightness = 1f;
     }
 }

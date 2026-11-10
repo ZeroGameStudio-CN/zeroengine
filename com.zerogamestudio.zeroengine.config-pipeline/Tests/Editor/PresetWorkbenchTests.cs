@@ -36,7 +36,7 @@ namespace ZeroGameStudio.ConfigPipeline.Tests.Editor
         [TearDown]
         public void TearDown()
         {
-            ConfigMaintenanceRegistry.ClearForTests();
+            ConfigMaintenanceRegistry.ClearConfigSetForTests("preset.sample");
             if (Directory.Exists(root))
             {
                 Directory.Delete(root, true);

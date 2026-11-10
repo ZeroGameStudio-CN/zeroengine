@@ -32,6 +32,7 @@ namespace ZeroEngine.Feedback
             }
 
             IsSubmitting = true;
+            FeedbackStatusCoordinator.HandleSubmitting();
             FeedbackSubmissionResult result = default;
             bool hasResult = false;
             FeedbackSubmissionRequest request = null;
@@ -46,8 +47,9 @@ namespace ZeroEngine.Feedback
                 };
                 _configuration.RequestDecorator?.Decorate(request);
             }
-            catch
+            catch (Exception exception)
             {
+                UnityEngine.Debug.LogWarning($"[FeedbackSubmission] failed code={FeedbackFailureCodes.PackageCreation} stage=decorate reason={exception.GetType().Name}");
                 result = new FeedbackSubmissionResult(
                     string.Empty,
                     false,
@@ -74,8 +76,9 @@ namespace ZeroEngine.Feedback
                         if (moved)
                             current = submission.Current;
                     }
-                    catch
+                    catch (Exception exception)
                     {
+                        UnityEngine.Debug.LogWarning($"[FeedbackSubmission] failed code={FeedbackFailureCodes.PackageCreation} stage=submit reason={exception.GetType().Name}");
                         result = new FeedbackSubmissionResult(
                             string.Empty,
                             false,

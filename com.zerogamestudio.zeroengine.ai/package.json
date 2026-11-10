@@ -6,7 +6,10 @@
   "unity": "2022.3",
   "unityRelease": "0f1",
   "dependencies": {
-    "com.zerogamestudio.zeroengine.core": "2.0.0"
+    "com.zerogamestudio.zeroengine.core": "2.0.0",
+    "com.unity.modules.physics": "1.0.0",
+    "com.unity.modules.ai": "1.0.0",
+    "com.unity.modules.animation": "1.0.0"
   },
   "keywords": [
     "zeroengine",

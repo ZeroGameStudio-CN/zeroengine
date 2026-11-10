@@ -1,13 +1,18 @@
 {
   "name": "com.zerogamestudio.zeroengine.combat",
-  "version": "2.0.0",
+  "version": "2.1.0",
   "displayName": "ZeroEngine.Combat",
   "description": "Combat framework for ZeroEngine. Includes Combat Core (CombatManager, team relations), Damage System (types, calculators), Targeting (selectors, filters, range), Health System, AbilitySystem (TCE pattern), Projectile, and Spawner.",
   "unity": "2022.3",
   "unityRelease": "0f1",
   "dependencies": {
     "com.zerogamestudio.zeroengine.core": "2.0.0",
-    "com.zerogamestudio.zeroengine.data": "2.0.0"
+    "com.zerogamestudio.zeroengine.data": "2.0.0",
+    "com.zerogamestudio.zeroengine.economy": "2.1.0",
+    "com.unity.modules.physics": "1.0.0",
+    "com.unity.modules.audio": "1.0.0",
+    "com.unity.modules.animation": "1.0.0",
+    "com.unity.modules.particlesystem": "1.0.0"
   },
   "keywords": [
     "zeroengine",

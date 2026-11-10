@@ -49,7 +49,11 @@ namespace ZeroGameStudio.ConfigPipeline
                 "x-zgs-preset-type",
                 "x-zgs-preset-source",
                 "x-zgs-preset-ref-field",
-                "x-zgs-override-mode-field"
+                "x-zgs-override-mode-field",
+                "x-zgs-inline-value-field",
+                "x-zgs-authoring-visibility",
+                "x-zgs-authoring-policy-version",
+                "x-zgs-require-authoring-visibility"
             };
 
         public static ConfigSchema Parse(byte[] utf8Schema)
@@ -88,6 +92,14 @@ namespace ZeroGameStudio.ConfigPipeline
             }
 
             ValidatePresetContracts(schemaRoot);
+
+            int policyVersion = OptionalNonNegativeInteger(root, "x-zgs-authoring-policy-version", "$") ?? 0;
+            bool requireVisibility = OptionalBoolean(root, "x-zgs-require-authoring-visibility", false, "$");
+            if (policyVersion > 2 || (policyVersion > 0 && !requireVisibility))
+                throw new ConfigSchemaException("SCHEMA_AUTHORING_POLICY_INVALID", "$",
+                    "Supported authoring policies are 1 and 2 and require explicit authoring visibility.");
+            if (requireVisibility)
+                RequireAuthoringVisibility(schemaRoot, "$", policyVersion >= 2);
 
             return new ConfigSchema(
                 schemaId,
@@ -166,6 +178,16 @@ namespace ZeroGameStudio.ConfigPipeline
             }
 
             ConfigSchemaType type = ParseType(RequireString(source, "type", path), path);
+            string visibility = OptionalString(source, "x-zgs-authoring-visibility", path);
+            if (visibility != null &&
+                (type == ConfigSchemaType.Object || (type == ConfigSchemaType.Array && source["x-zgs-sheet"] == null) ||
+                 (visibility != "basic" && visibility != "advanced" &&
+                  visibility != "technical" && visibility != "inactive")))
+                throw new ConfigSchemaException("SCHEMA_AUTHORING_VISIBILITY_INVALID", path,
+                    "Scalar fields and sheet arrays use basic, advanced, technical or inactive visibility.");
+            if ((source["x-zgs-require-authoring-visibility"] != null || source["x-zgs-authoring-policy-version"] != null) && path != "$")
+                throw new ConfigSchemaException("SCHEMA_AUTHORING_POLICY_INVALID", path,
+                    "The authoring visibility policy belongs on the schema root.");
             ConfigFieldScope scope = source.TryGetValue("x-zgs-scope", out JToken scopeToken)
                 ? ParseScope(RequireString(scopeToken, path + "/x-zgs-scope"), path)
                 : inheritedScope;
@@ -278,6 +300,24 @@ namespace ZeroGameStudio.ConfigPipeline
             }
 
             ConfigIntegerType? integerType = ParseIntegerType(source, type, path);
+            string inlineValueField = OptionalString(source, "x-zgs-inline-value-field", path);
+            if (inlineValueField != null)
+            {
+                var payload = items?.Properties.SingleOrDefault(property => property.Name == inlineValueField);
+                if (type != ConfigSchemaType.Array || items.Type != ConfigSchemaType.Object ||
+                    sheet == null || parentKey == null || orderField == null ||
+                    payload == null || payload.Schema.AuthoringOnly || payload.Schema.PrimaryKey ||
+                    payload.Schema.Type == ConfigSchemaType.Object || payload.Schema.Type == ConfigSchemaType.Array ||
+                    items.Properties.Count != 3 ||
+                    items.Properties.Count(property => property.Schema.PrimaryKey && property.Schema.AuthoringOnly) != 1 ||
+                    !items.Properties.Any(property => property.Name == orderField && property.Schema.AuthoringOnly &&
+                        !property.Schema.PrimaryKey && property.Schema.Type == ConfigSchemaType.Integer) ||
+                    items.Properties.Any(property => property.Name != inlineValueField &&
+                        !(property.Schema.PrimaryKey && property.Schema.AuthoringOnly) &&
+                        !(property.Name == orderField && property.Schema.AuthoringOnly)))
+                    throw new ConfigSchemaException("SCHEMA_INLINE_LIST_INVALID", path,
+                        "Inline lists require one scalar business value, an author-only key and author-only integer order. Complex rows remain tables.");
+            }
             ConfigNumberType? numberType = ParseNumberType(source, type, path);
             double? minimum = OptionalFiniteNumber(source, "minimum", path);
             double? maximum = OptionalFiniteNumber(source, "maximum", path);
@@ -384,7 +424,37 @@ namespace ZeroGameStudio.ConfigPipeline
                 presetType,
                 presetSource,
                 presetReferenceField,
-                collectionOverrideModeField);
+                collectionOverrideModeField,
+                visibility,
+                inlineValueField);
+        }
+
+        private static void RequireAuthoringVisibility(ConfigSchemaNode node, string path, bool classifyTables)
+        {
+            if (node.Type == ConfigSchemaType.Object)
+            {
+                foreach (ConfigSchemaProperty property in node.Properties)
+                {
+                    ConfigSchemaNode field = property.Schema;
+                    if (field.Type != ConfigSchemaType.Array && node.IsRequired(property.Name) && field.AuthoringVisibility != null &&
+                        field.AuthoringVisibility != "basic" && field.DefaultValue == null &&
+                        !field.PrimaryKey && property.Name != "order")
+                        throw new ConfigSchemaException("SCHEMA_HIDDEN_INPUT_REQUIRES_DEFAULT",
+                            path + "/properties/" + property.Name,
+                            "A hidden required input needs a default or must remain basic.");
+                    RequireAuthoringVisibility(property.Schema, path + "/properties/" + property.Name, classifyTables);
+                }
+            }
+            else if (node.Type == ConfigSchemaType.Array)
+            {
+                if (classifyTables && node.Sheet != null && node.AuthoringVisibility == null)
+                    throw new ConfigSchemaException("SCHEMA_AUTHORING_TABLE_VISIBILITY_REQUIRED", path,
+                        "Classify every configuration table, including relation and inactive tables.");
+                RequireAuthoringVisibility(node.Items, path + "/items", classifyTables);
+            }
+            else if (node.AuthoringVisibility == null)
+                throw new ConfigSchemaException("SCHEMA_AUTHORING_VISIBILITY_REQUIRED", path,
+                    "Classify every authoring field before adding it to a governed configuration table.");
         }
 
         private static void ValidateAnnotationApplicability(

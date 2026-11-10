@@ -4,6 +4,29 @@ namespace POB.Extraction.Core.Package.Tests.Editor
 {
     public class ExtractionItemActionPolicyTests
     {
+        // Core contract: serialized legacy enum values remain stable as body slots are added.
+        [Test]
+        public void EquipmentSlots_PreserveLegacyValues()
+        {
+            Assert.AreEqual(0, (int)ExtractionEquipmentSlotType.None);
+            Assert.AreEqual(1, (int)ExtractionEquipmentSlotType.Weapon);
+            Assert.AreEqual(2, (int)ExtractionEquipmentSlotType.Relic);
+            Assert.AreEqual(3, (int)ExtractionEquipmentSlotType.Card);
+        }
+
+        [TestCase(ExtractionEquipmentSlotType.Head, "head-1")]
+        [TestCase(ExtractionEquipmentSlotType.Top, "top-1")]
+        [TestCase(ExtractionEquipmentSlotType.Pants, "pants-1")]
+        [TestCase(ExtractionEquipmentSlotType.Shoes, "shoes-1")]
+        [TestCase(ExtractionEquipmentSlotType.Underwear, "underwear-1")]
+        [TestCase(ExtractionEquipmentSlotType.Gloves, "gloves-1")]
+        public void BodySlots_AcceptOnlyTheCorrespondingPart(ExtractionEquipmentSlotType type, string slot)
+        {
+            Assert.IsTrue(ExtractionEquipmentTransactionService.SlotIdMatchesType(slot, type));
+            Assert.IsFalse(ExtractionEquipmentTransactionService.SlotIdMatchesType("weapon-primary", type));
+            Assert.IsFalse(ExtractionEquipmentTransactionService.SlotIdMatchesType(null, type));
+        }
+
         [Test]
         public void DefaultPolicy_OldAndNewItemsRemainDroppableSellableAndDeathDroppable()
         {

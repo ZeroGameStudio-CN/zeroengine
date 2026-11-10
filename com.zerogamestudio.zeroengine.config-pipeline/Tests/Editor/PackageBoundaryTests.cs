@@ -51,6 +51,8 @@ namespace ZeroGameStudio.ConfigPipeline.Tests
             string sample = Path.Combine(root, "Samples~", "MinimalItemDrop", "Config");
             ConfigSchema schema = ConfigSchemaParser.Parse(File.ReadAllBytes(
                 Path.Combine(sample, "item-drop.schema.json")));
+            Assert.That(schema.AuthoringPolicyVersion, Is.EqualTo(2),
+                "The shipped sample must demonstrate the required new-project authoring policy.");
             var properties = new List<ConfigProperty>();
             foreach (var owner in new[]
                      {

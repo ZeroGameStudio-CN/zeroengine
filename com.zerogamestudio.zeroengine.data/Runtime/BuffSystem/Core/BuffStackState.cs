@@ -50,6 +50,18 @@ namespace ZeroEngine.BuffSystem.Runtime
         {
             if (requested <= 0 || (observer != null && !observer.IsActive)) return 0;
             int actual = Math.Min(requested, Math.Max(0, maximum - TotalStacks));
+            if (observer == null)
+            {
+                if (actual <= 0) return 0;
+                SourceStacks.TryGetValue(source, out int previous);
+                SourceStacks[source] = previous + actual;
+                if (sourceLifetime)
+                {
+                    SourceLifetimeStacks.TryGetValue(source, out int scoped);
+                    SourceLifetimeStacks[source] = scoped + actual;
+                }
+                return actual;
+            }
             int added = 0;
             for (int i = 0; i < actual; i++)
             {
@@ -67,6 +79,7 @@ namespace ZeroEngine.BuffSystem.Runtime
         public int RemoveStacks(string source, int requested, IBuffStackObserver observer = null)
         {
             if (requested <= 0 || TotalStacks <= 0) return 0;
+            if (observer == null) return RemoveUnobserved(source, requested);
             int removed = 0;
             for (int i = 0; i < requested; i++)
             {
@@ -84,6 +97,31 @@ namespace ZeroEngine.BuffSystem.Runtime
                 if (SourceStacks[key] <= 0) SourceStacks.Remove(key);
                 observer?.AfterRemoveStack();
                 removed++;
+            }
+            return removed;
+        }
+
+        private int RemoveUnobserved(string source, int requested)
+        {
+            int removed = 0;
+            while (removed < requested)
+            {
+                string key = source;
+                if (key == null)
+                    foreach (var entry in SourceStacks) { key = entry.Key; break; }
+                if (key == null || !SourceStacks.TryGetValue(key, out int count)) break;
+                // Public maps and the aggregate adapter allow signed legacy inputs.
+                // A nonpositive entry was consumed by one old remove iteration.
+                int take = Math.Min(requested - removed, Math.Max(1, count));
+                if (SourceLifetimeStacks.TryGetValue(key, out int scoped))
+                {
+                    if (scoped <= take) SourceLifetimeStacks.Remove(key);
+                    else SourceLifetimeStacks[key] = scoped - take;
+                }
+                int remaining = unchecked(count - take);
+                if (remaining <= 0) SourceStacks.Remove(key);
+                else SourceStacks[key] = remaining;
+                removed += take;
             }
             return removed;
         }

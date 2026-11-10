@@ -98,12 +98,14 @@ namespace ZeroEngine.Tutorial
 
         /// <summary>已跳过的教程序列 ID</summary>
         public string[] SkippedSequences = Array.Empty<string>();
+        public string[] TriggeredMarkers = Array.Empty<string>();
 
         /// <summary>当前进行中的教程 ID (为空表示无)</summary>
         public string CurrentSequenceId;
 
         /// <summary>当前步骤索引</summary>
         public int CurrentStepIndex;
+        public string CurrentStepId;
 
         /// <summary>全局变量 (键值对)</summary>
         public TutorialVariable[] GlobalVariables = Array.Empty<TutorialVariable>();

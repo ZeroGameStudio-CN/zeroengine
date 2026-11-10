@@ -55,9 +55,28 @@ namespace POB.Extraction
                 return false;
             }
 
+            var raidContainers = profile.ActiveRaid?.Content?.LootManifest?.Containers;
+            if (raidContainers != null)
+                foreach (var container in raidContainers)
+                {
+                    if (container?.Entries == null) continue;
+                    foreach (var item in container.Entries)
+                        if (item?.State == ExtractionContainerLootEntryState.Revealed && registryIds.Contains(item.ItemInstanceId)
+                            && !physicalLocations.TryAdd(item.ItemInstanceId, "raid-container:" + container.ContainerId))
+                            return Fail($"Item '{item.ItemInstanceId}' appears in multiple physical locations.", out issue);
+                }
+
             foreach (var pair in ownership)
             {
                 var entry = pair.Value;
+                if (entry.Container == ExtractionInventoryContainerType.RaidContainer)
+                {
+                    if (entry.LocationSubtype != ExtractionContainerInventoryService.LocationSubtype
+                        || !physicalLocations.TryGetValue(pair.Key, out var containerLocation)
+                        || containerLocation != "raid-container:" + entry.LocationId)
+                        return Fail($"Item '{pair.Key}' does not match its revealed raid container.", out issue);
+                    continue;
+                }
                 if (entry.Container == ExtractionInventoryContainerType.EquipmentSlot)
                 {
                     if (entry.LocationSubtype != BaseEquipmentLocationSubtype

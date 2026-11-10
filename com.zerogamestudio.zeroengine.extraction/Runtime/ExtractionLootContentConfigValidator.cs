@@ -3,17 +3,26 @@ using System.Collections.Generic;
 
 namespace POB.Extraction
 {
+    public sealed class ExtractionLootContentValidationIssue
+    {
+        public ExtractionLootContentValidationIssue(string message, string fieldPath) { Message = message; FieldPath = fieldPath; }
+        public string Message { get; }
+        public string FieldPath { get; }
+    }
+
     public sealed class ExtractionLootContentValidationReport
     {
         public readonly List<string> Errors = new();
         public readonly List<string> Warnings = new();
+        public readonly List<ExtractionLootContentValidationIssue> Issues = new();
 
         public bool IsValid => Errors.Count == 0;
         public string FirstError => Errors.Count > 0 ? Errors[0] : null;
 
-        internal void AddError(string message)
+        internal void AddError(string message, string fieldPath = "$")
         {
             Errors.Add(message);
+            Issues.Add(new ExtractionLootContentValidationIssue(message, fieldPath));
         }
 
         internal void AddWarning(string message)
@@ -34,6 +43,25 @@ namespace POB.Extraction
             ExtractionItemRarity.Mythic
         };
 
+        /// <summary>Read-only authoring diagnostics; independent spawn checks continue after sibling failures.</summary>
+        public static ExtractionLootContentValidationReport ValidateContainerPoints(ExtractionPlayableConfig config)
+        {
+            var report = new ExtractionLootContentValidationReport();
+            if (config == null) { report.AddError("搜打撤内容配置为空，无法继续解析。", "$"); return report; }
+            if (config.ContainerSpawns == null)
+            {
+                report.AddError("容器点位列表为空，无法继续解析该列表。", "$/containerSpawns");
+                return report;
+            }
+            CollectSpawns(config, report);
+            var regions = config.LootRegions == null ? null : CollectRegions(config, report);
+            var containers = config.ContainerDefinitions == null ? null : CollectContainers(config, report);
+            if (regions == null) report.AddError("区域目录缺失，未执行区域引用校验。", "$/lootRegions");
+            if (containers == null) report.AddError("容器目录缺失，未执行容器类型引用校验。", "$/containerDefinitions");
+            ValidateSpawnReferences(config.ContainerSpawns, regions, containers, report);
+            return report;
+        }
+
         public static ExtractionLootContentValidationReport Validate(ExtractionPlayableConfig config)
         {
             var report = new ExtractionLootContentValidationReport();
@@ -44,7 +72,10 @@ namespace POB.Extraction
             }
 
             if (!HasAnyContentConfiguration(config))
+            {
+                ValidateRaidRules(config, report);
                 return report;
+            }
 
             if (!HasRequiredLists(config, report))
                 return report;
@@ -62,13 +93,151 @@ namespace POB.Extraction
             ValidateMapReferences(config, tiers, profiles, report);
             ValidateProfileReferences(profiles, tiers, regions, report);
             ValidateRegionReferences(regions, containers, spawns, report);
-            ValidateSpawnReferences(spawns, regions, containers, report);
+            ValidateSpawnReferences(config.ContainerSpawns, regions, containers, report);
             ValidateContainerTables(containers, tables, items, report);
             if (!report.IsValid)
                 return report;
 
             ValidateProfileCapacityAndAvailability(profiles, regions, spawns, containers, tables, items, report);
+            ValidateRaidRules(config, report);
             return report;
+        }
+
+        private static void ValidateRaidRules(
+            ExtractionPlayableConfig config,
+            ExtractionLootContentValidationReport report)
+        {
+            bool hasRules = HasEntries(config.RaidRuleProfiles)
+                || HasEntries(config.RaidPhaseRules)
+                || HasEntries(config.RaidEffects);
+            if (!hasRules)
+            {
+                foreach (var map in config.Maps)
+                {
+                    if (map != null && !string.IsNullOrEmpty(map.RaidRuleProfileId))
+                    {
+                        hasRules = true;
+                        break;
+                    }
+                }
+            }
+            if (!hasRules) return;
+
+            var profiles = new Dictionary<string, ExtractionRaidRuleProfileDefinition>();
+            foreach (var profile in config.RaidRuleProfiles)
+            {
+                if (profile == null || !profile.IsValid)
+                {
+                    report.AddError("Raid 规则 Profile 无效。");
+                    continue;
+                }
+                if (!profiles.TryAdd(profile.ProfileId, profile))
+                    report.AddError($"Raid 规则 Profile ID 重复：'{profile.ProfileId}'。");
+            }
+
+            var effects = new Dictionary<string, ExtractionRaidEffectDefinition>();
+            foreach (var effect in config.RaidEffects)
+            {
+                if (effect == null || !effect.IsValid || !IsRaidEffectShapeValid(effect))
+                {
+                    report.AddError($"RaidEffect '{effect?.EffectId}' 的类型、目标或数值无效。");
+                    continue;
+                }
+                if (!effects.TryAdd(effect.EffectId, effect))
+                    report.AddError($"RaidEffect ID 重复：'{effect.EffectId}'。");
+            }
+
+            var ruleIds = new HashSet<string>();
+            foreach (var rule in config.RaidPhaseRules)
+            {
+                if (rule == null || !rule.IsValid)
+                {
+                    report.AddError("Raid 阶段规则无效。");
+                    continue;
+                }
+                if (!ruleIds.Add(rule.RuleId))
+                    report.AddError($"Raid 阶段规则 ID 重复：'{rule.RuleId}'。");
+                if (!profiles.TryGetValue(rule.ProfileId, out var profile))
+                    report.AddError($"Raid 阶段规则 '{rule.RuleId}' 引用了不存在的 Profile '{rule.ProfileId}'。");
+                else if (rule.RemainingSeconds > profile.DurationSeconds)
+                    report.AddError($"Raid 阶段规则 '{rule.RuleId}' 的剩余秒数超过 Profile 时长。");
+                if (!effects.ContainsKey(rule.EffectId))
+                    report.AddError($"Raid 阶段规则 '{rule.RuleId}' 引用了不存在的 Effect '{rule.EffectId}'。");
+            }
+
+            foreach (var map in config.Maps)
+            {
+                if (map == null || !map.IsValid) continue;
+                if (!string.IsNullOrEmpty(map.RaidRuleProfileId)
+                    && !profiles.ContainsKey(map.RaidRuleProfileId))
+                {
+                    report.AddError($"地图 '{map.MapId}' 引用了不存在的 raidRuleProfileId '{map.RaidRuleProfileId}'。");
+                }
+            }
+
+            var encounters = new HashSet<string>();
+            foreach (var encounter in config.HostileExplorerEncounters)
+            {
+                if (encounter == null || !encounter.IsValid) continue;
+                encounters.Add(encounter.EncounterId);
+            }
+            var containerSpawns = new HashSet<string>();
+            foreach (var spawn in config.ContainerSpawns)
+                if (spawn != null && !string.IsNullOrEmpty(spawn.SpawnId)) containerSpawns.Add(spawn.SpawnId);
+            var pointIds = new HashSet<string>();
+            foreach (var point in config.ExtractionPoints)
+            {
+                if (point == null || !point.IsValid)
+                    report.AddError($"撤离点 '{point?.PointId}' 的模式字段无效。");
+                else pointIds.Add(point.PointId);
+            }
+
+            foreach (var effect in effects.Values)
+            {
+                if (effect.EffectType == ExtractionRaidEffectType.SpawnEncounter
+                    && !encounters.Contains(effect.TargetId))
+                    report.AddError($"RaidEffect '{effect.EffectId}' 引用了不存在的 Encounter '{effect.TargetId}'。");
+                if (effect.EffectType == ExtractionRaidEffectType.SpawnContainer
+                    && !containerSpawns.Contains(effect.TargetId))
+                    report.AddError($"RaidEffect '{effect.EffectId}' 引用了不存在的 ContainerSpawn '{effect.TargetId}'。");
+                if (effect.EffectType == ExtractionRaidEffectType.AdvanceExtractionPointSeconds
+                    && !pointIds.Contains(effect.TargetId))
+                    report.AddError($"RaidEffect '{effect.EffectId}' 引用了不存在的撤离点 '{effect.TargetId}'。");
+            }
+
+            foreach (var gate in config.LeverDefinitions)
+            {
+                if (gate == null || gate.ChannelSeconds <= 0) continue;
+                if (!gate.IsGateConfigurationValid)
+                    report.AddError($"Gate '{gate.LeverId}' 的模式字段无效。");
+                if (gate.Mode == ExtractionGateMode.Capture
+                    && !encounters.Contains(gate.CaptureEncounterId))
+                    report.AddError($"Gate '{gate.LeverId}' 引用了不存在的 Capture Encounter '{gate.CaptureEncounterId}'。");
+                foreach (var effectId in gate.EffectIds)
+                    if (!effects.ContainsKey(effectId))
+                        report.AddError($"Gate '{gate.LeverId}' 引用了不存在的 Effect '{effectId}'。");
+            }
+        }
+
+        private static bool IsRaidEffectShapeValid(ExtractionRaidEffectDefinition effect)
+        {
+            switch (effect.EffectType)
+            {
+                case ExtractionRaidEffectType.EnemyStatMultiplier:
+                    return !IsBlank(effect.TargetId) && effect.Amount > 0f;
+                case ExtractionRaidEffectType.SpawnEncounter:
+                case ExtractionRaidEffectType.SpawnContainer:
+                case ExtractionRaidEffectType.SetRaidFlag:
+                case ExtractionRaidEffectType.UnlockBonusContainerGroup:
+                    return !IsBlank(effect.TargetId);
+                case ExtractionRaidEffectType.ExtendRaidDeadlineSeconds:
+                case ExtractionRaidEffectType.AddThreatLevel:
+                    return IsBlank(effect.TargetId) && effect.Amount > 0f;
+                case ExtractionRaidEffectType.AdvanceExtractionPointSeconds:
+                    return !IsBlank(effect.TargetId) && effect.Amount > 0f;
+                default:
+                    return false;
+            }
         }
 
         public static bool HasAnyContentConfiguration(ExtractionPlayableConfig config)
@@ -303,42 +472,47 @@ namespace POB.Extraction
             ExtractionLootContentValidationReport report)
         {
             var result = new Dictionary<string, ExtractionContainerSpawnDefinition>();
+            int rowIndex = -1;
             foreach (var spawn in config.ContainerSpawns)
             {
-                if (spawn == null || IsBlank(spawn.SpawnId) || IsBlank(spawn.RegionId))
+                string path = "$/containerSpawns[" + (++rowIndex) + "]";
+                if (spawn == null)
                 {
-                    report.AddError("容器生成点为空，或 SpawnId/RegionId 无效。");
+                    report.AddError("容器生成点为空，无法继续解析该记录。", path);
                     continue;
                 }
+                if (IsBlank(spawn.SpawnId)) report.AddError("容器生成点 SpawnId 无效。", path + "/SpawnId");
+                if (IsBlank(spawn.RegionId)) report.AddError($"容器生成点 '{spawn.SpawnId}' 的 RegionId 无效。", path + "/RegionId");
 
                 if (spawn.Always == spawn.ChancePerRaid)
-                    report.AddError($"容器生成点 '{spawn.SpawnId}' 必须且只能启用 Always 与 ChancePerRaid 其中一种模式。");
+                    report.AddError($"容器生成点 '{spawn.SpawnId}' 必须且只能启用 Always 与 ChancePerRaid 其中一种模式。", path + "/Always");
                 else if (spawn.ChancePerRaid && (spawn.Chance <= 0f || spawn.Chance > 1f))
-                    report.AddError($"容器生成点 '{spawn.SpawnId}' 的 ChancePerRaid 出现率必须在 (0, 1] 内。");
-                else if (spawn.Always && Math.Abs(spawn.Chance - 1f) > 0.0001f)
-                    report.AddError($"固定容器生成点 '{spawn.SpawnId}' 的出现率必须为 1。");
+                    report.AddError($"容器生成点 '{spawn.SpawnId}' 的 ChancePerRaid 出现率必须在 (0, 1] 内。", path + "/Chance");
 
                 if (spawn.Candidates == null || spawn.Candidates.Count == 0)
                 {
-                    report.AddError($"容器生成点 '{spawn.SpawnId}' 至少需要一个候选容器类型。");
+                    report.AddError($"容器生成点 '{spawn.SpawnId}' 至少需要一个候选容器类型。", path + "/Candidates");
                 }
                 else
                 {
                     var candidateIds = new HashSet<string>();
-                    foreach (var candidate in spawn.Candidates)
+                    for (int candidateIndex = 0; candidateIndex < spawn.Candidates.Count; candidateIndex++)
                     {
+                        var candidate = spawn.Candidates[candidateIndex];
+                        string candidatePath = path + "/Candidates[" + candidateIndex + "]";
                         if (candidate == null || IsBlank(candidate.ContainerTypeId) || candidate.Weight <= 0)
                         {
-                            report.AddError($"容器生成点 '{spawn.SpawnId}' 包含无效候选或非正权重。");
+                            report.AddError($"容器生成点 '{spawn.SpawnId}' 包含无效候选或非正权重。", candidatePath);
                             continue;
                         }
                         if (!candidateIds.Add(candidate.ContainerTypeId))
-                            report.AddError($"容器生成点 '{spawn.SpawnId}' 重复引用候选容器 '{candidate.ContainerTypeId}'。");
+                            report.AddError($"容器生成点 '{spawn.SpawnId}' 重复引用候选容器 '{candidate.ContainerTypeId}'。", candidatePath + "/ContainerTypeId");
                     }
                 }
 
+                if (IsBlank(spawn.SpawnId)) continue;
                 if (result.ContainsKey(spawn.SpawnId))
-                    report.AddError($"容器生成点 ID '{spawn.SpawnId}' 重复。");
+                    report.AddError($"容器生成点 ID '{spawn.SpawnId}' 重复。", path + "/SpawnId");
                 else
                     result.Add(spawn.SpawnId, spawn);
             }
@@ -422,32 +596,36 @@ namespace POB.Extraction
         }
 
         private static void ValidateSpawnReferences(
-            Dictionary<string, ExtractionContainerSpawnDefinition> spawns,
+            IEnumerable<ExtractionContainerSpawnDefinition> spawns,
             Dictionary<string, ExtractionLootRegionDefinition> regions,
             Dictionary<string, ExtractionContainerDefinition> containers,
             ExtractionLootContentValidationReport report)
         {
-            foreach (var pair in spawns)
+            int rowIndex = -1;
+            foreach (var spawn in spawns)
             {
-                var spawn = pair.Value;
-                if (!regions.TryGetValue(spawn.RegionId, out var region))
+                string path = "$/containerSpawns[" + (++rowIndex) + "]";
+                if (spawn == null) continue;
+                ExtractionLootRegionDefinition region = null;
+                if (regions != null && !IsBlank(spawn.RegionId))
                 {
-                    report.AddError($"容器生成点 '{spawn.SpawnId}' 引用了不存在的区域 '{spawn.RegionId}'。");
-                    continue;
+                    if (!regions.TryGetValue(spawn.RegionId, out region))
+                        report.AddError($"容器生成点 '{spawn.SpawnId}' 引用了不存在的区域 '{spawn.RegionId}'。", path + "/RegionId");
+                    else if (!IsBlank(spawn.SpawnId) && (region.ContainerSpawnIds == null || !region.ContainerSpawnIds.Contains(spawn.SpawnId)))
+                        report.AddError($"容器生成点 '{spawn.SpawnId}' 未列入所属区域 '{spawn.RegionId}' 的生成点列表。", path + "/RegionId");
                 }
-                if (region.ContainerSpawnIds == null || !region.ContainerSpawnIds.Contains(spawn.SpawnId))
-                    report.AddError($"容器生成点 '{spawn.SpawnId}' 未列入所属区域 '{spawn.RegionId}' 的生成点列表。");
                 if (spawn.Candidates == null) continue;
-                foreach (var candidate in spawn.Candidates)
+                for (int index = 0; index < spawn.Candidates.Count; index++)
                 {
-                    if (candidate == null) continue;
-                    if (!containers.ContainsKey(candidate.ContainerTypeId))
-                        report.AddError($"容器生成点 '{spawn.SpawnId}' 引用了不存在的容器类型 '{candidate.ContainerTypeId}'。");
-                    else if (region.AllowedContainerTypeIds == null
-                             || !region.AllowedContainerTypeIds.Contains(candidate.ContainerTypeId))
-                    {
-                        report.AddError($"容器生成点 '{spawn.SpawnId}' 的候选容器 '{candidate.ContainerTypeId}' 不在区域允许集合内。");
-                    }
+                    var candidate = spawn.Candidates[index];
+                    // Invalid identity was already diagnosed while collecting; do not invent a missing reference.
+                    if (candidate == null || IsBlank(candidate.ContainerTypeId)) continue;
+                    string field = path + "/Candidates[" + index + "]/ContainerTypeId";
+                    if (containers != null && !containers.ContainsKey(candidate.ContainerTypeId))
+                        report.AddError($"容器生成点 '{spawn.SpawnId}' 引用了不存在的容器类型 '{candidate.ContainerTypeId}'。", field);
+                    else if (containers != null && region != null && (region.AllowedContainerTypeIds == null
+                             || !region.AllowedContainerTypeIds.Contains(candidate.ContainerTypeId)))
+                        report.AddError($"容器生成点 '{spawn.SpawnId}' 的候选容器 '{candidate.ContainerTypeId}' 不在区域允许集合内。", field);
                 }
             }
         }

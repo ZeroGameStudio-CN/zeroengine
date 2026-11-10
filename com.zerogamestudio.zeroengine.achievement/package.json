@@ -8,6 +8,18 @@
     "dependencies": {
         "com.zerogamestudio.zeroengine.core": "2.0.0"
     },
-    "keywords": ["zeroengine", "achievement", "progress"],
-    "author": { "name": "ZeroGameStudio" }
+    "keywords": [
+        "zeroengine",
+        "achievement",
+        "progress"
+    ],
+    "author": {
+        "name": "ZeroGameStudio"
+    },
+    "license": "MIT",
+    "repository": {
+        "type": "git",
+        "url": "https://github.com/ZeroGameStudio-CN/zeroengine.git",
+        "directory": "com.zerogamestudio.zeroengine.achievement"
+    }
 }

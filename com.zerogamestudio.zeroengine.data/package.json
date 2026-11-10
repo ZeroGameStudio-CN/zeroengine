@@ -1,6 +1,6 @@
 {
   "name": "com.zerogamestudio.zeroengine.data",
-  "version": "2.2.0",
+  "version": "2.2.1",
   "displayName": "ZeroEngine.Data",
   "description": "Data systems for ZeroEngine. Includes StatSystem (attributes, modifiers, constraints) and BuffSystem (buff management, stacking, duration, stat integration).",
   "unity": "2022.3",
@@ -26,7 +26,7 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/liuzqk/zeroengine.git",
+    "url": "https://github.com/ZeroGameStudio-CN/zeroengine.git",
     "directory": "com.zerogamestudio.zeroengine.data"
   }
 }

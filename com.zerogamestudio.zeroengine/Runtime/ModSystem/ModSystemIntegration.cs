@@ -1,4 +1,5 @@
 using UnityEngine;
+using UnityEngine.Scripting.APIUpdating;
 
 namespace ZeroEngine.ModSystem
 {
@@ -6,6 +7,7 @@ namespace ZeroEngine.ModSystem
     /// ModSystem集成组件。
     /// 添加到场景中自动完成ModSystem的初始化和mod加载。
     /// </summary>
+    [MovedFrom(true, "ZeroEngine.ModSystem", "ZeroEngine.ModSystem", "ModSystemIntegration")]
     public class ModSystemIntegration : MonoBehaviour
     {
         [Header("Settings")]

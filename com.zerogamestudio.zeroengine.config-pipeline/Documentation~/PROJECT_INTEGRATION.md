@@ -1,9 +1,61 @@
 # Project integration
 
+New project templates and schema upgrades must declare authoring policy v2 and
+explicit table/field visibility. Follow the cross-project minimal input contract
+in `EXCEL_AUTHORING.md` before copying a sample or adding a table. Legacy source
+reading is compatible; it is not a supported shortcut for new template creation.
+
 Add the package and `com.unity.nuget.newtonsoft-json`, then create
 `Config/config-project.json`. Each config set declares its Schema, Excel source,
-one owner workbook per top-level table, generated DTO namespace/path, and target
+optional `authoringWorkbookFormat` (`xlsx` or `xlsm`; omitted means `xlsx`), one owner
+workbook per top-level table, generated DTO namespace/path, and target
 JSON, Manifest, source-map and optional Workshop Schema paths.
+The union of workbook `tables` must exactly cover every top-level Schema array
+that declares `x-zgs-sheet`; Plan, template generation and candidate refresh fail
+closed when a root table is unregistered. Create a new workbook by declaring its
+path and ownership in `config-project.json` first, then generate it through
+`WriteTemplates` or `RefreshCandidate`. A standalone XLSX/XLSM file is not a registered
+configuration source and must not be created as an intermediate workflow state.
+
+Set `"authoringOperationsVersion": 1` once on a long-lived `.xlsm` config set to
+give every current and future declared business Sheet the shared action bar,
+three-row freeze, accidental-row-deletion protection, shortcuts and generated
+help contract. Do not configure operations per Sheet. A workbook may additionally
+declare critical root rows without adding a business column:
+
+```json
+{
+  "path": "Config/items.xlsm",
+  "tables": ["items"],
+  "protectedRecordIds": { "items": ["starter-item"] }
+}
+```
+
+`protectedRecordIds` keys must be root tables owned by that workbook. Attach the
+reviewed generic VBA through `Editor/Excel/AuthoringVba~/InstallAuthoringVba.ps1`
+when a formal workbook is first created or migrated; candidate refresh then
+preserves it. Missing desktop-Excel/VBProject authorization is a release blocker,
+not permission to change Trust Center settings or ship inert action cells.
+
+An optional workbook `authoringSheets` array groups owned root tables into the
+designer-visible Sheet names. Every owned root must occur exactly once. Root and
+child tables in one group are placed as separate Excel tables on that worksheet;
+the reader restores the original normalized JSON arrays by Excel table identity.
+For example:
+
+```json
+{
+  "path": "Config/items.xlsx",
+  "tables": ["items", "itemTypes", "itemTags"],
+  "authoringSheets": [
+    { "name": "Item", "tables": ["items"] },
+    { "name": "Config", "tables": ["itemTypes", "itemTags"] }
+  ]
+}
+```
+
+Omit `authoringSheets` to retain the compatible one-physical-table-per-Sheet
+layout and visible navigation worksheet.
 For a brand-new config set with no workbook metadata yet, call
 `ConfigPipelineService.WriteTemplates(projectRoot, profilePath, configSetId,
 candidateOutputDirectory)` from project Editor automation. It reads the declared
@@ -45,9 +97,9 @@ file. After synchronous process exit, require a newly created, parseable
 an absent result is failure and may be retried only after Unity finishes compiling.
 Required command arguments are `--config-project-root`, `--config-profile`,
 `--config-set`, `--config-result-output` and
-`--config-mode Plan|Check|Apply|Compile|ExportCandidate|UpgradeCandidate`.
+`--config-mode Plan|Check|Apply|Compile|ExportCandidate|UpgradeCandidate|RefreshCandidate`.
 `--config-package-identity` is additionally required for every mode except
-ExportCandidate. Check is read-only and fails when artifacts are stale. Apply
+ExportCandidate and RefreshCandidate. Check is read-only and fails when artifacts are stale. Apply
 revalidates every baseline and commits the declared set transactionally. Compile
 is an Apply alias.
 Package identity is the immutable output-affecting pipeline identity included in
@@ -62,7 +114,15 @@ artifacts. ExportCandidate reads and compares existing authoring/runtime data
 but does not create a Plan or bind package identity into candidate workbook
 metadata, so that mode neither accepts identity as a safety guarantee nor
 requires the argument.
-ExportCandidate writes candidate `.xlsx` workbooks from current generated JSON;
+RefreshCandidate refreshes only the pipeline-owned table ranges in a source
+package copy while retaining all current workbook data and authoring parts. It
+additionally requires an empty
+`--config-candidate-output` directory, publishes the whole candidate set
+atomically, records the combined source hash, and never changes official source
+workbooks. Promote only candidates whose source hash still matches the reviewed
+source set; use the exact official filenames when replacing the declared sources.
+ExportCandidate writes candidate workbooks from current generated JSON using the
+configured `.xlsx` or `.xlsm` extension;
 it does not emit JSON. It additionally requires `--config-candidate-output` and
 `--config-target-scope shared|client|server`; choose the scope of the generated
 artifact being exported. Relative candidate-output paths resolve from the Unity
@@ -70,9 +130,10 @@ project root; absolute paths are accepted when the candidate should live outside
 the project. Candidate workbook metadata remains bound to the selected
 config-set ID; adopt and apply it under that same ID, or deliberately create a
 new config set and regenerate its workbooks instead of relabeling the candidate.
-Candidate files are named `<source-stem>.candidate.xlsx`; after review, rename
-each accepted file to the exact workbook filename declared by the target profile
-when promoting it into the official authoring location.
+Candidate files are named `<source-stem>.candidate.<extension>`; after review,
+rename each accepted file to the exact workbook filename declared by the target
+profile when promoting it into the official authoring location. In `.xlsm` mode,
+VBA is retained byte-for-byte and never executed by the pipeline.
 
 For a Schema version change, first require the current profile to pass Check.
 Keep it unchanged, create a next-version profile that points to the next Schema
@@ -97,7 +158,7 @@ To run the package's CoreContract tests from a consuming project, add
 project’s `Packages/manifest.json`. The test framework is a consumer test-only
 prerequisite and is intentionally not a runtime dependency of this package.
 Treat a zero-test result as failure even when the Unity process exits with code
-0. For package 2.0.2, run EditMode tests with NUnit category
-`ZGS.ConfigPipeline.CoreContract` and require exactly 72 discovered and passed
-tests; update the documented expected count when the package test contract
-changes.
+0. Run EditMode tests with NUnit category `ZGS.ConfigPipeline.CoreContract` and
+require the intended contracts, including newly added cases, to be discovered
+and pass. Keep fixture counts in dated release evidence rather than a permanent
+magic number that becomes stale when the package evolves.

@@ -17,9 +17,22 @@ startup discovery.
 ## Assemblies
 
 - `ZeroEngine.ModSystem`: neutral contracts for mod manifests, source discovery, safe path resolution, management projection/activation, and core loader orchestration with project-provided importers.
-- `ZeroEngine.ModSystem.Legacy`: opt-in compatibility for older `$type` JSON object parsing, singleton loader compatibility, hot reload, and Lua hooks.
 - `ZeroEngine.ModSystem.Steam`: optional, explicitly composed Steam Workshop client/source. It requires a project publish policy, a caller-supplied source ID and manifest filename, and never auto-registers itself.
-- `ZeroEngine.ModSystem.Editor`: legacy editor tools for the older `$type` JSON workflow.
+
+## Legacy compatibility
+
+The neutral package has no Editor UI or gameplay sibling dependency. Install the
+legacy bundle separately when its older authoring/runtime integration is needed.
+
+The older `$type` parser, singleton loader, hot reload, Lua hooks and legacy
+editor tools have a single owner in the legacy `com.zerogamestudio.zeroengine`
+bundle (3.0.0 or later), under `ZeroEngine.ModSystem.Legacy` and
+`ZeroEngine.ModSystem.Editor`. Install that bundle only when those compatibility
+APIs are required. This package no longer ships a second copy of those assets or
+requires the `ZEROENGINE_MODSYSTEM_LEGACY` project define.
+
+`ModManifest` belongs to this package. Its existing serialized fields and GUID
+are retained, including the legacy name, version and content-path fields.
 
 ## Project Responsibilities
 
@@ -36,3 +49,11 @@ Steam publishing always requires an explicit `WorkshopVisibility` and an
 `IModPublishPolicy`. A missing policy rejects every visibility. The adapter obtains its
 App ID from Steam runtime or explicit constructor configuration and contains no project
 App ID or project gate.
+
+
+## Consolidation dependency correction
+
+The 0.4.0 consolidation candidate explicitly declares Unity's built-in
+JSON Serialize module (`com.unity.modules.jsonserialize`) for this package's
+direct `JsonUtility` calls. Consumers no longer need an unrelated installed
+package to supply that module. This candidate is not a published release.

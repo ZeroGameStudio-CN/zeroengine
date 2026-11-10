@@ -1,0 +1,16 @@
+{
+  "name": "com.zerogamestudio.zeroengine.fishing",
+  "version": "0.1.0",
+  "displayName": "ZeroEngine.Fishing",
+  "description": "Caller-clocked fish movement, schooling, bait encounters and fish resistance. No scene, input, UI, inventory or save ownership.",
+  "unity": "2022.3",
+  "license": "MIT",
+  "author": {
+    "name": "ZeroGameStudio"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/ZeroGameStudio-CN/zeroengine.git",
+    "directory": "com.zerogamestudio.zeroengine.fishing"
+  }
+}

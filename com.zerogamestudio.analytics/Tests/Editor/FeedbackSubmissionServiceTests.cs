@@ -7,6 +7,7 @@ using System.Linq;
 using System.Reflection;
 using NUnit.Framework;
 using UnityEngine;
+using UnityEngine.TestTools;
 
 namespace ZGS.Analytics.Tests.Editor
 {
@@ -14,6 +15,7 @@ namespace ZGS.Analytics.Tests.Editor
     public sealed class FeedbackSubmissionServiceTests
     {
         private string _queueKey;
+        private string _root;
         private string _previousServerUrl;
         private string _previousSecret;
         private string _previousUploadSecret;
@@ -23,6 +25,8 @@ namespace ZGS.Analytics.Tests.Editor
         public void SetUp()
         {
             _queueKey = "zgs_feedback_submission_tests_" + Guid.NewGuid().ToString("N");
+            _root = Path.Combine(Path.GetTempPath(), _queueKey);
+            SetQueueField("_feedbackDirectoryOverride", _root);
             _previousServerUrl = AnalyticsConfig.ServerUrl;
             _previousSecret = AnalyticsConfig.Secret;
             _previousUploadSecret = AnalyticsConfig.UploadSecret;
@@ -38,6 +42,7 @@ namespace ZGS.Analytics.Tests.Editor
             SetQueueField("_tryUploadOverride", null);
             SetQueueField("_backgroundRunning", false);
             SetQueueField("QueuedSubmissionSucceeded", null);
+            SetQueueField("QueuedSubmissionFailed", null);
             PlayerPrefs.DeleteKey(_queueKey);
             FeedbackUploadQueue.Initialize();
             InvokeSubmissionReset();
@@ -52,15 +57,19 @@ namespace ZGS.Analytics.Tests.Editor
             PlayerPrefs.DeleteKey(_queueKey);
             PlayerPrefs.Save();
             SetQueueField("_queueKeyOverride", null);
+            SetQueueField("_feedbackDirectoryOverride", null);
             SetQueueField("_pendingUploads", null);
             SetQueueField("_persistQueueOverride", null);
             SetQueueField("_tryUploadOverride", null);
             SetQueueField("QueuedSubmissionSucceeded", null);
+            SetQueueField("QueuedSubmissionFailed", null);
 
             AnalyticsConfig.ServerUrl = _previousServerUrl;
             AnalyticsConfig.Secret = _previousSecret;
             AnalyticsConfig.UploadSecret = _previousUploadSecret;
             AnalyticsConfig.AppId = _previousAppId;
+            if (Directory.Exists(_root))
+                Directory.Delete(_root, true);
         }
 
         [Test]
@@ -80,6 +89,7 @@ namespace ZGS.Analytics.Tests.Editor
             Assert.AreEqual(1, callbackCount);
             Assert.IsFalse(observed.AcceptedLocally);
             Assert.AreEqual(FeedbackSubmissionFailure.InvalidRequest, observed.Failure);
+            Assert.AreEqual("F001", observed.FailureCode);
             Assert.AreEqual(0, FeedbackUploadQueue.PendingCount);
         }
 
@@ -99,6 +109,27 @@ namespace ZGS.Analytics.Tests.Editor
 
             Assert.AreEqual(1, callbackCount);
             Assert.AreEqual(FeedbackSubmissionFailure.NotConfigured, observed.Failure);
+            Assert.AreEqual("F002", observed.FailureCode);
+        }
+
+        [Test]
+        public void UploadFailure_ForwardsTypedResultAndIsolatesThrowingObserver()
+        {
+            typeof(FeedbackSubmissionService).GetMethod("EnsureQueueEventSubscribed", BindingFlags.NonPublic | BindingFlags.Static).Invoke(null, null);
+            int observed = 0;
+            FeedbackSubmissionService.UploadFailed += _ => throw new InvalidOperationException();
+            FeedbackSubmissionService.UploadFailed += failure =>
+            {
+                observed++;
+                Assert.AreEqual("current-submission", failure.SubmissionId);
+                Assert.AreEqual("F403", failure.FailureCode);
+                Assert.AreEqual(403, failure.HttpStatusCode);
+                Assert.AreEqual("server-request-1", failure.RequestId);
+            };
+            LogAssert.Expect(LogType.Warning, new System.Text.RegularExpressions.Regex("\\[FeedbackUpload\\] failed code=F403.*"));
+            LogAssert.Expect(LogType.Warning, new System.Text.RegularExpressions.Regex("\\[FeedbackSubmission\\] status_callback_failed code=F403.*"));
+            FeedbackUploadQueue.ReportUploadFailure("current-submission", "F403", "ProtocolError", 403, "server-request-1");
+            Assert.AreEqual(1, observed);
         }
 
         [Test]

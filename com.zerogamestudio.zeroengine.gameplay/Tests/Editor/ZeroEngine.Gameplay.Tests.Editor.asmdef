@@ -4,7 +4,8 @@
   "references": [
     "ZeroEngine.Gameplay",
     "UnityEngine.TestRunner",
-    "UnityEditor.TestRunner"
+    "UnityEditor.TestRunner",
+    "ZeroEngine.Core"
   ],
   "includePlatforms": [
     "Editor"

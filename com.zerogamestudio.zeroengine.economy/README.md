@@ -3,7 +3,7 @@
 经济/物品系统包。
 
 ## 版本
-- **当前版本**: 2.0.0
+- **整合候选版本**: 2.2.0（尚未发布）
 - **依赖**: ZeroEngine.Core, ZeroEngine.Persistence
 
 ## 包含模块
@@ -21,6 +21,7 @@
 
 ### Shop (商店系统)
 - `ShopManager` - 商店管理器
+- `ICurrencyWallet` / `ShopManager.SetWallet` - 项目注入钱包；购买扣款失败不改库存，背包添加失败时撤回已添加数量并退还款项。未注入钱包时保留旧的兼容行为，正式项目应显式接入钱包。
 - 买卖、折扣、库存
 
 ### Crafting (合成系统)

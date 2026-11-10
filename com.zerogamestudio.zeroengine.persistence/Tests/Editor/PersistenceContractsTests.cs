@@ -1,10 +1,12 @@
 using System;
+using System.Collections;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using NUnit.Framework;
+using UnityEngine.TestTools;
 
 namespace ZeroEngine.Persistence.Tests
 {
@@ -45,8 +47,8 @@ namespace ZeroEngine.Persistence.Tests
             Assert.That(events, Is.Empty);
         }
 
-        [Test]
-        public void Registry_PreparesAllParticipantsBeforeOrderedRestore()
+        [UnityTest]
+        public IEnumerator Registry_PreparesAllParticipantsBeforeOrderedRestore()
         {
             var events = new List<string>();
             var registry = new SaveParticipantRegistry();
@@ -69,8 +71,13 @@ namespace ZeroEngine.Persistence.Tests
                     events.Add("prepare:second");
                 }));
 
-            var restore = registry.RestoreAsync(
-                new Dictionary<string, object> { ["first"] = 10, ["second"] = 20 }).GetAwaiter().GetResult();
+            var restoreTask = registry.RestoreAsync(
+                new Dictionary<string, object> { ["first"] = 10, ["second"] = 20 });
+            var wait = System.Diagnostics.Stopwatch.StartNew();
+            while (!restoreTask.IsCompleted && wait.Elapsed.TotalSeconds < 5)
+                yield return null;
+            Assert.That(restoreTask.IsCompleted, Is.True, "Restore must finish while the Editor can process async continuations.");
+            var restore = restoreTask.GetAwaiter().GetResult();
 
             Assert.That(restore.Success, Is.True);
             Assert.That(events, Is.EqualTo(new[]

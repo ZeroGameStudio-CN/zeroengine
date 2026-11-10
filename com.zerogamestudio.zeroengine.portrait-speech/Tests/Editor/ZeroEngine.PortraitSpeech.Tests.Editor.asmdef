@@ -1,0 +1,9 @@
+{
+  "name": "ZeroEngine.PortraitSpeech.Tests.Editor",
+  "references": ["ZeroEngine.PortraitSpeech", "ZeroEngine.PortraitSpeech.Editor", "UnityEngine.UI", "UnityEngine.TestRunner", "UnityEditor.TestRunner"],
+  "includePlatforms": ["Editor"],
+  "overrideReferences": true,
+  "precompiledReferences": ["nunit.framework.dll"],
+  "autoReferenced": false,
+  "defineConstraints": ["UNITY_INCLUDE_TESTS"]
+}

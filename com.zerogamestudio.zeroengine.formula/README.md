@@ -214,3 +214,11 @@ adapt their game data into `IFormulaValueProvider` implementations.
 ## ZeroEngine Dashboard
 
 The optional Dashboard discovers Formula Catalog, Formula Workbench, and the read-only asset scan through the schema v2 descriptor and invokes this package's typed provider. This package does not depend on Dashboard.
+
+
+## Consolidation dependency correction
+
+The 0.6.1 consolidation candidate explicitly declares Unity's built-in
+JSON Serialize module (`com.unity.modules.jsonserialize`) for this package's
+direct `JsonUtility` calls. Consumers no longer need an unrelated installed
+package to supply that module. This candidate is not a published release.

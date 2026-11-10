@@ -55,6 +55,8 @@ namespace POB.Extraction
         public ExtractionContainerLootEntryState State = ExtractionContainerLootEntryState.CommittedHidden;
         public string RevealReceiptId;
         public string TransferReceiptId;
+        public ExtractionItemPlacement Layout;
+        public bool LayoutOverflow;
 
         public ExtractionContainerLootEntry(
             string entryId,
@@ -80,6 +82,9 @@ namespace POB.Extraction
         public string RegionId;
         public string ContainerTypeId;
         public int Capacity;
+        public int Rows;
+        public int Columns;
+        public int LayoutVersion;
         public int TargetContentCount;
         public int MaximumContentCount;
         public float SearchTimeMultiplier = 1f;
@@ -121,6 +126,10 @@ namespace POB.Extraction
     public class ExtractionRaidLootManifest
     {
         public string ManifestId;
+        // Unity JSON can materialize a null nested object; the scalar version owns dispatch.
+        public int LootSelectionVersion;
+        // Absent in old saves: preserve their single-stage unopened-container behavior.
+        public ExtractionLootSelectionPolicy SelectionPolicy;
         public string LootProfileId;
         public string ContentTierId;
         public int RaidSeed;

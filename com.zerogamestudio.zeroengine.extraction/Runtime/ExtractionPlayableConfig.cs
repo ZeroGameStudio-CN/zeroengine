@@ -38,6 +38,9 @@ namespace POB.Extraction
         public List<ExtractionLockDefinition> LockDefinitions = new();
         public List<ExtractionLeverDefinition> LeverDefinitions = new();
         public List<ExtractionWeaponGrowthDefinition> WeaponGrowthDefinitions = new();
+        public List<ExtractionRaidRuleProfileDefinition> RaidRuleProfiles = new();
+        public List<ExtractionRaidPhaseRuleDefinition> RaidPhaseRules = new();
+        public List<ExtractionRaidEffectDefinition> RaidEffects = new();
 
         // M2 SW.2：负重容量(总重达到此值=100%负重)+档位表；容量默认 0(=不参与负重系统，
         // TrySelectTier 对 capacity<=0 直接返回 false)，向后兼容不配负重的旧配置/mod。
@@ -110,6 +113,50 @@ namespace POB.Extraction
             }
 
             point = null;
+            return false;
+        }
+
+        public bool TryGetGateDefinition(string gateId, string mapId, out ExtractionLeverDefinition definition)
+        {
+            foreach (var candidate in LeverDefinitions)
+            {
+                if (candidate == null || candidate.LeverId != gateId) continue;
+                if (!string.IsNullOrEmpty(mapId) && candidate.MapId != mapId) continue;
+                definition = candidate;
+                return true;
+            }
+
+            definition = null;
+            return false;
+        }
+
+        public bool TryGetRaidRuleProfile(string profileId, out ExtractionRaidRuleProfileDefinition definition)
+        {
+            foreach (var candidate in RaidRuleProfiles)
+            {
+                if (candidate != null && candidate.IsValid && candidate.ProfileId == profileId)
+                {
+                    definition = candidate;
+                    return true;
+                }
+            }
+
+            definition = null;
+            return false;
+        }
+
+        public bool TryGetRaidEffect(string effectId, out ExtractionRaidEffectDefinition definition)
+        {
+            foreach (var candidate in RaidEffects)
+            {
+                if (candidate != null && candidate.IsValid && candidate.EffectId == effectId)
+                {
+                    definition = candidate;
+                    return true;
+                }
+            }
+
+            definition = null;
             return false;
         }
 
@@ -398,6 +445,37 @@ namespace POB.Extraction
                 mapId,
                 threatLevel,
                 results);
+        }
+
+        public bool TryGetHostileExplorerPointCandidates(
+            string mapId,
+            string spawnPointId,
+            int difficultyLevel,
+            List<ExtractionHostileExplorerDefinition> results)
+        {
+            if (results == null) return false;
+            results.Clear();
+            if (string.IsNullOrEmpty(mapId)
+                || string.IsNullOrEmpty(spawnPointId)
+                || difficultyLevel < 0)
+            {
+                return false;
+            }
+
+            foreach (var candidate in HostileExplorerEncounters)
+            {
+                if (candidate == null || !candidate.IsValid) continue;
+                if (candidate.MapId != mapId
+                    || candidate.SpawnPointId != spawnPointId
+                    || candidate.DifficultyLevel != difficultyLevel)
+                {
+                    continue;
+                }
+
+                results.Add(candidate);
+            }
+
+            return results.Count > 0;
         }
 
         public bool TrySelectHostileExplorerEncounter(

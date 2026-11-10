@@ -1,0 +1,7 @@
+{
+  "name": "ZeroEngine.Qte",
+  "rootNamespace": "ZeroEngine.Qte",
+  "references": [],
+  "autoReferenced": true,
+  "noEngineReferences": true
+}

@@ -2,6 +2,13 @@
 
 This guide is for Unity projects that consume ZeroEngine packages.
 
+The [current consolidation review](packages/2026-11-10-consolidation-review.md)
+is an unpublished candidate, not an instruction to replace existing pins. P6's
+AutoBattle 1.x, Character 2.x and Data Toolkit 1.x need project migration checks
+before adopting their newer major versions. The generic Portrait Speech and
+World Shift candidates preserve their original embedded asset GUIDs; POB's own
+adapter packages and production references remain project-owned.
+
 ## Standard Source
 
 Use Unity Package Manager Git dependencies that point at this repository:
@@ -43,6 +50,17 @@ Unity 2022.3. Dashboard 4.6.2 and Formula 0.6.0 consumers must therefore declare
 commit. Legacy ZeroEngine 2.1.1 consumers declare editor-ui 1.3.0 directly;
 Dashboard remains optional. Never mix these package versions across different
 Git revisions.
+
+For the consolidation candidate, use the versions declared by the selected
+commit's manifests and include the full sibling closure. The legacy 3.0 bundle
+now requires the neutral ModSystem package; it retains the parser/hot-reload/Lua
+and legacy Editor implementation rather than installing a second copy. New
+projects can select the neutral package without the compatibility bundle.
+
+JSON, Tilemap, particle and other built-in modules used directly are declared by
+their owning packages. Editor Tools also declares Test Framework for its public
+test-runner tasks. Test-only prerequisites in a fixture must not substitute for
+production package dependencies.
 
 ## Social package dependencies
 

@@ -3,7 +3,7 @@
 持久化系统包，包含后端无关的存档槽位编排、稳定参与者合同、原子文件提升和安全截图策略；旧 Save/Settings API 仍保留用于兼容。
 
 ## 版本
-- **当前版本**: 2.1.0
+- **整合候选版本**: 2.1.2（整合候选，尚未发布）
 - **依赖**: ZeroEngine.Core
 - **可选依赖**: Easy Save 3 (ES3)
 
@@ -19,6 +19,7 @@
 - `SaveSlotMeta` - 存档元信息
 - `ISaveProvider` - 存档后端接口
 - `JsonSaveProvider` - JSON 存档实现
+- 兼容 P6 的 `Dictionary<string, object>` 具体类型载荷；可通过 `JsonSaveProvider(basePath)` 指定独立存储目录，默认构造函数仍使用原存储路径。验证使用临时目录及新的 provider 重新读取磁盘。
 - `ScreenshotCapture` - 存档截图
 
 ### Settings (设置系统)
@@ -105,3 +106,11 @@ SettingsManager.Instance.ApplySettings();
 | 宏 | 说明 |
 |----|------|
 | `ES3` | 启用 Easy Save 3 后端 |
+
+
+## Consolidation dependency correction
+
+The 2.1.2 consolidation candidate explicitly declares Unity's built-in
+JSON Serialize module (`com.unity.modules.jsonserialize`) for this package's
+direct `JsonUtility` calls. Consumers no longer need an unrelated installed
+package to supply that module. This candidate is not a published release.

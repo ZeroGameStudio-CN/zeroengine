@@ -39,3 +39,7 @@ var result = TacticalDecisionPlanner.Decide(
 
 - 删除依赖 Unity/ZeroEngine 的 v1 自动战斗、单位、技能、阵型和 AI 配置原型。
 - 新增 headless tactical grid 与确定性 decision planner 公共合同。
+
+P6 仍采用 1.x 的 `AutoBattleManager`、`BattleUnitBase`、技能和模拟器接口，
+不能直接统一到此 2.x 包。升级需要先迁移该项目的战斗适配层并验证已有玩法；
+在此之前保留其已验证的 1.x Git pin。不能通过重新混入已删除原型来冒充兼容升级。

@@ -39,6 +39,9 @@ namespace POB.Extraction
             }
 
             if (!ExtractionFeatureSwitch.Enabled
+                || profile.ActiveRaid?.Content?.WorldPickupItemInstanceIds == null
+                || string.IsNullOrEmpty(profile.activeRaidId)
+                || profile.activeRaidId != profile.ActiveRaid.RaidId
                 || string.IsNullOrEmpty(worldPickupId)
                 || !ExtractionItemActionPolicyService.CanDrop(definition, item))
             {
@@ -46,6 +49,7 @@ namespace POB.Extraction
                 return false;
             }
             if (entry.Container != ExtractionInventoryContainerType.RaidBackpack
+                && entry.Container != ExtractionInventoryContainerType.RaidContainer
                 && (entry.Container != ExtractionInventoryContainerType.EquipmentSlot
                     || entry.LocationSubtype != ExtractionItemLocationService.RaidEquipmentLocationSubtype))
             {
@@ -99,7 +103,8 @@ namespace POB.Extraction
             {
                 return false;
             }
-            if (entry.Container != ExtractionInventoryContainerType.WorldPickup)
+            if (entry.Container != ExtractionInventoryContainerType.WorldPickup
+                || !ExtractionRaidWorldItemService.IsCurrentRaidItem(profile, itemInstanceId))
             {
                 result = ExtractionItemLifecycleResult.LocationConflict;
                 return false;
@@ -535,6 +540,8 @@ namespace POB.Extraction
             out Action restore)
         {
             restore = () => { };
+            if (entry.Container == ExtractionInventoryContainerType.RaidContainer)
+                return ExtractionContainerInventoryService.TryDetach(profile, item.InstanceId, out restore);
             if (entry.Container == ExtractionInventoryContainerType.EquipmentSlot)
             {
                 if (!ExtractionItemLocationService.TryGetEquipment(

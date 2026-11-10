@@ -169,3 +169,21 @@ session/streaming adapters before adopting the candidate.
 ### Material recipe changes
 
 Registered MeshRenderers react to `SurfaceWeatherMaterialSources.NotifyRendererMaterialsChanged(renderer)` synchronously. Only that tracked renderer is rebound through the existing material cache and released recipe; new objects keep the bounded discovery path. Registration budgets and authored shadow-proxy materials remain unchanged. Dispose removes the notification subscription.
+
+## Marked native lights and dark contours
+
+`SpriteRimLightSource.DarkEdgeFill` adds bounded light color to dark contour cells;
+zero retains the original fill response. `SpriteRimLightingProfile.DarkEdgeBrightness`
+limits added brightness on dark artwork. Marked point/spot lights use the available
+URP additional-shadow atlas. An optional opaque `FallbackOccluder` supplies oriented
+mesh bounds when realtime shadows cannot represent that light; it does not replace
+scene physics, game visibility or the original sprite material.
+
+The consolidated default asset retains the adopted POB inner-wrap and dark-edge
+values. Projects can pass an explicit profile to `SpriteRimLighting.Configure` for
+their own appearance. The body/weather backends and their package dependency remain
+available independently of this rim-light extension.
+
+Runtime body flames require the built-in `com.unity.modules.particlesystem` module,
+now declared by the core Render package. Synthetic rendering tests create a temporary
+URP pipeline if the host project has none and restore the previous quality override.

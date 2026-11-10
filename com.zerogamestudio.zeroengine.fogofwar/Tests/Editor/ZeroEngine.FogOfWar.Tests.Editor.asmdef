@@ -1,0 +1,11 @@
+{
+  "name": "ZeroEngine.FogOfWar.Tests.Editor",
+  "rootNamespace": "ZeroEngine.FogOfWar.Tests",
+  "references": ["ZeroEngine.FogOfWar", "ZeroEngine.FogOfWar.Unity", "UnityEngine.TestRunner", "UnityEditor.TestRunner"],
+  "includePlatforms": ["Editor"],
+  "overrideReferences": true,
+  "precompiledReferences": ["nunit.framework.dll"],
+  "autoReferenced": false,
+  "defineConstraints": ["UNITY_INCLUDE_TESTS"],
+  "noEngineReferences": false
+}

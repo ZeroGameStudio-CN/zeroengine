@@ -4,6 +4,35 @@ Schema-first configuration pipeline for Unity 2022.3 projects. It keeps one
 authoring source, validates through a typed intermediate document, emits
 deterministic artifacts, and loads immutable runtime snapshots.
 
+## Minimal authoring views
+
+
+New template and schema-upgrade entry points require authoring policy v2, including
+explicit table classification. The durable cross-project contract and acceptance
+checks live in `Documentation~/EXCEL_AUTHORING.md`; legacy read/refresh compatibility
+does not waive the new-project rule.
+
+New governed schemas set `x-zgs-require-authoring-visibility:true` on the root
+and classify each scalar with `x-zgs-authoring-visibility`: `basic` for necessary
+business inputs, `advanced` for infrequent inputs, `technical` for maintained
+identifiers/derived values, or `inactive` for unavailable authoring controls.
+Unclassified fields and hidden required inputs without a default (except managed
+primary keys/order) fail schema validation. A business selection or the only
+readable row identity must remain basic; an `Id` suffix or a default value alone
+is not a reason to hide it. Legacy schemas keep their existing layout until adopted.
+
+Templates and source-preserving refreshes start with only basic columns visible,
+keep every stored value, and place all six action buttons in visible columns.
+The common explicit `高级/技术` action expands advanced/technical fields without
+changing values; inactive fields stay hidden. Classified technical primary keys
+are allocated by Add/Copy, while semantic keys remain explicit inputs. No new
+Workbook Open/Save event executes macros. Refresh never executes or replaces VBA;
+the controlled VBA installer must be run explicitly to deploy changed macro code,
+and must not change Excel Trust Center settings.
+
+Composite-key tables retain the regular workbook workflow. Explicit row-action/VBA
+authoring requires a single identity field and refuses composite-key tables.
+
 Version 2.3.0 adds Workbench inspection of canonical effective values and their
 field-level provenance. A guarded Reset-to-Preset flow previews the inherited
 value and exact source cell, rejects stale plans, and updates the workbook plus
@@ -44,3 +73,11 @@ prerequisite.
 ## ZeroEngine Dashboard
 
 The optional Dashboard discovers this package through its schema v2 descriptor and invokes the package-owned typed provider. Open it from `ZGS > 工作台 > 内容创作`; this package does not reference or require Dashboard.
+
+
+## Consolidation dependency correction
+
+The 2.4.0 consolidation candidate explicitly declares Unity's built-in
+JSON Serialize module (`com.unity.modules.jsonserialize`) for this package's
+direct `JsonUtility` calls. Consumers no longer need an unrelated installed
+package to supply that module. This candidate is not a published release.

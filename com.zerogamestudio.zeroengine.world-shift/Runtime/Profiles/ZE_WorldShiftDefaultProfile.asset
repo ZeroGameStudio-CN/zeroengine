@@ -1,0 +1,31 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: dfafe29ee7079b943bd70a78d9a27949, type: 3}
+  m_Name: ZE_WorldShiftDefaultProfile
+  m_EditorClassIdentifier: 
+  duration: 1.35
+  scanStartRadius: 0
+  scanEndRadius: 10.8
+  edgeWidth: 0.34
+  noiseScale: 1.2
+  noiseStrength: 0.04
+  edgeColor: {r: 0.42, g: 0.96, b: 1, a: 1}
+  scanFrontYOffset: 0
+  scanFrontPrefab: {fileID: 8817909597550390322, guid: 9b2d3b42287476b43b24ab1008666790,
+    type: 3}
+  renderBackend: 0
+  overworldLayerMask:
+    serializedVersion: 2
+    m_Bits: 0
+  underworldLayerMask:
+    serializedVersion: 2
+    m_Bits: 0

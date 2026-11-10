@@ -1,0 +1,21 @@
+{
+  "name": "com.zerogamestudio.zeroengine.fogofwar",
+  "version": "0.2.6",
+  "displayName": "ZeroEngine Fog Of War",
+  "description": "Caller-driven XY sight, exploration memory and presentation visibility; engine-free registration core.",
+  "unity": "6000.6",
+  "dependencies": {
+    "com.unity.modules.tilemap": "1.0.0",
+    "com.unity.modules.jsonserialize": "1.0.0"
+  },
+  "author": {
+    "name": "ZeroGameStudio",
+    "url": "https://github.com/ZeroGameStudio-CN"
+  },
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/ZeroGameStudio-CN/zeroengine.git",
+    "directory": "com.zerogamestudio.zeroengine.fogofwar"
+  }
+}

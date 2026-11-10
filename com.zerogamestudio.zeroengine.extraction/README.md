@@ -14,14 +14,34 @@
 消费者使用经过测试的 Git commit pin，不使用本机 `file:` 路径：
 
 ```json
-"com.zerogamestudio.zeroengine.extraction": "https://github.com/liuzqk/zeroengine.git?path=com.zerogamestudio.zeroengine.extraction#<tested-commit>"
+"com.zerogamestudio.zeroengine.extraction": "https://github.com/ZeroGameStudio-CN/zeroengine.git?path=com.zerogamestudio.zeroengine.extraction#<tested-commit>"
 ```
 
 ## 验证
 
+编辑器预览可使用 `ExtractionLootContentConfigValidator.ValidateContainerPoints` 汇总容器点位的独立错误；`Issues` 提供字段路径，`Errors` 保留原有消息接口。缺失目录会说明关联校验边界，重复 ID 不会遮挡同一记录的其他错误。运行时完整验证继续使用 `Validate`。
+
+敌人定义使用 `ContainerTypeId` 引用共享容器及其 `LootTableIds`，单次奖励 API 复用现有加权 pickup 抽取。
+旧序列化 `LootTableId` 继续兼容；配置了容器时优先容器，错误容器或关联表不会静默回退旧表。
+容器容量及搜索行为仍由开箱服务负责，单次奖励 API 不替代开箱流程。
+
+新容器的保证掉落及首次开启的普通掉落复用真实 `Columns × Rows` 网格与物品 `CanRotate`。
+只从当前可放下的候选中按原有品质、物品权重和保底规则选择，并立即保留其占位；
+普通候选耗尽时提交较短结果，保证配额无处安放时仍原子返回 `InsufficientGuaranteedCapacity`。
+开过的容器不重抽、不重新排布；旧存档已提交的溢出物品保留原实例和数量，不为新掉落腾位而删除。
+
 - 包级合同测试位于 `Tests/Editor`。
 - 通用行为先在包内测试；消费者项目随后运行自己的 adapter 回归测试。
 - 发布前检查包内不存在 `POB` 项目路径、Unity 场景/Prefab 或本机绝对路径依赖。
+
+## 独立成长存档
+
+Profile schema v6 新增 `Growth`：`NodeLevels` 保存节点 ID 和等级，`TargetNodeId` 保存当前目标，
+`PurchaseReceipts` 保存购买的操作 ID、节点、预期/目标等级及配置版本。旧档迁移为空成长，
+保留原有 `Character.UnlockedTalentIds` 等状态，不推断或赠送已购买节点。
+成长和库存共用 Profile 草稿及 revision 提交；节点目录、费用、购买校验和效果投影属于消费者。
+消费者若手工构造 Profile 投影或时钟快照，必须保留 `Growth`，不能只复制旧字段。
+旧版本客户端不得覆盖 schema v6 存档；回退需使用兼容客户端或已验证备份。
 
 ## 迁移基线
 
@@ -31,3 +51,18 @@
 - 原始稳定树 SHA-256：`21db143662621b18e255ae3d9e5cdf1b944605b5d7a63072d7783d022f41e838`。
 - 树哈希输入按相对路径排序，每项为 `relative/path + NUL + lowercase(file SHA-256) + LF` 的 UTF-8 拼接。
 - 上游首提交只允许在这份原样基线上补 package metadata 与本 README；领域代码和测试不得静默改写。
+
+## Shared rarity and luck
+
+Requires ZeroEngine.Core 2.0.0; pin Core and Extraction to the same tested Git commit.
+New POB raids supply a copied ExtractionLootSelectionPolicy (v2): rarity first, then item weight.
+LootSelectionVersion=0 (including missing fields) preserves v1 selection even if Unity materializes a nested policy object. Never replace the policy when resuming a raid.
+The common WeightedSelection kernel owns interval selection and logarithmic luck; adapters own configuration and RNG.
+
+
+## Consolidation dependency correction
+
+The 0.1.1 consolidation candidate explicitly declares Unity's built-in
+JSON Serialize module (`com.unity.modules.jsonserialize`) for this package's
+direct `JsonUtility` calls. Consumers no longer need an unrelated installed
+package to supply that module. This candidate is not a published release.

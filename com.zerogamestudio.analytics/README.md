@@ -2,12 +2,42 @@
 
 ZeroGameStudio 游戏分析 SDK，支持自建 ClickHouse 数据平台。
 
-**版本**: 2.0.1
+**版本**: 2.2.1
 **Unity**: 2021.3+
 
 2.0.1 的 Editor 面板使用 `com.zerogamestudio.zeroengine.editor-ui@1.3.0`。通过 Git URL 安装时，消费工程必须把 Analytics 与 editor-ui 直接 pin 到同一 ZeroEngine commit；Unity 2022.3 不会自动解析同仓 sibling package。
 
 2.0.1 将 Dashboard 模块名称、说明和入口 tooltip 统一为简体中文，不改现有菜单路径。
+
+2.1.2 让旧上传接口复用同一尝试分类，并在入队后保留失败冷却、尝试次数和幂等编号。
+其回归仅使用隔离队列与合成传输结果，不访问本机正式反馈队列。
+
+2.1.1 修正后台退避循环的局部变量作用域冲突，保持原重试与冷却行为。
+
+2.1.0 增加失败可重试分类、队列校验和稳定幂等提交标识。临时网络/服务端错误自动重试，
+鉴权、请求格式和附件完整性错误进入长冷却并保留队列；反馈 ZIP 先写临时文件并完成结构校验，再原子落盘。
+上传请求同时发送 `Idempotency-Key`、`X-Feedback-Submission-Id` 和 `submission_id`，服务端可按提交编号去重。
+F403 记录 `server_forbidden`、提交编号、HTTP 状态和请求编号，并写入脱敏的持久诊断事件。
+
+2.0.2 增加 `FeedbackSubmissionResult.FailureCode` 和
+`FeedbackSubmissionService.UploadFailed`（`FeedbackUploadFailure`）。失败事件只描述一次尝试，
+传输失败仍保留持久队列，失败事件也不代替成功事件。回调异常相互隔离；后台首次尝试延后一帧，保证调用方先收到本地接受结果。
+
+反馈失败诊断在正式 Player 中也写入日志，仅包含短码、提交编号、HTTP 状态、服务端请求编号和原因类别，
+不记录请求 URL、密钥、正文、联系方式或文件路径。`F001` 为无效输入，`F002` 为未配置，
+`F101` 为打包失败，`F102` 为队列保存失败，`F103` 为附件读取失败；`F201` 为连接失败，
+`F202` 为超时，`F203` 为证书/TLS，`F204` 为响应处理失败，`F299` 为未分类失败。
+HTTP 4xx/5xx 保留实际状态，例如 `F403`、`F413`、`F429`、`F503`。
+完整码表、F203 排查步骤和重试规则见 [玩家反馈手册：反馈报错码与排查](../com.zerogamestudio.zeroengine.feedback/README.md#反馈报错码与排查)；安装 Feedback 包后也可从 Dashboard「玩家反馈」的文档入口打开。
+正式版也记录本地入队和 HTTP 确认节点，用提交编号区分“仍未送达”和“服务器收到但界面未提示”。
+
+上传失败日志和原有 `feedback_upload_failure` 事件额外记录 `diagnostic_schema`、`observed_utc`、
+`transport_result`、`curl_error`、`unity_version`、`app_version`、`platform`、`os_version`。
+Windows 的 `os_version` 是系统 API 报告的数字版本，可能受兼容模式影响；其他平台不采集此字段的实际版本。
+`curl_error=0` 表示传输错误文本中没有可提取的有效编号，并不表示没有底层错误。
+证书错误的 `reason` 按客户端返回文本细分为有效期、域名不匹配、信任校验、握手或通用 TLS 提示，
+这些提示不等于已核实根因。完整错误文本、URL、证书内容和本机路径均不写入该日志或事件。
+这些新增字段仅在升级后的客户端产生；旧包历史现场无法补采，Unity 仅返回通用 TLS 错误时仍需进一步调查。
 
 ## 特性
 
@@ -56,6 +86,56 @@ SDK 自动收集以下数据（无需写代码）：
 | 崩溃日志 | 自动捕获 Unity 异常 |
 
 ## API 使用
+
+### 项目诊断自动上报
+
+`AnalyticsService.TryReportDiagnostic` 是各项目复用的诊断入口。项目负责发现异常并生成
+允许上传的 JSON 现场；SDK 不扫描日志、存档、目录或游戏对象。必须在 Unity 主线程调用。
+
+```csharp
+var incidentId = System.Guid.NewGuid().ToString("N");
+var result = AnalyticsService.TryReportDiagnostic(new DiagnosticReport
+{
+    IncidentId = incidentId,
+    Kind = "asset-load",
+    Fingerprint = "asset-load.failed",
+    Revision = 0,
+    SnapshotJson = "{\"schema\":1,\"state\":\"load-failed\"}",
+    Context = new Dictionary<string, object> { ["content_key"] = "enemy-example" }
+});
+```
+
+- `AcceptedLocally` 只表示持久入队，不能显示为服务端收到。调用方检查 `Failure`；失败不能
+  当作成功。项目应保留本地现场作为反馈补证，不能在每帧重复生成故障。
+- 事件名称固定为 `diagnostic_incident`，事件编号为 `diag.<IncidentId>.<Revision>`。
+  资源核对等后续结果用同一个 `IncidentId`、递增 `Revision`，不要覆盖原事件或复用编号发送不同内容。
+- 摘要、`snapshot_data`、UTF-8 字节数和 SHA-256 同处一个事件信封，断网重启后补传原信封。
+  `snapshot_encoding=gzip-base64`；`TryDecodeSnapshot` 有界解压并核对 SHA-256。Analytics 按项目、
+  版本、事件名和会话查询，使用结果中的 `diagnostic_id` 关联各阶段。搜索框只匹配事件名。
+- JSON 现场最大 128 KiB，Context 最多 32 个标量字段，字符串值最大 1024 UTF-8 字节。
+  Context 的键值合计最多 512 UTF-8 字节且不能有控制字符。压缩现场最多 7 KiB，确保普通
+  Analytics 16,000 字符的详情响应可容纳诊断。超限明确拒绝；由项目缩减现场并说明省略内容，
+  SDK 不静默截断 JSON。
+- 诊断事件沿用匿名 user/session 关联，不附加平台账号 identity 列表；整个事件信封最大
+  15,000 UTF-8 字节。Provider 在持久化前拒绝超限信封，避免后台详情静默截断。
+- 每个会话最多接受 16 个诊断事件。相同编号、相同内容在会话内去重；修改内容返回
+  `IdentityConflict`。诊断队列按项目独立保存，最多 32 个待发送事件，不被普通事件队首失败阻塞。
+- 已配置的运行时每 5 秒检查发送队列，网络失败保留事件并指数退避，最长 5 分钟。
+  只有 `QueueRejected` 适合用原输入重试；无效输入、超限、编号冲突须修正或保存本地现场，
+  `RateLimited` 是本会话预算耗尽，不能靠循环重试恢复。
+- HTTP 400/409/413/415/422 表示单条事件永久拒收，隔离后继续发送后续事件；网络、鉴权、
+  路由、限流和服务端失败仍保留待发送记录。隔离区为原队列键的 `.rejected.v1`，最多保留
+  最近 8 条、合计 128 KiB；单条正文超过 64 KiB，或转义后超过隔离区上限时，只保留 SHA-256、HTTP 状态和省略标记。
+  正常成功收到才清除待发送记录；离线、队列满、未配置及未触发诊断均不能解释为没有故障。
+- 通用字段仅描述观测事实。文件差异、加载失败、引用释放和业务恢复分别记录，不能从一个释放
+  事件自动推断根因。不要自动上传个人信息、完整路径、密钥、存档或未经筛选的日志。
+
+包内 `DiagnosticReporterTests` 使用独立队列；连接拒绝后重载队列，再用本地 HTTP 接收端核对
+补传字节和清队结果，不修改系统网络或正式反馈队列。
+
+调查时用已授权 Analytics 事件详情查询读取 `diagnostic_incident`，筛选项目、版本和会话，
+将响应保存为 JSON 后执行 `python Tools~/diagnostic_snapshot.py response.json --incident <故障编号>`。
+工具不访问网络、不读取凭据；会拒绝截断、哈希不一致和解压超限的现场。
 
 ```csharp
 using ZGS.Analytics;
@@ -203,6 +283,10 @@ Streamlit Dashboard (可视化)
 
 ## 更新日志
 
+### v2.2.1
+- OfflineQueue: 单条永久拒收持久隔离，不阻塞后续事件；网络、鉴权、限流与服务端失败保持补传。
+- Diagnostics: 明确调用方重试边界，增加真实 HTTP 拒收后继续发送及隔离重载回归。
+
 ### v1.6.2
 - FeedbackUploadQueue: 新增可靠 `TryEnqueue`、队列成功事件和退避期间新反馈快速唤醒
 - FeedbackUploadQueue: 成功项先持久化移除再删除 ZIP，事件订阅异常不会中断队列
@@ -231,3 +315,44 @@ Streamlit Dashboard (可视化)
 ## ZeroEngine Dashboard
 
 安装可选的 `com.zerogamestudio.zeroengine.dashboard` 后，工作台会从本包 schema v2 描述符发现数据分析入口，并通过本包 typed provider 打开窗口；本包不依赖 Dashboard。入口位于 `ZGS > 工作台 > 检查与调试`。
+## Confirmed feedback delivery (2.3.1)
+
+Existing receivers remain supported by default: their successful JSON response
+must contain `status: ok` and an absolute HTTP(S) ZIP download URL. HTTP success
+or an intermediary HTML page alone is not enough. This mode retries with the
+existing submission identity and does not call the new receipt endpoint.
+
+Set `AnalyticsConfig.RequireFeedbackReceipt = true` only after the receiver
+supports the version-1 receipt protocol. In that mode success must echo the submission ID, original ZIP
+SHA-256, resolved project and canonical receipt ID. HTTP success alone is not
+delivery evidence. A retry first queries `GET /upload/receipt` using the upload
+secret and identity/content headers; a missing or unavailable receipt is unknown,
+not proof of rejection. Both receiver edges must support this protocol before a
+game upgrades. Legacy unnamed upload calls keep their existing response contract.
+
+`FeedbackSubmissionService.GetRecentSubmissions()` exposes immutable delivery
+snapshots separately from `UploadFailed`, which remains an individual-attempt
+diagnostic event. `StatusChanged` reports lifecycle transitions. A confirmed
+receipt never regresses to failure because local queue acknowledgement or file
+cleanup failed. The queue retries local cleanup without uploading the ZIP again.
+
+`RetrySubmission(id)` addresses the existing identity. A full queue rejects the new
+item without evicting older feedback (`F104`). Unreadable primary and backup queue
+records are retained instead of overwritten. Seven-day expiry stops automatic
+delivery attempts and retains a minimal unconfirmed result. Recent result records
+retain no contact, message, ZIP path or username. Notification flags are persisted
+when storage is available; a storage failure/crash can repeat a success notice,
+but must not create another business submission or report delivery failure.
+
+Lifecycle diagnostics use `feedback_submission_state` with an observation time and
+submission ID. Previous attempt errors remain in `feedback_upload_failure`; they
+are not final submission-failure counts. This is independent of server receipt,
+notification and internal handoff state.
+
+
+## Consolidation dependency correction
+
+The 2.3.2 consolidation candidate explicitly declares Unity's built-in
+JSON Serialize module (`com.unity.modules.jsonserialize`) for this package's
+direct `JsonUtility` calls. Consumers no longer need an unrelated installed
+package to supply that module. This candidate is not a published release.

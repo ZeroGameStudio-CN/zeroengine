@@ -1,11 +1,19 @@
 # ZeroEngine 框架文档
 
-[![Version](https://img.shields.io/badge/version-2.1.1-blue.svg)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-3.0.0-blue.svg)](CHANGELOG.md)
 [![Unity](https://img.shields.io/badge/unity-2022.3+-lightgrey.svg)](https://unity.com)
 
 ## 概述
 
 ZeroEngine 是一个模块化的 Unity 游戏开发框架，提供常用游戏系统的标准化实现。
+
+本包保留历史调试、作者工具和兼容入口；新项目优先安装对应的独立模块。
+3.0.0 与独立 ModSystem 共同安装：中立 `ModManifest` 和加载合同归
+`com.zerogamestudio.zeroengine.modsystem`，旧解析器、热重载、Lua 和旧编辑工具
+只在本包保留一份。旧运行时适配程序集改为 `ZeroEngine.ModSystem.Legacy`；
+`ModHotReloader` 和 `ModSystemIntegration` 保留脚本 GUID 并声明旧程序集来源。
+直接引用旧运行时适配程序集的代码应改引 `ZeroEngine.ModSystem.Legacy`；
+只使用中立合同的代码继续引用 `ZeroEngine.ModSystem`。原有清单字段保持兼容。
 
 ---
 
@@ -242,3 +250,18 @@ Unity.exe -runTests -testPlatform EditMode -projectPath "<项目路径>" -testRe
 ## ZeroEngine Dashboard
 
 主包通过 `Editor/ZeroEngineDashboardModule.json` 声明编辑器工具，并由本包 typed action provider 执行。安装 Dashboard 4.x 后统一从 `ZGS > 工作台` 进入；本包不依赖 Dashboard，窗口业务逻辑仍归本包所有。
+
+
+## Consolidation dependency correction
+
+Legacy translation coverage uses the installed Unity Localization package's
+version define and its Runtime/Editor assemblies. The window keeps its existing
+entry and saved identity. SpineSkin remains gated by `SPINE_UNITY` and references
+the actual `spine-csharp`, `spine-unity`, uGUI and TMP assemblies instead of relying
+on a transitive reference through the diagnostics assembly. SDK presence and
+native runtime behavior require their own verification profile.
+
+The 3.0.0 consolidation candidate explicitly declares Unity's built-in
+JSON Serialize module (`com.unity.modules.jsonserialize`) for this package's
+direct `JsonUtility` calls. Consumers no longer need an unrelated installed
+package to supply that module. This candidate is not a published release.

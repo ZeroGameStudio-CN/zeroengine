@@ -393,9 +393,16 @@ namespace ZeroEngine.Pool
         }
 #endif
 
-        private void OnDestroy()
+        protected override void OnDestroy()
         {
-            ClearAllPools();
+            try
+            {
+                ClearAllPools();
+            }
+            finally
+            {
+                base.OnDestroy();
+            }
         }
 
         /// <summary>

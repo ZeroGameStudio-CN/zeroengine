@@ -48,8 +48,78 @@ namespace ZeroEngine.Tutorial
 
         // 状态
         private bool _isInitialized;
+        private ZeroEngine.Tutorial.Guidance.TutorialFocusView _focusView;
+        private ZeroEngine.Tutorial.Presentation.TutorialPresentationView _presentationView;
+        private ZeroEngine.Tutorial.Presentation.ITutorialPresentation _fallback;
+        private TutorialContext _fallbackContext;
+        private Action _fallbackConfirm;
+        private IDisposable _fallbackTarget;
 
         public TutorialConfigSO Config => _config;
+        internal TutorialContext PresentationContext => FallbackContext;
+
+        private TutorialContext FallbackContext
+        {
+            get
+            {
+                if (_fallbackContext == null)
+                {
+                    _fallbackContext = new TutorialContext();
+                    _fallbackContext.Focus.VisibleExclusions = () => _fallback?.VisibleContent ?? Array.Empty<RectTransform>();
+                    _fallbackContext.Focus.IsValid = () => this && isActiveAndEnabled;
+                }
+                _fallbackContext.Config = _config;
+                return _fallbackContext;
+            }
+        }
+
+        private void BeginFallback(string text, string speaker, Sprite portrait, bool prompt, string[] choices)
+        {
+            HideDialogue();
+            _fallback = GetPresentationPlayer().Begin(new ZeroEngine.Tutorial.Presentation.TutorialMedia {
+                Id = "tutorial-ui", Kind = ZeroEngine.Tutorial.Presentation.TutorialMediaKind.Dialogue,
+                Text = text, Speaker = speaker, Portrait = portrait, Choices = choices ?? Array.Empty<string>(),
+                DialogueLayout = prompt ? ZeroEngine.Tutorial.Presentation.TutorialDialogueLayout.Corner : ZeroEngine.Tutorial.Presentation.TutorialDialogueLayout.Normal,
+                Advance = ZeroEngine.Tutorial.Presentation.TutorialAdvanceMode.Manual
+            }, FallbackContext, false);
+        }
+
+        private void Update()
+        {
+            if (_fallback == null) return;
+            _fallback.Tick(true);
+            if (_fallback.Result != ZeroEngine.Tutorial.Presentation.TutorialPresentationResult.Completed) return;
+            var choice = _fallback as ZeroEngine.Tutorial.Presentation.ITutorialChoicePresentation;
+            int selected = choice?.SelectedChoice ?? -1;
+            var confirmed = _fallbackConfirm; _fallbackConfirm = null;
+            _fallback.Dispose(); _fallback = null;
+            if (selected >= 0) TriggerChoiceSelected(selected); else TriggerDialogueContinue();
+            confirmed?.Invoke();
+        }
+
+        public ZeroEngine.Tutorial.Guidance.TutorialFocusView GetFocusView()
+        {
+            InitializeUI();
+            if (!_focusView)
+            {
+                _focusView = gameObject.AddComponent<ZeroEngine.Tutorial.Guidance.TutorialFocusView>();
+                _focusView.Initialize(_uiContainer, _config ? _config.DefaultFont : null);
+            }
+            return _focusView;
+        }
+
+        public ZeroEngine.Tutorial.Presentation.ITutorialPresentationPlayer GetPresentationPlayer()
+        {
+            InitializeUI();
+            if (!_presentationView)
+            {
+                _presentationView = gameObject.AddComponent<ZeroEngine.Tutorial.Presentation.TutorialPresentationView>();
+                _presentationView.Container = _uiContainer;
+                _presentationView.Font = _config ? _config.DefaultFont : null;
+                _presentationView.SortingOrder = 990;
+            }
+            return _presentationView;
+        }
 
         #endregion
 
@@ -99,8 +169,10 @@ namespace ZeroEngine.Tutorial
             newCanvas.renderMode = RenderMode.ScreenSpaceOverlay;
             newCanvas.sortingOrder = 1000; // 确保在最上层
 
-            go.AddComponent<UnityEngine.UI.CanvasScaler>().uiScaleMode =
-                UnityEngine.UI.CanvasScaler.ScaleMode.ScaleWithScreenSize;
+            var scaler = go.AddComponent<UnityEngine.UI.CanvasScaler>();
+            scaler.uiScaleMode = UnityEngine.UI.CanvasScaler.ScaleMode.ScaleWithScreenSize;
+            scaler.referenceResolution = _config ? _config.ReferenceResolution : new Vector2(1920, 1080);
+            scaler.matchWidthOrHeight = .5f;
             go.AddComponent<UnityEngine.UI.GraphicRaycaster>();
 
             return newCanvas;
@@ -161,7 +233,7 @@ namespace ZeroEngine.Tutorial
         {
             if (_dialogueView == null)
             {
-                Debug.LogWarning("[Tutorial] Dialogue view not initialized");
+                BeginFallback(text, speakerName, speakerAvatar, false, null);
                 return;
             }
 
@@ -176,7 +248,7 @@ namespace ZeroEngine.Tutorial
         {
             if (_dialogueView == null)
             {
-                Debug.LogWarning("[Tutorial] Dialogue view not initialized");
+                BeginFallback(text, speakerName, null, false, choices);
                 return;
             }
 
@@ -189,6 +261,7 @@ namespace ZeroEngine.Tutorial
         /// </summary>
         public void HideDialogue()
         {
+            _fallback?.Dispose(); _fallback = null; _fallbackConfirm = null;
             if (_dialogueView != null)
             {
                 _dialogueView.Hide();
@@ -212,6 +285,12 @@ namespace ZeroEngine.Tutorial
         /// </summary>
         public void ShowPrompt(string text, Action onConfirm)
         {
+            if (_dialogueView == null)
+            {
+                BeginFallback(text, null, null, true, null);
+                _fallbackConfirm = onConfirm;
+                return;
+            }
             ShowDialogue(text);
             // 注册一次性回调
             void HandleContinue()
@@ -241,7 +320,16 @@ namespace ZeroEngine.Tutorial
         {
             if (_highlightView == null)
             {
-                Debug.LogWarning("[Tutorial] Highlight view not initialized");
+                var ctx = FallbackContext;
+                _focusView?.Cancel(); _fallbackTarget?.Dispose();
+                _fallbackTarget = ctx.Focus.Targets.Register("ui-highlight", target.gameObject);
+                if (!string.IsNullOrWhiteSpace(hintText)) ShowPrompt(hintText, null);
+                var focus = GetFocusView();
+                var request = new ZeroEngine.Tutorial.Guidance.TutorialFocusRequest();
+                request.Targets.Add(new ZeroEngine.Tutorial.Guidance.TutorialTargetReference { Id = "ui-highlight", Kind = ZeroEngine.Tutorial.Guidance.TutorialTargetKind.UI,
+                    Shape = type == HighlightType.Circle ? ZeroEngine.Tutorial.Guidance.TutorialMaskShape.Circle : ZeroEngine.Tutorial.Guidance.TutorialMaskShape.Rectangle });
+                focus.Begin(request, ctx.Focus, _config ? _config.FocusStyle : new ZeroEngine.Tutorial.Guidance.TutorialFocusStyle(),
+                    result => { if (result == ZeroEngine.Tutorial.Guidance.TutorialFocusResult.Completed) TriggerHighlightTargetClicked(); });
                 return;
             }
 
@@ -270,6 +358,7 @@ namespace ZeroEngine.Tutorial
         /// </summary>
         public void HideHighlight()
         {
+            _focusView?.Cancel(); _fallbackTarget?.Dispose(); _fallbackTarget = null;
             if (_highlightView != null)
             {
                 _highlightView.Hide();
@@ -440,6 +529,8 @@ namespace ZeroEngine.Tutorial
         /// </summary>
         public void HideAll()
         {
+            _focusView?.Cancel();
+            _presentationView?.CancelCurrent();
             HideDialogue();
             HideHighlight();
             HideWorldArrow();
@@ -511,6 +602,11 @@ namespace ZeroEngine.Tutorial
 
         private void CleanupUI()
         {
+            _fallback?.Dispose(); _fallback = null;
+            _fallbackTarget?.Dispose(); _fallbackTarget = null;
+            _fallbackConfirm = null;
+            if (_focusView) { _focusView.Cancel(); Destroy(_focusView); _focusView = null; }
+            if (_presentationView) { _presentationView.CancelCurrent(); Destroy(_presentationView); _presentationView = null; }
             if (_dialogueView != null) Destroy(_dialogueView.gameObject);
             if (_highlightView != null) Destroy(_highlightView.gameObject);
             if (_arrowIndicator != null) Destroy(_arrowIndicator.gameObject);

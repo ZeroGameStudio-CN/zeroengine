@@ -157,6 +157,15 @@ namespace ZeroEngine.Pathfinding2D
         /// <summary>跳跃轨迹点（仅 Jump 类型有效，用于可视化和碰撞检测）</summary>
         public Vector2[] JumpTrajectory;
 
+        /// <summary>Jump 指令使用的显式朝向覆盖：-1=左，0=按几何方向，1=右。</summary>
+        public int FacingDirectionOverride;
+
+        /// <summary>Jump 链接是否携带显式墙面接触锚点。</summary>
+        public bool HasWallContactAnchor;
+
+        /// <summary>墙面接触锚点的世界 X 坐标。</summary>
+        public float WallContactX;
+
         /// <summary>
         /// 创建行走链接
         /// </summary>
@@ -188,8 +197,55 @@ namespace ZeroEngine.Pathfinding2D
                 JumpVelocityX = velocityX,
                 Duration = duration,
                 IsOneWay = true, // 跳跃链接通常是单向的
-                JumpTrajectory = trajectory
+                JumpTrajectory = trajectory,
+                FacingDirectionOverride = 0
             };
+        }
+
+        /// <summary>
+        /// 创建带显式朝向覆盖的跳跃链接。
+        /// </summary>
+        /// <param name="facingDirectionOverride">非零值归一化为 -1 或 1；0 表示按几何方向。</param>
+        public static PlatformLinkData CreateJump(
+            int from,
+            int to,
+            float velocityY,
+            float velocityX,
+            float duration,
+            Vector2[] trajectory,
+            int facingDirectionOverride)
+        {
+            var link = CreateJump(from, to, velocityY, velocityX, duration, trajectory);
+            link.FacingDirectionOverride = facingDirectionOverride == 0
+                ? 0
+                : (facingDirectionOverride > 0 ? 1 : -1);
+            return link;
+        }
+
+        /// <summary>
+        /// 创建携带显式墙面接触锚点的跳墙链接。
+        /// </summary>
+        public static PlatformLinkData CreateWallTraversalJump(
+            int from,
+            int to,
+            float velocityY,
+            float velocityX,
+            float duration,
+            Vector2[] trajectory,
+            int facingDirectionOverride,
+            float wallContactX)
+        {
+            var link = CreateJump(
+                from,
+                to,
+                velocityY,
+                velocityX,
+                duration,
+                trajectory,
+                facingDirectionOverride);
+            link.HasWallContactAnchor = true;
+            link.WallContactX = wallContactX;
+            return link;
         }
 
         /// <summary>

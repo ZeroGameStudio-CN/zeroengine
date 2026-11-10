@@ -185,17 +185,20 @@ namespace ZGS.Analytics.Tests.Editor
         [Test]
         public void FeedbackUploadQueue_UploadWithRetry_UsesRealtimeRetryDelay()
         {
-            string previousServerUrl = AnalyticsConfig.ServerUrl;
-            string previousSecret = AnalyticsConfig.Secret;
+            FieldInfo transport = typeof(FeedbackUploadQueue).GetField(
+                "_tryUploadDetailedOverride", BindingFlags.NonPublic | BindingFlags.Static);
+            object previousTransport = transport.GetValue(null);
+            IEnumerator coroutine = null;
 
             try
             {
-                AnalyticsConfig.ServerUrl = "";
-                AnalyticsConfig.Secret = "";
+                transport.SetValue(null,
+                    (Func<FeedbackUploadQueue.PendingUpload, Action<FeedbackUploadAttempt>, IEnumerator>)
+                    ((_, callback) => CompleteRetryableAttempt(callback)));
                 using var fixture = new ZipFixture();
                 File.WriteAllText(fixture.ZipPath, "zip");
 
-                IEnumerator coroutine = FeedbackUploadQueue.UploadWithRetry(
+                coroutine = FeedbackUploadQueue.UploadWithRetry(
                     fixture.ZipPath,
                     "POB_vEA0.7.7.3",
                     "Tester",
@@ -210,9 +213,15 @@ namespace ZGS.Analytics.Tests.Editor
             }
             finally
             {
-                AnalyticsConfig.ServerUrl = previousServerUrl;
-                AnalyticsConfig.Secret = previousSecret;
+                (coroutine as IDisposable)?.Dispose();
+                transport.SetValue(null, previousTransport);
             }
+        }
+
+        private static IEnumerator CompleteRetryableAttempt(Action<FeedbackUploadAttempt> callback)
+        {
+            callback(new FeedbackUploadAttempt(false, FeedbackFailureCodes.Connection));
+            yield break;
         }
 
         [Test]
@@ -268,13 +277,22 @@ namespace ZGS.Analytics.Tests.Editor
                         "POB_vEA0.7.7.4",
                         "20260714_215146",
                         "feedback.zip",
-                        new byte[] { 1, 2, 3 }
+                        new byte[] { 1, 2, 3 },
+                        "0123456789abcdef0123456789abcdef",
+                        "0123456789abcdef0123456789abcdef"
                     });
 
                 Assert.AreEqual("upload-secret", request.GetRequestHeader("X-Upload-Secret"));
+                Assert.AreEqual(
+                    "0123456789abcdef0123456789abcdef",
+                    request.GetRequestHeader("Idempotency-Key"));
+                Assert.AreEqual(
+                    "0123456789abcdef0123456789abcdef",
+                    request.GetRequestHeader("X-Feedback-Submission-Id"));
                 string formBody = Encoding.UTF8.GetString(request.uploadHandler.data);
                 StringAssert.DoesNotContain("upload-secret", formBody);
                 StringAssert.DoesNotContain("name=\"secret\"", formBody);
+                StringAssert.Contains("name=\"submission_id\"", formBody);
             }
             finally
             {

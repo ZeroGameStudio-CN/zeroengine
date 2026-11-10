@@ -18,6 +18,7 @@ namespace POB.Extraction
         public string Description;
         public int DangerLevel;
         public int RecommendedGearLevel;
+        public string RaidRuleProfileId;
         public List<string> LootTableIds = new();
         public List<string> SpawnPointIds = new();
         public List<string> CorpseRegionIds = new();

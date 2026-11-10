@@ -72,3 +72,11 @@ such as `LB + X`.
 
 See `docs/specs/2026-07-27-zeroengine-settings-platform.md` in the ZeroEngine
 repository for the complete contract and migration rules.
+
+
+## Consolidation dependency correction
+
+The 1.0.1 consolidation candidate explicitly declares Unity's built-in
+JSON Serialize module (`com.unity.modules.jsonserialize`) for this package's
+direct `JsonUtility` calls. Consumers no longer need an unrelated installed
+package to supply that module. This candidate is not a published release.

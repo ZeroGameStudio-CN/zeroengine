@@ -1,423 +1,81 @@
-# Tutorial System (v1.14.0+)
+# Tutorial system
 
-教程引导系统，提供新手教程、系统引导和步骤提示功能。
+Reusable tutorial sequences, scoped interaction guides and presentation services. Namespace: `ZeroEngine.Tutorial`; package: `com.zerogamestudio.zeroengine.gameplay`.
 
-## 快速开始
+## Ownership and installation
 
-### 1. 创建教程序列
+Consumers install the official package at a tested commit:
 
-在 Project 窗口右键 > Create > ZeroEngine > Tutorial > Tutorial Sequence：
-
-```yaml
-Tutorial Sequence SO:
-  Sequence Id: "onboarding_001"
-  Display Name: "新手引导"
-  Category: Onboarding
-  Auto Start: true
-  Skippable: true
-  Steps:
-    - Dialogue Step:
-        Speaker Name: "向导"
-        Dialogue Text: "欢迎来到游戏世界！"
-        Wait For Confirm: true
-    - Highlight Step:
-        Target Path: "Canvas/MainMenu/PlayButton"
-        Highlight Type: Circle
-        Hint Text: "点击这里开始游戏"
-        Wait For Click: true
+```json
+"com.zerogamestudio.zeroengine.gameplay": "https://github.com/ZeroGameStudio-CN/zeroengine.git?path=com.zerogamestudio.zeroengine.gameplay#<tested-commit>"
 ```
 
-### 2. 注册并启动
+Gameplay depends on ZE Core/Persistence, uGUI, Input System, TextMeshPro and the built-in Video/Director/ScreenCapture modules. ScreenCapture is used by optional native-frame verification recordings. A consumer pins the ZE dependencies under its repository policy. Local file bindings are for validation only. Consumers select a verified Git commit from the official repository.
 
-```csharp
-// 在 Inspector 中注册，或代码注册
-TutorialManager.Instance.RegisterSequence(myTutorialSO);
-
-// 手动启动
-TutorialManager.Instance.StartSequence("onboarding_001");
+The package contains no POB, Pixel Crushers or Odin dependency. Quests, inventories, feature access, save-slot selection and authored level generation stay with the consuming game. Tutorial completion is not proof of a business objective: use native operation callbacks and project result events for that objective.
 
-// 或让系统自动检测启动
-TutorialManager.Instance.CheckAutoStart();
-```
+## Authoring
 
-### 3. 监听事件
+1. Create `TutorialConfigSO` for shared appearance, font, timing and media. Each media item has a stable ID; placeholders include a replacement note.
+2. Create `TutorialSequenceSO`. Its Inspector has an **Add step** picker and **Validate** action. Steps have stable IDs, skip policy, prerequisites and sequential/parallel/any composition.
+3. Add a `TutorialManager`, configure its profile, register the sequence and bind the game's targets/services. Call `StartSequence` explicitly, `CheckAutoStart` for configured conditions, or use `TutorialSignalTrigger` for scoped event requests.
+4. Import **Guidance Playground** from Package Manager Samples. In an empty scene, add `TutorialPlayground` and enter Play. This sample does not read or write the game's saves.
 
-```csharp
-TutorialManager.Instance.OnSequenceStarted += seq =>
-    Debug.Log($"Tutorial started: {seq.DisplayName}");
+Use InputSystemUIInputModule with Input System (or Both) input handling. The default view is created at runtime; prefabs are optional. Assign the project's TMP font, or import TextMeshPro Essential Resources for its default font. New canvases use the configured reference resolution and do not modify an existing canvas.
 
-TutorialManager.Instance.OnSequenceCompleted += seq =>
-    Debug.Log($"Tutorial completed: {seq.SequenceId}");
+## Targets and scopes
 
-TutorialManager.Instance.OnStepStarted += (step, index) =>
-    Debug.Log($"Step {index}: {step.StepType}");
-```
+Register stable IDs through `context.Focus.Targets.Register(id, gameObject)` and dispose the returned lease when its owner exits. A `TutorialTargetAnchor` can bind to a manager/context without a global scene search or implicit manager creation. A duplicate live ID is rejected; an old lease cannot remove a replacement registration.
 
-## 核心 API
+Target references support:
 
-### TutorialManager
-
-教程系统核心管理器，使用 `MonoSingleton<T>` + `ISaveable`。
-
-```csharp
-// 状态
-bool isRunning = TutorialManager.Instance.IsRunning;
-var currentSeq = TutorialManager.Instance.CurrentSequence;
-var currentStep = TutorialManager.Instance.CurrentStep;
-int stepIndex = TutorialManager.Instance.CurrentStepIndex;
-
-// 控制
-TutorialManager.Instance.StartSequence("tutorial_001");
-TutorialManager.Instance.SkipCurrentStep();
-TutorialManager.Instance.SkipCurrentSequence();
-TutorialManager.Instance.CompleteCurrentStep();
-
-// 查询
-bool completed = TutorialManager.Instance.IsSequenceCompleted("tutorial_001");
-bool skipped = TutorialManager.Instance.IsSequenceSkipped("tutorial_001");
-bool any = TutorialManager.Instance.HasCompletedAny("t1", "t2", "t3");
-
-// 变量
-TutorialManager.Instance.SetGlobalVariable("gold", 100);
-int gold = TutorialManager.Instance.GetGlobalVariable<int>("gold");
-
-// 标记 (用于 FirstTimeCondition)
-TutorialManager.Instance.TriggerMarker("first_shop_visit");
-bool triggered = TutorialManager.Instance.HasTriggered("first_shop_visit");
-
-// 重置
-TutorialManager.Instance.ResetProgress();
-TutorialManager.Instance.ResetProgress("tutorial_001");
-```
-
-### TutorialSequenceSO
-
-教程序列 ScriptableObject：
-
-```csharp
-[CreateAssetMenu(menuName = "ZeroEngine/Tutorial/Tutorial Sequence")]
-public class TutorialSequenceSO : ScriptableObject
-{
-    public string SequenceId;
-    public string DisplayName;
-    public TutorialCategory Category;
-    public bool AutoStart = true;
-    public bool Skippable = true;
-    public bool Replayable = false;
-    public int Priority = 0;
-
-    [SerializeReference]
-    public List<TutorialCondition> StartConditions;
-
-    [SerializeReference]
-    public List<TutorialStep> Steps;
-
-    [SerializeReference]
-    public List<TutorialReward> CompletionRewards;
-
-    public string[] Prerequisites;
-    public string NextSequenceId;
-}
-```
-
-### TutorialContext
-
-教程执行上下文：
-
-```csharp
-// 在步骤中访问
-public override void OnEnter(TutorialContext ctx)
-{
-    // 当前信息
-    var sequence = ctx.CurrentSequence;
-    var step = ctx.CurrentStep;
-    float progress = ctx.GetProgress();
-
-    // 变量
-    ctx.SetVariable("visited", true);
-    bool visited = ctx.GetVariable<bool>("visited");
-
-    // UI 目标
-    var button = ctx.FindUITarget("Canvas/Button");
-
-    // 玩家引用
-    var player = ctx.Player;
-}
-```
-
-## 步骤类型
-
-### DialogueStep (对话)
-
-```csharp
-[Serializable]
-public class DialogueStep : TutorialStep
-{
-    public string SpeakerName;
-    public string DialogueText;
-    public Sprite SpeakerIcon;
-    public DialoguePosition Position;
-    public float TypewriterSpeed = 30f;
-    public bool WaitForConfirm = true;
-    public KeyCode ConfirmKey = KeyCode.Space;
-}
-```
-
-### HighlightStep (高亮)
-
-```csharp
-[Serializable]
-public class HighlightStep : TutorialStep
-{
-    public string TargetPath;
-    public HighlightType HighlightType;
-    public string HintText;
-    public Vector2 HintOffset;
-    public bool WaitForClick = true;
-    public float Timeout = 0f;
-}
-```
-
-### WaitInputStep (等待输入) - v1.14.0+
-
-```csharp
-[Serializable]
-public class WaitInputStep : TutorialStep
-{
-    public KeyCode[] RequiredKeys;
-    public bool RequireAll = false;
-}
-```
-
-### WaitInteractionStep (等待交互) - v1.14.0+
-
-```csharp
-[Serializable]
-public class WaitInteractionStep : TutorialStep
-{
-    public string InteractableId;
-    public InteractionType RequiredType;
-}
-```
-
-### WaitEventStep (等待事件) - v1.14.0+
-
-```csharp
-[Serializable]
-public class WaitEventStep : TutorialStep
-{
-    public string EventKey;
-    public string ExpectedValue;
-}
-```
-
-### MoveToStep (移动引导) - v1.14.0+
-
-```csharp
-[Serializable]
-public class MoveToStep : TutorialStep
-{
-    public Transform Target;
-    public float ArrivalDistance = 2f;
-    public bool ShowArrow = true;
-}
-```
-
-### DelayStep (延时)
-
-```csharp
-[Serializable]
-public class DelayStep : TutorialStep
-{
-    public float Duration = 1f;
-}
-```
-
-### CallbackStep (回调)
-
-```csharp
-[Serializable]
-public class CallbackStep : TutorialStep
-{
-    public string CallbackId;
-    public bool WaitForComplete = false;
-}
-```
-
-## 条件类型
-
-### 内置条件
-
-```csharp
-// 首次触发
-new FirstTimeCondition { Key = "first_login" }
-
-// 等级要求
-new LevelCondition { MinLevel = 5, MaxLevel = 10 }
-
-// 教程完成
-new TutorialCompletedCondition
-{
-    RequiredTutorialIds = new[] { "basic_001", "basic_002" },
-    RequireAll = true
-}
-
-// 场景条件
-new SceneCondition
-{
-    AllowedScenes = new[] { "MainMenu", "Tutorial" }
-}
-
-// 任务状态
-new QuestCondition
-{
-    QuestId = "quest_001",
-    RequiredState = QuestRequiredState.Completed
-}
-
-// 变量条件
-new VariableCondition
-{
-    VariableKey = "gold",
-    Operator = ComparisonOperator.GreaterOrEqual,
-    CompareValue = "100"
-}
-```
-
-### 自定义条件
-
-```csharp
-[Serializable]
-public class CustomCondition : TutorialCondition
-{
-    public string CustomValue;
-
-    public override string ConditionType => "Custom";
-
-    public override bool IsSatisfied(TutorialContext ctx)
-    {
-        // 自定义检查逻辑
-        return true;
-    }
-}
-```
-
-## 奖励类型
-
-```csharp
-// 物品奖励
-new ItemTutorialReward { ItemId = "sword_001", Amount = 1 }
-
-// 成就奖励
-new AchievementTutorialReward { AchievementId = "first_tutorial" }
-
-// 自定义奖励
-[Serializable]
-public class CurrencyReward : TutorialReward
-{
-    public string CurrencyType;
-    public int Amount;
-
-    public override string RewardType => "Currency";
-
-    public override void Grant()
-    {
-        // 发放货币
-    }
-}
-```
-
-## UI 系统
-
-教程 UI 使用 `UI.Core` 框架，继承 `UIViewBase`：
-
-```csharp
-// TutorialUIManager 自动管理 UI 组件
-TutorialUIManager.Instance.ShowDialogue(dialogueStep, onComplete, onConfirm);
-TutorialUIManager.Instance.HideDialogue();
-
-TutorialUIManager.Instance.ShowHighlight(target, type, hint, offset, onClick);
-TutorialUIManager.Instance.HideHighlight();
-
-TutorialUIManager.Instance.ShowProgress(current, total);
-TutorialUIManager.Instance.HideProgress();
-```
-
-## 高亮类型
-
-```csharp
-public enum HighlightType
-{
-    Circle,         // 圆形高亮
-    Rectangle,      // 矩形高亮
-    Finger,         // 手指指示
-    Arrow,          // 箭头指向
-    Pulse,          // 脉冲效果
-    None            // 无高亮
-}
-```
-
-## 事件
-
-```csharp
-// TutorialManager 事件
-OnSequenceStarted       // 教程开始
-OnSequenceCompleted     // 教程完成
-OnSequenceSkipped       // 教程跳过
-OnStepStarted           // 步骤开始
-OnStepCompleted         // 步骤完成
-OnStepSkipped           // 步骤跳过
-```
-
-## 存档集成
-
-`TutorialManager` 实现 `ISaveable` 接口，自动保存：
-- 已完成的教程列表
-- 已跳过的教程列表
-- 当前进行中的教程
-- 全局变量
-
-```csharp
-// 自动集成 SaveSlotManager
-// 无需额外代码
-```
-
-## 配置
-
-使用 `TutorialConfigSO` 配置全局参数：
-
-```yaml
-Tutorial Config SO:
-  Enable Tutorials: true
-  Auto Start For New Players: true
-  Allow Skipping: true
-
-  # UI 设置
-  Dialogue UI Prefab: ...
-  Highlight Mask Prefab: ...
-  UI Fade In Duration: 0.3
-
-  # 对话设置
-  Default Typewriter Speed: 30
-  Dialogue Confirm Key: Space
-  Skip Key: Escape
-
-  # 高亮设置
-  Highlight Color: Yellow
-  Mask Color: Black (70% alpha)
-```
-
-## 性能优化
-
-1. **目标缓存**: UI 目标查找结果缓存
-2. **延迟加载**: UI 预制体按需实例化
-3. **对象池**: 高亮 UI 使用对象池
-4. **GC 优化**: 使用 `readonly struct` 传递事件
-
-## 最佳实践
-
-1. 使用 `Priority` 控制多个可用教程的触发顺序
-2. 使用 `Prerequisites` 确保教程按正确顺序执行
-3. 使用 `MutuallyExclusive` 处理分支教程
-4. 为关键步骤设置 `Timeout` 避免玩家卡住
-5. 使用 `CallbackStep` 处理复杂的游戏逻辑
+| Kind | Resolution |
+| --- | --- |
+| Auto / UI | Registered object or path beneath ScopeRoot; UI regions may contain any native pointer handler |
+| World | Collider/renderer bounds, or explicit world size, projected through WorldCamera |
+| ScreenRegion | Normalized rectangle, independent of scene object ownership |
+
+Paths use a complete relative path or an unambiguous name. With no explicit root, path lookup is limited to the active scene. Hidden, ambiguous, offscreen and behind-camera targets do not acquire a blocking surface. Missing targets wait for TargetWaitSeconds; losing a target releases the input surface while waiting again.
+
+A Focus request can highlight several targets, with **Any** or **All** completion. `Interactive=false` creates a read-only highlight. `VisibleExclusions` exposes actual dialogue content; never supply a full-screen dialogue container as the exclusion.
+
+Rectangle, circle and rounded rectangle masks support padding, feather and border style. Circle holes circumscribe target rectangles. A request supports fifteen targets plus one dialogue exclusion. Visual holes and input admission are separate: a visible dialogue hole does not make the controls underneath clickable.
+
+## Native operations
+
+| Interaction | Completion |
+| --- | --- |
+| Click | Genuine native pointer click / submit, exactly once |
+| Hold | Continuous pointer or confirmation hold reaching HoldSeconds; early release/exit cancels the press |
+| Drag | Native initialize/begin/drag/drop/end events, with a configured destination; keyboard/gamepad uses source confirmation then destination confirmation |
+| EnterArea | Actor position enters the target world bounds |
+| Signal | The context's specified project event is received |
+| Display | Presentation duration only; it is not an operation objective |
+
+The closest underlying UI/collider is checked, so an intervening control cannot be clicked through. Screen-region gestures do not activate an unrelated control underneath. Custom world operations can connect `TutorialInteractionRelay.OnActivated` to the project's real interaction method. For accepted inventory drops, purchases and other business rules, supply `AcceptInteraction` or a fresh context-local `CompletionEvent`.
+
+`BlockOtherInput=false` observes the existing click/drag handlers instead of replaying their actions. The input gate snapshots UI maps and explicitly supplied project maps; only pointer, confirmation, navigation, cancellation and AllowedActions remain enabled. Provide `InputMaps`, `CanRestoreInputMap`, `IsValid` and `AcquireScope` for the game's player/input/time ownership. The package does not write a game's global time scale or fabricate gameplay events.
+
+## Presentations
+
+`PresentationStep` references a media ID; `FocusStep.PresentationId` attaches corner coaching to an operation. Normal dialogue is a separate beat with `DialogueLayout=Normal`; built-in choices require that layout. `ITutorialPresentationPlayer` / `ITutorialPresentation` support Text/Dialogue, CG, Video, Timeline and custom backends.
+
+The built-in player provides speaker/text/portrait, simple choices, CG timing, VideoPlayer first-frame readiness and unscaled playback, and PlayableDirector bindings by stream name/registered target ID. `IsReady` for video requires a real decoded frame. A completed/skipped handle keeps its frame until disposed, allowing a project-owned scene preparation barrier to release it at the right time. Skipping pauses video/Timeline and submits only a Skipped result. Permanent rewards never run from Timeline callbacks.
+
+Register a dialogue backend by key with `context.Presentations.Register(key, player)`. A consuming game may continue using its existing dialogue UI and conversation database. A handle must stop only its own playback, cancel on stale scene/slot ownership and dispose its resources. Built-in resources are released with the handle; failed or late callbacks cannot overwrite its terminal result.
+
+## Conditions, progress and project outcomes
+
+Timing defaults to the injected realtime clock, including paused UI. UseUnscaledTime is configurable for other tutorial steps. Operation steps reject automatic completion delays. Input/event/movement timeouts fail rather than count as learning.
+
+Disable, cancel, failure and destruction exit each entered step exactly once. Skips emit OnStepSkipped, not OnStepCompleted. Parallel composition permits one blocking presenter; put corner coaching on FocusStep. Stable step IDs are saved with the current index; reordering resolves the ID first. First-time markers survive export/import.
+
+Level and quest conditions require `QueryState` / `QueryQuestState`; an unavailable provider remains unsatisfied. World/minimap markers use `CreateWorldMarker` and an owned disposable lease. Completion rewards require `ITutorialRewardService`: it grants the complete batch atomically and idempotently by sequence ID. Rejected or unavailable rewards do not record sequence completion. A tutorial never bootstraps a save manager implicitly.
+
+Natural trigger requests are deduplicated, prioritized and revalidated before starting. Disabling/unloading their source cancels its pending request. An expired source does not interrupt an active lesson or force itself into another scene.
+
+## Verification
+
+The package includes focused Editor contracts and a standalone PlayMode scenario covering native UI input, multiple targets, hold, pointer/two-confirm drag/drop, context events, world/area targets, media and owned cleanup. Captures use native ScreenCapture after WaitForEndOfFrame and actual realtime timestamps.
+
+Consumer startup/quit callbacks also run for package PlayMode tests. Use the consuming project's prebuild storage guard and isolated fixture when those callbacks can write player data. Restore normal dependency and metadata bytes after temporary local validation. The runtime scenario accepts a readable source `FontFixture` and optional `VideoFixture`; it never changes those imported assets.

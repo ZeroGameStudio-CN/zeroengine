@@ -32,12 +32,30 @@ namespace POB.Extraction
                     request.Seed,
                     rareLootDisabled,
                     out var manifest,
-                    out manifestFailure))
+                    out manifestFailure,
+                    request.LootSelectionPolicy))
             {
                 return false;
             }
 
-            return TryCreateInternal(profile, map, request, manifest, out session);
+            ExtractionRaidRuleSnapshot ruleSnapshot = null;
+            if (!string.IsNullOrEmpty(map.RaidRuleProfileId)
+                && !ExtractionRaidMechanicsService.TryCreateRuleSnapshot(
+                    config,
+                    map,
+                    map.ThreatLevel,
+                    out ruleSnapshot))
+            {
+                return false;
+            }
+
+            if (!TryCreateInternal(profile, map, request, manifest, out session)) return false;
+            if (ruleSnapshot == null || session.TrySetRuleSnapshot(ruleSnapshot)) return true;
+
+            profile.ActiveRaid = null;
+            profile.activeRaidId = null;
+            session = null;
+            return false;
         }
 
         private static bool TryCreateInternal(

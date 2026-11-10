@@ -18,7 +18,7 @@ namespace ZeroEngine.SpineSkin
         
 #if SPINE_UNITY
         [SerializeField] private SkeletonAnimation skeletonAnimation;
-        [SerializeField, SpineSkin] private string baseSkinName;
+        [SerializeField, Spine.Unity.SpineSkin] private string baseSkinName;
 #endif
         
         // 当前装备的皮肤 (SlotId -> FullSkinName)

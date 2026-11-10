@@ -1,3 +1,5 @@
+#Requires -Version 7.0
+
 [CmdletBinding()]
 param(
     [string]$RootPath = (Resolve-Path (Join-Path $PSScriptRoot '..\..')).Path,
@@ -160,10 +162,11 @@ foreach ($descriptorPath in $descriptorPaths) {
 $dashboardRoot = Join-Path $RootPath 'com.zerogamestudio.zeroengine.dashboard'
 $dashboardPackage = Get-Content -LiteralPath (Join-Path $dashboardRoot 'package.json') -Raw -Encoding UTF8 | ConvertFrom-Json
 $dashboardAsmdef = Get-Content -LiteralPath (Join-Path $dashboardRoot 'Editor\ZeroEngine.Dashboard.Editor.asmdef') -Raw -Encoding UTF8 | ConvertFrom-Json
-Assert-Condition ($dashboardPackage.version -eq '4.7.0') 'Dashboard package version must be 4.7.0.'
+Assert-Condition ($dashboardPackage.version -match '^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?$') 'Dashboard package must declare a semantic version.'
 $dashboardDependencies = @($dashboardPackage.dependencies.psobject.Properties)
-Assert-Condition ($dashboardDependencies.Count -eq 1) 'Dashboard package must depend only on editor-ui.'
-Assert-Condition ($dashboardDependencies[0].Name -eq 'com.zerogamestudio.zeroengine.editor-ui' -and $dashboardDependencies[0].Value -eq '1.5.0') 'Dashboard editor-ui dependency must be exactly 1.5.0.'
+Assert-Condition ($dashboardDependencies.Count -eq 2) 'Dashboard dependencies must be editor-ui and the JSON Serialize built-in module.'
+Assert-Condition ($dashboardPackage.dependencies.'com.zerogamestudio.zeroengine.editor-ui' -eq '1.5.0') 'Dashboard editor-ui dependency must be 1.5.0.'
+Assert-Condition ($dashboardPackage.dependencies.'com.unity.modules.jsonserialize' -eq '1.0.0') 'Dashboard must declare its directly used JSON Serialize module.'
 $dashboardReferences = @($dashboardAsmdef.references)
 Assert-Condition ($dashboardReferences.Count -eq 1 -and $dashboardReferences[0] -eq 'ZeroEngine.EditorUI.Editor') 'Dashboard production asmdef must reference only editor-ui.'
 Assert-Condition (@($dashboardAsmdef.includePlatforms).Count -eq 1 -and $dashboardAsmdef.includePlatforms[0] -eq 'Editor') 'Dashboard production asmdef must be Editor-only.'
@@ -192,7 +195,12 @@ $menuPaths = @(Get-ChildItem -LiteralPath $RootPath -Directory -Filter 'com.zero
     Where-Object { $_.FullName -notmatch '[\\/]Tests[\\/]' } |
     ForEach-Object { [regex]::Matches((Get-Content -LiteralPath $_.FullName -Raw -Encoding UTF8), '\[MenuItem\("([^"]+)"') } |
     ForEach-Object { $_.Groups[1].Value })
-$allowedMenuPaths = @('ZGS/工作台', 'Assets/Export to Mod JSON')
+$allowedMenuPaths = @(
+    'ZGS/工作台',
+    'Assets/Export to Mod JSON',
+    'GameObject/Light/角色边缘点光',
+    'GameObject/Light/角色边缘聚光'
+)
 foreach ($menuPath in $menuPaths) {
     Assert-Condition ($allowedMenuPaths -contains $menuPath) "First-party top-level menu is not consolidated: $menuPath"
 }
@@ -205,11 +213,12 @@ if (-not [string]::IsNullOrWhiteSpace($ProjectManifest)) {
     $manifest = Get-Content -LiteralPath $ProjectManifest -Raw -Encoding UTF8 | ConvertFrom-Json
     $dependencyNames = @($manifest.dependencies.psobject.Properties.Name)
     $legacyInstalled = $dependencyNames -contains 'com.zerogamestudio.zeroengine'
-    $modularInstalled = @($dependencyNames | Where-Object {
-        $_ -like 'com.zerogamestudio.zeroengine.*' -and
-        $_ -notin @('com.zerogamestudio.zeroengine.dashboard', 'com.zerogamestudio.zeroengine.editor-ui')
-    })
-    Assert-Condition (-not ($legacyInstalled -and $modularInstalled.Count -gt 0)) 'Legacy and modular ZeroEngine packages are mutually exclusive.'
+    if ($legacyInstalled) {
+        $legacyPackage = Get-Content -LiteralPath (Join-Path $RootPath 'com.zerogamestudio.zeroengine/package.json') -Raw -Encoding UTF8 | ConvertFrom-Json
+        foreach ($requiredSibling in @($legacyPackage.dependencies.psobject.Properties.Name | Where-Object { $_ -like 'com.zerogamestudio.*' })) {
+            Assert-Condition ($dependencyNames -contains $requiredSibling) "Legacy compatibility bundle is missing its modular sibling: $requiredSibling"
+        }
+    }
 }
 
 Write-Host "PASS Dashboard descriptors=$($descriptorPaths.Count)"

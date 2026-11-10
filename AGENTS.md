@@ -6,6 +6,9 @@ This repository is the ZeroEngine development workspace. Other Unity projects
 consume ZeroEngine through Unity Package Manager Git dependencies that point at
 `https://github.com/ZeroGameStudio-CN/zeroengine.git`.
 
+Development-content records and their format follow
+[the project adapter](docs/agent/project-adapter.md).
+
 Do not tell consumer projects to copy a `ZeroEngine` folder into `Assets` or to
 depend on this local checkout as their normal setup.
 

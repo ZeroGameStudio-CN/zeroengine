@@ -18,7 +18,19 @@ namespace POB.Extraction
         public List<ExtractionPointRuntimeState> ExtractionPointStates = new();
         public ExtractionRaidLootManifest LootManifest;
 
-        internal void EnsureInitialized()
+        // C2/C3 raid snapshot state. Existing UsedExtractionPointIds and
+        // OpenedLockIds remain the persisted stores for those compatible IDs.
+        public List<string> TriggeredMilestoneIds = new();
+        public List<string> ActivatedGateIds = new();
+        public List<string> OpenedKeyDoorIds = new();
+        public List<ExtractionGateRewardState> GateRewardStates = new();
+        public string SelectedRandomExtractionPointId;
+        public int CurrentReinforcementLevel;
+        public bool IsOvertime;
+        public bool OvertimeEnemySpawned;
+        public ExtractionRaidPhase Phase = ExtractionRaidPhase.Countdown;
+
+        public void EnsureInitialized()
         {
             OpenedContainerIds ??= new List<string>();
             OpenedLockIds ??= new List<string>();
@@ -28,6 +40,12 @@ namespace POB.Extraction
             AppliedReceiptIds ??= new List<string>();
             UnlockedBonusContainerGroupIds ??= new List<string>();
             ExtractionPointStates ??= new List<ExtractionPointRuntimeState>();
+            TriggeredMilestoneIds ??= new List<string>();
+            ActivatedGateIds ??= new List<string>();
+            OpenedKeyDoorIds ??= new List<string>();
+            GateRewardStates ??= new List<ExtractionGateRewardState>();
+            if (IsOvertime && Phase == ExtractionRaidPhase.Countdown)
+                Phase = ExtractionRaidPhase.Overtime;
             LootManifest?.EnsureInitialized();
         }
     }

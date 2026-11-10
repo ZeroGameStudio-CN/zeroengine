@@ -216,3 +216,11 @@ Dashboard 4.x 仍兼容外部 schema v1，并把它标记为“旧版入口”�
 ### 1.0.0
 
 - 从主包独立出来。
+
+
+## Consolidation dependency correction
+
+The 4.7.1 consolidation candidate explicitly declares Unity's built-in
+JSON Serialize module (`com.unity.modules.jsonserialize`) for this package's
+direct `JsonUtility` calls. Consumers no longer need an unrelated installed
+package to supply that module. This candidate is not a published release.

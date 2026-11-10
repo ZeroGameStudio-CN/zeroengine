@@ -3,7 +3,7 @@ using System;
 namespace ZeroEngine.ModSystem
 {
     [Serializable]
-    public sealed class ModManifest
+    public class ModManifest
     {
         public string Id;
         public string Name;

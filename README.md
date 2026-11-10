@@ -39,6 +39,11 @@ mixing in game-specific content.
 There are also packages for AI, audio, combat, economy, input, localization,
 network, RPG, social, world, and editor dashboard systems.
 
+The [2026-11-10 consolidation review](docs/packages/2026-11-10-consolidation-review.md)
+records every package's ownership, candidate version and consumer migration gates.
+It is an unpublished integration candidate; existing consumers keep their tested
+pins until their corresponding upgrade checks are complete.
+
 ## Installation
 
 Add packages through Unity Package Manager using a Git URL with the package
@@ -90,12 +95,15 @@ and has no Unity project integration.
 
 ## Testing
 
-The repository includes a GitHub Actions workflow that builds a temporary Unity
-project and runs EditMode tests through GameCI.
+The repository includes a GitHub Actions workflow that builds temporary Unity
+projects for compatible package sets and runs EditMode tests through GameCI.
+Unity 2022.3 lanes exclude packages declaring a newer minimum; a separate static
+audit checks all package boundaries. See [package tooling](Tools/Packages/README.md).
 
-For local work, open a Unity 2022.3 project that references the package under
-test, then run the relevant EditMode tests from Unity Test Runner. Keep new
-tests narrow and package-scoped.
+For local work, use the Editor version required by the package's `package.json`
+and run the relevant EditMode or PlayMode tests from Unity Test Runner. Keep
+tests narrow and package-scoped. An Editor import does not establish Player,
+optional SDK or real consumer compatibility.
 
 ## Support and Security
 

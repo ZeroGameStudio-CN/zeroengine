@@ -426,8 +426,7 @@ namespace ZeroEngine.ModSystem
                     mod.FileLastModified[file] = File.GetLastWriteTime(file);
                 }
                 
-                // 实际内容解析由ModContentParser处理
-                // TODO: 调用 ModContentParser.ParseDirectory(fullPath, mod)
+                // Legacy loader records files for hot reload; projects call ModContentParser through their compatibility flow.
             }
         }
     }

@@ -11,3 +11,11 @@ adapters and own the shared catalog location.
 The DeepSeek client uses `https://api.deepseek.com/chat/completions`, model
 `deepseek-v4-flash`, non-thinking JSON output, at most 40 candidates, and at
 most 1200 output tokens. API keys are never stored in project files.
+
+
+## Consolidation dependency correction
+
+The 0.1.1 consolidation candidate explicitly declares Unity's built-in
+JSON Serialize module (`com.unity.modules.jsonserialize`) for this package's
+direct `JsonUtility` calls. Consumers no longer need an unrelated installed
+package to supply that module. This candidate is not a published release.

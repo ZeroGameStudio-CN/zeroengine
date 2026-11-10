@@ -1,48 +1,48 @@
 {
-  "name": "com.zerogamestudio.zeroengine.tce",
-  "version": "0.2.1",
-  "displayName": "ZeroEngine TCE",
-  "description": "Generic Trigger-Condition-Effect runtime contracts and reusable components.",
-  "unity": "2022.3",
-  "dependencies": {
-    "com.zerogamestudio.zeroengine.editor-ui": "1.3.0"
-  },
-  "keywords": [
-    "zeroengine",
-    "tce",
-    "ability",
-    "gameplay"
-  ],
-  "samples": [
-    {
-      "displayName": "Minimal Graph",
-      "description": "A minimal project-agnostic Trigger-Condition-Effect graph using only generic TCE components.",
-      "path": "Samples~/MinimalGraph"
+    "name": "com.zerogamestudio.zeroengine.tce",
+    "version": "0.2.1",
+    "displayName": "ZeroEngine TCE",
+    "description": "Generic Trigger-Condition-Effect runtime contracts and reusable components.",
+    "unity": "2022.3",
+    "dependencies": {
+        "com.zerogamestudio.zeroengine.editor-ui": "1.3.0"
     },
-    {
-      "displayName": "Authoring MVP",
-      "description": "A package-manager sample guide for creating, validating, and previewing a generic TCE graph asset.",
-      "path": "Samples~/AuthoringMvp"
+    "keywords": [
+        "zeroengine",
+        "tce",
+        "ability",
+        "gameplay"
+    ],
+    "samples": [
+        {
+            "displayName": "Minimal Graph",
+            "description": "A minimal project-agnostic Trigger-Condition-Effect graph using only generic TCE components.",
+            "path": "Samples~/MinimalGraph"
+        },
+        {
+            "displayName": "Authoring MVP",
+            "description": "A package-manager sample guide for creating, validating, and previewing a generic TCE graph asset.",
+            "path": "Samples~/AuthoringMvp"
+        },
+        {
+            "displayName": "Mod Graph Import",
+            "description": "A safe external graph import sample using stable component IDs and the TCE graph registry.",
+            "path": "Samples~/ModGraphImport"
+        },
+        {
+            "displayName": "Adapter Template",
+            "description": "A thin project adapter guide for actor, clock, event bridge, and contract-test integration.",
+            "path": "Samples~/AdapterTemplate"
+        }
+    ],
+    "author": {
+        "name": "ZeroGameStudio",
+        "url": "https://github.com/zerogamestudio"
     },
-    {
-      "displayName": "Mod Graph Import",
-      "description": "A safe external graph import sample using stable component IDs and the TCE graph registry.",
-      "path": "Samples~/ModGraphImport"
+    "repository": {
+        "type": "git",
+        "url": "https://github.com/ZeroGameStudio-CN/zeroengine.git",
+        "directory": "com.zerogamestudio.zeroengine.tce"
     },
-    {
-      "displayName": "Adapter Template",
-      "description": "A thin project adapter guide for actor, clock, event bridge, and contract-test integration.",
-      "path": "Samples~/AdapterTemplate"
-    }
-  ],
-  "author": {
-    "name": "ZeroGameStudio",
-    "url": "https://github.com/zerogamestudio"
-  },
-  "repository": {
-    "type": "git",
-    "url": "https://github.com/liuzqk/zeroengine.git",
-    "directory": "com.zerogamestudio.zeroengine.tce"
-  },
-  "license": "MIT"
+    "license": "MIT"
 }

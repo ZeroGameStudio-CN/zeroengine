@@ -1,9 +1,22 @@
 using NUnit.Framework;
+using System.Linq;
 
 namespace POB.Extraction.Core.Package.Tests.Editor
 {
     public class ExtractionLootContentConfigValidatorTests
     {
+        [Test]
+        public void ValidateContainerPoints_DuplicateIdentityStillChecksBothReferences()
+        {
+            var config = CreateValidConfig();
+            var duplicate = new ExtractionContainerSpawnDefinition("spawn-a", "region-a", true, false, 1);
+            duplicate.Candidates.Add(new ExtractionWeightedContainerCandidate("missing-second", 1));
+            config.ContainerSpawns.Add(duplicate);
+            var report = ExtractionLootContentConfigValidator.ValidateContainerPoints(config);
+            Assert.That(report.Errors.Count, Is.EqualTo(2));
+            Assert.That(report.Issues[1].FieldPath, Is.EqualTo("$/containerSpawns[1]/Candidates[0]/ContainerTypeId"));
+        }
+
         [Test]
         public void Validate_CompleteContentConfig_PassesWithoutWarnings()
         {
@@ -62,14 +75,31 @@ namespace POB.Extraction.Core.Package.Tests.Editor
             StringAssert.Contains("Always 与 ChancePerRaid", report.FirstError);
         }
 
-        [Test]
-        public void Validate_ChancePerRaidOutsideUnitInterval_ReturnsError()
+        // Permanent regression: Always ignores the preserved probability, as runtime generation does.
+        [TestCase(-1f)]
+        [TestCase(0f)]
+        [TestCase(0.37f)]
+        [TestCase(1f)]
+        [TestCase(2f)]
+        public void Validate_AlwaysIgnoresChance(float chance)
+        {
+            var config = CreateValidConfig();
+            config.ContainerSpawns[0].Chance = chance;
+            var report = ExtractionLootContentConfigValidator.Validate(config);
+            Assert.IsTrue(report.IsValid, report.FirstError);
+            Assert.AreEqual(chance, config.ContainerSpawns[0].Chance);
+        }
+
+        [TestCase(-1f)]
+        [TestCase(0f)]
+        [TestCase(2f)]
+        public void Validate_ChancePerRaidOutsideUnitInterval_ReturnsError(float chance)
         {
             var config = CreateValidConfig();
             var spawn = config.ContainerSpawns[0];
             spawn.Always = false;
             spawn.ChancePerRaid = true;
-            spawn.Chance = 0f;
+            spawn.Chance = chance;
 
             var report = ExtractionLootContentConfigValidator.Validate(config);
 
@@ -205,6 +235,53 @@ namespace POB.Extraction.Core.Package.Tests.Editor
                     ExtractionItemRarity.Common,
                     hard.RareLootDisabled));
             Assert.IsFalse(ExtractionLootContentPolicy.IsPityEnabled(profile, hard.RareLootDisabled));
+        }
+
+        // Permanent regression: independent point errors survive earlier collection failures.
+        [Test]
+        public void ValidateContainerPoints_ReportsAllIndependentRecordsAndReferences()
+        {
+            var config = CreateValidConfig();
+            var a = config.ContainerSpawns[0];
+            a.Always = false; a.ChancePerRaid = true; a.Chance = 0;
+            a.Candidates[0].ContainerTypeId = "absent-a";
+            var b = new ExtractionContainerSpawnDefinition("spawn-b", "absent-region", false, true, 2);
+            b.Candidates.Add(new ExtractionWeightedContainerCandidate("absent-b", 1));
+            config.ContainerSpawns.Add(b);
+            var report = ExtractionLootContentConfigValidator.ValidateContainerPoints(config);
+            Assert.That(report.Errors.Count, Is.EqualTo(5));
+            Assert.That(report.Issues.All(issue => issue.FieldPath.StartsWith("$/containerSpawns")), Is.True);
+            a.Chance = 0.5f; a.Candidates[0].ContainerTypeId = "supply";
+            report = ExtractionLootContentConfigValidator.ValidateContainerPoints(config);
+            Assert.That(report.Errors.Count, Is.EqualTo(3));
+            Assert.That(report.Errors.All(error => error.Contains("spawn-b")), Is.True);
+            b.Chance = 0.5f; b.RegionId = "region-a"; b.Candidates[0].ContainerTypeId = "supply";
+            config.LootRegions[0].ContainerSpawnIds.Add("spawn-b");
+            Assert.That(ExtractionLootContentConfigValidator.ValidateContainerPoints(config).IsValid, Is.True);
+        }
+
+        [Test]
+        public void ValidateContainerPoints_MissingCatalogDoesNotInventMissingReferences()
+        {
+            var config = CreateValidConfig();
+            config.LootRegions = null;
+            var report = ExtractionLootContentConfigValidator.ValidateContainerPoints(config);
+            Assert.That(report.Issues.Count, Is.EqualTo(1));
+            Assert.That(report.Issues[0].FieldPath, Is.EqualTo("$/lootRegions"));
+        }
+
+        [Test]
+        public void ValidateContainerPoints_NullAndMalformedCandidateDoNotStopSiblingChecks()
+        {
+            var config = CreateValidConfig();
+            config.ContainerSpawns.Insert(0, null);
+            config.ContainerSpawns[1].Candidates.Add(null);
+            config.ContainerSpawns[1].Candidates.Add(new ExtractionWeightedContainerCandidate(null, 0));
+            config.ContainerSpawns[1].Candidates[0].ContainerTypeId = "absent";
+            var report = ExtractionLootContentConfigValidator.ValidateContainerPoints(config);
+            Assert.That(report.Errors.Count, Is.EqualTo(4));
+            Assert.That(report.Issues[0].FieldPath, Is.EqualTo("$/containerSpawns[0]"));
+            Assert.That(report.Errors.Last(), Does.Contain("absent"));
         }
 
         private static ExtractionPlayableConfig CreateValidConfig()

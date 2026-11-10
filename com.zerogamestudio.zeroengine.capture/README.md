@@ -61,3 +61,11 @@ Install from this repository's package path at a tested full Git commit, followi
 Add this package to the consumer's `testables` to run
 `ZeroEngine.Capture.Tests.CaptureContractTests` (EditMode). Run a real isolated
 PlayMode capture in each consuming project before promoting a version.
+
+
+## Consolidation dependency correction
+
+The 0.1.1 consolidation candidate explicitly declares Unity's built-in
+JSON Serialize module (`com.unity.modules.jsonserialize`) for this package's
+direct `JsonUtility` calls. Consumers no longer need an unrelated installed
+package to supply that module. This candidate is not a published release.
