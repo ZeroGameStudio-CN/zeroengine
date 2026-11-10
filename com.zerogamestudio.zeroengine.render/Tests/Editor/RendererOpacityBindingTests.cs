@@ -6,6 +6,27 @@ namespace ZeroEngine.Render.Tests
     public sealed class RendererOpacityBindingTests
     {
         [Test]
+        public void HiddenOverride_SurvivesFramePreparationAndRestoresOnPolicyChange()
+        {
+            var root = new GameObject("Persistent hidden contract");
+            var sprite = root.AddComponent<SpriteRenderer>(); sprite.color = new Color(.2f,.4f,.6f,.8f);
+            var binding = new RendererOpacityBinding(sprite);
+            try
+            {
+                binding.Apply(0f); binding.PrepareFrame();
+                Assert.That(sprite.forceRenderingOff, Is.True);
+                sprite.color = new Color(.4f,.3f,.2f,.6f); binding.Apply(0f);
+                binding.Apply(.5f);
+                Assert.That(sprite.forceRenderingOff, Is.False);
+                Assert.That(sprite.color.a, Is.EqualTo(.3f).Within(.001f));
+                binding.PrepareFrame(); Assert.That(sprite.color.a, Is.EqualTo(.6f).Within(.001f));
+                binding.Apply(0f); sprite.forceRenderingOff = false; binding.Apply(0f);
+                binding.Restore(); Assert.That(sprite.forceRenderingOff, Is.False);
+            }
+            finally { binding.Dispose(); Object.DestroyImmediate(root); }
+        }
+
+        [Test]
         public void PropertyBlockAuthoredBetweenFrames_KeepsItsOwnAlphaAfterFade()
         {
             var root = new GameObject("Property-block animation contract");

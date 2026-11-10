@@ -33,6 +33,11 @@ Channels are created lazily on the first partial fade. Previously injected neutr
 values still follow material animation when full intensity is restored.
 Partial fades validate ownership and apply the new tint in one property-block
 read, while retaining changes made by another writer between frames.
+Call `PrepareFrame` before animation scripts to restore color/fade inputs while
+keeping a zero-opacity visibility override. Policy changes and pool return use
+`Apply`/`Restore` to release that override. `NeedsMaterialFollow` exposes only
+previously injected values that still follow material animation. When the material
+input is unchanged, following a neutral value avoids reading its property block.
 
 Shaders without a usable opacity input, including cutout-only layers, can retain
 their appearance at intermediate values. The optional unsupported-material callback

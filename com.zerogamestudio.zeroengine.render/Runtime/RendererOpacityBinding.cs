@@ -21,6 +21,10 @@ namespace ZeroEngine.Render
         private readonly List<Material> cachedMaterials = new(), currentMaterials = new();
         private readonly List<Shader> cachedShaders = new();
         public Renderer Renderer => renderer;
+        public bool NeedsMaterialFollow
+        {
+            get { foreach (var channel in materials) if (channel.NeedsMaterialFollow) return true; return false; }
+        }
 
         public RendererOpacityBinding(Renderer renderer, Action<Renderer, Material> onUnsupported = null)
         {
@@ -63,6 +67,7 @@ namespace ZeroEngine.Render
         public void Apply(float multiplier)
         {
             multiplier = float.IsNaN(multiplier) || float.IsInfinity(multiplier) ? 1f : Mathf.Clamp01(multiplier);
+            if (multiplier <= 0f && applied && hidden && renderer && renderer.forceRenderingOff) return;
             Restore();
             if (!renderer) return;
             if (multiplier >= 1f)
@@ -145,6 +150,14 @@ namespace ZeroEngine.Render
                 var main = particle.main;
                 main.startColor = originalStartColor;
             }
+        }
+
+        // A visibility override does not alter the inputs authored by color/fade
+        // scripts. Keep it until policy/lifecycle changes instead of toggling it
+        // off and on around every animation update.
+        public void PrepareFrame()
+        {
+            if (!hidden) Restore();
         }
 
         public void Dispose() => Restore();
@@ -313,9 +326,26 @@ namespace ZeroEngine.Render
 
         // Unity cannot remove one MPB property. Keep an injected neutral value synchronized
         // with its actual material source; never turn a temporary override into a frozen fade.
+        internal bool NeedsMaterialFollow => materialSource && injected;
+
         internal void FollowMaterial()
         {
             if (!materialSource || !injected || !renderer || !material) return;
+            // If the material input did not move, the neutral override needs no
+            // MPB read. When it moves, validate ownership before writing so other
+            // authors retain every value they changed in the meantime.
+            Color currentColor = default;
+            float currentFloat = 0f;
+            if (color)
+            {
+                currentColor = material.GetColor(property);
+                if (SameColor(currentColor, neutralColor)) return;
+            }
+            else
+            {
+                currentFloat = material.GetFloat(property);
+                if (Mathf.Approximately(currentFloat, neutralFloat)) return;
+            }
             ReadBlock();
             bool exists = color ? block.HasColor(property) : block.HasFloat(property);
             if (!exists) { injected = false; return; }
@@ -324,15 +354,11 @@ namespace ZeroEngine.Render
             if (!owned) { materialSource = false; return; }
             if (color)
             {
-                var current = material.GetColor(property);
-                if (SameColor(current, neutralColor)) return;
-                neutralColor = current; block.SetColor(property, current);
+                neutralColor = currentColor; block.SetColor(property, currentColor);
             }
             else
             {
-                float current = material.GetFloat(property);
-                if (Mathf.Approximately(current, neutralFloat)) return;
-                neutralFloat = current; block.SetFloat(property, current);
+                neutralFloat = currentFloat; block.SetFloat(property, currentFloat);
             }
             WriteBlock();
         }
