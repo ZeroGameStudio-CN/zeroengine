@@ -1,6 +1,7 @@
 using System;
 using System.Text.RegularExpressions;
 using NUnit.Framework;
+using Unity.Profiling;
 using UnityEngine;
 using UnityEngine.TestTools;
 using Is = NUnit.Framework.Is;
@@ -64,28 +65,31 @@ namespace ZeroEngine.Activity.Tests
             var world = root.AddComponent<ActivityWorldDriver>();
             var observer = Child<ActivityObserver>("warm"); observer.Configure(world);
             var snapshot = new ActivityObservationSnapshot(); world.CaptureObservers(snapshot);
-            // Validate the thread counter before using it as a zero-allocation gate.
-            _ = GC.GetAllocatedBytesForCurrentThread();
-            long canaryBefore = GC.GetAllocatedBytesForCurrentThread();
-            var canary = new byte[16];
-            long canaryBytes = GC.GetAllocatedBytesForCurrentThread() - canaryBefore;
-            GC.KeepAlive(canary);
-            Assert.That(canaryBytes, Is.GreaterThan(0), "The allocation counter must observe a real managed allocation.");
+            Action empty = () => { };
+            Action canary = () => GC.KeepAlive(new byte[16]);
+            Action readBatch = () =>
+            {
+                for (int i = 0; i < 32; i++)
+                {
+                    world.CaptureObservers(snapshot);
+                    snapshot.TryGetDistance(Vector3.one, out _);
+                }
+            };
+            for (int i = 0; i < 4; i++) readBatch();
+            Assert.That(CountAllocations(empty), Is.Zero, "Recorder setup must not count as caller work.");
+            Assert.That(CountAllocations(canary), Is.GreaterThan(0), "The recorder must observe a real managed allocation.");
+            Assert.That(CountAllocations(readBatch), Is.Zero, "32 warmed capture/query batches must produce no GC.Alloc events on the calling thread.");
+        }
 
-            // Warm both operations, then measure only the caller's complete read batches.
-            for (int i = 0; i < 4; i++)
+        private static int CountAllocations(Action action)
+        {
+            using (var recorder = ProfilerRecorder.StartNew(ProfilerCategory.Internal, "GC.Alloc", 1024,
+                       ProfilerRecorderOptions.CollectOnlyOnCurrentThread))
             {
-                world.CaptureObservers(snapshot);
-                snapshot.TryGetDistance(Vector3.one, out _);
+                action();
+                recorder.Stop();
+                return recorder.Count;
             }
-            long before = GC.GetAllocatedBytesForCurrentThread();
-            for (int i = 0; i < 32; i++)
-            {
-                world.CaptureObservers(snapshot);
-                snapshot.TryGetDistance(Vector3.one, out _);
-            }
-            long allocatedBytes = GC.GetAllocatedBytesForCurrentThread() - before;
-            Assert.That(allocatedBytes, Is.Zero, "32 warmed capture/query batches must allocate zero managed bytes on the calling thread.");
         }
 
         [Test]

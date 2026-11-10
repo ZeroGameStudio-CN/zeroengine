@@ -148,16 +148,17 @@ persistence test; the corrected bounded-yield test now passes independently.
 A separate full-combination request completed package resolution; its cleanup
 probe encountered duplicate `JsonConvert` types from Localization and Newtonsoft.
 The idle disposable Editor was normally closed after clean scene/status readback,
-and that original request subsequently verified cleanup. The hung Core/legacy
-request remains retained; normal close has not ended the unresponsive process.
+and that original request subsequently verified cleanup. Normal close did not
+end the hung Core/legacy Editor. After exact user approval, its original process
+was ended without restarting; the original failed request now verifies cleanup.
 These original operations are not replayed or reclassified as passing tests.
 An imported wallet test also wrote the disposable fixture's default storage;
 that file was preserved and the test now injects external persistence ownership.
 Its content is unchanged after the corrected wallet and lifecycle checks.
 
 No production consumer manifest, lock file, scene or asset has been changed by
-this integration. Unity 2022.3, optional commercial SDK presence, Player/platform
-behavior and real POB/P5 consumer acceptance remain unverified. Do not start the
+this integration. Optional commercial SDK runtime, Player/platform behavior and
+whole-game consumer adoption remain separate acceptance scopes. Do not start the
 native Console or the synchronized AI Skill until the package acceptance gate is
 satisfied. This document records ownership and boundaries; active progress remains
 in the existing development-content registry.
@@ -186,3 +187,23 @@ The new minimal Core/Audio PlayMode lane also exposed Core's undeclared uGUI/UI
 dependencies, which larger installations had supplied indirectly. Core 2.2.2
 declares the packages and assembly it actually uses. CI keeps this three-sibling
 runtime combination separate from the five EditMode installation combinations.
+
+The existing temporary Editor now resolves 22 packages from a common fixed Git
+commit. The first 21-package readback compares 2,174 tracked files: runtime/source
+content matches after newline normalization; package manifests only add UPM's
+cache fingerprint, and an ignored-tools `.gitignore` is omitted. Three scoped
+native PlayMode checks execute the actual POB Stat binary against the installed
+kernel, P5's actual CharacterStats/memory-save projection, and P5's pool registrar
+enable/disable/destroy lifecycle. Four inspected camera readbacks from the pinned
+rim test show the light direction and restoration of the original image. These
+prove the scoped caller and rendering behavior, not full game startup or adoption.
+
+Unity 2022.3 CI includes five EditMode combinations and ten Core/Audio PlayMode
+cases. The remaining Activity allocation gate uses an owned, current-thread
+ProfilerRecorder with both empty and real-allocation controls; this exact
+measurement passed a native probe. It keeps the strict zero-allocation condition
+for 32 warmed capture/query batches. A CLR thread-byte counter is not used because
+its real-allocation control reports zero on the tested Unity Mono runtime.
+The final CI result is tracked by the draft PR rather than inferred from local
+checks. The allocation recorder follows Unity's
+[current-thread GC.Alloc example](https://docs.unity.cn/2023.2/Documentation/ScriptReference/Unity.Profiling.ProfilerRecorderOptions.CollectOnlyOnCurrentThread.html).
