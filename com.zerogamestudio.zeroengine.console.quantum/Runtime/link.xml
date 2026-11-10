@@ -1,0 +1,13 @@
+<linker>
+  <assembly fullname="QFSW.QC" ignoreIfMissing="1">
+    <type fullname="QFSW.QC.QuantumConsole" preserve="all" />
+    <type fullname="QFSW.QC.ResponseConfig" preserve="all" />
+    <type fullname="QFSW.QC.QuantumKeyConfig" preserve="all" />
+    <type fullname="QFSW.QC.ModifierKeyCombo" preserve="all" />
+  </assembly>
+  <assembly fullname="Unity.TextMeshPro" ignoreIfMissing="1">
+    <type fullname="TMPro.TMP_InputField" preserve="all" />
+    <type fullname="TMPro.TMP_Text" preserve="all" />
+    <type fullname="TMPro.TextMeshProUGUI" preserve="all" />
+  </assembly>
+</linker>

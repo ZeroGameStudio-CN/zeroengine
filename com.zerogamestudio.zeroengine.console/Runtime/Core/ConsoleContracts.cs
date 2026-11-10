@@ -186,6 +186,15 @@ namespace ZeroEngine.Console
 
     public interface IConsoleOutput { void Write(ConsoleOutput output); }
 
+    public readonly struct ConsoleOutputSnapshot
+    {
+        public long Revision { get; }
+        public long ClearRevision { get; }
+        public IReadOnlyList<ConsoleOutput> Entries { get; }
+        internal ConsoleOutputSnapshot(long revision, long clearRevision, ConsoleOutput[] entries)
+        { Revision = revision; ClearRevision = clearRevision; Entries = entries; }
+    }
+
     public sealed class ConsoleInvocation
     {
         public string Id { get; }

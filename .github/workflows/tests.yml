@@ -73,6 +73,9 @@ jobs:
           - lane: console-native
             name: Console native frontend only
             test-mode: all
+          - lane: console-quantum
+            name: Console optional adapter without vendor SDK
+            test-mode: all
 
     steps:
       - name: Checkout repository

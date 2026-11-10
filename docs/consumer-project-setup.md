@@ -111,6 +111,21 @@ ZeroEngine dependencies to a shared consumer-project branch unless that branch
 is explicitly local-only. Before handoff, replace them with Git URLs pinned to
 a pushed ZeroEngine commit.
 
+## Optional native Console candidate
+
+The Console slice is a development candidate, separate from adoption of the
+frozen gameplay packages. Install `com.zerogamestudio.zeroengine.console` for the
+native kernel/Unity host and add `com.zerogamestudio.zeroengine.console.ui` for
+the independent UI. Both entries must use the same tested commit and the normal
+Git UPM URL pattern above.
+
+`com.zerogamestudio.zeroengine.console.quantum` is an optional third entry with
+the same pin; include its Console/UI siblings explicitly. It contains no vendor
+SDK or licensed prefab. Without those assets and a verified profile, Auto selects
+Native. See the [adapter setup](../com.zerogamestudio.zeroengine.console.quantum/README.md)
+for prefab/profile, CJK font and input-lease configuration. Player/IL2CPP support
+must be established by matching build evidence before production adoption.
+
 ## Troubleshooting
 
 - Confirm the package path matches a top-level package directory in this repo.

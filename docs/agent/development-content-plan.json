@@ -267,12 +267,12 @@
       "stage": "InProgress",
       "targetReleaseId": "",
       "availability": "InternalOnly",
-      "responsibleChat": "",
-      "chatUrl": "",
-      "nextAction": "继续 G4：用干净最小依赖图验证无 QC 导入与输入模式；验证公开响应 API 的可选 QC 自有实例、原生补全、卸载和统一结果。完成 AOT／对照记录前不做 G5 批量迁移。",
+      "responsibleChat": "接手并归档版本管理 Z 包对话",
+      "chatUrl": "codex://threads/01a1c66f-d77b-7b00-88d4-37f8f3df3b13",
+      "nextAction": "继续 G4 的 Player/IL2CPP 与同条件成本验证；这两项出口满足后再做 G5 项目指令迁移，最后交付 G7 Skill。",
       "entrance": "docs/specs/2026-11-10-native-console.md",
       "resourcePath": "com.zerogamestudio.zeroengine.console/README.md",
-      "revision": "原生 Core／Unity host 与独立 uGUI 轻量界面已形成首版。22 项内核的 portable／原生结果、主线程及宿主生命周期 3 项、运行按钮／补全／暂停取消 UI 3 项成功并验证清理；1920×1080 实际 Game View 中的中文、帮助、输出已截图检查。有／无 Input System 的两份源码分支编译成功。尚未建立最小安装、QC 前端、真实项目迁移与 Player／AOT 完整证据。",
+      "revision": "原生内核23项、主线程/宿主3项、Native界面及回退5项、QC中文补全/单次执行/暂停取消/切换2项、物理移除SDK后的加载执行1项均无失败且清理已确认。Native和QC的1920×1080实际Game View画面已检查，修正补全残留、EventSystem切换、关闭后控件残留及中文字体接线。",
       "releaseEvidence": "",
       "verificationEvidence": [
         "D:/CodexArtifacts/ze-package-audit-20261110/console-compat-baseline/input-hashes.json",
@@ -285,7 +285,10 @@
         "D:/CodexArtifacts/ze-package-audit-20261110/console-ui-draft-precheck-v2/SdkPresent/result.txt",
         "D:/CodexArtifacts/ze-package-audit-20261110/console-visual-native-result.json",
         "D:/CodexArtifacts/ze-package-audit-20261110/native-console-g4.png",
-        "D:/CodexArtifacts/ze-package-audit-20261110/native-console-g4.json"
+        "D:/CodexArtifacts/ze-package-audit-20261110/native-console-g4.json",
+        "D:/CodexArtifacts/ze-package-audit-20261110/takeover-g4-evidence.json",
+        "D:/CodexArtifacts/ze-package-audit-20261110/takeover-final-package-audit.json",
+        "docs/specs/2026-11-10-native-console.md"
       ],
       "relatedContent": [
         {
@@ -297,7 +300,7 @@
           "contentId": "tool.zeroengine-package-audit-console"
         }
       ],
-      "verificationScope": "G3 包基线仍为独立 PR #81。G4 源码候选只在唯一自有临时 Editor 验证，未改正式 POB／P5 manifest／lock／场景资产；没有在公开仓库包含第三方 SDK 代码或图形资源。原生 UI 当前桌面样片不宣称移动端、全部 IME／输入模式或 QC 已验收。"
+      "verificationScope": "现有唯一临时验证工程；公开源码不含第三方SDK和临时验证fixture。Player/AOT、完整IME/平台与性能对照尚未验收；正式POB/P5包引用和场景保持原归属，尚未进入G5。"
     }
   ]
 }

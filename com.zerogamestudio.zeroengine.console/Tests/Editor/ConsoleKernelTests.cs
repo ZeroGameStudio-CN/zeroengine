@@ -221,6 +221,22 @@ namespace ZeroEngine.Console.Tests
             Assert.That(session.GetHistory(), Is.EqualTo(new[] { "missing2", "missing3" }));
         }
 
+        [Test]
+        public void OutputSnapshot_IdentifiesClearEvenWhenOutputCountStaysTheSame()
+        {
+            using var registry = new ConsoleRegistry();
+            using var session = new ConsoleSession(registry, outputCapacity: 2);
+            session.Write(new ConsoleOutput("one", ConsoleOutputLevel.Info, "before"));
+            var before = session.GetOutputSnapshot();
+            session.ClearOutput();
+            session.Write(new ConsoleOutput("two", ConsoleOutputLevel.Info, "after"));
+            var after = session.GetOutputSnapshot();
+            Assert.That(before.Entries[0].Message, Is.EqualTo("before"));
+            Assert.That(after.Entries[0].Message, Is.EqualTo("after"));
+            Assert.That(after.ClearRevision, Is.GreaterThan(before.Revision));
+            Assert.That(after.Revision, Is.GreaterThan(after.ClearRevision));
+        }
+
         private static Task<ConsoleResult> ConsoleResultTask(object data) => Task.FromResult(ConsoleResult.Success(data: data));
     }
 }

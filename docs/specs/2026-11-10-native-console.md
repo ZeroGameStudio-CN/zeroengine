@@ -82,3 +82,35 @@ Record a comparable QC/Native baseline before making cost or superiority claims.
 Only after that vertical contract is verified does G5 migrate all inventory
 entries, followed by G6 experience/cleanup and G7 synchronized Skill delivery.
 The immutable package baseline remains independently reviewable in its own PR.
+
+## Verified Editor slice, 2026-11-11
+
+The optional Quantum package now uses a source-verified 2.6.7 profile, public
+response/lifecycle APIs and cloned widgets. Native completion/history, output
+clear revisions and cancellation remain owned by the same session. The selector
+releases the previous input/EventSystem lease before opening its replacement,
+falls back on a rejected profile or opening failure, and never replays a command.
+The project may assign its own TMP font to cloned QC text widgets.
+
+| Focused check, Unity 6000.6.4f1 | Executed | Failed |
+| --- | ---: | ---: |
+| Native kernel, including bounded output and clear snapshots | 23 | 0 |
+| Main-thread dispatch and host lifecycle | 3 | 0 |
+| Native UI, paused cancellation, selection and opening fallback | 5 | 0 |
+| Verified QC: quoted Chinese completion, one execution, paused cancellation, switch to Native; unverified-profile fallback | 2 | 0 |
+| Physical SDK removal: adapter import, no loaded vendor assembly, Native execution and no missing components | 1 | 0 |
+| Package audit/project-selection Python contracts | 18 | 0 |
+
+Every local Editor request above reached a terminal result with native cleanup
+confirmed. Both frontends' actual 1920x1080 Game View output was inspected after
+adding an owned clearing camera and a transient CJK font to the isolated fixture.
+Initial missing-glyph and stale-completion findings were fixed; assertions alone
+were not used as visual acceptance. Vendor code, licensed assets and temporary
+fixtures stay outside this repository.
+
+G4 is still in progress. Player/IL2CPP execution and stripping, target-specific
+IME/input behavior and the comparable cost baseline remain unverified. The
+Editor profile deliberately refuses a different assembly identity. No G5 bulk
+project migration or G7 Skill delivery is claimed, and no production consumer
+pin or scene has been changed by this slice. The dedicated `console-quantum`
+CI lane installs the optional adapter with no vendor SDK.

@@ -11,12 +11,15 @@ class TestProjectSelectionTests(unittest.TestCase):
         packages = {
             "com.zerogamestudio.zeroengine.console": dict(unity="2022.3"),
             "com.zerogamestudio.zeroengine.console.ui": dict(unity="2022.3", dependencies={"com.zerogamestudio.zeroengine.console": "0.1.0"}),
+            "com.zerogamestudio.zeroengine.console.quantum": dict(unity="2022.3", dependencies={"com.zerogamestudio.zeroengine.console.ui": "0.1.0"}),
             "com.zerogamestudio.zeroengine.core": dict(unity="2022.3"),
         }
         core, _ = select_packages(packages, "console-core", "2022.3.62f1")
         self.assertEqual(core, ["com.zerogamestudio.zeroengine.console"])
         native, _ = select_packages(packages, "console-native", "2022.3.62f1")
         self.assertCountEqual(native, ["com.zerogamestudio.zeroengine.console", "com.zerogamestudio.zeroengine.console.ui"])
+        quantum, _ = select_packages(packages, "console-quantum", "2022.3.62f1")
+        self.assertCountEqual(quantum, [name for name in packages if ".console" in name])
 
     def test_lifecycle_keeps_audio_core_closure_without_unrelated_modules(self):
         packages = {

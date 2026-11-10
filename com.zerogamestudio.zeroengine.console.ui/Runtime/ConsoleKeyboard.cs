@@ -5,9 +5,9 @@ using UnityEngine.InputSystem;
 
 namespace ZeroEngine.Console.UI
 {
-    internal static class ConsoleKeyboard
+    public static class ConsoleKeyboard
     {
-        internal static bool Pressed(KeyCode key)
+        public static bool Pressed(KeyCode key)
         {
 #if ZE_CONSOLE_INPUT_SYSTEM && ENABLE_INPUT_SYSTEM
             var keyboard = Keyboard.current;

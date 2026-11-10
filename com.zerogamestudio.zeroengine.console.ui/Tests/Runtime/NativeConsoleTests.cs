@@ -14,6 +14,61 @@ namespace ZeroEngine.Console.UI.Tests
     public sealed class NativeConsoleTests
     {
         [UnityTest]
+        public IEnumerator Selector_OpeningFailureReleasesProviderBeforeNativeFallback()
+        {
+            var root = new GameObject("Frontend opening failure contract");
+            int leases = 0;
+            try
+            {
+                var provider = root.AddComponent<OpeningFailureFrontend>();
+                var selector = root.AddComponent<ConsoleFrontendSelector>();
+                selector.AcquireInputIsolation = () => { leases++; return new ActionLease(() => leases--); };
+                selector.ConfigureQuantum(provider);
+                selector.Open();
+                yield return null;
+                Assert.That(provider.OpenCount, Is.EqualTo(1));
+                Assert.That(provider.IsOpen, Is.False);
+                Assert.That(selector.Current.BackendId, Is.EqualTo("native"));
+                Assert.That(selector.Current.IsOpen, Is.True);
+                Assert.That(leases, Is.EqualTo(1));
+                selector.Close();
+                Assert.That(leases, Is.Zero);
+                selector.enabled = false;
+                Assert.That(provider.AcquireInputIsolation, Is.Null);
+            }
+            finally { Object.DestroyImmediate(root); }
+        }
+
+        [UnityTest]
+        public IEnumerator Selector_WithoutQuantumReopensAndRestoresItsBorrowedInputCallback()
+        {
+            GameObject root = null;
+            int leases = 0;
+            try
+            {
+                root = new GameObject("Frontend selection contract");
+                var view = root.AddComponent<NativeConsole>();
+                Func<IDisposable> original = () => { leases++; return new ActionLease(() => leases--); };
+                view.AcquireInputIsolation = original;
+                var selector = root.AddComponent<ConsoleFrontendSelector>();
+                Assert.That(selector.Current.BackendId, Is.EqualTo("native"));
+                selector.Open();
+                Assert.That(leases, Is.EqualTo(1));
+                Assert.That(UnityEngine.EventSystems.EventSystem.current, Is.Not.Null);
+                selector.Select(ConsoleFrontendPreference.Native);
+                yield return null;
+                Assert.That(view.IsOpen, Is.True);
+                Assert.That(leases, Is.EqualTo(1));
+                Assert.That(UnityEngine.EventSystems.EventSystem.current, Is.Not.Null);
+                selector.enabled = false;
+                Assert.That(leases, Is.Zero);
+                Assert.That(view.AcquireInputIsolation, Is.SameAs(original));
+                Assert.That(view.KeyboardShortcutEnabled, Is.True);
+            }
+            finally { if (root) Object.DestroyImmediate(root); }
+        }
+
+        [UnityTest]
         public IEnumerator NativeView_RunButtonUsesOneHandlerAndRestoresInputLease()
         {
             GameObject root = null;

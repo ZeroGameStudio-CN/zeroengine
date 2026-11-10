@@ -13,7 +13,7 @@ namespace ZeroEngine.Console.UI
 {
     [DisallowMultipleComponent]
     [RequireComponent(typeof(ConsoleHost))]
-    public sealed class NativeConsole : MonoBehaviour
+    public sealed class NativeConsole : MonoBehaviour, IConsoleFrontend
     {
         [SerializeField] private ConsoleHost host;
         [SerializeField] private Font font;
@@ -33,12 +33,14 @@ namespace ZeroEngine.Console.UI
         private string completionInput;
         private int selectedCompletion;
         private bool completionDirty;
+        private int observedCaret = -1;
         private float completionAt;
         private long renderedRevision = -1;
         private bool wasRunning;
         private int historyIndex = -1;
         private string draftInput = string.Empty;
         private IDisposable inputLease;
+        private ConsoleEventSystemLease eventSystemLease;
         private CursorLockMode previousLock;
         private bool previousCursor;
         private GameObject previousSelection;
@@ -46,10 +48,21 @@ namespace ZeroEngine.Console.UI
         private BaseInput previousInputOverride;
         private ConsoleInputOverride inputOverride;
         public bool IsOpen { get; private set; }
+        public string BackendId => "native";
+        public bool KeyboardShortcutEnabled { get; set; } = true;
         public ConsoleHost Host => host;
         public UnityEngine.UI.InputField InputField => input;
         public Func<IDisposable> AcquireInputIsolation { get; set; }
         public event Action<bool> OpenChanged;
+
+        public bool TryInitialize(ConsoleHost owner, out string reason)
+        {
+            if (owner) host = owner;
+            if (!host) host = GetComponent<ConsoleHost>();
+            if (host) host.Initialize();
+            reason = host && host.Session != null ? string.Empty : "Native Console host is disabled.";
+            return string.IsNullOrEmpty(reason);
+        }
 
         private void OnEnable()
         {
@@ -65,6 +78,7 @@ namespace ZeroEngine.Console.UI
             previousCursor = Cursor.visible;
             previousSelection = EventSystem.current ? EventSystem.current.currentSelectedGameObject : null;
             inputLease = AcquireInputIsolation?.Invoke();
+            eventSystemLease = ConsoleEventSystemLease.Acquire(transform);
             IsOpen = true;
             view.SetActive(true);
 #if ZE_CONSOLE_INPUT_SYSTEM && ENABLE_INPUT_SYSTEM && !ENABLE_LEGACY_INPUT_MANAGER
@@ -103,6 +117,7 @@ namespace ZeroEngine.Console.UI
                 finally
                 {
                     inputLease = null;
+                    eventSystemLease?.Dispose(); eventSystemLease = null;
                     if (Cursor.lockState == CursorLockMode.None && Cursor.visible)
                     { Cursor.lockState = previousLock; Cursor.visible = previousCursor; }
                     var events = EventSystem.current;
@@ -117,9 +132,14 @@ namespace ZeroEngine.Console.UI
 
         private void Update()
         {
-            bool composing = IsComposing();
-            if (!composing && ConsoleKeyboard.Pressed(KeyCode.BackQuote)) Toggle();
+            bool composing = IsComposing;
+            if (KeyboardShortcutEnabled && !composing && ConsoleKeyboard.Pressed(KeyCode.BackQuote)) Toggle();
             if (!IsOpen || host.Session == null) return;
+            if (input.caretPosition != observedCaret)
+            {
+                observedCaret = input.caretPosition;
+                InputChanged(input.text);
+            }
             if (!composing && ConsoleKeyboard.Pressed(KeyCode.Escape)) { Close(); return; }
             if (!composing && input.isFocused)
             {
@@ -172,14 +192,17 @@ namespace ZeroEngine.Console.UI
             return pendingExecution;
         }
 
-        private bool IsComposing()
+        public bool IsComposing
         {
-            if (inputOverride && inputOverride.isActiveAndEnabled) return !string.IsNullOrEmpty(inputOverride.compositionString);
-            try { return !string.IsNullOrEmpty(Input.compositionString); }
-            catch (InvalidOperationException) { return false; }
+            get
+            {
+                if (inputOverride && inputOverride.isActiveAndEnabled) return !string.IsNullOrEmpty(inputOverride.compositionString);
+                try { return !string.IsNullOrEmpty(Input.compositionString); }
+                catch (InvalidOperationException) { return false; }
+            }
         }
-        private void SubmitInput(string line) { if (!IsComposing()) _ = SubmitAsync(line); }
-        private void InputChanged(string value) { completionDirty = true; completionAt = Time.unscaledTime + .04f; }
+        private void SubmitInput(string line) { if (!IsComposing) _ = SubmitAsync(line); }
+        private void InputChanged(string value) { CancelCompletion(); completionDirty = true; completionAt = Time.unscaledTime + .04f; }
 
         private void NavigateHistory(int direction)
         {
@@ -223,19 +246,24 @@ namespace ZeroEngine.Console.UI
             completionCancellation?.Cancel();
             completionCancellation?.Dispose();
             completionCancellation = null;
+            var abandoned = pendingCompletion;
             pendingCompletion = null;
+            if (abandoned != null)
+                _ = abandoned.ContinueWith(task => { _ = task.Exception; }, CancellationToken.None,
+                    TaskContinuationOptions.OnlyOnFaulted | TaskContinuationOptions.ExecuteSynchronously, TaskScheduler.Default);
             currentCompletions = null;
             if (completions) completions.gameObject.SetActive(false);
         }
 
         private void RenderOutput()
         {
-            var entries = host.Session.GetOutput();
-            int first = Mathf.Max(0, entries.Length - outputRows.Count);
+            var snapshot = host.Session.GetOutputSnapshot();
+            var entries = snapshot.Entries;
+            int first = Mathf.Max(0, entries.Count - outputRows.Count);
             for (int i = 0; i < outputRows.Count; i++)
             {
                 int index = first + i;
-                bool visible = index < entries.Length;
+                bool visible = index < entries.Count;
                 var text = outputRows[i];
                 text.gameObject.SetActive(visible);
                 if (!visible) continue;
@@ -246,7 +274,7 @@ namespace ZeroEngine.Console.UI
             }
             Canvas.ForceUpdateCanvases();
             scroll.verticalNormalizedPosition = 0;
-            renderedRevision = host.Session.OutputRevision;
+            renderedRevision = snapshot.Revision;
         }
 
         private void EnsureView()
@@ -268,15 +296,6 @@ namespace ZeroEngine.Console.UI
             var canvas = view.GetComponent<Canvas>(); canvas.renderMode = RenderMode.ScreenSpaceOverlay; canvas.sortingOrder = 30000;
             var scaler = view.GetComponent<UnityEngine.UI.CanvasScaler>(); scaler.uiScaleMode = UnityEngine.UI.CanvasScaler.ScaleMode.ScaleWithScreenSize;
             scaler.referenceResolution = new Vector2(1280, 720); scaler.matchWidthOrHeight = .5f;
-            if (!EventSystem.current)
-            {
-                var events = new GameObject("Console EventSystem", typeof(EventSystem)); events.transform.SetParent(view.transform, false);
-#if ZE_CONSOLE_INPUT_SYSTEM && ENABLE_INPUT_SYSTEM
-                var module = events.AddComponent<InputSystemUIInputModule>(); module.AssignDefaultActions();
-#else
-                events.AddComponent<StandaloneInputModule>();
-#endif
-            }
             var panel = Rect("Panel", view.transform); Stretch(panel, new Vector2(0, .38f), Vector2.one, new Vector2(16, 12), new Vector2(-16, -16));
             panel.gameObject.AddComponent<UnityEngine.UI.Image>().color = new Color(.045f, .055f, .075f, .97f);
             var title = Text("Title", panel, "ZE CONSOLE"); Stretch(title.rectTransform, new Vector2(0, 1), Vector2.one, new Vector2(16, -40), new Vector2(-300, -8)); title.fontStyle = FontStyle.Bold;

@@ -30,6 +30,7 @@ namespace ZeroEngine.Console
         private CancellationTokenSource current;
         private bool disposed;
         private long outputRevision;
+        private long clearRevision;
         public ConsoleRegistry Registry { get; }
         public ConsoleValues Values { get; }
         public long OutputRevision { get { lock (sync) return outputRevision; } }
@@ -69,8 +70,9 @@ namespace ZeroEngine.Console
         }
 
         public ConsoleOutput[] GetOutput() { lock (sync) return output.ToArray(); }
+        public ConsoleOutputSnapshot GetOutputSnapshot() { lock (sync) return new ConsoleOutputSnapshot(outputRevision, clearRevision, output.ToArray()); }
         public string[] GetHistory() { lock (sync) return history.ToArray(); }
-        public void ClearOutput() { lock (sync) { output.Clear(); outputRevision++; } }
+        public void ClearOutput() { lock (sync) { output.Clear(); outputRevision++; clearRevision = outputRevision; } }
 
         public ConsoleCommand[] GetCommands(ConsoleCaller caller)
         {
