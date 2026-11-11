@@ -29,6 +29,10 @@ namespace ZeroEngine.Render
         private readonly List<int> triangles=new(4096);
         private readonly ParticleSystem.Particle[] sprayParticles=new ParticleSystem.Particle[96];
         private ParticleSystem authoredSpray;
+        private bool pendingSprayCleanup;
+        private System.Random pendingSprayRandom;
+        private Vector2 pendingSprayDirection;
+        private float pendingSprayIntensity;
         private BloodImpactStyle hitStyle;
         private bool Composite => !IsDeath && hitStyle!=BloodImpactStyle.Original;
         private Transform visuals;
@@ -219,6 +223,27 @@ namespace ZeroEngine.Render
             if(roomVersion!=context.ScopeVersion){Stop();return;}
             Advance(clock?.Invoke()??0f);
         }
+        private void LateUpdate()=>PrepareForRender();
+        /// <summary>Finish first-use native spray preparation in a safe update phase, before rendering.</summary>
+        public void PrepareForRender()
+        {
+            if(!pendingSprayCleanup || !Playing || !authoredSpray)return;
+            // Native hits may arrive inside animation/physics callbacks. Keep the clone inactive
+            // until this safe phase so copied scripts never Awake or Enable before removal.
+            var child=authoredSpray.gameObject;
+            foreach(var script in child.GetComponentsInChildren<MonoBehaviour>(true))DestroyImmediate(script);
+            foreach(var audio in child.GetComponentsInChildren<AudioSource>(true))DestroyImmediate(audio);
+            foreach(var collider in child.GetComponentsInChildren<Collider2D>(true))DestroyImmediate(collider);
+            foreach(var collider in child.GetComponentsInChildren<Collider>(true))DestroyImmediate(collider);
+            context.PrepareAuthoredSpray?.Invoke(child);
+            pendingSprayCleanup=false;child.SetActive(true);
+            if(pendingSprayRandom!=null && Composite)
+            {
+                EmitAuthoredSpray(pendingSprayRandom,pendingSprayDirection,pendingSprayIntensity);
+                authoredSpray.Simulate(Mathf.Min(elapsed,.1f),false,false,false);
+            }
+            pendingSprayRandom=null;
+        }
         private void RefreshPalette()
         {
             if(!Playing)return;
@@ -239,7 +264,7 @@ namespace ZeroEngine.Render
             }
             if(Composite && authoredSpray)
             {
-                if(elapsed<1.1f)authoredSpray.Simulate(delta,false,false,false);
+                if(elapsed<1.1f && !pendingSprayCleanup)authoredSpray.Simulate(delta,false,false,false);
                 else if(authoredSpray.particleCount!=0)authoredSpray.Stop(true,ParticleSystemStopBehavior.StopEmittingAndClear);
             }
             DrawThreads();if(alive==0 && (!authoredSpray || authoredSpray.particleCount==0))Stop(false);
@@ -420,16 +445,19 @@ namespace ZeroEngine.Render
                 // Clone under an inactive owner so prefab scripts cannot run; retain only cosmetic native data.
                 var staging=new GameObject("Blood spray preparation"){hideFlags=HideFlags.DontSave};staging.SetActive(false);
                 var child=Instantiate(template.gameObject,staging.transform,false);child.name="Authored blood spray";child.hideFlags=HideFlags.DontSave;child.layer=gameObject.layer;
-                foreach(var script in child.GetComponentsInChildren<MonoBehaviour>(true))DestroyImmediate(script);
-                foreach(var audio in child.GetComponentsInChildren<AudioSource>(true))DestroyImmediate(audio);
-                foreach(var collider in child.GetComponentsInChildren<Collider2D>(true))DestroyImmediate(collider);
-                foreach(var collider in child.GetComponentsInChildren<Collider>(true))DestroyImmediate(collider);
+                child.SetActive(false);pendingSprayCleanup=true;
                 authoredSpray=child.GetComponent<ParticleSystem>();authoredSpray.Stop(true,ParticleSystemStopBehavior.StopEmittingAndClear);
-                context.PrepareAuthoredSpray?.Invoke(child);child.transform.SetParent(visuals,false);Destroy(staging);
+                child.transform.SetParent(visuals,false);Destroy(staging);
                 var main=authoredSpray.main;main.playOnAwake=false;main.loop=false;main.maxParticles=96;
                 main.stopAction=ParticleSystemStopAction.None;main.cullingMode=ParticleSystemCullingMode.AlwaysSimulate;
                 main.simulationSpace=ParticleSystemSimulationSpace.World;
             }
+            if(pendingSprayCleanup)
+            {pendingSprayRandom=random;pendingSprayDirection=direction;pendingSprayIntensity=intensity;return;}
+            EmitAuthoredSpray(random,direction,intensity);
+        }
+        private void EmitAuthoredSpray(System.Random random,Vector2 direction,float intensity)
+        {
             authoredSpray.transform.position=transform.position+Vector3.back*.55f;
             authoredSpray.Stop(true,ParticleSystemStopBehavior.StopEmittingAndClear);
             var settings=authoredSpray.main;
@@ -455,6 +483,7 @@ namespace ZeroEngine.Render
         {
             if(context!=null)context.PaletteChanged-=RefreshPalette;
             Playing=false;lifetime?.Dispose();lifetime=null;clock=null;
+            pendingSprayRandom=null;
             if(authoredSpray)authoredSpray.Stop(true,ParticleSystemStopBehavior.StopEmittingAndClear);
             if(visuals)visuals.gameObject.SetActive(false);
             if(restoreNative)

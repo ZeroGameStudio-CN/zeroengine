@@ -137,6 +137,10 @@ Pass an `IDisposable` particle-pool lease to Play; the view releases it on Stop.
 borrowed particle/template dependencies resident until all consumers have stopped.
 The optional `PrepareAuthoredSpray` callback can apply the consumer's palette component
 to an isolated cosmetic clone; the source template is never changed.
+New native spray clones stay inactive until LateUpdate safely removes copied components,
+then become visible before rendering. Animation/physics hit callbacks never destroy
+components immediately. Manual render drivers call `PrepareForRender` from their safe
+update phase; normal MonoBehaviour use needs no extra call.
 
 For surfaces, Bind, Add, enqueue in `BloodSurfaceUploadQueue`, then Advance, Pump once
 per rendered frame, and Render your explicit renderer list. The queue coalesces each
