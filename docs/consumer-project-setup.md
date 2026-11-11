@@ -1,5 +1,13 @@
 # Consumer Project Setup
 
+For optional project AI guidance, install
+`com.zerogamestudio.zeroengine.ai-support` at the same tested commit and follow
+its [explicit snapshot/synchronization workflow](../com.zerogamestudio.zeroengine.ai-support/README.md).
+It uses actual registered PackageInfo and matching manifest/lock hashes, previews
+changes, and writes only the project's `.agents/skills/zeroengine` output.
+It preserves other Skills, local modifications and package pins; a version split
+or local trial remains explicitly identified rather than silently unified.
+
 This guide is for Unity projects that consume ZeroEngine packages.
 
 The [current consolidation review](packages/2026-11-10-consolidation-review.md)

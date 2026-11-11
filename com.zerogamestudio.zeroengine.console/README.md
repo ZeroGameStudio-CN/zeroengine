@@ -1,6 +1,6 @@
 # ZeroEngine.Console
 
-G4 implementation candidate. This package owns native command contracts and a
+Implementation candidate. This package owns native command contracts and a
 frontend-independent execution pipeline. Projects explicitly register modules;
 gameplay packages do not acquire a Console dependency.
 
@@ -45,6 +45,10 @@ feedback can explicitly enable `CaptureUnityLogs`; messages use the session's
 bounded queue and the subscription ends when the host is disabled. Capture is
 off by default and does not turn log text into a business result.
 
-The first candidate has 22 portable/native kernel cases and three native host
-lifecycle cases. Native UI/QC compatibility and project migration have separate
-gates; these counts do not establish Player or consumer adoption.
+Both Host execution overloads return a structured `Cancelled` result when the
+request token is cancelled before main-thread dispatch. The handler is not run;
+this applies to requests made on the Unity thread and on worker threads.
+
+The current focused Unity 6 evidence covers 27 kernel cases and five Host cases.
+Native UI/QC compatibility and project migration retain their separate gates;
+these counts do not establish Player or consumer adoption.

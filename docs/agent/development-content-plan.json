@@ -269,10 +269,10 @@
       "availability": "InternalOnly",
       "responsibleChat": "01a1c66f-d77b-7b00-88d4-37f8f3df3b13",
       "chatUrl": "codex://threads/01a1c66f-d77b-7b00-88d4-37f8f3df3b13",
-      "nextAction": "G4 已按明确兼容边界收口；迁移 G5 的项目命令、补全、面板及调用方，保留冻结别名、业务保护和其他未提交工作；随后 G6 体验／成本及消费者验收，最后交付项目级同步 Skill。验证使用 CLI／PlayMode。",
+      "nextAction": "验证并接入同一候选提交的 AI Support／Console 包，按实际安装图同步 POB 项目 Skill；保全其他本地版本与四个原作者保留的未提交命令，完成任务源码精确提交及清理。",
       "entrance": "docs/specs/2026-11-10-native-console.md",
       "resourcePath": "com.zerogamestudio.zeroengine.console/README.md",
-      "revision": "G4：84d523e 的六组真实 Player 结果已核对。Native Mono／IL2CPP、QC Mono 和两组非开发包保护有证据；QC 2.6.7 在 Unity 6000.6.4f1 Windows IL2CPP 返回空 MVID，保持明确不支持及任务 failed，Native 回退的补全、取消、受控组词单次执行和输入恢复独立验证。最终 1661 个持久产物文件摘要一致；签名运行时 counter155，维护 reservation 已归还。",
+      "revision": "G5 原生目录与真实项目流程已验证；G6 移除 QC 编译耦合、精确目标链接、可见 SDK 控件、12 秒 1080p 录制、切换及完整恢复均有证据，许可 SDK 保留。G7 新增 AI Support 0.1.0 候选，14 项同步 CLI 合同、实际 Editor PackageInfo 导出和隔离项目同步已验证；待 POB Git 依赖接入、项目指引同步与精确提交。",
       "releaseEvidence": "",
       "verificationEvidence": [
         "D:/CodexArtifacts/ze-package-audit-20261110/console-compat-baseline/input-hashes.json",

@@ -34,6 +34,8 @@ mixing in game-specific content.
 | `com.zerogamestudio.zeroengine.pathfinding2d` | 2D platform navigation, graph generation, jump links, route costs, and diagnostics. |
 | `com.zerogamestudio.zeroengine.persistence` | Save and persistence infrastructure. |
 | `com.zerogamestudio.zeroengine.ui` | Runtime UI framework and toast notification systems. |
+| `com.zerogamestudio.zeroengine.console` | Native command sessions, typed automation, policy and completion; separate native UI and optional Quantum adapters. |
+| `com.zerogamestudio.zeroengine.ai-support` | Explicit project Skill synchronization from actual installed module versions. |
 | `com.zerogamestudio.analytics` | Self-hostable analytics and bug feedback SDK. |
 
 There are also packages for AI, audio, combat, economy, input, localization,

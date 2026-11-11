@@ -234,3 +234,43 @@ maintenance reservation was released at generation 59833. No publish or
 notification was requested. The six-config evidence establishes the bounded G4
 exit and permits G5 migration; project adoption, G6 experience/cost acceptance,
 physical OS IME acceptance and G7 Skill delivery remain separate.
+
+## Native project migration checkpoint, 2026-11-12
+
+The POB working workspace now uses an explicit 161-entry native declaration
+catalog, schema 1, with declaration digest
+`b29a7ea99a944aedc65aff91c0b8a9ba134bd9fc6ded656fa629b44149d3060d`.
+Original handlers, aliases, defaults and business guards remain the authority.
+Legacy void/string handlers return `Unconfirmed`; fire-and-forget operations
+return `Started`. Native help, completion, typed automation and text entry share
+the same session and policy. A transient project panel owns pause/input lifetime.
+
+All three Console packages in this scoped consumer verification resolve to
+`038ed1772f775594faac522d17929a5d2b7993a3`. Other package pins and local trials
+remain separately owned. GitHub run 43070638035, attempt 2, completed all nine
+Unity installation lanes and the package-boundary check. Real isolated POB
+PlayMode verified the original god-mode state change and restoration, one submit,
+completion, honest cancellation/results, native panel reopening and navigation,
+cursor, selection and time restoration. The normal saves and audio state were
+restored after PlayMode exit.
+
+G6 removes the old QC command-table/suggestor dependency from POB's debugging
+assembly while retaining the licensed SDK and optional presentation asset.
+Actual Windows Player script compilation produced 246 assemblies per mode.
+Target-aware development links cover 131 original methods; release links contain
+zero development entries. This is compiled target-metadata evidence, not a full
+POB IL2CPP Player execution. The project extracts the verified SDK widget from
+its old initially-transparent panel wrapper, so the optional QC clone is actually
+visible. The native and QC controls, completion, shared session and restoration
+were inspected in a 1920x1080 H.264 recording with a measured 12-second wall clock.
+Sixteen warmed help invocations retain `Unconfirmed`; their Editor timings are
+diagnostic. The allocation counter returned no change for a known managed
+allocation and is explicitly unavailable, not a zero-allocation result.
+
+The optional AI Support package supplies a read-only registered-package snapshot,
+version-aware project Skill and explicit CLI synchronization. Fourteen isolated
+CLI checks cover ownership, stale snapshots, version/repository distinctions,
+local trials, downgrade/schema conflicts and write recovery. Its exporter and a
+complete project-local synchronization were also exercised with the actual
+Editor PackageInfo. POB adoption and exact source submission remain in progress;
+human experience acceptance, physical OS IME and user release stay separate.

@@ -1,0 +1,4 @@
+interface:
+  display_name: "ZeroEngine Project"
+  short_description: "Use installed ZeroEngine packages and version-aware guidance"
+  default_prompt: "Use $zeroengine to inspect the installed module versions and integrate the requested feature."
