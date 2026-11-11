@@ -269,10 +269,10 @@
       "availability": "InternalOnly",
       "responsibleChat": "接手并归档版本管理 Z 包对话",
       "chatUrl": "codex://threads/01a1c66f-d77b-7b00-88d4-37f8f3df3b13",
-      "nextAction": "继续 G4：受控交互夹具已完成C#编译预检，实际桌面接管等待用户单独许可；随后验证真实Windows中文组词、首次回车不执行、第二次只执行一次及关闭恢复。SDK存在时的QC Player仍须匹配独立兼容证据。G4出口满足后才做G5批量迁移，G7最后交付。",
+      "nextAction": "继续G4：将当前EventSystem组词输入源修正绑定到新的受管Git pin，重跑Mono与IL2CPP隔离Player。用户指定CLI/PlayMode，不进行蓝框桌面接管。SDK存在时的QC Player继续保留匹配兼容性证据要求，G4出口后才进行G5批量迁移和最后的G7交付。",
       "entrance": "docs/specs/2026-11-10-native-console.md",
       "resourcePath": "com.zerogamestudio.zeroengine.console/README.md",
-      "revision": "原生内核23项、主线程/宿主3项、Native界面及回退5项、QC中文补全/单次执行/暂停取消/切换2项、物理移除SDK后的加载执行1项均无失败且清理已确认。Native和QC的1920×1080实际Game View画面已检查，修正补全残留、EventSystem切换、关闭后控件残留及中文字体接线。 同条件 Editor 补全样片 P50：Native 42.08ms、QC 42.36ms，包含40ms去抖，仅作诊断，不建立Player性能结论。固定ZE入口已按现行控制面/Worker基线受管上线；Windows签名运行时counter147。任务job-4fa8445022从同一Git pin e47ce24构建并实际运行Mono开发、IL2CPP开发和IL2CPP非开发三配置，均返回PASS，796个产物文件摘要逐项读回一致，Player日志无异常，构建与CI租约已释放。非开发包宿主保持默认关闭。",
+      "revision": "原生内核23项、主线程/宿主3项、Native界面及回退5项、QC中文补全/单次执行/暂停取消/切换2项、物理移除SDK后的加载执行1项均无失败且清理已确认。Native和QC的1920×1080实际Game View画面已检查，修正补全残留、EventSystem切换、关闭后控件残留及中文字体接线。 同条件 Editor 补全样片 P50：Native 42.08ms、QC 42.36ms，包含40ms去抖，仅作诊断，不建立Player性能结论。固定ZE入口已按现行控制面/Worker基线受管上线；Windows签名运行时counter147。任务job-4fa8445022从同一Git pin e47ce24构建并实际运行Mono开发、IL2CPP开发和IL2CPP非开发三配置，均返回PASS，796个产物文件摘要逐项读回一致，Player日志无异常，构建与CI租约已释放。非开发包宿主保持默认关闭。 新增受控PlayMode组词回归：Native和QC旧实现均提前执行1次；改为读取当前EventSystem BaseInput后，两个前端组词阶段0次、确认后1次且输入恢复；6项Native UI回归无失败，已确认原生清理。",
       "releaseEvidence": "",
       "verificationEvidence": [
         "D:/CodexArtifacts/ze-package-audit-20261110/console-compat-baseline/input-hashes.json",
@@ -299,7 +299,12 @@
         "D:/CodexArtifacts/ze-package-audit-20261110/takeover-ze-player-evidence.json",
         "D:/CodexArtifacts/ze-package-audit-20261110/takeover-ops-type-fix-qualified.json",
         "D:/CodexArtifacts/ze-package-audit-20261110/takeover-control-activated.json",
-        "D:/CodexArtifacts/ze-package-audit-20261110/takeover-worker-147-postinstall-status.json"
+        "D:/CodexArtifacts/ze-package-audit-20261110/takeover-worker-147-postinstall-status.json",
+        "D:/CodexArtifacts/ze-package-audit-20261110/takeover-composition-native-before.json",
+        "D:/CodexArtifacts/ze-package-audit-20261110/takeover-composition-quantum-before.json",
+        "D:/CodexArtifacts/ze-package-audit-20261110/takeover-composition-bound-status.json",
+        "D:/CodexArtifacts/ze-package-audit-20261110/takeover-composition-af8e6bf05a857811cd4e6844a0937f31-result.json",
+        "D:/CodexArtifacts/ze-package-audit-20261110/takeover-composition-6364b709c29a10d84846f2ef653fe2c6-result.json"
       ],
       "relatedContent": [
         {
@@ -311,7 +316,7 @@
           "contentId": "tool.zeroengine-package-audit-console"
         }
       ],
-      "verificationScope": "无SDK的Windows Mono/IL2CPP运行、AOT与生命周期已有受管实机证据；Native和QC既有Editor渲染画面及诊断性成本样片另有记录。真实目标画面/IME与SDK存在时匹配的QC Player profile尚未验收。现有Candidate信任沿原Owner密钥和两台Worker原范围续期30天，epoch4已安装，有效期至2026-12-11T03:24:53Z；私钥仅在原Owner本机签名，没有复制到服务、构建机或仓库。正式POB/P5引用和场景未接入，尚未进入G5；不声明发布。"
+      "verificationScope": "无SDK的Windows Mono/IL2CPP运行、AOT与生命周期已有受管实机证据；Native和QC既有Editor渲染画面及诊断性成本样片另有记录。用户指定CLI/PlayMode后，新增结果仅覆盖受控组词和提交事件，不代表物理系统IME；SDK存在时匹配的QC Player profile仍是显式兼容性限制。当前输入源修正尚待新的受管Player证据。现有Candidate信任沿原Owner密钥和两台Worker原范围续期30天，epoch4已安装，有效期至2026-12-11T03:24:53Z；私钥仅在原Owner本机签名，没有复制到服务、构建机或仓库。正式POB/P5引用和场景未接入，尚未进入G5；不声明发布。"
     }
   ]
 }

@@ -192,15 +192,7 @@ namespace ZeroEngine.Console.UI
             return pendingExecution;
         }
 
-        public bool IsComposing
-        {
-            get
-            {
-                if (inputOverride && inputOverride.isActiveAndEnabled) return !string.IsNullOrEmpty(inputOverride.compositionString);
-                try { return !string.IsNullOrEmpty(Input.compositionString); }
-                catch (InvalidOperationException) { return false; }
-            }
-        }
+        public bool IsComposing => ConsoleKeyboard.IsComposing;
         private void SubmitInput(string line) { if (!IsComposing) _ = SubmitAsync(line); }
         private void InputChanged(string value) { CancelCompletion(); completionDirty = true; completionAt = Time.unscaledTime + .04f; }
 

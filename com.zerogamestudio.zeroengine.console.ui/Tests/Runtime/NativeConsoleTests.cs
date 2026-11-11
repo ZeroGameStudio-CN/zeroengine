@@ -113,6 +113,72 @@ namespace ZeroEngine.Console.UI.Tests
         }
 
         [UnityTest]
+        public IEnumerator NativeView_CompositionInputDefersRunUntilCommit()
+        {
+            GameObject root = null, eventsOwner = null;
+            NativeConsole view = null;
+            UnityEngine.EventSystems.BaseInputModule inputModule = null;
+            UnityEngine.EventSystems.BaseInput previousInput = null;
+            CompositionInputSource controlled = null;
+            IDisposable module = null;
+            int calls = 0, leases = 0;
+            string received = null;
+            var previousLock = Cursor.lockState;
+            bool previousCursor = Cursor.visible;
+            try
+            {
+                var events = UnityEngine.EventSystems.EventSystem.current;
+                if (!events)
+                {
+                    eventsOwner = new GameObject("Composition event system", typeof(UnityEngine.EventSystems.EventSystem), typeof(UnityEngine.EventSystems.StandaloneInputModule));
+                    events = eventsOwner.GetComponent<UnityEngine.EventSystems.EventSystem>();
+                }
+                inputModule = events.currentInputModule;
+                if (!inputModule) inputModule = events.GetComponent<UnityEngine.EventSystems.BaseInputModule>();
+                Assert.That(inputModule, Is.Not.Null);
+                root = new GameObject("Composition submit contract");
+                controlled = root.AddComponent<CompositionInputSource>();
+                previousInput = inputModule.inputOverride;
+                inputModule.inputOverride = controlled;
+                var host = root.AddComponent<ConsoleHost>();
+                view = root.AddComponent<NativeConsole>();
+                view.AcquireInputIsolation = () => { leases++; return new ActionLease(() => leases--); };
+                module = host.Registry.Register("composition", new[] {
+                    new ConsoleBinding(new ConsoleCommand("composition.write", "composition-write", "composition", "Read committed Unicode input.",
+                        new[] { new ConsoleParameter("value", typeof(string)) }),
+                        (context, args, token) => { calls++; received = args.Get<string>(0); return Task.FromResult(ConsoleResult.Success(received)); }) });
+                view.Open();
+                yield return null;
+                yield return null;
+                inputModule.inputOverride = controlled;
+                controlled.Composition = "ni'hao";
+                view.InputField.text = "composition-write 你好";
+                Button(view, "运行").onClick.Invoke();
+                yield return null;
+                Assert.That(view.IsComposing, Is.True);
+                Assert.That(calls, Is.Zero);
+                controlled.Composition = string.Empty;
+                Button(view, "运行").onClick.Invoke();
+                while (host.Session.IsRunning) yield return null;
+                Assert.That(calls, Is.EqualTo(1));
+                Assert.That(received, Is.EqualTo("你好"));
+                view.Close();
+                Assert.That(leases, Is.Zero);
+                Assert.That(inputModule.inputOverride, Is.SameAs(controlled));
+                Assert.That(Cursor.lockState, Is.EqualTo(previousLock));
+                Assert.That(Cursor.visible, Is.EqualTo(previousCursor));
+            }
+            finally
+            {
+                if (view) view.Close();
+                if (inputModule && inputModule.inputOverride == controlled) inputModule.inputOverride = previousInput;
+                module?.Dispose();
+                if (root) Object.DestroyImmediate(root);
+                if (eventsOwner) Object.DestroyImmediate(eventsOwner);
+            }
+        }
+
+        [UnityTest]
         public IEnumerator DynamicCompletion_ButtonAppliesNativeQuotedArgument()
         {
             GameObject root = null;

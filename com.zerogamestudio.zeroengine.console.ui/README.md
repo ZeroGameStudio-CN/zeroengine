@@ -20,3 +20,9 @@ Both presentations use the same host, policy, quoted argument completion,
 bounded output/history and cancellation. Switching closes the previous view
 and releases its EventSystem/input state before opening the next; it does not
 cancel or replay an already started business command.
+
+Composition guards read the current EventSystem module's active `BaseInput`,
+including its `inputOverride`, before falling back to Unity's legacy input.
+Custom input providers must expose their current `compositionString` there.
+Native and Quantum use the same guard and defer submission while that provider
+reports an active composition.

@@ -139,3 +139,19 @@ The fixed managed entry is qualified by ContentBuilder source
 Windows runtime uses signed counter 147. The independent `console-quantum`
 package CI lane also passed without vendor SDK. Production consumer pins and
 scenes retain their existing owners.
+
+## Controlled composition regression, 2026-11-11
+
+The user selected CLI/PlayMode validation rather than desktop takeover. A real
+PlayMode UI event with a controlled `BaseInput` exposed premature execution in
+both frontends: their guards read the global legacy composition string while
+the active EventSystem supplied a different composition source. Both now use
+the current module's active input provider, with the prior legacy fallback.
+
+The same private SDK-present Native/QC fixture now records zero calls while
+composing, one call with committed `你好`, and restored input/cursor ownership
+on close (2 cases). The package's six Native UI cases also pass, including a new
+Run-button regression using the same public EventSystem input contract. Every
+request reached terminal cleanup. These are controlled composition and submit
+events; no physical Windows IME or desktop control is claimed. Matching managed
+Player evidence for this correction remains pending.

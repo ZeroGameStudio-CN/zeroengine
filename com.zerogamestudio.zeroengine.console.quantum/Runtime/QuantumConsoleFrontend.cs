@@ -37,10 +37,7 @@ namespace ZeroEngine.Console.Quantum
         private GameObject previousSelection;
         public string BackendId => "quantum";
         public bool IsOpen { get; private set; }
-        public bool IsComposing
-        {
-            get { try { return !string.IsNullOrEmpty(Input.compositionString); } catch (InvalidOperationException) { return false; } }
-        }
+        public bool IsComposing => ConsoleKeyboard.IsComposing;
         public Func<IDisposable> AcquireInputIsolation { get; set; }
         public GameObject OwnedInstance => owned;
 
