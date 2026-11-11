@@ -173,3 +173,19 @@ The maintenance drain was released at generation 243. SDK-present QC Player
 identity remains an explicit compatibility boundary: an unmatched profile uses
 Native. Consumer migration, experience acceptance and Skill delivery retain
 their later stages.
+
+## Target-compiled QC profile, 2026-11-11
+
+The SDK-present Player candidate now has an explicit build-time authoring path.
+An Editor-only metadata probe compiled the actual QC SDK for the Windows Player
+and read a different MVID from the loaded Editor module. The verifier reads the
+compiled module without loading another vendor assembly into the Editor domain,
+then stamps target/backend/Unity version and the exact module identity. Runtime
+matching retains that exact identity check; it rejects Editor profiles in Players
+and Player profiles in the Editor. No blanket AOT exemption is introduced.
+
+Four private metadata/precompile cases, five SDK-absent profile guard cases,
+the two existing SDK integration cases and two controlled composition cases
+passed with native cleanup confirmed. The managed harness is being extended to
+run both SDK-absent and SDK-present Mono/IL2CPP configurations against fixed,
+read-only licensed SDK inputs. Actual QC Player execution remains pending.

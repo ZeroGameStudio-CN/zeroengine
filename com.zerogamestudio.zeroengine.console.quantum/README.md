@@ -42,11 +42,18 @@ restoration. It never leaves a borrowed QC instance in response mode. A profile
 or opening failure selects Native with one specific reason. Already started
 commands are never replayed during a frontend change.
 
-The source profile currently has Editor evidence. Its assembly module identity
-is deliberately checked at runtime: a different Player/AOT assembly needs matching
-build evidence rather than being declared compatible from an Editor result.
+An Editor profile is accepted only in the Editor. For a Windows Player, compile
+scripts with the final target/backend/development settings first, then call
+`QuantumProfileVerifier.VerifyPlayerAssembly(prefab, compiledQcDll,
+RuntimePlatform.WindowsPlayer, backend)` and save the returned owned asset before
+serializing the build scene. The verifier reads the compiled DLL's public PE
+metadata through Unity's bundled Cecil, without loading the vendor DLL into the
+Editor domain. It binds assembly name, exact module ID, DLL SHA-256, Unity version,
+platform and `mono`/`il2cpp` backend. A changed identity still selects Native.
+Keep the compilation inputs unchanged between this step and BuildPlayer; a
+Player build/run must establish compatibility for the resulting artifact.
 The supplied `link.xml` preserves public vendor types used by this bridge and
 tolerates a missing SDK. The SDK-absent Mono and IL2CPP Players passed managed
 build/run checks at e47ce24, including Native fallback. SDK-present QC Player
-compatibility, rendered input/IME acceptance and full project migration remain
+compatibility of this new build profile, rendered input/IME acceptance and full project migration remain
 separate acceptance items.

@@ -269,10 +269,10 @@
       "availability": "InternalOnly",
       "responsibleChat": "接手并归档版本管理 Z 包对话",
       "chatUrl": "codex://threads/01a1c66f-d77b-7b00-88d4-37f8f3df3b13",
-      "nextAction": "按既定顺序收束G4协议及明确兼容边界，再推进G5项目指令、补全、面板与调用方迁移；保留旧void业务结果未确认语义和单一处理器。G6体验/成本验收后最后交付G7 Skill。用户明确采用CLI/PlayMode，不进行蓝框桌面接管。",
+      "nextAction": "先收口G4 QC Player：按目标编译DLL的精确MVID/后端生成profile，使用固定只读SDK输入在受管构建中核验含/不含SDK的Mono和IL2CPP。通过后依次推进G5、G6，最后交付同步Skill。验证采用CLI/PlayMode。",
       "entrance": "docs/specs/2026-11-10-native-console.md",
       "resourcePath": "com.zerogamestudio.zeroengine.console/README.md",
-      "revision": "G3稳定包基线和Console既有Editor行为证据保留。输入源修正e4c028a在Native/QC受控组词用例得到0次提前调用、确认后1次调用及关闭恢复，另6项Native UI回归无失败；全部原生清理已确认。e4c028a公开9条Unity组合及包边界CI成功。受管任务job-55a1ecc89b在3060Ti实际构建并运行Mono开发、IL2CPP开发、IL2CPP非开发三配置，均PASS；两个开发后端都实际执行CLI受控组词事件，保留中文值且只调用一次，非开发宿主默认关闭。796个产物文件摘要逐项核对一致，Player日志无匹配异常。签名运行时counter148与固定Git合同已上线，维护drain已归还generation243；构建/CI租约与Unity进程均空闲。",
+      "revision": "G3稳定包基线和Console既有Editor行为证据保留。输入源修正e4c028a在Native/QC受控组词用例得到0次提前调用、确认后1次调用及关闭恢复，另6项Native UI回归无失败；全部原生清理已确认。e4c028a公开9条Unity组合及包边界CI成功。受管任务job-55a1ecc89b在3060Ti实际构建并运行Mono开发、IL2CPP开发、IL2CPP非开发三配置，均PASS；两个开发后端都实际执行CLI受控组词事件，保留中文值且只调用一次，非开发宿主默认关闭。796个产物文件摘要逐项核对一致，Player日志无匹配异常。签名运行时counter148与固定Git合同已上线，维护drain已归还generation243；构建/CI租约与Unity进程均空闲。 新的Player profile作者工具已完成预编译原型：实际Player SDK MVID与Editor不同；读取工具不向Editor重复加载供应商DLL。4项元数据/预编译、5项无SDK保护和4项既有QC/组词回归均无失败且清理确认。新六配置受管Player实包尚待执行。",
       "releaseEvidence": "",
       "verificationEvidence": [
         "D:/CodexArtifacts/ze-package-audit-20261110/console-compat-baseline/input-hashes.json",
@@ -312,7 +312,11 @@
         "D:/CodexArtifacts/ze-package-audit-20261110/takeover-cli-control-activated.json",
         "D:/CodexArtifacts/ze-package-audit-20261110/takeover-cli-worker-install.json",
         "D:/CodexArtifacts/ze-package-audit-20261110/takeover-cli-player-cleanup-status.json",
-        "https://github.com/ZeroGameStudio-CN/zeroengine/actions/runs/42962884292"
+        "https://github.com/ZeroGameStudio-CN/zeroengine/actions/runs/42962884292",
+        "D:/CodexArtifacts/ze-package-audit-20261110/qc-player-module-preflight.json",
+        "D:/CodexArtifacts/ze-package-audit-20261110/qc-player-metadata-status-v3.json",
+        "D:/CodexArtifacts/ze-package-audit-20261110/qc-current-69a47011ba00403bb529d188975bb96f.json",
+        "D:/CodexArtifacts/ze-package-audit-20261110/qc-current-969afe189f094fb7a3e12c70b02b896c.json"
       ],
       "relatedContent": [
         {
