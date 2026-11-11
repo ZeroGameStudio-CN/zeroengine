@@ -14,6 +14,29 @@ namespace ZeroEngine.Console.UI.Tests
     public sealed class NativeConsoleTests
     {
         [UnityTest]
+        public IEnumerator Selector_InactiveNativeConfigurationOpensWithoutAQuantumWarning()
+        {
+            var root = new GameObject("Explicit project input owner");
+            root.SetActive(false);
+            try
+            {
+                var selector = root.AddComponent<ConsoleFrontendSelector>();
+                selector.Preference = ConsoleFrontendPreference.Native;
+                selector.KeyboardShortcutEnabled = false;
+                root.SetActive(true);
+                selector.Open();
+                yield return null;
+                Assert.That(selector.Current.BackendId, Is.EqualTo("native"));
+                Assert.That(selector.Current.IsOpen, Is.True);
+                Assert.That(root.GetComponent<ConsoleHost>().Session.GetOutput(), Is.Empty);
+                selector.Close();
+                selector.enabled = false;
+                Assert.That(root.GetComponent<NativeConsole>().KeyboardShortcutEnabled, Is.True);
+            }
+            finally { Object.DestroyImmediate(root); }
+        }
+
+        [UnityTest]
         public IEnumerator Selector_OpeningFailureReleasesProviderBeforeNativeFallback()
         {
             var root = new GameObject("Frontend opening failure contract");

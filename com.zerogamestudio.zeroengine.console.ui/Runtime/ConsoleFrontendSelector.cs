@@ -21,6 +21,11 @@ namespace ZeroEngine.Console.UI
         public string SelectionReason { get; private set; } = string.Empty;
         public Func<IDisposable> AcquireInputIsolation { get; set; }
         public bool KeyboardShortcutEnabled { get; set; } = true;
+        public ConsoleFrontendPreference Preference
+        {
+            get => preference;
+            set { if (isActiveAndEnabled) Select(value); else preference = value; }
+        }
 
         private void OnEnable()
         {

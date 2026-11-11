@@ -15,6 +15,9 @@ selection. Supply an optional frontend component using `ConfigureQuantum` and
 open through the selector. With no compatible provider, Auto uses Native and
 records one reason. `AcquireInputIsolation` supplies the project's disposable
 gameplay/navigation lease and is restored when the selector is disabled.
+Set `Preference` before enabling an inactive owner to choose Native without an
+unnecessary missing-Quantum warning. Set `KeyboardShortcutEnabled = false` on
+the selector when the project's existing input action owns opening and closing.
 
 Both presentations use the same host, policy, quoted argument completion,
 bounded output/history and cancellation. Switching closes the previous view

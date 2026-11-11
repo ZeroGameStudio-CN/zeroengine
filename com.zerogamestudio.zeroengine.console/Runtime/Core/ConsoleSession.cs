@@ -250,7 +250,8 @@ namespace ZeroEngine.Console
                         {
                             foreach (var candidate in supplied)
                             {
-                                if (candidate != null && candidate.Value.StartsWith(prefix, StringComparison.OrdinalIgnoreCase)) candidates.Add(candidate);
+                                if (candidate != null && (candidate.Value.StartsWith(prefix, StringComparison.OrdinalIgnoreCase) ||
+                                    candidate.Label.StartsWith(prefix, StringComparison.OrdinalIgnoreCase))) candidates.Add(candidate);
                                 if (candidates.Count == limit) break;
                             }
                         }

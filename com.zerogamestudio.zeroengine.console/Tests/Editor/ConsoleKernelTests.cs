@@ -151,6 +151,22 @@ namespace ZeroEngine.Console.Tests
         }
 
         [Test]
+        public async Task Completion_MatchesDisplayNameAndInsertsCanonicalResourceValue()
+        {
+            using var registry = new ConsoleRegistry();
+            using var module = registry.Register("test", new[] { new ConsoleBinding(
+                Command(parameters: new[] { new ConsoleParameter("asset", typeof(string)) }), Ok,
+                (context, token) => Task.FromResult<IReadOnlyList<ConsoleCompletionItem>>(new[] {
+                    new ConsoleCompletionItem("asset:stable", "Assets/Food/Apple Pie.asset", "Apple Pie") })) });
+            using var session = new ConsoleSession(registry);
+            const string line = "ze-echo app";
+            var completions = await session.CompleteAsync(line, line.Length, Editor);
+            Assert.That(completions.Items.Count, Is.EqualTo(1));
+            Assert.That(completions.Items[0].Id, Is.EqualTo("asset:stable"));
+            Assert.That(completions.Apply(line, 0), Is.EqualTo("ze-echo \"Assets/Food/Apple Pie.asset\""));
+        }
+
+        [Test]
         public async Task CommonCommands_UsePolicyAndClearWithoutAnEmptyOutputRow()
         {
             using var registry = new ConsoleRegistry();
