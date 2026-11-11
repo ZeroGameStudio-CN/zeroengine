@@ -211,7 +211,11 @@ namespace ZGS.Analytics.Tests.Editor
                 }
             });
             yield return SendInEditMode(queue.FlushCoroutine(prefix + "events", "fixture"));
+            DateTime deadline = DateTime.UtcNow.AddSeconds(5);
+            while (!receive.IsCompleted && DateTime.UtcNow < deadline)
+                yield return null;
             Assert.That(receive.IsCompleted, Is.True);
+            receive.GetAwaiter().GetResult();
             Assert.That(bodies.Count, Is.EqualTo(2));
             StringAssert.Contains(good, bodies[1]);
             Assert.That(queue.Count, Is.Zero);
