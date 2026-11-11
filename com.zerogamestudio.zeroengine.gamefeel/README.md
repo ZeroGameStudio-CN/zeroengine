@@ -156,3 +156,20 @@ full baseline; zero rejects optional effects while text remains controlled by it
 on/off flag. Consumers decide source eligibility and persistent/essential roles.
 Use separate burst and lifetime admission when rejecting a cosmetic request before
 spawn; `TryAcquireLifetime` does not spend the burst allowance twice.
+
+`FeedbackCadenceLimiter` owns per-target repetition deadlines;
+`TargetFeedbackReservations` owns weak target scopes for the existing particle/output
+reservation contract. `FeedbackNumberMerger` owns numeric windows and totals, while
+`FeedbackUpdateQueue` coalesces display updates without overwriting newer reentrant
+versions. Target-lifetime and display-activation predicates are supplied once by the
+consumer. Reset a target when its pool activation ends and reset the session at its
+own shutdown boundary. A failed output never commits a reservation; old or foreign
+tickets cannot affect a newer target/session.
+
+Numeric windows reuse warmed target/style state; style capacity is bounded and
+overflow preserves the individual first output. Full/protected cadence paths bypass
+target lookup. These types do not spawn objects, choose shaders or call renderers.
+The retired `VisualEffectSettings.Opacity` helper remains as an obsolete, inactive
+API: density never calls it. Authored local fades belong to the renderer adapter and
+remain supported independently. Do not restore the player opacity setting by adding
+a second active policy or migration branch.

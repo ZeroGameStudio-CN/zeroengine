@@ -29,6 +29,7 @@ namespace ZeroEngine.GameFeel
             _ => new VisualEffectSettings(8, 16, 64, .1, .08)
         };
 
+        [Obsolete("User-opacity control is retired. Use CombatPresentationSettings for density; authored local fades remain consumer-owned.")]
         public static float Opacity(float userValue, bool eligible, bool exempt = false)
         {
             if (!eligible || exempt || float.IsNaN(userValue) || float.IsInfinity(userValue)) return 1f;
@@ -50,12 +51,13 @@ namespace ZeroEngine.GameFeel
         public double RepeatedFlashSeconds => .04d + .4d * (1d - Density);
         public CombatPresentationSettings(float density)
         {
-            Density = float.IsNaN(density) || float.IsInfinity(density) ? 1f : Math.Max(0f, Math.Min(1f, density));
+            Density = NormalizeDensity(density);
             double amount = Density * Density;
             Effects = new VisualEffectSettings(1 + (int)Math.Round(15d * Density),
                 1 + (int)Math.Round(31d * amount), 4 + (int)Math.Round(124d * amount),
                 .1d, .04d + .3d * (1d - Density), Density >= 1f);
         }
+        public static float NormalizeDensity(float value) => float.IsNaN(value) || float.IsInfinity(value) ? 1f : Math.Max(0f, Math.Min(1f, value));
         public float DamageMergeSeconds(float baseline) => baseline <= 0f || float.IsNaN(baseline) || float.IsInfinity(baseline)
             ? 0f : baseline * DamageMergeScale;
     }
