@@ -147,3 +147,12 @@ storage and warmed allocation contracts. The same contracts can run against the
 pure-System runtime outside Unity; Unity consumers also need their focused adapter
 checks and comparable recordings. Microbenchmarks do not establish Player FPS,
 GPU cost or physical haptic feel.
+
+## Continuous combat presentation
+
+`CombatPresentationSettings` resolves one 0..1 value into optional visual burst/lifetime
+budgets, numeric merge-window scaling and repeated-flash cadence. One is the existing
+full baseline; zero rejects optional effects while text remains controlled by its own
+on/off flag. Consumers decide source eligibility and persistent/essential roles.
+Use separate burst and lifetime admission when rejecting a cosmetic request before
+spawn; `TryAcquireLifetime` does not spend the burst allowance twice.

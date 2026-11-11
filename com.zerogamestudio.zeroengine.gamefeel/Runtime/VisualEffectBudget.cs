@@ -38,6 +38,28 @@ namespace ZeroEngine.GameFeel
         private static bool Finite(double value) => !double.IsNaN(value) && !double.IsInfinity(value);
     }
 
+    /// <summary>One continuous setting for optional visual repetition and numeric presentation.
+    /// Consumers retain ownership of eligibility, essential cues and gameplay lifetimes.</summary>
+    public readonly struct CombatPresentationSettings
+    {
+        public readonly float Density;
+        public readonly VisualEffectSettings Effects;
+        public bool Disabled => Density <= 0f;
+        public bool Full => Density >= 1f;
+        public float DamageMergeScale => 4f - 3f * Density;
+        public double RepeatedFlashSeconds => .04d + .4d * (1d - Density);
+        public CombatPresentationSettings(float density)
+        {
+            Density = float.IsNaN(density) || float.IsInfinity(density) ? 1f : Math.Max(0f, Math.Min(1f, density));
+            double amount = Density * Density;
+            Effects = new VisualEffectSettings(1 + (int)Math.Round(15d * Density),
+                1 + (int)Math.Round(31d * amount), 4 + (int)Math.Round(124d * amount),
+                .1d, .04d + .3d * (1d - Density), Density >= 1f);
+        }
+        public float DamageMergeSeconds(float baseline) => baseline <= 0f || float.IsNaN(baseline) || float.IsInfinity(baseline)
+            ? 0f : baseline * DamageMergeScale;
+    }
+
     public readonly struct VisualEffectLease
     {
         private static long nextOwner;
@@ -103,6 +125,21 @@ namespace ZeroEngine.GameFeel
             ActiveCount++; windowAccepted++;
             lease = new VisualEffectLease(owner, generation, token, free);
             return true;
+        }
+
+        /// <summary>Lifetime admission only; a producer may already have performed burst admission.</summary>
+        public bool TryAcquireLifetime(VisualEffectSettings settings, bool important, out VisualEffectLease lease)
+        {
+            lease = default;
+            if (settings.Unlimited || important) return true;
+            if (ActiveCount >= settings.ActiveLimit || ActiveCount >= active.Length) return false;
+            for (int i = 0; i < active.Length; i++)
+            {
+                if (active[i].Token != 0) continue;
+                long token = ++nextToken; if (token == 0) token = ++nextToken; active[i].Token = token; ActiveCount++;
+                lease = new VisualEffectLease(owner, generation, token, i); return true;
+            }
+            return false;
         }
 
         public bool Release(VisualEffectLease lease)

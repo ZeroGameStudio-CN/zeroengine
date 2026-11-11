@@ -5,6 +5,31 @@ namespace ZeroEngine.GameFeel.Tests
     public sealed class VisualEffectBudgetTests
     {
         [Test]
+        public void ContinuousDensity_PreservesEndpointsAndLinksNumericWindows()
+        {
+            var full = new CombatPresentationSettings(1f); var half = new CombatPresentationSettings(.5f); var off = new CombatPresentationSettings(0f);
+            Assert.That(full.Full && full.Effects.Unlimited, Is.True); Assert.That(off.Disabled, Is.True);
+            Assert.That(half.Full || half.Disabled, Is.False);
+            Assert.That(full.DamageMergeSeconds(.15f), Is.EqualTo(.15f).Within(.0001f));
+            Assert.That(half.DamageMergeSeconds(.15f), Is.EqualTo(.375f).Within(.0001f));
+            Assert.That(off.DamageMergeSeconds(.15f), Is.EqualTo(.6f).Within(.0001f));
+            Assert.That(new CombatPresentationSettings(float.NaN).Full, Is.True);
+            Assert.That(new CombatPresentationSettings(.25f).Effects.ActiveLimit, Is.LessThan(half.Effects.ActiveLimit));
+        }
+
+        [Test]
+        public void LifetimeOnlyAdmission_DoesNotSpendBurstReservationsAndReleasesExactlyOnce()
+        {
+            var budget = new VisualEffectBudget<int>(2); var settings = new VisualEffectSettings(1,1,2,.1,.1);
+            Assert.That(budget.TryAcquireLifetime(settings,false,out var first), Is.True);
+            Assert.That(budget.TryAcquireLifetime(settings,false,out var second), Is.True);
+            Assert.That(budget.WindowAcceptedCount, Is.Zero);
+            Assert.That(budget.TryAcquireLifetime(settings,false,out _), Is.False);
+            Assert.That(budget.Release(first), Is.True); Assert.That(budget.Release(first), Is.False);
+            budget.Reset(); Assert.That(budget.Release(second), Is.False);
+        }
+
+        [Test]
         public void ManyDifferentVariants_ShareFrameAndWindowBudgets()
         {
             var budget = new VisualEffectBudget<int>();
