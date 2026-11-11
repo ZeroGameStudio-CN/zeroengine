@@ -1,12 +1,12 @@
 {
   "name": "com.zerogamestudio.zeroengine.render.urp",
-  "version": "0.2.1",
+  "version": "0.2.2",
   "displayName": "ZeroEngine Render URP",
   "description": "Actor-scoped pixel rim lighting using URP visible lights and a single enhanced Render Graph composite.",
   "unity": "6000.6",
   "dependencies": {
     "com.unity.render-pipelines.universal": "17.6.0",
-    "com.zerogamestudio.zeroengine.render": "0.3.1"
+    "com.zerogamestudio.zeroengine.render": "0.3.5"
   },
   "author": {
     "name": "ZeroGameStudio",

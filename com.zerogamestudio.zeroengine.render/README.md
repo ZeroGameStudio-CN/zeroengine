@@ -115,3 +115,39 @@ actor may supply an independent gameplay-domain clock for its ice appearance.
 apply damage, freeze controls, stats or save settings. Pipeline shaders are
 supplied by `BodyVisualResources`. The URP package provides ready-made resources.
 Authoring presets and game-specific lifetime/loading adapters remain consumers.
+
+## Pixel blood (0.3.5)
+
+Opt-in, caller-clocked cosmetic blood for any explicitly supplied actor. `BloodBurstView`
+adds stepped volumes, thin strands, swept XY terrain contact, flat stains and bounded
+flesh/bone residue to a borrowed native particle root. `BloodImpactView` supplies smaller
+hit jets or a death supplement; it preserves native cinematic death emitters.
+
+`BloodSurface` overlays the current Sprite/Mesh/SkinnedMesh layers without replacing
+source materials. Its 64x64 source-colour lookup uses a fixed seed and symmetric source
+features so dye follows the source animation and flips. This is colour/feature-attached
+dye, not body-part skinning; identical source features intentionally share treatment.
+New splashes accumulate, hold for 3 caller seconds and fade over 5. No position or time
+noise selects the attached pattern. Skinned meshes require per-update BakeMesh;
+large skinned crowds need their own target-device measurements.
+
+Create a `BloodVisualContext` with explicitly supplied shaders/resources (the URP package
+has a loader), camera, terrain mask, one-way layer, clock and optional colour mapper.
+Pass an `IDisposable` particle-pool lease to Play; the view releases it on Stop. Keep the
+borrowed particle/template dependencies resident until all consumers have stopped.
+The optional `PrepareAuthoredSpray` callback can apply the consumer's palette component
+to an isolated cosmetic clone; the source template is never changed.
+
+For surfaces, Bind, Add, enqueue in `BloodSurfaceUploadQueue`, then Advance, Pump once
+per rendered frame, and Render your explicit renderer list. The queue coalesces each
+surface, limits uploads to 8/frame by default and rejects old pool-generation tickets.
+Call ResetForPool on disable/death and Dispose when retiring the actor view. Stop all
+burst/impact views and reset/dispose surfaces before disposing their shared context.
+ClearScope invalidates detached tails and clears only that context's residue/queue.
+Set `RetainResidue=false` when no persistent visual scope is available; settled debris
+then keeps the emitter's own safety tail instead of entering the residue store.
+
+The package owns visual resources and bounded residue (60 retained + 60 retiring),
+not damage, kill credit, actor discovery, room events, pooling services, saves or quality
+policy. Consumers decide active/cold-spawn limits and fallback. No colliders or rigid
+bodies are added. This is presentation only, with no POB or third-party game dependency.

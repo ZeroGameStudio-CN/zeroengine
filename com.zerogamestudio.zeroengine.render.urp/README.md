@@ -110,3 +110,13 @@ tested commit. Local file paths are verification-only pins.
 The package body tests cover caller-clocked playback, current-pose masks, fixed
 pixel emission, source composition and borrowed asset cleanup. A consumer must
 also check real game-camera output before adopting an extraction.
+
+## Pixel blood backend (0.2.2)
+
+Pair this version with Render 0.3.5 at the same tested Git commit.
+`BloodVisualResourcesLoader.Load(optionalAuthoredSpray)` loads the runtime surface-dye
+and spatial pixel-blood shaders from `Resources/ZeroEngine/Blood`. They use URP Core,
+receive caller-provided blood colours and preserve the source art's pixel scale.
+No POB shader include or global setting is required. This backend does not add a renderer
+feature or automatically enable gameplay effects. Runtime Resources assets keep both
+shaders referenced in a Player; source sprites/templates remain consumer-owned.
