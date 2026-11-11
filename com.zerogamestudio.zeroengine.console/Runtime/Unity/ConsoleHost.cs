@@ -51,7 +51,7 @@ namespace ZeroEngine.Console.Unity
             var session = Session;
             var target = dispatcher;
             return session == null || target == null ? Task.FromResult(ConsoleResult.Failure("host-disabled", "Unity Console host is disabled."))
-                : target.DispatchAsync(() => session.ExecuteLineAsync(line, CreateCaller(), cancellation, timeout), cancellation);
+                : DispatchExecutionAsync(target, () => session.ExecuteLineAsync(line, CreateCaller(), cancellation, timeout), cancellation);
         }
 
         public Task<ConsoleResult> ExecuteAsync(string idOrName, object[] arguments, CancellationToken cancellation = default, TimeSpan? timeout = null)
@@ -59,7 +59,15 @@ namespace ZeroEngine.Console.Unity
             var session = Session;
             var target = dispatcher;
             return session == null || target == null ? Task.FromResult(ConsoleResult.Failure("host-disabled", "Unity Console host is disabled."))
-                : target.DispatchAsync(() => session.ExecuteAsync(idOrName, arguments, CreateCaller(), cancellation, timeout), cancellation);
+                : DispatchExecutionAsync(target, () => session.ExecuteAsync(idOrName, arguments, CreateCaller(), cancellation, timeout), cancellation);
+        }
+
+        private static async Task<ConsoleResult> DispatchExecutionAsync(UnityConsoleDispatcher target,
+            Func<Task<ConsoleResult>> execution, CancellationToken cancellation)
+        {
+            try { return await target.DispatchAsync(execution, cancellation); }
+            catch (OperationCanceledException) when (cancellation.IsCancellationRequested)
+            { return ConsoleResult.Cancelled(); }
         }
 
         private void UpdateLogCapture()

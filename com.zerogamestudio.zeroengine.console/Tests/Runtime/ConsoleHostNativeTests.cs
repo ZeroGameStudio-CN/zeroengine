@@ -13,6 +13,40 @@ namespace ZeroEngine.Console.Tests.Runtime
     public sealed class ConsoleHostNativeTests
     {
         [UnityTest]
+        public IEnumerator CancelledBeforeDispatch_ReturnsStructuredResultWithoutInvokingTheHandler()
+        {
+            var root = new GameObject("Console cancelled request owner");
+            IDisposable module = null;
+            try
+            {
+                var host = root.AddComponent<ConsoleHost>();
+                int calls = 0;
+                var command = new ConsoleCommand("cancel.write", "cancel-write", "cancel", "Must not run.");
+                module = host.Registry.Register("cancel", new[] { new ConsoleBinding(command, (context, args, token) =>
+                { calls++; return Task.FromResult(ConsoleResult.Success()); }) });
+                using (var cancellation = new CancellationTokenSource())
+                {
+                    cancellation.Cancel();
+                    var text = host.ExecuteAsync(command.Name, cancellation.Token);
+                    var typed = host.ExecuteAsync(command.Id, Array.Empty<object>(), cancellation.Token);
+                    yield return Wait(text);
+                    yield return Wait(typed);
+                    Assert.That(text.GetAwaiter().GetResult().Status, Is.EqualTo(ConsoleResultStatus.Cancelled));
+                    Assert.That(typed.GetAwaiter().GetResult().Status, Is.EqualTo(ConsoleResultStatus.Cancelled));
+                    var workerText = Task.Run(() => host.ExecuteAsync(command.Name, cancellation.Token));
+                    var workerTyped = Task.Run(() => host.ExecuteAsync(command.Id, Array.Empty<object>(), cancellation.Token));
+                    yield return Wait(workerText);
+                    yield return Wait(workerTyped);
+                    Assert.That(workerText.GetAwaiter().GetResult().Status, Is.EqualTo(ConsoleResultStatus.Cancelled));
+                    Assert.That(workerTyped.GetAwaiter().GetResult().Status, Is.EqualTo(ConsoleResultStatus.Cancelled));
+                }
+                Assert.That(calls, Is.Zero);
+                Assert.That(host.Session.GetHistory(), Is.Empty);
+            }
+            finally { module?.Dispose(); Object.DestroyImmediate(root); }
+        }
+
+        [UnityTest]
         public IEnumerator WorkerInvocation_ExecutesActualUnityWriteOnMainThread()
         {
             GameObject root = null;
