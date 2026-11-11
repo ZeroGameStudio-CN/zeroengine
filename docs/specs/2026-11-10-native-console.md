@@ -153,5 +153,23 @@ composing, one call with committed `你好`, and restored input/cursor ownership
 on close (2 cases). The package's six Native UI cases also pass, including a new
 Run-button regression using the same public EventSystem input contract. Every
 request reached terminal cleanup. These are controlled composition and submit
-events; no physical Windows IME or desktop control is claimed. Matching managed
-Player evidence for this correction remains pending.
+events; no physical Windows IME or desktop control is claimed.
+
+The corrected package commit `e4c028a846abcecd2b7a009847c617d4fe8aeb71`
+passed all nine public Unity CI lanes and the package boundary job in run
+`42962884292`. Managed build `job-55a1ecc89b`, attempt
+`attempt-6722b29acd407a2dd36e362ef6e57174`, then built and ran the same three
+Player configurations on 3060 Ti. Both development backends recorded zero
+composition-stage calls, one committed `你好` call and restored input ownership;
+the non-development host remained disabled. All 796 indexed files matched their
+digests and the terminal manifest, with no matching Player exception/assertion
+failure or remaining Unity process/build lease.
+
+The CLI-only fixture is qualified at ContentBuilder source
+`7ddc547ae2988f696e715df2c9be3c7c5d786de2`, Native CI
+`ci-59f27941a6c7a07c730f95a9` and its finalized receipt. Windows signed counter
+148 is active; the Control update changed only the fixed Git source contract.
+The maintenance drain was released at generation 243. SDK-present QC Player
+identity remains an explicit compatibility boundary: an unmatched profile uses
+Native. Consumer migration, experience acceptance and Skill delivery retain
+their later stages.
