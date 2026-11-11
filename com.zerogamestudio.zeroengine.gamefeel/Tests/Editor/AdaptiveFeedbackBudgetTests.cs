@@ -135,6 +135,20 @@ namespace ZeroEngine.GameFeel.Tests
         }
 
         [Test]
+        public void AdaptiveFeedbackUsesTheSameDensityCurve_ForVisualsNumbersAndFlashes()
+        {
+            var run = new Run(); run.Roots(140); run.Frames(1200);
+            var resolved = new CombatPresentationSettings(run.Budget.Scale);
+            Assert.That(run.Budget.Feedback.Density, Is.EqualTo(resolved.Density));
+            Assert.That(run.Budget.Effects.ActiveLimit, Is.EqualTo(resolved.Effects.ActiveLimit));
+            Assert.That(run.Budget.Feedback.DamageMergeSeconds(.15f), Is.GreaterThan(.4f));
+            Assert.That(run.Budget.Feedback.RepeatedFlashSeconds, Is.GreaterThan(.25));
+            Assert.That(run.Budget.Player.Density, Is.EqualTo(1));
+            run.Budget.Configure(.5f, false);
+            Assert.That(run.Budget.Feedback.Density, Is.EqualTo(.5f));
+        }
+
+        [Test]
         public void WarmFrameSamplingAndRootCounters_DoNotAllocate()
         {
             var run = new Run(); run.Frames(300);

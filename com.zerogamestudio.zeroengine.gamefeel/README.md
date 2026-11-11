@@ -180,8 +180,9 @@ a second active policy or migration branch.
 consumer reports optional effect-root starts/stops and one unscaled frame sample;
 no renderer enumeration, individual-particle query or GPU profiler is required.
 Full, disabled and manually fixed settings retain their normal paths. Under
-sustained crowding or frame-time pressure, the controller tightens only future
-burst/lifetime admissions; it never revisits existing live outputs. Recovery is
+sustained crowding or frame-time pressure, the controller resolves a lower effective
+density through the same visual, numeric-window and flash-cadence curve as the slider.
+The player's stored ceiling remains unchanged. Recovery is
 slower than reduction. Loading, pause/background state and the selected frame cap
 are supplied by the adapter and excluded from overload samples. A single hitch
 cannot trigger repeated quality cuts.
@@ -190,7 +191,19 @@ A performance-only reduction is a bounded attribution probe: if frame time does
 not improve, further performance-driven cuts stop while the optional scene is
 sparse. Independent crowding control may still tighten output. Caps have a floor,
 root counts cannot become negative, and an epoch change invalidates old root
-observations after a room/session/settings reset. Keep the user's stored density
-and numeric merge policy stable; do not write adaptive pressure back to settings.
+observations after a room/session/settings reset. Do not write adaptive pressure back to settings.
 All hot observation methods and settings resolution are allocation-free after
 construction. Frame targets and sampling eligibility remain platform/game policy.
+
+`VisualEffectCoalescer<TKey,TOutput>` keeps a bounded set of live representatives
+of equivalent continuous visuals, promoting another live output when a selected one ends.
+The default is one. `ConfigureMaximum` changes the limit without invalidating leases;
+the caller then reapplies current visibility. `ReplaceOutput` transfers a representative
+slot to a new live output without reordering its spatial admission. A consumer can combine
+exact-variant coalescing with a regional layer limit, retaining distinct targets/endpoints.
+It has bounded preallocated slots, generation-checked leases, expected O(1) lifecycle
+operations and warmed allocation-free churn. Capacity overflow preserves the output.
+The consumer supplies spatial/style keys and persistent-role eligibility, preserves
+essential cues and gameplay objects, and applies visibility only when membership changes.
+It may refresh moving-root keys at a low frequency while coalescing is active; no
+individual particle processing is needed. Disable/reset restores consumer-owned visibility.

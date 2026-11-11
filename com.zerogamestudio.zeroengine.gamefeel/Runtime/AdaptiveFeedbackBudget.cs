@@ -23,6 +23,7 @@ namespace ZeroEngine.GameFeel
         public float Scale => scale;
         public bool Enabled => enabled;
         public CombatPresentationSettings Player { get; private set; } = new(1f);
+        public CombatPresentationSettings Feedback { get; private set; } = new(1f);
         public VisualEffectSettings Effects { get; private set; } = new CombatPresentationSettings(1f).Effects;
         public AdaptiveFeedbackReason Reason { get; private set; }
         public double LastFrameSeconds { get; private set; }
@@ -156,12 +157,8 @@ namespace ZeroEngine.GameFeel
 
         private void ResolveEffects()
         {
-            var original = Player.Effects;
-            Effects = !enabled || scale >= 1f ? original : new VisualEffectSettings(
-                Math.Max(1, (int)Math.Floor(original.FrameLimit * scale)),
-                Math.Max(1, (int)Math.Floor(original.WindowLimit * scale)),
-                Math.Max(1, (int)Math.Floor(original.ActiveLimit * scale)),
-                original.WindowSeconds, Math.Min(.6d, original.MergeSeconds / scale));
+            Feedback = !enabled || scale >= 1f ? Player : new CombatPresentationSettings(Player.Density * scale);
+            Effects = Feedback.Effects;
             Revision++;
         }
 
