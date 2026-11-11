@@ -46,5 +46,7 @@ The source profile currently has Editor evidence. Its assembly module identity
 is deliberately checked at runtime: a different Player/AOT assembly needs matching
 build evidence rather than being declared compatible from an Editor result.
 The supplied `link.xml` preserves public vendor types used by this bridge and
-tolerates a missing SDK. Player/IL2CPP and full project migration remain separate
-acceptance items.
+tolerates a missing SDK. The SDK-absent Mono and IL2CPP Players passed managed
+build/run checks at e47ce24, including Native fallback. SDK-present QC Player
+compatibility, rendered input/IME acceptance and full project migration remain
+separate acceptance items.

@@ -108,9 +108,34 @@ Initial missing-glyph and stale-completion findings were fixed; assertions alone
 were not used as visual acceptance. Vendor code, licensed assets and temporary
 fixtures stay outside this repository.
 
-G4 is still in progress. Player/IL2CPP execution and stripping, target-specific
-IME/input behavior and the comparable cost baseline remain unverified. The
-Editor profile deliberately refuses a different assembly identity. No G5 bulk
-project migration or G7 Skill delivery is claimed, and no production consumer
-pin or scene has been changed by this slice. The dedicated `console-quantum`
-CI lane installs the optional adapter with no vendor SDK.
+G4 remains in progress. The Editor compatibility profile deliberately refuses a
+different Player assembly identity; matching SDK-present QC Player evidence and
+real target IME/input acceptance remain separate. The recorded Editor cost sample
+includes the same 40 ms completion debounce and is diagnostic only. No G5 bulk
+migration, G7 Skill delivery or production adoption is claimed.
+
+## Managed SDK-absent Player slice, 2026-11-11
+
+Managed build `job-4fa8445022`, attempt
+`attempt-7e023895fb2e4e291dae69b8c9b00e56`, ran on Windows Worker 01 / 3060 Ti
+with Unity 6000.6.4f1. All three Console packages were loaded as Git packages at
+`e47ce2499d9c65f3a4b7df10c37d8371ba1d7458` according to actual PackageInfo.
+
+| Player configuration | Build and execution | Established behavior |
+| --- | --- | --- |
+| Mono Development | Succeeded / PASS | Main-thread write exactly once, array/enum conversion, quoted Chinese completion, cancellation, SDK absence, Native fallback and input/EventSystem/cursor restoration. |
+| IL2CPP Development, configured High stripping | Succeeded / PASS | The same behavior on the compiled AOT path. |
+| IL2CPP non-development | Succeeded / PASS | SDK absence and the default-disabled Console host; no development command ran. |
+
+The result and artifact-index digests match the managed terminal manifest; all
+796 indexed files were read back and hashed, and all Player logs had no matching
+exception/assertion failure. No Unity process, build/CI ticket or attention drain
+remained. This was a headless structural/lifecycle check, not rendered UI or IME
+acceptance. No SDK-present QC Player compatibility is inferred from fallback.
+
+The fixed managed entry is qualified by ContentBuilder source
+`2e2538c974fbb701c9d57e1e4197a6f3073c0629`, Native CI
+`ci-7a1b689a7c9baac8d6be94ac` and the finalizer's exact-source receipt. The
+Windows runtime uses signed counter 147. The independent `console-quantum`
+package CI lane also passed without vendor SDK. Production consumer pins and
+scenes retain their existing owners.
