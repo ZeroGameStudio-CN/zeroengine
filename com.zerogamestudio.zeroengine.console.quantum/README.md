@@ -8,8 +8,8 @@ fall back to the independent native frontend.
 The bridge uses public response/lifecycle APIs and owns a cloned QC instance.
 Raw input goes to the same ZE session; QC does not parse or execute that input.
 SDK 2.6.7's response route has a native proof, including quoted Chinese input,
-rearming and one native execution per submission. Complete frontend/AOT and
-experience acceptance remains in G4/G6.
+rearming and one native execution per submission. Platform support is bounded
+below; project migration and full experience acceptance remain separate.
 
 ## Explicit setup
 
@@ -42,18 +42,35 @@ restoration. It never leaves a borrowed QC instance in response mode. A profile
 or opening failure selects Native with one specific reason. Already started
 commands are never replayed during a frontend change.
 
-An Editor profile is accepted only in the Editor. For a Windows Player, compile
-scripts with the final target/backend/development settings first, then call
-`QuantumProfileVerifier.VerifyPlayerAssembly(prefab, compiledQcDll,
-RuntimePlatform.WindowsPlayer, backend)` and save the returned owned asset before
-serializing the build scene. The verifier reads the compiled DLL's public PE
-metadata through Unity's bundled Cecil, without loading the vendor DLL into the
-Editor domain. It binds assembly name, exact module ID, DLL SHA-256, Unity version,
-platform and `mono`/`il2cpp` backend. A changed identity still selects Native.
-Keep the compilation inputs unchanged between this step and BuildPlayer; a
-Player build/run must establish compatibility for the resulting artifact.
-The supplied `link.xml` preserves public vendor types used by this bridge and
-tolerates a missing SDK. The SDK-absent Mono and IL2CPP Players passed managed
-build/run checks at e47ce24, including Native fallback. SDK-present QC Player
-compatibility of this new build profile, rendered input/IME acceptance and full project migration remain
-separate acceptance items.
+An Editor profile is accepted only in the Editor. A Windows Player profile must
+bind the **final linked** QC assembly: Unity's linker can change its module ID
+after script precompilation. The verified build workflow is:
+
+1. Compile with the final target/backend/development settings and create an
+   owned provisional profile with `QuantumProfileVerifier.VerifyPlayerAssembly`.
+2. Build a probe Player, then read its final linked `QFSW.QC.dll`. The tested
+   Unity 6000.6.4f1 Windows pipeline retains it in the Bee `ManagedStripped`
+   output; for Mono, require byte equality with the DLL shipped in the Player.
+3. Call `QuantumProfileVerifier.VerifyPlayerAssembly(prefab, linkedQcDll,
+   RuntimePlatform.WindowsPlayer, backend)`, reacquire the asset references after
+   `BuildPlayer`, and update the same owned profile asset before saving.
+4. Build again with unchanged compilation inputs. Require the assembly name,
+   module ID and DLL SHA-256 to remain identical to the stored linked profile,
+   then run the resulting Player to check its runtime identity and frontend.
+
+The verifier reads public PE metadata through Unity's bundled Cecil without
+loading the vendor DLL into the Editor domain. Profiles also bind the Unity
+version, platform and `mono`/`il2cpp` backend. Any identity mismatch selects Native.
+The supplied `link.xml` preserves the public vendor types and tolerates a missing
+SDK.
+
+For SDK 2.6.7 on Unity **6000.6.4f1 / Windows**, the managed Player checks establish
+QC support for **Mono Development** with this two-pass workflow. The same
+**IL2CPP Development** runtime reports an all-zero `ModuleVersionId`, so QC is
+**unsupported** there and the strict identity guard selects Native. A successful
+Native fallback is independent evidence and never counts as QC compatibility.
+Other Unity versions, SDK revisions, targets and backends require their own
+verified profile and Player evidence. The independent Native frontend supports
+the tested SDK-absent Mono/IL2CPP configurations; release builds keep the host
+disabled by default. Controlled composition input checks use the active
+EventSystem input override; OS input-method acceptance remains unverified.

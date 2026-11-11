@@ -108,9 +108,10 @@ Initial missing-glyph and stale-completion findings were fixed; assertions alone
 were not used as visual acceptance. Vendor code, licensed assets and temporary
 fixtures stay outside this repository.
 
-G4 remains in progress. The Editor compatibility profile deliberately refuses a
-different Player assembly identity; matching SDK-present QC Player evidence and
-real target IME/input acceptance remain separate. The recorded Editor cost sample
+This Editor checkpoint did not establish Player compatibility. The Editor
+profile deliberately refuses a different Player assembly identity. The final
+Player support boundary is recorded below; physical target IME acceptance remains
+unverified. The recorded Editor cost sample
 includes the same 40 ms completion debounce and is diagnostic only. No G5 bulk
 migration, G7 Skill delivery or production adoption is claimed.
 
@@ -168,7 +169,7 @@ failure or remaining Unity process/build lease.
 The CLI-only fixture is qualified at ContentBuilder source
 `7ddc547ae2988f696e715df2c9be3c7c5d786de2`, Native CI
 `ci-59f27941a6c7a07c730f95a9` and its finalized receipt. Windows signed counter
-148 is active; the Control update changed only the fixed Git source contract.
+148 was active at that checkpoint; the Control update changed only the fixed Git source contract.
 The maintenance drain was released at generation 243. SDK-present QC Player
 identity remains an explicit compatibility boundary: an unmatched profile uses
 Native. Consumer migration, experience acceptance and Skill delivery retain
@@ -186,6 +187,50 @@ and Player profiles in the Editor. No blanket AOT exemption is introduced.
 
 Four private metadata/precompile cases, five SDK-absent profile guard cases,
 the two existing SDK integration cases and two controlled composition cases
-passed with native cleanup confirmed. The managed harness is being extended to
-run both SDK-absent and SDK-present Mono/IL2CPP configurations against fixed,
-read-only licensed SDK inputs. Actual QC Player execution remains pending.
+passed with native cleanup confirmed. The following final-linked matrix
+supersedes the initial precompile-only Player profile attempt.
+
+## Final-linked Player support and bounded G4 exit, 2026-11-11
+
+Managed job `job-7855a75b17`, attempt
+`attempt-d20679dc1f0439f5f13e26487a2bca9a`, built and ran all six configurations
+on Windows Worker 01 / 3060 Ti with Unity 6000.6.4f1. Actual PackageInfo in every
+build records all three Console packages at Git commit
+`84d523eb4946d3db8cc03fc6705ac873b42ac0fd`; its public CI run `42987324184`
+completed all nine Unity lanes and the package boundary check.
+
+| SDK / Player | Runtime result | Established boundary |
+| --- | --- | --- |
+| Absent / Mono Development | PASS | Native execution, controlled composition and restored input. |
+| Absent / IL2CPP Development | PASS | The same Native behavior with High stripping. |
+| Absent / IL2CPP non-development | PASS | Host disabled by default; no command invoked. |
+| QC 2.6.7 / Mono Development | PASS, actual Quantum frontend | Two builds bind the final linked DLL; module identity remains stable. Completion, cancellation, one committed invocation, frontend switching and restoration are verified. |
+| QC 2.6.7 / IL2CPP Development | UNSUPPORTED; matrix FAIL | Runtime `ModuleVersionId` is all zero while the valid linked profile has a nonzero ID. The strict guard selects Native; its completion, cancellation, controlled composition and restoration are independently verified. |
+| QC 2.6.7 / IL2CPP non-development | PASS | SDK is present; host remains disabled and no command runs. |
+
+The managed job deliberately remains **failed** for QC IL2CPP compatibility.
+Native fallback never substitutes for a Quantum success. This is a concrete
+unsupported-platform conclusion permitted by the G4 exit, bounded to this exact
+Unity/SDK/Windows combination. Other combinations require fresh evidence.
+
+Unity's linker changes the precompiled DLL identity. The build therefore creates
+a provisional profile, builds a probe, verifies the final linked assembly,
+updates the same owned profile asset and rebuilds. Assembly name, MVID and PE
+SHA-256 must remain stable across the two builds; Mono also checks the shipped
+DLL against the linked bytes. The [Quantum setup](../../com.zerogamestudio.zeroengine.console.quantum/README.md)
+documents this workflow. No vendor source changes or empty-MVID exemption occur.
+
+All **1,661** persistent artifact files matched the terminal manifest's index
+and result digests. A previous job's index had included compiler scratch later
+removed by Unity; signed runtime counter **155** excludes only that temporary
+precompile directory. The original failed job and its evidence remain intact.
+The source fix is ContentBuilder `9b415c3ad65a22189bc6b0165f1388f8dd855831`;
+its 14 focused audit checks, Ruff and both required local runtime gates exited
+zero. New full Native CI is separate and is not claimed here. The runtime retains
+all 694 other signed baseline files and the existing build profile.
+
+Final readback found no Unity process or active Worker job. This task's physical
+maintenance reservation was released at generation 59833. No publish or
+notification was requested. The six-config evidence establishes the bounded G4
+exit and permits G5 migration; project adoption, G6 experience/cost acceptance,
+physical OS IME acceptance and G7 Skill delivery remain separate.
