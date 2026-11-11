@@ -163,6 +163,49 @@ namespace ZeroEngine.Console.Tests
             Assert.That((await session.ExecuteLineAsync("ze-session", new ConsoleCaller(ConsoleEnvironment.Player))).IsSuccess, Is.True);
         }
 
+        [TestCase(false)]
+        [TestCase(true)]
+        public async Task LegacyOutcome_IsWarningWithoutInventingBusinessSuccess(bool started)
+        {
+            using var registry = new ConsoleRegistry();
+            int calls = 0;
+            using var module = registry.Register("test", new[] { new ConsoleBinding(Command(), (context, args, token) =>
+            {
+                calls++;
+                return Task.FromResult(started ? ConsoleResult.Started(data: "legacy") : ConsoleResult.Unconfirmed(data: "legacy"));
+            }) });
+            using var session = new ConsoleSession(registry);
+            ConsoleResult result = await session.ExecuteLineAsync("ze-echo", Editor);
+            Assert.That(result.IsSuccess, Is.False);
+            Assert.That(result.Status, Is.EqualTo(started ? ConsoleResultStatus.Started : ConsoleResultStatus.Unconfirmed));
+            Assert.That(result.Data, Is.EqualTo("legacy"));
+            Assert.That(calls, Is.EqualTo(1));
+            Assert.That(session.GetOutput(), Has.Length.EqualTo(1));
+            Assert.That(session.GetOutput()[0].Level, Is.EqualTo(ConsoleOutputLevel.Warning));
+        }
+
+        [Test]
+        public async Task Completion_UnclaimedParameterUsesNullableEnumAndNullBinding()
+        {
+            using var registry = new ConsoleRegistry();
+            var command = Command(parameters: new[] { new ConsoleParameter("day", typeof(DayOfWeek?), optional: true) });
+            bool suppliesEmpty = false;
+            using var module = registry.Register("test", new[] { new ConsoleBinding(command, (context, args, token) =>
+            {
+                Assert.That(args.Get<DayOfWeek?>(0), Is.Null);
+                return Task.FromResult(ConsoleResult.Success());
+            }, (context, token) => Task.FromResult<IReadOnlyList<ConsoleCompletionItem>>(
+                suppliesEmpty ? Array.Empty<ConsoleCompletionItem>() : null)) });
+            using var session = new ConsoleSession(registry);
+            var completion = await session.CompleteAsync("ze-echo ", 8, Editor);
+            Assert.That(completion.Items.Select(item => item.Value), Does.Contain("Monday").And.Contain("null"));
+            Assert.That(completion.Items.Count, Is.EqualTo(8));
+            suppliesEmpty = true;
+            Assert.That((await session.CompleteAsync("ze-echo ", 8, Editor)).Items, Is.Empty);
+            Assert.That((await session.ExecuteLineAsync("ze-echo null", Editor)).IsSuccess, Is.True);
+            Assert.That((await session.ExecuteLineAsync("ze-echo not-a-day", Editor)).Code, Is.EqualTo("invalid-argument"));
+        }
+
         [Test]
         public async Task ModuleDisposal_CancelsOwnedInvocationAndRemovesDiscovery()
         {

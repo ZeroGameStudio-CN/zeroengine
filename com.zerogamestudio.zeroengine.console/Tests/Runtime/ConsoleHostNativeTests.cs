@@ -36,8 +36,43 @@ namespace ZeroEngine.Console.Tests.Runtime
                 Assert.That(result.GetAwaiter().GetResult().IsSuccess, Is.True);
                 Assert.That(root.transform.childCount, Is.EqualTo(1));
                 Assert.That(root.transform.GetChild(0).name, Is.EqualTo("工作线程请求"));
+                result = Task.Run(() => host.ExecuteAsync(command.Id, new object[] { "Typed worker request" }));
+                yield return Wait(result);
+                Assert.That(result.GetAwaiter().GetResult().IsSuccess, Is.True);
+                Assert.That(root.transform.childCount, Is.EqualTo(2));
+                Assert.That(root.transform.GetChild(1).name, Is.EqualTo("Typed worker request"));
             }
             finally { module?.Dispose(); if (root) Object.DestroyImmediate(root); }
+        }
+
+        [UnityTest]
+        public IEnumerator UnityLogCapture_IsOptInAndEndsWithTheHost()
+        {
+            GameObject root = null;
+            try
+            {
+                root = new GameObject("Console log owner");
+                var host = root.AddComponent<ConsoleHost>();
+                Debug.Log("Console uncaptured log");
+                Assert.That(host.Session.GetOutput(), Is.Empty);
+                host.CaptureUnityLogs = true;
+                Debug.Log("Console captured log");
+                Assert.That(host.Session.GetOutput(), Has.Length.EqualTo(1));
+                Assert.That(host.Session.GetOutput()[0].Message, Is.EqualTo("Console captured log"));
+                host.CaptureUnityLogs = false;
+                Debug.Log("Console capture disabled");
+                Assert.That(host.Session.GetOutput(), Has.Length.EqualTo(1));
+                host.CaptureUnityLogs = true;
+                var ended = host.Session;
+                root.SetActive(false);
+                Debug.Log("Console owner ended");
+                Assert.That(ended.GetOutput(), Is.Empty);
+                root.SetActive(true);
+                Debug.Log("Console fresh owner");
+                Assert.That(host.Session.GetOutput(), Has.Length.EqualTo(1));
+                yield return null;
+            }
+            finally { if (root) Object.DestroyImmediate(root); }
         }
 
         [UnityTest]

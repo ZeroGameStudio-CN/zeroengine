@@ -29,6 +29,19 @@ Dispose registrations when a module unloads, then dispose the session and regist
 when their owner ends. A Unity owner can use `ConsoleHost`; its dispatcher keeps
 handlers on the main thread, including calls submitted from a worker.
 
+Legacy wrappers can return `ConsoleResult.Unconfirmed` after a `void` or string
+handler returns, or `ConsoleResult.Started` for work whose completion cannot be
+observed. Both preserve optional data, report warning output and keep `IsSuccess`
+false. Only a handler with an established business outcome returns `Success`.
+A custom completer may return `null` for a parameter it does not own; the session
+then supplies its built-in bool/enum completion, including nullable values and
+the explicit `null` token. An empty list deliberately supplies no candidates.
+`ConsoleHost.ExecuteAsync(idOrName, object[])` provides the same main-thread,
+policy-checked path for typed callers. Projects that rely on legacy `Debug.Log`
+feedback can explicitly enable `CaptureUnityLogs`; messages use the session's
+bounded queue and the subscription ends when the host is disabled. Capture is
+off by default and does not turn log text into a business result.
+
 The first candidate has 22 portable/native kernel cases and three native host
 lifecycle cases. Native UI/QC compatibility and project migration have separate
 gates; these counts do not establish Player or consumer adoption.

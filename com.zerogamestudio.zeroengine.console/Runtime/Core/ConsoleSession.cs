@@ -182,15 +182,19 @@ namespace ZeroEngine.Console
                 entry.Release();
             }
             if (!string.IsNullOrEmpty(result.Message))
-                Write(new ConsoleOutput(invocationId, result.IsSuccess ? ConsoleOutputLevel.Info : ConsoleOutputLevel.Error, result.Message));
+                Write(new ConsoleOutput(invocationId, OutputLevel(result), result.Message));
             return result;
         }
 
         private Task<ConsoleResult> Report(ConsoleResult result)
         {
-            Write(new ConsoleOutput(string.Empty, result.IsSuccess ? ConsoleOutputLevel.Info : ConsoleOutputLevel.Error, result.Message));
+            Write(new ConsoleOutput(string.Empty, OutputLevel(result), result.Message));
             return Task.FromResult(result);
         }
+
+        private static ConsoleOutputLevel OutputLevel(ConsoleResult result) => result.IsSuccess ? ConsoleOutputLevel.Info :
+            result.Status == ConsoleResultStatus.Unconfirmed || result.Status == ConsoleResultStatus.Started ?
+                ConsoleOutputLevel.Warning : ConsoleOutputLevel.Error;
 
         public void CancelCurrent()
         {
@@ -235,23 +239,29 @@ namespace ZeroEngine.Console
                     }
                     using (var linked = CancellationTokenSource.CreateLinkedTokenSource(cancellation, ownerToken, lifetimeToken))
                     {
+                        IReadOnlyList<ConsoleCompletionItem> supplied = null;
                         if (entry.Binding.Completer != null)
                         {
                             var context = new ConsoleCompletionContext(command, caller, line, caret, parameterIndex, prefix, limit);
-                            var supplied = await entry.Binding.Completer(context, linked.Token).ConfigureAwait(false);
+                            supplied = await entry.Binding.Completer(context, linked.Token).ConfigureAwait(false);
                             linked.Token.ThrowIfCancellationRequested();
-                            if (supplied != null)
-                                foreach (var candidate in supplied)
-                                {
-                                    if (candidate != null && candidate.Value.StartsWith(prefix, StringComparison.OrdinalIgnoreCase)) candidates.Add(candidate);
-                                    if (candidates.Count == limit) break;
-                                }
+                        }
+                        if (supplied != null)
+                        {
+                            foreach (var candidate in supplied)
+                            {
+                                if (candidate != null && candidate.Value.StartsWith(prefix, StringComparison.OrdinalIgnoreCase)) candidates.Add(candidate);
+                                if (candidates.Count == limit) break;
+                            }
                         }
                         else
                         {
                             Type type = command.Parameters[parameterIndex].ValueType;
                             if (command.Parameters[parameterIndex].IsVariadic) type = type.GetElementType();
+                            bool nullable = Nullable.GetUnderlyingType(type) != null;
+                            type = Nullable.GetUnderlyingType(type) ?? type;
                             string[] values = type == typeof(bool) ? new[] { "false", "true" } : type.IsEnum ? Enum.GetNames(type) : Array.Empty<string>();
+                            if (nullable) values = values.Concat(new[] { "null" }).ToArray();
                             foreach (string value in values)
                                 if (value.StartsWith(prefix, StringComparison.OrdinalIgnoreCase)) candidates.Add(new ConsoleCompletionItem(command.Id + ":" + parameterIndex + ":" + value, value));
                         }

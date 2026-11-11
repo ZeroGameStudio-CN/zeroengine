@@ -17,7 +17,7 @@ namespace ZeroEngine.Console
         All = Development | Player
     }
 
-    public enum ConsoleResultStatus { Succeeded, Failed, Cancelled, TimedOut }
+    public enum ConsoleResultStatus { Succeeded, Failed, Cancelled, TimedOut, Unconfirmed, Started }
     public enum ConsoleOutputLevel { Info, Warning, Error }
 
     public sealed class ConsoleResult
@@ -46,6 +46,10 @@ namespace ZeroEngine.Console
             new ConsoleResult(ConsoleResultStatus.Cancelled, "cancelled", message, null, null);
         public static ConsoleResult TimedOut() =>
             new ConsoleResult(ConsoleResultStatus.TimedOut, "deadline-exceeded", "The command deadline expired.", null, null);
+        public static ConsoleResult Unconfirmed(string message = "Handler returned; the business outcome is unconfirmed.", object data = null) =>
+            new ConsoleResult(ConsoleResultStatus.Unconfirmed, "outcome-unconfirmed", message, data, null);
+        public static ConsoleResult Started(string message = "Operation started; completion has not been observed.", object data = null) =>
+            new ConsoleResult(ConsoleResultStatus.Started, "started", message, data, null);
     }
 
     public sealed class ConsoleCaller

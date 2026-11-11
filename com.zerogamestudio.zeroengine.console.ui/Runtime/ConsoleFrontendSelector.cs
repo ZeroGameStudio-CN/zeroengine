@@ -20,6 +20,7 @@ namespace ZeroEngine.Console.UI
         public IConsoleFrontend Current => current;
         public string SelectionReason { get; private set; } = string.Empty;
         public Func<IDisposable> AcquireInputIsolation { get; set; }
+        public bool KeyboardShortcutEnabled { get; set; } = true;
 
         private void OnEnable()
         {
@@ -71,7 +72,7 @@ namespace ZeroEngine.Console.UI
 
         private void Update()
         {
-            if (current?.IsComposing == true || !ConsoleKeyboard.Pressed(KeyCode.BackQuote)) return;
+            if (!KeyboardShortcutEnabled || current?.IsComposing == true || !ConsoleKeyboard.Pressed(KeyCode.BackQuote)) return;
             if (current?.IsOpen == true) Close(); else Open();
         }
 
