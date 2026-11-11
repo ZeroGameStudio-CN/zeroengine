@@ -173,3 +173,24 @@ The retired `VisualEffectSettings.Opacity` helper remains as an obsolete, inacti
 API: density never calls it. Authored local fades belong to the renderer adapter and
 remain supported independently. Do not restore the player opacity setting by adding
 a second active policy or migration branch.
+
+## Adaptive optional-effect budget
+
+`AdaptiveFeedbackBudget` treats the player density as an immutable ceiling. The
+consumer reports optional effect-root starts/stops and one unscaled frame sample;
+no renderer enumeration, individual-particle query or GPU profiler is required.
+Full, disabled and manually fixed settings retain their normal paths. Under
+sustained crowding or frame-time pressure, the controller tightens only future
+burst/lifetime admissions; it never revisits existing live outputs. Recovery is
+slower than reduction. Loading, pause/background state and the selected frame cap
+are supplied by the adapter and excluded from overload samples. A single hitch
+cannot trigger repeated quality cuts.
+
+A performance-only reduction is a bounded attribution probe: if frame time does
+not improve, further performance-driven cuts stop while the optional scene is
+sparse. Independent crowding control may still tighten output. Caps have a floor,
+root counts cannot become negative, and an epoch change invalidates old root
+observations after a room/session/settings reset. Keep the user's stored density
+and numeric merge policy stable; do not write adaptive pressure back to settings.
+All hot observation methods and settings resolution are allocation-free after
+construction. Frame targets and sampling eligibility remain platform/game policy.
