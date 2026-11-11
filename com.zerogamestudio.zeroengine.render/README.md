@@ -116,7 +116,7 @@ apply damage, freeze controls, stats or save settings. Pipeline shaders are
 supplied by `BodyVisualResources`. The URP package provides ready-made resources.
 Authoring presets and game-specific lifetime/loading adapters remain consumers.
 
-## Pixel blood (0.3.5)
+## Pixel blood (0.3.6)
 
 Opt-in, caller-clocked cosmetic blood for any explicitly supplied actor. `BloodBurstView`
 adds stepped volumes, thin strands, swept XY terrain contact, flat stains and bounded
@@ -128,7 +128,10 @@ source materials. Its 64x64 source-colour lookup uses a fixed seed and symmetric
 features so dye follows the source animation and flips. This is colour/feature-attached
 dye, not body-part skinning; identical source features intentionally share treatment.
 New splashes accumulate, hold for 3 caller seconds and fade over 5. No position or time
-noise selects the attached pattern. Skinned meshes require per-update BakeMesh;
+noise selects the attached pattern. High accumulated load fills and deepens the same
+attached pattern while preserving translucent hair and dark outlines; small splashes
+retain their scattered coverage. Pair with URP 0.2.3 at the same tested Git commit.
+Skinned meshes require per-update BakeMesh;
 large skinned crowds need their own target-device measurements.
 
 Create a `BloodVisualContext` with explicitly supplied shaders/resources (the URP package

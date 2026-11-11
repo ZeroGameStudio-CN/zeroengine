@@ -128,6 +128,7 @@ namespace ZeroEngine.Render
                     block.SetVector("_BloodSourceTexel",new Vector4(1f/tex.width,1f/tex.height,tex.width,tex.height));
                     block.SetTexture("_BloodMask",bloodMask);
                     block.SetFloat("_StainOpacity",mask.DisplayFade);
+                    block.SetFloat("_StainLoad",mask.Intensity);
                     block.SetVector("_StainFlip",renderer is SpriteRenderer sr?new Vector4(sr.flipX?-1:1,sr.flipY?-1:1,0,0):Vector4.one);
                     block.SetColor("_BloodColor",bloodColor);
                     layer.Overlay.SetPropertyBlock(block,i);

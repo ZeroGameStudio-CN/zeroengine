@@ -111,9 +111,9 @@ The package body tests cover caller-clocked playback, current-pose masks, fixed
 pixel emission, source composition and borrowed asset cleanup. A consumer must
 also check real game-camera output before adopting an extraction.
 
-## Pixel blood backend (0.2.2)
+## Pixel blood backend (0.2.3)
 
-Pair this version with Render 0.3.5 at the same tested Git commit.
+Pair this version with Render 0.3.6 at the same tested Git commit.
 `BloodVisualResourcesLoader.Load(optionalAuthoredSpray)` loads the runtime surface-dye
 and spatial pixel-blood shaders from `Resources/ZeroEngine/Blood`. They use URP Core,
 receive caller-provided blood colours and preserve the source art's pixel scale.

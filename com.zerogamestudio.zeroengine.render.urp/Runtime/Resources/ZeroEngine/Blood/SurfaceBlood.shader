@@ -6,6 +6,7 @@ Shader "Hidden/ZeroEngine/Blood/Surface"
         [PerRendererData] _BloodMask("Source colour dye lookup",2D)="black"{}
         _Color("Tint",Color)=(1,1,1,1)
         _StainOpacity("Blood fade",Range(0,1))=1
+        _StainLoad("Accumulated blood",Range(0,1))=0
     }
     SubShader
     {
@@ -25,7 +26,7 @@ Shader "Hidden/ZeroEngine/Blood/Surface"
             TEXTURE2D(_MainTex);SAMPLER(sampler_MainTex);
             TEXTURE2D(_BloodMask);SAMPLER(sampler_BloodMask);
             float4 _BloodColor,_Color,_StainFlip,_BloodSourceTexel;
-            float _StainOpacity;
+            float _StainOpacity,_StainLoad;
             struct A{float4 positionOS:POSITION;float2 uv:TEXCOORD0;half4 color:COLOR;};
             struct V{float4 positionCS:SV_POSITION;float2 uv:TEXCOORD0;half4 color:COLOR;};
             uint3 Feature(half4 center,half4 neighbour)
@@ -65,8 +66,13 @@ Shader "Hidden/ZeroEngine/Blood/Surface"
                 // Broken, translucent gaps and opaque clusters, with three pixel-art blood shades.
                 uint coverage=pattern&7u;
                 half density=lerp(.14,1,coverage/7.0);
+                half heavy=smoothstep(.45,.9,_StainLoad);
+                // Heavy blood deepens the same attached pattern; no new coordinates or moving noise.
+                density=lerp(density,.48+.52*density,heavy*.85);
                 // Leave flat colour interiors readable; concentrate blotches where original features break them up.
-                density*=lerp(.16,1,saturate((feature.x+feature.y+feature.z)/24.0));
+                half features=lerp(.16,1,saturate((feature.x+feature.y+feature.z)/24.0));
+                features=lerp(features,.42+.58*features,heavy*.8);
+                density*=features;
                 uint shade=(pattern>>8)%3u;
                 half pigment=shade==0u?.32:shade==1u?.64:1;
                 half light=dot(body.rgb,half3(.2126,.7152,.0722));
