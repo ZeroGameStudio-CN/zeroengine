@@ -79,8 +79,10 @@ at most one additional cell at 15% of the configured wrap strength; coherent dir
 side lighting retains its own profile width and transition. The center projection
 also fades the directional wrap continuously instead of flipping it across XY=0.
 When marked lights arrive from opposed directions, their weighted directional
-coherence also narrows the combined band and reduces its inner shell. Multiple
-lights on the same side keep the directional profile instead of being dimmed
+coherence also narrows the combined band and reduces its inner shell. This mix
+uses each art cell's shadow visibility, so a blocked opposing light does not
+weaken the visible side's transition. Multiple lights on the same side keep
+the directional profile instead of being dimmed
 merely because more than one source is present.
 
 Only registered actors visible to a game base camera update their silhouette.

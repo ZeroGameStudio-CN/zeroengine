@@ -221,7 +221,7 @@ namespace ZeroEngine.Render.Tests.Runtime
                         VerifyDarkEdgeFill(camera, material, native, participation);
                         VerifyNativeOverlap(camera, material, native, participation);
                         VerifyNativeBacklight(camera, actor, native, participation, profile);
-                        VerifyRearContourWrap(camera, actor, material, native, participation, profile);
+                        VerifyRearContourWrap(camera, actor, material, native, participation, profile, pipeline);
                         VerifyLocalShadows(camera, material, native, participation, profile, pipeline);
                         VerifyDarkContourStyle(camera, material, native, participation, profile);
                         participation.enabled=false;unselectedImage=Render(camera);
@@ -514,15 +514,17 @@ namespace ZeroEngine.Render.Tests.Runtime
             }
         }
 
-        private static void VerifyRearContourWrap(Camera camera, Renderer actor, Material material, Light light, SpriteRimLightSource source, SpriteRimLightingProfile profile)
+        private static void VerifyRearContourWrap(Camera camera, Renderer actor, Material material, Light light, SpriteRimLightSource source, SpriteRimLightingProfile profile, UniversalRenderPipelineAsset pipeline)
         {
             var position = light.transform.position; var color = light.color;
             float intensity = light.intensity, fill = source.DarkEdgeFill;
             var baseColor = material.GetVector("_BaseColor");
             float wrap = profile.InnerWrapStrength, cap = profile.DarkEdgeBrightness, exposure = profile.MinimumExposure;
             int width = profile.InnerWrapWidth;
-            Texture2D baseline = null, core = null, wrapped = null, singleSide = null, opposed = null;
-            GameObject opposedHost = null;
+            bool additionalShadows = pipeline.supportsAdditionalLightShadows;
+            var realtimeShadows = typeof(UniversalRenderPipelineAsset).GetProperty(nameof(UniversalRenderPipelineAsset.supportsAdditionalLightShadows));
+            Texture2D baseline = null, core = null, wrapped = null, singleSide = null, opposed = null, blocked = null, blockedOnly = null;
+            GameObject opposedHost = null, caster = null;
             try
             {
                 light.transform.position = actor.bounds.center + Vector3.forward * .7f;
@@ -552,12 +554,28 @@ namespace ZeroEngine.Render.Tests.Runtime
                 var other = opposedHost.AddComponent<Light>(); other.type = LightType.Point;
                 other.color = light.color; other.intensity = light.intensity; other.range = light.range;
                 other.cullingMask = light.cullingMask; other.renderMode = LightRenderMode.ForcePixel;
-                opposedHost.AddComponent<SpriteRimLightSource>().DarkEdgeFill = source.DarkEdgeFill;
+                var otherSource = opposedHost.AddComponent<SpriteRimLightSource>();
+                otherSource.DarkEdgeFill = source.DarkEdgeFill;
                 opposed = Render(camera);
                 Assert.That(opposed.GetPixel(13, 28).g - baseline.GetPixel(13, 28).g, Is.GreaterThan(.1f));
                 Assert.That(opposed.GetPixel(42, 28).g - baseline.GetPixel(42, 28).g, Is.GreaterThan(.1f));
                 Assert.That(opposed.GetPixel(17, 28).g - baseline.GetPixel(17, 28).g, Is.LessThan(edgeGain * .1f), "Opposed lights keep the inward transition faint.");
                 Assert.That(opposed.GetPixel(21, 28).g, Is.EqualTo(baseline.GetPixel(21, 28).g).Within(.004f), "Opposed wrap stays out of the body interior.");
+                // Shadowing must affect the style mix as well as the light color. Otherwise an
+                // invisible opposing source still removes the visible side's inward transition.
+                realtimeShadows.SetValue(pipeline, false);
+                caster = GameObject.CreatePrimitive(PrimitiveType.Cube);
+                SceneManager.MoveGameObjectToScene(caster, camera.scene);
+                caster.layer = 29;
+                caster.transform.position = opposedHost.transform.position;
+                caster.transform.localScale = Vector3.one * .15f;
+                other.shadows = LightShadows.Hard; other.shadowStrength = 1;
+                otherSource.FallbackOccluder = caster.GetComponent<MeshRenderer>();
+                blocked = Render(camera);
+                AssertSameImage(singleSide, blocked, "A fully blocked opposing light must preserve the visible side's contour style.");
+                source.enabled = false;
+                blockedOnly = Render(camera);
+                AssertSameImage(baseline, blockedOnly, "The style comparison must use a completely occluded opposing source.");
             }
             finally
             {
@@ -565,8 +583,10 @@ namespace ZeroEngine.Render.Tests.Runtime
                 light.color = color; light.intensity = intensity; material.SetVector("_BaseColor", baseColor);
                 profile.InnerWrapStrength = wrap; profile.InnerWrapWidth = width;
                 profile.DarkEdgeBrightness = cap; profile.MinimumExposure = exposure;
+                realtimeShadows.SetValue(pipeline, additionalShadows);
+                if (caster) Object.DestroyImmediate(caster);
                 if (opposedHost) Object.DestroyImmediate(opposedHost);
-                foreach (var image in new[] { baseline, core, wrapped, singleSide, opposed }) if (image) Object.DestroyImmediate(image);
+                foreach (var image in new[] { baseline, core, wrapped, singleSide, opposed, blocked, blockedOnly }) if (image) Object.DestroyImmediate(image);
             }
         }
 
