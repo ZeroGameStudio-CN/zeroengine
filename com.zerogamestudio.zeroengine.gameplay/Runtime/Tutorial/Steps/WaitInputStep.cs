@@ -10,6 +10,7 @@ namespace ZeroEngine.Tutorial
     [Serializable]
     public class WaitInputStep : TutorialStep
     {
+        public override bool SupportsAutomaticCompletion => false;
         [Header("Input Settings")]
         [Tooltip("需要按下的按键列表")]
         public KeyCode[] RequiredKeys = new[] { KeyCode.Space };
@@ -51,7 +52,7 @@ namespace ZeroEngine.Tutorial
             // 超时检查
             if (Timeout > 0 && ctx.StepElapsedTime >= Timeout)
             {
-                _inputReceived = true;
+                ctx.Fail("The required input timed out.");
                 return;
             }
 
@@ -61,7 +62,7 @@ namespace ZeroEngine.Tutorial
                 bool allPressed = true;
                 foreach (var key in RequiredKeys)
                 {
-                    if (!Input.GetKey(key))
+                    if (!TutorialInputHelper.GetKey(key))
                     {
                         allPressed = false;
                         break;
@@ -73,7 +74,7 @@ namespace ZeroEngine.Tutorial
             {
                 foreach (var key in RequiredKeys)
                 {
-                    if (Input.GetKeyDown(key))
+                    if (TutorialInputHelper.GetKeyDown(key))
                     {
                         _inputReceived = true;
                         break;
