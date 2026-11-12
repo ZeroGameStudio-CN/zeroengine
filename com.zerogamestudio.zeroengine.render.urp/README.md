@@ -69,6 +69,12 @@ Incoming HDR/emission is preserved, and the profile controls added highlight
 limits and a weak inward light wrap. The rim uses the same native realtime
 shadow visibility and distance fade as other additional-light receivers.
 
+Native Point/Spot lights also resolve view depth. A light centered behind the
+actor produces a symmetric silhouette band and inward transition; crossing its
+projected center remains continuous. A centered front light does not produce
+that backlight band. Source art stays point sampled and the body interior keeps
+the profile's existing exposure and highlight protection.
+
 Only registered actors visible to a game base camera update their silhouette.
 Scene lights are captured from that camera's URP culling results. Disabling an
 actor or removing its light removes its contribution in the same camera render.

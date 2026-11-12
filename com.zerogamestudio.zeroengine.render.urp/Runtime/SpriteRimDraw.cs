@@ -123,9 +123,9 @@ namespace ZeroEngine.Render.Urp
                 var light = source.Light;
                 if ((light.cullingMask & layerMask) == 0) continue;
                 var toward = light.transform.position - position;
-                if (toward.sqrMagnitude < .0000001f) continue;
                 var away = new Vector2(-toward.x, -toward.y).normalized;
-                if (away.sqrMagnitude < .0000001f) continue;
+                // A native light directly behind the actor has no XY direction.
+                // Keep it selected: the shader resolves its back-facing contour per art cell.
                 float range = Mathf.Max(.001f, light.range);
                 float attenuation = Mathf.Pow(Mathf.Clamp01(1 - toward.sqrMagnitude / (range * range)), 2);
                 float outer = 0, inner = 1;
@@ -178,7 +178,9 @@ namespace ZeroEngine.Render.Urp
                 var away = new Vector3(input.Away.x, input.Away.y, 0);
                 UpdateData(rows0, i, input.Row0, 1, ref changes); UpdateData(rows1, i, input.Row1, 2, ref changes);
                 UpdateData(rows2, i, input.Row2, 4, ref changes); UpdateData(colors, i, input.Color, 8, ref changes);
-                UpdateData(shapes, i, input.Shape, 16, ref changes); UpdateData(powers, i, input.Powers, 32, ref changes);
+                UpdateData(shapes, i, input.Shape, 16, ref changes);
+                // Native falloff is geometric; its otherwise unused power stores the art-cell band width.
+                UpdateData(powers, i, input.Shape.x > 2.5f ? new Vector4(distance, 0, 0, 0) : input.Powers, 32, ref changes);
                 UpdateData(shadows, i, input.Shadow, 256, ref changes);
                 if (input.Shadow.w < 0)
                 {

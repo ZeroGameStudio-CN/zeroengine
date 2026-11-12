@@ -220,6 +220,7 @@ namespace ZeroEngine.Render.Tests.Runtime
                         Assert.That(nativeImage.GetPixel(13,28).g,Is.GreaterThan(nativeImage.GetPixel(13,28).r+.01f),"A native point light must tint the near contour.");
                         VerifyDarkEdgeFill(camera, material, native, participation);
                         VerifyNativeOverlap(camera, material, native, participation);
+                        VerifyNativeBacklight(camera, actor, native, participation, profile);
                         VerifyLocalShadows(camera, material, native, participation, profile, pipeline);
                         VerifyDarkContourStyle(camera, material, native, participation, profile);
                         participation.enabled=false;unselectedImage=Render(camera);
@@ -455,6 +456,61 @@ namespace ZeroEngine.Render.Tests.Runtime
                 sum += Mathf.Abs(result[i].r - source[i].r) + Mathf.Abs(result[i].g - source[i].g) +
                     Mathf.Abs(result[i].b - source[i].b);
             return sum / source.Length;
+        }
+
+        private static void VerifyNativeBacklight(Camera camera, Renderer actor, Light light, SpriteRimLightSource source, SpriteRimLightingProfile profile)
+        {
+            var position = light.transform.position;
+            var color = light.color;
+            var fill = source.DarkEdgeFill;
+            var exposure = profile.MinimumExposure;
+            Texture2D baseline = null, back = null;
+            try
+            {
+                light.color = Color.green;
+                profile.MinimumExposure = 1;
+                source.DarkEdgeFill = .22f;
+                source.enabled = false;
+                baseline = Render(camera);
+                source.enabled = true;
+                light.transform.position = actor.bounds.center + Vector3.forward * .7f;
+                back = Render(camera);
+                float left = back.GetPixel(13, 28).g - baseline.GetPixel(13, 28).g;
+                float right = back.GetPixel(42, 28).g - baseline.GetPixel(42, 28).g;
+                Assert.That(left, Is.GreaterThan(.01f), "A projected-center rear light keeps the left contour.");
+                Assert.That(right, Is.GreaterThan(.01f), "A projected-center rear light keeps the right contour.");
+                Assert.That(Mathf.Abs(left - right), Is.LessThan(.01f), "Backlight must not choose an arbitrary side at XY=0.");
+                Assert.That(back.GetPixel(29, 28).g, Is.EqualTo(baseline.GetPixel(29, 28).g).Within(.004f), "The opaque body remains unchanged behind its contour.");
+                foreach (float x in new[] { -.005f, .005f })
+                {
+                    light.transform.position = actor.bounds.center + new Vector3(x, 0, .7f);
+                    var image = Render(camera);
+                    try
+                    {
+                        Assert.That(image.GetPixel(13, 28).g, Is.EqualTo(back.GetPixel(13, 28).g).Within(.015f));
+                        Assert.That(image.GetPixel(42, 28).g, Is.EqualTo(back.GetPixel(42, 28).g).Within(.015f));
+                    }
+                    finally { Object.DestroyImmediate(image); }
+                }
+                light.transform.position = actor.bounds.center + Vector3.back * .7f;
+                var front = Render(camera);
+                try
+                {
+                    Assert.That(front.GetPixel(13, 28).g - baseline.GetPixel(13, 28).g, Is.LessThan(left * .25f), "A centered front light is not a rear silhouette light.");
+                    Assert.That(front.GetPixel(42, 28).g - baseline.GetPixel(42, 28).g, Is.LessThan(right * .25f));
+                }
+                finally { Object.DestroyImmediate(front); }
+            }
+            finally
+            {
+                source.enabled = true;
+                source.DarkEdgeFill = fill;
+                profile.MinimumExposure = exposure;
+                light.color = color;
+                light.transform.position = position;
+                if (baseline) Object.DestroyImmediate(baseline);
+                if (back) Object.DestroyImmediate(back);
+            }
         }
 
         private static void VerifyNativeOverlap(Camera camera, Material material, Light primary, SpriteRimLightSource source)
