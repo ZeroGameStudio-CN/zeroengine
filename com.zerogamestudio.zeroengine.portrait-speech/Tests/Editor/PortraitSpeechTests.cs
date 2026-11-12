@@ -265,6 +265,59 @@ namespace ZeroEngine.PortraitSpeech.Tests
             finally{EditorLifecycle(go.GetComponent<PortraitSpeechImage>(),"OnDisable");UnityEngine.Object.DestroyImmediate(go);UnityEngine.Object.DestroyImmediate(bank);UnityEngine.Object.DestroyImmediate(library);UnityEngine.Object.DestroyImmediate(first);UnityEngine.Object.DestroyImmediate(second);UnityEngine.Object.DestroyImmediate(texture);}
         }
 
+        [Test] public void ExpressionTransitionChangesAtSwapAndCanCompleteImmediately()
+        {
+            var texture=new Texture2D(8,8);
+            var first=Sprite.Create(texture,new Rect(0,0,8,8),Vector2.one*.5f);
+            var second=Sprite.Create(texture,new Rect(0,0,8,8),Vector2.one*.5f);
+            first.name="Neutral";second.name="Closed";
+            var bank=ScriptableObject.CreateInstance<PortraitExpressionSet>();
+            var library=ScriptableObject.CreateInstance<PortraitSpeechLibrary>();
+            var go=new GameObject("Expression transition",typeof(RectTransform),typeof(Image),typeof(PortraitSpeechImage));
+            var player=go.GetComponent<PortraitSpeechImage>();
+            try
+            {
+                bank.actorId=3;bank.library=library;
+                bank.expressions=new[]{
+                    new PortraitExpression{key="neutral",sprite=first,transitionGroup="outfit",transitionEyes=PortraitExpressionEyes.Open},
+                    new PortraitExpression{key="closed",sprite=second,transitionGroup="outfit",transitionEyes=PortraitExpressionEyes.Closed}};
+                library.portraitSpeech=new[]{
+                    new PortraitSpeechProfile{actorId=3,spriteName=first.name,blink=new PortraitBlinkProfile{enabled=true,
+                        leftEye=new PortraitBlinkEye{area=new Rect(.2f,.5f,.2f,.2f),closedHeight=.4f}}},
+                    new PortraitSpeechProfile{actorId=3,spriteName=second.name}};
+                player.expressionSet=bank;EditorLifecycle(player,"OnEnable");
+                Assert.That(player.SetExpression("neutral"),Is.True);
+                Assert.That(player.BeginManualPresentation(),Is.True);
+                var changes=new System.Collections.Generic.List<string>();player.ExpressionChanged+=changes.Add;
+                Assert.That(player.TransitionToExpression("closed"),Is.True);
+                Assert.That(player.IsTransitioning,Is.True);
+                Assert.That(player.CurrentExpression,Is.EqualTo("neutral"));
+                Assert.That(go.GetComponent<Image>().overrideSprite,Is.EqualTo(first));
+                Assert.That(changes,Is.Empty,"Requesting a transition must not report a visible swap early.");
+                float start=Time.unscaledTime;
+                for(int step=0;step<50;step++)player.PresentManually(start+step*.02f,.02f);
+                Assert.That(player.IsTransitioning,Is.False);
+                Assert.That(player.CurrentExpression,Is.EqualTo("closed"));
+                Assert.That(go.GetComponent<Image>().overrideSprite,Is.EqualTo(second));
+                Assert.That(changes,Is.EqualTo(new[]{"closed"}));
+                Assert.That(player.SetExpression("neutral"),Is.True);
+                Assert.That(player.IsTransitioning,Is.False,"The existing switch remains immediate.");
+                Assert.That(player.TransitionToExpression("closed"),Is.True);
+                player.Complete(true);
+                Assert.That(player.IsTransitioning,Is.False);
+                Assert.That(player.CurrentExpression,Is.EqualTo("closed"));
+                Assert.That(go.GetComponent<Image>().overrideSprite,Is.EqualTo(second));
+                Assert.That(player.Motion.Openness,Is.Zero);
+                Assert.That(changes,Is.EqualTo(new[]{"closed","neutral","closed"}));
+            }
+            finally
+            {
+                EditorLifecycle(player,"OnDisable");UnityEngine.Object.DestroyImmediate(go);
+                UnityEngine.Object.DestroyImmediate(bank);UnityEngine.Object.DestroyImmediate(library);
+                UnityEngine.Object.DestroyImmediate(first);UnityEngine.Object.DestroyImmediate(second);UnityEngine.Object.DestroyImmediate(texture);
+            }
+        }
+
         [Test] public void SharedExpressionSwitchCanPreserveSpeechAndBlinkClock()
         {
             var texture=new Texture2D(8,8);var first=Sprite.Create(texture,new Rect(0,0,8,8),Vector2.one*.5f);var second=Sprite.Create(texture,new Rect(0,0,8,8),Vector2.one*.5f);
@@ -333,10 +386,21 @@ namespace ZeroEngine.PortraitSpeech.Tests
         {
             const int size=16;
             var texture=new Texture2D(size,size,TextureFormat.RGBA32,false){filterMode=FilterMode.Point};
-            var eye=new RectInt(4,10,7,4);var protectedPixel=new Vector2Int(5,12);
+            var eye=new RectInt(4,9,7,6);
+            var lashUnderHair=new Vector2Int(7,14);
+            var lashTip=new Vector2Int(7,13);
+            var longLash=new Vector2Int(8,12);
+            var longLashOccluder=new Vector2Int(8,13);
+            var foreground=new[]{new Vector2Int(5,13),new Vector2Int(6,9),new Vector2Int(6,11),
+                new Vector2Int(7,12),lashUnderHair,longLashOccluder};
+            var belowHair=new Vector2Int(5,12);
+            var fringe=new Vector2Int(6,10);
             var pixels=Enumerable.Repeat(new Color32(240,202,190,255),size*size).ToArray();
             for(int y=eye.yMin;y<eye.yMax;y++)for(int x=eye.xMin;x<eye.xMax;x++)pixels[y*size+x]=new Color32(230,190,40,255);
-            pixels[protectedPixel.y*size+protectedPixel.x]=new Color32(45,90,150,255);
+            foreach(var point in foreground)pixels[point.y*size+point.x]=new Color32(45,90,150,255);
+            pixels[fringe.y*size+fringe.x]=new Color32(57,40,91,255);
+            pixels[lashTip.y*size+lashTip.x]=new Color32(0,0,0,255);
+            pixels[longLash.y*size+longLash.x]=new Color32(0,0,0,255);
             texture.SetPixels32(pixels);texture.Apply();
             var sprite=Sprite.Create(texture,new Rect(0,0,size,size),Vector2.one*.5f);
             var go=EditorUtility.CreateGameObjectWithHideFlags("Blink shader test",HideFlags.HideAndDontSave,typeof(RectTransform),typeof(Image));
@@ -351,7 +415,7 @@ namespace ZeroEngine.PortraitSpeech.Tests
                 var profile=new PortraitSpeechProfile{mouth=new Rect(5f/size,4f/size,6f/size,5f/size),skinSample=new Vector2(.1f,.1f),mouthColor=Color.black,tongueColor=Color.red,teethColor=Color.white};
                 var speech=new PortraitSpeechMotion();speech.Reveal('a',0,1,9,.12f);speech.Advance(1.04f,.04f,.035f,.065f,.045f);
                 PortraitSpeechMaterial.Apply(image,material,profile,speech);
-                var eyes=new PortraitBlinkProfile{enabled=true,maskCanvasSize=new Vector2Int(size,size),protectedPixels=new[]{protectedPixel},lidColor=Color.black,
+                var eyes=new PortraitBlinkProfile{enabled=true,maskCanvasSize=new Vector2Int(size,size),protectedPixels=foreground,lidColor=Color.black,
                     leftEye=new PortraitBlinkEye{area=new Rect((float)eye.x/size,(float)eye.y/size,(float)eye.width/size,(float)eye.height/size),skinSample=new Vector2(.1f,.1f),closedHeight=.4f}};
                 Color32[] Render(float amount,Vector2Int canvas)
                 {
@@ -369,12 +433,23 @@ namespace ZeroEngine.PortraitSpeech.Tests
                     finally{UnityEngine.Object.DestroyImmediate(read);}
                 }
                 var dimensions=new Vector2Int(size,size);
-                var open=Render(0,dimensions);var half=Render(.5f,dimensions);var closed=Render(1,dimensions);
+                var open=Render(0,dimensions);var partial=Render(.4f,dimensions);
+                var half=Render(.5f,dimensions);var closed=Render(1,dimensions);
+                int below=belowHair.y*size+belowHair.x;
+                int edge=fringe.y*size+fringe.x;
+                Assert.That(partial[below],Is.EqualTo(open[below]),"The visible lash below the painted hair must not become a skin block.");
+                Assert.That(closed[edge],Is.EqualTo(open[edge]),"An isolated detail separated by foreground stays in the original artwork.");
+                int tip=lashTip.y*size+lashTip.x;
+                int hair=lashUnderHair.y*size+lashUnderHair.x;
+                Assert.That(half[tip],Is.EqualTo(open[hair]),"An occluded lash tip reveals the adjacent foreground instead of hanging in place.");
+                Assert.That(closed[tip],Is.EqualTo(open[hair]),"Full closure must not leave a detached lash dot.");
+                Assert.That(partial[longLash.y*size+longLash.x],Is.EqualTo(open[longLashOccluder.y*size+longLashOccluder.x]),
+                    "A clamped long-run lash cannot be stretched across its foreground boundary.");
                 Assert.That(open.Any(p=>p.a>200),Is.True);
                 Assert.That(half.SequenceEqual(open)||half.SequenceEqual(closed),Is.False,"Half closure is a different rendered pose.");
                 Assert.That(closed.SequenceEqual(open),Is.False,"Eye closure actually changes pixels.");
                 for(int i=0;i<open.Length;i++)
-                    if(!eye.Contains(new Vector2Int(i%size,i/size))||i==protectedPixel.y*size+protectedPixel.x)
+                    if(!eye.Contains(new Vector2Int(i%size,i/size))||foreground.Contains(new Vector2Int(i%size,i/size)))
                     {Assert.That(half[i],Is.EqualTo(open[i]));Assert.That(closed[i],Is.EqualTo(open[i]));}
                 Assert.That(Render(1,new Vector2Int(size+1,size)),Is.EqualTo(open),"A resized source cannot reuse a painted mask.");
             }
