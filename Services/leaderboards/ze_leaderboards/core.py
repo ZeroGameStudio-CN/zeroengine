@@ -13,6 +13,7 @@ import time
 from .common import (Rejected, AuthenticationRejected, ProviderUnavailable, WriteNotSent,
                      canonical, digest, text, integer, fields)
 from .ledger import SQLiteLedger
+from .maintenance import prune_history
 
 NATIVE_ROOM_FLOW_VERSION = 2
 
@@ -421,25 +422,12 @@ class RunService:
             return self._result(db.execute("SELECT * FROM runs WHERE id=?", (run_id,)).fetchone())
 
     def prune_history(self):
-        """Bounded housekeeping; keep identities and start/final replay receipts."""
+        """Compatibility entrypoint; production invokes maintenance out of band."""
         now = self.clock()
         if now < self._next_history_prune:
             return
         self._next_history_prune = now + 600
-        # Expiry bounds every late event. Keep start, final and the last batch
-        # marker so a lost final-batch response still replays its receipt.
-        marker = '%"batch":%'
-        last_marker = """COALESCE((SELECT MAX(m.sequence) FROM events m WHERE m.run_id=r.id
-            AND m.sequence>0 AND m.response LIKE ?), 0)"""
-        with self._db("history-prune") as db:
-            rows = db.execute(f"""SELECT r.id,r.sequence,{last_marker} FROM runs r
-                WHERE r.expires<? AND r.state IN ('published','revoked','active') AND EXISTS
-                (SELECT 1 FROM events e WHERE e.run_id=r.id AND e.sequence>0 AND e.sequence<r.sequence
-                 AND e.sequence<>{last_marker})
-                ORDER BY r.started LIMIT 256""", (marker, now - 3 * 86400, marker)).fetchall()
-            for row in rows:
-                db.execute("DELETE FROM events WHERE run_id=? AND sequence>0 AND sequence<? AND sequence<>?",
-                           (row[0], row[1], row[2]))
+        return prune_history(self.ledger, now)
 
     def _freeze_policy(self, policy, room_flow):
         return dict(policy, _autoCompatible=self.auto_compatible, _roomFlowVersion=room_flow)
