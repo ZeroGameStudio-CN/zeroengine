@@ -191,3 +191,4 @@ URP pipeline if the host project has none and restore the previous quality overr
 Native point and spot rim participation retains a symmetric rear contour at the projected actor center and stays continuous as the light crosses the center. Front-centered lights do not become rear silhouette lights. This preserves the POB fix from `8b06c811` on the consolidated package baseline.
 Version 0.4.3 requires Render 0.4.4 at the same Git commit, including the existing blood-resource loader and shaders.
 It also preserves `faafbd1f`'s thin rear and opposed-light contours, including the faint inward transition and continuous center projection.
+The adopted `e54a5509` correction excludes occluded native lights from each art cell's directional style mix, preserving the visible light's contour and transition.

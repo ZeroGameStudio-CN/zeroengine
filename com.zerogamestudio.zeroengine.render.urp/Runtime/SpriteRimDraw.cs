@@ -172,7 +172,6 @@ namespace ZeroEngine.Render.Urp
             var axisX = ((Vector3)Silhouette.WorldToMask.GetRow(0)).normalized;
             var axisY = ((Vector3)Silhouette.WorldToMask.GetRow(1)).normalized;
             float total = 0, weightedExposure = 0;
-            Vector2 weightedDirection = Vector2.zero;
             for (int i = 0; i < selectedCount; i++)
             {
                 var input = selected[i];
@@ -182,8 +181,9 @@ namespace ZeroEngine.Render.Urp
                 UpdateData(rows0, i, input.Row0, 1, ref changes); UpdateData(rows1, i, input.Row1, 2, ref changes);
                 UpdateData(rows2, i, input.Row2, 4, ref changes); UpdateData(colors, i, input.Color, 8, ref changes);
                 UpdateData(shapes, i, input.Shape, 16, ref changes);
-                // Native falloff is geometric; unused powers carry band width and center projection.
-                UpdateData(powers, i, input.Shape.x > 2.5f ? new Vector4(distance, input.Powers.y, 0, 0) : input.Powers, 32, ref changes);
+                // Native falloff is geometric. Carry the band's width, center projection and
+                // world-XY direction so the shader can exclude shadowed light from its style mix.
+                UpdateData(powers, i, input.Shape.x > 2.5f ? new Vector4(distance, input.Powers.y, input.Away.x, input.Away.y) : input.Powers, 32, ref changes);
                 UpdateData(shadows, i, input.Shadow, 256, ref changes);
                 if (input.Shadow.w < 0)
                 {
@@ -197,13 +197,10 @@ namespace ZeroEngine.Render.Urp
                 UpdateData(bands, i, new Vector4(Vector3.Dot(away, axisX) * distance, Vector3.Dot(away, axisY) * distance,
                     Mathf.Lerp(0, profile.StrongScale, response), response), 64, ref changes);
                 total += input.Score; weightedExposure += input.MinimumExposure * input.Score;
-                weightedDirection += input.Away * input.Score;
             }
-            // Opposed local lights can cover the whole silhouette. Preserve coherent
-            // single-side styling, but let diffuse/all-around groups use a thin inner shell.
-            float coherence = selected[0].Shape.x > 2.5f ? Mathf.Clamp01(weightedDirection.magnitude / Mathf.Max(total, .000001f)) : 1f;
             var wrap = new Vector4(Mathf.Clamp(profile.InnerWrapWidth, 1, 4), Mathf.Clamp(profile.InnerWrapStrength, 0, .35f),
-                float.IsFinite(profile.DarkEdgeBrightness) ? Mathf.Clamp(profile.DarkEdgeBrightness, .01f, 1f) : 1f, coherence);
+                float.IsFinite(profile.DarkEdgeBrightness) ? Mathf.Clamp(profile.DarkEdgeBrightness, .01f, 1f) : 1f,
+                1f / Mathf.Max(.001f, profile.ResponsePower));
             if (!uploadedWrap.Equals(wrap)) { uploadedWrap = wrap; changes |= 128; }
             float exposure = Mathf.Lerp(1, Mathf.Clamp(profile.MinimumExposure * weightedExposure / Mathf.Max(total, .000001f), .01f, 1), selected[0].Score);
             foreach (var material in Materials)

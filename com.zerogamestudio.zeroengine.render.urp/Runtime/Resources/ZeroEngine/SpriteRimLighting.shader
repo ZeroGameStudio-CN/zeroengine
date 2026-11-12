@@ -188,6 +188,10 @@ Shader "Hidden/ZeroEngine/SpriteRimLighting"
             RimColorMix darkMix = (RimColorMix)0;
             float unshadowedAlpha = 0;
             float visibleAlpha = 0;
+            float3 cellWS = ArtCellWorldPosition(input.positionWS, cellOffset);
+            float4 alphas = 0, visibilities = 0;
+            float2 weightedDirection = 0;
+            float directionalWeight = 0;
             [unroll] for (int i = 0; i < 4; i++)
             {
                 if (i >= _RimEnhanceLightCount) break;
@@ -203,27 +207,42 @@ Shader "Hidden/ZeroEngine/SpriteRimLighting"
                 UNITY_BRANCH
                 if (_RimEnhanceAdditionalShadowDistanceSq > 0 && shadow.w > 0 && alpha > 0)
                 {
-                    float3 positionWS = ArtCellWorldPosition(input.positionWS, cellOffset);
-                    half3 direction = SafeNormalize(shadow.xyz - positionWS);
-                    half realtime = AdditionalLightRealtimeShadow((int)shadow.w - 1, positionWS, direction);
+                    half3 direction = SafeNormalize(shadow.xyz - cellWS);
+                    half realtime = AdditionalLightRealtimeShadow((int)shadow.w - 1, cellWS, direction);
                     // Keep projected art-cell shadows readable in wide gameplay cameras.
                     // The rim fades over at most the last 8% of URP's existing shadow distance.
-                    float3 cameraOffset = positionWS - _WorldSpaceCameraPos;
+                    float3 cameraOffset = cellWS - _WorldSpaceCameraPos;
                     float distanceSq = dot(cameraOffset, cameraOffset);
                     float rimFade = smoothstep(_RimEnhanceAdditionalShadowDistanceSq * (.92 * .92),
                         _RimEnhanceAdditionalShadowDistanceSq, distanceSq);
-                    visibility = lerp(realtime, 1, min(rimFade, GetAdditionalLightShadowFade(positionWS)));
+                    visibility = lerp(realtime, 1, min(rimFade, GetAdditionalLightShadowFade(cellWS)));
                 }
             #endif
                 UNITY_BRANCH
                 if (shadow.w < 0 && alpha > 0)
                 {
-                    float3 positionWS = ArtCellWorldPosition(input.positionWS, cellOffset);
-                    float3 localCell = mul(_RimEnhanceFallbackBoxes[i], float4(positionWS, 1)).xyz;
+                    float3 localCell = mul(_RimEnhanceFallbackBoxes[i], float4(cellWS, 1)).xyz;
                     if (IntersectsShadowBox(shadow.xyz, localCell)) visibility += shadow.w;
                 }
                 unshadowedAlpha = max(unshadowedAlpha, alpha);
                 visibleAlpha = max(visibleAlpha, alpha * visibility);
+                alphas[i] = alpha;
+                visibilities[i] = visibility;
+                if (_RimEnhanceShapes[i].x > 2.5)
+                {
+                    // Recover the selection score from its response. Weight by this art cell's
+                    // shadow once, so a blocked opposing lamp cannot thin the visible side's rim.
+                    float weight = pow(_RimEnhanceBands[i].w, _RimEnhanceInnerWrap.w) * visibility;
+                    weightedDirection += _RimEnhancePowers[i].zw * weight;
+                    directionalWeight += weight;
+                }
+            }
+            float coherence = saturate(length(weightedDirection) / max(directionalWeight, .000001));
+            float nativeDirectionalStyle = smoothstep(.55, .9, coherence);
+            [unroll] for (int i = 0; i < 4; i++)
+            {
+                if (i >= _RimEnhanceLightCount) break;
+                float alpha = alphas[i], visibility = visibilities[i];
                 if (visibility <= 0) continue;
                 float amount = alpha * alpha * visibility;
                 float4 band = _RimEnhanceBands[i];
@@ -232,13 +251,12 @@ Shader "Hidden/ZeroEngine/SpriteRimLighting"
                 float directionalStyle = 1;
                 if (_RimEnhanceShapes[i].x > 2.5)
                 {
-                    directionalStyle = smoothstep(.55, .9, _RimEnhanceInnerWrap.w);
+                    directionalStyle = nativeDirectionalStyle;
                     float thinWidth = lerp(min(bandWidth, 1), bandWidth, directionalStyle);
                     band.xy *= thinWidth / max(bandWidth, .00001);
                     bandWidth = thinWidth;
                     // Native matrices contain rotation and uniform inverse range. Recover the
                     // light vector without adding another per-light upload or guessing a side at XY=0.
-                    float3 cellWS = ArtCellWorldPosition(input.positionWS, cellOffset);
                     float3 cellQ = float3(dot(float4(cellWS, 1), _RimEnhanceRows0[i]),
                         dot(float4(cellWS, 1), _RimEnhanceRows1[i]), dot(float4(cellWS, 1), _RimEnhanceRows2[i]));
                     float3 toLight = -(_RimEnhanceRows0[i].xyz * cellQ.x + _RimEnhanceRows1[i].xyz * cellQ.y +

@@ -35,9 +35,9 @@ job audits every source package, including packages excluded from those Unity
 2022.3 lanes. A successful 2022.3 lane is not verification of Unity 6-only packages;
 verify those with the matching Editor and package-specific tests before publishing.
 
-The `lifecycle` lane selects Core, Audio and their required siblings. CI runs it
-in PlayMode so singleton shutdown and audio enable/disable ownership are exercised
-through real Unity lifecycle callbacks, independently of the EditMode lanes.
+The `lifecycle` lane selects Core, Audio, Render and their required siblings. CI
+runs it in PlayMode so singleton shutdown, audio ownership and in-place sprite
+geometry run through real Unity lifecycle callbacks, independently of EditMode.
 
 The test-runner CLI is pinned to the observed `v0.1.72` release; resolving a
 floating latest release is unnecessary and can fail before Unity starts.

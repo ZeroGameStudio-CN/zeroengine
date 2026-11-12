@@ -69,7 +69,7 @@ jobs:
             name: Modules without Dashboard
             test-mode: EditMode
           - lane: lifecycle
-            name: Core and Audio lifecycles
+            name: Core, Audio and Render lifecycles
             test-mode: PlayMode
           - lane: console-core
             name: Console core only
