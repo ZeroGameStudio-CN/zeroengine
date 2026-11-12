@@ -63,6 +63,27 @@ files; deployment never downloads floating source or a developer's checkout.
 For a separately installed Python package, pin the repository commit and
 `subdirectory=Services/leaderboards`. Neither path changes Unity package pins.
 
+## Maintenance and recovery
+
+The HTTP adapter must not call history pruning after admitting a run. Schedule
+`maintenance.prune_history(ledger, now)` separately. It uses a persistent indexed
+expiry cursor, a deferred-hold queue and short bounded delete transactions. It
+preserves the existing expiry plus three-day grace, start/final/last-batch
+receipts, run identities and held publication/review states. It does not delete
+whole runs or scores. New metadata tables/indexes preserve the legacy `runs`
+column layout for code rollback. A busy maintenance writer yields; an API
+SQLite busy/locked error becomes `LedgerUnavailable` (HTTP 503), without retrying
+the transaction or reissuing an external score write.
+
+`recovery.backup(layout, output, timestamp)` makes an online SQLite snapshot,
+includes the pinned runtime package and source manifest, streams both archive
+creation and verification, and rotates the existing one-database/three-bundle
+local retention only after validation. Keep outputs private: bundles contain
+keys. Game adapters own layout paths, CLI defaults and systemd units. A restore
+drill must import the restored runtime in isolation; never test a restored
+publisher against a production leaderboard. Offsite replication and mobile
+ranking storage remain separate planned work.
+
 ## Verification
 
 Run `python -B -m unittest discover -s tests` here. The independent synthetic

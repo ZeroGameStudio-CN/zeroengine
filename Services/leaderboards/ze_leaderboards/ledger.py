@@ -21,6 +21,12 @@ CREATE TABLE IF NOT EXISTS events (
 CREATE TABLE IF NOT EXISTS limits (
     bucket TEXT NOT NULL, period INTEGER NOT NULL, count INTEGER NOT NULL,
     PRIMARY KEY(bucket, period));
+CREATE INDEX IF NOT EXISTS runs_history_expiry ON runs(expires, id);
+CREATE TABLE IF NOT EXISTS history_cursor (
+    name TEXT PRIMARY KEY, expires DOUBLE PRECISION NOT NULL, run_id TEXT NOT NULL);
+CREATE TABLE IF NOT EXISTS history_pending (
+    run_id TEXT PRIMARY KEY, due DOUBLE PRECISION NOT NULL);
+CREATE INDEX IF NOT EXISTS history_pending_due ON history_pending(due, run_id);
 """
 
 
@@ -41,19 +47,31 @@ class SQLiteLedger:
                 db.execute("UPDATE runs SET state='unknown', reason='interrupted_write' WHERE state='writing'")
 
     @contextlib.contextmanager
-    def transaction(self, lock_key=None):
-        db = sqlite3.connect(self.path, timeout=5)
-        db.row_factory = sqlite3.Row
+    def _connection(self, *, read_only=False, timeout=5):
         try:
-            db.execute("PRAGMA synchronous=FULL")
-            db.execute("BEGIN IMMEDIATE")
-            yield db
-            db.commit()
-        except BaseException:
-            db.rollback()
+            with contextlib.closing(sqlite3.connect(self.path, timeout=timeout)) as db:
+                db.row_factory = sqlite3.Row
+                try:
+                    db.execute("PRAGMA query_only=ON" if read_only else "PRAGMA synchronous=FULL")
+                    db.execute("BEGIN" if read_only else "BEGIN IMMEDIATE")
+                    yield db
+                    db.commit()
+                except BaseException:
+                    # A rollback error must not hide the original failure.
+                    with contextlib.suppress(sqlite3.Error):
+                        db.rollback()
+                    raise
+        except sqlite3.Error as error:
+            if getattr(error, "sqlite_errorcode", 0) & 0xff in (sqlite3.SQLITE_BUSY, sqlite3.SQLITE_LOCKED):
+                raise LedgerUnavailable("Leaderboard ledger temporarily unavailable") from None
             raise
-        finally:
-            db.close()
+
+    def transaction(self, lock_key=None, *, timeout=5):
+        return self._connection(timeout=timeout)
+
+    def snapshot(self):
+        # WAL readers do not reserve the writer while examining old JSON.
+        return self._connection(read_only=True, timeout=0)
 
 
 class _Row(dict):
@@ -98,13 +116,13 @@ class PostgresLedger:
         # Shared publication claims are recovered per run, never in a global UPDATE.
 
     @contextlib.contextmanager
-    def transaction(self, lock_key=None):
+    def transaction(self, lock_key=None, *, timeout=5):
         # libpq selects a writable server on every new transaction connection.
         # Never retry here: a lost COMMIT acknowledgement has an unknown outcome.
         try:
             with self._connect(self._dsn, target_session_attrs="read-write", connect_timeout=10,
                                row_factory=_row_factory,
-                               options="-c statement_timeout=15000 -c lock_timeout=5000 -c synchronous_commit=on") as connection:
+                               options=f"-c statement_timeout=15000 -c lock_timeout={max(1, int(timeout*1000))} -c synchronous_commit=on") as connection:
                 db = _PostgresConnection(connection)
                 if lock_key is not None:
                     key = int.from_bytes(hashlib.sha256(lock_key.encode()).digest()[:8], "big", signed=True)
@@ -112,3 +130,6 @@ class PostgresLedger:
                 yield db
         except self._unavailable:
             raise LedgerUnavailable("Leaderboard ledger temporarily unavailable") from None
+
+    def snapshot(self):
+        return self.transaction()
