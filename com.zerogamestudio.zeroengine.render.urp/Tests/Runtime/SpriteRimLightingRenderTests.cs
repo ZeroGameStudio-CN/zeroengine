@@ -221,6 +221,7 @@ namespace ZeroEngine.Render.Tests.Runtime
                         VerifyDarkEdgeFill(camera, material, native, participation);
                         VerifyNativeOverlap(camera, material, native, participation);
                         VerifyNativeBacklight(camera, actor, native, participation, profile);
+                        VerifyRearContourWrap(camera, actor, material, native, participation, profile);
                         VerifyLocalShadows(camera, material, native, participation, profile, pipeline);
                         VerifyDarkContourStyle(camera, material, native, participation, profile);
                         participation.enabled=false;unselectedImage=Render(camera);
@@ -510,6 +511,62 @@ namespace ZeroEngine.Render.Tests.Runtime
                 light.transform.position = position;
                 if (baseline) Object.DestroyImmediate(baseline);
                 if (back) Object.DestroyImmediate(back);
+            }
+        }
+
+        private static void VerifyRearContourWrap(Camera camera, Renderer actor, Material material, Light light, SpriteRimLightSource source, SpriteRimLightingProfile profile)
+        {
+            var position = light.transform.position; var color = light.color;
+            float intensity = light.intensity, fill = source.DarkEdgeFill;
+            var baseColor = material.GetVector("_BaseColor");
+            float wrap = profile.InnerWrapStrength, cap = profile.DarkEdgeBrightness, exposure = profile.MinimumExposure;
+            int width = profile.InnerWrapWidth;
+            Texture2D baseline = null, core = null, wrapped = null, singleSide = null, opposed = null;
+            GameObject opposedHost = null;
+            try
+            {
+                light.transform.position = actor.bounds.center + Vector3.forward * .7f;
+                light.color = Color.green; light.intensity = 2.6f; source.DarkEdgeFill = .22f;
+                material.SetVector("_BaseColor", new Vector4(.04f, .04f, .04f, 1));
+                profile.MinimumExposure = 1; profile.DarkEdgeBrightness = .56f;
+                profile.InnerWrapWidth = 2; profile.InnerWrapStrength = 0;
+                source.enabled = false; baseline = Render(camera); source.enabled = true;
+                core = Render(camera);
+                profile.InnerWrapStrength = .32f; wrapped = Render(camera);
+                float edgeGain = wrapped.GetPixel(13, 28).g - baseline.GetPixel(13, 28).g;
+                Assert.That(edgeGain, Is.GreaterThan(.1f));
+                float corePeak = Mathf.Max(core.GetPixel(13, 28).g, core.GetPixel(42, 28).g);
+                float wrappedPeak = Mathf.Max(wrapped.GetPixel(13, 28).g, wrapped.GetPixel(42, 28).g);
+                Assert.That(wrappedPeak, Is.EqualTo(corePeak).Within(.004f), "Reducing rear wrap must preserve the bright contour peak.");
+                Assert.That(wrapped.GetPixel(13, 28).g, Is.GreaterThanOrEqualTo(core.GetPixel(13, 28).g - .004f), "A partially covered boundary cell may receive wrap, but must not be dimmed.");
+                Assert.That(wrapped.GetPixel(17, 28).g - baseline.GetPixel(17, 28).g, Is.LessThan(edgeGain * .1f), "The symmetric rear transition is faint beside the one-cell core.");
+                Assert.That(wrapped.GetPixel(21, 28).g, Is.EqualTo(baseline.GetPixel(21, 28).g).Within(.004f), "Rear wrap must not reach the third art cell inside the body.");
+                // Several lights on opposite sides must not reconstruct a broad body fill
+                // from individually valid directional transitions.
+                light.transform.position = actor.bounds.center + new Vector3(-.6f, 0, -.4f);
+                singleSide = Render(camera);
+                Assert.That(singleSide.GetPixel(17, 28).g - baseline.GetPixel(17, 28).g, Is.GreaterThan(edgeGain * .1f), "Keep the existing one-sided transition.");
+                opposedHost = new GameObject("Synthetic opposed light");
+                SceneManager.MoveGameObjectToScene(opposedHost, light.gameObject.scene);
+                opposedHost.transform.position = actor.bounds.center + new Vector3(.6f, 0, -.4f);
+                var other = opposedHost.AddComponent<Light>(); other.type = LightType.Point;
+                other.color = light.color; other.intensity = light.intensity; other.range = light.range;
+                other.cullingMask = light.cullingMask; other.renderMode = LightRenderMode.ForcePixel;
+                opposedHost.AddComponent<SpriteRimLightSource>().DarkEdgeFill = source.DarkEdgeFill;
+                opposed = Render(camera);
+                Assert.That(opposed.GetPixel(13, 28).g - baseline.GetPixel(13, 28).g, Is.GreaterThan(.1f));
+                Assert.That(opposed.GetPixel(42, 28).g - baseline.GetPixel(42, 28).g, Is.GreaterThan(.1f));
+                Assert.That(opposed.GetPixel(17, 28).g - baseline.GetPixel(17, 28).g, Is.LessThan(edgeGain * .1f), "Opposed lights keep the inward transition faint.");
+                Assert.That(opposed.GetPixel(21, 28).g, Is.EqualTo(baseline.GetPixel(21, 28).g).Within(.004f), "Opposed wrap stays out of the body interior.");
+            }
+            finally
+            {
+                source.enabled = true; source.DarkEdgeFill = fill; light.transform.position = position;
+                light.color = color; light.intensity = intensity; material.SetVector("_BaseColor", baseColor);
+                profile.InnerWrapStrength = wrap; profile.InnerWrapWidth = width;
+                profile.DarkEdgeBrightness = cap; profile.MinimumExposure = exposure;
+                if (opposedHost) Object.DestroyImmediate(opposedHost);
+                foreach (var image in new[] { baseline, core, wrapped, singleSide, opposed }) if (image) Object.DestroyImmediate(image);
             }
         }
 
