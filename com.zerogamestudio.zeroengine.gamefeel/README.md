@@ -130,3 +130,5 @@ storage and warmed allocation contracts. The same contracts can run against the
 pure-System runtime outside Unity; Unity consumers also need their focused adapter
 checks and comparable recordings. Microbenchmarks do not establish Player FPS,
 GPU cost or physical haptic feel.
+
+The consolidated baseline retains the POB-consumed adaptive feedback, channel coordination, visual-effect leases/budgets and coalescing APIs from `7ba1d752`. Their original `ZeroEngine.GameFeel` contracts and regression tests are preserved.

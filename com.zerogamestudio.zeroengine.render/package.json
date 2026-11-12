@@ -1,6 +1,6 @@
 {
   "name": "com.zerogamestudio.zeroengine.render",
-  "version": "0.4.3",
+  "version": "0.4.4",
   "displayName": "ZeroEngine Render",
   "description": "Caller-clocked pose snapshots, composited body visuals and portable shading primitives.",
   "unity": "2022.3",
@@ -15,6 +15,9 @@
     "directory": "com.zerogamestudio.zeroengine.render"
   },
   "dependencies": {
-    "com.unity.modules.particlesystem": "1.0.0"
+    "com.unity.modules.audio": "1.0.0",
+    "com.unity.modules.particlesystem": "1.0.0",
+    "com.unity.modules.physics": "1.0.0",
+    "com.unity.modules.physics2d": "1.0.0"
   }
 }

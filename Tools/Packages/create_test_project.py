@@ -45,7 +45,7 @@ def select_packages(packages, lane, editor_version):
         seeds = {PREFIX + suffix for suffix in (".dashboard", ".editor-ui", ".project-atlas", ".core", ".ui")}
         seeds.add("com.zerogamestudio.analytics")
     elif lane == "lifecycle":
-        seeds = {PREFIX + ".core", PREFIX + ".audio"}
+        seeds = {PREFIX + ".core", PREFIX + ".audio", PREFIX + ".render"}
     elif lane == "console-core":
         seeds = {PREFIX + ".console"}
     elif lane == "console-native":

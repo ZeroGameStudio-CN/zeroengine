@@ -21,10 +21,11 @@ class TestProjectSelectionTests(unittest.TestCase):
         quantum, _ = select_packages(packages, "console-quantum", "2022.3.62f1")
         self.assertCountEqual(quantum, [name for name in packages if ".console" in name])
 
-    def test_lifecycle_keeps_audio_core_closure_without_unrelated_modules(self):
+    def test_lifecycle_keeps_audio_core_render_closure_without_unrelated_modules(self):
         packages = {
             "com.zerogamestudio.zeroengine.core": dict(unity="2022.3"),
             "com.zerogamestudio.zeroengine.audio": dict(unity="2022.3", dependencies={"com.zerogamestudio.zeroengine.persistence": "2.0.0"}),
+            "com.zerogamestudio.zeroengine.render": dict(unity="2022.3"),
             "com.zerogamestudio.zeroengine.persistence": dict(unity="2022.3", dependencies={"com.zerogamestudio.zeroengine.core": "2.0.0"}),
             "com.zerogamestudio.zeroengine.dashboard": dict(unity="2022.3"),
         }
@@ -32,6 +33,7 @@ class TestProjectSelectionTests(unittest.TestCase):
         self.assertCountEqual([
             "com.zerogamestudio.zeroengine.core",
             "com.zerogamestudio.zeroengine.audio",
+            "com.zerogamestudio.zeroengine.render",
             "com.zerogamestudio.zeroengine.persistence",
         ], selected)
 

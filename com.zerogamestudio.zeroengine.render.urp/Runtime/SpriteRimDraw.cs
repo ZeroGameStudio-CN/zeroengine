@@ -123,9 +123,9 @@ namespace ZeroEngine.Render.Urp
                 var light = source.Light;
                 if ((light.cullingMask & layerMask) == 0) continue;
                 var toward = light.transform.position - position;
-                if (toward.sqrMagnitude < .0000001f) continue;
                 var away = new Vector2(-toward.x, -toward.y).normalized;
-                if (away.sqrMagnitude < .0000001f) continue;
+                // A native light directly behind the actor has no XY direction.
+                // Keep it selected: the shader resolves its back-facing contour per art cell.
                 float range = Mathf.Max(.001f, light.range);
                 float attenuation = Mathf.Pow(Mathf.Clamp01(1 - toward.sqrMagnitude / (range * range)), 2);
                 float outer = 0, inner = 1;
@@ -151,7 +151,9 @@ namespace ZeroEngine.Render.Urp
                     Shape = new Vector4(light.type == LightType.Point ? 3 : 4, outer, inner, source.DarkEdgeFill),
                     Shadow = source.Shadow,
                     FallbackBox = source.FallbackBox,
-                    Powers = Vector4.one
+                    // Preserve the center's projected magnitude as well as its direction.
+                    // Normalizing XY alone makes a tiny center offset become a full inner-wrap direction.
+                    Powers = new Vector4(1, new Vector2(toward.x, toward.y).magnitude / Mathf.Max(toward.magnitude, .00001f), 0, 0)
                 });
             }
             return selectedCount > 0;
@@ -178,7 +180,10 @@ namespace ZeroEngine.Render.Urp
                 var away = new Vector3(input.Away.x, input.Away.y, 0);
                 UpdateData(rows0, i, input.Row0, 1, ref changes); UpdateData(rows1, i, input.Row1, 2, ref changes);
                 UpdateData(rows2, i, input.Row2, 4, ref changes); UpdateData(colors, i, input.Color, 8, ref changes);
-                UpdateData(shapes, i, input.Shape, 16, ref changes); UpdateData(powers, i, input.Powers, 32, ref changes);
+                UpdateData(shapes, i, input.Shape, 16, ref changes);
+                // Native falloff is geometric. Carry the band's width, center projection and
+                // world-XY direction so the shader can exclude shadowed light from its style mix.
+                UpdateData(powers, i, input.Shape.x > 2.5f ? new Vector4(distance, input.Powers.y, input.Away.x, input.Away.y) : input.Powers, 32, ref changes);
                 UpdateData(shadows, i, input.Shadow, 256, ref changes);
                 if (input.Shadow.w < 0)
                 {
@@ -194,7 +199,8 @@ namespace ZeroEngine.Render.Urp
                 total += input.Score; weightedExposure += input.MinimumExposure * input.Score;
             }
             var wrap = new Vector4(Mathf.Clamp(profile.InnerWrapWidth, 1, 4), Mathf.Clamp(profile.InnerWrapStrength, 0, .35f),
-                float.IsFinite(profile.DarkEdgeBrightness) ? Mathf.Clamp(profile.DarkEdgeBrightness, .01f, 1f) : 1f, 0);
+                float.IsFinite(profile.DarkEdgeBrightness) ? Mathf.Clamp(profile.DarkEdgeBrightness, .01f, 1f) : 1f,
+                1f / Mathf.Max(.001f, profile.ResponsePower));
             if (!uploadedWrap.Equals(wrap)) { uploadedWrap = wrap; changes |= 128; }
             float exposure = Mathf.Lerp(1, Mathf.Clamp(profile.MinimumExposure * weightedExposure / Mathf.Max(total, .000001f), .01f, 1), selected[0].Score);
             foreach (var material in Materials)

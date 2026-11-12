@@ -52,6 +52,13 @@ you are deliberately testing a split. If Unity reports a missing
 `com.zerogamestudio.*` dependency, add that package to the manifest with the
 same commit.
 
+Render URP 0.4.3 requires Render 0.4.4, including the existing blood rendering,
+body-bounds cache and opacity APIs. Game Feel 0.8.1 retains the adaptive feedback,
+channel and visual-effect budget APIs. When unifying previously split pins,
+validate those existing consumer integrations as well as the selected commit.
+Render declares Audio, Particle System, Physics and Physics 2D itself; a consumer's unrelated
+gameplay packages must not supply those production prerequisites implicitly.
+
 Editor-facing packages do not transitively resolve sibling Git packages in
 Unity 2022.3. Dashboard 4.6.2 and Formula 0.6.0 consumers must therefore declare
 `com.zerogamestudio.zeroengine.editor-ui` 1.4.0 directly at the same tested

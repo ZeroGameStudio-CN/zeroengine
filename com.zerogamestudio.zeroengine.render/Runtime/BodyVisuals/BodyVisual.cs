@@ -158,6 +158,9 @@ namespace ZeroEngine.Render
 
         /// <returns>False when the source is gone/unsupported or a single pulse has ended.</returns>
         public bool Update(float elapsed, Renderer body)
+            => Update(elapsed, body, null);
+
+        internal bool Update(float elapsed, Renderer body, BodyVisualBoundsCache boundsCache)
         {
             if (disposed) return false;
             if (!origin || !body || !BodyVisualSettings.InRange(elapsed, 0f, float.MaxValue)) return false;
@@ -182,7 +185,7 @@ namespace ZeroEngine.Render
             {
                 if (!source.TryCapture(snapshot, origin)) return false;
                 capturedCycle = cycle;
-                pulsePivot = origin.InverseTransformPoint(body.bounds.center);
+                pulsePivot = origin.InverseTransformPoint(boundsCache != null ? boundsCache.GetCenter(body) : body.bounds.center);
             }
             if (snapshot.Layers.Count == 0)
             {

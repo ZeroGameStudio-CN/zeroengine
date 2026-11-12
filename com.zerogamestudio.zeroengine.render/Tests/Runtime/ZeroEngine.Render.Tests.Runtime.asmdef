@@ -1,0 +1,16 @@
+{
+  "name": "ZeroEngine.Render.Tests.Runtime",
+  "rootNamespace": "ZeroEngine.Render.Tests.Runtime",
+  "references": [
+    "ZeroEngine.Render"
+  ],
+  "includePlatforms": [],
+  "autoReferenced": false,
+  "defineConstraints": [
+    "UNITY_INCLUDE_TESTS"
+  ],
+  "optionalUnityReferences": [
+    "TestAssemblies"
+  ],
+  "noEngineReferences": false
+}

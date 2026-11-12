@@ -1,10 +1,12 @@
 using System;
+using System.Collections;
 using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using NUnit.Framework;
+using UnityEngine.TestTools;
 
 namespace ZeroEngine.Console.Tests
 {
@@ -119,8 +121,20 @@ namespace ZeroEngine.Console.Tests
             finally { CultureInfo.CurrentCulture = previous; }
         }
 
-        [Test]
-        public async Task VariadicAndOptionalBinding_RejectsMissingAndExtraArguments()
+        [UnityTest]
+        public IEnumerator VariadicAndOptionalBinding_RejectsMissingAndExtraArguments()
+        {
+            var pending = VerifyVariadicAndOptionalBindingAsync();
+            var elapsed = System.Diagnostics.Stopwatch.StartNew();
+            while (!pending.IsCompleted)
+            {
+                Assert.That(elapsed.Elapsed.TotalSeconds, Is.LessThan(10), "Console binding did not complete.");
+                yield return null;
+            }
+            pending.GetAwaiter().GetResult();
+        }
+
+        private static async Task VerifyVariadicAndOptionalBindingAsync()
         {
             using var registry = new ConsoleRegistry();
             var command = Command(parameters: new[] { new ConsoleParameter("id", typeof(string)), new ConsoleParameter("values", typeof(int[]), variadic: true) });
