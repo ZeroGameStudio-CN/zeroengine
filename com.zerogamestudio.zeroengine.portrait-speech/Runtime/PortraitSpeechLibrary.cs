@@ -29,6 +29,33 @@ namespace ZeroEngine.PortraitSpeech
         public bool CanSpeak => HasMouth&&!speechDisabled;
     }
 
+    [Serializable]
+    public struct PortraitExpressionGroup
+    {
+        public int actorId;
+        [Tooltip("Only use a shared prefix for the same outfit and registered framing.")]
+        public string spriteNamePrefix;
+        [Tooltip("Authored closed or squinting poses; keep them static outside transitions.")]
+        public Sprite[] closedPoses;
+        [Tooltip("Poses sharing the prefix but changing the body's placement or composition.")]
+        public Sprite[] excludedPoses;
+
+        internal bool Contains(Sprite sprite)
+        {
+            if(!sprite||string.IsNullOrWhiteSpace(spriteNamePrefix)
+                ||!sprite.name.StartsWith(spriteNamePrefix,StringComparison.Ordinal))return false;
+            if(excludedPoses!=null)foreach(var excluded in excludedPoses)if(excluded==sprite)return false;
+            return true;
+        }
+        internal PortraitExpressionEyes EyeState(Sprite sprite,PortraitSpeechProfile profile)
+        {
+            if(closedPoses!=null)foreach(var pose in closedPoses)
+                if(pose==sprite)return PortraitExpressionEyes.Closed;
+            return PortraitExpressionSet.HasCalibratedBlink(sprite,profile)
+                ?PortraitExpressionEyes.Open:PortraitExpressionEyes.Unspecified;
+        }
+    }
+
     [CreateAssetMenu(menuName="ZeroEngine/UI/Portrait Speech Library")]
     public class PortraitSpeechLibrary : ScriptableObject
     {
@@ -36,6 +63,8 @@ namespace ZeroEngine.PortraitSpeech
         public float portraitMouthOpenTime=.035f,portraitMouthCloseTime=.065f,portraitMouthTransition=.045f;
         public PortraitBlinkTiming blinkTiming=PortraitBlinkTiming.Default;
         public PortraitSpeechProfile[] portraitSpeech=Array.Empty<PortraitSpeechProfile>();
+        [Tooltip("Opt-in groups for automatic transitions. Hosts still decide when to request one.")]
+        public PortraitExpressionGroup[] expressionGroups=Array.Empty<PortraitExpressionGroup>();
 #if UNITY_EDITOR
         [HideInInspector] public string portraitAuthoringStateJson;
 #endif
@@ -45,6 +74,32 @@ namespace ZeroEngine.PortraitSpeech
                 if(entry.actorId==actorId&&entry.spriteName==spriteName){result=entry;return true;}
             result=default;return false;
         }
+        /// <summary>Resolve one unambiguous same-outfit pair, without changing either portrait or profile.</summary>
+        public bool TryResolveExpressionPair(int actorId,Sprite from,Sprite to,
+            out PortraitExpressionEyes fromEyes,out PortraitExpressionEyes toEyes)
+        {
+            fromEyes=toEyes=PortraitExpressionEyes.Unspecified;
+            if(from==to||expressionGroups==null||!PortraitExpressionSet.FitsCanvas(from,to))return false;
+            int a=-1,b=-1;
+            for(int i=0;i<expressionGroups.Length;i++)
+            {
+                var group=expressionGroups[i];
+                if(group.actorId!=actorId)continue;
+                if(group.Contains(from)){if(a>=0)return false;a=i;}
+                if(group.Contains(to)){if(b>=0)return false;b=i;}
+            }
+            if(a<0||a!=b||!TryGetPortraitProfile(actorId,from.name,out var source)
+                ||!TryGetPortraitProfile(actorId,to.name,out var target))return false;
+            var selected=expressionGroups[a];
+            var sourceEyes=selected.EyeState(from,source);
+            var targetEyes=selected.EyeState(to,target);
+            // A calibrated open endpoint supplies the eyelid movement. With two
+            // static poses there is no automatic blink to hide the switch.
+            if(sourceEyes==PortraitExpressionEyes.Unspecified||targetEyes==PortraitExpressionEyes.Unspecified
+                ||sourceEyes==PortraitExpressionEyes.Closed&&targetEyes==PortraitExpressionEyes.Closed)return false;
+            fromEyes=sourceEyes;toEyes=targetEyes;return true;
+        }
+
         public bool TryGetPortraitSpeech(int actorId,Sprite sprite,out PortraitSpeechProfile result)
         {
             if(TryGetPortraitProfile(actorId,sprite?sprite.name:null,out result)&&result.CanSpeak)return true;

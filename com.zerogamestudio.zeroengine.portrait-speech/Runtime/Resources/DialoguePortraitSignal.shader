@@ -51,6 +51,20 @@ Shader "ZeroEngine/UI/PortraitSpeech"
         _BlinkLidColor("Closed eyelid",Color)=(.15,.07,.085,1)
         _BlinkMask("Protected source pixels",2D)="black" {}
         _BlinkMaskRect("Protection texture source bounds",Vector)=(0,0,0,0)
+        [HideInInspector] [NoScaleOffset] _ExpressionFromTex("Outgoing portrait",2D)="black" {}
+        [HideInInspector] _ExpressionFromUV("Outgoing UV bounds",Vector)=(0,0,1,1)
+        [HideInInspector] _ExpressionFromPadding("Outgoing trim padding",Vector)=(0,0,0,0)
+        [HideInInspector] _ExpressionMouthRegion("Expression overlay region",Vector)=(0,0,0,0)
+        [HideInInspector] _ExpressionExcludeMouth("Mouth kept for its own transition",Vector)=(0,0,0,0)
+        [HideInInspector] _ExpressionExcludeEyeA("Left eye kept covered during hand-off",Vector)=(0,0,0,0)
+        [HideInInspector] _ExpressionExcludeEyeB("Right eye kept covered during hand-off",Vector)=(0,0,0,0)
+        [HideInInspector] _ExpressionIncomingSkinA("Incoming left eye skin",Vector)=(0,0,0,0)
+        [HideInInspector] _ExpressionIncomingSkinB("Incoming right eye skin",Vector)=(0,0,0,0)
+        [HideInInspector] _ExpressionClosedArcA("Incoming closed left contour",Vector)=(0,0,0,0)
+        [HideInInspector] _ExpressionClosedArcB("Incoming closed right contour",Vector)=(0,0,0,0)
+        [HideInInspector] [NoScaleOffset] _ExpressionBridgeTex("Authored eye and brow bridge",2D)="black" {}
+        [HideInInspector] _ExpressionBridgeRect("Bridge origin and size in source pixels",Vector)=(0,0,0,0)
+        [HideInInspector] _ExpressionFromWeight("Expression overlay coverage",Float)=0
         _StencilComp("Stencil Comparison",Float)=8
         _Stencil("Stencil ID",Float)=0
         _StencilOp("Stencil Operation",Float)=0
@@ -70,6 +84,7 @@ Shader "ZeroEngine/UI/PortraitSpeech"
             CGPROGRAM
             #pragma target 3.0 PORTRAIT_DRAWN_MOUTH
             #pragma multi_compile_local _ PORTRAIT_DRAWN_MOUTH
+            #pragma multi_compile_local _ PORTRAIT_EXPRESSION_MOUTH
             #pragma vertex vert
             #pragma fragment frag
             #pragma multi_compile_local _ UNITY_UI_CLIP_RECT
@@ -80,6 +95,15 @@ Shader "ZeroEngine/UI/PortraitSpeech"
             struct Varyings{float4 vertex:SV_POSITION;float4 local:TEXCOORD1;float2 uv:TEXCOORD0;float4 color:COLOR;};
             sampler2D _MainTex;
             sampler2D _BlinkMask;
+            #if defined(PORTRAIT_EXPRESSION_MOUTH)
+            sampler2D _ExpressionFromTex,_ExpressionBridgeTex;
+            float4 _ExpressionBridgeRect;
+            float4 _ExpressionFromTex_TexelSize,_ExpressionFromUV,_ExpressionFromPadding,_ExpressionMouthRegion;
+            float4 _ExpressionExcludeMouth,_ExpressionExcludeEyeA,_ExpressionExcludeEyeB;
+            float4 _ExpressionIncomingSkinA,_ExpressionIncomingSkinB;
+            float4 _ExpressionClosedArcA,_ExpressionClosedArcB;
+            float _ExpressionFromWeight;
+            #endif
             #if defined(PORTRAIT_DRAWN_MOUTH)
             sampler2D _MouthPoseSheet;
             float4 _MouthPoseSheet_TexelSize;
@@ -181,46 +205,214 @@ Shader "ZeroEngine/UI/PortraitSpeech"
             {
                 return all(box.zw>0)&&all(source>=box.xy)&&all(source<box.xy+box.zw);
             }
-            bool ProtectedEyePixel(float2 sourcePixel)
+            float4 BlinkMaskAt(float2 sourceCell)
             {
-                float2 localPixel=floor(sourcePixel+.001)+.5-_BlinkMaskRect.xy;
-                if(any(localPixel<0)||any(localPixel>=_BlinkMaskRect.zw))return false;
-                return tex2D(_BlinkMask,localPixel/max(1,_BlinkMaskRect.zw)).r>.5;
+                float2 localPixel=sourceCell-_BlinkMaskRect.xy;
+                if(any(localPixel<0)||any(localPixel>=_BlinkMaskRect.zw))return 0;
+                return floor(tex2D(_BlinkMask,localPixel/max(1,_BlinkMaskRect.zw))*255+.5);
             }
+            float4 BlinkSourceAt(float2 pixel,float2 trimmed,float2 span)
+            {
+                float2 uv=_UvRect.xy+(pixel-_SpritePadding.xy)/trimmed*span;
+                return tex2D(_MainTex,BoundedUV(uv));
+            }
+            bool IsLashInk(float3 color)
+            {
+                // Compare the authored eyelid ink in display color space. A tolerance of a
+                // few source values accepts the same ink, without classifying dark hair in bulk.
+                float3 ink=_BlinkLidColor.rgb;
+                #if !defined(UNITY_COLORSPACE_GAMMA)
+                color=LinearToGammaSpace(color);
+                ink=LinearToGammaSpace(ink);
+                #endif
+                float3 delta=abs(color-ink);
+                return max(delta.r,max(delta.g,delta.b))<=3.0/255.0;
+            }
+            float4 BlinkForegroundAt(float2 sourceCell,float2 trimmed,float2 span)
+            {
+                if(BlinkMaskAt(sourceCell).r<128)return 0;
+                return BlinkSourceAt(sourceCell,trimmed,span);
+            }
+            float4 BlinkLashBand(float x,float row,float closeY,float2 rows,float2 footprint,float2 trimmed,float2 span)
+            {
+                float4 ink=BlinkSourceAt(float2(x,row+.5),trimmed,span);
+                if(ink.a<=.001||!IsLashInk(ink.rgb))return 0;
+                // Forward-warp the actual lash row with the upper lid. Intersect its
+                // moving footprint with the authored visible gap before compositing.
+                float low=max(rows.x,lerp(row,closeY,_BlinkAmount));
+                float high=min(rows.y,lerp(row+1,closeY,_BlinkAmount));
+                float coverage=saturate((min(high,footprint.y)-max(low,footprint.x))/max(.001,footprint.y-footprint.x));
+                return float4(ink.rgb*coverage,coverage);
+            }
+            #if defined(PORTRAIT_EXPRESSION_MOUTH)
+            float4 ExpressionSourceAt(float2 pixel,float2 size)
+            {
+                float2 secondarySize=max(1,size-_ExpressionFromPadding.xy-_ExpressionFromPadding.zw);
+                float2 q=(pixel-_ExpressionFromPadding.xy)/secondarySize;
+                if(any(q<0)||any(q>=1))return 0;
+                float2 mappedUV=lerp(_ExpressionFromUV.xy,_ExpressionFromUV.zw,q);
+                float2 halfPixel=_ExpressionFromTex_TexelSize.xy*.5;
+                return tex2D(_ExpressionFromTex,clamp(mappedUV,_ExpressionFromUV.xy+halfPixel,_ExpressionFromUV.zw-halfPixel));
+            }
+            #endif
             float3 EyeBlink(float2 uv,float2 span,float3 original)
             {
                 float2 sourceSize=max(_SourceSize.xy,1);
                 float2 trimmed=max(sourceSize-_SpritePadding.xy-_SpritePadding.zw,1);
                 float2 sourcePixel=_SpritePadding.xy+(uv-_UvRect.xy)/span*trimmed;
                 float2 source=sourcePixel/sourceSize;
+                float footprintY=clamp(fwidth(sourcePixel.y),.015625,1);
                 bool left=InEye(source,_BlinkEyeA);
-                if((!left&&!InEye(source,_BlinkEyeB))||ProtectedEyePixel(sourcePixel))return original;
+                if(!left&&!InEye(source,_BlinkEyeB))return original;
+                float2 sourceCell=floor(sourcePixel+.001)+.5;
+                float4 protection=BlinkMaskAt(sourceCell);
+                if(protection.r>=128)return original;
 
                 float4 box=left?_BlinkEyeA:_BlinkEyeB;
                 float4 pose=left?_BlinkPoseA:_BlinkPoseB;
                 float2 skin=(left?_BlinkSkinA:_BlinkSkinB).xy;
                 float2 grid=max(1,round(box.zw*sourceSize));
-                float2 pointInEye=floor(sourcePixel-box.xy*sourceSize+.001)+.5;
+                float2 eyeStart=box.xy*sourceSize;
+                float2 pointInEye=floor(sourcePixel-eyeStart+.001)+.5;
                 float2 q=pointInEye/grid;
                 float dx=q.x-.5;
                 float lid=clamp(pose.x+dx*pose.y+dx*dx*4*pose.z,.1,.9);
+                float2 rows=float2(protection.r+protection.g*128,protection.b+protection.a*256);
+                bool restricted=rows.y>rows.x;
+                bool pocket=false;
+                if(restricted)
+                {
+                    float2 eyeRows=ceil(float2(box.y,box.y+box.w)*sourceSize.y-.5);
+                    rows=float2(max(rows.x,eyeRows.x),min(rows.y,eyeRows.y));
+                    if(rows.y<=rows.x)return original;
+                    float closingRow=floor(eyeStart.y+lid*grid.y);
+                    // A short pocket separated by the painted foreground may be a detail
+                    // or a lash tip. Keep unrelated artwork, but let actual lid ink move.
+                    pocket=rows.y-rows.x<=2&&(rows.x>eyeRows.x||rows.y<eyeRows.y)
+                        &&(closingRow<rows.x||closingRow>=rows.y);
+                }
                 float bottom=lid*_BlinkAmount,top=lerp(1,lid,_BlinkAmount);
-                float2 skinUV=_UvRect.xy+(skin*sourceSize-_SpritePadding.xy)/trimmed*span;
-                float3 closed=tex2D(_MainTex,BoundedUV(skinUV)).rgb;
-                if(q.y>=bottom&&q.y<top&&_BlinkAmount<.98)
+                float blend=smoothstep(0,.16,_BlinkAmount);
+                bool visible=q.y>=bottom&&q.y<top&&_BlinkAmount<.98;
+                float2 samplePixel=sourceCell;
+                if(visible)
                 {
                     float eyeY=(q.y-bottom)/max(.01,top-bottom);
-                    float2 samplePixel=box.xy*sourceSize+float2(pointInEye.x,min(grid.y-.5,floor(eyeY*grid.y)+.5));
-                    if(!ProtectedEyePixel(samplePixel))
+                    samplePixel=eyeStart+float2(pointInEye.x,min(grid.y-.5,floor(eyeY*grid.y)+.5));
+                    if(_BlinkMaskRect.z>0)samplePixel.x=sourceCell.x;
+                }
+                if(pocket)
+                {
+                    bool originalInk=IsLashInk(original);
+                    float4 above=BlinkForegroundAt(float2(sourceCell.x,rows.y+.5),trimmed,span);
+                    float4 below=BlinkForegroundAt(float2(sourceCell.x,rows.x-.5),trimmed,span);
+                    bool aboveVisible=above.a>.001&&!IsLashInk(above.rgb);
+                    bool belowVisible=below.a>.001&&!IsLashInk(below.rgb);
+                    bool upper=q.y>=lid;
+                    bool hasBackground=aboveVisible||belowVisible;
+                    float3 background=(aboveVisible&&(!belowVisible||upper))?above.rgb:below.rgb;
+                    if(aboveVisible&&belowVisible)
                     {
-                        float2 eyeUV=_UvRect.xy+(samplePixel-_SpritePadding.xy)/trimmed*span;
-                        closed=tex2D(_MainTex,BoundedUV(eyeUV)).rgb;
+                        float closeY=eyeStart.y+lid*grid.y;
+                        float2 footprint=sourcePixel.y+float2(-.5,.5)*footprintY;
+                        float4 moving=BlinkLashBand(sourceCell.x,rows.x,closeY,rows,footprint,trimmed,span);
+                        if(rows.y-rows.x>1)
+                            moving+=BlinkLashBand(sourceCell.x,rows.x+1,closeY,rows,footprint,trimmed,span);
+                        if(!originalInk&&moving.a<=.001)return original;
+                        float3 backing=originalInk?background:original;
+                        return backing*(1-saturate(moving.a))+moving.rgb;
+                    }
+
+                    float4 shifted=0;
+                    if(visible&&samplePixel.y>=rows.x&&samplePixel.y<rows.y)
+                        shifted=BlinkSourceAt(samplePixel,trimmed,span);
+                    bool shiftedInk=shifted.a>.001&&IsLashInk(shifted.rgb);
+                    if(!originalInk&&!shiftedInk)return original;
+                    if(shifted.a>.001)return lerp(original,shifted.rgb,blend);
+                    if(!originalInk)return original;
+                    return hasBackground?lerp(original,background,blend):original;
+                }
+
+                float3 closed=BlinkSourceAt(skin*sourceSize,trimmed,span).rgb;
+                #if defined(PORTRAIT_EXPRESSION_MOUTH)
+                // Use only the authored skin sample from the incoming eye. The
+                // blink still draws its own single lid and honors the hair mask.
+                float4 incomingSkin=left?_ExpressionIncomingSkinA:_ExpressionIncomingSkinB;
+                if(_BlinkAmount>=.98&&incomingSkin.z>.5)
+                {
+                    float4 sampleColor=ExpressionSourceAt((floor(incomingSkin.xy*sourceSize)+.5),sourceSize);
+                    closed=lerp(closed,sampleColor.rgb,saturate(_ExpressionFromWeight)*sampleColor.a);
+                }
+                #endif
+                bool occludedLash=false;
+                if(visible)
+                {
+                    bool above=restricted&&samplePixel.y>=rows.y;
+                    bool below=restricted&&samplePixel.y<rows.x;
+                    if(restricted)samplePixel.y=clamp(samplePixel.y,rows.x+.5,rows.y-.5);
+                    closed=BlinkSourceAt(samplePixel,trimmed,span).rgb;
+                    // Ordinary eye color clamps to the editable rows. If that last row is
+                    // lash ink and the original sample crossed the mask, show the actual
+                    // occluder rather than stretching a copy of the lash along the seam.
+                    if((above||below)&&IsLashInk(closed))
+                    {
+                        float2 edge=float2(sourceCell.x,above?rows.y+.5:rows.x-.5);
+                        float4 foreground=BlinkForegroundAt(edge,trimmed,span);
+                        occludedLash=foreground.a>.001&&!IsLashInk(foreground.rgb);
+                        if(occludedLash)closed=foreground.rgb;
                     }
                 }
-                if(_BlinkAmount>.28&&q.x>.09&&q.x<.91&&floor(pointInEye.y)==floor(top*grid.y))
+                if(!occludedLash&&_BlinkAmount>.28&&q.x>.09&&q.x<.91&&floor(pointInEye.y)==floor(top*grid.y))
                     closed=lerp(closed,_BlinkLidColor.rgb,_BlinkLidColor.a);
-                return lerp(original,closed,smoothstep(0,.16,_BlinkAmount));
+                return lerp(original,closed,blend);
             }
+            #if defined(PORTRAIT_EXPRESSION_MOUTH)
+            float3 ExpressionOverlayAt(float2 uv,float2 span,float3 current)
+            {
+                float2 size=max(1,_SourceSize.xy);
+                float2 trimmed=max(1,size-_SpritePadding.xy-_SpritePadding.zw);
+                float2 pixel=floor(_SpritePadding.xy+(uv-_UvRect.xy)/span*trimmed+.001)+.5;
+                float2 position=pixel/size;
+                if(!InEye(position,_ExpressionMouthRegion)||InEye(position,_ExpressionExcludeMouth))return current;
+                bool left=InEye(position,_ExpressionExcludeEyeA);
+                if(left||InEye(position,_ExpressionExcludeEyeB))
+                {
+                    // Only an authored closed pose with an aligned contour may
+                    // contribute its original ink. Open targets never enter here.
+                    float4 arc=left?_ExpressionClosedArcA:_ExpressionClosedArcB;
+                    if(arc.w<=0||_BlinkAmount<.98||BlinkMaskAt(pixel).r>=128)return current;
+                    float4 eye=left?_BlinkEyeA:_BlinkEyeB;
+                    float4 pose=left?_BlinkPoseA:_BlinkPoseB;
+                    float2 grid=max(1,round(eye.zw*size));
+                    float2 origin=eye.xy*size;
+                    float dx=(floor(pixel.x-origin.x)+.5)/grid.x-.5;
+                    float3 basis=float3(1,dx,4*dx*dx);
+                    float y=origin.y+clamp(dot(pose.xyz,basis),.1,.9)*grid.y;
+                    float targetY=origin.y+clamp(dot(arc.xyz,basis),.1,.9)*grid.y;
+                    // Shift the painted lash band as one piece. Outside that band
+                    // the brows and cheeks keep their original coordinates.
+                    float stepY=floor(targetY)-floor(y);
+                    const float lashRadius=2.75;
+                    if(abs(pixel.y-(floor(y)+.5))<=lashRadius)
+                        pixel.y=clamp(pixel.y+stepY,.5,size.y-.5);
+                    else if(stepY!=0&&abs(pixel.y-(floor(targetY)+.5))<=lashRadius)
+                        return current;
+                }
+                float4 incoming=ExpressionSourceAt(pixel,size);
+                return lerp(current,incoming.rgb,saturate(_ExpressionFromWeight)*incoming.a);
+            }
+            float3 ExpressionBridgeAt(float2 uv,float2 span,float3 current)
+            {
+                float2 size=max(1,_SourceSize.xy);
+                float2 trimmed=max(1,size-_SpritePadding.xy-_SpritePadding.zw);
+                float2 pixel=floor(_SpritePadding.xy+(uv-_UvRect.xy)/span*trimmed+.001)+.5;
+                float2 local=pixel-_ExpressionBridgeRect.xy;
+                if(any(local<0)||any(local>=_ExpressionBridgeRect.zw)||InEye(pixel/size,_ExpressionExcludeMouth))
+                    return current;
+                float4 patch=tex2D(_ExpressionBridgeTex,local/_ExpressionBridgeRect.zw);
+                return lerp(current,patch.rgb,patch.a);
+            }
+            #endif
             fixed4 frag(Varyings input):SV_Target
             {
                 float period=max(.5,_GlitchInterval);
@@ -249,6 +441,10 @@ Shader "ZeroEngine/UI/PortraitSpeech"
                     if(!frame&&_MouthFrame>.5)color=DrawnMouthAt(input.uv,span,color);
                     #endif
                     if(!frame&&_BlinkAmount>.001)color=EyeBlink(input.uv,span,color);
+                    #if defined(PORTRAIT_EXPRESSION_MOUTH)
+                    if(!frame&&_ExpressionFromWeight>.001)color=ExpressionOverlayAt(input.uv,span,color);
+                    if(!frame&&_ExpressionBridgeRect.z>0)color=ExpressionBridgeAt(input.uv,span,color);
+                    #endif
                     float noise=frac(sin(dot(floor(relative*_SourceSize.xy/4),float2(12.9898,78.233))+floor(_SignalTime*11))*43758.5453)-.5;
                     float2 cell=frac(input.local.xy*.5)-.5;
                     float pixelLattice=smoothstep(.28,.52,length(cell));

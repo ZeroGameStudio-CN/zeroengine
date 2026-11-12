@@ -5,11 +5,10 @@ dialogue-plugin, audio, gameplay clock or gameplay RNG dependency. Five speaking
 silhouettes blend back into the original closed mouth. This is stylized visible
 character synchronization, not phoneme or recorded-audio lip sync.
 
-The 0.1.1 consolidation candidate preserves the embedded package's public types,
-serialized data and asset GUIDs, and declares its direct Image Conversion module
-dependency. POB integration and adoption remain in POB. This source candidate is
-not yet published. After verification, install the package from the canonical ZE
-Git repository at the same tested commit as the other selected ZE packages.
+Version 0.1.2 preserves the consumer's committed expression transitions, authored
+bridges and protected blink rendering, together with its public types, serialized
+data and asset GUIDs. Install from the canonical ZE Git repository at the same
+tested commit as the other selected ZE packages. POB integration remains in POB.
 
 ## Configure
 
@@ -97,6 +96,48 @@ than inheriting a previous face's mouth. ExpressionChanged lets a project add
 content-specific screen/character feedback; it does not infer emotion from text.
 Existing users of the inline profile need no expression set.
 
+Use **TransitionToExpression("smile")** to opt in to a soft expression hand-off.
+Assign a shared non-empty **Transition Group** only to the same actor, outfit and
+framing. Mark each pose's eyes as **Open** or **Closed**. Open poses need a saved
+blink calibration; a paused calibration is used only during the transition.
+Unspecified, mismatched or incompatible poses use the ordinary immediate switch.
+
+The outgoing mouth settles and the eyes close. A short local face hand-off
+blends skin and brows before switching the sprite. A single closed eyelid moves
+toward the target calibration; protected foreground pixels stay in place. An
+authored closed pose can optionally provide an eye box, skin sample and closed
+contour while its blink playback stays off. When aligned, its painted line joins
+the moving eyelid before the sprite switch. Open target eyes only reopen after
+the swap, using their own calibration. The mouth blends separately in its small
+calibrated region. Subsequent glyphs still drive speech. **SetExpression** remains the
+immediate path, and **Complete(true)** finishes a pending hand-off immediately.
+**ExpressionChanged** fires at the visible sprite change. The shared timings live
+on the expression set. No portrait textures are generated or edited.
+
+For an expression pair that needs a hand-drawn in-between pose, add a **Bridge**
+on the same expression set. Select the exact **From** and **To** keys, then
+assign a transparent **Patch** texture and its **Bottom Left** origin in the
+untrimmed portrait's source pixels. A tightly cropped patch avoids storing the
+whole portrait; a full-size transparent patch can use origin (0, 0). Import at
+native size (NPOT scaling off), with alpha, point filtering and no mipmaps.
+Paint only the pixels that should change. The portrait's silhouette and
+calibrated mouth stay intact.
+
+The authored pose plays automatically just before the swap (about 20 ms, or
+one rendered update when a slow frame would skip it). A missing, duplicate or
+out-of-bounds bridge keeps the ordinary transition. Reversing a pair requires
+its own entry. Adding a bridge does not enable transitions on **SetExpression**
+or change either source portrait.
+
+A host can call **TryResolveExpressionPair** on its portrait speech library to
+automatically select compatible changes. Set one **Expression Group** per actor
+and outfit, with a case-sensitive sprite prefix for registered artwork. Both
+sprites need library profiles and the same canvas, pivot and pixels per unit.
+Mark existing static squints in **Closed Poses** and place composition changes
+in **Excluded Poses**. Unknown poses, overlapping groups and pairs with two
+static endpoints stay on the immediate path. An explicitly requested
+**TransitionToExpression** still supports its own authored group and bridge.
+
 ## Connect
 
 For an ordinary UI Image, add `PortraitSpeechImage`, assign its profile, call
@@ -153,7 +194,7 @@ method retains its reset behavior for actor/line changes.
 
 ## Consolidation dependency correction
 
-The 0.1.1 consolidation candidate explicitly declares Unity's built-in
+The package explicitly declares Unity's built-in
 JSON Serialize module (`com.unity.modules.jsonserialize`) for this package's
 direct `JsonUtility` calls. Consumers no longer need an unrelated installed
-package to supply that module. This candidate is not a published release.
+package to supply that module.
