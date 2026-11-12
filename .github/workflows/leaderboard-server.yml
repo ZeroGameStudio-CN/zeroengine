@@ -1,0 +1,26 @@
+name: Leaderboard server
+
+on:
+  push:
+    paths:
+      - 'Services/leaderboards/**'
+      - '.github/workflows/leaderboard-server.yml'
+  pull_request:
+    paths:
+      - 'Services/leaderboards/**'
+      - '.github/workflows/leaderboard-server.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  portable-server:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Test server without Unity or Steam
+        working-directory: Services/leaderboards
+        run: python -B -m unittest discover -s tests
