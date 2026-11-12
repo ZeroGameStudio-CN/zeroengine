@@ -7,7 +7,7 @@ import re
 import shutil
 
 
-LANES = ("legacy", "modular", "dashboard-only", "dashboard-with-modules", "modules-only", "lifecycle")
+LANES = ("legacy", "modular", "dashboard-only", "dashboard-with-modules", "modules-only", "lifecycle", "console-core", "console-native", "console-quantum")
 PREFIX = "com.zerogamestudio.zeroengine"
 
 
@@ -46,6 +46,12 @@ def select_packages(packages, lane, editor_version):
         seeds.add("com.zerogamestudio.analytics")
     elif lane == "lifecycle":
         seeds = {PREFIX + ".core", PREFIX + ".audio"}
+    elif lane == "console-core":
+        seeds = {PREFIX + ".console"}
+    elif lane == "console-native":
+        seeds = {PREFIX + ".console.ui"}
+    elif lane == "console-quantum":
+        seeds = {PREFIX + ".console.quantum"}
     elif lane in ("modular", "modules-only"):
         seeds = compatible - {PREFIX}
         if lane == "modules-only":

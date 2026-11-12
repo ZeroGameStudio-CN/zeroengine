@@ -1,0 +1,7 @@
+{
+  "name": "ZeroEngine.AiSupport.Editor",
+  "rootNamespace": "ZeroEngine.AiSupport.Editor",
+  "references": [],
+  "includePlatforms": [ "Editor" ],
+  "autoReferenced": true
+}

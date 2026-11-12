@@ -1,0 +1,7 @@
+{
+  "name": "ZeroEngine.Console.Tests.Runtime",
+  "rootNamespace": "ZeroEngine.Console.Tests.Runtime",
+  "references": ["ZeroEngine.Console.Core", "ZeroEngine.Console.Unity"],
+  "optionalUnityReferences": ["TestAssemblies"],
+  "autoReferenced": false
+}

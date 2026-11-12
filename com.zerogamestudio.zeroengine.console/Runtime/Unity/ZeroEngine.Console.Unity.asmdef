@@ -1,0 +1,6 @@
+{
+  "name": "ZeroEngine.Console.Unity",
+  "rootNamespace": "ZeroEngine.Console.Unity",
+  "references": ["ZeroEngine.Console.Core"],
+  "autoReferenced": true
+}

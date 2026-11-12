@@ -41,3 +41,12 @@ through real Unity lifecycle callbacks, independently of the EditMode lanes.
 
 The test-runner CLI is pinned to the observed `v0.1.72` release; resolving a
 floating latest release is unnecessary and can fail before Unity starts.
+
+`console-core` and `console-native` are clean Console installations: the kernel
+alone, and the kernel plus native UI. CI runs their EditMode and PlayMode cases
+without other ZE gameplay packages, QC or Input System as incidental dependencies.
+
+`console-quantum` installs the optional Quantum adapter and its Console/UI
+closure, with no vendor SDK or licensed assets. It protects physical SDK absence
+and cannot certify a particular vendor version; that compatibility needs the
+project's licensed prefab, explicit profile and focused integration evidence.

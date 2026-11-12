@@ -1,0 +1,8 @@
+{
+  "name": "ZeroEngine.Console.Tests.Editor",
+  "rootNamespace": "ZeroEngine.Console.Tests",
+  "references": ["ZeroEngine.Console.Core"],
+  "includePlatforms": ["Editor"],
+  "optionalUnityReferences": ["TestAssemblies"],
+  "autoReferenced": false
+}
