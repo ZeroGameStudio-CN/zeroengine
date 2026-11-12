@@ -124,3 +124,5 @@ Zero feather retains an explicit hard edge. The field owns no weather clock or s
 ### Presentation-owner material changes
 
 After replacing a renderer material recipe, call `SurfaceWeatherMaterialSources.NotifyRendererMaterialsChanged(renderer)`. Active adapters can immediately rebind renderers they already track. This notification does not discover new objects or mutate materials by itself. Resolve borrowed weather materials before retaining an authored source; never retain a temporary weather instance as another owner's restoration source.
+
+The consolidated baseline retains the POB-consumed blood views, surfaces, residue and upload coordination, body-bounds cache and renderer-opacity bindings from `8b06c811`. Existing `ZeroEngine.Render` APIs and asset GUIDs are preserved.

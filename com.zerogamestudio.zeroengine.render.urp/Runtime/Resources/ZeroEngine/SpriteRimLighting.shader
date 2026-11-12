@@ -58,6 +58,11 @@ Shader "Hidden/ZeroEngine/SpriteRimLighting"
             if (any(uv < 0) || any(uv >= 1)) return 0;
             return SAMPLE_TEXTURE2D_LOD(_RimRefMask, sampler_LinearClamp, uv, 0).r;
         }
+        float BackContourCoverage(float2 uv, float2 step)
+        {
+            return min(min(FilteredMaskAlpha(uv + float2(step.x, 0)), FilteredMaskAlpha(uv - float2(step.x, 0))),
+                min(FilteredMaskAlpha(uv + float2(0, step.y)), FilteredMaskAlpha(uv - float2(0, step.y))));
+        }
         float2 CoveredArtCell(ActorVaryings input, out float2 cellOffset)
         {
             float2 sourceUV = input.uv * _RimRefActorST.xy + _RimRefActorST.zw;
@@ -222,25 +227,67 @@ Shader "Hidden/ZeroEngine/SpriteRimLighting"
                 if (visibility <= 0) continue;
                 float amount = alpha * alpha * visibility;
                 float4 band = _RimEnhanceBands[i];
+                float backFacing = 0;
+                float bandWidth = _RimEnhancePowers[i].x;
+                float directionalStyle = 1;
+                if (_RimEnhanceShapes[i].x > 2.5)
+                {
+                    directionalStyle = smoothstep(.55, .9, _RimEnhanceInnerWrap.w);
+                    float thinWidth = lerp(min(bandWidth, 1), bandWidth, directionalStyle);
+                    band.xy *= thinWidth / max(bandWidth, .00001);
+                    bandWidth = thinWidth;
+                    // Native matrices contain rotation and uniform inverse range. Recover the
+                    // light vector without adding another per-light upload or guessing a side at XY=0.
+                    float3 cellWS = ArtCellWorldPosition(input.positionWS, cellOffset);
+                    float3 cellQ = float3(dot(float4(cellWS, 1), _RimEnhanceRows0[i]),
+                        dot(float4(cellWS, 1), _RimEnhanceRows1[i]), dot(float4(cellWS, 1), _RimEnhanceRows2[i]));
+                    float3 toLight = -(_RimEnhanceRows0[i].xyz * cellQ.x + _RimEnhanceRows1[i].xyz * cellQ.y +
+                        _RimEnhanceRows2[i].xyz * cellQ.z) / max(dot(_RimEnhanceRows0[i].xyz, _RimEnhanceRows0[i].xyz), .00000001);
+                    float3 view = GetWorldSpaceNormalizeViewDir(cellWS);
+                    float depth = dot(toLight, view);
+                    float lightDistance = max(length(toLight), .00001);
+                    backFacing = saturate(-depth / lightDistance);
+                    // Near the projected center the directional band vanishes continuously;
+                    // only a light behind the visible actor grows a symmetric contour.
+                    if (backFacing > 0) band.xy *= saturate(_RimEnhancePowers[i].y);
+                }
                 float2 scale = (_RimRefFrame.zw + band.z) / max(_RimRefFrame.zw, 1);
                 float2 shifted = (uv - _RimRefFrame.xy) / max(scale, .00001) + _RimRefFrame.xy - band.xy * texel;
                 // Filter only contour coverage, never source art: every art cell retains a uniform shade.
-                float occupied = FilteredMaskAlpha(shifted);
+                float directionalOccupied = FilteredMaskAlpha(shifted);
+                float rearOccupied = 1;
+                // Symmetric backlight stays on one art-cell contour, even when the weak
+                // directional profile requests a wider band. Do not spread it over the body.
+                float rearWidth = min(bandWidth, 1) * backFacing;
+                if (backFacing > 0) rearOccupied = BackContourCoverage(uv, texel * rearWidth);
+                float occupied = min(directionalOccupied, rearOccupied);
                 float4 tint = lerp(_RimRefEdgeTint, _RimRefInnerTint, occupied);
                 float3 modulation = tint.rgb * tint.a;
                 if (_RimEnhanceInnerWrap.y > 0 && occupied > 0)
                 {
                     float2 inward = band.xy / max(length(band.xy), .00001) * texel;
                     int steps = (int)_RimEnhanceInnerWrap.x;
+                    float wrapSpan = _RimEnhanceShapes[i].x > 2.5 ? lerp(1.0 / max(steps, 1), 1, directionalStyle) : 1;
                     float coverage = 0;
                     [unroll] for (int tap = 1; tap <= 4; tap++)
                     {
                         if (tap > steps) break;
-                        coverage += saturate(occupied - FilteredMaskAlpha(shifted - inward * tap));
+                        coverage += saturate(directionalOccupied - FilteredMaskAlpha(shifted - inward * (tap * wrapSpan)));
                     }
-                    // Averaged contour shells fade inward per art cell and add nothing to the bright outer core.
+                    coverage /= max(steps, 1);
+                    if (_RimEnhanceShapes[i].x > 2.5) coverage *= lerp(.15, 1, directionalStyle);
+                    if (backFacing > 0)
+                    {
+                        // Retain the single-side transition; taper its normalized direction
+                        // to zero at the projected center instead of flipping a full-strength shell.
+                        coverage *= saturate(_RimEnhancePowers[i].y);
+                        // The extra all-around contour gets only a faint one-cell inner transition.
+                        float rearInner = BackContourCoverage(uv, texel * (rearWidth + backFacing));
+                        coverage = max(coverage, .15 * saturate(rearOccupied - rearInner));
+                    }
+                    // Never add inward-wrap energy to the bright outer core.
                     modulation += _RimRefEdgeTint.rgb * _RimRefEdgeTint.a *
-                        (_RimEnhanceInnerWrap.y * coverage / max(steps, 1));
+                        (_RimEnhanceInnerWrap.y * coverage);
                 }
                 float3 rimColor = saturate(_RimEnhanceColors[i].rgb * amount) * modulation * band.w;
                 // Native Shape.w opts into dark contour fill. Use the smooth field directly

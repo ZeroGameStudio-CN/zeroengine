@@ -16,6 +16,7 @@ namespace ZeroEngine.Render
         private readonly BodyVisualResources resources;
         private bool disposed, statusEffectsVisible = true;
         private VisualPalette palette;
+        private readonly BodyVisualBoundsCache boundsCache = new();
         public BodyVisualHost(Transform origin, Func<Renderer> body,
             Func<bool, IRenderPoseSource> sourceFactory, Func<float> clock, BodyVisualResources resources)
         {
@@ -27,6 +28,9 @@ namespace ZeroEngine.Render
         }
         public void SetStatusEffectsVisible(bool visible) => statusEffectsVisible = visible;
         public void SetPalette(VisualPalette value) => palette = value;
+        /// <summary>Opt in only for ordinary sprite renderers without custom world bounds or skinning.</summary>
+        public void SetBodyBoundsCacheEligibility(Func<Renderer, bool> predicate) => boundsCache.SetEligibility(predicate);
+        public int GetBodyBoundsReadCount() => boundsCache.NativeReadsThisPass;
         private bool IsAlive => !disposed && origin && origin.gameObject.activeInHierarchy;
         private bool clearing;
         private bool statusVisualsEnabled;
@@ -221,6 +225,7 @@ namespace ZeroEngine.Render
         private void Render()
         {
             if (!IsAlive || !body()) { Clear(); return; }
+            boundsCache.BeginPass();
             if (statusVisualsEnabled != statusEffectsVisible)
             {
                 statusVisualsEnabled = statusEffectsVisible;
@@ -253,7 +258,8 @@ namespace ZeroEngine.Render
                 group.Visual.SetComposition(opacity,
                     groups.Count > 1 && !pulse ? SurfaceOrder(kind) * 4 : 0,
                     speckGroups > 0 ? SmallParticleBudget / speckGroups : SmallParticleBudget);
-                if (!group.Visual.Update(Mathf.Max(0f, group.Clock() - group.StartedAt), body())) ClearKind(kind);
+                if (!group.Visual.Update(Mathf.Max(0f, group.Clock() - group.StartedAt), body(),
+                    boundsCache.Enabled ? boundsCache : null)) ClearKind(kind);
                 else if (group.Retiring && group.Presence <= 0f && !group.Visual.HasSmallParticles)
                 {
                     groups.Remove(kind);
@@ -296,6 +302,7 @@ namespace ZeroEngine.Render
         public void Clear()
         {
             if (clearing) return;
+            boundsCache.BeginPass();
             clearing = true;
             try
             {
