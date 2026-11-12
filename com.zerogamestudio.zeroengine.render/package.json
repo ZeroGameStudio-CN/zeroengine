@@ -15,7 +15,9 @@
     "directory": "com.zerogamestudio.zeroengine.render"
   },
   "dependencies": {
+    "com.unity.modules.audio": "1.0.0",
     "com.unity.modules.particlesystem": "1.0.0",
+    "com.unity.modules.physics": "1.0.0",
     "com.unity.modules.physics2d": "1.0.0"
   }
 }
