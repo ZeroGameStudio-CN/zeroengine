@@ -49,6 +49,7 @@ namespace POB.Extraction
                 return false;
             }
             if (entry.Container != ExtractionInventoryContainerType.RaidBackpack
+                && entry.Container != ExtractionInventoryContainerType.RaidContainer
                 && (entry.Container != ExtractionInventoryContainerType.EquipmentSlot
                     || entry.LocationSubtype != ExtractionItemLocationService.RaidEquipmentLocationSubtype))
             {
@@ -539,6 +540,8 @@ namespace POB.Extraction
             out Action restore)
         {
             restore = () => { };
+            if (entry.Container == ExtractionInventoryContainerType.RaidContainer)
+                return ExtractionContainerInventoryService.TryDetach(profile, item.InstanceId, out restore);
             if (entry.Container == ExtractionInventoryContainerType.EquipmentSlot)
             {
                 if (!ExtractionItemLocationService.TryGetEquipment(

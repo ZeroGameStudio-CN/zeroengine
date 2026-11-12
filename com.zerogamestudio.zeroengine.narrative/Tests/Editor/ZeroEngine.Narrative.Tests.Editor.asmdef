@@ -3,6 +3,7 @@
   "rootNamespace": "ZeroEngine.Quest.Tests.Editor",
   "references": [
     "ZeroEngine.Core",
+    "ZeroEngine.Achievement",
     "ZeroEngine.Narrative",
     "UnityEditor.TestRunner",
     "UnityEngine.TestRunner"

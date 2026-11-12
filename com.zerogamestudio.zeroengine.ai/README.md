@@ -3,7 +3,7 @@
 AI 决策系统包，包含 FSM、行为树、效用 AI、GOAP 和 NPC 日程系统。
 
 ## 版本
-- **当前版本**: 2.0.0
+- **当前版本**: 2.0.1
 - **依赖**: ZeroEngine.Core
 - **可选依赖**: crashkonijn/GOAP
 
@@ -86,6 +86,9 @@ var controller = GetComponent<NPCScheduleController>();
 controller.OnScheduleChanged += entry =>
     Debug.Log($"Now: {entry.Action.Name}");
 ```
+
+消费项目通过 AI 黑板的 `BlackboardKeys.CurrentHour`、`CurrentDayOfWeek` 和
+`CurrentSeason` 提供游戏时间。AI 包不直接依赖 World 包。
 
 ## 条件编译
 

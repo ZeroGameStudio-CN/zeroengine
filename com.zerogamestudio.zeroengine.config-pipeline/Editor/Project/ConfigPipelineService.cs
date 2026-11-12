@@ -11,18 +11,21 @@ namespace ZeroGameStudio.ConfigPipeline.Editor
             ConfigPipelinePlan plan,
             IReadOnlyList<ConfigArtifact> artifacts,
             IReadOnlyList<ConfigDiagnostic> diagnostics,
-            IReadOnlyList<ConfigValueDiff> valueDiffs)
+            IReadOnlyList<ConfigValueDiff> valueDiffs,
+            IReadOnlyList<ConfigEffectiveValue> effectiveValues)
         {
             Plan = plan;
             Artifacts = artifacts;
             Diagnostics = diagnostics;
             ValueDiffs = valueDiffs;
+            EffectiveValues = effectiveValues;
         }
 
         public ConfigPipelinePlan Plan { get; }
         public IReadOnlyList<ConfigArtifact> Artifacts { get; }
         public IReadOnlyList<ConfigDiagnostic> Diagnostics { get; }
         public IReadOnlyList<ConfigValueDiff> ValueDiffs { get; }
+        public IReadOnlyList<ConfigEffectiveValue> EffectiveValues { get; }
     }
 
     public sealed class ConfigSchemaUpgradeCandidateResult
@@ -45,13 +48,40 @@ namespace ZeroGameStudio.ConfigPipeline.Editor
         public int CandidateFileCount { get; }
     }
 
-    public sealed class ConfigPipelineService
+    public sealed class ConfigWorkbookRefreshCandidateResult
+    {
+        internal ConfigWorkbookRefreshCandidateResult(string sourceHash, int candidateFileCount)
+        {
+            SourceHash = sourceHash;
+            CandidateFileCount = candidateFileCount;
+        }
+
+        public string SourceHash { get; }
+        public int CandidateFileCount { get; }
+    }
+
+    public sealed partial class ConfigPipelineService
     {
         public ConfigPipelinePreparedPlan Plan(
             string projectRoot,
             string profileRelativePath,
             string configSetId,
             string packageIdentity)
+        {
+            return PlanInternal(
+                projectRoot,
+                profileRelativePath,
+                configSetId,
+                packageIdentity,
+                null);
+        }
+
+        private ConfigPipelinePreparedPlan PlanInternal(
+            string projectRoot,
+            string profileRelativePath,
+            string configSetId,
+            string packageIdentity,
+            IReadOnlyDictionary<string, byte[]> workbookOverrides)
         {
             string root = ConfigPathGuard.NormalizeProjectRoot(projectRoot);
             string profilePath = ConfigPathGuard.NormalizeRelativePath(profileRelativePath);
@@ -60,14 +90,20 @@ namespace ZeroGameStudio.ConfigPipeline.Editor
             ConfigSetProfile set = profile.GetConfigSet(configSetId);
             string schemaAbsolute = ConfigPathGuard.ResolveInside(root, set.SchemaPath);
             ConfigSchema schema = ConfigSchemaParser.Parse(File.ReadAllBytes(schemaAbsolute));
-            XlsxReadResult source = ReadWorkbooks(root, set, schema);
-            var diagnostics = new List<ConfigDiagnostic>();
+            XlsxReadResult source = ReadWorkbooks(root, set, schema, workbookOverrides);
+            ConfigPresetResolutionResult presetResolution = ConfigPresetResolver.Resolve(
+                source.Document,
+                schema,
+                source.SourceMap);
+            var diagnostics = new List<ConfigDiagnostic>(presetResolution.Diagnostics);
+            ThrowIfErrors(diagnostics);
             var artifacts = new List<ConfigArtifact>();
+            var effectiveValues = new List<ConfigEffectiveValue>();
             bool writeCode = true;
             foreach (ConfigTargetProfile target in set.Targets)
             {
                 ConfigNormalizationResult normalized = ConfigSchemaNormalizer.Normalize(
-                    source.Document,
+                    presetResolution.Document,
                     schema,
                     target.Scope);
                 diagnostics.AddRange(normalized.Diagnostics);
@@ -95,6 +131,13 @@ namespace ZeroGameStudio.ConfigPipeline.Editor
                     continue;
                 }
 
+                effectiveValues.AddRange(ConfigEffectiveValueBuilder.Build(
+                    target.Scope,
+                    target.JsonPath,
+                    normalized.Document,
+                    schema,
+                    presetResolution.SourceMap));
+
                 artifacts.AddRange(new ConfigArtifactGenerator(
                     schema,
                     new ConfigArtifactGenerationOptions
@@ -109,13 +152,22 @@ namespace ZeroGameStudio.ConfigPipeline.Editor
                         GeneratedNamespace = set.GeneratedNamespace,
                         RootClassName = set.RootClassName
                     },
-                    source.SourceMap).Write(
+                    presetResolution.SourceMap).Write(
                         normalized.Document,
                         new ConfigWriteContext(target.Scope, root)));
                 writeCode = false;
             }
 
+            diagnostics = EnrichErrorDiagnostics(diagnostics, source.SourceMap);
             ThrowIfErrors(diagnostics);
+            if (workbookOverrides != null)
+            {
+                foreach (KeyValuePair<string, byte[]> workbook in workbookOverrides)
+                {
+                    artifacts.Add(new ConfigArtifact(workbook.Key, workbook.Value));
+                }
+            }
+
             AddRequiredUnityMetas(root, configSetId, artifacts);
             EnsureUniqueArtifacts(artifacts);
             var inputs = new List<string> { profilePath, set.SchemaPath };
@@ -143,7 +195,12 @@ namespace ZeroGameStudio.ConfigPipeline.Editor
                 valueDiffs.AddRange(ConfigDocumentDiff.Compare(target.JsonPath, before, after));
             }
 
-            return new ConfigPipelinePreparedPlan(plan, artifacts, diagnostics, valueDiffs);
+            return new ConfigPipelinePreparedPlan(
+                plan,
+                artifacts,
+                diagnostics,
+                valueDiffs,
+                effectiveValues);
         }
 
         public bool Check(
@@ -174,6 +231,42 @@ namespace ZeroGameStudio.ConfigPipeline.Editor
                 () => Check(projectRoot, profileRelativePath, configSetId, packageIdentity));
         }
 
+        public ConfigApplyResult ApplyExpectedPlan(
+            string projectRoot,
+            string profileRelativePath,
+            string configSetId,
+            string packageIdentity,
+            string expectedPlanId)
+        {
+            if (string.IsNullOrWhiteSpace(expectedPlanId))
+            {
+                throw new ArgumentException("Expected Plan ID is required.", nameof(expectedPlanId));
+            }
+
+            ConfigPipelinePreparedPlan prepared = Plan(
+                projectRoot,
+                profileRelativePath,
+                configSetId,
+                packageIdentity);
+            if (!string.Equals(prepared.Plan.PlanId, expectedPlanId, StringComparison.Ordinal))
+            {
+                throw new ConfigPlanStaleException("CONFIG_PLAN_CHANGED_REPLAN_REQUIRED");
+            }
+
+            return new ConfigTransactionalApplier().Apply(
+                projectRoot,
+                prepared.Plan,
+                packageIdentity,
+                prepared.Artifacts,
+                () => Check(projectRoot, profileRelativePath, configSetId, packageIdentity));
+        }
+
+        private static void RequireMinimalAuthoringPolicy(ConfigSchema schema)
+        {
+            if (schema.AuthoringPolicyVersion < 2)
+                throw new InvalidOperationException("CONFIG_MINIMAL_AUTHORING_POLICY_REQUIRED: New and upgraded authoring templates require policy version 2 with explicit table and field visibility. Existing legacy reads and same-schema refreshes remain supported.");
+        }
+
         public void WriteTemplates(
             string projectRoot,
             string profileRelativePath,
@@ -186,6 +279,8 @@ namespace ZeroGameStudio.ConfigPipeline.Editor
             ConfigSetProfile set = profile.GetConfigSet(configSetId);
             ConfigSchema schema = ConfigSchemaParser.Parse(File.ReadAllBytes(
                 ConfigPathGuard.ResolveInside(root, set.SchemaPath)));
+            ValidateWorkbookOwnership(set, schema);
+            RequireMinimalAuthoringPolicy(schema);
             Directory.CreateDirectory(outputDirectory);
             foreach (ConfigWorkbookProfile workbook in set.Workbooks)
             {
@@ -198,8 +293,108 @@ namespace ZeroGameStudio.ConfigPipeline.Editor
                         configSetId,
                         null,
                         null,
-                        workbook.Tables);
+                        workbook.Tables,
+                        workbook.AuthoringSheets,
+                        set.UsesMacroEnabledWorkbooks,
+                        workbook.ProtectedRecordIds,
+                        set.UsesAuthoringOperations);
                 }
+            }
+        }
+
+        public ConfigWorkbookRefreshCandidateResult ExportWorkbookRefreshCandidate(
+            string projectRoot,
+            string profileRelativePath,
+            string configSetId,
+            string outputDirectory)
+        {
+            string root = ConfigPathGuard.NormalizeProjectRoot(projectRoot);
+            ConfigProjectProfile profile = ConfigProjectProfileParser.Parse(File.ReadAllBytes(
+                ConfigPathGuard.ResolveInside(root, profileRelativePath)));
+            ConfigSetProfile set = profile.GetConfigSet(configSetId);
+            ConfigSchema schema = ConfigSchemaParser.Parse(File.ReadAllBytes(
+                ConfigPathGuard.ResolveInside(root, set.SchemaPath)));
+            XlsxReadResult source = ReadWorkbooks(root, set, schema);
+            byte[] sourceBytes = CanonicalJsonWriter.WriteUtf8(source.Document.Root);
+            string sourceHash = ConfigHash.Sha256(sourceBytes);
+            if (string.IsNullOrWhiteSpace(outputDirectory))
+            {
+                throw new ArgumentException("Workbook refresh candidate output directory is required.",
+                    nameof(outputDirectory));
+            }
+
+            string output = Path.GetFullPath(outputDirectory)
+                .TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+            if (Directory.Exists(output) || File.Exists(output))
+            {
+                throw new InvalidOperationException(
+                    "Workbook refresh candidate output directory must not already exist.");
+            }
+
+            string parent = Path.GetDirectoryName(output);
+            string outputName = Path.GetFileName(output);
+            if (string.IsNullOrEmpty(parent) || string.IsNullOrEmpty(outputName))
+            {
+                throw new InvalidOperationException(
+                    "Workbook refresh candidate output directory requires a parent directory.");
+            }
+
+            Directory.CreateDirectory(parent);
+            string staging = Path.Combine(
+                parent,
+                "." + outputName + ".staging." + Guid.NewGuid().ToString("N"));
+            Directory.CreateDirectory(staging);
+            var candidates = new Dictionary<ConfigWorkbookProfile, string>();
+            var names = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            try
+            {
+                foreach (ConfigWorkbookProfile workbook in set.Workbooks)
+                {
+                    string name = CandidateWorkbookName(workbook, set);
+                    if (!names.Add(name))
+                    {
+                        throw new InvalidOperationException("Candidate workbook names must be unique.");
+                    }
+
+                    string candidatePath = Path.Combine(staging, name);
+                    candidates.Add(workbook, candidatePath);
+                    XlsxConfigWorkbookSourcePreservingWriter.WriteCandidate(
+                        ConfigPathGuard.ResolveInside(root, workbook.Path),
+                        candidatePath,
+                        schema,
+                        configSetId,
+                        source.Document,
+                        sourceHash,
+                        workbook.Tables,
+                        workbook.AuthoringSheets,
+                        set.UsesMacroEnabledWorkbooks,
+                        workbook.ProtectedRecordIds,
+                        set.UsesAuthoringOperations);
+                }
+
+                XlsxReadResult roundTrip = ReadWorkbooks(
+                    set,
+                    schema,
+                    workbook => candidates[workbook],
+                    workbook => Path.Combine(output, Path.GetFileName(candidates[workbook])));
+                byte[] roundTripBytes = CanonicalJsonWriter.WriteUtf8(roundTrip.Document.Root);
+                if (!sourceBytes.SequenceEqual(roundTripBytes))
+                {
+                    throw new InvalidDataException("CONFIG_WORKBOOK_REFRESH_DATA_MISMATCH");
+                }
+
+                Directory.Move(staging, output);
+
+                return new ConfigWorkbookRefreshCandidateResult(sourceHash, candidates.Count);
+            }
+            catch
+            {
+                if (Directory.Exists(staging))
+                {
+                    Directory.Delete(staging, true);
+                }
+
+                throw;
             }
         }
 
@@ -218,13 +413,24 @@ namespace ZeroGameStudio.ConfigPipeline.Editor
             ConfigSchema schema = ConfigSchemaParser.Parse(File.ReadAllBytes(
                 ConfigPathGuard.ResolveInside(root, set.SchemaPath)));
             XlsxReadResult workbookSource = ReadWorkbooks(root, set, schema);
-            ConfigNormalizationResult normalizedWorkbook = ConfigSchemaNormalizer.Normalize(
+            ConfigPresetResolutionResult presetResolution = ConfigPresetResolver.Resolve(
                 workbookSource.Document,
+                schema,
+                workbookSource.SourceMap);
+            if (!presetResolution.IsValid)
+            {
+                throw new ConfigPipelineValidationException(presetResolution.Diagnostics);
+            }
+
+            ConfigNormalizationResult normalizedWorkbook = ConfigSchemaNormalizer.Normalize(
+                presetResolution.Document,
                 schema,
                 targetScope);
             if (!normalizedWorkbook.IsValid)
             {
-                throw new ConfigPipelineValidationException(normalizedWorkbook.Diagnostics);
+                throw new ConfigPipelineValidationException(EnrichErrorDiagnostics(
+                    normalizedWorkbook.Diagnostics,
+                    workbookSource.SourceMap));
             }
 
             byte[] json = File.ReadAllBytes(ConfigPathGuard.ResolveInside(root, target.JsonPath));
@@ -283,7 +489,6 @@ namespace ZeroGameStudio.ConfigPipeline.Editor
                 throw new InvalidOperationException(conflict.DiagnosticCode);
             }
 
-            Directory.CreateDirectory(outputDirectory);
             ConfigDocument candidateDocument = new ConfigDocument(
                 configSetId,
                 schema.SchemaId,
@@ -293,19 +498,90 @@ namespace ZeroGameStudio.ConfigPipeline.Editor
                     workbookSource.Document.Root,
                     normalizedJson.Document.Root,
                     targetScope));
-            foreach (ConfigWorkbookProfile workbook in set.Workbooks)
+
+            if (string.IsNullOrWhiteSpace(outputDirectory))
             {
-                string name = Path.GetFileNameWithoutExtension(workbook.Path) + ".candidate.xlsx";
-                using (FileStream stream = File.Create(Path.Combine(outputDirectory, name)))
+                throw new ArgumentException(
+                    "JSON candidate output directory is required.",
+                    nameof(outputDirectory));
+            }
+
+            string output = Path.GetFullPath(outputDirectory)
+                .TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+            if (Directory.Exists(output) || File.Exists(output))
+            {
+                throw new InvalidOperationException(
+                    "JSON candidate output directory must not already exist.");
+            }
+
+            string parent = Path.GetDirectoryName(output);
+            string outputName = Path.GetFileName(output);
+            if (string.IsNullOrEmpty(parent) || string.IsNullOrEmpty(outputName))
+            {
+                throw new InvalidOperationException(
+                    "JSON candidate output directory requires a parent directory.");
+            }
+
+            Directory.CreateDirectory(parent);
+            string staging = Path.Combine(
+                parent,
+                "." + outputName + ".staging." + Guid.NewGuid().ToString("N"));
+            Directory.CreateDirectory(staging);
+            var names = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            var candidates = new Dictionary<ConfigWorkbookProfile, string>();
+            try
+            {
+                foreach (ConfigWorkbookProfile workbook in set.Workbooks)
                 {
-                    new XlsxConfigWorkbookWriter().WriteTemplate(
-                        stream,
+                    string name = CandidateWorkbookName(workbook, set);
+                    if (!names.Add(name))
+                    {
+                        throw new InvalidOperationException(
+                            "Candidate workbook names must be unique.");
+                    }
+
+                    string candidatePath = Path.Combine(staging, name);
+                    candidates.Add(workbook, candidatePath);
+                    XlsxConfigWorkbookSourcePreservingWriter.WriteCandidate(
+                        ConfigPathGuard.ResolveInside(root, workbook.Path),
+                        candidatePath,
                         schema,
                         configSetId,
                         candidateDocument,
                         jsonSourceHash,
-                        workbook.Tables);
+                        workbook.Tables,
+                        workbook.AuthoringSheets,
+                        set.UsesMacroEnabledWorkbooks,
+                        workbook.ProtectedRecordIds,
+                        set.UsesAuthoringOperations);
                 }
+
+                XlsxReadResult roundTrip = ReadWorkbooks(
+                    set,
+                    schema,
+                    workbook => candidates[workbook],
+                    workbook => Path.Combine(
+                        output,
+                        Path.GetFileName(candidates[workbook])));
+                byte[] expectedBytes = CanonicalJsonWriter.WriteUtf8(candidateDocument.Root);
+                byte[] roundTripBytes = CanonicalJsonWriter.WriteUtf8(
+                    roundTrip.Document.Root);
+                if (!expectedBytes.SequenceEqual(roundTripBytes))
+                {
+                    throw new InvalidDataException(
+                        "CONFIG_JSON_CANDIDATE_DATA_MISMATCH");
+                }
+
+                Directory.Move(staging, output);
+            }
+            catch
+            {
+                if (Directory.Exists(staging))
+                {
+                    Directory.Delete(staging, true);
+                }
+
+                throw;
             }
 
             return conflict;
@@ -332,6 +608,8 @@ namespace ZeroGameStudio.ConfigPipeline.Editor
                 ConfigPathGuard.ResolveInside(root, currentSet.SchemaPath)));
             ConfigSchema nextSchema = ConfigSchemaParser.Parse(File.ReadAllBytes(
                 ConfigPathGuard.ResolveInside(root, nextSet.SchemaPath)));
+            ValidateWorkbookOwnership(nextSet, nextSchema);
+            RequireMinimalAuthoringPolicy(nextSchema);
             if (!string.Equals(currentSchema.SchemaId, nextSchema.SchemaId, StringComparison.Ordinal))
             {
                 throw new InvalidOperationException("Schema upgrade cannot change the schema ID.");
@@ -347,7 +625,8 @@ namespace ZeroGameStudio.ConfigPipeline.Editor
                 throw new InvalidOperationException("CONFIG_UPGRADE_BASE_STALE");
             }
 
-            ConfigDocument source = ReadWorkbooks(root, currentSet, currentSchema).Document;
+            XlsxReadResult sourceRead = ReadWorkbooks(root, currentSet, currentSchema);
+            ConfigDocument source = sourceRead.Document;
             IReadOnlyList<IConfigMigration> migrations = ConfigMaintenanceRegistry.GetMigrations(configSetId);
             ConfigDocument upgraded = migrations.Count == 0
                 ? new ConfigDocument(
@@ -357,10 +636,16 @@ namespace ZeroGameStudio.ConfigPipeline.Editor
                     source.Root)
                 : new ConfigMigrationRegistry(migrations).Migrate(source, nextSchema.SchemaVersion);
             var diagnostics = new List<ConfigDiagnostic>();
+            ConfigPresetResolutionResult presetResolution = ConfigPresetResolver.Resolve(
+                upgraded,
+                nextSchema,
+                Array.Empty<XlsxSourceMapEntry>());
+            diagnostics.AddRange(presetResolution.Diagnostics);
+            ThrowIfErrors(diagnostics);
             foreach (ConfigTargetProfile target in nextSet.Targets)
             {
                 ConfigNormalizationResult normalized = ConfigSchemaNormalizer.Normalize(
-                    upgraded,
+                    presetResolution.Document,
                     nextSchema,
                     target.Scope);
                 diagnostics.AddRange(normalized.Diagnostics);
@@ -387,28 +672,116 @@ namespace ZeroGameStudio.ConfigPipeline.Editor
                     diagnostics);
             }
 
+            diagnostics = EnrichErrorDiagnostics(diagnostics, sourceRead.SourceMap);
             ThrowIfErrors(diagnostics);
             string sourceHash = ConfigHash.Sha256(CanonicalJsonWriter.WriteUtf8(source.Root));
-            Directory.CreateDirectory(outputDirectory);
-            var names = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-            foreach (ConfigWorkbookProfile workbook in nextSet.Workbooks)
+            if (string.IsNullOrWhiteSpace(outputDirectory))
             {
-                string name = Path.GetFileNameWithoutExtension(workbook.Path) + ".candidate.xlsx";
-                if (!names.Add(name))
+                throw new ArgumentException(
+                    "Schema upgrade candidate output directory is required.",
+                    nameof(outputDirectory));
+            }
+
+            string output = Path.GetFullPath(outputDirectory)
+                .TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+            if (Directory.Exists(output) || File.Exists(output))
+            {
+                throw new InvalidOperationException(
+                    "Schema upgrade candidate output directory must not already exist.");
+            }
+
+            string parent = Path.GetDirectoryName(output);
+            string outputName = Path.GetFileName(output);
+            if (string.IsNullOrEmpty(parent) || string.IsNullOrEmpty(outputName))
+            {
+                throw new InvalidOperationException(
+                    "Schema upgrade candidate output directory requires a parent directory.");
+            }
+
+            Directory.CreateDirectory(parent);
+            string staging = Path.Combine(
+                parent,
+                "." + outputName + ".staging." + Guid.NewGuid().ToString("N"));
+            Directory.CreateDirectory(staging);
+            var names = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            var candidates = new Dictionary<ConfigWorkbookProfile, string>();
+            try
+            {
+                foreach (ConfigWorkbookProfile workbook in nextSet.Workbooks)
                 {
-                    throw new InvalidOperationException("Candidate workbook names must be unique.");
+                    string name = CandidateWorkbookName(workbook, nextSet);
+                    if (!names.Add(name))
+                    {
+                        throw new InvalidOperationException(
+                            "Candidate workbook names must be unique.");
+                    }
+
+                    string candidatePath = Path.Combine(staging, name);
+                    candidates.Add(workbook, candidatePath);
+                    string sourceWorkbook = ResolveUpgradeSourceWorkbook(
+                        root,
+                        currentSet,
+                        workbook);
+                    if (!string.IsNullOrEmpty(sourceWorkbook))
+                    {
+                        XlsxConfigWorkbookSourcePreservingWriter.WriteCandidate(
+                            sourceWorkbook,
+                            candidatePath,
+                            nextSchema,
+                            configSetId,
+                            upgraded,
+                            sourceHash,
+                            workbook.Tables,
+                            workbook.AuthoringSheets,
+                            nextSet.UsesMacroEnabledWorkbooks,
+                            workbook.ProtectedRecordIds,
+                            nextSet.UsesAuthoringOperations);
+                    }
+                    else
+                    {
+                        using (FileStream stream = File.Create(candidatePath))
+                        {
+                            new XlsxConfigWorkbookWriter().WriteTemplate(
+                                stream,
+                                nextSchema,
+                                configSetId,
+                                upgraded,
+                                sourceHash,
+                                workbook.Tables,
+                                workbook.AuthoringSheets,
+                                nextSet.UsesMacroEnabledWorkbooks,
+                                workbook.ProtectedRecordIds,
+                                nextSet.UsesAuthoringOperations);
+                        }
+                    }
                 }
 
-                using (FileStream stream = File.Create(Path.Combine(outputDirectory, name)))
+                XlsxReadResult roundTrip = ReadWorkbooks(
+                    nextSet,
+                    nextSchema,
+                    workbook => candidates[workbook],
+                    workbook => Path.Combine(
+                        output,
+                        Path.GetFileName(candidates[workbook])));
+                byte[] expectedBytes = CanonicalJsonWriter.WriteUtf8(upgraded.Root);
+                byte[] roundTripBytes = CanonicalJsonWriter.WriteUtf8(
+                    roundTrip.Document.Root);
+                if (!expectedBytes.SequenceEqual(roundTripBytes))
                 {
-                    new XlsxConfigWorkbookWriter().WriteTemplate(
-                        stream,
-                        nextSchema,
-                        configSetId,
-                        upgraded,
-                        sourceHash,
-                        workbook.Tables);
+                    throw new InvalidDataException(
+                        "CONFIG_UPGRADE_CANDIDATE_DATA_MISMATCH");
                 }
+
+                Directory.Move(staging, output);
+            }
+            catch
+            {
+                if (Directory.Exists(staging))
+                {
+                    Directory.Delete(staging, true);
+                }
+
+                throw;
             }
 
             return new ConfigSchemaUpgradeCandidateResult(
@@ -424,7 +797,7 @@ namespace ZeroGameStudio.ConfigPipeline.Editor
             ConfigNode projected,
             string targetScope)
         {
-            if (!AppliesToTarget(schema.Scope, targetScope))
+            if (schema.AuthoringOnly || !AppliesToTarget(schema.Scope, targetScope))
             {
                 return current;
             }
@@ -438,7 +811,8 @@ namespace ZeroGameStudio.ConfigPipeline.Editor
                 {
                     bool hasCurrent = currentObject.TryGetValue(property.Name, out ConfigNode currentValue);
                     bool hasProjected = projectedObject.TryGetValue(property.Name, out ConfigNode projectedValue);
-                    if (!AppliesToTarget(property.Schema.Scope, targetScope))
+                    if (property.Schema.AuthoringOnly ||
+                        !AppliesToTarget(property.Schema.Scope, targetScope))
                     {
                         if (hasCurrent)
                         {
@@ -467,28 +841,75 @@ namespace ZeroGameStudio.ConfigPipeline.Editor
                 projected is ConfigArrayNode projectedArray &&
                 schema.Items?.Type == ConfigSchemaType.Object)
             {
-                ConfigSchemaProperty primary = schema.Items.Properties.SingleOrDefault(
-                    property => property.Schema.PrimaryKey);
-                if (primary != null)
+                ConfigSchemaProperty[] primaryKeys = schema.Items.Properties
+                    .Where(property => property.Schema.PrimaryKey)
+                    .ToArray();
+                if (primaryKeys.Length != 0)
                 {
-                    Dictionary<string, ConfigNode> currentById = currentArray.Items
-                        .OfType<ConfigObjectNode>()
-                        .Where(value => value.TryGetValue(primary.Name, out ConfigNode id) &&
-                                        id is ConfigStringNode)
-                        .ToDictionary(
-                            value => ((ConfigStringNode)value.Properties.Single(
-                                property => property.Name == primary.Name).Value).Value,
-                            value => (ConfigNode)value,
-                            StringComparer.Ordinal);
+                    if (primaryKeys.All(primaryKey => primaryKey.Schema.AuthoringOnly))
+                    {
+                        if (currentArray.Items.Count != projectedArray.Items.Count)
+                        {
+                            throw new InvalidDataException(
+                                "CONFIG_JSON_CANDIDATE_AUTHORING_IDENTITY_AMBIGUOUS: " +
+                                "An array keyed only by authoring data changed length; " +
+                                "edit the Excel source or use an explicit migration.");
+                        }
+
+                        var mergedByIndex = new List<ConfigNode>();
+                        for (int index = 0; index < projectedArray.Items.Count; index++)
+                        {
+                            if (!(currentArray.Items[index] is ConfigObjectNode currentItem) ||
+                                !(projectedArray.Items[index] is ConfigObjectNode projectedItem))
+                            {
+                                throw new InvalidDataException(
+                                    "CONFIG_JSON_CANDIDATE_AUTHORING_IDENTITY_AMBIGUOUS: " +
+                                    "An array keyed only by authoring data cannot be matched; " +
+                                    "edit the Excel source or use an explicit migration.");
+                            }
+
+                            mergedByIndex.Add(MergeProjection(
+                                schema.Items,
+                                currentItem,
+                                projectedItem,
+                                targetScope));
+                        }
+
+                        return new ConfigArrayNode(mergedByIndex);
+                    }
+
+                    var currentById = new Dictionary<string, ConfigNode>(StringComparer.Ordinal);
+                    foreach (ConfigObjectNode currentRow in currentArray.Items.OfType<ConfigObjectNode>())
+                    {
+                        if (TryGetProjectionKey(currentRow, primaryKeys, out string key))
+                        {
+                            currentById.Add(key, currentRow);
+                        }
+                    }
+
                     var merged = new List<ConfigNode>();
                     foreach (ConfigNode projectedItem in projectedArray.Items)
                     {
                         var projectedRow = (ConfigObjectNode)projectedItem;
-                        string id = ((ConfigStringNode)projectedRow.Properties.Single(
-                            property => property.Name == primary.Name).Value).Value;
-                        merged.Add(currentById.TryGetValue(id, out ConfigNode currentItem)
+                        if (!TryGetProjectionKey(projectedRow, primaryKeys, out string key))
+                        {
+                            throw new InvalidDataException("Candidate row requires every string primary key component.");
+                        }
+
+                        merged.Add(currentById.TryGetValue(key, out ConfigNode currentItem)
                             ? MergeProjection(schema.Items, currentItem, projectedItem, targetScope)
                             : projectedItem);
+                    }
+
+                    // Workbook reads use declared order, then the complete ordinal key tuple.
+                    // Normalize the candidate to that same representation before byte verification.
+                    if (!string.IsNullOrEmpty(schema.Sheet))
+                    {
+                        merged.Sort((left, right) => CompareProjectionRows(
+                            (ConfigObjectNode)left,
+                            (ConfigObjectNode)right,
+                            primaryKeys,
+                            schema.OrderField));
                     }
 
                     return new ConfigArrayNode(merged);
@@ -496,6 +917,57 @@ namespace ZeroGameStudio.ConfigPipeline.Editor
             }
 
             return projected;
+        }
+
+        private static int CompareProjectionRows(
+            ConfigObjectNode left,
+            ConfigObjectNode right,
+            IReadOnlyList<ConfigSchemaProperty> primaryKeys,
+            string orderField)
+        {
+            if (!string.IsNullOrEmpty(orderField))
+            {
+                left.TryGetValue(orderField, out ConfigNode leftOrder);
+                right.TryGetValue(orderField, out ConfigNode rightOrder);
+                int order = Nullable.Compare(
+                    (leftOrder as ConfigIntegerNode)?.Value,
+                    (rightOrder as ConfigIntegerNode)?.Value);
+                if (order != 0) return order;
+            }
+
+            foreach (ConfigSchemaProperty primary in primaryKeys)
+            {
+                left.TryGetValue(primary.Name, out ConfigNode leftKey);
+                right.TryGetValue(primary.Name, out ConfigNode rightKey);
+                int comparison = string.CompareOrdinal(
+                    ((ConfigStringNode)leftKey).Value,
+                    ((ConfigStringNode)rightKey).Value);
+                if (comparison != 0) return comparison;
+            }
+
+            return 0;
+        }
+
+        private static bool TryGetProjectionKey(
+            ConfigObjectNode row,
+            IReadOnlyList<ConfigSchemaProperty> primaryKeys,
+            out string key)
+        {
+            var components = new List<ConfigNode>(primaryKeys.Count);
+            foreach (ConfigSchemaProperty primary in primaryKeys)
+            {
+                if (!row.TryGetValue(primary.Name, out ConfigNode value) || !(value is ConfigStringNode))
+                {
+                    key = null;
+                    return false;
+                }
+
+                components.Add(value);
+            }
+
+            // Canonical tuples preserve ordinal identity without delimiter collisions between components.
+            key = CanonicalJsonWriter.WriteText(new ConfigArrayNode(components));
+            return true;
         }
 
         private static bool AppliesToTarget(ConfigFieldScope scope, string targetScope)
@@ -518,20 +990,66 @@ namespace ZeroGameStudio.ConfigPipeline.Editor
             ConfigSetProfile set,
             ConfigSchema schema)
         {
+            return ReadWorkbooks(root, set, schema, null);
+        }
+
+        private static XlsxReadResult ReadWorkbooks(
+            string root,
+            ConfigSetProfile set,
+            ConfigSchema schema,
+            IReadOnlyDictionary<string, byte[]> workbookOverrides)
+        {
+            return ReadWorkbooks(
+                set,
+                schema,
+                workbook =>
+                {
+                    string path = ConfigPathGuard.NormalizeRelativePath(workbook.Path);
+                    if (workbookOverrides != null &&
+                        workbookOverrides.TryGetValue(path, out byte[] content))
+                    {
+                        return new MemoryStream(content, false);
+                    }
+
+                    return File.OpenRead(ConfigPathGuard.ResolveInside(root, path));
+                },
+                workbook => workbook.Path);
+        }
+
+        private static XlsxReadResult ReadWorkbooks(
+            ConfigSetProfile set,
+            ConfigSchema schema,
+            Func<ConfigWorkbookProfile, string> pathResolver,
+            Func<ConfigWorkbookProfile, string> workbookNameResolver)
+        {
+            return ReadWorkbooks(
+                set,
+                schema,
+                workbook => File.OpenRead(pathResolver(workbook)),
+                workbookNameResolver);
+        }
+
+        private static XlsxReadResult ReadWorkbooks(
+            ConfigSetProfile set,
+            ConfigSchema schema,
+            Func<ConfigWorkbookProfile, Stream> streamResolver,
+            Func<ConfigWorkbookProfile, string> workbookNameResolver)
+        {
+            ValidateWorkbookOwnership(set, schema);
             var properties = new Dictionary<string, ConfigNode>(StringComparer.Ordinal);
             var sourceMap = new List<XlsxSourceMapEntry>();
             foreach (ConfigWorkbookProfile workbook in set.Workbooks)
             {
-                string absolute = ConfigPathGuard.ResolveInside(root, workbook.Path);
-                using (FileStream stream = File.OpenRead(absolute))
+                using (Stream stream = streamResolver(workbook))
                 {
                     XlsxReadResult read = new XlsxConfigSourceReader(
                         schema,
                         null,
-                        workbook.Tables).ReadWithSourceMap(
+                        workbook.Tables,
+                        set.UsesMacroEnabledWorkbooks).ReadWithSourceMap(
                             stream,
                             new ConfigReadContext(set.ConfigSetId, schema.SchemaId, schema.SchemaVersion),
-                            workbook.Path);
+                            workbookNameResolver(workbook));
                     foreach (ConfigProperty property in read.Document.Root.Properties)
                     {
                         if (properties.ContainsKey(property.Name))
@@ -564,6 +1082,74 @@ namespace ZeroGameStudio.ConfigPipeline.Editor
                 new ConfigDocument(set.ConfigSetId, schema.SchemaId, schema.SchemaVersion, new ConfigObjectNode(ordered)),
                 string.Empty,
                 sourceMap);
+        }
+
+        private static string CandidateWorkbookName(
+            ConfigWorkbookProfile workbook,
+            ConfigSetProfile set)
+        {
+            string extension = set.UsesMacroEnabledWorkbooks ? ".xlsm" : ".xlsx";
+            return Path.GetFileNameWithoutExtension(workbook.Path) +
+                   ".candidate" +
+                   extension;
+        }
+
+        private static string ResolveUpgradeSourceWorkbook(
+            string root,
+            ConfigSetProfile currentSet,
+            ConfigWorkbookProfile nextWorkbook)
+        {
+            string direct = ConfigPathGuard.ResolveInside(root, nextWorkbook.Path);
+            if (File.Exists(direct))
+            {
+                return direct;
+            }
+
+            ConfigWorkbookProfile byTables = currentSet.Workbooks.SingleOrDefault(workbook =>
+                workbook.Tables.Count == nextWorkbook.Tables.Count &&
+                workbook.Tables.All(nextWorkbook.Tables.Contains));
+            if (byTables != null)
+            {
+                string fallback = ConfigPathGuard.ResolveInside(root, byTables.Path);
+                if (File.Exists(fallback))
+                {
+                    return fallback;
+                }
+            }
+
+            bool overlapsCurrentWorkbook = currentSet.Workbooks.Any(workbook =>
+                workbook.Tables.Any(nextWorkbook.Tables.Contains));
+            if (!overlapsCurrentWorkbook)
+            {
+                return null;
+            }
+
+            throw new InvalidDataException(
+                "CONFIG_WORKBOOK_SOURCE_MIGRATION_REQUIRED: " + nextWorkbook.Path);
+        }
+
+        private static void ValidateWorkbookOwnership(
+            ConfigSetProfile set,
+            ConfigSchema schema)
+        {
+            var declared = new HashSet<string>(
+                set.Workbooks.SelectMany(workbook => workbook.Tables),
+                StringComparer.Ordinal);
+            var required = new HashSet<string>(
+                schema.Root.Properties
+                    .Where(property => property.Schema.Type == ConfigSchemaType.Array &&
+                                       !string.IsNullOrEmpty(property.Schema.Sheet) &&
+                                       property.Schema.Items?.Type == ConfigSchemaType.Object)
+                    .Select(property => property.Name),
+                StringComparer.Ordinal);
+            if (!declared.SetEquals(required))
+            {
+                string missing = string.Join(",", required.Except(declared).OrderBy(value => value));
+                string unknown = string.Join(",", declared.Except(required).OrderBy(value => value));
+                throw new InvalidDataException(
+                    "CONFIG_WORKBOOK_OWNERSHIP_INCOMPLETE missing=[" + missing +
+                    "] unknown=[" + unknown + "]");
+            }
         }
 
         private static void ValidateAssets(
@@ -627,6 +1213,300 @@ namespace ZeroGameStudio.ConfigPipeline.Editor
             {
                 throw new ConfigPipelineValidationException(errors);
             }
+        }
+
+        private static List<ConfigDiagnostic> EnrichErrorDiagnostics(
+            IEnumerable<ConfigDiagnostic> diagnostics,
+            IReadOnlyList<XlsxSourceMapEntry> sourceMap)
+        {
+            var enriched = new List<ConfigDiagnostic>();
+            IReadOnlyList<XlsxSourceMapEntry> available =
+                sourceMap ?? Array.Empty<XlsxSourceMapEntry>();
+            foreach (ConfigDiagnostic diagnostic in diagnostics)
+            {
+                if (diagnostic.Severity != ConfigDiagnosticSeverity.Error ||
+                    diagnostic.SourceLocation != null)
+                {
+                    enriched.Add(diagnostic);
+                    continue;
+                }
+
+                ConfigSourceLocation source = FindSourceLocation(
+                    diagnostic.FieldPath,
+                    available);
+                enriched.Add(source == null
+                    ? diagnostic
+                    : new ConfigDiagnostic(
+                        diagnostic.Code,
+                        diagnostic.Severity,
+                        diagnostic.Message,
+                        diagnostic.ConfigSetId,
+                        diagnostic.FieldPath,
+                        source));
+            }
+
+            return enriched;
+        }
+
+        private static ConfigSourceLocation FindSourceLocation(
+            string fieldPath,
+            IReadOnlyList<XlsxSourceMapEntry> sourceMap)
+        {
+            string[] fieldSegments = ParseFieldPath(fieldPath);
+            if (fieldSegments.Length == 0)
+            {
+                return null;
+            }
+
+            var nearest = new List<XlsxSourceMapEntry>();
+            int bestRecordDepth = 0;
+            int bestCommonPrefix = 0;
+            foreach (XlsxSourceMapEntry candidate in sourceMap)
+            {
+                string[] sourceSegments = ParseFieldPath(candidate.JsonPath);
+                if (sourceSegments.Length == 0)
+                {
+                    continue;
+                }
+
+                int commonPrefix = 0;
+                int sharedLength = Math.Min(fieldSegments.Length, sourceSegments.Length);
+                while (commonPrefix < sharedLength &&
+                       string.Equals(
+                           fieldSegments[commonPrefix],
+                           sourceSegments[commonPrefix],
+                           StringComparison.Ordinal))
+                {
+                    commonPrefix++;
+                }
+
+                if (commonPrefix == fieldSegments.Length &&
+                    commonPrefix == sourceSegments.Length)
+                {
+                    return new ConfigSourceLocation(
+                        candidate.Workbook,
+                        candidate.Sheet,
+                        candidate.Row,
+                        candidate.Column);
+                }
+
+                int recordDepth = RecordDepth(sourceSegments);
+                if (recordDepth == 0 ||
+                    recordDepth > fieldSegments.Length ||
+                    !HasPrefix(fieldSegments, sourceSegments, recordDepth))
+                {
+                    continue;
+                }
+
+                if (recordDepth > bestRecordDepth ||
+                    (recordDepth == bestRecordDepth && commonPrefix > bestCommonPrefix))
+                {
+                    nearest.Clear();
+                    nearest.Add(candidate);
+                    bestRecordDepth = recordDepth;
+                    bestCommonPrefix = commonPrefix;
+                }
+                else if (recordDepth == bestRecordDepth &&
+                         commonPrefix == bestCommonPrefix)
+                {
+                    nearest.Add(candidate);
+                }
+            }
+
+            if (nearest.Count == 0)
+            {
+                return null;
+            }
+
+            XlsxSourceMapEntry first = nearest[0];
+            if (nearest.Any(candidate =>
+                    !string.Equals(candidate.Workbook, first.Workbook, StringComparison.Ordinal) ||
+                    !string.Equals(candidate.Sheet, first.Sheet, StringComparison.Ordinal) ||
+                    candidate.Row != first.Row))
+            {
+                return null;
+            }
+
+            return new ConfigSourceLocation(
+                first.Workbook,
+                first.Sheet,
+                first.Row,
+                null);
+        }
+
+        private static int RecordDepth(IReadOnlyList<string> segments)
+        {
+            for (int index = segments.Count - 1; index >= 0; index--)
+            {
+                if (IsArrayIndex(segments[index]))
+                {
+                    return index + 1;
+                }
+            }
+
+            return 0;
+        }
+
+        private static bool HasPrefix(
+            IReadOnlyList<string> value,
+            IReadOnlyList<string> prefix,
+            int length)
+        {
+            for (int index = 0; index < length; index++)
+            {
+                if (!string.Equals(value[index], prefix[index], StringComparison.Ordinal))
+                {
+                    return false;
+                }
+            }
+
+            return true;
+        }
+
+        private static bool IsArrayIndex(string segment)
+        {
+            if (string.IsNullOrEmpty(segment))
+            {
+                return false;
+            }
+
+            for (int index = 0; index < segment.Length; index++)
+            {
+                if (segment[index] < '0' || segment[index] > '9')
+                {
+                    return false;
+                }
+            }
+
+            return true;
+        }
+
+        private static string[] ParseFieldPath(string path)
+        {
+            if (string.IsNullOrEmpty(path))
+            {
+                return Array.Empty<string>();
+            }
+
+            if (path[0] == '/')
+            {
+                return ParseJsonPointer(path.Substring(1));
+            }
+
+            if (path[0] != '$')
+            {
+                return Array.Empty<string>();
+            }
+
+            if (path.StartsWith("$/", StringComparison.Ordinal))
+            {
+                return ParseJsonPointer(path.Substring(2));
+            }
+
+            var segments = new List<string>();
+            int index = 1;
+            while (index < path.Length)
+            {
+                if (path[index] == '.')
+                {
+                    index++;
+                    continue;
+                }
+
+                if (path[index] == '[')
+                {
+                    int end = path.IndexOf(']', index + 1);
+                    if (end < 0)
+                    {
+                        return Array.Empty<string>();
+                    }
+
+                    string segment = path.Substring(index + 1, end - index - 1);
+                    if (segment.Length >= 2 &&
+                        ((segment[0] == '\'' && segment[segment.Length - 1] == '\'') ||
+                         (segment[0] == '"' && segment[segment.Length - 1] == '"')))
+                    {
+                        segment = segment.Substring(1, segment.Length - 2);
+                    }
+
+                    if (segment.Length == 0)
+                    {
+                        return Array.Empty<string>();
+                    }
+
+                    segments.Add(segment);
+                    index = end + 1;
+                    continue;
+                }
+
+                int start = index;
+                while (index < path.Length && path[index] != '.' && path[index] != '[')
+                {
+                    index++;
+                }
+
+                if (index == start)
+                {
+                    return Array.Empty<string>();
+                }
+
+                segments.Add(path.Substring(start, index - start));
+            }
+
+            return segments.ToArray();
+        }
+
+        private static string[] ParseJsonPointer(string pointer)
+        {
+            string[] encoded = pointer.Split(new[] { '/' }, StringSplitOptions.None);
+            var decoded = new string[encoded.Length];
+            for (int index = 0; index < encoded.Length; index++)
+            {
+                if (!TryDecodePointerSegment(encoded[index], out decoded[index]))
+                {
+                    return Array.Empty<string>();
+                }
+            }
+
+            return decoded;
+        }
+
+        private static bool TryDecodePointerSegment(string encoded, out string decoded)
+        {
+            var result = new System.Text.StringBuilder(encoded.Length);
+            for (int index = 0; index < encoded.Length; index++)
+            {
+                char value = encoded[index];
+                if (value != '~')
+                {
+                    result.Append(value);
+                    continue;
+                }
+
+                if (index + 1 >= encoded.Length)
+                {
+                    decoded = null;
+                    return false;
+                }
+
+                char escape = encoded[++index];
+                if (escape == '0')
+                {
+                    result.Append('~');
+                }
+                else if (escape == '1')
+                {
+                    result.Append('/');
+                }
+                else
+                {
+                    decoded = null;
+                    return false;
+                }
+            }
+
+            decoded = result.ToString();
+            return true;
         }
 
         private static void EnsureUniqueArtifacts(IEnumerable<ConfigArtifact> artifacts)

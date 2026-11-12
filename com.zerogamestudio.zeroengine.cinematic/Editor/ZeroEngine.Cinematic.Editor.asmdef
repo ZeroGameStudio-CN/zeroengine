@@ -1,0 +1,14 @@
+{
+    "name": "ZeroEngine.Cinematic.Editor",
+    "rootNamespace": "ZeroEngine.Cinematic.Editor",
+    "references": ["ZeroEngine.Cinematic", "Unity.Timeline"],
+    "includePlatforms": ["Editor"],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": true,
+    "defineConstraints": [],
+    "versionDefines": [],
+    "noEngineReferences": false
+}

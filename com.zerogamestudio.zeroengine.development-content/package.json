@@ -1,0 +1,27 @@
+{
+  "name": "com.zerogamestudio.zeroengine.development-content",
+  "version": "1.1.0",
+  "displayName": "ZeroEngine Development Content",
+  "description": "Portable development-content and version planning with guarded JSON storage and an adapter-driven Unity workspace panel.",
+  "unity": "2022.3",
+  "dependencies": {
+    "com.zerogamestudio.zeroengine.editor-ui": "1.5.0",
+    "com.unity.nuget.newtonsoft-json": "3.2.1"
+  },
+  "keywords": [
+    "development",
+    "content",
+    "planning",
+    "editor"
+  ],
+  "author": {
+    "name": "ZeroGameStudio",
+    "url": "https://github.com/ZeroGameStudio-CN"
+  },
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/ZeroGameStudio-CN/zeroengine.git",
+    "directory": "com.zerogamestudio.zeroengine.development-content"
+  }
+}

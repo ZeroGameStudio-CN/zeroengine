@@ -4,29 +4,7 @@
     "references": [
         "ZeroEngine.Core",
         "ZeroEngine.Data",
-        "ZeroEngine.Persistence",
-        "ZeroEngine.AI",
-        "ZeroEngine.Combat",
-        "ZeroEngine.Economy",
-        "ZeroEngine.UI",
-        "ZeroEngine.Input",
-        "ZeroEngine.Narrative",
-        "ZeroEngine.World",
-        "ZeroEngine.Social",
-        "ZeroEngine.Character",
-        "ZeroEngine.Gameplay",
-        "ZeroEngine.Audio",
-        "ZeroEngine.Network",
-        "ZeroEngine.Localization",
-        "Unity.InputSystem",
-        "Unity.Localization",
-        "Unity.Addressables",
-        "Unity.ResourceManager",
-        "Unity.Netcode.Runtime",
-        "Unity.TextMeshPro",
-        "Unity.Networking.Transport",
-        "XNode",
-        "Unity.ugui"
+        "ZeroEngine.AI"
     ],
     "includePlatforms": [],
     "excludePlatforms": [],
@@ -35,62 +13,6 @@
     "precompiledReferences": [],
     "autoReferenced": true,
     "defineConstraints": [],
-    "versionDefines": [
-        {
-            "name": "com.unity.netcode.gameobjects",
-            "expression": "",
-            "define": "ZEROENGINE_NETCODE"
-        },
-        {
-            "name": "com.cysharp.unitask",
-            "expression": "",
-            "define": "UNITASK"
-        },
-        {
-            "name": "com.unity.addressables",
-            "expression": "",
-            "define": "ADDRESSABLES_ENABLED"
-        },
-        {
-            "name": "com.unity.textmeshpro",
-            "expression": "",
-            "define": "TEXTMESHPRO_ENABLED"
-        },
-        {
-            "name": "com.unity.localization",
-            "expression": "",
-            "define": "UNITY_LOCALIZATION"
-        },
-        {
-            "name": "com.demigiant.dotween",
-            "expression": "",
-            "define": "DOTWEEN"
-        },
-        {
-            "name": "com.tuyoogame.yooasset",
-            "expression": "",
-            "define": "YOOASSET"
-        },
-        {
-            "name": "com.svermeulen.extenject",
-            "expression": "",
-            "define": "EXTENJECT"
-        },
-        {
-            "name": "com.inklestudios.ink-unity-integration",
-            "expression": "",
-            "define": "INK_PRESENT"
-        },
-        {
-            "name": "com.unity.localization",
-            "expression": "",
-            "define": "LOCALIZATION_ENABLED"
-        },
-        {
-            "name": "com.github.siccity.xnode",
-            "expression": "",
-            "define": "XNODE_PRESENT"
-        }
-    ],
+    "versionDefines": [],
     "noEngineReferences": false
 }

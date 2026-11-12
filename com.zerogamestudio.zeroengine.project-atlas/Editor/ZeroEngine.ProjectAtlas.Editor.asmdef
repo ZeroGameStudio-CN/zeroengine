@@ -1,0 +1,19 @@
+{
+  "name": "ZeroEngine.ProjectAtlas.Editor",
+  "rootNamespace": "ZeroEngine.ProjectAtlas",
+  "references": [
+    "ZeroEngine.EditorUI.Editor",
+    "Unity.Newtonsoft.Json"
+  ],
+  "includePlatforms": [
+    "Editor"
+  ],
+  "excludePlatforms": [],
+  "allowUnsafeCode": false,
+  "overrideReferences": false,
+  "precompiledReferences": [],
+  "autoReferenced": false,
+  "defineConstraints": [],
+  "versionDefines": [],
+  "noEngineReferences": false
+}

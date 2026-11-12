@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Runtime.CompilerServices;
 using UnityEditor;
 using UnityEngine;
 
@@ -9,7 +10,7 @@ namespace ZGS.DataToolkit.Editor
 {
     public static class AssetDiscoveryService
     {
-        private static readonly Dictionary<string, string[]> AssetPathCache = new();
+        private static ConditionalWeakTable<DataToolkitProjectSettings, Dictionary<Type, string[]>> AssetPathCache = new();
 
         public static string[] GetAssetPathsForType(Type type, DataToolkitProjectSettings settings)
         {
@@ -18,8 +19,8 @@ namespace ZGS.DataToolkit.Editor
                 return Array.Empty<string>();
             }
 
-            var cacheKey = $"{settings.ProjectId}|{type.AssemblyQualifiedName}";
-            if (AssetPathCache.TryGetValue(cacheKey, out var cachedPaths))
+            var pathsForSettings = AssetPathCache.GetOrCreateValue(settings);
+            if (pathsForSettings.TryGetValue(type, out var cachedPaths))
             {
                 return cachedPaths;
             }
@@ -36,7 +37,7 @@ namespace ZGS.DataToolkit.Editor
                 .OrderBy(path => Path.GetFileNameWithoutExtension(path), StringComparer.OrdinalIgnoreCase)
                 .ToArray();
 
-            AssetPathCache[cacheKey] = paths;
+            pathsForSettings[type] = paths;
             return paths;
         }
 
@@ -71,7 +72,7 @@ namespace ZGS.DataToolkit.Editor
 
         public static void ClearCaches()
         {
-            AssetPathCache.Clear();
+            AssetPathCache = new ConditionalWeakTable<DataToolkitProjectSettings, Dictionary<Type, string[]>>();
         }
 
         private static bool IsExcluded(string path, DataToolkitProjectSettings settings)

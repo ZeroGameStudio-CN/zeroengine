@@ -1,5 +1,7 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
+using System.Text.RegularExpressions;
 
 namespace ZeroEngine.Formula.Editor
 {
@@ -49,12 +51,35 @@ namespace ZeroEngine.Formula.Editor
 
     public static class FormulaReferenceIndexer
     {
+        private static readonly Regex GuidPattern = new(
+            @"(?<![0-9a-fA-F])[0-9a-fA-F]{32}(?![0-9a-fA-F])",
+            RegexOptions.Compiled | RegexOptions.CultureInvariant);
+
         public static IEnumerable<FormulaAssetReference> FindGuidReferences(
             string formulaGuid,
             IEnumerable<FormulaReferenceTextDocument> documents,
             FormulaReferenceSearchOptions options)
         {
             if (string.IsNullOrWhiteSpace(formulaGuid) || documents == null)
+                yield break;
+
+            foreach (var reference in FindGuidReferences(new[] { formulaGuid }, documents, options))
+                yield return reference;
+        }
+
+        public static IEnumerable<FormulaAssetReference> FindGuidReferences(
+            IEnumerable<string> formulaGuids,
+            IEnumerable<FormulaReferenceTextDocument> documents,
+            FormulaReferenceSearchOptions options)
+        {
+            if (formulaGuids == null || documents == null)
+                yield break;
+
+            var canonicalGuids = formulaGuids
+                .Where(guid => !string.IsNullOrWhiteSpace(guid))
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToDictionary(guid => guid, guid => guid, StringComparer.OrdinalIgnoreCase);
+            if (canonicalGuids.Count == 0)
                 yield break;
 
             foreach (var document in documents)
@@ -66,11 +91,50 @@ namespace ZeroEngine.Formula.Editor
                 if (!IsPathIncluded(assetPath, options))
                     continue;
 
-                if (document.Text.IndexOf(formulaGuid, StringComparison.Ordinal) < 0)
-                    continue;
-
-                yield return new FormulaAssetReference(assetPath, formulaGuid, "guid");
+                foreach (var guid in FindKnownFormulaGuids(document.Text, canonicalGuids))
+                    yield return new FormulaAssetReference(assetPath, guid, "guid");
             }
+        }
+
+        internal static IReadOnlyList<string> FindKnownFormulaGuids(
+            string text,
+            IReadOnlyDictionary<string, string> canonicalGuids)
+        {
+            if (string.IsNullOrEmpty(text) || canonicalGuids == null || canonicalGuids.Count == 0)
+                return Array.Empty<string>();
+
+            var matches = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            foreach (Match match in GuidPattern.Matches(text))
+            {
+                if (canonicalGuids.TryGetValue(match.Value, out var canonicalGuid))
+                    matches.Add(canonicalGuid);
+            }
+
+            foreach (var pair in canonicalGuids)
+            {
+                if (IsUnityGuid(pair.Key))
+                    continue;
+                if (text.IndexOf(pair.Key, StringComparison.OrdinalIgnoreCase) >= 0)
+                    matches.Add(pair.Value);
+            }
+
+            return matches.OrderBy(guid => guid, StringComparer.OrdinalIgnoreCase).ToArray();
+        }
+
+        private static bool IsUnityGuid(string value)
+        {
+            if (string.IsNullOrEmpty(value) || value.Length != 32)
+                return false;
+
+            foreach (var character in value)
+            {
+                if ((character < '0' || character > '9')
+                    && (character < 'a' || character > 'f')
+                    && (character < 'A' || character > 'F'))
+                    return false;
+            }
+
+            return true;
         }
 
         public static bool IsPathIncluded(string assetPath, FormulaReferenceSearchOptions options)
@@ -108,7 +172,7 @@ namespace ZeroEngine.Formula.Editor
                 || assetPath.StartsWith(normalizedRoot + "/", StringComparison.OrdinalIgnoreCase);
         }
 
-        private static string NormalizePath(string path)
+        internal static string NormalizePath(string path)
         {
             return (path ?? string.Empty)
                 .Replace('\\', '/')

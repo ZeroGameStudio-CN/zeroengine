@@ -4,6 +4,7 @@
 
 using System.Collections.Generic;
 using UnityEngine;
+using UnityEngine.Pool;
 
 namespace ZeroEngine.Pathfinding2D
 {
@@ -667,8 +668,9 @@ namespace ZeroEngine.Pathfinding2D
             Vector3 actualStart,
             Vector3 actualEnd)
         {
-            var cameFrom = new Dictionary<int, int>(targetResult.LinkCount);
-            var cameFromLink = new Dictionary<int, PlatformLinkData>(targetResult.LinkCount);
+            // Reconstruction is synchronous; none of these maps escape into a returned path.
+            using var cameFromScope = DictionaryPool<int, int>.Get(out var cameFrom);
+            using var cameFromLinkScope = DictionaryPool<int, PlatformLinkData>.Get(out var cameFromLink);
             int currentNodeId = sourceNodeId;
             for (int i = 0; i < targetResult.LinkCount; i++)
             {
@@ -1974,35 +1976,12 @@ namespace ZeroEngine.Pathfinding2D
             if (actualEnd.y <= actualStart.y + config.SamePlatformMaxHeightDiff)
                 return false;
 
-            bool hasJump = false;
-            bool hasDownwardTraversal = false;
+            // A complete route may climb above an elevated target and descend
+            // onto it. Traversal ordering is not evidence of an invalid endpoint;
+            // command and partial-endpoint validation remain responsible for that.
             foreach (var command in path.Commands)
-            {
-                if (command.CommandType == MoveCommandType.Jump)
-                    hasJump = true;
-                else if (command.CommandType == MoveCommandType.Fall ||
-                         command.CommandType == MoveCommandType.DropDown)
-                    hasDownwardTraversal = true;
-            }
-
-            if (!hasJump)
-                return true;
-
-            if (!hasDownwardTraversal)
-                return false;
-
-            int lastJumpIndex = -1;
-            int lastDownIndex = -1;
-            for (int i = 0; i < path.Commands.Count; i++)
-            {
-                var type = path.Commands[i].CommandType;
-                if (type == MoveCommandType.Jump)
-                    lastJumpIndex = i;
-                else if (type == MoveCommandType.Fall || type == MoveCommandType.DropDown)
-                    lastDownIndex = i;
-            }
-
-            return lastDownIndex > lastJumpIndex;
+                if (command.CommandType == MoveCommandType.Jump) return false;
+            return true;
         }
 
         /// <summary>
@@ -2475,8 +2454,9 @@ namespace ZeroEngine.Pathfinding2D
             Vector3 actualStart,
             Vector3 actualEnd)
         {
-            var nodePath = new List<int>();
-            var linkPath = new List<PlatformLinkData>();
+            // Only the temporary route sequences are pooled. Each result retains its own commands.
+            using var nodePathScope = ListPool<int>.Get(out var nodePath);
+            using var linkPathScope = ListPool<PlatformLinkData>.Get(out var linkPath);
 
             // 回溯路径
             while (cameFrom.ContainsKey(current))

@@ -1,23 +1,17 @@
 {
   "name": "com.zerogamestudio.zeroengine.autobattle",
-  "version": "1.0.0",
+  "version": "2.0.0",
   "displayName": "ZeroEngine.AutoBattle",
-  "description": "Auto-battle framework for grid-based tactical combat. Includes grid system, battle units, skill configuration, AI strategy, and formation management.",
+  "description": "Headless deterministic tactical grid and auto-battle decision kernel.",
   "unity": "2022.3",
   "unityRelease": "0f1",
-  "dependencies": {
-    "com.zerogamestudio.zeroengine.core": "2.0.0",
-    "com.zerogamestudio.zeroengine.combat": "2.0.0",
-    "com.zerogamestudio.zeroengine.data": "2.0.0",
-    "com.zerogamestudio.zeroengine.ai": "2.0.0"
-  },
+  "dependencies": {},
   "keywords": [
     "zeroengine",
     "autobattle",
     "grid",
     "tactical",
-    "formation",
-    "ai"
+    "deterministic"
   ],
   "author": {
     "name": "ZeroGameStudio",

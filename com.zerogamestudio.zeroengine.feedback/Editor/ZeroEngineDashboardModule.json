@@ -6,6 +6,19 @@
   "order": 500,
   "scope": "universal",
   "documentationPath": "README.md",
+  "panels": [
+    {
+      "id": "failure-codes",
+      "providerId": "zeroengine.feedback.help",
+      "displayName": "反馈报错查询",
+      "description": "在工作台内查看 F203 等反馈上传报错的含义、排查方法和重试行为。",
+      "usage": "输入报错码或关键词查看说明，留空显示全部。此面板只读，不发送反馈、不更改上传配置。",
+      "section": "玩家反馈",
+      "order": 100,
+      "safety": "read-only",
+      "availability": "always"
+    }
+  ],
   "entries": [
     {
       "id": "install-default-ui",

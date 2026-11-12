@@ -77,7 +77,7 @@ namespace ZeroGameStudio.ConfigPipeline.Editor
                 new ConfigArtifact(
                     options.ManifestPath,
                     CanonicalJsonWriter.WriteUtf8(manifest.ToNode())),
-                new ConfigArtifact(options.SourceMapPath, WriteSourceMap())
+                new ConfigArtifact(options.SourceMapPath, WriteSourceMap(document))
             };
             if (!string.IsNullOrEmpty(options.CodePath))
             {
@@ -103,10 +103,11 @@ namespace ZeroGameStudio.ConfigPipeline.Editor
             return artifacts;
         }
 
-        private byte[] WriteSourceMap()
+        private byte[] WriteSourceMap(ConfigDocument document)
         {
             var entries = new List<ConfigNode>();
-            foreach (XlsxSourceMapEntry entry in sourceMap
+            foreach (XlsxSourceMapEntry entry in ConfigSourceMapBuilder
+                         .Build(document, schema, sourceMap)
                          .OrderBy(value => value.JsonPath, StringComparer.Ordinal)
                          .ThenBy(value => value.Workbook, StringComparer.Ordinal)
                          .ThenBy(value => value.Sheet, StringComparer.Ordinal)
@@ -116,8 +117,11 @@ namespace ZeroGameStudio.ConfigPipeline.Editor
                 entries.Add(new ConfigObjectNode(new[]
                 {
                     new ConfigProperty("jsonPath", new ConfigStringNode(entry.JsonPath)),
+                    new ConfigProperty("sourceKind", new ConfigStringNode(entry.SourceKind.ToString())),
+                    new ConfigProperty("sourceJsonPath", new ConfigStringNode(entry.SourceJsonPath ?? string.Empty)),
+                    new ConfigProperty("schemaPath", new ConfigStringNode(entry.SchemaPath ?? string.Empty)),
                     new ConfigProperty("workbook", new ConfigStringNode(entry.Workbook ?? string.Empty)),
-                    new ConfigProperty("sheet", new ConfigStringNode(entry.Sheet)),
+                    new ConfigProperty("sheet", new ConfigStringNode(entry.Sheet ?? string.Empty)),
                     new ConfigProperty("row", new ConfigIntegerNode(entry.Row)),
                     new ConfigProperty("column", new ConfigIntegerNode(entry.Column))
                 }));
@@ -126,7 +130,7 @@ namespace ZeroGameStudio.ConfigPipeline.Editor
             return CanonicalJsonWriter.WriteUtf8(
                 new ConfigObjectNode(new[]
                 {
-                    new ConfigProperty("formatVersion", new ConfigIntegerNode(1)),
+                    new ConfigProperty("formatVersion", new ConfigIntegerNode(2)),
                     new ConfigProperty("entries", new ConfigArrayNode(entries))
                 }));
         }

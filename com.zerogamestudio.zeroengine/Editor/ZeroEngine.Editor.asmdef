@@ -1,43 +1,52 @@
 {
-    "name": "ZeroEngine.Editor",
-    "rootNamespace": "ZeroEngine.Editor",
-    "references": [
-        "ZeroEngine",
-        "ZeroEngine.Core",
-        "ZeroEngine.Persistence",
-        "ZeroEngine.Combat",
-        "ZeroEngine.Data",
-        "ZeroEngine.Economy",
-        "ZeroEngine.AI",
-        "ZeroEngine.Narrative",
-        "ZeroEngine.World",
-        "ZeroEngine.Gameplay",
-        "ZeroEngine.Social",
-        "ZeroEngine.Character",
-        "ZeroEngine.Audio",
-        "Unity.InputSystem",
-        "ZeroEngine.EditorUI.Editor"
-    ],
-    "includePlatforms": [
-        "Editor"
-    ],
-    "excludePlatforms": [],
-    "allowUnsafeCode": false,
-    "overrideReferences": false,
-    "precompiledReferences": [],
-    "autoReferenced": true,
-    "defineConstraints": [],
-    "versionDefines": [
-        {
-            "name": "com.unity.netcode.gameobjects",
-            "expression": "",
-            "define": "ZEROENGINE_NETCODE"
-        },
-        {
-            "name": "com.esotericsoftware.spine.spine-unity",
-            "expression": "",
-            "define": "SPINE_UNITY"
-        }
-    ],
-    "noEngineReferences": false
+  "name": "ZeroEngine.Editor",
+  "rootNamespace": "ZeroEngine.Editor",
+  "references": [
+    "ZeroEngine",
+    "ZeroEngine.Core",
+    "ZeroEngine.Persistence",
+    "ZeroEngine.Combat",
+    "ZeroEngine.Data",
+    "ZeroEngine.Economy",
+    "ZeroEngine.AI",
+    "ZeroEngine.Narrative",
+    "ZeroEngine.World",
+    "ZeroEngine.Gameplay",
+    "ZeroEngine.Social",
+    "ZeroEngine.Character",
+    "ZeroEngine.Audio",
+    "Unity.InputSystem",
+    "ZeroEngine.EditorUI.Editor",
+    "ZeroEngine.Achievement",
+    "Unity.Localization",
+    "Unity.Localization.Editor",
+    "Unity.ResourceManager"
+  ],
+  "includePlatforms": [
+    "Editor"
+  ],
+  "excludePlatforms": [],
+  "allowUnsafeCode": false,
+  "overrideReferences": false,
+  "precompiledReferences": [],
+  "autoReferenced": true,
+  "defineConstraints": [],
+  "versionDefines": [
+    {
+      "name": "com.unity.netcode.gameobjects",
+      "expression": "",
+      "define": "ZEROENGINE_NETCODE"
+    },
+    {
+      "name": "com.esotericsoftware.spine.spine-unity",
+      "expression": "",
+      "define": "SPINE_UNITY"
+    },
+    {
+      "name": "com.unity.localization",
+      "expression": "",
+      "define": "UNITY_LOCALIZATION"
+    }
+  ],
+  "noEngineReferences": false
 }

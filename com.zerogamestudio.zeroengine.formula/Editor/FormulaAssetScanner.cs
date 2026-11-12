@@ -131,6 +131,33 @@ namespace ZeroEngine.Formula.Editor
             return report;
         }
 
+        public static FormulaAssetScanReport ScanRecords(
+            IReadOnlyList<FormulaCatalogAssetRecord> records,
+            FormulaEditorProfile profile,
+            FormulaAssetScanContext scanContext)
+        {
+            var report = new FormulaAssetScanReport();
+            var registry = FormulaEditorPreview.CreateRegistry(profile);
+            var context = FormulaEditorPreview.CreateContext(profile);
+            foreach (var record in records ?? System.Array.Empty<FormulaCatalogAssetRecord>())
+            {
+                if (record == null)
+                    continue;
+
+                report.AssetCount++;
+                ScanFormula(
+                    string.IsNullOrEmpty(record.AssetPath) ? "<formula>" : record.AssetPath,
+                    record.Formula,
+                    profile,
+                    context,
+                    registry,
+                    report,
+                    scanContext);
+            }
+
+            return report;
+        }
+
         private static void ScanFormula(
             string path,
             FormulaAsset formula,
@@ -203,7 +230,7 @@ namespace ZeroEngine.Formula.Editor
                 report.AddIssue(
                     FormulaAssetScanSeverity.Warning,
                     path,
-                    "公式缺少目录信息：请在 Formula Catalog 中补充用途、Owner、单位和标签。");
+                    "目录资料待补全：请补充用途、单位和标签；不影响公式运行。归属信息由 Data Manager 维护。");
             }
 
             if (rules.WarnOnUnreferencedFormula
@@ -253,10 +280,10 @@ namespace ZeroEngine.Formula.Editor
             var referenceSearchOptions = new FormulaReferenceSearchOptions(
                 profile.ReferenceRoots,
                 profile.ExcludedReferenceRoots);
-            foreach (var pair in formulaGuidsByPath)
-            {
-                references.AddRange(FormulaReferenceIndexer.FindGuidReferences(pair.Value, referenceDocuments, referenceSearchOptions));
-            }
+            references.AddRange(FormulaReferenceIndexer.FindGuidReferences(
+                formulaGuidsByPath.Values,
+                referenceDocuments,
+                referenceSearchOptions));
 
             return new FormulaAssetScanContext(catalogLookup, references, formulaGuidsByPath);
         }

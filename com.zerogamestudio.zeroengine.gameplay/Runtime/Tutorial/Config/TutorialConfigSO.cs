@@ -1,4 +1,8 @@
 using UnityEngine;
+using System.Collections.Generic;
+using TMPro;
+using ZeroEngine.Tutorial.Guidance;
+using ZeroEngine.Tutorial.Presentation;
 
 namespace ZeroEngine.Tutorial
 {
@@ -19,6 +23,14 @@ namespace ZeroEngine.Tutorial
 
         [Tooltip("允许跳过教程")]
         public bool AllowSkipping = true;
+
+        public bool UseUnscaledTime = true;
+        public TMP_FontAsset DefaultFont;
+        public Vector2 ReferenceResolution = new Vector2(1920, 1080);
+        public TutorialFocusStyle FocusStyle = new TutorialFocusStyle();
+        public List<TutorialMedia> Media = new List<TutorialMedia>();
+
+        public TutorialMedia FindMedia(string id) => Media.Find(media => media != null && media.Id == id);
 
         #endregion
 

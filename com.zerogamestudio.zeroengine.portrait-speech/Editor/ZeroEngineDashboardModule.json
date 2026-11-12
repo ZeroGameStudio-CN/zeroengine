@@ -1,0 +1,29 @@
+{
+  "schemaVersion": 2,
+  "moduleId": "com.zerogamestudio.zeroengine.portrait-speech",
+  "displayName": "对话头像口型",
+  "description": "头像口型、眨眼标定与候选预览。",
+  "order": 650,
+  "scope": "universal",
+  "documentationPath": "README.md",
+  "entries": [
+    {
+      "id": "portrait-speech-authoring",
+      "displayName": "对话头像口型",
+      "description": "打开头像口型与眨眼配置工具。",
+      "category": "authoring",
+      "kind": "window",
+      "safety": "navigation",
+      "availability": "always",
+      "visibility": "primary",
+      "order": 100,
+      "legacyKeywords": [
+        "Tools/ZeroEngine/Portrait Speech"
+      ],
+      "executionKind": "provider",
+      "providerId": "zeroengine.portrait-speech",
+      "actionId": "portrait-speech-authoring",
+      "replaces": []
+    }
+  ]
+}

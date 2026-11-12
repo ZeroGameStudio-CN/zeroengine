@@ -1,0 +1,15 @@
+{
+  "name": "com.zerogamestudio.zeroengine.console",
+  "version": "0.1.0",
+  "displayName": "ZeroEngine.Console",
+  "description": "Native command descriptors, parsing, policy, execution and completion, independent of console frontends and game projects.",
+  "unity": "2022.3",
+  "dependencies": {},
+  "author": { "name": "ZeroGameStudio" },
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/ZeroGameStudio-CN/zeroengine.git",
+    "directory": "com.zerogamestudio.zeroengine.console"
+  }
+}

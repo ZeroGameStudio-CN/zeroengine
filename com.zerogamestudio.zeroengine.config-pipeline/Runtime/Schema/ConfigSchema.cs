@@ -52,6 +52,9 @@ namespace ZeroGameStudio.ConfigPipeline
         public ConfigObjectNode SourceNode { get; }
 
         public ConfigSchemaNode Root { get; }
+
+        public int AuthoringPolicyVersion => SourceNode.TryGetValue("x-zgs-authoring-policy-version", out var value)
+            && value is ConfigIntegerNode version ? (int)version.Value : 0;
     }
 
     public sealed class ConfigSchemaNode
@@ -89,7 +92,14 @@ namespace ZeroGameStudio.ConfigPipeline
             string title,
             string description,
             string unit,
-            string group)
+            string group,
+            bool nullable,
+            string presetType,
+            string presetSource,
+            string presetReferenceField,
+            string collectionOverrideModeField,
+            string authoringVisibility,
+            string inlineValueField)
         {
             Type = type;
             this.properties = new List<ConfigSchemaProperty>(
@@ -124,6 +134,13 @@ namespace ZeroGameStudio.ConfigPipeline
             Description = description;
             Unit = unit;
             Group = group;
+            Nullable = nullable;
+            PresetType = presetType;
+            PresetSource = presetSource;
+            PresetReferenceField = presetReferenceField;
+            CollectionOverrideModeField = collectionOverrideModeField;
+            AuthoringVisibility = authoringVisibility;
+            InlineValueField = inlineValueField;
         }
 
         public ConfigSchemaType Type { get; }
@@ -181,6 +198,29 @@ namespace ZeroGameStudio.ConfigPipeline
         public string Unit { get; }
 
         public string Group { get; }
+
+        public bool Nullable { get; }
+
+        public string PresetType { get; }
+
+        public string PresetSource { get; }
+
+        public string PresetReferenceField { get; }
+
+        public string CollectionOverrideModeField { get; }
+
+        /// <summary>Null preserves legacy authoring; classified fields use basic, advanced, technical or inactive.</summary>
+        public string AuthoringVisibility { get; }
+
+        /// <summary>Opt-in single-cell list of a child row's sole business value.</summary>
+        public string InlineValueField { get; }
+
+        public string ResolveAuthoringVisibility(string inherited)
+        {
+            if (AuthoringVisibility == "inactive" || inherited == "inactive") return "inactive";
+            if (inherited == "technical" || inherited == "advanced") return inherited;
+            return AuthoringVisibility;
+        }
 
         public bool IsRequired(string propertyName)
         {

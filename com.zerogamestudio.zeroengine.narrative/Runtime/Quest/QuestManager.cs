@@ -7,11 +7,25 @@ using ZeroEngine.Utils;
 
 namespace ZeroEngine.Quest
 {
+    public readonly struct QuestCompletionTransition
+    {
+        public QuestCompletionTransition(long sequence, string questId)
+        {
+            Sequence = sequence;
+            QuestId = questId;
+        }
+
+        public long Sequence { get; }
+
+        public string QuestId { get; }
+    }
+
     public class QuestManager : Singleton<QuestManager>, ISaveable
     {
         private QuestSystemSaveData _saveData = new QuestSystemSaveData();
         private Dictionary<string, QuestConfigSO> _questConfigs = new Dictionary<string, QuestConfigSO>();
         private SaveSlotManager _registeredSaveSlotManager;
+        private long _completionTransitionSequence;
 
         #region Events
 
@@ -24,6 +38,14 @@ namespace ZeroEngine.Quest
         /// 单个条件完成时触发。
         /// </summary>
         public event Action<string, QuestCondition> OnConditionCompleted;
+
+        /// <summary>
+        /// Raised once for each Active-to-Successful transition owned by this manager instance.
+        /// This channel is independent from the legacy static EventManager lifecycle.
+        /// </summary>
+        public event Action<QuestCompletionTransition> OnQuestCompletionTransition;
+
+        public long CompletionTransitionSequence => _completionTransitionSequence;
 
         #endregion
 
@@ -180,10 +202,11 @@ namespace ZeroEngine.Quest
         /// </summary>
         public void ProcessConditionEvent(string eventType, ConditionEventData data)
         {
-            for (int i = 0; i < _saveData.activeQuests.Count; i++)
+            var activeQuestSnapshot = new List<QuestRuntimeData>(_saveData.activeQuests);
+            for (int i = 0; i < activeQuestSnapshot.Count; i++)
             {
-                var quest = _saveData.activeQuests[i];
-                if (quest.state != QuestState.Active) continue;
+                var quest = activeQuestSnapshot[i];
+                if (!_saveData.activeQuests.Contains(quest) || quest.state != QuestState.Active) continue;
 
                 var config = GetConfig(quest.questId);
                 if (config == null || config.Conditions == null || config.Conditions.Count == 0) continue;
@@ -211,6 +234,21 @@ namespace ZeroEngine.Quest
             }
         }
 
+        public void UpdateQuestProgress(QuestType type, string targetName, int amount = 1)
+        {
+            if (string.IsNullOrWhiteSpace(targetName)) return;
+
+            amount = Mathf.Max(1, amount);
+            var eventType = type switch
+            {
+                QuestType.Collect => QuestEvents.ItemObtained,
+                QuestType.KillMonster => QuestEvents.EntityKilled,
+                QuestType.Dialogue => QuestEvents.Interacted,
+                _ => QuestEvents.Interacted
+            };
+            ProcessConditionEvent(eventType, new ConditionEventData(targetName, amount));
+        }
+
         private void CheckCompletion(QuestRuntimeData quest, QuestConfigSO config)
         {
             if (config.Conditions == null || config.Conditions.Count == 0) return;
@@ -231,8 +269,14 @@ namespace ZeroEngine.Quest
 
         private void CompleteQuest(QuestRuntimeData quest, QuestConfigSO config)
         {
+            if (quest == null || quest.state != QuestState.Active) return;
+
             quest.state = QuestState.Successful;
+            var transition = new QuestCompletionTransition(
+                ++_completionTransitionSequence,
+                quest.questId);
             ZeroLog.Info(ZeroLog.Modules.Quest, $"Quest '{quest.questId}' Conditions Met!");
+            OnQuestCompletionTransition?.Invoke(transition);
             EventManager.Trigger(GameEvents.QuestCompleted, quest.questId);
 
             if (config.autoSubmit)
@@ -421,6 +465,22 @@ namespace ZeroEngine.Quest
             return _conditionProgressBuffer;
         }
 
+        public QuestStateSnapshot GetQuestStateSnapshot(string questId)
+        {
+            var quest = FindActiveQuest(questId);
+            return quest != null
+                ? BuildSnapshot(quest)
+                : new QuestStateSnapshot(questId, GetQuestState(questId), Array.Empty<QuestObjectiveSnapshot>(), Array.Empty<string>());
+        }
+
+        public IReadOnlyList<QuestStateSnapshot> GetActiveQuestSnapshots()
+        {
+            var result = new List<QuestStateSnapshot>(_saveData.activeQuests.Count);
+            for (var i = 0; i < _saveData.activeQuests.Count; i++)
+                result.Add(BuildSnapshot(_saveData.activeQuests[i]));
+            return result;
+        }
+
         #endregion
 
         #region Helpers
@@ -533,6 +593,36 @@ namespace ZeroEngine.Quest
         public void LoadSaveData(QuestSystemSaveData data)
         {
             _saveData = data ?? new QuestSystemSaveData();
+        }
+
+        private QuestStateSnapshot BuildSnapshot(QuestRuntimeData quest)
+        {
+            if (quest == null) return default;
+
+            var config = GetConfig(quest.questId);
+            var objectives = new List<QuestObjectiveSnapshot>();
+            if (config?.Conditions != null)
+            {
+                foreach (var condition in config.Conditions)
+                {
+                    if (condition == null) continue;
+                    var key = condition.GetProgressKey();
+                    objectives.Add(new QuestObjectiveSnapshot(
+                        key,
+                        key,
+                        string.IsNullOrWhiteSpace(condition.Description) ? key : condition.Description,
+                        condition.GetCurrentProgress(quest),
+                        condition.GetTargetProgress(),
+                        condition.IsSatisfied(quest),
+                        condition.IsHidden));
+                }
+            }
+
+            return new QuestStateSnapshot(
+                quest.questId,
+                quest.state,
+                objectives,
+                config != null ? config.GetRewardPreviews() : Array.Empty<string>());
         }
 
 #if UNITY_EDITOR

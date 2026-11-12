@@ -222,17 +222,11 @@ namespace ZeroEngine.AI.UtilityAI
         {
             float currentHour = 12f;
 
-            // 从黑板获取
+            // 消费项目通过黑板提供游戏时间，AI 包不反向依赖世界系统。
             if (context?.Blackboard != null && context.Blackboard.Contains(BlackboardKeys.CurrentHour))
             {
                 currentHour = context.Blackboard.GetFloat(BlackboardKeys.CurrentHour);
             }
-#if ZEROENGINE_ENVIRONMENT
-            else if (EnvironmentSystem.TimeManager.Instance != null)
-            {
-                currentHour = EnvironmentSystem.TimeManager.Instance.CurrentHour;
-            }
-#endif
 
             switch (_checkType)
             {

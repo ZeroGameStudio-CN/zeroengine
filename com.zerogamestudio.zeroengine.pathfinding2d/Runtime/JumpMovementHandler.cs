@@ -62,7 +62,9 @@ namespace ZeroEngine.Pathfinding2D
             float maxJumpVelocity,
             float gravityScale = DefaultGravityScale,
             float overshoot = 1.2f,
-            float maxAirHorizontalSpeed = DisabledAirSpeedLimit)
+            float maxAirHorizontalSpeed = DisabledAirSpeedLimit,
+            float maxFlightTime = MaxJumpTime,
+            bool allowHigherArcForHorizontalSpeed = false)
         {
             float deltaX = end.x - start.x;
             float deltaY = end.y - start.y;
@@ -137,7 +139,8 @@ namespace ZeroEngine.Pathfinding2D
             float totalTime = timeToApex + timeToFall;
 
             // 限制飞行时间
-            if (totalTime < MinJumpTime || totalTime > MaxJumpTime)
+            if (float.IsNaN(totalTime) || float.IsInfinity(totalTime) || totalTime < MinJumpTime ||
+                (maxFlightTime > 0f && totalTime > maxFlightTime))
             {
                 return JumpCalculationResult.NotReachable;
             }
@@ -146,7 +149,15 @@ namespace ZeroEngine.Pathfinding2D
             float requiredVelocityX = deltaX / totalTime;
             if (ExceedsAirHorizontalSpeed(requiredVelocityX, maxAirHorizontalSpeed))
             {
-                return JumpCalculationResult.NotReachable;
+                if (!allowHigherArcForHorizontalSpeed)
+                    return JumpCalculationResult.NotReachable;
+                totalTime = Mathf.Abs(deltaX) / maxAirHorizontalSpeed;
+                requiredVelocityY = (deltaY + 0.5f * gravity * totalTime * totalTime) / totalTime;
+                if (requiredVelocityY <= 0f || requiredVelocityY > maxJumpVelocity + 0.001f ||
+                    (maxFlightTime > 0f && totalTime > maxFlightTime))
+                    return JumpCalculationResult.NotReachable;
+                requiredHeight = requiredVelocityY * requiredVelocityY / (2f * gravity);
+                requiredVelocityX = deltaX / totalTime;
             }
 
             // 生成轨迹点
@@ -336,18 +347,40 @@ namespace ZeroEngine.Pathfinding2D
             Vector2 endPos = trajectory[trajectory.Length - 1];
             float traveledDistance = 0f;
             float endpointIgnoreDistance = Mathf.Max(ignoreInitialDistance, colliderRadius * 2f + 0.05f);
+            using var castLease = UnityEngine.Pool.ListPool<RaycastHit2D>.Get(out var hits);
+            using var overlapLease = UnityEngine.Pool.ListPool<Collider2D>.Get(out var overlaps);
+            var filter = new ContactFilter2D();
+            filter.NoFilter(); filter.SetLayerMask(obstacleMask);
+            filter.useTriggers = Physics2D.queriesHitTriggers;
+            bool checkedEndpoint = false;
+            Vector2 previousEndpointSample = default;
+            const int interiorStart = TrajectoryPoints / 2;
+            const int interiorEnd = TrajectoryPoints * 4 / 5;
 
             for (int i = 0; i < trajectory.Length - 1; i++)
             {
+                // Ballistic samples cluster near launch; keep those and the
+                // landing sweeps exact. An obstacle in the initial segments should
+                // reject without paying for the rest of the trajectory. An empty
+                // padded box encloses every circle sweep and overlap sample in
+                // this middle section; occupied/invalid bounds keep the exact route.
+                if (i == interiorStart && trajectory.Length == TrajectoryPoints &&
+                    HasEmptyTrajectoryInterior(trajectory, interiorStart, interiorEnd,
+                        colliderRadius, filter, overlaps))
+                {
+                    i = interiorEnd - 1;
+                    continue;
+                }
                 Vector2 from = trajectory[i];
                 Vector2 to = trajectory[i + 1];
                 float segmentDist = Vector2.Distance(from, to);
                 if (segmentDist <= Mathf.Epsilon) continue;
 
-                RaycastHit2D[] hits = Physics2D.CircleCastAll(
-                    from, colliderRadius, (to - from).normalized, segmentDist, obstacleMask);
+                hits.Clear();
+                int hitCount = Physics2D.CircleCast(
+                    from, colliderRadius, (to - from).normalized, filter, hits, segmentDist);
 
-                for (int hitIndex = 0; hitIndex < hits.Length; hitIndex++)
+                for (int hitIndex = 0; hitIndex < hitCount; hitIndex++)
                 {
                     var hit = hits[hitIndex];
                     if (hit.collider == null) continue;
@@ -383,20 +416,52 @@ namespace ZeroEngine.Pathfinding2D
                         from,
                         to,
                         colliderRadius,
-                        obstacleMask,
+                        filter,
+                        overlaps,
                         startPos,
                         endPos,
                         fromPlatform,
                         toPlatform,
-                        endpointIgnoreDistance))
+                        endpointIgnoreDistance,
+                        checkedEndpoint && previousEndpointSample.Equals(from)))
                 {
                     return false;
                 }
 
+                checkedEndpoint = true;
+                previousEndpointSample = Vector2.Lerp(from, to, 1f);
                 traveledDistance += segmentDist;
             }
             return true;
         }
+
+        private static bool HasEmptyTrajectoryInterior(Vector2[] trajectory, int first, int last,
+            float radius, ContactFilter2D filter, System.Collections.Generic.List<Collider2D> overlaps)
+        {
+            if (radius < 0f || !IsFinite(radius)) return false;
+            Vector2 minimum = trajectory[first];
+            Vector2 maximum = minimum;
+            for (int i = first; i <= last; i++)
+            {
+                Vector2 point = trajectory[i];
+                if (!IsFinite(point.x) || !IsFinite(point.y)) return false;
+                minimum = Vector2.Min(minimum, point);
+                maximum = Vector2.Max(maximum, point);
+            }
+
+            float magnitude = Mathf.Max(Mathf.Max(Mathf.Abs(minimum.x), Mathf.Abs(minimum.y)),
+                Mathf.Max(Mathf.Abs(maximum.x), Mathf.Abs(maximum.y)));
+            float padding = Mathf.Max(.01f, Mathf.Max(Physics2D.defaultContactOffset,
+                Mathf.Max(magnitude, radius) * 1e-6f));
+            Vector2 center = minimum + (maximum - minimum) * .5f;
+            Vector2 size = maximum - minimum + Vector2.one * (2f * (radius + padding));
+            if (!IsFinite(center.x) || !IsFinite(center.y) || !IsFinite(size.x) || !IsFinite(size.y))
+                return false;
+            overlaps.Clear();
+            return Physics2D.OverlapBox(center, size, 0f, filter, overlaps) == 0;
+        }
+
+        private static bool IsFinite(float value) => !float.IsNaN(value) && !float.IsInfinity(value);
 
         private static bool ExceedsAirHorizontalSpeed(float velocityX, float maxAirHorizontalSpeed)
         {
@@ -408,22 +473,27 @@ namespace ZeroEngine.Pathfinding2D
             Vector2 from,
             Vector2 to,
             float colliderRadius,
-            LayerMask obstacleMask,
+            ContactFilter2D filter,
+            System.Collections.Generic.List<Collider2D> overlaps,
             Vector2 startPos,
             Vector2 endPos,
             Collider2D fromPlatform,
             Collider2D toPlatform,
-            float endpointIgnoreDistance)
+            float endpointIgnoreDistance,
+            bool skipFirstSample)
         {
             float segmentDist = Vector2.Distance(from, to);
             if (segmentDist <= Mathf.Epsilon) return false;
 
             int steps = Mathf.Max(1, Mathf.CeilToInt(segmentDist / Mathf.Max(0.1f, colliderRadius)));
-            for (int step = 0; step <= steps; step++)
+            // The shared endpoint was already checked with identical inputs by
+            // the previous segment. Retest if float interpolation differed.
+            for (int step = skipFirstSample ? 1 : 0; step <= steps; step++)
             {
                 Vector2 sample = Vector2.Lerp(from, to, (float)step / steps);
-                Collider2D[] overlaps = Physics2D.OverlapCircleAll(sample, colliderRadius, obstacleMask);
-                for (int i = 0; i < overlaps.Length; i++)
+                overlaps.Clear();
+                int overlapCount = Physics2D.OverlapCircle(sample, colliderRadius, filter, overlaps);
+                for (int i = 0; i < overlapCount; i++)
                 {
                     var collider = overlaps[i];
                     if (collider == null) continue;
@@ -460,7 +530,17 @@ namespace ZeroEngine.Pathfinding2D
                 return true;
 
             if (collider == toPlatform && Vector2.Distance(hitPoint, endPos) <= endpointIgnoreDistance)
-                return true;
+            {
+                // The destination platform is ignored only for the final
+                // top-side landing contact. A side hit shortly before the
+                // endpoint must remain blocking; otherwise the graph accepts
+                // a trajectory that the runtime body will bonk into, lose its
+                // horizontal velocity, and fail to climb the platform.
+                Vector2 closest = collider.ClosestPoint(hitPoint);
+                Vector2 separation = hitPoint - closest;
+                if (Mathf.Abs(separation.x) <= Mathf.Abs(separation.y) + 0.001f)
+                    return true;
+            }
 
             return false;
         }

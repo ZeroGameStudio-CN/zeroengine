@@ -15,9 +15,9 @@ Install from the ZeroEngine repository with Unity Package Manager:
 "com.zerogamestudio.zeroengine.formula": "https://github.com/liuzqk/zeroengine.git?path=com.zerogamestudio.zeroengine.formula#<commit>"
 ```
 
-Version 0.5.1 requires a direct pin for `com.zerogamestudio.zeroengine.editor-ui@1.1.1` at the same commit. Unity 2022.3 does not resolve same-repository sibling packages transitively. Use a pinned commit for production projects.
+Version 0.6.0 requires a direct pin for `com.zerogamestudio.zeroengine.editor-ui@1.4.0` at the same commit. Unity 2022.3 does not resolve same-repository sibling packages transitively. Use a pinned commit for production projects.
 
-Formula Catalog and Formula Workbench share one `公式中心` window with `公式工作台` and `公式目录` pages. Fixed labels and actionable-control tooltips are Simplified Chinese; the original menu paths and public open methods remain compatible.
+Formula Catalog and Formula Workbench are available as lazy workspace panels in `ZGS/工作台`; the compatibility window still shares `公式工作台` and `公式目录` pages. Fixed labels and actionable-control tooltips are Simplified Chinese; the original public open methods remain compatible.
 
 ## Runtime Formula
 
@@ -214,3 +214,11 @@ adapt their game data into `IFormulaValueProvider` implementations.
 ## ZeroEngine Dashboard
 
 The optional Dashboard discovers Formula Catalog, Formula Workbench, and the read-only asset scan through the schema v2 descriptor and invokes this package's typed provider. This package does not depend on Dashboard.
+
+
+## Consolidation dependency correction
+
+The 0.6.1 consolidation candidate explicitly declares Unity's built-in
+JSON Serialize module (`com.unity.modules.jsonserialize`) for this package's
+direct `JsonUtility` calls. Consumers no longer need an unrelated installed
+package to supply that module. This candidate is not a published release.

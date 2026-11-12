@@ -1,7 +1,6 @@
 using System;
 using System.Collections.Generic;
 using UnityEngine;
-using ZeroEngine.Core;
 using ZeroEngine.Save;
 using ZeroEngine.StatSystem;
 
@@ -23,17 +22,19 @@ namespace ZeroEngine.Equipment
         [Header("调试")]
         [SerializeField] private bool _debugMode;
 
-        // 已装备的装备（槽位 -> 装备实例）
-        private readonly Dictionary<EquipmentSlotType, EquipmentInstance> _equippedItems =
-            new Dictionary<EquipmentSlotType, EquipmentInstance>();
+        private EquipmentLoadout<EquipmentSlotType, EquipmentInstance> _loadout;
+
+        private EquipmentLoadout<EquipmentSlotType, EquipmentInstance> Loadout => _loadout ??=
+            new EquipmentLoadout<EquipmentSlotType, EquipmentInstance>(
+                _availableSlots,
+                item => item.Data.SlotType,
+                item => item.GetStatModifiers(),
+                ResolveStat,
+                item => item.Data != null && item.Data.SlotType != null);
 
         // 当前激活的套装效果
         private readonly Dictionary<EquipmentSetSO, HashSet<int>> _activeSetEffects =
             new Dictionary<EquipmentSetSO, HashSet<int>>();
-
-        // 当前应用的修饰器（用于移除）
-        private readonly Dictionary<EquipmentInstance, List<(StatType, StatModifier)>> _appliedModifiers =
-            new Dictionary<EquipmentInstance, List<(StatType, StatModifier)>>();
 
         // 套装修饰器
         private readonly Dictionary<(EquipmentSetSO, int), List<(StatType, StatModifier)>> _setModifiers =
@@ -44,28 +45,6 @@ namespace ZeroEngine.Equipment
         private readonly Dictionary<EquipmentSetSO, int> _tempSetCounts = new Dictionary<EquipmentSetSO, int>();
         private readonly List<(EquipmentSetSO, int)> _tempSetsToRemove = new List<(EquipmentSetSO, int)>(8);
         private readonly HashSet<int> _tempActiveThresholds = new HashSet<int>();
-
-        // 修饰器列表对象池
-        private static class ModifierListPool
-        {
-            private static readonly Stack<List<(StatType, StatModifier)>> _pool =
-                new Stack<List<(StatType, StatModifier)>>(16);
-
-            public static List<(StatType, StatModifier)> Get()
-            {
-                return _pool.Count > 0 ? _pool.Pop() : new List<(StatType, StatModifier)>(16);
-            }
-
-            public static void Return(List<(StatType, StatModifier)> list)
-            {
-                if (list == null) return;
-                list.Clear();
-                if (_pool.Count < 32)
-                {
-                    _pool.Push(list);
-                }
-            }
-        }
 
         #region Events
 
@@ -86,7 +65,10 @@ namespace ZeroEngine.Equipment
         public IReadOnlyList<EquipmentSlotType> AvailableSlots => _availableSlots;
 
         /// <summary>已装备数量</summary>
-        public int EquippedCount => _equippedItems.Count;
+        public int EquippedCount => Loadout.Equipped.Count;
+
+        /// <summary>Host-owned content lookup used when restoring saved equipment IDs.</summary>
+        public Func<string, EquipmentDataSO> ResolveEquipmentData { get; set; }
 
         #endregion
 
@@ -107,7 +89,7 @@ namespace ZeroEngine.Equipment
         public object ExportSaveData()
         {
             var data = new EquipmentManagerSaveData();
-            foreach (var kvp in _equippedItems)
+            foreach (var kvp in Loadout.Equipped)
             {
                 data.EquippedItems.Add(new EquippedSlotData
                 {
@@ -121,17 +103,39 @@ namespace ZeroEngine.Equipment
         public void ImportSaveData(object data)
         {
             if (data is not EquipmentManagerSaveData saveData) return;
-
-            // 清空当前装备
-            UnequipAll();
-
-            // 恢复装备（需要外部提供装备数据查找）
-            // 这里只是框架，实际需要 EquipmentDatabase 或类似机制
-            foreach (var slotData in saveData.EquippedItems)
+            if (!TryRestore(saveData, ResolveEquipmentData))
             {
-                // TODO: 通过 slotData.Equipment.DataId 查找 EquipmentDataSO
-                // 然后恢复 EquipmentInstance 并装备
+                LogWarning("无法解析装备存档，保留当前装备");
             }
+        }
+
+        /// <summary>Resolve every saved definition before replacing any current equipment.</summary>
+        public bool TryRestore(EquipmentManagerSaveData data, Func<string, EquipmentDataSO> resolveData)
+        {
+            if (data?.EquippedItems == null) return false;
+            var restored = new List<EquipmentInstance>(data.EquippedItems.Count);
+            foreach (var slot in data.EquippedItems)
+            {
+                if (slot?.Equipment == null || resolveData == null) return false;
+                var definition = resolveData(slot.Equipment.DataId);
+                if (definition == null || definition.SlotType == null ||
+                    !string.Equals(definition.Id, slot.Equipment.DataId, StringComparison.Ordinal) ||
+                    !string.Equals(definition.SlotType.SlotId, slot.SlotId, StringComparison.Ordinal)) return false;
+                var instance = new EquipmentInstance();
+                instance.ImportSaveData(slot.Equipment, definition);
+                restored.Add(instance);
+            }
+
+            var previous = new List<KeyValuePair<EquipmentSlotType, EquipmentInstance>>(Loadout.Equipped);
+            if (!Loadout.TryRestore(restored)) return false;
+            foreach (var pair in previous) pair.Value.IsEquipped = false;
+            foreach (var item in restored) item.IsEquipped = true;
+            UpdateSetEffects();
+            foreach (var pair in previous)
+                OnEquipmentChanged?.Invoke(EquipmentEventArgs.Unequipped(pair.Key, pair.Value));
+            foreach (var item in restored)
+                OnEquipmentChanged?.Invoke(EquipmentEventArgs.Equipped(item.Data.SlotType, item, null));
+            return true;
         }
 
         public void ResetToDefault()
@@ -158,6 +162,15 @@ namespace ZeroEngine.Equipment
 
         private void OnDestroy()
         {
+            if (_loadout != null)
+            {
+                foreach (var item in _loadout.Equipped.Values) item.IsEquipped = false;
+                _loadout.Dispose();
+            }
+            _tempSetsToRemove.Clear();
+            _tempSetsToRemove.AddRange(_setModifiers.Keys);
+            foreach (var key in _tempSetsToRemove) RemoveSetEffectModifiers(key.Item1, key.Item2);
+            _activeSetEffects.Clear();
             Unregister();
         }
 
@@ -171,46 +184,15 @@ namespace ZeroEngine.Equipment
         public bool TryEquip(EquipmentInstance equipment, out EquipmentInstance replaced)
         {
             replaced = null;
-
-            if (equipment == null || equipment.Data == null)
-            {
-                LogWarning("尝试装备空装备");
+            if (equipment == null || equipment.Data == null || equipment.Data.SlotType == null)
                 return false;
-            }
+            if (!Loadout.TryEquip(equipment, out replaced)) return false;
 
-            var slotType = equipment.Data.SlotType;
-            if (slotType == null)
-            {
-                LogWarning($"装备 {equipment.Data.name} 没有指定槽位类型");
-                return false;
-            }
-
-            if (!_availableSlots.Contains(slotType))
-            {
-                LogWarning($"槽位类型 {slotType.DisplayName} 不可用");
-                return false;
-            }
-
-            // 检查是否有已装备的物品
-            if (_equippedItems.TryGetValue(slotType, out var existing))
-            {
-                replaced = existing;
-                RemoveEquipmentStats(existing);
-                existing.IsEquipped = false;
-            }
-
-            // 装备新物品
-            _equippedItems[slotType] = equipment;
+            if (replaced != null) replaced.IsEquipped = false;
             equipment.IsEquipped = true;
-            ApplyEquipmentStats(equipment);
-
-            // 更新套装效果
             UpdateSetEffects();
-
-            // 触发事件
-            OnEquipmentChanged?.Invoke(EquipmentEventArgs.Equipped(slotType, equipment, replaced));
-
-            Log($"装备 {equipment.Data.ItemName} 到 {slotType.DisplayName}");
+            OnEquipmentChanged?.Invoke(EquipmentEventArgs.Equipped(equipment.Data.SlotType, equipment, replaced));
+            Log($"装备 {equipment.Data.ItemName} 到 {equipment.Data.SlotType.DisplayName}");
             return true;
         }
 
@@ -220,22 +202,12 @@ namespace ZeroEngine.Equipment
         public EquipmentInstance Unequip(EquipmentSlotType slotType)
         {
             if (slotType == null) return null;
+            var equipment = Loadout.Unequip(slotType);
+            if (equipment == null) return null;
 
-            if (!_equippedItems.TryGetValue(slotType, out var equipment))
-            {
-                return null;
-            }
-
-            _equippedItems.Remove(slotType);
             equipment.IsEquipped = false;
-            RemoveEquipmentStats(equipment);
-
-            // 更新套装效果
             UpdateSetEffects();
-
-            // 触发事件
             OnEquipmentChanged?.Invoke(EquipmentEventArgs.Unequipped(slotType, equipment));
-
             Log($"卸下 {equipment.Data.ItemName} 从 {slotType.DisplayName}");
             return equipment;
         }
@@ -247,7 +219,7 @@ namespace ZeroEngine.Equipment
         {
             // 使用缓存列表避免分配
             _tempSlotList.Clear();
-            foreach (var slot in _equippedItems.Keys)
+            foreach (var slot in Loadout.Equipped.Keys)
             {
                 _tempSlotList.Add(slot);
             }
@@ -265,7 +237,7 @@ namespace ZeroEngine.Equipment
         public EquipmentInstance GetEquipped(EquipmentSlotType slotType)
         {
             if (slotType == null) return null;
-            return _equippedItems.TryGetValue(slotType, out var equipment) ? equipment : null;
+            return Loadout.Equipped.TryGetValue(slotType, out var equipment) ? equipment : null;
         }
 
         /// <summary>
@@ -273,7 +245,7 @@ namespace ZeroEngine.Equipment
         /// </summary>
         public IEnumerable<EquipmentInstance> GetAllEquipped()
         {
-            return _equippedItems.Values;
+            return Loadout.Equipped.Values;
         }
 
         /// <summary>
@@ -281,7 +253,7 @@ namespace ZeroEngine.Equipment
         /// </summary>
         public bool HasEquipped(EquipmentSlotType slotType)
         {
-            return slotType != null && _equippedItems.ContainsKey(slotType);
+            return slotType != null && Loadout.Equipped.ContainsKey(slotType);
         }
 
         /// <summary>
@@ -292,7 +264,7 @@ namespace ZeroEngine.Equipment
             if (set == null) return 0;
 
             int count = 0;
-            foreach (var equipment in _equippedItems.Values)
+            foreach (var equipment in Loadout.Equipped.Values)
             {
                 if (equipment.Data.BelongsToSet == set)
                 {
@@ -321,9 +293,14 @@ namespace ZeroEngine.Equipment
                 return false;
             }
 
-            // 重新应用属性
-            RemoveEquipmentStats(equipment);
-            ApplyEquipmentStats(equipment);
+            // Refresh through the same stat lifecycle as equip/restore.
+            if (!Loadout.RefreshStats())
+            {
+                equipment.EnhanceLevel = oldLevel;
+                equipment.MarkModifiersDirty();
+                result = EnhanceResult.Failed;
+                return false;
+            }
 
             // 触发事件
             OnEnhanced?.Invoke(new EnhanceEventArgs(equipment, result, oldLevel, equipment.EnhanceLevel));
@@ -338,7 +315,7 @@ namespace ZeroEngine.Equipment
         public float GetTotalScore()
         {
             float total = 0;
-            foreach (var equipment in _equippedItems.Values)
+            foreach (var equipment in Loadout.Equipped.Values)
             {
                 total += equipment.GetScore();
             }
@@ -349,43 +326,9 @@ namespace ZeroEngine.Equipment
 
         #region Stat Integration
 
-        private void ApplyEquipmentStats(EquipmentInstance equipment)
+        private Stat ResolveStat(StatId statId)
         {
-            if (_statController == null || equipment == null) return;
-
-            var modifiers = equipment.GetCalculatedModifiers();
-            var appliedList = ModifierListPool.Get(); // 使用对象池
-
-            foreach (var mod in modifiers)
-            {
-                // 查找对应的 StatType（通过 StatModifierData）
-                foreach (var statData in equipment.Data.BaseStats)
-                {
-                    if (mod.Source == equipment)
-                    {
-                        _statController.AddModifier(statData.StatType, mod);
-                        appliedList.Add((statData.StatType, mod));
-                    }
-                }
-            }
-
-            _appliedModifiers[equipment] = appliedList;
-        }
-
-        private void RemoveEquipmentStats(EquipmentInstance equipment)
-        {
-            if (_statController == null || equipment == null) return;
-
-            if (_appliedModifiers.TryGetValue(equipment, out var modifiers))
-            {
-                for (int i = 0; i < modifiers.Count; i++)
-                {
-                    var (statType, modifier) = modifiers[i];
-                    _statController.RemoveModifier(statType, modifier);
-                }
-                ModifierListPool.Return(modifiers); // 归还对象池
-                _appliedModifiers.Remove(equipment);
-            }
+            return _statController == null ? null : _statController.GetStat(statId);
         }
 
         #endregion
@@ -396,7 +339,7 @@ namespace ZeroEngine.Equipment
         {
             // 使用缓存字典避免分配
             _tempSetCounts.Clear();
-            foreach (var equipment in _equippedItems.Values)
+            foreach (var equipment in Loadout.Equipped.Values)
             {
                 var set = equipment.Data.BelongsToSet;
                 if (set != null)

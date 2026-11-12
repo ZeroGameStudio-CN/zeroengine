@@ -6,6 +6,31 @@
 
 ---
 
+## 定义项与实例项
+
+同一个背包支持普通定义项和不可堆叠的实例项，不维护平行库存。
+`InventoryInstanceData(instanceId, payloadType, payloadVersion, payloadJson)` 保存稳定身份及领域载荷，
+属性只读，`Clone()` 返回独立对象。economy 只验证必要字段／版本，不解释 JSON 内的领域状态，
+也不引用角色包或保存 CLR 类型名；载荷语义与 JSON 内容由所属领域校验。
+
+- `InventorySlot.InstanceData` 非空表示实例项，`HasInstance` 可用于展示与选择；实例数量固定为 1。
+  `Set(item, amount)` 清除实例状态，`Set(item, instanceData)` 克隆状态；Clone、Swap、Sort 与移动保留实例。
+- `InventoryItemAmount(item, amount)` 表示普通定义项；`InventoryItemAmount(item, instanceData)` 表示数量为 1 的实例。
+  `CanExchangeItems`／`TryExchangeItems` 先在同一暂存背包消费，再计算产出容量。
+  实例消费必须匹配定义 ID、实例 ID 和完整载荷；重复实例、无效载荷、数量或容量不合法时无写入／事件。
+- `GetItemCount`、`HasItem`、`FindSlot`、`AddItem` 的堆叠、`RemoveItem`、普通配方与 `UseItem` 仅处理定义项，
+  不会把强化装备当作模板消耗。实例操作使用显式交换；同模板换入另一实例也会发布槽变化事件。
+- `ExportSaveData()` 仍返回 `List<InventorySlot>`，列表、槽位与实例状态均为独立快照。
+  `CanImportSaveData(IReadOnlyList<InventorySlot>)` 只读预检；先注册目标定义，再调用 `ImportSaveData(object)`。
+  导入只接受当前槽位列表，完整验证后克隆替换；未知定义、非法形状或重复实例抛出 `ArgumentException`，
+  原库存与事件不变，不把未知项置空。空列表是合法空背包；最少 10 个展示槽位在验证后补齐。
+
+```csharp
+var state = new InventoryInstanceData("owned-001", "equipment", 1, equipmentJson);
+var instance = new InventoryItemAmount(swordDefinition, state);
+bool accepted = inventory.TryExchangeItems(null, new[] { instance }, persistImmediately: false);
+```
+
 ## 目录结构
 
 ```

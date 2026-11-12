@@ -1,0 +1,18 @@
+{
+  "name": "ZeroEngine.Fishing.Tests.Editor",
+  "rootNamespace": "ZeroEngine.Fishing.Tests",
+  "references": [
+    "ZeroEngine.Fishing"
+  ],
+  "includePlatforms": [
+    "Editor"
+  ],
+  "optionalUnityReferences": [
+    "TestAssemblies"
+  ],
+  "defineConstraints": [
+    "UNITY_INCLUDE_TESTS"
+  ],
+  "autoReferenced": false,
+  "noEngineReferences": true
+}

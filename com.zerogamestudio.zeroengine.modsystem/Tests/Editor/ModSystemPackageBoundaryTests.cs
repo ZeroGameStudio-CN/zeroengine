@@ -53,56 +53,60 @@ namespace ZeroEngine.ModSystem.Tests.Editor
         [Test]
         public void LegacyAssembly_IsOnlyPlaceForBroadTypeRegistry()
         {
-            string registryPath = Path.Combine(PackageRoot, "Runtime/Legacy/ZeroEngineTypeRegistry.cs");
-            string legacyAsmdef = File.ReadAllText(Path.Combine(PackageRoot, "Runtime/Legacy/ZeroEngine.ModSystem.Legacy.asmdef"));
+            Assert.That(Directory.Exists(Path.Combine(PackageRoot, "Runtime/Legacy")), Is.False);
+            var legacyPackage = PackageInfo.GetAllRegisteredPackages()
+                .FirstOrDefault(package => package.name == "com.zerogamestudio.zeroengine");
+            if (legacyPackage == null)
+                Assert.Ignore("Legacy ownership is checked when the compatibility bundle is installed.");
+            string legacyRoot = Path.Combine(legacyPackage.resolvedPath, "Runtime/ModSystem");
+            string registryPath = Path.Combine(legacyRoot, "ZeroEngineTypeRegistry.cs");
+            string legacyAsmdef = File.ReadAllText(Path.Combine(legacyRoot, "ZeroEngine.ModSystem.asmdef"));
 
             Assert.That(File.Exists(registryPath), Is.True);
-            Assert.That(File.Exists(Path.Combine(PackageRoot, "Runtime/Legacy/ModLoader.cs")), Is.True);
-            Assert.That(File.Exists(Path.Combine(PackageRoot, "Runtime/Legacy/ModHotReloader.cs")), Is.True);
-            Assert.That(File.Exists(Path.Combine(PackageRoot, "Runtime/Legacy/ModSystemIntegration.cs")), Is.True);
-            Assert.That(File.Exists(Path.Combine(PackageRoot, "Runtime/Legacy/Scripting/LuaScriptRunner.cs")), Is.True);
-            Assert.That(File.Exists(Path.Combine(PackageRoot, "Runtime/Legacy/Scripting/ModScriptManager.cs")), Is.True);
+            Assert.That(File.Exists(Path.Combine(legacyRoot, "ModLoader.cs")), Is.True);
+            Assert.That(File.Exists(Path.Combine(legacyRoot, "ModHotReloader.cs")), Is.True);
+            Assert.That(File.Exists(Path.Combine(legacyRoot, "ModSystemIntegration.cs")), Is.True);
+            Assert.That(File.Exists(Path.Combine(legacyRoot, "Scripting/LuaScriptRunner.cs")), Is.True);
+            Assert.That(File.Exists(Path.Combine(legacyRoot, "Scripting/ModScriptManager.cs")), Is.True);
+            Assert.That(legacyAsmdef, Does.Contain("\"name\": \"ZeroEngine.ModSystem.Legacy\""));
+            Assert.That(legacyAsmdef, Does.Contain("\"ZeroEngine.ModSystem\""));
             Assert.That(legacyAsmdef, Does.Contain("ZeroEngine.Combat"));
             Assert.That(legacyAsmdef, Does.Contain("ZeroEngine.Data"));
             Assert.That(legacyAsmdef, Does.Contain("ZeroEngine.Economy"));
-            Assert.That(legacyAsmdef, Does.Contain("\"defineConstraints\""));
-            Assert.That(legacyAsmdef, Does.Contain("\"ZEROENGINE_MODSYSTEM_LEGACY\""));
         }
 
         [Test]
-        public void OldBasePackage_DoesNotKeepDuplicateRuntimeAssemblies()
+        public void InstalledLegacyBundle_DoesNotDuplicateNeutralManifestOrAssembly()
         {
-            string oldRuntimeRoot = Path.GetFullPath(Path.Combine(
-                Application.dataPath,
-                "../Packages/com.zerogamestudio.zeroengine/Runtime/ModSystem"));
-            if (!Directory.Exists(oldRuntimeRoot))
-                Assert.Pass("The legacy package is not installed, so duplicate runtime assemblies cannot be present.");
+            var legacyPackage = PackageInfo.GetAllRegisteredPackages()
+                .FirstOrDefault(package => package.name == "com.zerogamestudio.zeroengine");
+            if (legacyPackage == null)
+                Assert.Ignore("The compatibility bundle is not installed in this package-only fixture.");
+            string oldRuntimeRoot = Path.Combine(legacyPackage.resolvedPath, "Runtime/ModSystem");
 
-            string[] remainingEntries = Directory.GetFileSystemEntries(oldRuntimeRoot);
-
-            Assert.That(File.Exists(Path.Combine(oldRuntimeRoot, "ZeroEngine.ModSystem.asmdef")), Is.False);
-            Assert.That(File.Exists(Path.Combine(oldRuntimeRoot, "ModLoader.cs")), Is.False);
+            string legacyAsmdef = File.ReadAllText(Path.Combine(oldRuntimeRoot, "ZeroEngine.ModSystem.asmdef"));
+            Assert.That(legacyAsmdef, Does.Contain("\"name\": \"ZeroEngine.ModSystem.Legacy\""));
             Assert.That(File.Exists(Path.Combine(oldRuntimeRoot, "ModManifest.cs")), Is.False);
-            Assert.That(remainingEntries, Is.EquivalentTo(new[]
-            {
-                Path.Combine(oldRuntimeRoot, "README.md"),
-                Path.Combine(oldRuntimeRoot, "README.md.meta")
-            }));
+            Assert.That(typeof(ModManifest).Assembly.GetName().Name, Is.EqualTo("ZeroEngine.ModSystem"));
         }
 
         [Test]
-        public void LegacyEditorAssembly_MovedIntoStandalonePackage()
+        public void LegacyEditorAssembly_IsOwnedOnlyByCompatibilityBundle()
         {
-            string editorAsmdefPath = Path.Combine(PackageRoot, "Editor/Legacy/ZeroEngine.ModSystem.Editor.asmdef");
+            Assert.That(Directory.Exists(Path.Combine(PackageRoot, "Editor/Legacy")), Is.False);
+            var legacyPackage = PackageInfo.GetAllRegisteredPackages()
+                .FirstOrDefault(package => package.name == "com.zerogamestudio.zeroengine");
+            if (legacyPackage == null)
+                Assert.Ignore("Legacy authoring ownership requires the compatibility bundle.");
+            string legacyEditor = Path.Combine(legacyPackage.resolvedPath, "Editor/ModSystem");
+            string editorAsmdefPath = Path.Combine(legacyEditor, "ZeroEngine.ModSystem.Editor.asmdef");
             string editorAsmdef = File.ReadAllText(editorAsmdefPath);
 
-            Assert.That(File.Exists(Path.Combine(PackageRoot, "Editor/Legacy/ModCreatorWindow.cs")), Is.True);
-            Assert.That(File.Exists(Path.Combine(PackageRoot, "Editor/Legacy/ModExporter.cs")), Is.True);
-            Assert.That(File.Exists(Path.Combine(PackageRoot, "Editor/Legacy/ModValidatorWindow.cs")), Is.True);
+            Assert.That(File.Exists(Path.Combine(legacyEditor, "ModCreatorWindow.cs")), Is.True);
+            Assert.That(File.Exists(Path.Combine(legacyEditor, "ModExporter.cs")), Is.True);
+            Assert.That(File.Exists(Path.Combine(legacyEditor, "ModValidatorWindow.cs")), Is.True);
             Assert.That(editorAsmdef, Does.Contain("ZeroEngine.ModSystem"));
             Assert.That(editorAsmdef, Does.Contain("ZeroEngine.ModSystem.Legacy"));
-            Assert.That(editorAsmdef, Does.Contain("\"defineConstraints\""));
-            Assert.That(editorAsmdef, Does.Contain("\"ZEROENGINE_MODSYSTEM_LEGACY\""));
         }
 
         [Test]
@@ -129,14 +133,13 @@ namespace ZeroEngine.ModSystem.Tests.Editor
         }
 
         [Test]
-        public void PackageManifest_AllowsOnlySharedEditorUiSiblingDependency()
+        public void PackageManifest_DoesNotRequireGameplayLegacyBundleOrEditorUi()
         {
             string manifest = File.ReadAllText(Path.Combine(PackageRoot, "package.json"));
             Match dependencies = Regex.Match(
                 manifest,
                 "\\\"dependencies\\\"\\s*:\\s*\\{(?<body>[^}]*)\\}");
 
-            Assert.That(manifest, Does.Contain("\"version\": \"0.3.0\""));
             Assert.That(dependencies.Success, Is.True);
             string dependencyBody = dependencies.Groups["body"].Value;
             string[] zeroEngineDependencies = Regex.Matches(
@@ -148,10 +151,8 @@ namespace ZeroEngine.ModSystem.Tests.Editor
 
             Assert.That(
                 zeroEngineDependencies,
-                Is.EquivalentTo(new[] { "com.zerogamestudio.zeroengine.editor-ui" }));
-            Assert.That(
-                dependencyBody,
-                Does.Contain("\"com.zerogamestudio.zeroengine.editor-ui\": \"1.3.0\""));
+                Is.Empty);
+            Assert.That(dependencyBody, Does.Contain("com.unity.nuget.newtonsoft-json"));
         }
 
         [Test]

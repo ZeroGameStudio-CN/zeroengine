@@ -1,0 +1,7 @@
+{
+  "name": "ZeroEngine.Gameplay.Editor",
+  "rootNamespace": "ZeroEngine.Tutorial.Editor",
+  "references": ["ZeroEngine.Gameplay"],
+  "includePlatforms": ["Editor"],
+  "autoReferenced": true
+}

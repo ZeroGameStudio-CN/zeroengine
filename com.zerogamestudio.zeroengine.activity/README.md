@@ -33,3 +33,15 @@ Install through UPM using
 `https://github.com/ZeroGameStudio-CN/zeroengine.git?path=com.zerogamestudio.zeroengine.activity#<tested-commit>`.
 Never copy this package into a consumer's Assets folder. Run the package's
 `ZeroEngine.Activity.Tests.Editor` tests in Unity before pinning a release.
+
+## Synchronous observer read batches (1.1)
+
+`ActivityObservationSnapshot` is caller-owned reusable storage. Call
+`ActivityWorldDriver.CaptureObservers(snapshot)` at the start of a synchronous
+pure-read batch, then query `snapshot.TryGetDistance` with current participant
+positions. Capture reads live membership, enabled state, positions and influence
+radii once. Missing/invalid observers retain the existing full-activity fallback.
+
+The caller must clear/recapture after any callback or observer mutation and at the
+end of the batch. The snapshot has no frame TTL and never guarantees freshness
+across physics, gameplay or rendering phases. Do not use it to delay wake-up.

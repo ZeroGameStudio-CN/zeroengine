@@ -1,6 +1,21 @@
 # Consumer Project Setup
 
+For optional project AI guidance, install
+`com.zerogamestudio.zeroengine.ai-support` at the same tested commit and follow
+its [explicit snapshot/synchronization workflow](../com.zerogamestudio.zeroengine.ai-support/README.md).
+It uses actual registered PackageInfo and matching manifest/lock hashes, previews
+changes, and writes only the project's `.agents/skills/zeroengine` output.
+It preserves other Skills, local modifications and package pins; a version split
+or local trial remains explicitly identified rather than silently unified.
+
 This guide is for Unity projects that consume ZeroEngine packages.
+
+The [current consolidation review](packages/2026-11-10-consolidation-review.md)
+is an unpublished candidate, not an instruction to replace existing pins. P6's
+AutoBattle 1.x, Character 2.x and Data Toolkit 1.x need project migration checks
+before adopting their newer major versions. The generic Portrait Speech and
+World Shift candidates preserve their original embedded asset GUIDs; POB's own
+adapter packages and production references remain project-owned.
 
 ## Standard Source
 
@@ -38,10 +53,32 @@ you are deliberately testing a split. If Unity reports a missing
 same commit.
 
 Editor-facing packages do not transitively resolve sibling Git packages in
-Unity 2022.3. Dashboard 3.1 and Formula 0.5 consumers must therefore declare
-`com.zerogamestudio.zeroengine.editor-ui` 1.1 directly at the same tested
-commit. Legacy ZeroEngine 2.1 consumers must also declare Dashboard 3.1 at that
-commit; never mix these package versions across different Git revisions.
+Unity 2022.3. Dashboard 4.6.2 and Formula 0.6.0 consumers must therefore declare
+`com.zerogamestudio.zeroengine.editor-ui` 1.4.0 directly at the same tested
+commit. Legacy ZeroEngine 2.1.1 consumers declare editor-ui 1.3.0 directly;
+Dashboard remains optional. Never mix these package versions across different
+Git revisions.
+
+For the consolidation candidate, use the versions declared by the selected
+commit's manifests and include the full sibling closure. The legacy 3.0 bundle
+now requires the neutral ModSystem package; it retains the parser/hot-reload/Lua
+and legacy Editor implementation rather than installing a second copy. New
+projects can select the neutral package without the compatibility bundle.
+
+JSON, Tilemap, particle and other built-in modules used directly are declared by
+their owning packages. Editor Tools also declares Test Framework for its public
+test-runner tasks. Test-only prerequisites in a fixture must not substitute for
+production package dependencies.
+
+## Social package dependencies
+
+Social's gift definitions and runtime assembly require Economy as well as Core and
+Persistence. Consumers selecting Social must declare all four sibling Git packages
+at the same tested commit. The 3.0 candidate requires Economy 2.1 and Persistence
+2.1.1 for joined in-memory commits and explicit participant registration. The
+dependency declaration does not establish that a
+consumer's save and inventory integration is ready; validate those domain contracts
+before adopting the relationship runtime.
 
 ## Upgrade Flow
 
@@ -54,6 +91,15 @@ commit; never mix these package versions across different Git revisions.
 6. Run the consumer project's relevant EditMode, PlayMode, or smoke tests.
 7. Commit the consumer project's `Packages/manifest.json` and
    `Packages/packages-lock.json` if Unity updated the lock file.
+
+## Optional background capture
+
+`com.zerogamestudio.zeroengine.capture` is an independent Editor-only tool.
+Install its package path at the reviewed Git commit; it does not require ZE
+gameplay packages. Enable its `testables` entry during consumer validation.
+Projects supply camera selection and isolated gameplay scenarios; encoding and
+delivery remain external. Its README distinguishes still camera screenshots,
+fixed-step video frames, and unsupported Editor-window/audio/Player capture.
 
 ## Temporary Local Development
 
@@ -72,6 +118,21 @@ Adjust the relative path to your local checkout. Do not commit `file:`
 ZeroEngine dependencies to a shared consumer-project branch unless that branch
 is explicitly local-only. Before handoff, replace them with Git URLs pinned to
 a pushed ZeroEngine commit.
+
+## Optional native Console candidate
+
+The Console slice is a development candidate, separate from adoption of the
+frozen gameplay packages. Install `com.zerogamestudio.zeroengine.console` for the
+native kernel/Unity host and add `com.zerogamestudio.zeroengine.console.ui` for
+the independent UI. Both entries must use the same tested commit and the normal
+Git UPM URL pattern above.
+
+`com.zerogamestudio.zeroengine.console.quantum` is an optional third entry with
+the same pin; include its Console/UI siblings explicitly. It contains no vendor
+SDK or licensed prefab. Without those assets and a verified profile, Auto selects
+Native. See the [adapter setup](../com.zerogamestudio.zeroengine.console.quantum/README.md)
+for prefab/profile, CJK font and input-lease configuration. Player/IL2CPP support
+must be established by matching build evidence before production adoption.
 
 ## Troubleshooting
 

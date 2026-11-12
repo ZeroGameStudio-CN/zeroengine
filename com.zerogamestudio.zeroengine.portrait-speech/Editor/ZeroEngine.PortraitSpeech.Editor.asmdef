@@ -1,0 +1,13 @@
+{
+  "name": "ZeroEngine.PortraitSpeech.Editor",
+  "rootNamespace": "ZeroEngine.PortraitSpeech.Editor",
+  "references": [
+    "ZeroEngine.PortraitSpeech",
+    "ZeroEngine.EditorUI.Editor"
+  ],
+  "includePlatforms": [
+    "Editor"
+  ],
+  "autoReferenced": false,
+  "noEngineReferences": false
+}

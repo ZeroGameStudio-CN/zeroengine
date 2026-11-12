@@ -26,6 +26,18 @@ namespace POB.Extraction
             int expired = 0;
             foreach (var entry in profile.Ownership.Entries)
             {
+                if (entry?.Container == ExtractionInventoryContainerType.RaidContainer)
+                {
+                    bool current = ExtractionContainerInventoryService.TryFindRevealedEntry(profile,
+                        entry.ItemInstanceId, out var container, out var containerItem)
+                        && container.ContainerId == entry.LocationId;
+                    if (preserveCurrentRaid && current) continue;
+                    if (current) containerItem.State = ExtractionContainerLootEntryState.Transferred;
+                    entry.Container = ExtractionInventoryContainerType.Destroyed;
+                    entry.LocationSubtype = "expired-raid-container";
+                    expired++;
+                    continue;
+                }
                 if (entry == null || entry.Container != ExtractionInventoryContainerType.WorldPickup
                     || (preserveCurrentRaid && IsCurrentRaidItem(profile, entry.ItemInstanceId))) continue;
 

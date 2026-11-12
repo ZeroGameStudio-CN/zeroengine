@@ -1,5 +1,6 @@
 using UnityEngine;
 using ZeroEngine.Combat;
+using ZeroEngine.Utils;
 
 namespace ZeroEngine.RPG.Systems
 {
@@ -30,7 +31,7 @@ namespace ZeroEngine.RPG.Systems
 
             float newDamage = damage.BaseDamage * multiplier;
 
-            Debug.Log($"[BoostDamageProcessor] Boost Lv.{boostLevel}: {damage.BaseDamage:F1} x {multiplier:F2} = {newDamage:F1}");
+            DebugUtils.Log($"[BoostDamageProcessor] Boost Lv.{boostLevel}: {damage.BaseDamage:F1} x {multiplier:F2} = {newDamage:F1}");
 
             return damage.WithBaseDamage(newDamage);
         }

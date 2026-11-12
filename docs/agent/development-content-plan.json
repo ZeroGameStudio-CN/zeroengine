@@ -1,0 +1,348 @@
+{
+  "schemaVersion": 1,
+  "projectId": "zeroengine",
+  "currentReleaseId": "",
+  "releases": [],
+  "records": [
+    {
+      "id": "ze.character.actor-martial-state",
+      "title": "按角色独立持有的武学状态与装配",
+      "stage": "Previewable",
+      "targetReleaseId": "",
+      "availability": "TestOnly",
+      "responsibleChat": "01a14d22-2dbb-7313-a0ae-34366b9c3862",
+      "chatUrl": "",
+      "nextAction": "取得包含显式 RecipientId 的准确 ZE 新候选发布授权；P5 真实成员／奖励／NPC／磁盘保存沿同一状态合同迁移。",
+      "entrance": "受控临时 UPM 窗口加载本分支 Character 后运行 ZeroEngine.Tests.Character.MartialArtStateTests；历史窗口仅作证据，不重放。",
+      "resourcePath": "com.zerogamestudio.zeroengine.character/Runtime/MartialArts/Core/MartialArtState.cs",
+      "revision": "R38 actor state and explicit recipient candidate",
+      "releaseEvidence": "",
+      "candidatePackageVersion": "3.0.0",
+      "verificationEvidence": [
+        "D:\\Temp\\P5GrowthNpcPackages-20261105\\character-proof-v3.json",
+        "D:\\Temp\\P5GrowthNpcPackages-20261105\\package-play-proof.json",
+        "D:\\Temp\\P5GrowthNpcPackages-20261105\\p5-reward-recipient-proof.json"
+      ],
+      "relatedContent": [
+        {
+          "projectId": "p5",
+          "contentId": "p5.demo.party-growth-npc"
+        }
+      ],
+      "verificationScope": "Character 42 项包级合同与真实四角色 PlayMode 沿原输入证据；新增 Gameplay 接收者构造及目录到指定成员有 13 项 Editor＋1 项后台 PlayMode，0 失败。均为受控候选，不证明 P5 普通 Demo 或磁盘 Continue。"
+    },
+    {
+      "id": "ze.social.transactional-relationship",
+      "title": "关系状态、游戏时钟与原子送礼的现代化接入",
+      "stage": "Previewable",
+      "targetReleaseId": "",
+      "availability": "TestOnly",
+      "responsibleChat": "01a14d22-2dbb-7313-a0ae-34366b9c3862",
+      "chatUrl": "",
+      "nextAction": "准备并取得准确 ZE 发布授权；然后接 P5 关系／请教、上下文查询和保存消费者。",
+      "entrance": "受控临时 UPM 窗口加载本分支 Social／Economy，并启用 Social testables 后运行 ZeroEngine.Social.Tests.RelationshipStateTests；正常 P5 尚无此新版入口。",
+      "resourcePath": "com.zerogamestudio.zeroengine.social",
+      "revision": "R38 explicit-owner runtime candidate",
+      "releaseEvidence": "",
+      "candidatePackageVersion": "3.0.0",
+      "relatedContent": [
+        {
+          "projectId": "p5",
+          "contentId": "p5.demo.party-growth-npc"
+        }
+      ],
+      "supportingChanges": [
+        {
+          "package": "com.zerogamestudio.zeroengine.economy",
+          "candidatePackageVersion": "2.1.0",
+          "resourcePath": "com.zerogamestudio.zeroengine.economy/Runtime/Inventory/IInventoryExchangeParticipant.cs",
+          "validation": "9 exact native Editor cases; 0 failures; original package bytes and scene/data restored"
+        },
+        {
+          "package": "com.zerogamestudio.zeroengine.gameplay",
+          "candidatePackageVersion": "2.1.0",
+          "resourcePath": "com.zerogamestudio.zeroengine.gameplay/Runtime/Interaction/Core/IInteractionRelationshipQuery.cs",
+          "validation": "9 exact native Editor cases; 0 failures; exact original package/testable/data restoration"
+        }
+      ],
+      "verificationEvidence": [
+        "D:\\Temp\\P5GrowthNpcPackages-20261105\\social-proof.json",
+        "D:\\Temp\\P5GrowthNpcPackages-20261105\\economy-proof.json",
+        "D:\\Temp\\P5GrowthNpcPackages-20261105\\gameplay-proof.json",
+        "D:\\Temp\\P5GrowthNpcPackages-20261105\\package-play-proof.json"
+      ],
+      "verificationScope": "Social 21、Economy 9、Gameplay 9 项原生规则，以及关系宿主真实 PlayMode 送礼／日历／保存参与者／销毁流程；临时输入均已归还，P5 玩家流程待接入。"
+    },
+    {
+      "id": "tool.development-content",
+      "title": "开发内容与版本计划",
+      "stage": "Ready",
+      "targetReleaseId": "",
+      "availability": "InternalOnly",
+      "nextAction": "在 P5 工作台验证 Git 包接入及清单扩展字段保存。",
+      "entrance": "Unity 工作台中的开发内容面板",
+      "resourcePath": "com.zerogamestudio.zeroengine.development-content/README.md",
+      "revision": "1.1.0",
+      "verificationEvidence": [
+        "Unity 6000.6.4f1，P5 Editor UI 基线，16 项包内测试与 3 项草稿复测无失败。"
+      ]
+    },
+    {
+      "id": "ze.data.statid-normalization",
+      "title": "StatId 规范化的兼容性与分配优化",
+      "stage": "Previewable",
+      "targetReleaseId": "",
+      "availability": "DevelopmentOnly",
+      "responsibleChat": "01a14d22-2dbb-7313-a0ae-34366b9c3862",
+      "chatUrl": "",
+      "nextAction": "P5 已采用统一固定 Git 图；保留旧序列化与旧构造入口。后续按真实消费者增量优化，用户版本发行仍沿消费项目。",
+      "entrance": "隔离消费者运行 BuffHandlerStatIdTests 与 P5 CharacterStatsTests。",
+      "resourcePath": "com.zerogamestudio.zeroengine.data/Runtime/StatSystem/StatId.cs",
+      "revision": "StatId canonical ASCII reuse candidate",
+      "releaseEvidence": "Reviewed Git source publication: https://github.com/ZeroGameStudio-CN/zeroengine/commit/10bbc665a5d017be8f87a28cc1eb69dfd77fe8df",
+      "candidatePackageVersion": "2.0.1",
+      "verificationEvidence": [
+        "D:\\Temp\\P5PresentationFoundation-20261107\\batch-2-statid\\consumer\\edit.xml",
+        "D:\\Temp\\P5PresentationFoundation-20261107\\batch-2-statid\\consumer-proof.json",
+        "D:\\Temp\\P5PresentationFoundation-20261107\\batch-2-statid\\restoration.json",
+        "D:\\Temp\\P5PresentationFoundation-20261107\\batch-2-statid\\reused-performance-evidence.json",
+        "D:\\Temp\\P5PresentationFoundation-20261107\\batch-2-statid\\review.md",
+        "D:\\Temp\\P5PresentationFoundation-20261107\\ze-publication.json",
+        "D:\\Temp\\P5PresentationFoundation-20261107\\p5-package-adoption\\adoption-proof.json",
+        "D:\\Temp\\P5PresentationFoundation-20261107\\p5-package-adoption\\pinned-edit-warm\\edit.xml"
+      ],
+      "relatedContent": [
+        {
+          "projectId": "p5",
+          "contentId": "p5.demo.shared-rpg-performance"
+        }
+      ],
+      "verificationScope": "11 项包内标识／Buff 与 6 项 P5 属性合同；保留旧序列化、空白及 Unicode 规范化语义。既有实际探索／战斗分配对照仅在源码散列一致的范围内复用。临时包输入已归还，尚未发布或生产采用。"
+    },
+    {
+      "id": "tool.data-toolkit.explicit-types",
+      "title": "原生配置类型登记与隔离发现",
+      "stage": "Previewable",
+      "targetReleaseId": "",
+      "availability": "EditorOnly",
+      "responsibleChat": "01a14d22-2dbb-7313-a0ae-34366b9c3862",
+      "chatUrl": "",
+      "nextAction": "P5 已采用统一固定 Git 图；保留旧序列化与旧构造入口。后续按真实消费者增量优化，用户版本发行仍沿消费项目。",
+      "entrance": "隔离消费者运行 DataToolkitDiagnosticsTests、UI 文案合同及 P5 DataToolkitDiscoveryTests 的无焦点用例。",
+      "resourcePath": "com.zerogamestudio.zeroengine.data-toolkit/Editor/Settings/DataToolkitProjectSettings.cs",
+      "revision": "Editor-only additional types and scoped asset cache candidate",
+      "releaseEvidence": "Reviewed Git source publication: https://github.com/ZeroGameStudio-CN/zeroengine/commit/10bbc665a5d017be8f87a28cc1eb69dfd77fe8df",
+      "candidatePackageVersion": "2.2.0",
+      "verificationEvidence": [
+        "D:\\Temp\\P5PresentationFoundation-20261107\\batch-3-authoring\\refined\\edit.xml",
+        "D:\\Temp\\P5PresentationFoundation-20261107\\batch-3-authoring\\consumer-proof.json",
+        "D:\\Temp\\P5PresentationFoundation-20261107\\batch-3-authoring\\restoration.json",
+        "D:\\Temp\\P5PresentationFoundation-20261107\\batch-3-authoring\\toolkit-scope.json",
+        "D:\\Temp\\P5PresentationFoundation-20261107\\batch-3-authoring\\p5-scope.json",
+        "D:\\Temp\\P5PresentationFoundation-20261107\\batch-3-authoring\\review.md",
+        "D:\\Temp\\P5PresentationFoundation-20261107\\batch-3-authoring\\refined-v2\\edit.xml",
+        "D:\\Temp\\P5PresentationFoundation-20261107\\batch-3-authoring\\refined-v2\\source-scope.json",
+        "D:\\Temp\\P5PresentationFoundation-20261107\\ze-publication.json",
+        "D:\\Temp\\P5PresentationFoundation-20261107\\p5-package-adoption\\adoption-proof.json",
+        "D:\\Temp\\P5PresentationFoundation-20261107\\p5-package-adoption\\pinned-edit-warm\\edit.xml"
+      ],
+      "relatedContent": [
+        {
+          "projectId": "p5",
+          "contentId": "p5.demo.shared-rpg-performance"
+        }
+      ],
+      "verificationScope": "19 项原生 EditMode 合同覆盖显式／旧特性发现、旧构造入口、原生 Inspector 诊断、配置缓存隔离、隐藏嵌入视图刷新及 P5 演出配置。未打开或置前窗口；未核对渲染面板或真实配置替换。P5 适配和包输入已归还，尚未发布或生产采用。 缓存以配置弱键持有；19 项结果已绑定最终源码散列并在 refined-v2 原生复核。"
+    },
+    {
+      "id": "ze.packages.pob-p5-convergence",
+      "title": "POB 与 P5 共用包能力收敛",
+      "stage": "Previewable",
+      "targetReleaseId": "",
+      "availability": "DevelopmentOnly",
+      "responsibleChat": "01a14d22-2dbb-7313-a0ae-34366b9c3862",
+      "nextAction": "已发布并由 P5 的统一固定 Git 图采用；后续按真实消费者增量维护，不改变开放中的玩法细节。",
+      "entrance": "P5 私有隔离工程中的包内原生合同、指定 NPC 临时参战与实际对话流程。",
+      "resourcePath": "com.zerogamestudio.zeroengine.data/README.md",
+      "revision": "Data 2.2.0；Narrative 3.1.0；Achievement 1.0.0；Project Atlas 1.2.0；Dashboard 4.7.0 项目归属修补。 Published 1b9c28cc.",
+      "releaseEvidence": "Reviewed Git package publication: https://github.com/ZeroGameStudio-CN/zeroengine/commit/1b9c28ccf344db7f37b2aab25e964a3fd40c9887",
+      "verificationEvidence": [
+        "D:\\Temp\\P5PobUiPackageAlignment-20261107\\ze-candidate\\native-results\\data\\results.xml",
+        "D:\\Temp\\P5PobUiPackageAlignment-20261107\\ze-candidate\\native-results\\dashboard\\results.xml",
+        "D:\\Temp\\P5PobUiPackageAlignment-20261107\\ze-candidate\\native-results\\atlas-initial\\results.xml",
+        "D:\\Temp\\P5PobUiPackageAlignment-20261107\\ze-candidate\\native-results\\narrative-ordinary\\results.xml",
+        "D:\\Temp\\P5PobUiPackageAlignment-20261107\\ze-candidate\\native-results\\narrative-async\\results.xml",
+        "D:\\Temp\\P5PobUiPackageAlignment-20261107\\ze-candidate\\native-results\\play\\results.xml",
+        "D:\\Temp\\P5PobUiPackageAlignment-20261107\\ze-candidate\\native-results\\narrative-play\\results.xml",
+        "D:\\Temp\\P5PobUiPackageAlignment-20261107\\ze-candidate\\retained-contracts.json",
+        "D:/Temp/P5PobUiPackageAlignment-20261107/pinned-adoption/source-proof.json",
+        "D:/Temp/P5PobUiPackageAlignment-20261107/pinned-adoption/native-results/edit/results.xml",
+        "D:/Temp/P5PobUiPackageAlignment-20261107/startup-ui/flow-r6/play.xml"
+      ],
+      "verificationScope": "Data 与 P5 属性 53 项、Dashboard 增量 6 项；Atlas 包内 38 项与最终 P5 四项；Narrative／Achievement 与原 Quest 服务 60 项及上传队列 4 项。指定 NPC 与对话各一项真实 Play Mode。首次 Atlas 索引过期已由作者生成器更新，最终新直接包图覆盖与新鲜度成功。仅 Editor／Play Mode；未发布、未作 Player 或内容构建。 发布后 P5 35 包均为 Git，manifest／lock 同一提交，88 份改变且会进入 UPM 的包文件逐项匹配；正式图额外 12 项原生身份／Atlas／初始化与一次后台启动返回有成功结果。",
+      "candidatePackageVersions": {
+        "data": "2.2.0",
+        "narrative": "3.1.0",
+        "achievement": "1.0.0",
+        "project-atlas": "1.2.0",
+        "dashboard": "4.7.0"
+      },
+      "relatedContent": [
+        {
+          "projectId": "p5",
+          "contentId": "tool.p5.package-alignment-pob"
+        }
+      ]
+    },
+    {
+      "id": "ze.maintenance.package-consolidation",
+      "title": "ZE 全库包审查与整理（先于原生指令）",
+      "stage": "Previewable",
+      "targetReleaseId": "",
+      "availability": "InternalOnly",
+      "responsibleChat": "",
+      "chatUrl": "",
+      "nextAction": "G3 源码基线冻结于 8441097；统一指令进入 ze.console.native 的 G4 纵向样片。消费者正式采用、P6 major 迁移、商业 SDK 运行及 Player 检查保持各自明确范围。",
+      "entrance": "docs/specs/2026-11-10-package-consolidation.md",
+      "resourcePath": "Tools/Packages/audit_packages.py",
+      "revision": "57 个通用源包及 POB 的 3 个项目接线包均有处置记录。候选保留 POB／P5 与 P6 独立合同，清理 ModSystem／成就重复。Core／Data 2.2.2 补齐最小 UI 依赖和 POB 已采用的排序缓存、批量复制合同。工具 17 项、全 57 包静态审查无发现；Config、Render、Data、持久化、Analytics、Extraction、反馈、教程、工具导航及生命周期均有匹配的局部原生证据。POB 51 与 P5 53 个直接生产消费程序集有冻结输入的 API 编译证据，POB 最初缺失的 Stat 合同已补回并复核。源码提交与草稿 PR 不代表采用或发布。 G3 基线 8441097：六种 Unity CI 安装组合及包质量作业均成功；22 包同一固定 Git 图、Activity 原生最终用例和实际调用者局部回归已建立。",
+      "releaseEvidence": "",
+      "verificationEvidence": [
+        "D:/CodexArtifacts/ze-package-audit-20261110/first-batch-health.json",
+        "D:/CodexArtifacts/ze-package-audit-20261110/integration-plan.json",
+        "D:/CodexArtifacts/ze-package-audit-20261110/legacy-consolidation-receipt.json",
+        "D:/CodexArtifacts/ze-package-audit-20261110/current-health.json",
+        "D:/CodexArtifacts/ze-package-audit-20261110/native-config-final-result.json",
+        "D:/CodexArtifacts/ze-package-audit-20261110/native-render-editor-result.json",
+        "D:/CodexArtifacts/ze-package-audit-20261110/render-cap-v2-playmode-result.json",
+        "D:/CodexArtifacts/ze-package-audit-20261110/consumer-source-coverage.json",
+        "D:/CodexArtifacts/ze-package-audit-20261110/ci-project-selection-verification.json",
+        "D:/CodexArtifacts/ze-package-audit-20261110/neutral-data-contracts-result.json",
+        "D:/CodexArtifacts/ze-package-audit-20261110/neutral-persistence-async-result.json",
+        "D:/CodexArtifacts/ze-package-audit-20261110/neutral-repaired-cases-result.json",
+        "D:/CodexArtifacts/ze-package-audit-20261110/neutral-core-play-result.json",
+        "D:/CodexArtifacts/ze-package-audit-20261110/sdk-surface-profile-results.json",
+        "D:/CodexArtifacts/ze-package-audit-20261110/native-legacy-historical-guid-proof.json",
+        "D:/CodexArtifacts/ze-package-audit-20261110/navigation-native-smoke-readback.json",
+        "D:/CodexArtifacts/ze-package-audit-20261110/ci-descriptor-lane-verification.json",
+        "D:/CodexArtifacts/ze-package-audit-20261110/runtime-analytics-result.json",
+        "D:/CodexArtifacts/ze-package-audit-20261110/runtime-extraction-result.json",
+        "D:/CodexArtifacts/ze-package-audit-20261110/runtime-feedback-result.json",
+        "D:/CodexArtifacts/ze-package-audit-20261110/runtime-tutorial-result.json",
+        "D:/CodexArtifacts/ze-package-audit-20261110/runtime-toolkit-native-result.json",
+        "D:/CodexArtifacts/ze-package-audit-20261110/runtime-tutorial-dynamic-font-result.json",
+        "D:/CodexArtifacts/ze-package-audit-20261110/runtime-feedback-play-with-font-result.json",
+        "D:/CodexArtifacts/ze-package-audit-20261110/ci-fix-focused-summary.json",
+        "D:/CodexArtifacts/ze-package-audit-20261110/consumer-compile/POB/result.json",
+        "D:/CodexArtifacts/ze-package-audit-20261110/consumer-compile/ZGSProject_5/result.json",
+        "D:/CodexArtifacts/ze-package-audit-20261110/consumer-stat-contract-integration.json",
+        "D:/CodexArtifacts/ze-package-audit-20261110/consumer-stat-contract-repair-results.json",
+        "D:/CodexArtifacts/ze-package-audit-20261110/consumer-stat-settled-test-result.json",
+        "D:/CodexArtifacts/ze-package-audit-20261110/matrix-after-close-original-request.json",
+        "D:/CodexArtifacts/ze-package-audit-20261110/pinned-candidate-native-source-proof.json",
+        "D:/CodexArtifacts/ze-package-audit-20261110/pinned-candidate-file-identity-reviewed.json",
+        "D:/CodexArtifacts/ze-package-audit-20261110/pinned-87ad6ed-native-source-proof.json",
+        "D:/CodexArtifacts/ze-package-audit-20261110/consumer-native-flow-result.json",
+        "D:/CodexArtifacts/ze-package-audit-20261110/published-rim-visual-proof.json",
+        "D:/CodexArtifacts/ze-package-audit-20261110/rim-capture-native-test-result.json",
+        "D:/CodexArtifacts/ze-package-audit-20261110/core-legacy-close-review/authorization.json",
+        "D:/CodexArtifacts/ze-package-audit-20261110/core-legacy-close-review/termination-result.json",
+        "D:/CodexArtifacts/ze-package-audit-20261110/core-legacy-close-review/original-request-after-close-status.json",
+        "D:/CodexArtifacts/ze-package-audit-20261110/activity-recorder-probe-native-result.json",
+        "D:/CodexArtifacts/ze-package-audit-20261110/pinned-8441097-native-source-proof.json",
+        "D:/CodexArtifacts/ze-package-audit-20261110/activity-final-native-result.json",
+        "D:/CodexArtifacts/ze-package-audit-20261110/activity-final-native-status.json"
+      ],
+      "verificationScope": "57 包与 17 项工具检查；POB 51／P5 53 个冻结生产消费程序集编译为辅助证据。单一临时 Editor 现加载 22 包同一固定 Git 提交；POB 实际 Stat、P5 实际属性与内存存档、对象池接线三项原生 PlayMode 成功，四份相机图已检查。Unity 2022.3 的 Core／Audio 10 项 PlayMode 和五个 EditMode 安装组合分别保留 CI 结果；最终 Activity 零分配门仍在复核，原生 ProfilerRecorder 的空操作、真实分配和 32 组零分配控制已成功。旧挂起 PID 56456 经用户准确批准后结束，原请求现 cleanupVerified=true；其他临时实例已正常关闭。临时默认存档原件与备份保留且哈希未变。全部失败原结果保留；未将 Player、商业 SDK 运行、P6 major 迁移或正式采用记为成功。 最终 CI run 42827294116 六组合均成功，Activity 最终源码的原生检查亦成功且清理确认；G3 工程验收范围见 docs/packages/2026-11-10-g3-acceptance.md。",
+      "relatedContent": [
+        {
+          "projectId": "pob",
+          "contentId": "tool.zeroengine-package-audit-console"
+        }
+      ]
+    },
+    {
+      "id": "ze.console.native",
+      "title": "ZE 原生统一指令与可选 Quantum 前端",
+      "stage": "Previewable",
+      "targetReleaseId": "",
+      "availability": "InternalOnly",
+      "responsibleChat": "01a1c66f-d77b-7b00-88d4-37f8f3df3b13",
+      "chatUrl": "codex://threads/01a1c66f-d77b-7b00-88d4-37f8f3df3b13",
+      "nextAction": "按固定 Git 提交进行内部采用；QC 2.6.7 在该 Windows IL2CPP 配置使用 Native 回退。正式发布另行决定，四份作者保留源码维持原有提交权。",
+      "entrance": "docs/specs/2026-11-10-native-console.md",
+      "resourcePath": "com.zerogamestudio.zeroengine.console/README.md",
+      "revision": "2026-11-12：G5／G6 迁移及清理已提交 POB cs19088，包引用 cs19086 固定四包 f44d946；cs19094 移除误依赖本地未提交 BasePanel 扩展的 override，147 源文件离线编译、共享基类覆写和 27 个项目接口声明核对，Editor 已加载 Debugging 与 Runtime 测试程序集。161 条目录摘要保持 b29a7ea；实际目标编译 246 程序集／模式，131 开发链接、非开发包 0 开发链接。G7 项目 Skill 已按实际 44 包同步，最后检查 current／changed[]。3060 Ti 受管 job-9daac5e4e1 在同一 f44d946 构建并运行六配置，1661 文件摘要一致；Native Mono／IL2CPP、QC Mono 与两种非开发默认保护成立，typed 工作线程派发和主／工作线程 text／typed 预取消均验证。QC IL2CPP 全零 MVID 明确 UNSUPPORTED，Native 回退及恢复成立，整轮任务保留失败。已有真实 1080p 比较录制；不据此声称物理 IME、完整 POB IL2CPP 实机或正式用户发布。",
+      "releaseEvidence": "",
+      "verificationEvidence": [
+        "D:/CodexArtifacts/ze-package-audit-20261110/console-compat-baseline/input-hashes.json",
+        "D:/CodexArtifacts/ze-package-audit-20261110/console-compat-baseline/current-command-signatures.json",
+        "D:/CodexArtifacts/ze-package-audit-20261110/console-kernel-tests/results/kernel-v2.trx",
+        "D:/CodexArtifacts/ze-package-audit-20261110/console-core-native-step-1-result.json",
+        "D:/CodexArtifacts/ze-package-audit-20261110/console-core-native-step-2-result.json",
+        "D:/CodexArtifacts/ze-package-audit-20261110/console-ui-native-step-1-result.json",
+        "D:/CodexArtifacts/ze-package-audit-20261110/console-ui-draft-precheck-v2/SdkAbsent/result.txt",
+        "D:/CodexArtifacts/ze-package-audit-20261110/console-ui-draft-precheck-v2/SdkPresent/result.txt",
+        "D:/CodexArtifacts/ze-package-audit-20261110/console-visual-native-result.json",
+        "D:/CodexArtifacts/ze-package-audit-20261110/native-console-g4.png",
+        "D:/CodexArtifacts/ze-package-audit-20261110/native-console-g4.json",
+        "D:/CodexArtifacts/ze-package-audit-20261110/takeover-g4-evidence.json",
+        "D:/CodexArtifacts/ze-package-audit-20261110/takeover-final-package-audit.json",
+        "docs/specs/2026-11-10-native-console.md",
+        "D:/CodexArtifacts/ze-package-audit-20261110/takeover-frontend-cost.json",
+        "https://github.com/ZeroGameStudio-CN/zgs-ops-workflow/commit/f1ae6c1b264afb6a29c20fba036a619fc1b4eb00",
+        "D:/CodexArtifacts/ze-package-audit-20261110/worker-runtime-source-v2/payload-plan.json",
+        "D:/CodexArtifacts/ze-package-audit-20261110/control-runtime-source-v2/payload-plan.json",
+        "D:/CodexArtifacts/ze-package-audit-20261110/takeover-trust-renewal-plan.json",
+        "https://github.com/ZeroGameStudio-CN/zgs-ops-workflow/commit/0f12279e668ac0398b191353d96297e50839a75d",
+        "D:/CodexArtifacts/ze-package-audit-20261110/takeover-ze-player-verification.json",
+        "D:/CodexArtifacts/ze-package-audit-20261110/takeover-ze-player-evidence.json",
+        "D:/CodexArtifacts/ze-package-audit-20261110/takeover-ops-type-fix-qualified.json",
+        "D:/CodexArtifacts/ze-package-audit-20261110/takeover-control-activated.json",
+        "D:/CodexArtifacts/ze-package-audit-20261110/takeover-worker-147-postinstall-status.json",
+        "D:/CodexArtifacts/ze-package-audit-20261110/takeover-composition-native-before.json",
+        "D:/CodexArtifacts/ze-package-audit-20261110/takeover-composition-quantum-before.json",
+        "D:/CodexArtifacts/ze-package-audit-20261110/takeover-composition-bound-status.json",
+        "D:/CodexArtifacts/ze-package-audit-20261110/takeover-composition-af8e6bf05a857811cd4e6844a0937f31-result.json",
+        "D:/CodexArtifacts/ze-package-audit-20261110/takeover-composition-6364b709c29a10d84846f2ef653fe2c6-result.json",
+        "D:/CodexArtifacts/ze-package-audit-20261110/takeover-composition-verification.json",
+        "D:/CodexArtifacts/ze-package-audit-20261110/takeover-cli-player-verification.json",
+        "D:/CodexArtifacts/ze-package-audit-20261110/takeover-cli-player-evidence.json",
+        "D:/CodexArtifacts/ze-package-audit-20261110/takeover-cli-source-qualified.json",
+        "D:/CodexArtifacts/ze-package-audit-20261110/takeover-cli-control-activated.json",
+        "D:/CodexArtifacts/ze-package-audit-20261110/takeover-cli-worker-install.json",
+        "D:/CodexArtifacts/ze-package-audit-20261110/takeover-cli-player-cleanup-status.json",
+        "https://github.com/ZeroGameStudio-CN/zeroengine/actions/runs/42962884292",
+        "D:/CodexArtifacts/ze-package-audit-20261110/qc-player-module-preflight.json",
+        "D:/CodexArtifacts/ze-package-audit-20261110/qc-player-metadata-status-v3.json",
+        "D:/CodexArtifacts/ze-package-audit-20261110/qc-current-69a47011ba00403bb529d188975bb96f.json",
+        "D:/CodexArtifacts/ze-package-audit-20261110/qc-current-969afe189f094fb7a3e12c70b02b896c.json",
+        "https://github.com/ZeroGameStudio-CN/zeroengine/actions/runs/42987324184",
+        "https://github.com/ZeroGameStudio-CN/zgs-ops-workflow/commit/9b415c3ad65a22189bc6b0165f1388f8dd855831",
+        "D:/CodexArtifacts/ze-package-audit-20261110/qc-artifact155-final-artifacts-verified.json",
+        "D:/CodexArtifacts/ze-package-audit-20261110/qc-artifact-live-evidence155.json",
+        "D:/CodexArtifacts/ze-package-audit-20261110/qc-artifact-index155-v2-local-gates.json",
+        "D:/CodexArtifacts/ze-package-audit-20261110/qc-artifact-worker155-live.json",
+        "D:/CodexArtifacts/ze-package-audit-20261110/g4-final-cleanup155.json",
+        "D:/CodexArtifacts/ze-package-audit-20261110/g5-roslyn-intake-current.json",
+        "D:\\CodexArtifacts\\ze-package-audit-20261110\\g11-final-artifacts157-verified.json",
+        "D:\\CodexArtifacts\\ze-package-audit-20261110\\g9-panel-baseline-fix\\submission-verified.json",
+        "D:\\CodexArtifacts\\ze-package-audit-20261110\\g9-panel-baseline-fix\\loaded-assemblies.json",
+        "D:\\CodexArtifacts\\ze-package-audit-20261110\\g9-pob-skill-final-readback.json",
+        "D:\\CodexArtifacts\\ze-package-audit-20261110\\g6-pob-console-flow-v3\\runtime\\console-native-quantum.mp4",
+        "https://github.com/ZeroGameStudio-CN/zeroengine/actions/runs/43090792069"
+      ],
+      "relatedContent": [
+        {
+          "projectId": "zeroengine",
+          "contentId": "ze.maintenance.package-consolidation"
+        },
+        {
+          "projectId": "pob",
+          "contentId": "tool.zeroengine-package-audit-console"
+        }
+      ],
+      "verificationScope": "限 Unity 6000.6.4f1 Windows／QC 2.6.7 精确指纹；QC Mono 最终链接身份一致，IL2CPP 空 MVID 不放宽。CLI 受控组词 0 次提前调用、确认后 1 次；新增 typed 派发与四种预取消组合在真实开发 Player 成立。POB 迁移、目标元数据、PlayMode 比较、44 包 Skill 同步分别有证据；不代表物理系统 IME、正式 POB IL2CPP 包或用户发布。"
+    }
+  ]
+}

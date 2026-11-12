@@ -1,0 +1,21 @@
+{
+  "name": "ZeroEngine.WorldShift.Tests.Editor",
+  "rootNamespace": "ZeroEngine.WorldShift.Tests.Editor",
+  "references": [
+    "ZeroEngine.WorldShift"
+  ],
+  "includePlatforms": [
+    "Editor"
+  ],
+  "excludePlatforms": [],
+  "allowUnsafeCode": false,
+  "overrideReferences": false,
+  "precompiledReferences": [],
+  "autoReferenced": true,
+  "defineConstraints": [],
+  "versionDefines": [],
+  "noEngineReferences": false,
+  "optionalUnityReferences": [
+    "TestAssemblies"
+  ]
+}

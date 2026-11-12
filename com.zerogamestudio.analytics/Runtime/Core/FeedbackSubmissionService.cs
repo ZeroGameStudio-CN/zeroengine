@@ -12,15 +12,35 @@ namespace ZGS.Analytics
         private static bool _queueEventSubscribed;
 
         public static event Action<FeedbackUploadCompletion> UploadSucceeded;
+        public static event Action<FeedbackUploadFailure> UploadFailed;
+
+        public static event Action<FeedbackSubmissionStatus> StatusChanged
+        {
+            add => FeedbackUploadQueue.SubmissionStateChanged += value;
+            remove => FeedbackUploadQueue.SubmissionStateChanged -= value;
+        }
+
+        public static IReadOnlyList<FeedbackSubmissionStatus> GetRecentSubmissions() =>
+            FeedbackUploadQueue.GetRecentSubmissions();
+
+        public static bool RetrySubmission(string submissionId) =>
+            FeedbackUploadQueue.RetrySubmission(submissionId);
+
+        public static void MarkSuccessNotified(string submissionId) =>
+            FeedbackUploadQueue.MarkSuccessNotified(submissionId);
 
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
         private static void ResetRuntimeState()
         {
             if (_queueEventSubscribed)
+            {
                 FeedbackUploadQueue.QueuedSubmissionSucceeded -= HandleQueuedSubmissionSucceeded;
+                FeedbackUploadQueue.QueuedSubmissionFailed -= HandleQueuedSubmissionFailed;
+            }
 
             _queueEventSubscribed = false;
             UploadSucceeded = null;
+            UploadFailed = null;
         }
 
         public static IEnumerator Submit(
@@ -94,7 +114,9 @@ namespace ZGS.Analytics
                                 new FeedbackSubmissionResult(
                                     submissionId,
                                     false,
-                                    FeedbackSubmissionFailure.QueuePersistenceFailed));
+                                    FeedbackUploadQueue.IsFull
+                                        ? FeedbackSubmissionFailure.QueueFull
+                                        : FeedbackSubmissionFailure.QueuePersistenceFailed));
                         }
                         else
                         {
@@ -106,7 +128,7 @@ namespace ZGS.Analytics
                                     true,
                                     FeedbackSubmissionFailure.None));
                             LogStructuredBugReport(request, submissionId, timeline.StructuredEvents);
-                            AnalyticsLog.Log($"[FeedbackSubmission] Accepted submission {submissionId}");
+                            Debug.Log($"[FeedbackSubmission] queued submission={submissionId}");
                         }
                     }
                 }
@@ -257,6 +279,7 @@ namespace ZGS.Analytics
                 return;
 
             FeedbackUploadQueue.QueuedSubmissionSucceeded += HandleQueuedSubmissionSucceeded;
+            FeedbackUploadQueue.QueuedSubmissionFailed += HandleQueuedSubmissionFailed;
             _queueEventSubscribed = true;
         }
 
@@ -274,8 +297,23 @@ namespace ZGS.Analytics
                 }
                 catch (Exception exception)
                 {
-                    AnalyticsLog.LogWarning(
-                        $"[FeedbackSubmission] Success callback failed: {exception.GetType().Name}");
+                    Debug.LogWarning(
+                        $"[FeedbackSubmission] status_callback_failed code=F299 submission={FeedbackFailureCodes.SafeDiagnosticId(completion.SubmissionId)} stage=success reason={exception.GetType().Name}");
+                }
+            }
+        }
+
+        private static void HandleQueuedSubmissionFailed(FeedbackUploadFailure failure)
+        {
+            Action<FeedbackUploadFailure> handlers = UploadFailed;
+            if (handlers == null)
+                return;
+            foreach (Action<FeedbackUploadFailure> handler in handlers.GetInvocationList())
+            {
+                try { handler(failure); }
+                catch (Exception exception)
+                {
+                    Debug.LogWarning($"[FeedbackSubmission] status_callback_failed code={failure.FailureCode} submission={FeedbackFailureCodes.SafeDiagnosticId(failure.SubmissionId)} stage=failure reason={exception.GetType().Name}");
                 }
             }
         }
@@ -289,6 +327,8 @@ namespace ZGS.Analytics
                 return;
 
             callbackInvoked = true;
+            if (!result.AcceptedLocally)
+                Debug.LogWarning($"[FeedbackSubmission] failed code={result.FailureCode} submission={FeedbackFailureCodes.SafeDiagnosticId(result.SubmissionId)} reason={result.Failure}");
             try
             {
                 completed?.Invoke(result);

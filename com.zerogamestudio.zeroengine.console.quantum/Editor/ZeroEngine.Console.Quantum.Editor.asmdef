@@ -1,0 +1,7 @@
+{
+  "name": "ZeroEngine.Console.Quantum.Editor",
+  "rootNamespace": "ZeroEngine.Console.Quantum.Editor",
+  "references": ["ZeroEngine.Console.Quantum"],
+  "includePlatforms": ["Editor"],
+  "autoReferenced": true
+}

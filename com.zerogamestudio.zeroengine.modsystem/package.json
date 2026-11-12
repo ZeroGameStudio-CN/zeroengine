@@ -1,12 +1,12 @@
 {
   "name": "com.zerogamestudio.zeroengine.modsystem",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "displayName": "ZeroEngine ModSystem",
   "description": "Project-neutral mod discovery, management, source, Steam Workshop, and import orchestration foundation for ZeroEngine projects.",
   "unity": "2022.3",
   "dependencies": {
-    "com.zerogamestudio.zeroengine.editor-ui": "1.3.0",
-    "com.unity.nuget.newtonsoft-json": "3.2.1"
+    "com.unity.nuget.newtonsoft-json": "3.2.1",
+    "com.unity.modules.jsonserialize": "1.0.0"
   },
   "keywords": [
     "zeroengine",
@@ -18,5 +18,10 @@
     "name": "ZeroGameStudio",
     "url": "https://github.com/zerogamestudio"
   },
-  "license": "MIT"
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/ZeroGameStudio-CN/zeroengine.git",
+    "directory": "com.zerogamestudio.zeroengine.modsystem"
+  }
 }

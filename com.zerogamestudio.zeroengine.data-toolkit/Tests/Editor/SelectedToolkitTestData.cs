@@ -12,6 +12,14 @@ namespace ZGS.DataToolkit.Editor.Tests
     {
     }
 
+    public abstract class AbstractToolkitTestData : ScriptableObject
+    {
+    }
+
+    public sealed class GenericToolkitTestData<T> : ScriptableObject
+    {
+    }
+
     public sealed class ToolkitHostTestData : ScriptableObject
     {
     }

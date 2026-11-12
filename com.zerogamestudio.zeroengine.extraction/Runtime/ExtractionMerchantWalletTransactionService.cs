@@ -241,8 +241,7 @@ namespace POB.Extraction
 
             if (!ExtractionItemActionPolicyService.CanSell(definition, item)
                 || !IsSellableBaseLocation(entry)) return false;
-            long raw = (long)definition.Value * Math.Max(0, item.Quantity);
-            creditQuantity = (int)Math.Min(int.MaxValue, raw * 1 / 2);
+            creditQuantity = ExtractionSellTransactionService.GetSellQuantity(definition, item);
             return creditQuantity > 0;
         }
 

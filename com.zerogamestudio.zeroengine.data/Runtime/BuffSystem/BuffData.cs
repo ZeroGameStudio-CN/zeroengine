@@ -82,6 +82,11 @@ namespace ZeroEngine.BuffSystem
         public StatType StatType;
 
         /// <summary>
+        /// 可扩展属性 ID。非空时优先于旧的 StatType，用于项目自定义属性目录。
+        /// </summary>
+        public StatId StatId;
+
+        /// <summary>
         /// 修饰值
         /// </summary>
         public float Value;

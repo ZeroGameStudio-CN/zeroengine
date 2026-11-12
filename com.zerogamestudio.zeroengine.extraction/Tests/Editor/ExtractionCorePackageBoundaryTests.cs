@@ -22,7 +22,8 @@ namespace POB.Extraction.Core.Package.Tests.Editor
             string json = File.ReadAllText($"{PackageRoot}/package.json");
 
             StringAssert.Contains("\"name\": \"com.zerogamestudio.zeroengine.extraction\"", json);
-            StringAssert.Contains("\"version\": \"0.1.0\"", json);
+            StringAssert.IsMatch("\\\"version\\\"\\s*:\\s*\\\"[0-9]+\\.[0-9]+\\.[0-9]+(?:-[0-9A-Za-z.-]+)?\\\"", json);
+            StringAssert.Contains("\"com.unity.modules.jsonserialize\"", json);
         }
 
         [Test]

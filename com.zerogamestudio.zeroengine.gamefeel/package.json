@@ -1,0 +1,19 @@
+{
+  "name": "com.zerogamestudio.zeroengine.gamefeel",
+  "version": "0.3.0",
+  "displayName": "ZeroEngine Game Feel",
+  "description": "Reusable, allocation-free sensory coordination policies for stop, signals, peaks, audio, haptics and particles.",
+  "unity": "2022.3",
+  "dependencies": {},
+  "keywords": ["zeroengine", "gamefeel", "feedback"],
+  "author": {
+    "name": "ZeroGameStudio",
+    "url": "https://github.com/ZeroGameStudio-CN"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/ZeroGameStudio-CN/zeroengine.git",
+    "directory": "com.zerogamestudio.zeroengine.gamefeel"
+  },
+  "license": "MIT"
+}

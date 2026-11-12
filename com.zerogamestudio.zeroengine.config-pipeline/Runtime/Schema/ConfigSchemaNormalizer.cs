@@ -77,6 +77,22 @@ namespace ZeroGameStudio.ConfigPipeline
             List<ConfigDiagnostic> diagnostics,
             bool checkEnum)
         {
+            if (value is ConfigNullNode)
+            {
+                if (schema.Nullable)
+                {
+                    return value;
+                }
+
+                AddError(
+                    diagnostics,
+                    "CONFIG_NULL_NOT_ALLOWED",
+                    document,
+                    path,
+                    "Null is only allowed when x-zgs-nullable is true.");
+                return null;
+            }
+
             ConfigNode normalized;
             switch (schema.Type)
             {
@@ -315,7 +331,7 @@ namespace ZeroGameStudio.ConfigPipeline
                  !string.IsNullOrEmpty(schema.ReferencePath) ||
                  !string.IsNullOrEmpty(schema.AssetType) ||
                  schema.LocalizationKey) &&
-                (stringValue.Value.Length == 0 ||
+                ((stringValue.Value.Length == 0 && string.IsNullOrEmpty(schema.PresetType)) ||
                  !string.Equals(stringValue.Value, stringValue.Value.Trim(), StringComparison.Ordinal)))
             {
                 AddError(

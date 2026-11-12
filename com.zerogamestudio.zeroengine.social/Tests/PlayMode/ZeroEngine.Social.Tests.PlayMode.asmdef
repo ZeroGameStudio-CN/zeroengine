@@ -1,0 +1,24 @@
+{
+  "name": "ZeroEngine.Social.Tests.PlayMode",
+  "rootNamespace": "ZeroEngine.Social.Tests.PlayMode",
+  "references": [
+    "ZeroEngine.Social",
+    "ZeroEngine.Economy",
+    "ZeroEngine.Persistence",
+    "UnityEngine.TestRunner",
+    "ZeroEngine.Core"
+  ],
+  "includePlatforms": [],
+  "excludePlatforms": [],
+  "allowUnsafeCode": false,
+  "overrideReferences": true,
+  "precompiledReferences": [
+    "nunit.framework.dll"
+  ],
+  "autoReferenced": false,
+  "defineConstraints": [
+    "UNITY_INCLUDE_TESTS"
+  ],
+  "versionDefines": [],
+  "noEngineReferences": false
+}

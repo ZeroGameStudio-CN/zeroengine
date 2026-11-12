@@ -209,7 +209,9 @@ namespace ZeroEngine.Formula.Tests.Editor
                 var report = FormulaAssetScanner.ScanAsset("Assets/Test/Formula.asset", formula, profile, context);
 
                 Assert.AreEqual(1, report.WarningCount);
-                StringAssert.Contains("缺少目录信息", report.Issues.Single().Message);
+                Assert.AreEqual(FormulaAssetScanSeverity.Warning, report.Issues.Single().Severity);
+                Assert.AreEqual("Assets/Test/Formula.asset", report.Issues.Single().AssetPath);
+                StringAssert.Contains("目录资料待补全", report.Issues.Single().Message);
             }
             finally
             {

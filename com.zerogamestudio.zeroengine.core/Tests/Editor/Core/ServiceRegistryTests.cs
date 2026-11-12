@@ -1,5 +1,8 @@
 using System;
+using System.Linq;
+using System.Reflection;
 using NUnit.Framework;
+using UnityEngine;
 
 namespace ZeroEngine.Core.Tests
 {
@@ -118,6 +121,32 @@ namespace ZeroEngine.Core.Tests
         public void OverrideForTests_NullService_ThrowsArgumentNullException()
         {
             Assert.Throws<ArgumentNullException>(() => ServiceRegistry.OverrideForTests<ITestService>(null));
+        }
+
+        [Test]
+        public void SubsystemRegistrationReset_HasTheRequiredUnityLoadHook()
+        {
+            var reset = typeof(ServiceRegistry).GetMethod(
+                "ResetForSubsystemRegistration",
+                BindingFlags.NonPublic | BindingFlags.Static);
+
+            Assert.That(reset, Is.Not.Null);
+            var attribute = reset.GetCustomAttributes<RuntimeInitializeOnLoadMethodAttribute>(false).Single();
+            Assert.That(attribute.loadType, Is.EqualTo(RuntimeInitializeLoadType.SubsystemRegistration));
+        }
+
+        [Test]
+        public void SubsystemRegistrationReset_ClearsStaleRegistrations()
+        {
+            var service = new TestService("stale");
+            ServiceRegistry.Register<ITestService>(service);
+            var reset = typeof(ServiceRegistry).GetMethod(
+                "ResetForSubsystemRegistration",
+                BindingFlags.NonPublic | BindingFlags.Static);
+
+            reset.Invoke(null, null);
+
+            Assert.That(ServiceRegistry.ResolveOrNull<ITestService>(), Is.Null);
         }
 
         private interface ITestService

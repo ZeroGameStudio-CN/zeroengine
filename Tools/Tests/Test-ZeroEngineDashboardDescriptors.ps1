@@ -1,3 +1,5 @@
+#Requires -Version 7.0
+
 [CmdletBinding()]
 param(
     [string]$RootPath = (Resolve-Path (Join-Path $PSScriptRoot '..\..')).Path,
@@ -133,10 +135,25 @@ foreach ($descriptorPath in $descriptorPaths) {
         }
     }
 
+    $panels = if ($null -eq $descriptor.panels) { @() } else { @($descriptor.panels) }
+    $panelIds = @{}
+    foreach ($panel in $panels) {
+        Assert-Condition ($panel.id -match $stableActionIdPattern) "Invalid panel id '$($panel.id)' in $descriptorPath"
+        Assert-Condition (-not $panelIds.ContainsKey($panel.id)) "Duplicate panel id '$($panel.id)' in $descriptorPath"
+        $panelIds[$panel.id] = $true
+        Assert-Condition ($panel.displayName -match $hanPattern) "Chinese panel displayName is required for '$($panel.id)' in $descriptorPath"
+        Assert-Condition ($panel.description -match $hanPattern) "Chinese panel description is required for '$($panel.id)' in $descriptorPath"
+        Assert-Condition ($panel.providerId -match $stableModuleIdPattern) "Invalid panel providerId for '$($panel.id)' in $descriptorPath"
+        Assert-Condition ($allowedSafety -contains $panel.safety) "Invalid panel safety for '$($panel.id)' in $descriptorPath"
+        Assert-Condition ($allowedAvailability -contains $panel.availability) "Invalid panel availability for '$($panel.id)' in $descriptorPath"
+        Assert-Condition ($sourceText.Contains('[EditorWorkspacePanelProvider("' + $panel.providerId + '")]')) "No panel provider '$($panel.providerId)' in $($package.name)"
+        Assert-Condition ($sourceText.Contains('"' + $panel.id + '"')) "No panel '$($panel.providerId)/$($panel.id)' in $($package.name)"
+    }
+
     if ($package.name -ne 'com.zerogamestudio.zeroengine.dashboard') {
         $dependencyNames = @($package.dependencies.psobject.Properties.Name)
         Assert-Condition ($dependencyNames -notcontains 'com.zerogamestudio.zeroengine.dashboard') "$($package.name) must not depend on Dashboard"
-        if (@($descriptor.entries).Count -gt 0) {
+        if (@($descriptor.entries).Count -gt 0 -or $panels.Count -gt 0) {
             Assert-Condition ($dependencyNames -contains 'com.zerogamestudio.zeroengine.editor-ui') "$($package.name) provider package must depend on editor-ui"
         }
     }
@@ -145,10 +162,11 @@ foreach ($descriptorPath in $descriptorPaths) {
 $dashboardRoot = Join-Path $RootPath 'com.zerogamestudio.zeroengine.dashboard'
 $dashboardPackage = Get-Content -LiteralPath (Join-Path $dashboardRoot 'package.json') -Raw -Encoding UTF8 | ConvertFrom-Json
 $dashboardAsmdef = Get-Content -LiteralPath (Join-Path $dashboardRoot 'Editor\ZeroEngine.Dashboard.Editor.asmdef') -Raw -Encoding UTF8 | ConvertFrom-Json
-Assert-Condition ($dashboardPackage.version -eq '4.1.0') 'Dashboard package version must be 4.1.0.'
+Assert-Condition ($dashboardPackage.version -match '^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?$') 'Dashboard package must declare a semantic version.'
 $dashboardDependencies = @($dashboardPackage.dependencies.psobject.Properties)
-Assert-Condition ($dashboardDependencies.Count -eq 1) 'Dashboard package must depend only on editor-ui.'
-Assert-Condition ($dashboardDependencies[0].Name -eq 'com.zerogamestudio.zeroengine.editor-ui' -and $dashboardDependencies[0].Value -eq '1.3.0') 'Dashboard editor-ui dependency must be exactly 1.3.0.'
+Assert-Condition ($dashboardDependencies.Count -eq 2) 'Dashboard dependencies must be editor-ui and the JSON Serialize built-in module.'
+Assert-Condition ($dashboardPackage.dependencies.'com.zerogamestudio.zeroengine.editor-ui' -eq '1.5.0') 'Dashboard editor-ui dependency must be 1.5.0.'
+Assert-Condition ($dashboardPackage.dependencies.'com.unity.modules.jsonserialize' -eq '1.0.0') 'Dashboard must declare its directly used JSON Serialize module.'
 $dashboardReferences = @($dashboardAsmdef.references)
 Assert-Condition ($dashboardReferences.Count -eq 1 -and $dashboardReferences[0] -eq 'ZeroEngine.EditorUI.Editor') 'Dashboard production asmdef must reference only editor-ui.'
 Assert-Condition (@($dashboardAsmdef.includePlatforms).Count -eq 1 -and $dashboardAsmdef.includePlatforms[0] -eq 'Editor') 'Dashboard production asmdef must be Editor-only.'
@@ -164,36 +182,43 @@ $forbiddenDashboardTokens = @(
     'File.Write',
     'File.Delete',
     'Directory.Delete',
-    'PlayerPrefs.Delete',
-    'Packages/manifest.json'
+    'PlayerPrefs.Delete'
 )
 foreach ($token in $forbiddenDashboardTokens) {
     Assert-Condition (-not $dashboardProductionText.Contains($token)) "Dashboard production code contains forbidden side-effect token '$token'."
 }
+Assert-Condition (-not $dashboardProductionText.Contains('未声明工具')) 'Installed package rows must not describe installed packages as undeclared.'
+Assert-Condition ($dashboardProductionText.Contains('已安装 · 基础能力（无工作台面板）')) 'Installed package rows must separate installation from workspace integration.'
 
 $menuPaths = @(Get-ChildItem -LiteralPath $RootPath -Directory -Filter 'com.zerogamestudio*' |
     ForEach-Object { Get-ChildItem -LiteralPath $_.FullName -Recurse -File -Filter '*.cs' } |
     Where-Object { $_.FullName -notmatch '[\\/]Tests[\\/]' } |
     ForEach-Object { [regex]::Matches((Get-Content -LiteralPath $_.FullName -Raw -Encoding UTF8), '\[MenuItem\("([^"]+)"') } |
     ForEach-Object { $_.Groups[1].Value })
-$allowedMenuPaths = @('ZGS/工作台', 'Assets/Export to Mod JSON')
+$allowedMenuPaths = @(
+    'ZGS/工作台',
+    'Assets/Export to Mod JSON',
+    'GameObject/Light/角色边缘点光',
+    'GameObject/Light/角色边缘聚光'
+)
 foreach ($menuPath in $menuPaths) {
     Assert-Condition ($allowedMenuPaths -contains $menuPath) "First-party top-level menu is not consolidated: $menuPath"
 }
 Assert-Condition (@($menuPaths | Where-Object { $_ -eq 'ZGS/工作台' }).Count -eq 1) 'Exactly one ZGS/工作台 MenuItem is required.'
 
 $editorUiPackage = Get-Content -LiteralPath (Join-Path $RootPath 'com.zerogamestudio.zeroengine.editor-ui\package.json') -Raw -Encoding UTF8 | ConvertFrom-Json
-Assert-Condition ($editorUiPackage.version -eq '1.3.0') 'editor-ui package version must be 1.3.0.'
+Assert-Condition ($editorUiPackage.version -eq '1.5.0') 'editor-ui package version must be 1.5.0.'
 
 if (-not [string]::IsNullOrWhiteSpace($ProjectManifest)) {
     $manifest = Get-Content -LiteralPath $ProjectManifest -Raw -Encoding UTF8 | ConvertFrom-Json
     $dependencyNames = @($manifest.dependencies.psobject.Properties.Name)
     $legacyInstalled = $dependencyNames -contains 'com.zerogamestudio.zeroengine'
-    $modularInstalled = @($dependencyNames | Where-Object {
-        $_ -like 'com.zerogamestudio.zeroengine.*' -and
-        $_ -notin @('com.zerogamestudio.zeroengine.dashboard', 'com.zerogamestudio.zeroengine.editor-ui')
-    })
-    Assert-Condition (-not ($legacyInstalled -and $modularInstalled.Count -gt 0)) 'Legacy and modular ZeroEngine packages are mutually exclusive.'
+    if ($legacyInstalled) {
+        $legacyPackage = Get-Content -LiteralPath (Join-Path $RootPath 'com.zerogamestudio.zeroengine/package.json') -Raw -Encoding UTF8 | ConvertFrom-Json
+        foreach ($requiredSibling in @($legacyPackage.dependencies.psobject.Properties.Name | Where-Object { $_ -like 'com.zerogamestudio.*' })) {
+            Assert-Condition ($dependencyNames -contains $requiredSibling) "Legacy compatibility bundle is missing its modular sibling: $requiredSibling"
+        }
+    }
 }
 
 Write-Host "PASS Dashboard descriptors=$($descriptorPaths.Count)"

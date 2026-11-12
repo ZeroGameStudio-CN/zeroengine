@@ -13,7 +13,7 @@
 输入管理包。
 
 ## 版本
-- **当前版本**: 2.0.0
+- **当前版本**: 2.1.1（整合候选，尚未发布）
 - **依赖**: ZeroEngine.Core, Unity Input System
 
 ## 包含模块
@@ -36,3 +36,11 @@ var device = InputManager.Instance.CurrentDevice;
 // 重绑定
 InputManager.Instance.StartRebind("Jump", callback);
 ```
+
+
+## Consolidation dependency correction
+
+The 2.1.1 consolidation candidate explicitly declares Unity's built-in
+JSON Serialize module (`com.unity.modules.jsonserialize`) for this package's
+direct `JsonUtility` calls. Consumers no longer need an unrelated installed
+package to supply that module. This candidate is not a published release.

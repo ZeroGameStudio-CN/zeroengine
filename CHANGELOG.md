@@ -5,10 +5,41 @@ tracked in each package's `package.json`.
 
 ## Unreleased
 
+- UI 2.3.0 adds the project-neutral `MVVMViewBase<TViewModel>` integration with
+  managed UIView lifecycle; product-specific view models and events stay in consumers.
+- EditorTools 1.1.0 adds exact-file byte snapshots with opt-in parent recreation,
+  unchanged-file preservation and explicit rollback verification. AssetDatabase,
+  scene/Undo and write-authority policies remain with the authoring owner.
+
 - Added root project documentation.
 - Added contribution, support, and security guidance.
 - Added MIT licensing.
 - Normalized package repository metadata for UPM Git dependencies.
+
+## com.zerogamestudio.zeroengine.config-pipeline 2.2.0
+
+- Add generation-time typed presets, explicit collection replacement,
+  nullable/empty Excel tokens, and complete per-field source provenance.
+
+## com.zerogamestudio.zeroengine.narrative 2.1.0
+
+- Add an instance-owned, sequenced quest completion transition event that survives legacy `EventManager.Clear()` while preserving the legacy completion event.
+
+## com.zerogamestudio.zeroengine.narrative 2.0.2
+
+- Snapshot active quest runtimes at condition-event boundaries so auto-submit removal cannot skip adjacent quests and newly accepted quests cannot consume an earlier broadcast.
+
+## com.zerogamestudio.zeroengine.ui 2.2.1
+
+- Suppress prefab-load failure diagnostics for asynchronous view requests invalidated by manager or session teardown.
+
+## com.zerogamestudio.zeroengine.core 2.2.0
+
+- Add injectable log channels, immutable entries, level filtering, and the Unity log sink while preserving the existing `ZeroLog` API and format.
+
+## com.zerogamestudio.zeroengine.core 2.1.0
+
+- Reset registered services during Unity subsystem registration so stale scene instances cannot survive Play Mode entry when Domain Reload is disabled.
 
 ## com.zerogamestudio.analytics 1.6.1
 

@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using UnityEngine;
+using ZeroEngine.BuffSystem;
 
 namespace ZeroEngine.StatSystem
 {
@@ -22,7 +23,7 @@ namespace ZeroEngine.StatSystem
         }
     }
 
-    public class StatController : MonoBehaviour, IStatProvider
+    public class StatController : MonoBehaviour, IStatProvider, IBuffStatTarget
     {
         [SerializeField] private Dictionary<StatType, Stat> _stats = new Dictionary<StatType, Stat>();
 
@@ -82,10 +83,20 @@ namespace ZeroEngine.StatSystem
             return null;
         }
 
+        public Stat GetStat(StatId statId)
+        {
+            return StatId.TryParseStatType(statId, out var statType) ? GetStat(statType) : null;
+        }
+
         public float GetStatValue(StatType type)
         {
             if (_stats.TryGetValue(type, out var stat)) return stat.Value;
             return 0;
+        }
+
+        public float GetStatValue(StatId statId)
+        {
+            return StatId.TryParseStatType(statId, out var statType) ? GetStatValue(statType) : 0f;
         }
 
         public void AddModifier(StatType type, StatModifier mod)
@@ -99,11 +110,27 @@ namespace ZeroEngine.StatSystem
             _stats[type].AddModifier(mod);
         }
 
+        public void AddModifier(StatId statId, StatModifier mod)
+        {
+            if (StatId.TryParseStatType(statId, out var statType))
+            {
+                AddModifier(statType, mod);
+            }
+        }
+
         public void RemoveModifier(StatType type, StatModifier mod)
         {
             if (_stats.TryGetValue(type, out var stat))
             {
                 stat.RemoveModifier(mod);
+            }
+        }
+
+        public void RemoveModifier(StatId statId, StatModifier mod)
+        {
+            if (StatId.TryParseStatType(statId, out var statType))
+            {
+                RemoveModifier(statType, mod);
             }
         }
 

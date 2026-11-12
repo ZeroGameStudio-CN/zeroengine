@@ -1,0 +1,6 @@
+{
+  "name": "ZeroEngine.Console.Quantum",
+  "rootNamespace": "ZeroEngine.Console.Quantum",
+  "references": ["ZeroEngine.Console.Core", "ZeroEngine.Console.Unity", "ZeroEngine.Console.UI", "UnityEngine.UI"],
+  "autoReferenced": true
+}

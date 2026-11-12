@@ -13,6 +13,7 @@ namespace ZeroGameStudio.ConfigPipeline.Editor
         Apply,
         Compile,
         ExportCandidate,
+        RefreshCandidate,
         UpgradeCandidate
     }
 
@@ -23,6 +24,7 @@ namespace ZeroGameStudio.ConfigPipeline.Editor
             string configSetId,
             bool success,
             bool current,
+            string planId,
             string summary,
             byte[] machineJson)
         {
@@ -30,6 +32,7 @@ namespace ZeroGameStudio.ConfigPipeline.Editor
             ConfigSetId = configSetId;
             Success = success;
             Current = current;
+            PlanId = planId;
             Summary = summary;
             MachineJson = machineJson;
         }
@@ -38,6 +41,7 @@ namespace ZeroGameStudio.ConfigPipeline.Editor
         public string ConfigSetId { get; }
         public bool Success { get; }
         public bool Current { get; }
+        public string PlanId { get; }
         public string Summary { get; }
         public byte[] MachineJson { get; }
     }
@@ -58,13 +62,15 @@ namespace ZeroGameStudio.ConfigPipeline.Editor
             ConfigPipelinePreparedPlan prepared = null;
             bool current;
             string detail;
+            string planId = null;
             switch (mode)
             {
                 case ConfigPipelineMode.Plan:
                     prepared = service.Plan(
                         projectRoot, profileRelativePath, configSetId, packageIdentity);
                     current = prepared.Plan.IsCurrent;
-                    detail = prepared.Plan.PlanId + ":" + prepared.ValueDiffs.Count + " field changes";
+                    planId = prepared.Plan.PlanId;
+                    detail = planId + ":" + prepared.ValueDiffs.Count + " field changes";
                     break;
                 case ConfigPipelineMode.Check:
                     current = service.Check(projectRoot, profileRelativePath, configSetId, packageIdentity);
@@ -75,7 +81,8 @@ namespace ZeroGameStudio.ConfigPipeline.Editor
                     ConfigApplyResult applied = service.Apply(
                         projectRoot, profileRelativePath, configSetId, packageIdentity);
                     current = true;
-                    detail = applied.PlanId + ":" + applied.ChangedFileCount;
+                    planId = applied.PlanId;
+                    detail = planId + ":" + applied.ChangedFileCount;
                     break;
                 case ConfigPipelineMode.ExportCandidate:
                     if (string.IsNullOrWhiteSpace(candidateOutputDirectory) || string.IsNullOrWhiteSpace(targetScope))
@@ -91,6 +98,21 @@ namespace ZeroGameStudio.ConfigPipeline.Editor
                         candidateOutputDirectory);
                     current = false;
                     detail = candidate.DiagnosticCode;
+                    break;
+                case ConfigPipelineMode.RefreshCandidate:
+                    if (string.IsNullOrWhiteSpace(candidateOutputDirectory))
+                    {
+                        throw new ArgumentException("Candidate output directory is required.");
+                    }
+
+                    ConfigWorkbookRefreshCandidateResult refresh =
+                        service.ExportWorkbookRefreshCandidate(
+                            projectRoot,
+                            profileRelativePath,
+                            configSetId,
+                            candidateOutputDirectory);
+                    current = false;
+                    detail = refresh.SourceHash + ":" + refresh.CandidateFileCount;
                     break;
                 case ConfigPipelineMode.UpgradeCandidate:
                     if (string.IsNullOrWhiteSpace(candidateOutputDirectory) ||
@@ -116,6 +138,39 @@ namespace ZeroGameStudio.ConfigPipeline.Editor
                     throw new ArgumentOutOfRangeException(nameof(mode));
             }
 
+            return CreateResult(mode, configSetId, current, detail, planId, prepared);
+        }
+
+        public static ConfigPipelineCommandResult ApplyExpectedPlan(
+            string projectRoot,
+            string profileRelativePath,
+            string configSetId,
+            string packageIdentity,
+            string expectedPlanId)
+        {
+            ConfigApplyResult applied = new ConfigPipelineService().ApplyExpectedPlan(
+                projectRoot,
+                profileRelativePath,
+                configSetId,
+                packageIdentity,
+                expectedPlanId);
+            return CreateResult(
+                ConfigPipelineMode.Apply,
+                configSetId,
+                true,
+                applied.PlanId + ":" + applied.ChangedFileCount,
+                applied.PlanId,
+                null);
+        }
+
+        private static ConfigPipelineCommandResult CreateResult(
+            ConfigPipelineMode mode,
+            string configSetId,
+            bool current,
+            string detail,
+            string planId,
+            ConfigPipelinePreparedPlan prepared)
+        {
             bool success = mode != ConfigPipelineMode.Check || current;
             string summary = mode + " " + configSetId + ": " + detail;
             IEnumerable<ConfigNode> allowedWrites = prepared == null
@@ -142,11 +197,19 @@ namespace ZeroGameStudio.ConfigPipeline.Editor
                 new ConfigProperty("configSetId", new ConfigStringNode(configSetId)),
                 new ConfigProperty("success", new ConfigBooleanNode(success)),
                 new ConfigProperty("current", new ConfigBooleanNode(current)),
+                new ConfigProperty("planId", new ConfigStringNode(planId ?? string.Empty)),
                 new ConfigProperty("detail", new ConfigStringNode(detail)),
                 new ConfigProperty("allowedWrites", new ConfigArrayNode(allowedWrites)),
                 new ConfigProperty("valueDiffs", new ConfigArrayNode(valueDiffs))
             }));
-            return new ConfigPipelineCommandResult(mode, configSetId, success, current, summary, json);
+            return new ConfigPipelineCommandResult(
+                mode,
+                configSetId,
+                success,
+                current,
+                planId,
+                summary,
+                json);
         }
 
         public static void Execute()
@@ -199,7 +262,8 @@ namespace ZeroGameStudio.ConfigPipeline.Editor
 
         public static bool RequiresPackageIdentity(ConfigPipelineMode mode)
         {
-            return mode != ConfigPipelineMode.ExportCandidate;
+            return mode != ConfigPipelineMode.ExportCandidate &&
+                   mode != ConfigPipelineMode.RefreshCandidate;
         }
 
         internal static byte[] CreateFailureMachineJson(Exception exception)

@@ -1,12 +1,12 @@
 {
   "name": "com.zerogamestudio.zeroengine.data-toolkit",
-  "version": "2.0.1",
+  "version": "2.3.0",
   "displayName": "ZeroEngine.DataToolkit",
   "description": "Reusable ZeroEngine tooling for marking, discovering, browsing, editing, and validating project data assets.",
   "unity": "2022.3",
   "unityRelease": "0f1",
   "dependencies": {
-    "com.zerogamestudio.zeroengine.editor-ui": "1.0.0"
+    "com.zerogamestudio.zeroengine.editor-ui": "1.4.0"
   },
   "keywords": [
     "zeroengine",
@@ -18,5 +18,11 @@
   "author": {
     "name": "ZeroGameStudio",
     "url": "https://github.com/zerogamestudio"
+  },
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/ZeroGameStudio-CN/zeroengine.git",
+    "directory": "com.zerogamestudio.zeroengine.data-toolkit"
   }
 }

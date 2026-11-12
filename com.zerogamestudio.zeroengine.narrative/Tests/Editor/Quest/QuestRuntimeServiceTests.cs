@@ -1,6 +1,7 @@
 using System.Collections.Generic;
 using NUnit.Framework;
 using UnityEngine;
+using ZeroEngine.Core;
 using ZeroEngine.Dialog;
 using Object = UnityEngine.Object;
 
@@ -12,6 +13,7 @@ namespace ZeroEngine.Quest.Tests.Editor
         public void SetUp()
         {
             DestroyExistingQuestManagers();
+            EventManager.Clear();
             QuestServiceRegistry.ResetForTests();
         }
 
@@ -19,6 +21,7 @@ namespace ZeroEngine.Quest.Tests.Editor
         public void TearDown()
         {
             DestroyExistingQuestManagers();
+            EventManager.Clear();
         }
 
         [Test]
@@ -91,6 +94,123 @@ namespace ZeroEngine.Quest.Tests.Editor
             manager.RegisterConfig(quest);
 
             Assert.AreSame(quest, manager.GetConfig("test_quest"));
+
+            Object.DestroyImmediate(managerObject);
+            Object.DestroyImmediate(quest);
+        }
+
+        [Test]
+        public void QuestManager_ProcessConditionEvent_AutoSubmitsEveryMatchingActiveQuest()
+        {
+            const string locationId = "shared_location";
+            var firstQuest = CreateReachQuest("first_reach_quest", locationId, true);
+            var secondQuest = CreateReachQuest("second_reach_quest", locationId, true);
+            var managerObject = new GameObject("QuestManager_AutoSubmitSnapshot_Test");
+            var manager = managerObject.AddComponent<QuestManager>();
+            manager.RegisterConfig(firstQuest);
+            manager.RegisterConfig(secondQuest);
+
+            Assert.True(manager.AcceptQuest(firstQuest.questId));
+            Assert.True(manager.AcceptQuest(secondQuest.questId));
+
+            manager.ProcessConditionEvent(
+                QuestEvents.LocationReached,
+                new ConditionEventData(locationId, 1));
+
+            Assert.AreEqual(QuestState.TheEnd, manager.GetQuestState(firstQuest.questId));
+            Assert.AreEqual(QuestState.TheEnd, manager.GetQuestState(secondQuest.questId));
+            Assert.AreEqual(1, manager.GetQuestCompletionCount(firstQuest.questId));
+            Assert.AreEqual(1, manager.GetQuestCompletionCount(secondQuest.questId));
+            Assert.IsEmpty(manager.GetActiveQuests());
+
+            Object.DestroyImmediate(managerObject);
+            Object.DestroyImmediate(firstQuest);
+            Object.DestroyImmediate(secondQuest);
+        }
+
+        [Test]
+        public void QuestManager_ProcessConditionEvent_DoesNotApplyEventToQuestAcceptedDuringBroadcast()
+        {
+            const string locationId = "shared_location";
+            var initialQuest = CreateReachQuest("initial_reach_quest", locationId, false);
+            var acceptedDuringBroadcast = CreateReachQuest("late_reach_quest", locationId, true);
+            var managerObject = new GameObject("QuestManager_BroadcastBoundary_Test");
+            var manager = managerObject.AddComponent<QuestManager>();
+            manager.RegisterConfig(initialQuest);
+            manager.RegisterConfig(acceptedDuringBroadcast);
+            Assert.True(manager.AcceptQuest(initialQuest.questId));
+
+            manager.OnConditionProgress += (_, _) => manager.AcceptQuest(acceptedDuringBroadcast.questId);
+
+            manager.ProcessConditionEvent(
+                QuestEvents.LocationReached,
+                new ConditionEventData(locationId, 1));
+
+            Assert.AreEqual(QuestState.Successful, manager.GetQuestState(initialQuest.questId));
+            Assert.AreEqual(QuestState.Active, manager.GetQuestState(acceptedDuringBroadcast.questId));
+            Assert.AreEqual(0, manager.GetQuestCompletionCount(acceptedDuringBroadcast.questId));
+
+            Object.DestroyImmediate(managerObject);
+            Object.DestroyImmediate(initialQuest);
+            Object.DestroyImmediate(acceptedDuringBroadcast);
+        }
+
+        [Test]
+        public void QuestManager_CompletionTransition_SurvivesLegacyEventManagerClear()
+        {
+            var quest = CreateReachQuest("clear_safe_completion", "clear_safe_location", true);
+            var managerObject = new GameObject("QuestManager_ClearSafeCompletion_Test");
+            var manager = managerObject.AddComponent<QuestManager>();
+            manager.RegisterConfig(quest);
+            Assert.True(manager.AcceptQuest(quest.questId));
+
+            var transitions = new List<QuestCompletionTransition>();
+            manager.OnQuestCompletionTransition += transitions.Add;
+            EventManager.Clear();
+
+            manager.ProcessConditionEvent(
+                QuestEvents.LocationReached,
+                new ConditionEventData("clear_safe_location", 1));
+            manager.ProcessConditionEvent(
+                QuestEvents.LocationReached,
+                new ConditionEventData("clear_safe_location", 1));
+
+            Assert.AreEqual(1, transitions.Count);
+            Assert.AreEqual(1, transitions[0].Sequence);
+            Assert.AreEqual(quest.questId, transitions[0].QuestId);
+            Assert.AreEqual(1, manager.CompletionTransitionSequence);
+            Assert.AreEqual(QuestState.TheEnd, manager.GetQuestState(quest.questId));
+            Assert.AreEqual(1, manager.GetQuestCompletionCount(quest.questId));
+
+            Object.DestroyImmediate(managerObject);
+            Object.DestroyImmediate(quest);
+        }
+
+        [Test]
+        public void QuestManager_CompletionTransition_PreservesLegacyQuestCompletedEvent()
+        {
+            var quest = CreateReachQuest("legacy_completion", "legacy_location", false);
+            var managerObject = new GameObject("QuestManager_LegacyCompletion_Test");
+            var manager = managerObject.AddComponent<QuestManager>();
+            manager.RegisterConfig(quest);
+            Assert.True(manager.AcceptQuest(quest.questId));
+
+            var transitionCount = 0;
+            var legacyCount = 0;
+            manager.OnQuestCompletionTransition += _ => transitionCount++;
+            EventManager.Subscribe<string>(GameEvents.QuestCompleted, completedQuestId =>
+            {
+                if (completedQuestId == quest.questId)
+                    legacyCount++;
+            });
+
+            manager.ProcessConditionEvent(
+                QuestEvents.LocationReached,
+                new ConditionEventData("legacy_location", 1));
+
+            Assert.AreEqual(1, transitionCount);
+            Assert.AreEqual(1, legacyCount);
+            Assert.AreEqual(QuestState.Successful, manager.GetQuestState(quest.questId));
 
             Object.DestroyImmediate(managerObject);
             Object.DestroyImmediate(quest);
@@ -189,6 +309,18 @@ namespace ZeroEngine.Quest.Tests.Editor
         private sealed class FakeConfigSource : IQuestConfigSource
         {
             public IReadOnlyList<QuestConfigSO> LoadConfigs() => new List<QuestConfigSO>();
+        }
+
+        private static QuestConfigSO CreateReachQuest(string questId, string locationId, bool autoSubmit)
+        {
+            var quest = ScriptableObject.CreateInstance<QuestConfigSO>();
+            quest.questId = questId;
+            quest.autoSubmit = autoSubmit;
+            quest.Conditions = new List<QuestCondition>
+            {
+                new ReachCondition { LocationId = locationId }
+            };
+            return quest;
         }
 
         private static void DestroyExistingQuestManagers()

@@ -184,16 +184,9 @@ namespace ZeroEngine.Interaction
 
         public override bool IsSatisfied(InteractionContext ctx, IInteractable interactable)
         {
-            // 需要与 RelationshipManager 集成
-#if ZEROENGINE_RELATIONSHIP
-            var relationship = ZeroEngine.Relationship.RelationshipManager.Instance;
-            if (relationship != null)
-            {
-                int level = (int)relationship.GetLevel(NpcId);
-                return level >= MinLevel;
-            }
-#endif
-            return true;
+            return !string.IsNullOrWhiteSpace(NpcId) && MinLevel >= 0
+                && ctx.Relationships != null && ctx.Relationships.TryGetLevel(NpcId, out var level)
+                && level >= 0 && level >= MinLevel;
         }
 
         public override string GetFailureReason(InteractionContext ctx, IInteractable interactable)

@@ -2,7 +2,10 @@
     "name": "ZeroEngine.SpineSkin",
     "rootNamespace": "ZeroEngine.SpineSkin",
     "references": [
-        "ZeroEngine"
+        "spine-csharp",
+        "spine-unity",
+        "UnityEngine.UI",
+        "Unity.TextMeshPro"
     ],
     "includePlatforms": [],
     "excludePlatforms": [],

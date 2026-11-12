@@ -10,7 +10,8 @@ namespace ZeroEngine.Tests.Narrative
     {
         [TestCase("Runtime/Quest/QuestManager.cs", "OnDestroy")]
         [TestCase("Runtime/Dialog/DialogSaveAdapter.cs", "OnDestroy")]
-        [TestCase("Runtime/Achievement/AchievementManager.cs", "Unregister")]
+        [TestCase("Runtime/Achievement/AchievementSaveSlotAdapter.cs", "Unbind")]
+        [TestCase("Runtime/Achievement/AchievementSaveSlotAdapter.cs", "OnDestroy")]
         public void TeardownDoesNotResolveSaveSlotManagerSingleton(string relativePath, string methodName)
         {
             var source = File.ReadAllText(FindNarrativeSourcePath(relativePath));
@@ -41,8 +42,11 @@ namespace ZeroEngine.Tests.Narrative
 
         private static string ExtractMethodBody(string source, string methodName)
         {
-            var match = Regex.Match(source, $@"\b{Regex.Escape(methodName)}\s*\([^)]*\)\s*\{{");
+            var match = Regex.Match(source, $@"\b{Regex.Escape(methodName)}\s*\([^)]*\)\s*(?:\{{|=>\s*(?<expression>[^;]*);)");
             Assert.IsTrue(match.Success, $"Could not locate method: {methodName}");
+
+            if (match.Groups["expression"].Success)
+                return match.Groups["expression"].Value;
 
             var start = match.Index + match.Length - 1;
             var depth = 0;

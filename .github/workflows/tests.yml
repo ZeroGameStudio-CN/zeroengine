@@ -7,6 +7,7 @@ on:
       - 'com.zerogamestudio.zeroengine*/**'
       - 'com.zerogamestudio.analytics/**'
       - 'Tools/Tests/**'
+      - 'Tools/Packages/**'
       - 'Services/leaderboards/**'
       - '.github/workflows/tests.yml'
   pull_request:
@@ -16,6 +17,7 @@ on:
       - 'com.zerogamestudio.zeroengine*/**'
       - 'com.zerogamestudio.analytics/**'
       - 'Tools/Tests/**'
+      - 'Tools/Packages/**'
       - 'Services/leaderboards/**'
       - '.github/workflows/tests.yml'
   workflow_dispatch:
@@ -26,6 +28,24 @@ permissions:
   pull-requests: write
 
 jobs:
+  package-quality:
+    name: Package boundaries and project selection
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Verify package audit and project generator
+        run: python3 -B -m unittest discover -s Tools/Packages -p 'test_*.py'
+      - name: Audit all source packages
+        run: python3 -B Tools/Packages/audit_packages.py --root . --output package-audit.json --check
+      - name: Verify project Skill synchronization
+        run: python3 -B -m unittest discover -s com.zerogamestudio.zeroengine.ai-support/Tools~ -p 'test_*.py'
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: Package Audit
+          path: package-audit.json
+          retention-days: 14
+
   test:
     name: Run Unity Tests (${{ matrix.name }})
     runs-on: ubuntu-latest
@@ -35,14 +55,31 @@ jobs:
         include:
           - lane: legacy
             name: Legacy package
+            test-mode: EditMode
           - lane: modular
             name: Modular packages
+            test-mode: EditMode
           - lane: dashboard-only
             name: Dashboard only
+            test-mode: EditMode
           - lane: dashboard-with-modules
             name: Dashboard with Analytics and UI
+            test-mode: EditMode
           - lane: modules-only
             name: Modules without Dashboard
+            test-mode: EditMode
+          - lane: lifecycle
+            name: Core and Audio lifecycles
+            test-mode: PlayMode
+          - lane: console-core
+            name: Console core only
+            test-mode: all
+          - lane: console-native
+            name: Console native frontend only
+            test-mode: all
+          - lane: console-quantum
+            name: Console optional adapter without vendor SDK
+            test-mode: all
 
     steps:
       - name: Checkout repository
@@ -52,98 +89,11 @@ jobs:
 
       - name: Setup isolated Unity project
         shell: bash
-        run: |
-          set -euo pipefail
-          mkdir -p TestProject/Assets TestProject/Packages TestProject/ProjectSettings
-          shopt -s nullglob
-
-          include_package() {
-            local package_name="$1"
-            case "${{ matrix.lane }}" in
-              legacy)
-                [[ "$package_name" == "com.zerogamestudio.analytics" ||
-                   ( "$package_name" == com.zerogamestudio.zeroengine* &&
-                     "$package_name" != "com.zerogamestudio.zeroengine.modsystem" ) ]]
-                ;;
-              modular)
-                [[ "$package_name" == "com.zerogamestudio.analytics" || ( "$package_name" == com.zerogamestudio.zeroengine.* ) ]]
-                ;;
-              dashboard-only)
-                [[ "$package_name" == "com.zerogamestudio.zeroengine.dashboard" ||
-                   "$package_name" == "com.zerogamestudio.zeroengine.editor-ui" ]]
-                ;;
-              dashboard-with-modules)
-                [[ "$package_name" == "com.zerogamestudio.zeroengine.dashboard" ||
-                   "$package_name" == "com.zerogamestudio.zeroengine.editor-ui" ||
-                   "$package_name" == "com.zerogamestudio.zeroengine.core" ||
-                   "$package_name" == "com.zerogamestudio.zeroengine.ui" ||
-                   "$package_name" == "com.zerogamestudio.analytics" ]]
-                ;;
-              modules-only)
-                [[ "$package_name" == "com.zerogamestudio.analytics" ||
-                   ( "$package_name" == com.zerogamestudio.zeroengine.* && "$package_name" != "com.zerogamestudio.zeroengine.dashboard" ) ]]
-                ;;
-              *)
-                return 1
-                ;;
-            esac
-          }
-
-          for package_path in com.zerogamestudio.zeroengine* com.zerogamestudio.analytics; do
-            [[ -d "$package_path" ]] || continue
-            package_name=$(basename "$package_path")
-            if include_package "$package_name"; then
-              cp -r "$package_path" "TestProject/Packages/"
-            fi
-          done
-
-          deps='"com.unity.test-framework": "1.3.9"'
-          deps="$deps, \"com.unity.modules.physics\": \"1.0.0\""
-          deps="$deps, \"com.unity.modules.physics2d\": \"1.0.0\""
-          deps="$deps, \"com.unity.modules.ai\": \"1.0.0\""
-          deps="$deps, \"com.unity.modules.animation\": \"1.0.0\""
-          deps="$deps, \"com.unity.modules.audio\": \"1.0.0\""
-          deps="$deps, \"com.unity.modules.imgui\": \"1.0.0\""
-          deps="$deps, \"com.unity.modules.ui\": \"1.0.0\""
-          deps="$deps, \"com.unity.modules.imageconversion\": \"1.0.0\""
-          deps="$deps, \"com.unity.modules.unitywebrequest\": \"1.0.0\""
-          deps="$deps, \"com.unity.modules.particlesystem\": \"1.0.0\""
-          deps="$deps, \"com.unity.modules.tilemap\": \"1.0.0\""
-
-          testables=''
-          for package_path in TestProject/Packages/com.zerogamestudio.*; do
-            [[ -d "$package_path" ]] || continue
-            package_name=$(basename "$package_path")
-            if [[ "${{ matrix.lane }}" == "legacy" &&
-                  "$package_name" != "com.zerogamestudio.zeroengine" &&
-                  "$package_name" != "com.zerogamestudio.zeroengine.dashboard" ]]; then
-              continue
-            fi
-            deps="$deps, \"$package_name\": \"file:$package_name\""
-            if [[ -n "$testables" ]]; then
-              testables="$testables, "
-            fi
-            testables="$testables\"$package_name\""
-          done
-
-          if [[ "${{ matrix.lane }}" == "dashboard-with-modules" ]]; then
-            deps="$deps, \"com.zerogamestudio.dashboard-removal-fixture\": \"file:../../Tools/Tests/Fixtures/com.zerogamestudio.dashboard-removal-fixture\""
-          fi
-
-          cat > TestProject/Packages/manifest.json << EOF
-          {
-            "dependencies": {
-              $deps
-            },
-            "testables": [
-              $testables
-            ]
-          }
-          EOF
-
-          cat > TestProject/ProjectSettings/ProjectVersion.txt << 'EOF'
-          m_EditorVersion: 2022.3.62f1
-          EOF
+        run: >-
+          python3 Tools/Packages/create_test_project.py
+          --destination TestProject
+          --lane "${{ matrix.lane }}"
+          --unity-version 2022.3.62f1
 
       - name: Validate descriptors and package shape
         shell: pwsh
@@ -164,7 +114,7 @@ jobs:
         shell: bash
         run: rm -rf TestProject/Library
 
-      - name: Run EditMode Tests
+      - name: Run ${{ matrix.test-mode }} Tests
         uses: game-ci/unity-test-runner@v4
         id: testRunner
         env:
@@ -174,17 +124,20 @@ jobs:
           ZEROENGINE_DASHBOARD_PACKAGE_REMOVAL_TEST: ${{ matrix.lane == 'dashboard-with-modules' && '1' || '0' }}
         with:
           unityVersion: 2022.3.62f1
+          cliVersion: v0.1.72
           projectPath: TestProject
-          testMode: EditMode
+          testMode: ${{ matrix.test-mode }}
           artifactsPath: TestResults
-          checkName: EditMode Test Results (${{ matrix.name }})
+          checkName: ${{ matrix.test-mode }} Test Results (${{ matrix.name }})
 
       - name: Upload Test Results
         uses: actions/upload-artifact@v4
         if: always()
         with:
           name: Test Results - ${{ matrix.lane }}
-          path: TestResults
+          path: |
+            TestResults
+            TestProject/package-selection.json
           if-no-files-found: warn
           retention-days: 14
 

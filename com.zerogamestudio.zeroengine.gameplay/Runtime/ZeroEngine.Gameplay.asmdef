@@ -5,7 +5,8 @@
         "ZeroEngine.Core",
         "ZeroEngine.Persistence",
         "Unity.TextMeshPro",
-        "Unity.InputSystem"
+        "Unity.InputSystem",
+        "UnityEngine.UI"
     ],
     "includePlatforms": [],
     "excludePlatforms": [],

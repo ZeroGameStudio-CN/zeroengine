@@ -10,6 +10,7 @@ namespace ZeroEngine.Tutorial
     [Serializable]
     public class WaitEventStep : TutorialStep
     {
+        public override bool SupportsAutomaticCompletion => false;
         [Header("Event Settings")]
         [Tooltip("事件键")]
         public string EventKey;
@@ -29,7 +30,7 @@ namespace ZeroEngine.Tutorial
         private bool _eventReceived;
 
         // 静态事件触发器
-        private static event Action<string, string> OnTutorialEvent;
+        [NonSerialized] private IDisposable subscription;
 
         public override string StepType => "WaitEvent";
 
@@ -38,7 +39,7 @@ namespace ZeroEngine.Tutorial
             _eventReceived = false;
 
             // 注册事件监听
-            OnTutorialEvent += HandleEvent;
+            subscription = ctx.Focus.Signals.Subscribe(HandleEvent);
 
             // 显示提示
             if (!string.IsNullOrEmpty(PromptText))
@@ -54,14 +55,14 @@ namespace ZeroEngine.Tutorial
             // 超时检查
             if (Timeout > 0 && ctx.StepElapsedTime >= Timeout)
             {
-                _eventReceived = true;
+                ctx.Fail("The required event timed out.");
             }
         }
 
         public override void OnExit(TutorialContext ctx)
         {
-            OnTutorialEvent -= HandleEvent;
-            TutorialUIManager.Instance?.HidePrompt();
+            subscription?.Dispose(); subscription = null;
+            UnityEngine.Object.FindObjectOfType<TutorialUIManager>()?.HidePrompt();
         }
 
         public override bool IsCompleted(TutorialContext ctx)
@@ -109,7 +110,8 @@ namespace ZeroEngine.Tutorial
         /// </summary>
         public static void TriggerEvent(string key, string value = null)
         {
-            OnTutorialEvent?.Invoke(key, value ?? "");
+            var manager = UnityEngine.Object.FindObjectOfType<TutorialManager>();
+            if (manager && manager.Enabled && manager.IsRunning) manager.Context.Signal(key, value ?? string.Empty);
         }
 
         /// <summary>

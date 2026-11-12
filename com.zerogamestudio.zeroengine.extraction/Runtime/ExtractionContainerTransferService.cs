@@ -88,6 +88,11 @@ namespace POB.Extraction
                 return false;
             }
             if (profile.Items.TryGet(itemInstanceId, out _)
+                && profile.Ownership.TryGetContainer(itemInstanceId, out var owned)
+                && owned == ExtractionInventoryContainerType.RaidContainer)
+                return ExtractionContainerInventoryService.TryMove(profile, raidInventory, itemCatalog, itemInstanceId,
+                    targetContainer, null, 0, 0, false, true, transferReceiptId, out result);
+            if (profile.Items.TryGet(itemInstanceId, out _)
                 || profile.Ownership.TryGetContainer(itemInstanceId, out _))
             {
                 result = ExtractionContainerTransferResult.LocationConflict;

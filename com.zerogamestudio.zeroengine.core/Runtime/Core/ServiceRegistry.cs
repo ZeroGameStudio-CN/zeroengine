@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using UnityEngine;
 
 #nullable enable
 
@@ -80,6 +81,15 @@ namespace ZeroEngine.Core
         }
 
         public static void ClearForTests()
+        {
+            lock (SyncRoot)
+            {
+                Services.Clear();
+            }
+        }
+
+        [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
+        internal static void ResetForSubsystemRegistration()
         {
             lock (SyncRoot)
             {

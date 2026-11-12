@@ -2,17 +2,24 @@
 
 > **用途**: 本文档面向AI助手，提供StatSystem模块的快速参考。
 
+## 2.2 内核入口
+
+`ZeroEngine.StatSystem.Core` 是同一 Data 包中的独立叶子程序集，不引用 Unity、Formula 或项目类型。`IStatModifierAdapter<TModifier,TSource>` 显式映射消费者的类型和值；属性键与存储由消费者拥有。`EvaluateOrdered` 保留按序 float32 与连续百分比组，`EvaluateGrouped` 保留旧 Data 的分组规则、原值乘算及 Clamp 后 Round(4)，两者不得隐式互换。
+
+`RepeatedModifiers<T>` 提供重复输入视图，`StatKernel.RemoveBatch` 对可证明互斥的请求稳定压缩，近似匹配重叠时保留贪心回退并返回诊断。`Sort` 的比较器必须按 adapter.Order 升序；同 Order 不同引用继续采用原不稳定排序。公开可变字段/列表的写入者需显式调用宿主 `NotifyModifiersChanged()`；普通增删与初始化会失效。`GetCalculationVersion()` 返回版本和真实计算次数，诊断不新增默认 JSON 属性。宿主仍负责公式求值时机、当前值事件、存档及玩法。
+
 ---
 
 ## 目录结构
 
 ```
 StatSystem/
+├── Core/                # 无引擎依赖的显式计算、批处理与版本诊断
 ├── Stat.cs              # 属性类和修饰器
+├── CurrentStat.cs       # 旧 Data 当前值与事件策略
 ├── StatController.cs    # 属性控制器
-├── StatType.cs          # 属性类型枚举
-└── Formula/
-    └── MathFormula.cs   # 公式计算
+├── StatDefinitions.cs   # 旧属性枚举/配置
+└── Stats.cs             # 旧属性容器
 ```
 
 ---
@@ -31,10 +38,11 @@ public class StatModifier
     public StatModType ModType;    // Flat, PercentAdd, PercentMult
     public int Order;              // 计算顺序
     public object Source;          // 来源（用于追踪/移除）
-    public MathFormula Formula;    // 可选公式
+    public ZeroEngine.Formula.FormulaAsset Formula; // 可选公式
     
     StatModifier(float value, StatModType type, int order = default, object source = null);
-    float GetValue(MathContext ctx = null);  // 支持公式计算
+    float GetValue(ZeroEngine.Formula.IFormulaEvaluationContext context = null,
+        ZeroEngine.Formula.FormulaProviderRegistry registry = null);
 }
 ```
 

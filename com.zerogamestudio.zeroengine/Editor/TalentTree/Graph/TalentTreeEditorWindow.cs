@@ -34,11 +34,19 @@ namespace ZeroEngine.Editor.TalentTree
         }
 
         [OnOpenAsset(1)]
+#if UNITY_6000_6_OR_NEWER
+        public static bool OnOpenAsset(EntityId instanceId, int line)
+#else
         public static bool OnOpenAsset(int instanceId, int line)
+#endif
         {
+#if UNITY_6000_6_OR_NEWER
+            var asset = EditorUtility.EntityIdToObject(instanceId) as TalentTreeSO;
+#else
 #pragma warning disable CS0618
             var asset = EditorUtility.InstanceIDToObject(instanceId) as TalentTreeSO;
 #pragma warning restore CS0618
+#endif
             if (asset != null)
             {
                 Open(asset);

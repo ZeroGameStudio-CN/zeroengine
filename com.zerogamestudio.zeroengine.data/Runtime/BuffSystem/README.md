@@ -1,7 +1,7 @@
 # ZeroEngine.BuffSystem API 文档
 
 > **用途**: 本文档面向AI助手，提供BuffSystem模块的快速参考。
-> **版本**: v1.2.0+
+> **版本**: v2.1.0 (legacy facade retained)
 > **最后更新**: 2025-12-31
 
 ---
@@ -10,6 +10,7 @@
 
 ```
 BuffSystem/
+├── Core/            # 无引擎的来源层数、生命周期与时钟内核
 ├── BuffEnums.cs     # 枚举定义
 ├── BuffData.cs      # Buff配置（ScriptableObject）
 ├── BuffHandler.cs   # Buff运行时实例
@@ -321,3 +322,7 @@ receiver.AddBuff(buffData, 3);
 |------|----------|
 | v1.0.0 | 基础 Buff 系统、层数、持续时间 |
 | v1.2.0 | 事件系统、BuffStackMode、BuffUtils 工具类 |
+
+## 2.1.0 runtime kernel
+
+The legacy facade delegates storage, generation state and clock arithmetic to `ZeroEngine.BuffSystem.Core`. See the package README for source-aware stacks, scoped lifetime layers, independent restored cohorts and explicit host clock policies. Neither API event order nor the existing legacy expiry/tick order changes.

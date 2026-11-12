@@ -30,13 +30,21 @@ mixing in game-specific content.
 | `com.zerogamestudio.zeroengine.data-toolkit` | Editor tooling for browsing, inspecting, and validating project data assets. |
 | `com.zerogamestudio.zeroengine.gameplay` | Reusable gameplay mechanics and trigger helpers. |
 | `com.zerogamestudio.zeroengine.narrative` | Quest and narrative runtime services. |
+| `com.zerogamestudio.zeroengine.particle-catalog` | Editor-only particle catalog schema, search, Ollama classification, and personal DeepSeek recommendations. |
 | `com.zerogamestudio.zeroengine.pathfinding2d` | 2D platform navigation, graph generation, jump links, route costs, and diagnostics. |
 | `com.zerogamestudio.zeroengine.persistence` | Save and persistence infrastructure. |
 | `com.zerogamestudio.zeroengine.ui` | Runtime UI framework and toast notification systems. |
+| `com.zerogamestudio.zeroengine.console` | Native command sessions, typed automation, policy and completion; separate native UI and optional Quantum adapters. |
+| `com.zerogamestudio.zeroengine.ai-support` | Explicit project Skill synchronization from actual installed module versions. |
 | `com.zerogamestudio.analytics` | Self-hostable analytics and bug feedback SDK. |
 
 There are also packages for AI, audio, combat, economy, input, localization,
 network, RPG, social, world, and editor dashboard systems.
+
+The [2026-11-10 consolidation review](docs/packages/2026-11-10-consolidation-review.md)
+records every package's ownership, candidate version and consumer migration gates.
+It is an unpublished integration candidate; existing consumers keep their tested
+pins until their corresponding upgrade checks are complete.
 
 ## Installation
 
@@ -86,12 +94,15 @@ Repository tooling that is not a general runtime package lives under `Tools/`.
 
 ## Testing
 
-The repository includes a GitHub Actions workflow that builds a temporary Unity
-project and runs EditMode tests through GameCI.
+The repository includes a GitHub Actions workflow that builds temporary Unity
+projects for compatible package sets and runs EditMode tests through GameCI.
+Unity 2022.3 lanes exclude packages declaring a newer minimum; a separate static
+audit checks all package boundaries. See [package tooling](Tools/Packages/README.md).
 
-For local work, open a Unity 2022.3 project that references the package under
-test, then run the relevant EditMode tests from Unity Test Runner. Keep new
-tests narrow and package-scoped.
+For local work, use the Editor version required by the package's `package.json`
+and run the relevant EditMode or PlayMode tests from Unity Test Runner. Keep
+tests narrow and package-scoped. An Editor import does not establish Player,
+optional SDK or real consumer compatibility.
 
 ## Support and Security
 

@@ -1,9 +1,12 @@
 {
   "$id": "urn:zgs:sample:item-drop",
-  "x-zgs-schema-version": 1,
+  "x-zgs-schema-version": 2,
   "type": "object",
   "additionalProperties": false,
-  "required": ["items", "dropTables"],
+  "required": [
+    "items",
+    "dropTables"
+  ],
   "properties": {
     "items": {
       "type": "array",
@@ -11,13 +14,33 @@
       "items": {
         "type": "object",
         "additionalProperties": false,
-        "required": ["id", "nameKey", "weight"],
+        "required": [
+          "id",
+          "nameKey",
+          "weight"
+        ],
         "properties": {
-          "id": {"type": "string", "title": "物品 ID", "x-zgs-primary-key": true},
-          "nameKey": {"type": "string", "title": "名称 Key"},
-          "weight": {"type": "number", "title": "重量", "x-zgs-number-type": "float32", "minimum": 0}
+          "id": {
+            "type": "string",
+            "title": "物品 ID",
+            "x-zgs-primary-key": true,
+            "x-zgs-authoring-visibility": "basic"
+          },
+          "nameKey": {
+            "type": "string",
+            "title": "名称 Key",
+            "x-zgs-authoring-visibility": "basic"
+          },
+          "weight": {
+            "type": "number",
+            "title": "重量",
+            "x-zgs-number-type": "float32",
+            "minimum": 0,
+            "x-zgs-authoring-visibility": "basic"
+          }
         }
-      }
+      },
+      "x-zgs-authoring-visibility": "basic"
     },
     "dropTables": {
       "type": "array",
@@ -25,9 +48,17 @@
       "items": {
         "type": "object",
         "additionalProperties": false,
-        "required": ["id", "entries"],
+        "required": [
+          "id",
+          "entries"
+        ],
         "properties": {
-          "id": {"type": "string", "title": "掉落表 ID", "x-zgs-primary-key": true},
+          "id": {
+            "type": "string",
+            "title": "掉落表 ID",
+            "x-zgs-primary-key": true,
+            "x-zgs-authoring-visibility": "basic"
+          },
           "entries": {
             "type": "array",
             "x-zgs-sheet": "DropEntries",
@@ -36,17 +67,49 @@
             "items": {
               "type": "object",
               "additionalProperties": false,
-              "required": ["id", "order", "itemId", "chance"],
+              "required": [
+                "id",
+                "order",
+                "itemId",
+                "chance"
+              ],
               "properties": {
-                "id": {"type": "string", "title": "条目 ID", "x-zgs-primary-key": true},
-                "order": {"type": "integer", "title": "顺序", "x-zgs-number-type": "int32", "minimum": 0},
-                "itemId": {"type": "string", "title": "物品 ID", "x-zgs-ref": "#/properties/items/items/properties/id"},
-                "chance": {"type": "number", "title": "概率", "x-zgs-number-type": "float32", "minimum": 0, "maximum": 1}
+                "id": {
+                  "type": "string",
+                  "title": "条目 ID",
+                  "x-zgs-primary-key": true,
+                  "x-zgs-authoring-visibility": "basic"
+                },
+                "order": {
+                  "type": "integer",
+                  "title": "顺序",
+                  "x-zgs-number-type": "int32",
+                  "minimum": 0,
+                  "x-zgs-authoring-visibility": "basic"
+                },
+                "itemId": {
+                  "type": "string",
+                  "title": "物品 ID",
+                  "x-zgs-ref": "#/properties/items/items/properties/id",
+                  "x-zgs-authoring-visibility": "basic"
+                },
+                "chance": {
+                  "type": "number",
+                  "title": "概率",
+                  "x-zgs-number-type": "float32",
+                  "minimum": 0,
+                  "maximum": 1,
+                  "x-zgs-authoring-visibility": "basic"
+                }
               }
-            }
+            },
+            "x-zgs-authoring-visibility": "basic"
           }
         }
-      }
+      },
+      "x-zgs-authoring-visibility": "basic"
     }
-  }
+  },
+  "x-zgs-require-authoring-visibility": true,
+  "x-zgs-authoring-policy-version": 2
 }

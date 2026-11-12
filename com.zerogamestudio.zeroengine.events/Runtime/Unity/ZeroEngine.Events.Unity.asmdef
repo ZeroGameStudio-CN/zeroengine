@@ -1,0 +1,17 @@
+{
+    "name": "ZeroEngine.Events.Unity",
+    "rootNamespace": "ZeroEngine.Events.Unity",
+    "references": [
+        "ZeroEngine.Events",
+        "UnityEngine.CoreModule"
+    ],
+    "includePlatforms": [],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": true,
+    "defineConstraints": [],
+    "versionDefines": [],
+    "noEngineReferences": false
+}

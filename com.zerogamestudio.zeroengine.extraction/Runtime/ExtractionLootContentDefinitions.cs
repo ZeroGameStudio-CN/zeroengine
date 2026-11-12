@@ -176,6 +176,8 @@ namespace POB.Extraction
     {
         public string ContainerTypeId;
         public int Capacity;
+        public int Rows;
+        public int Columns;
         public int MinimumContentCount;
         public int MaximumContentCount;
         public float SearchTimeMultiplier;

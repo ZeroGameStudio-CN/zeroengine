@@ -58,6 +58,18 @@ namespace ZeroEngine.UI
     }
 
     /// <summary>
+    /// 视图跨会话的生命周期。
+    /// Session 视图由 ReleaseSessionViews 清理，Resident 视图保留，
+    /// Evictable 视图在关闭时立即清理。
+    /// </summary>
+    public enum UIViewLifetime
+    {
+        Session,
+        Resident,
+        Evictable
+    }
+
+    /// <summary>
     /// 视图状态
     /// </summary>
     public enum UIViewState
@@ -115,6 +127,7 @@ namespace ZeroEngine.UI
         [Header("其他")]
         public bool preload = false;
         public bool cache = true;
+        public UIViewLifetime lifetime = UIViewLifetime.Session;
     }
 
     /// <summary>

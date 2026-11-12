@@ -1,10 +1,13 @@
 {
   "name": "com.zerogamestudio.zeroengine.extraction",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "displayName": "ZeroEngine Extraction Core",
   "description": "Pure extraction-looter rules for inventory, loot, raid sessions, recovery, economy, and settlement.",
   "unity": "2022.3",
-  "dependencies": {},
+  "dependencies": {
+    "com.zerogamestudio.zeroengine.core": "2.0.0",
+    "com.unity.modules.jsonserialize": "1.0.0"
+  },
   "keywords": [
     "zeroengine",
     "extraction",
@@ -17,7 +20,7 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/liuzqk/zeroengine.git",
+    "url": "https://github.com/ZeroGameStudio-CN/zeroengine.git",
     "directory": "com.zerogamestudio.zeroengine.extraction"
   }
 }

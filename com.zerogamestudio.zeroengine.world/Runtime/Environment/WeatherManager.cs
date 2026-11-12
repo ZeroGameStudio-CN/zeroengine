@@ -7,8 +7,8 @@ using ZeroEngine.Save;
 namespace ZeroEngine.EnvironmentSystem
 {
     /// <summary>
-    /// 天气系统管理器
-    /// 管理天气效果、VFX、雾效、环境音效
+    /// Owns weather state, lookup, save data, and events. Visual and audio output
+    /// is delegated to an explicitly authored presentation adapter.
     /// </summary>
     public class WeatherManager : MonoSingleton<WeatherManager>, ISaveable
     {
@@ -18,29 +18,26 @@ namespace ZeroEngine.EnvironmentSystem
         [Header("Available Presets")]
         [SerializeField] private List<WeatherPresetSO> _weatherPresets = new List<WeatherPresetSO>();
 
-        [Header("References")]
+        [Header("Presentation (Optional)")]
+        [Tooltip("Leave empty for state-only weather. Assign an IWeatherPresentationAdapter to opt into visuals and audio.")]
+        [SerializeField] private MonoBehaviour _presentationAdapterBehaviour;
         [SerializeField] private Transform _followTarget;
 
         [Header("Debug")]
         [SerializeField] private bool _debugMode;
 
-        // 事件
         public event Action<EnvironmentEventArgs> OnEnvironmentEvent;
 
-        // 运行时
-        private GameObject _activeVfx;
-        private AudioSource _currentAmbientSource;
-        private float _originalFogDensity;
-        private Color _originalFogColor;
-        private bool _originalFogEnabled;
-
-        // 查找缓存
-        private readonly Dictionary<WeatherType, WeatherPresetSO> _presetLookup = new Dictionary<WeatherType, WeatherPresetSO>();
+        private readonly Dictionary<WeatherType, WeatherPresetSO> _presetLookup =
+            new Dictionary<WeatherType, WeatherPresetSO>();
+        private IWeatherPresentationAdapter _presentationAdapter;
 
         #region Properties
 
         public WeatherPresetSO CurrentWeather => _currentWeather;
-        public WeatherType CurrentWeatherType => _currentWeather != null ? _currentWeather.WeatherType : WeatherType.Clear;
+        public WeatherType CurrentWeatherType =>
+            _currentWeather != null ? _currentWeather.WeatherType : WeatherType.Clear;
+        public bool HasPresentationAdapter => _presentationAdapter != null;
 
         #endregion
 
@@ -61,7 +58,11 @@ namespace ZeroEngine.EnvironmentSystem
 
         public void ImportSaveData(object data)
         {
-            if (data is not WeatherSaveData saveData) return;
+            if (data is not WeatherSaveData saveData)
+            {
+                return;
+            }
+
             SetWeather(saveData.CurrentWeatherType);
         }
 
@@ -69,7 +70,9 @@ namespace ZeroEngine.EnvironmentSystem
         {
             ClearWeather();
             if (_weatherPresets.Count > 0)
+            {
                 SetWeather(_weatherPresets[0]);
+            }
         }
 
         #endregion
@@ -79,38 +82,17 @@ namespace ZeroEngine.EnvironmentSystem
         protected override void Awake()
         {
             base.Awake();
-
-            // 保存原始雾效设置
-            _originalFogEnabled = RenderSettings.fog;
-            _originalFogColor = RenderSettings.fogColor;
-            _originalFogDensity = RenderSettings.fogDensity;
-
+            ResolvePresentationAdapter();
+            BindFollowTarget();
             BuildPresetLookup();
         }
 
         private void Start()
         {
             Register();
-
-            if (_followTarget == null)
-            {
-                var mainCam = Camera.main;
-                if (mainCam != null) _followTarget = mainCam.transform;
-            }
-
-            // 应用初始天气
             if (_currentWeather != null)
             {
-                ApplyWeather(_currentWeather, true);
-            }
-        }
-
-        private void LateUpdate()
-        {
-            // VFX 跟随相机
-            if (_activeVfx != null && _followTarget != null && _currentWeather != null)
-            {
-                _activeVfx.transform.position = _followTarget.position + _currentWeather.VfxOffset;
+                PresentWeather(_currentWeather, WeatherType.Clear, true);
             }
         }
 
@@ -127,20 +109,24 @@ namespace ZeroEngine.EnvironmentSystem
         /// <summary>设置天气</summary>
         public void SetWeather(WeatherPresetSO preset)
         {
-            if (preset == null || preset == _currentWeather) return;
+            if (preset == null || preset == _currentWeather)
+            {
+                return;
+            }
 
-            var previousType = CurrentWeatherType;
+            WeatherType previousType = CurrentWeatherType;
             _currentWeather = preset;
-            ApplyWeather(preset, false);
+            PresentWeather(preset, previousType, false);
 
-            OnEnvironmentEvent?.Invoke(EnvironmentEventArgs.WeatherChanged(preset.WeatherType, previousType));
+            OnEnvironmentEvent?.Invoke(
+                EnvironmentEventArgs.WeatherChanged(preset.WeatherType, previousType));
             Log($"天气变更: {previousType} -> {preset.WeatherType}");
         }
 
         /// <summary>通过类型设置天气</summary>
         public void SetWeather(WeatherType type)
         {
-            var preset = GetPreset(type);
+            WeatherPresetSO preset = GetPreset(type);
             if (preset != null)
             {
                 SetWeather(preset);
@@ -150,184 +136,118 @@ namespace ZeroEngine.EnvironmentSystem
         /// <summary>获取预设</summary>
         public WeatherPresetSO GetPreset(WeatherType type)
         {
-            _presetLookup.TryGetValue(type, out var preset);
+            _presetLookup.TryGetValue(type, out WeatherPresetSO preset);
             return preset;
         }
 
-        /// <summary>清除天气效果</summary>
+        /// <summary>清除天气状态，并通知显式演出适配器恢复其自有状态。</summary>
         public void ClearWeather()
         {
-            // 移除 VFX
-            if (_activeVfx != null)
-            {
-                Destroy(_activeVfx);
-                _activeVfx = null;
-            }
-
-            // 停止环境音效
-            StopAmbientSound();
-
-            // 恢复雾效
-            RestoreFog();
-
+            WeatherType previousType = CurrentWeatherType;
             _currentWeather = null;
+            _presentationAdapter?.ClearWeatherPresentation(previousType);
         }
 
-        /// <summary>设置跟随目标</summary>
+        /// <summary>设置天气演出的跟随目标。</summary>
         public void SetFollowTarget(Transform target)
         {
             _followTarget = target;
+            BindFollowTarget();
         }
 
         /// <summary>注册新的天气预设</summary>
         public void RegisterPreset(WeatherPresetSO preset)
         {
-            if (preset == null) return;
+            if (preset == null)
+            {
+                return;
+            }
+
             if (!_weatherPresets.Contains(preset))
+            {
                 _weatherPresets.Add(preset);
+            }
+
             _presetLookup[preset.WeatherType] = preset;
         }
+
+#if UNITY_INCLUDE_TESTS
+        public void ConfigurePresentationAdapterForTests(MonoBehaviour adapterBehaviour)
+        {
+            _presentationAdapterBehaviour = adapterBehaviour;
+            ResolvePresentationAdapter();
+            BindFollowTarget();
+        }
+#endif
 
         #endregion
 
         #region Internal
 
+        private void ResolvePresentationAdapter()
+        {
+            _presentationAdapter = null;
+            if (_presentationAdapterBehaviour == null)
+            {
+                return;
+            }
+
+            if (_presentationAdapterBehaviour is not IWeatherPresentationAdapter adapter)
+            {
+                throw new InvalidOperationException(
+                    $"Weather presentation component '{_presentationAdapterBehaviour.GetType().FullName}' "
+                    + $"must implement {nameof(IWeatherPresentationAdapter)}.");
+            }
+
+            _presentationAdapter = adapter;
+        }
+
+        private void BindFollowTarget()
+        {
+            if (_presentationAdapter is IWeatherFollowTargetAdapter followTargetAdapter)
+            {
+                followTargetAdapter.SetFollowTarget(_followTarget);
+            }
+        }
+
         private void BuildPresetLookup()
         {
             _presetLookup.Clear();
-            foreach (var preset in _weatherPresets)
+            foreach (WeatherPresetSO preset in _weatherPresets)
             {
                 if (preset != null)
-                    _presetLookup[preset.WeatherType] = preset;
-            }
-        }
-
-        private void ApplyWeather(WeatherPresetSO preset, bool immediate)
-        {
-            float duration = immediate ? 0f : preset.TransitionDuration;
-
-            // 1. VFX
-            if (_activeVfx != null)
-            {
-                Destroy(_activeVfx);
-                _activeVfx = null;
-            }
-
-            if (preset.VfxPrefab != null && _followTarget != null)
-            {
-                _activeVfx = Instantiate(preset.VfxPrefab,
-                    _followTarget.position + preset.VfxOffset,
-                    Quaternion.identity);
-            }
-
-            // 2. Fog
-            if (preset.OverrideFog)
-            {
-                RenderSettings.fog = preset.EnableFog;
-                if (preset.EnableFog)
                 {
-                    if (immediate)
-                    {
-                        RenderSettings.fogColor = preset.FogColor;
-                        RenderSettings.fogDensity = preset.FogDensity;
-                    }
-                    else
-                    {
-                        StartCoroutine(TransitionFog(preset.FogColor, preset.FogDensity, duration));
-                    }
+                    _presetLookup[preset.WeatherType] = preset;
                 }
             }
-
-            // 3. Audio
-            PlayAmbientSound(preset, duration);
         }
 
-        private System.Collections.IEnumerator TransitionFog(Color targetColor, float targetDensity, float duration)
+        private void PresentWeather(
+            WeatherPresetSO preset,
+            WeatherType previousType,
+            bool immediate)
         {
-            Color startColor = RenderSettings.fogColor;
-            float startDensity = RenderSettings.fogDensity;
-            float elapsed = 0f;
-
-            while (elapsed < duration)
+            if (_presentationAdapter == null)
             {
-                elapsed += Time.deltaTime;
-                float t = elapsed / duration;
-
-                RenderSettings.fogColor = Color.Lerp(startColor, targetColor, t);
-                RenderSettings.fogDensity = Mathf.Lerp(startDensity, targetDensity, t);
-
-                yield return null;
+                return;
             }
 
-            RenderSettings.fogColor = targetColor;
-            RenderSettings.fogDensity = targetDensity;
-        }
-
-        private void RestoreFog()
-        {
-            StartCoroutine(TransitionFog(_originalFogColor, _originalFogDensity, 1f));
-        }
-
-        private void PlayAmbientSound(WeatherPresetSO preset, float fadeDuration)
-        {
-            StopAmbientSound();
-
-            if (preset.AmbientSound == null) return;
-
-            // 创建 AudioSource 播放环境音
-            var go = new GameObject("WeatherAmbient");
-            go.transform.SetParent(transform);
-            _currentAmbientSource = go.AddComponent<AudioSource>();
-            _currentAmbientSource.clip = preset.AmbientSound;
-            _currentAmbientSource.loop = true;
-            _currentAmbientSource.volume = 0f;
-            _currentAmbientSource.Play();
-
-            StartCoroutine(FadeAudioVolume(_currentAmbientSource, preset.AmbientVolume, fadeDuration));
-        }
-
-        private void StopAmbientSound()
-        {
-            if (_currentAmbientSource != null)
-            {
-                StartCoroutine(FadeOutAndDestroy(_currentAmbientSource, 1f));
-                _currentAmbientSource = null;
-            }
-        }
-
-        private System.Collections.IEnumerator FadeAudioVolume(AudioSource source, float targetVolume, float duration)
-        {
-            if (source == null) yield break;
-
-            float startVolume = source.volume;
-            float elapsed = 0f;
-
-            while (elapsed < duration && source != null)
-            {
-                elapsed += Time.deltaTime;
-                source.volume = Mathf.Lerp(startVolume, targetVolume, elapsed / duration);
-                yield return null;
-            }
-
-            if (source != null)
-                source.volume = targetVolume;
-        }
-
-        private System.Collections.IEnumerator FadeOutAndDestroy(AudioSource source, float duration)
-        {
-            if (source == null) yield break;
-
-            yield return FadeAudioVolume(source, 0f, duration);
-
-            if (source != null)
-                Destroy(source.gameObject);
+            _presentationAdapter.ApplyWeatherPresentation(
+                new WeatherPresentationContext(
+                    previousType,
+                    preset.WeatherType,
+                    preset,
+                    immediate));
         }
 
         [System.Diagnostics.Conditional("UNITY_EDITOR")]
         [System.Diagnostics.Conditional("ZEROENGINE_DEBUG")]
         private void Log(string message)
         {
-            if (_debugMode) Debug.Log($"[Weather] {message}");
+            if (_debugMode)
+            {
+                Debug.Log($"[Weather] {message}");
+            }
         }
 
         #endregion

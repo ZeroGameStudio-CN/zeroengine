@@ -2,12 +2,20 @@ using System;
 using System.Collections.Generic;
 using NUnit.Framework;
 using UnityEngine;
+using UnityEngine.TestTools;
+using ZeroEngine.Core;
 
 namespace ZeroEngine.Audio.Tests
 {
     public sealed class AudioBankTests
     {
         private readonly List<UnityEngine.Object> _createdObjects = new();
+
+        [SetUp]
+        public void SetUp()
+        {
+            ServiceRegistry.ClearForTests();
+        }
 
         [TearDown]
         public void TearDown()
@@ -18,6 +26,7 @@ namespace ZeroEngine.Audio.Tests
             }
 
             _createdObjects.Clear();
+            ServiceRegistry.ClearForTests();
         }
 
         [Test]

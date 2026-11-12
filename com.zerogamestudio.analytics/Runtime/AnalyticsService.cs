@@ -64,6 +64,9 @@ namespace ZGS.Analytics
             TryLogEvent(eventName, parameters, default);
         }
 
+        /// <summary>Persist one explicit project diagnostic and its bounded snapshot as one event.</summary>
+        public static DiagnosticSubmissionResult TryReportDiagnostic(DiagnosticReport report) => DiagnosticReporter.TryReport(report);
+
         /// <summary>
         /// Builds one immutable event envelope and asks all configured providers to enqueue it.
         /// </summary>
@@ -271,6 +274,7 @@ namespace ZGS.Analytics
         {
             _providers.Clear();
             _initialized = false;
+            DiagnosticReporter.Reset();
         }
     }
 }

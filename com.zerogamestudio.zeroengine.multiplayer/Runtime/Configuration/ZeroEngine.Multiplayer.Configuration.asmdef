@@ -1,0 +1,16 @@
+{
+  "name": "ZeroEngine.Multiplayer.Configuration",
+  "rootNamespace": "ZeroEngine.Multiplayer",
+  "references": [
+    "ZeroEngine.Multiplayer.Core"
+  ],
+  "includePlatforms": [],
+  "excludePlatforms": [],
+  "allowUnsafeCode": false,
+  "overrideReferences": false,
+  "precompiledReferences": [],
+  "autoReferenced": true,
+  "defineConstraints": [],
+  "versionDefines": [],
+  "noEngineReferences": false
+}

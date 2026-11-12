@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using UnityEngine;
 using ZeroEngine.StatSystem;
+using ZeroEngine.BuffSystem.Runtime;
 
 namespace ZeroEngine.BuffSystem
 {
@@ -19,7 +20,7 @@ namespace ZeroEngine.BuffSystem
         /// <summary>
         /// 当前层数
         /// </summary>
-        public int CurrentStacks => _currentStacks;
+        public int CurrentStacks => _stacks.TotalStacks;
 
         /// <summary>
         /// 剩余持续时间（秒）
@@ -29,16 +30,18 @@ namespace ZeroEngine.BuffSystem
         /// <summary>
         /// Buff 是否已过期
         /// </summary>
-        public bool IsExpired { get; private set; }
+        public bool IsExpired => _lifecycle.IsReleased;
 
-        private int _currentStacks;
+        private readonly BuffStackState _stacks = new BuffStackState();
+        private readonly BuffLifecycle _lifecycle = new BuffLifecycle();
         private float _tickTimer;
-        private StatController _targetStats;
+        private IBuffStatTarget _targetStats;
+        private float? _durationOverride;
         
         // Refactored: Track type with modifier to allow removal
         private struct AppliedModifier
         {
-            public StatType Type;
+            public StatId StatId;
             public StatModifier Modifier;
         }
         private List<AppliedModifier> _appliedModifiers = new List<AppliedModifier>();
@@ -58,7 +61,7 @@ namespace ZeroEngine.BuffSystem
         /// </summary>
         /// <param name="data">Buff 配置数据</param>
         /// <param name="targetStats">目标属性控制器（用于应用修饰器）</param>
-        public BuffHandler(BuffData data, StatController targetStats)
+        public BuffHandler(BuffData data, IBuffStatTarget targetStats)
         {
             Data = data;
             _targetStats = targetStats;
@@ -73,13 +76,12 @@ namespace ZeroEngine.BuffSystem
         {
             if (IsExpired) return;
 
-            var oldStacks = _currentStacks;
-            _currentStacks += count;
-            if (_currentStacks > Data.MaxStacks) _currentStacks = Data.MaxStacks;
+            var oldStacks = CurrentStacks;
+            _stacks.SetSourceStackCount(string.Empty, Math.Min(unchecked(oldStacks + count), Data.MaxStacks));
 
             if (Data.RefreshOnAddStack) RefreshDuration();
 
-            UpdateStatModifiers(oldStacks, _currentStacks);
+            UpdateStatModifiers(oldStacks, CurrentStacks);
         }
 
         /// <summary>
@@ -90,18 +92,18 @@ namespace ZeroEngine.BuffSystem
         {
             if (IsExpired) return;
 
-            var oldStacks = _currentStacks;
-            _currentStacks -= count;
+            var oldStacks = CurrentStacks;
+            _stacks.SetSourceStackCount(string.Empty, unchecked(oldStacks - count));
 
             if (Data.RefreshOnRemoveStack) RefreshDuration();
 
-            if (_currentStacks <= 0)
+            if (CurrentStacks <= 0)
             {
                 Expire();
             }
             else
             {
-                UpdateStatModifiers(oldStacks, _currentStacks);
+                UpdateStatModifiers(oldStacks, CurrentStacks);
             }
         }
 
@@ -115,22 +117,26 @@ namespace ZeroEngine.BuffSystem
 
             if (Data.Duration > 0)
             {
-                RemainingTime -= deltaTime;
+                RemainingTime = BuffClock.AdvanceDuration(RemainingTime, deltaTime);
                 if (RemainingTime <= 0)
                 {
                     HandleExpire();
                 }
             }
             
-            if (Data.TickInterval > 0)
+            if (BuffClock.TryAdvanceTick(deltaTime, ref _tickTimer, Data.TickInterval))
             {
-                _tickTimer += deltaTime;
-                if (_tickTimer >= Data.TickInterval)
-                {
-                    _tickTimer = 0;
-                    OnTick?.Invoke(this);
-                }
+                OnTick?.Invoke(this);
             }
+        }
+
+        /// <summary>
+        /// 按施放点覆盖本实例的持续时长，并立即刷新剩余时间。
+        /// </summary>
+        public void OverrideDuration(float duration)
+        {
+            _durationOverride = duration;
+            RemainingTime = duration;
         }
 
         /// <summary>
@@ -138,7 +144,7 @@ namespace ZeroEngine.BuffSystem
         /// </summary>
         public void RefreshDuration()
         {
-            RemainingTime = Data.Duration;
+            RemainingTime = _durationOverride ?? Data.Duration;
         }
 
         /// <summary>
@@ -147,8 +153,8 @@ namespace ZeroEngine.BuffSystem
         public void ResetStacks()
         {
             if (IsExpired) return;
-            UpdateStatModifiers(_currentStacks, 0);
-            _currentStacks = 0;
+            UpdateStatModifiers(CurrentStacks, 0);
+            _stacks.Clear();
         }
 
         /// <summary>
@@ -157,6 +163,24 @@ namespace ZeroEngine.BuffSystem
         public void ForceExpire()
         {
             Expire();
+        }
+
+        /// <summary>
+        /// 从存档数据恢复剩余时长和层数，不触发堆叠生命周期副作用。
+        /// </summary>
+        public void RestoreState(float remainingTime, int stacks)
+        {
+            if (IsExpired) return;
+
+            if (stacks < 0)
+            {
+                Debug.LogWarning($"BuffHandler.RestoreState received negative stacks ({stacks}) for buff '{Data?.BuffId}'; clamping to 0.");
+            }
+
+            RemainingTime = remainingTime;
+            var oldStacks = CurrentStacks;
+            _stacks.SetSourceStackCount(string.Empty, Mathf.Clamp(stacks, 0, Data.MaxStacks));
+            UpdateStatModifiers(oldStacks, CurrentStacks);
         }
 
         private void HandleExpire()
@@ -175,8 +199,8 @@ namespace ZeroEngine.BuffSystem
         private void Expire()
         {
             if (IsExpired) return;
-            IsExpired = true;
-            _currentStacks = 0;
+            _lifecycle.Release();
+            _stacks.Clear();
             
             ClearModifiers();
             
@@ -199,11 +223,12 @@ namespace ZeroEngine.BuffSystem
                     foreach (var modConfig in Data.StatModifiers)
                     {
                         var mod = new StatModifier(modConfig.Value, modConfig.ModType, (int)modConfig.ModType, this);
-                        _targetStats.AddModifier(modConfig.StatType, mod);
+                        var statId = ResolveStatId(modConfig);
+                        _targetStats.AddModifier(statId, mod);
                         
                         _appliedModifiers.Add(new AppliedModifier 
                         { 
-                            Type = modConfig.StatType, 
+                            StatId = statId,
                             Modifier = mod 
                         });
                     }
@@ -224,7 +249,7 @@ namespace ZeroEngine.BuffSystem
                         var lastIndex = _appliedModifiers.Count - 1;
                         var entry = _appliedModifiers[lastIndex];
                         
-                        _targetStats.RemoveModifier(entry.Type, entry.Modifier);
+                        _targetStats.RemoveModifier(entry.StatId, entry.Modifier);
                         _appliedModifiers.RemoveAt(lastIndex);
                     }
                 }
@@ -240,9 +265,21 @@ namespace ZeroEngine.BuffSystem
 
             foreach (var entry in _appliedModifiers)
             {
-                _targetStats.RemoveModifier(entry.Type, entry.Modifier);
+                _targetStats.RemoveModifier(entry.StatId, entry.Modifier);
             }
             _appliedModifiers.Clear();
+        }
+
+        private static StatId ResolveStatId(BuffStatModifierConfig config)
+        {
+            if (!config.StatId.IsEmpty)
+            {
+                return config.StatId;
+            }
+
+            return config.StatType == StatType.None
+                ? new StatId(string.Empty)
+                : new StatId(config.StatType.ToString());
         }
     }
 }

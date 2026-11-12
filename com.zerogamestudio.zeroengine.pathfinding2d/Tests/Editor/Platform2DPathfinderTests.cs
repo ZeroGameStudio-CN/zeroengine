@@ -9,6 +9,40 @@ namespace ZeroEngine.Pathfinding2D.Tests.Editor
     public class Platform2DPathfinderTests
     {
         [Test]
+        public void GenerateNearlyLevelCompoundPolygon_PreservesEveryExposedSpan()
+        {
+            var terrain = new GameObject("NearlyLevelCompoundPolygon");
+            var host = new GameObject("NearlyLevelGraph");
+            try
+            {
+                terrain.layer = 8;
+                terrain.AddComponent<PolygonCollider2D>().points = new[] {
+                    new Vector2(13f, 13f), new Vector2(70f, 13f), new Vector2(69.99996f, 15.00001f),
+                    new Vector2(43.00001f, 15.00004f), new Vector2(43f, 24f), new Vector2(41f, 24f),
+                    new Vector2(40.99996f, 15.00001f), new Vector2(28.00001f, 15.00004f),
+                    new Vector2(28f, 33f), new Vector2(25f, 33f), new Vector2(24.99996f, 15.00001f), new Vector2(12.99999f, 14.99997f)
+                };
+                Physics2D.SyncTransforms();
+                var graph = host.AddComponent<PlatformGraphGenerator>();
+                graph.Config.ScanCenter = new Vector2(40f, 20f); graph.Config.ScanSize = new Vector2(80f, 50f);
+                graph.Config.GroundLayer = 1 << 8;
+                graph.Config.OneWayPlatformLayer = 0;
+                graph.GeneratePlatformGraph();
+                foreach (float x in new[] { 20f, 35f, 55f })
+                    Assert.That(graph.SurfaceSegments.Any(segment => segment.MinX <= x && segment.MaxX >= x && Mathf.Abs(segment.Y - 15f) < .01f),
+                        Is.True, $"Missing exposed floor at {x},15: {graph.BuildSurfaceSegmentDebug()}");
+                foreach (float x in new[] { 26f, 42f })
+                    Assert.That(graph.SurfaceSegments.Any(segment => segment.MinX <= x && segment.MaxX >= x && Mathf.Abs(segment.Y - 15f) < .01f),
+                        Is.False, "A wall must still split the floor into separate exposed spans.");
+            }
+            finally
+            {
+                Object.DestroyImmediate(host);
+                Object.DestroyImmediate(terrain);
+            }
+        }
+
+        [Test]
         public void CreateJump_NormalizesFacingDirectionOverride()
         {
             var geometric = PlatformLinkData.CreateJump(1, 2, 8f, 2f, 0.5f);
@@ -98,6 +132,68 @@ namespace ZeroEngine.Pathfinding2D.Tests.Editor
 
                 Assert.AreEqual(-1, geometricPath.Commands[0].FacingDirection);
                 Assert.IsFalse(geometricPath.Commands[0].HasWallContactAnchor);
+            }
+            finally
+            {
+                Object.DestroyImmediate(host);
+            }
+        }
+
+        [Test]
+        public void ReconstructPath_RetainedCommandsSurviveOtherRoutesAndEarlyFailure()
+        {
+            var host = new GameObject("RetainedReconstructedPathTest");
+            try
+            {
+                var graph = host.AddComponent<PlatformGraphGenerator>();
+                var positions = new[] { Vector3.zero, new Vector3(3f, 0f), new Vector3(5f, 2f) };
+                for (int i = 0; i < positions.Length; i++)
+                {
+                    graph.Nodes.Add(PlatformNodeData.CreateSurface(i + 1, positions[i], null));
+                    graph.NodeIdToIndex[i + 1] = i;
+                }
+                var pathfinder = host.AddComponent<Platform2DPathfinder>();
+                pathfinder.SetGraphGenerator(graph);
+                var reconstruct = typeof(Platform2DPathfinder).GetMethod("ReconstructPath",
+                    System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic);
+                Assert.IsNotNull(reconstruct);
+                var parents = new System.Collections.Generic.Dictionary<int, int> { [2] = 1, [3] = 2 };
+                var links = new System.Collections.Generic.Dictionary<int, PlatformLinkData>
+                {
+                    [2] = new PlatformLinkData { FromNodeId = 1, ToNodeId = 2, LinkType = PlatformLinkType.Walk, Duration = .3f },
+                    [3] = PlatformLinkData.CreateWallTraversalJump(2, 3, 8f, 2f, .5f, null, -1, 4.25f)
+                };
+                Platform2DPath Build(int target, Vector3 start, Vector3 end) =>
+                    (Platform2DPath)reconstruct.Invoke(pathfinder, new object[] { parents, links, target, start, end });
+
+                var retained = Build(3, positions[0], positions[2]);
+                Assert.AreEqual(PathStatus.Valid, retained.Status);
+                Assert.AreEqual(2, retained.Commands.Count);
+                var retainedCommands = retained.Commands.ToArray();
+                float retainedDuration = retained.TotalDuration;
+                retained.AdvanceToNext();
+
+                parents.Clear(); links.Clear();
+                parents[3] = 1;
+                links[3] = new PlatformLinkData { FromNodeId = 1, ToNodeId = 3, LinkType = PlatformLinkType.Walk, Duration = 1f };
+                Assert.AreEqual(PathStatus.NotFound, Build(3, positions[0], positions[2]).Status,
+                    "A vertical walk must still fail after temporary route buffers were populated.");
+
+                parents.Clear(); links.Clear();
+                parents[2] = 1;
+                links[2] = new PlatformLinkData { FromNodeId = 1, ToNodeId = 2, LinkType = PlatformLinkType.Walk, Duration = .3f };
+                var next = Build(2, positions[0], positions[1]);
+                Assert.AreEqual(PathStatus.Valid, next.Status);
+                Assert.AreEqual(1, next.Commands.Count);
+                Assert.AreEqual(positions[1], next.Commands[0].Target);
+                Assert.AreNotSame(retained.Commands, next.Commands);
+                next.Commands.Clear();
+
+                CollectionAssert.AreEqual(retainedCommands, retained.Commands);
+                Assert.AreEqual(1, retained.CurrentIndex);
+                Assert.AreEqual(retainedDuration, retained.TotalDuration);
+                Assert.AreEqual(positions[0], retained.StartPosition);
+                Assert.AreEqual(positions[2], retained.EndPosition);
             }
             finally
             {
@@ -576,6 +672,42 @@ namespace ZeroEngine.Pathfinding2D.Tests.Editor
                 Object.DestroyImmediate(host);
                 Object.DestroyImmediate(lower);
                 Object.DestroyImmediate(upper);
+            }
+        }
+
+        [Test]
+        public void TryRequestPath_ElevatedTargetViaHigherLedge_AllowsFinalFall()
+        {
+            var host = new GameObject("ElevatedDetourGraph");
+            var start = CreatePlatform("DetourStart", Vector2.zero, new Vector2(4f, .2f));
+            var ledge = CreatePlatform("DetourLedge", new Vector2(5f, 8f), new Vector2(4f, .2f));
+            var target = CreatePlatform("DetourTarget", new Vector2(9f, 4f), new Vector2(4f, .2f));
+            try
+            {
+                Physics2D.SyncTransforms();
+                var graph = host.AddComponent<PlatformGraphGenerator>();
+                graph.Config.ScanCenter = new Vector2(5f, 4f); graph.Config.ScanSize = new Vector2(20f, 20f);
+                graph.Config.GroundLayer = 1 << start.layer; graph.Config.OneWayPlatformLayer = 0;
+                graph.GeneratePlatformGraph();
+                var from = graph.Nodes.First(node => node.PlatformCollider == start.GetComponent<BoxCollider2D>() && node.NodeType == PlatformNodeType.RightEdge);
+                var over = graph.Nodes.First(node => node.PlatformCollider == ledge.GetComponent<BoxCollider2D>() && node.NodeType == PlatformNodeType.RightEdge);
+                var to = graph.Nodes.First(node => node.PlatformCollider == target.GetComponent<BoxCollider2D>() && node.NodeType == PlatformNodeType.LeftEdge);
+                graph.BeginBuild();
+                graph.AddLink(PlatformLinkData.CreateJump(from.NodeId, over.NodeId, 14f, 4f, 1.25f));
+                graph.AddLink(PlatformLinkData.CreateFall(over.NodeId, to.NodeId, 1f));
+                graph.BuildAdjacencyList(); graph.CommitBuild();
+                var finder = host.AddComponent<Platform2DPathfinder>(); finder.SetGraphGenerator(graph);
+                Assert.That(finder.TryRequestPath(new PlatformPathRequest(new Vector3(0f, .1f), new Vector3(9f, 4.1f),
+                    forceRequest: true, projectTargetToGround: false, allowPartialPathOverride: false), out var result), Is.True, BuildPathDebug(result));
+                Assert.That(result.CompletionKind, Is.EqualTo(PlatformPathCompletionKind.FullPath));
+                Assert.That(result.Path.Commands.Any(command => command.CommandType == MoveCommandType.Jump), Is.True);
+                Assert.That(result.Path.Commands.Last(command => command.CommandType != MoveCommandType.Walk).CommandType,
+                    Is.EqualTo(MoveCommandType.Fall));
+            }
+            finally
+            {
+                Object.DestroyImmediate(host); Object.DestroyImmediate(start);
+                Object.DestroyImmediate(ledge); Object.DestroyImmediate(target);
             }
         }
 

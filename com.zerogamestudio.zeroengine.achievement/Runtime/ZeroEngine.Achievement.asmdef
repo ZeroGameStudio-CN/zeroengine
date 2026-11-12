@@ -1,0 +1,6 @@
+{
+    "name": "ZeroEngine.Achievement",
+    "rootNamespace": "ZeroEngine.Achievement",
+    "references": ["ZeroEngine.Core"],
+    "autoReferenced": true
+}

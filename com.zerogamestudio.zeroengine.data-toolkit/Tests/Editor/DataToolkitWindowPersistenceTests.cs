@@ -1,6 +1,8 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Reflection;
+using System.Text.RegularExpressions;
 using NUnit.Framework;
 using UnityEditor;
 using UnityEngine;
@@ -35,7 +37,7 @@ namespace ZGS.DataToolkit.Editor.Tests
             {
                 if (window != null)
                 {
-                    UnityEngine.Object.DestroyImmediate(window);
+                    window.Close();
                 }
             }
 
@@ -49,6 +51,34 @@ namespace ZGS.DataToolkit.Editor.Tests
         }
 
         [Test]
+        public void ProjectSettings_UseConfiguredUiText()
+        {
+            var uiText = new DataToolkitUiText(
+                dataTypes: "数据类型",
+                assets: "资产",
+                browse: "浏览数据",
+                inspector: "资产详情",
+                selectAssetPrompt: "从中栏选择一个数据资产。",
+                assetSummaryFormat: "{0} 类 / {1}{2} 项资产");
+            var settings = new DataToolkitProjectSettings(
+                projectId: "LocalizedDataToolkit",
+                windowTitle: "数据管理",
+                menuPath: "工具/数据管理",
+                editorPrefsPrefix: "LocalizedDataToolkit",
+                searchRoots: new[] { TestRoot },
+                excludedPaths: Array.Empty<string>(),
+                uiText: uiText);
+
+            Assert.AreSame(uiText, settings.UiText);
+            Assert.AreEqual("数据类型", settings.UiText.DataTypes);
+            Assert.AreEqual("资产", settings.UiText.Assets);
+            Assert.AreEqual("浏览数据", settings.UiText.Browse);
+            Assert.AreEqual("资产详情", settings.UiText.Inspector);
+            Assert.AreEqual("从中栏选择一个数据资产。", settings.UiText.SelectAssetPrompt);
+            Assert.AreEqual("2 类 / 3+ 项资产", string.Format(settings.UiText.AssetSummaryFormat, 2, 3, "+"));
+        }
+
+        [Test]
         public void ReopenedWindow_RestoresSelectedTypeAndAsset()
         {
             CreateTestAsset(OriginalAssetPath);
@@ -57,6 +87,9 @@ namespace ZGS.DataToolkit.Editor.Tests
             var firstWindow = Track(DataToolkitWindow.Open(profile));
             InvokeWindowMethod(firstWindow, "SelectType", typeof(SelectedToolkitTestData));
             InvokeWindowMethod(firstWindow, "SelectAssetByPath", OriginalAssetPath);
+            SetWindowField(firstWindow, "typeColumnScroll", new Vector2(1f, 2f));
+            SetWindowField(firstWindow, "assetColumnScroll", new Vector2(3f, 4f));
+            SetWindowField(firstWindow, "inspectorScroll", new Vector2(5f, 6f));
             Assert.AreEqual(OriginalAssetPath, EditorPrefs.GetString(EditorPrefsPrefix + "_SelectedAssetPath", string.Empty));
             var selectedAssetGuid = EditorPrefs.GetString(EditorPrefsPrefix + "_SelectedAssetGuid", string.Empty);
             Assert.IsNotEmpty(selectedAssetGuid);
@@ -69,6 +102,65 @@ namespace ZGS.DataToolkit.Editor.Tests
             Assert.AreEqual(typeof(SelectedToolkitTestData), GetWindowField(reopenedWindow, "selectedType"));
             Assert.AreEqual(OriginalAssetPath, GetWindowField(reopenedWindow, "selectedAssetPath"));
             Assert.AreEqual(OriginalAssetPath, AssetDatabase.GUIDToAssetPath(selectedAssetGuid));
+            Assert.AreEqual(new Vector2(1f, 2f), GetWindowField(reopenedWindow, "typeColumnScroll"));
+            Assert.AreEqual(new Vector2(3f, 4f), GetWindowField(reopenedWindow, "assetColumnScroll"));
+            Assert.AreEqual(new Vector2(5f, 6f), GetWindowField(reopenedWindow, "inspectorScroll"));
+        }
+
+        [Test]
+        public void BodyLayout_PreservesThreeColumnsAndAddsHorizontalOverflowWhenNarrow()
+        {
+            var contentWidthMethod = typeof(DataToolkitWindow).GetMethod(
+                "ResolveBodyContentWidth",
+                BindingFlags.Static | BindingFlags.NonPublic);
+            Assert.NotNull(contentWidthMethod);
+
+            Assert.AreEqual(378f, (float)contentWidthMethod.Invoke(null, new object[] { 320f }));
+            Assert.AreEqual(700f, (float)contentWidthMethod.Invoke(null, new object[] { 700f }));
+
+            var window = Track(DataToolkitWindow.Open(CreateProfile()));
+            var layoutMethod = typeof(DataToolkitWindow).GetMethod(
+                "CalculateBodyLayoutRects",
+                BindingFlags.Instance | BindingFlags.NonPublic);
+            Assert.NotNull(layoutMethod);
+
+            var layout = layoutMethod.Invoke(window, new object[] { new Rect(0f, 0f, 378f, 400f) });
+            var layoutType = layout.GetType();
+            var typeColumn = (Rect)layoutType.GetProperty("TypeColumn").GetValue(layout);
+            var assetColumn = (Rect)layoutType.GetProperty("AssetColumn").GetValue(layout);
+            var inspectorColumn = (Rect)layoutType.GetProperty("InspectorColumn").GetValue(layout);
+
+            Assert.AreEqual(64f, typeColumn.width);
+            Assert.AreEqual(64f, assetColumn.width);
+            Assert.AreEqual(240f, inspectorColumn.width);
+        }
+
+        [Test]
+        public void EmbeddedView_IsHiddenAndWorkspacePanelIsPublic()
+        {
+            var createEmbedded = typeof(DataToolkitWindow).GetMethod(
+                "CreateEmbedded",
+                BindingFlags.Static | BindingFlags.NonPublic);
+            Assert.NotNull(createEmbedded);
+            var embedded = (DataToolkitWindow)createEmbedded.Invoke(
+                null,
+                new object[] { CreateProfile(), (Action)(() => { }) });
+            try
+            {
+                Assert.AreEqual(HideFlags.HideAndDontSave, embedded.hideFlags);
+                Assert.AreEqual(true, GetWindowField(embedded, "embeddedHost"));
+            }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(embedded);
+            }
+
+            var panelType = typeof(DataToolkitWindow).Assembly.GetType("ZGS.DataToolkit.Editor.DataToolkitWorkspacePanel");
+            Assert.NotNull(panelType);
+            Assert.IsTrue(panelType.IsPublic);
+            Assert.IsTrue(panelType.GetInterfaces().Any(type => type.FullName == "ZeroEngine.EditorUI.IEditorWorkspacePanel"));
+            Assert.IsTrue(panelType.GetInterfaces().Any(type => type.FullName == "ZeroEngine.EditorUI.IEditorWorkspaceFullWidthPanel"));
+            Assert.NotNull(panelType.GetConstructor(new[] { typeof(Func<DataToolkitProjectProfile>) }));
         }
 
         [Test]
@@ -106,7 +198,9 @@ namespace ZGS.DataToolkit.Editor.Tests
         [Test]
         public void ToolbarProviderException_IsLoggedOnceAndProviderIsDisabled()
         {
-            LogAssert.ignoreFailingMessages = true;
+            LogAssert.Expect(
+                LogType.Exception,
+                new Regex(ThrowingToolbarProvider.ExceptionMessage));
             var provider = new ThrowingToolbarProvider();
             var profile = new DataToolkitProjectProfile(
                 CreateSettings(),
@@ -137,19 +231,53 @@ namespace ZGS.DataToolkit.Editor.Tests
         }
 
         [Test]
-        public void SelectableRowsWithoutCountText_UseAvailableTitleWidth()
+        public void SelectableRows_UseMeasuredCountWidthAndPrioritizeFullTitle()
         {
-            var method = typeof(DataToolkitWindow).GetMethod("BuildSelectableRowTitleRect", BindingFlags.Static | BindingFlags.NonPublic);
-            Assert.NotNull(method, "Selectable rows should calculate title width from whether count text is visible.");
+            var countWidthMethod = typeof(DataToolkitWindow).GetMethod(
+                "ResolveSelectableRowCountWidth",
+                BindingFlags.Static | BindingFlags.NonPublic);
+            var showCountMethod = typeof(DataToolkitWindow).GetMethod(
+                "ShouldShowSelectableRowCount",
+                BindingFlags.Static | BindingFlags.NonPublic);
+            var titleRectMethod = typeof(DataToolkitWindow).GetMethod(
+                "BuildSelectableRowTitleRect",
+                BindingFlags.Static | BindingFlags.NonPublic);
+            Assert.NotNull(countWidthMethod);
+            Assert.NotNull(showCountMethod);
+            Assert.NotNull(titleRectMethod);
 
             var rowRect = new Rect(10f, 20f, 240f, 24f);
-            var titleRectWithoutCount = (Rect)method.Invoke(null, new object[] { rowRect, false });
-            var titleRectWithCount = (Rect)method.Invoke(null, new object[] { rowRect, true });
+            var compactCountWidth = (float)countWidthMethod.Invoke(null, new object[] { 7f });
+            var showCompactCount = (bool)showCountMethod.Invoke(
+                null,
+                new object[] { rowRect.width, 80f, compactCountWidth, true });
+            var titleRectWithCount = (Rect)titleRectMethod.Invoke(
+                null,
+                new object[] { rowRect, showCompactCount, compactCountWidth });
+            var showCountInNarrowRow = (bool)showCountMethod.Invoke(
+                null,
+                new object[] { 80f, 68f, compactCountWidth, true });
+            var titleRectWithoutCount = (Rect)titleRectMethod.Invoke(
+                null,
+                new object[] { new Rect(10f, 20f, 80f, 24f), showCountInNarrowRow, compactCountWidth });
 
-            Assert.AreEqual(rowRect.x + 6f, titleRectWithoutCount.x);
-            Assert.AreEqual(rowRect.width - 12f, titleRectWithoutCount.width);
-            Assert.AreEqual(rowRect.width - 56f, titleRectWithCount.width);
-            Assert.Greater(titleRectWithoutCount.width, titleRectWithCount.width);
+            Assert.AreEqual(16f, compactCountWidth);
+            Assert.IsTrue(showCompactCount);
+            Assert.AreEqual(rowRect.width - 12f - 6f - compactCountWidth, titleRectWithCount.width);
+            Assert.IsFalse(showCountInNarrowRow);
+            Assert.AreEqual(68f, titleRectWithoutCount.width);
+        }
+
+        [Test]
+        public void SelectableRowTooltip_PreservesFullTitleAndCountWhenCountIsHidden()
+        {
+            var method = typeof(DataToolkitWindow).GetMethod(
+                "BuildSelectableRowTooltip",
+                BindingFlags.Static | BindingFlags.NonPublic);
+            Assert.NotNull(method);
+
+            Assert.AreEqual("ClassData · 9", method.Invoke(null, new object[] { "ClassData", "9" }));
+            Assert.AreEqual("ClassData", method.Invoke(null, new object[] { "ClassData", string.Empty }));
         }
 
         private static DataToolkitProjectProfile CreateProfile()
@@ -205,6 +333,12 @@ namespace ZGS.DataToolkit.Editor.Tests
             EditorPrefs.DeleteKey(EditorPrefsPrefix + "_SelectedAssetPath");
             EditorPrefs.DeleteKey(EditorPrefsPrefix + "_TypeSearch");
             EditorPrefs.DeleteKey(EditorPrefsPrefix + "_AssetSearch");
+            EditorPrefs.DeleteKey(EditorPrefsPrefix + "_TypeScrollX");
+            EditorPrefs.DeleteKey(EditorPrefsPrefix + "_TypeScrollY");
+            EditorPrefs.DeleteKey(EditorPrefsPrefix + "_AssetScrollX");
+            EditorPrefs.DeleteKey(EditorPrefsPrefix + "_AssetScrollY");
+            EditorPrefs.DeleteKey(EditorPrefsPrefix + "_InspectorScrollX");
+            EditorPrefs.DeleteKey(EditorPrefsPrefix + "_InspectorScrollY");
         }
 
         private static object InvokeWindowMethod(DataToolkitWindow window, string methodName, params object[] arguments)

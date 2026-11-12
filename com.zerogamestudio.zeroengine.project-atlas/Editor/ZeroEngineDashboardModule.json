@@ -1,0 +1,23 @@
+{
+  "schemaVersion": 2,
+  "moduleId": "com.zerogamestudio.zeroengine.project-atlas",
+  "displayName": "项目功能",
+  "description": "面向项目人员的游戏功能目录与配置直达入口。",
+  "order": 5,
+  "scope": "universal",
+  "documentationPath": "README.md",
+  "entries": [],
+  "panels": [
+    {
+      "id": "project-atlas",
+      "displayName": "项目功能",
+      "description": "按角色、地图、战斗、任务等项目工作查找配置、预览和检查入口。",
+      "usage": "选择领域和功能后直接进入现有配置所有者；导航本身不会修改项目内容。",
+      "section": "项目导航",
+      "providerId": "zeroengine.project-atlas",
+      "order": 5,
+      "safety": "navigation",
+      "availability": "always"
+    }
+  ]
+}

@@ -75,6 +75,7 @@ namespace ZGS.Analytics
 
             // 初始化所有 Provider (会触发 SessionInfo.Initialize)
             AnalyticsService.Initialize();
+            AnalyticsService.Flush();
 
             // 监听退出事件以释放资源
             Application.quitting += AnalyticsService.Shutdown;

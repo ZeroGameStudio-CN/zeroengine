@@ -129,7 +129,7 @@ namespace ZeroEngine.Relationship
             // 检查喜欢的礼物
             for (int i = 0; i < LikedGifts.Count; i++)
             {
-                if (LikedGifts[i].Item == item)
+                if (LikedGifts[i]?.Item != null && !string.IsNullOrWhiteSpace(item.Id) && LikedGifts[i].Item.Id == item.Id)
                 {
                     return LikedGifts[i];
                 }
@@ -138,7 +138,7 @@ namespace ZeroEngine.Relationship
             // 检查讨厌的礼物
             for (int i = 0; i < DislikedGifts.Count; i++)
             {
-                if (DislikedGifts[i].Item == item)
+                if (DislikedGifts[i]?.Item != null && !string.IsNullOrWhiteSpace(item.Id) && DislikedGifts[i].Item.Id == item.Id)
                 {
                     return DislikedGifts[i];
                 }

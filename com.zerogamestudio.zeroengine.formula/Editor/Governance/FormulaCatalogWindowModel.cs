@@ -192,7 +192,6 @@ namespace ZeroEngine.Formula.Editor
                 || Contains(row.AssetPath, token)
                 || Contains(row.FormulaGuid, token)
                 || Contains(row.Purpose, token)
-                || Contains(row.Owner, token)
                 || Contains(row.Unit, token)
                 || Contains(row.Notes, token)
                 || Contains(FormulaEditorLabels.CatalogStatusName(row.Status), token))

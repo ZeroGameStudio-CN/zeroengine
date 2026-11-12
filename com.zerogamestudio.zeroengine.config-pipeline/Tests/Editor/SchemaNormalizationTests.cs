@@ -1,5 +1,6 @@
 using System.Linq;
 using System.Text;
+using Newtonsoft.Json.Linq;
 using NUnit.Framework;
 
 namespace ZeroGameStudio.ConfigPipeline.Tests
@@ -31,6 +32,58 @@ namespace ZeroGameStudio.ConfigPipeline.Tests
             "\"clientHint\":{\"type\":\"string\",\"x-zgs-scope\":\"client\"}," +
             "\"serverSecret\":{\"type\":\"integer\",\"x-zgs-number-type\":\"int32\",\"x-zgs-scope\":\"server\"}" +
             "}}}}}";
+
+        [Test]
+        public void AuthoringPolicy_RejectsUnclassifiedNewFieldsAndInvalidRoles()
+        {
+            var root = JObject.Parse(SchemaJson);
+            root["x-zgs-require-authoring-visibility"] = true;
+            var fields = (JObject)root["properties"]["items"]["items"]["properties"];
+            foreach (JProperty field in fields.Properties()) field.Value["x-zgs-authoring-visibility"] = "basic";
+            Assert.DoesNotThrow(() => ConfigSchemaParser.Parse(Encoding.UTF8.GetBytes(root.ToString())));
+            fields["newInput"] = JObject.Parse("{\"type\":\"boolean\"}");
+            Assert.That(Assert.Throws<ConfigSchemaException>(() =>
+                ConfigSchemaParser.Parse(Encoding.UTF8.GetBytes(root.ToString()))).Code,
+                Is.EqualTo("SCHEMA_AUTHORING_VISIBILITY_REQUIRED"));
+            fields["newInput"]["x-zgs-authoring-visibility"] = "guess";
+            Assert.That(Assert.Throws<ConfigSchemaException>(() =>
+                ConfigSchemaParser.Parse(Encoding.UTF8.GetBytes(root.ToString()))).Code,
+                Is.EqualTo("SCHEMA_AUTHORING_VISIBILITY_INVALID"));
+        }
+
+        [Test]
+        public void AuthoringPolicyV2_RequiresTableClassificationAsWellAsFields()
+        {
+            var root = JObject.Parse(SchemaJson);
+            root["x-zgs-require-authoring-visibility"] = true;
+            root["x-zgs-authoring-policy-version"] = 2;
+            var table = (JObject)root["properties"]["items"];
+            table["x-zgs-sheet"] = "Items";
+            foreach (JProperty field in ((JObject)table["items"]["properties"]).Properties())
+                field.Value["x-zgs-authoring-visibility"] = "basic";
+            Assert.That(Assert.Throws<ConfigSchemaException>(() => ConfigSchemaParser.Parse(Encoding.UTF8.GetBytes(root.ToString()))).Code,
+                Is.EqualTo("SCHEMA_AUTHORING_TABLE_VISIBILITY_REQUIRED"));
+            table["x-zgs-authoring-visibility"] = "inactive";
+            var schema = ConfigSchemaParser.Parse(Encoding.UTF8.GetBytes(root.ToString()));
+            Assert.That(schema.AuthoringPolicyVersion, Is.EqualTo(2));
+            Assert.That(schema.Root.Properties[0].Schema.Items.Properties[0].Schema.ResolveAuthoringVisibility("inactive"), Is.EqualTo("inactive"));
+        }
+
+        [Test]
+        public void AuthoringPolicy_DoesNotHideUnfillableRequiredInputs()
+        {
+            var root = JObject.Parse(SchemaJson);
+            root["x-zgs-require-authoring-visibility"] = true;
+            var fields = (JObject)root["properties"]["items"]["items"]["properties"];
+            foreach (JProperty field in fields.Properties()) field.Value["x-zgs-authoring-visibility"] = "basic";
+            fields["id"]["x-zgs-authoring-visibility"] = "technical";
+            fields["weight"]["x-zgs-authoring-visibility"] = "advanced";
+            Assert.That(Assert.Throws<ConfigSchemaException>(() =>
+                ConfigSchemaParser.Parse(Encoding.UTF8.GetBytes(root.ToString()))).Code,
+                Is.EqualTo("SCHEMA_HIDDEN_INPUT_REQUIRES_DEFAULT"));
+            fields["weight"]["default"] = 1;
+            Assert.DoesNotThrow(() => ConfigSchemaParser.Parse(Encoding.UTF8.GetBytes(root.ToString())));
+        }
 
         [Test]
         public void Normalize_MaterializesDefaultsAndProjectsScope()

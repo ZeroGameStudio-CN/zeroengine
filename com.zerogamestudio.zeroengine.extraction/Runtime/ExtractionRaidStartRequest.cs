@@ -15,6 +15,7 @@ namespace POB.Extraction
         public List<string> SecureItemInstanceIds = new();
         public List<ExtractionEquipmentSlotState> EquipmentSlots = new();
         public bool UseUnifiedItemLocations;
+        public ExtractionLootSelectionPolicy LootSelectionPolicy;
 
         public bool IsValid => !string.IsNullOrEmpty(RaidId);
 

@@ -13,4 +13,15 @@ namespace ZeroEngine.Quest
         Persistent, // Survives across runs
         PerRun      // Cleared at end of each run
     }
+
+    /// <summary>
+    /// Legacy objective category retained for serialized quest assets and consumer compatibility.
+    /// </summary>
+    public enum QuestType
+    {
+        Custom,
+        Dialogue,
+        Collect,
+        KillMonster
+    }
 }

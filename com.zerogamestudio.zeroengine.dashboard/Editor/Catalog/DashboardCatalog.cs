@@ -125,6 +125,7 @@ namespace ZeroEngine.Editor.Dashboard
         public int order;
         public string safety;
         public string availability;
+        public string[] zeroEngineCapabilityPackages;
     }
 
     internal sealed class DashboardDescriptorSource
@@ -161,16 +162,31 @@ namespace ZeroEngine.Editor.Dashboard
 
     internal sealed class DashboardInstalledPackage
     {
-        internal DashboardInstalledPackage(string name, string version, string resolvedPath)
+        internal DashboardInstalledPackage(
+            string name,
+            string version,
+            string resolvedPath,
+            string displayName = null,
+            string packageId = null,
+            bool isDirectDependency = false,
+            IReadOnlyList<string> dependencies = null)
         {
             Name = name ?? string.Empty;
             Version = version ?? string.Empty;
             ResolvedPath = resolvedPath ?? string.Empty;
+            DisplayName = string.IsNullOrWhiteSpace(displayName) ? Name : displayName.Trim();
+            PackageId = packageId ?? string.Empty;
+            IsDirectDependency = isDirectDependency;
+            Dependencies = dependencies ?? Array.Empty<string>();
         }
 
         internal string Name { get; }
         internal string Version { get; }
         internal string ResolvedPath { get; }
+        internal string DisplayName { get; }
+        internal string PackageId { get; }
+        internal bool IsDirectDependency { get; }
+        internal IReadOnlyList<string> Dependencies { get; }
     }
 
     internal sealed class DashboardDiagnostic
@@ -437,7 +453,8 @@ namespace ZeroEngine.Editor.Dashboard
             int order,
             DashboardEntrySafety safety,
             DashboardEntryAvailability availability,
-            string sourcePath)
+            string sourcePath,
+            IReadOnlyList<string> zeroEngineCapabilityPackages = null)
         {
             ModuleId = moduleId;
             Id = id;
@@ -451,6 +468,7 @@ namespace ZeroEngine.Editor.Dashboard
             Safety = safety;
             Availability = availability;
             SourcePath = sourcePath;
+            ZeroEngineCapabilityPackages = zeroEngineCapabilityPackages ?? Array.Empty<string>();
         }
 
         internal string ModuleId { get; }
@@ -465,6 +483,7 @@ namespace ZeroEngine.Editor.Dashboard
         internal DashboardEntrySafety Safety { get; }
         internal DashboardEntryAvailability Availability { get; }
         internal string SourcePath { get; }
+        internal IReadOnlyList<string> ZeroEngineCapabilityPackages { get; }
     }
 
     internal sealed class DashboardCatalog
@@ -980,6 +999,25 @@ namespace ZeroEngine.Editor.Dashboard
             string usage = Trim(data.usage);
             string section = Trim(data.section);
             string providerId = Trim(data.providerId);
+            var zeroEngineCapabilityPackages = new List<string>();
+
+            if (data.zeroEngineCapabilityPackages != null)
+            {
+                foreach (string rawPackageName in data.zeroEngineCapabilityPackages)
+                {
+                    string packageName = Trim(rawPackageName);
+                    if (!ModuleIdPattern.IsMatch(packageName) ||
+                        !packageName.StartsWith("com.zerogamestudio.zeroengine.", StringComparison.Ordinal))
+                    {
+                        errors.Add(prefix +
+                                   "zeroEngineCapabilityPackages must contain ZeroEngine package IDs.");
+                        continue;
+                    }
+
+                    if (!zeroEngineCapabilityPackages.Contains(packageName, StringComparer.Ordinal))
+                        zeroEngineCapabilityPackages.Add(packageName);
+                }
+            }
 
             if (!EntryIdPattern.IsMatch(id))
                 errors.Add(prefix + "id must be lowercase kebab-case.");
@@ -1005,7 +1043,8 @@ namespace ZeroEngine.Editor.Dashboard
                 data.order,
                 safety,
                 availability,
-                sourcePath);
+                sourcePath,
+                zeroEngineCapabilityPackages);
         }
 
         private static void ValidateSurfaceGroups(

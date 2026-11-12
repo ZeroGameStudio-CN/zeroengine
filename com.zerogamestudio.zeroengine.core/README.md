@@ -3,8 +3,9 @@
 ZeroEngine 框架的核心基础设施包。
 
 ## 版本
-- **当前版本**: 2.0.0
+- **整合候选版本**: 2.2.2（尚未发布）
 - **最小 Unity**: 2022.3 LTS
+- **基础依赖**: uGUI 和 UI 引擎模块；现有 `UIUtils` 与 `DOTweenAdapter` 的 Canvas／EventSystem 合同直接使用这些类型。Core 单独安装同样声明它们。
 
 ## 包含模块
 
@@ -12,8 +13,10 @@ ZeroEngine 框架的核心基础设施包。
 - `Singleton<T>` - 非持久单例基类
 - `MonoSingleton<T>` - Singleton 别名
 - `PersistentSingleton<T>` - 跨场景持久单例
+- 退出期间的迟到访问不再新建持久单例；销毁重复实例不会清除仍存活的拥有者。
 - `EventManager` - 事件总线系统
 - `GameEvents` - 预定义事件常量
+- `ServiceRegistry` - 类型化服务注册；SubsystemRegistration 时自动清除旧场景实例
 
 ### Pool (对象池)
 - `PoolManager` - 对象池管理器 (PersistentSingleton)
@@ -22,6 +25,7 @@ ZeroEngine 框架的核心基础设施包。
 
 ### Utils (工具)
 - `ZeroLog` - 统一日志系统
+- `ZeroLogChannel` - 可注入 sink、等级过滤和结构化 entry 的实例日志通道
 - `DebugUtils` - 条件编译调试工具
 - `DateUtils` - 时间戳/格式化工具
 - `ZeroEase` - 缓动枚举 (DOTween 解耦)
@@ -108,3 +112,5 @@ string hp = ZeroGC.CacheFormattedValue("hp", 100, v => $"{v} HP");
 ## 许可
 
 ZeroGameStudio Internal Use
+
+WeightedSelection provides pure weighted interval selection and a rank-count-independent logarithmic luck curve. Callers supply stable candidate order and a unit sample in [0,1); invalid or empty weight pools fail without consuming fallback randomness.

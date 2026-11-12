@@ -84,6 +84,25 @@ namespace ZeroEngine.Dashboard.Tests.Editor
         }
 
         [Test]
+        public void Build_PanelCapabilityPackages_PreservesExplicitZeroEngineOwnership()
+        {
+            DashboardCatalog catalog = Build(Source(Descriptor(
+                "project.panels",
+                "Panels",
+                string.Empty,
+                Panel(
+                    "runtime",
+                    "运行概览",
+                    "project.panels",
+                    "com.zerogamestudio.zeroengine.narrative"))));
+
+            Assert.That(
+                catalog.Modules[0].Panels[0].ZeroEngineCapabilityPackages,
+                Is.EqualTo(new[] { "com.zerogamestudio.zeroengine.narrative" }));
+            Assert.IsFalse(catalog.Diagnostics.Any(item => item.Severity == DashboardDiagnosticSeverity.Error));
+        }
+
+        [Test]
         public void Build_InvalidPanelProviderId_RejectsDescriptor()
         {
             DashboardCatalog catalog = Build(Source(Descriptor(
@@ -787,10 +806,12 @@ namespace ZeroEngine.Dashboard.Tests.Editor
                 Assert.Ignore("Runs only in the synthetic package-removal lane.");
             }
 
-            ZeroEngineDashboard window = UnityEngine.ScriptableObject.CreateInstance<ZeroEngineDashboard>();
-            DashboardCatalog initialCatalog = GetWindowCatalog(window);
-            Assert.IsTrue(initialCatalog.Modules.Any(module => module.ModuleId == RemovalFixturePackageName));
-
+            DashboardCatalogSession.Invalidate();
+            DashboardCatalog initialCatalog = DashboardCatalogDiscovery.Discover();
+            Assert.IsTrue(
+                initialCatalog.Modules.Any(module => module.ModuleId == RemovalFixturePackageName),
+                "Initial Dashboard discovery did not include the removal fixture. Diagnostics: " +
+                string.Join(" | ", initialCatalog.Diagnostics.Select(item => item.Code + ": " + item.Message)));
             bool observedRemovalEvent = false;
             void OnRegisteredPackages(PackageRegistrationEventArgs args)
             {
@@ -812,13 +833,12 @@ namespace ZeroEngine.Dashboard.Tests.Editor
                     yield return null;
                 Assert.IsTrue(observedRemovalEvent, "registeredPackages did not report the removal.");
 
-                DashboardCatalog refreshedCatalog = GetWindowCatalog(window);
+                DashboardCatalog refreshedCatalog = DashboardCatalogDiscovery.Discover();
                 Assert.IsFalse(refreshedCatalog.Modules.Any(module => module.ModuleId == RemovalFixturePackageName));
             }
             finally
             {
                 UnityEditor.PackageManager.Events.registeredPackages -= OnRegisteredPackages;
-                UnityEngine.Object.DestroyImmediate(window);
             }
         }
 
@@ -1011,8 +1031,17 @@ namespace ZeroEngine.Dashboard.Tests.Editor
                    "\"replaces\":[]" + confirmationField + contentTypeField + "}";
         }
 
-        private static string Panel(string id, string displayName, string providerId)
+        private static string Panel(
+            string id,
+            string displayName,
+            string providerId,
+            params string[] zeroEngineCapabilityPackages)
         {
+            string capabilityField = zeroEngineCapabilityPackages == null || zeroEngineCapabilityPackages.Length == 0
+                ? string.Empty
+                : ",\"zeroEngineCapabilityPackages\":[" +
+                  string.Join(",", zeroEngineCapabilityPackages.Select(value => "\"" + value + "\"")) +
+                  "]";
             return "{" +
                    "\"id\":\"" + id + "\"," +
                    "\"displayName\":\"" + displayName + "\"," +
@@ -1022,7 +1051,7 @@ namespace ZeroEngine.Dashboard.Tests.Editor
                    "\"providerId\":\"" + providerId + "\"," +
                    "\"order\":100," +
                    "\"safety\":\"read-only\"," +
-                   "\"availability\":\"always\"}";
+                   "\"availability\":\"always\"" + capabilityField + "}";
         }
 
         private static string Entry(

@@ -1,0 +1,47 @@
+{
+  "schemaVersion": 2,
+  "moduleId": "com.zerogamestudio.zeroengine.multiplayer",
+  "displayName": "多人会话",
+  "description": "本地多人启动与会话配置检查。",
+  "order": 650,
+  "scope": "universal",
+  "documentationPath": "README.md",
+  "entries": [
+    {
+      "id": "multiplayer-local-launcher",
+      "displayName": "本地多人启动器",
+      "description": "选择已构建的程序并配置本地会话。",
+      "category": "test-release",
+      "kind": "window",
+      "safety": "navigation",
+      "availability": "edit-mode",
+      "visibility": "primary",
+      "order": 100,
+      "legacyKeywords": [
+        "Window/ZeroEngine/Multiplayer/Local Launcher"
+      ],
+      "executionKind": "provider",
+      "providerId": "zeroengine.multiplayer",
+      "actionId": "multiplayer-local-launcher",
+      "replaces": []
+    },
+    {
+      "id": "multiplayer-validate-setup",
+      "displayName": "检查多人配置",
+      "description": "只读检查已安装的会话配置与后端。",
+      "category": "diagnostics",
+      "kind": "command",
+      "safety": "read-only",
+      "availability": "edit-mode",
+      "visibility": "advanced",
+      "order": 200,
+      "legacyKeywords": [
+        "Window/ZeroEngine/Multiplayer/Validate Setup"
+      ],
+      "executionKind": "provider",
+      "providerId": "zeroengine.multiplayer",
+      "actionId": "multiplayer-validate-setup",
+      "replaces": []
+    }
+  ]
+}

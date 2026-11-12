@@ -136,6 +136,158 @@ namespace ZGS.DataToolkit.Editor.Tests
             StringAssert.DoesNotContain(".Where(path => ContainsAssetOfType(path, type))", source);
         }
 
+        [Test]
+        public void Discovery_ExplicitTypesPreserveAttributedTypesAndRemoveDuplicates()
+        {
+            var settings = CreateSettings(DataToolkitDefaultInspectorMode.FullInspector)
+                .WithAdditionalManageableTypes(new[]
+                {
+                    typeof(ToolkitHostTestData), typeof(ToolkitHostTestData), typeof(SelectedToolkitTestData)
+                });
+
+            var types = ManageableDataTypeDiscovery.GetManageableScriptableObjectTypes(settings);
+
+            CollectionAssert.Contains(types, typeof(ToolkitHostTestData));
+            CollectionAssert.Contains(types, typeof(SelectedToolkitTestData));
+            CollectionAssert.Contains(types, typeof(ToolkitAttributedTestData));
+            Assert.AreEqual(1, types.Count(type => type == typeof(ToolkitHostTestData)));
+            Assert.AreEqual(1, types.Count(type => type == typeof(SelectedToolkitTestData)));
+        }
+
+        [Test]
+        public void Discovery_ExplicitTypesDoNotLeakAcrossProfilesOrLegacyCalls()
+        {
+            var original = CreateSettings(DataToolkitDefaultInspectorMode.FullInspector);
+            var registered = original.WithAdditionalManageableTypes(new[] { typeof(ToolkitHostTestData) });
+
+            CollectionAssert.Contains(ManageableDataTypeDiscovery.GetManageableScriptableObjectTypes(registered), typeof(ToolkitHostTestData));
+            CollectionAssert.DoesNotContain(ManageableDataTypeDiscovery.GetManageableScriptableObjectTypes(original), typeof(ToolkitHostTestData));
+            CollectionAssert.DoesNotContain(ManageableDataTypeDiscovery.GetManageableScriptableObjectTypes(), typeof(ToolkitHostTestData));
+        }
+
+        [Test]
+        public void ProjectSettings_ExplicitTypesRejectUnsupportedAssetTypes()
+        {
+            var settings = CreateSettings(DataToolkitDefaultInspectorMode.FullInspector)
+                .WithAdditionalManageableTypes(new[]
+                {
+                    null, typeof(string), typeof(GameObject), typeof(ScriptableObject),
+                    typeof(AbstractToolkitTestData), typeof(GenericToolkitTestData<>), typeof(ToolkitHostTestData)
+                });
+
+            CollectionAssert.AreEqual(new[] { typeof(ToolkitHostTestData) }, settings.AdditionalManageableTypes);
+        }
+
+        [Test]
+        public void ProjectSettings_ExplicitRegistrationCopiesItsInputAndKeepsExistingSettings()
+        {
+            var original = CreateSettings(DataToolkitDefaultInspectorMode.LazyPreview);
+            var input = new[] { typeof(ToolkitHostTestData) };
+            var registered = original.WithAdditionalManageableTypes(input);
+            input[0] = typeof(SelectedToolkitTestData);
+
+            CollectionAssert.AreEqual(new[] { typeof(ToolkitHostTestData) }, registered.AdditionalManageableTypes);
+            Assert.IsEmpty(original.AdditionalManageableTypes);
+            CollectionAssert.AreEqual(original.SearchRoots, registered.SearchRoots);
+            CollectionAssert.AreEqual(original.ExcludedPaths, registered.ExcludedPaths);
+            Assert.AreEqual(original.DefaultInspectorMode, registered.DefaultInspectorMode);
+            Assert.AreSame(original.UiText, registered.UiText);
+            Assert.IsNotNull(typeof(DataToolkitProjectSettings).GetConstructor(new[]
+            {
+                typeof(string), typeof(string), typeof(string), typeof(string),
+                typeof(System.Collections.Generic.IEnumerable<string>), typeof(System.Collections.Generic.IEnumerable<string>),
+                typeof(DataToolkitDefaultInspectorMode), typeof(System.Collections.Generic.IEnumerable<DataToolkitSafeInspectorRule>),
+                typeof(DataToolkitUiText)
+            }), "The original public constructor must remain available to compiled consumers.");
+        }
+
+        [Test]
+        public void BuildReport_ExplicitTypeUsesNativeInspectorCoverage()
+        {
+            AssetDatabase.CreateAsset(ScriptableObject.CreateInstance<UnmarkedToolkitTestData>(), AssetPath);
+            AssetDatabase.SaveAssets();
+            var settings = CreateSettings(DataToolkitDefaultInspectorMode.FullInspector)
+                .WithAdditionalManageableTypes(new[] { typeof(UnmarkedToolkitTestData) });
+
+            var report = DataToolkitDiagnosticsService.BuildReport(
+                new DataToolkitContext(settings), Array.Empty<IDataToolkitAssetInspectorProvider>());
+            var info = report.Types.Single(type => type.Type == typeof(UnmarkedToolkitTestData));
+
+            Assert.AreEqual(1, info.AssetCount);
+            Assert.AreEqual(AssetPath, info.SampleAssetPath);
+            Assert.AreEqual(DataToolkitInspectorCoverageLevel.NativeInspectorFallback, info.CoverageLevel);
+        }
+
+        [Test]
+        public void GetAssetPathsForType_SameProjectIdKeepsDifferentRootsSeparate()
+        {
+            AssetDatabase.CreateFolder(TestRoot, "Other");
+            CreateTestAsset(AssetPath);
+            var otherPath = TestRoot + "/Other/Other.asset";
+            CreateTestAsset(otherPath);
+            var all = CreateSettings(DataToolkitDefaultInspectorMode.FullInspector);
+            var scoped = new DataToolkitProjectSettings(
+                all.ProjectId, all.WindowTitle, all.MenuPath, all.EditorPrefsPrefix,
+                new[] { TestRoot + "/Other" }, Array.Empty<string>());
+
+            CollectionAssert.AreEquivalent(new[] { AssetPath, otherPath }, AssetDiscoveryService.GetAssetPathsForType(typeof(SelectedToolkitTestData), all));
+            CollectionAssert.AreEqual(new[] { otherPath }, AssetDiscoveryService.GetAssetPathsForType(typeof(SelectedToolkitTestData), scoped));
+        }
+
+        [Test]
+        public void GetAssetPathsForType_SameProjectIdKeepsDifferentExclusionsSeparate()
+        {
+            AssetDatabase.CreateFolder(TestRoot, "Other");
+            CreateTestAsset(AssetPath);
+            var otherPath = TestRoot + "/Other/Other.asset";
+            CreateTestAsset(otherPath);
+            var all = CreateSettings(DataToolkitDefaultInspectorMode.FullInspector);
+            var scoped = new DataToolkitProjectSettings(
+                all.ProjectId, all.WindowTitle, all.MenuPath, all.EditorPrefsPrefix,
+                all.SearchRoots, new[] { TestRoot + "/Other" });
+
+            Assert.AreEqual(2, AssetDiscoveryService.GetAssetPathsForType(typeof(SelectedToolkitTestData), all).Length);
+            CollectionAssert.AreEqual(new[] { AssetPath }, AssetDiscoveryService.GetAssetPathsForType(typeof(SelectedToolkitTestData), scoped));
+        }
+
+        [Test]
+        public void EmbeddedView_UsesExplicitTypesInitiallyAndAfterRefreshWithoutOpeningWindow()
+        {
+            var original = CreateSettings(DataToolkitDefaultInspectorMode.FullInspector);
+            var settings = new DataToolkitProjectSettings(
+                original.ProjectId, original.WindowTitle, original.MenuPath,
+                "ZGS_DataToolkitExplicitTypes_" + Guid.NewGuid().ToString("N"),
+                original.SearchRoots, original.ExcludedPaths)
+                .WithAdditionalManageableTypes(new[] { typeof(ToolkitHostTestData) });
+            var flags = System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static;
+            var create = typeof(DataToolkitWindow).GetMethod("CreateEmbedded", flags);
+            var view = (DataToolkitWindow)create.Invoke(null, new object[]
+            {
+                new DataToolkitProjectProfile(settings), (Action)(() => { })
+            });
+            try
+            {
+                var instanceFlags = System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance;
+                var typesField = typeof(DataToolkitWindow).GetField("typesToDisplay", instanceFlags);
+                CollectionAssert.Contains((Type[])typesField.GetValue(view), typeof(ToolkitHostTestData));
+                typeof(DataToolkitWindow).GetMethod("RefreshCaches", instanceFlags).Invoke(view, null);
+                CollectionAssert.Contains((Type[])typesField.GetValue(view), typeof(ToolkitHostTestData));
+            }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(view);
+                foreach (var suffix in new[]
+                {
+                    "SelectedType", "SelectedAssetGuid", "SelectedAssetPath", "TypeSearch", "AssetSearch",
+                    "TypeScrollX", "TypeScrollY", "AssetScrollX", "AssetScrollY", "InspectorScrollX", "InspectorScrollY",
+                    "BodyScrollX", "TypeColumnWidth", "AssetColumnWidth"
+                })
+                {
+                    EditorPrefs.DeleteKey(settings.PrefKey(suffix));
+                }
+            }
+        }
+
         private static DataToolkitProjectSettings CreateSettings(DataToolkitDefaultInspectorMode inspectorMode)
         {
             return new DataToolkitProjectSettings(

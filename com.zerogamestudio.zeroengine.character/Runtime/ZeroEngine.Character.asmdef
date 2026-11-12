@@ -1,7 +1,7 @@
 {
     "name": "ZeroEngine.Character",
     "rootNamespace": "ZeroEngine",
-    "references": ["ZeroEngine.Core", "ZeroEngine.Data", "ZeroEngine.Persistence", "ZeroEngine.Economy"],
+    "references": ["ZeroEngine.Core", "ZeroEngine.Data", "ZeroEngine.Persistence", "ZeroEngine.Economy", "ZeroEngine.Formula"],
     "includePlatforms": [],
     "excludePlatforms": [],
     "allowUnsafeCode": false,

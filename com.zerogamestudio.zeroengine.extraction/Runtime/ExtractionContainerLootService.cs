@@ -53,6 +53,12 @@ namespace POB.Extraction
                 result = ExtractionContainerOpenResult.AlreadyOpened;
                 return true;
             }
+            if (manifest.LootSelectionVersion != 0 && (manifest.LootSelectionVersion != 2
+                || manifest.SelectionPolicy == null || !manifest.SelectionPolicy.IsValid))
+            {
+                result = ExtractionContainerOpenResult.MissingConfiguration;
+                return false;
+            }
 
             if (!ExtractionRaidLootManifestGenerator.TryGetContentDefinitions(
                     config,
@@ -72,8 +78,14 @@ namespace POB.Extraction
                 openSequence.ToString(CultureInfo.InvariantCulture));
             string receiptId = ExtractionReceiptId.Create(operationId, OpenReceiptType);
             var generatedEntries = new List<ExtractionContainerLootEntry>();
+            if (!ExtractionContainerLayoutService.TryBuildGenerationGrid(container, config,
+                    out var grid, out bool existingOverflow))
+            {
+                result = ExtractionContainerOpenResult.MissingConfiguration;
+                return false;
+            }
             for (int slotIndex = container.Entries.Count;
-                 slotIndex < container.TargetContentCount;
+                 !existingOverflow && slotIndex < container.TargetContentCount;
                  slotIndex++)
             {
                 ExtractionLootPityDefinition pity = ExtractionLootContentPolicy.IsPityEnabled(
@@ -95,8 +107,16 @@ namespace POB.Extraction
                         out var itemDefinition,
                         manifest.PityState.ConsecutiveMisses,
                         pity,
-                        manifest.RareLootDisabled))
+                        manifest.RareLootDisabled,
+                        manifest.LootSelectionVersion == 2 ? manifest.SelectionPolicy : null,
+                        item => ExtractionContainerLayoutService.CanFit(grid, item)))
                 {
+                    // Exhausted space is a successful shorter result; invalid loot configuration is still an error.
+                    if (ExtractionRaidLootManifestGenerator.TrySelectLootEntry(config, tier, container.RegionId,
+                            container.ContainerTypeId, null, manifest.RaidSeed, RollHashDomain, container.ContainerId,
+                            openSequence + ":" + slotIndex, out _, out _, manifest.PityState.ConsecutiveMisses,
+                            pity, manifest.RareLootDisabled,
+                            manifest.LootSelectionVersion == 2 ? manifest.SelectionPolicy : null)) break;
                     result = ExtractionContainerOpenResult.LootRollFailed;
                     return false;
                 }
@@ -113,6 +133,11 @@ namespace POB.Extraction
                     InstanceHashDomain,
                     manifest.ManifestId,
                     entryId);
+                if (!ExtractionContainerLayoutService.TryReserve(grid, entryId, itemDefinition))
+                {
+                    result = ExtractionContainerOpenResult.LootRollFailed;
+                    return false;
+                }
                 generatedEntries.Add(new ExtractionContainerLootEntry(
                     entryId,
                     instanceId,

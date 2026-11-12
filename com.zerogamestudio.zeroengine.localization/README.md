@@ -1,12 +1,14 @@
 # ZeroEngine.Localization
 
-Localization utilities.
+Localization utilities and provider-agnostic localization contracts.
 
 ## Features
 
 - Unity Localization integration
-- Runtime language switching
-- Text formatting helpers
+- Async initialization and runtime language switching with structured results
+- Deterministic locale fallback and required-table preload hooks
+- Non-blocking missing-key and format diagnostics
+- Generic locale/role font routing and placeholder validation
 
 ## Dependencies
 
@@ -15,4 +17,4 @@ Localization utilities.
 
 ## Version
 
-2.0.0 - Initial modular release (split from ZeroEngine v1.17.0)
+2.1.0 - Async localization service, fallback policy, diagnostics, and font routing contracts

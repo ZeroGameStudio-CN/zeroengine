@@ -79,5 +79,29 @@ namespace ZeroEngine.Formula.Tests.Editor
 
             Assert.AreEqual(0, references.Length);
         }
+
+        [Test]
+        public void FindGuidReferences_MatchesAllKnownGuidsInOneDocumentWithoutDuplicates()
+        {
+            const string firstGuid = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
+            const string secondGuid = "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb";
+            var documents = new[]
+            {
+                new FormulaReferenceTextDocument(
+                    "Assets/Data/Combined.asset",
+                    $"{firstGuid}\n{secondGuid}\n{firstGuid}"),
+            };
+
+            var references = FormulaReferenceIndexer.FindGuidReferences(
+                    new[] { firstGuid, secondGuid },
+                    documents,
+                    new FormulaReferenceSearchOptions(new[] { "Assets" }, null))
+                .ToArray();
+
+            Assert.AreEqual(2, references.Length);
+            CollectionAssert.AreEquivalent(
+                new[] { firstGuid, secondGuid },
+                references.Select(reference => reference.FormulaGuid).ToArray());
+        }
     }
 }

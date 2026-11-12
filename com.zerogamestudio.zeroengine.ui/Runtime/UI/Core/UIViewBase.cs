@@ -1,226 +1,167 @@
 using System;
+using System.Threading;
 using System.Threading.Tasks;
 using UnityEngine;
 using UnityEngine.EventSystems;
 
 #if DOTWEEN
 using DG.Tweening;
-using DG.Tweening.Core;
-using DG.Tweening.Plugins.Options;
 #endif
 
 namespace ZeroEngine.UI
 {
     /// <summary>
-    /// UI视图基类 - 工业级通用面板基类
-    ///
-    /// 生命周期:
-    /// OnCreate -> OnOpen -> OnResume -> OnPause -> OnClose -> OnDestroy
-    ///
-    /// OnCreate: 首次创建时调用（只调用一次）
-    /// OnOpen: 每次打开时调用
-    /// OnResume: 从暂停恢复时调用（被其他面板覆盖后恢复）
-    /// OnPause: 被其他面板覆盖时调用
-    /// OnClose: 关闭时调用
-    /// OnDestroy: 销毁时调用（只调用一次）
+    /// UI 视图基类。生命周期由 UIManager 串行驱动，动画过渡使用独立取消令牌。
     /// </summary>
     public abstract class UIViewBase : MonoBehaviour
     {
-        #region Properties
-
-        /// <summary>
-        /// 缓存的视图名称（避免每次 GetType().Name 分配）
-        /// </summary>
         private string _cachedViewName;
+        private CancellationTokenSource _transitionCts = new();
+        private CancellationToken _activeTransitionToken;
+        private GameObject _lastSelected;
+        private GameObject _pendingFocusTarget;
+        private bool _destroyed;
 
-        /// <summary>
-        /// 视图名称（唯一标识）
-        /// </summary>
         public virtual string ViewName => _cachedViewName ??= GetType().Name;
-
-        /// <summary>
-        /// 视图配置
-        /// </summary>
         public UIViewConfig Config { get; private set; }
-
-        /// <summary>
-        /// 当前状态
-        /// </summary>
         public UIViewState State { get; private set; } = UIViewState.None;
-
-        /// <summary>
-        /// 打开参数
-        /// </summary>
         protected UIOpenArgs OpenArgs { get; private set; }
-
-        /// <summary>
-        /// CanvasGroup组件
-        /// </summary>
         protected CanvasGroup CanvasGroup { get; private set; }
-
-        /// <summary>
-        /// RectTransform
-        /// </summary>
         protected RectTransform RectTransform { get; private set; }
-
-        /// <summary>
-        /// 是否可见
-        /// </summary>
         public bool IsVisible => State == UIViewState.Opened || State == UIViewState.Opening;
 
-        /// <summary>
-        /// 最后选中的对象（用于焦点恢复）
-        /// </summary>
-        private GameObject _lastSelected;
-
-        /// <summary>
-        /// 默认选中对象
-        /// </summary>
         [SerializeField] protected GameObject defaultSelected;
 
-        #endregion
-
-        #region Initialization
-
-        /// <summary>
-        /// 内部初始化（UIManager调用）
-        /// </summary>
         internal void InternalInit(UIViewConfig config)
         {
-            Config = config;
+            Config = config ?? throw new ArgumentNullException(nameof(config));
+            _destroyed = false;
             CanvasGroup = gameObject.GetOrAddComponent<CanvasGroup>();
             RectTransform = GetComponent<RectTransform>();
-
-            // 初始状态隐藏
             SetVisible(false, true);
             State = UIViewState.Created;
         }
 
-        /// <summary>
-        /// 异步初始化（子类重写）
-        /// </summary>
         public virtual Task OnCreateAsync()
         {
             return Task.CompletedTask;
         }
 
-        #endregion
-
-        #region Lifecycle - 生命周期
-
-        /// <summary>
-        /// 首次创建
-        /// </summary>
         protected virtual void OnCreate() { }
-
-        /// <summary>
-        /// 打开（每次）
-        /// </summary>
         protected virtual void OnOpen() { }
-
-        /// <summary>
-        /// 从暂停恢复
-        /// </summary>
         protected virtual void OnResume() { }
-
-        /// <summary>
-        /// 暂停（被覆盖）
-        /// </summary>
         protected virtual void OnPause() { }
-
-        /// <summary>
-        /// 关闭
-        /// </summary>
         protected virtual void OnClose() { }
-
-        /// <summary>
-        /// 销毁
-        /// </summary>
         protected virtual void OnViewDestroy() { }
-
-        /// <summary>
-        /// 刷新数据
-        /// </summary>
         public virtual void Refresh() { }
-
-        /// <summary>
-        /// 本地化刷新
-        /// </summary>
         protected virtual void OnLocalizationChanged() { }
-
-        #endregion
-
-        #region Internal Lifecycle - 内部生命周期（UIManager调用）
 
         internal async Task InternalOpenAsync(UIOpenArgs args)
         {
+            if (_destroyed)
+            {
+                return;
+            }
+
+            args ??= new UIOpenArgs();
             OpenArgs = args;
 
             if (State == UIViewState.Created)
             {
                 await OnCreateAsync();
+                if (_destroyed)
+                {
+                    return;
+                }
+
                 OnCreate();
             }
 
+            var token = BeginTransition();
             State = UIViewState.Opening;
             gameObject.SetActive(true);
-            KillActiveAnimations();
 
-            // 播放打开动画
-            if (!args.Immediate && Config.openAnimation != UIAnimationType.None)
+            try
             {
-                await PlayOpenAnimation();
+                _activeTransitionToken = token;
+                if (!args.Immediate && Config.openAnimation != UIAnimationType.None)
+                {
+                    await AwaitAnimationAsync(PlayOpenAnimation(token), token);
+                }
+                else
+                {
+                    SetVisible(true, true);
+                }
+
+                token.ThrowIfCancellationRequested();
+                State = UIViewState.Opened;
+                OnOpen();
+                RestoreFocus();
+                args.OnOpened?.Invoke();
             }
-            else
+            catch (OperationCanceledException)
             {
-                SetVisible(true, true);
+                if (!_destroyed)
+                {
+                    SetVisible(false, true);
+                    State = UIViewState.Closed;
+                    gameObject.SetActive(false);
+                }
             }
-
-            State = UIViewState.Opened;
-            OnOpen();
-
-            // 设置焦点
-            RestoreFocus();
-
-            args.OnOpened?.Invoke();
         }
 
         internal async Task InternalCloseAsync(UICloseArgs args)
         {
-            if (State == UIViewState.Closed || State == UIViewState.Closing)
+            if (_destroyed || State == UIViewState.Closed || State == UIViewState.Closing)
+            {
                 return;
+            }
 
+            args ??= new UICloseArgs();
+            var token = BeginTransition();
             State = UIViewState.Closing;
             SaveLastSelected();
-            KillActiveAnimations();
-
             OnClose();
 
-            // 播放关闭动画
-            if (!args.Immediate && Config.closeAnimation != UIAnimationType.None)
+            try
             {
-                await PlayCloseAnimation();
+                _activeTransitionToken = token;
+                if (!args.Immediate && Config.closeAnimation != UIAnimationType.None)
+                {
+                    await AwaitAnimationAsync(PlayCloseAnimation(token), token);
+                }
+                else
+                {
+                    SetVisible(false, true);
+                }
+
+                token.ThrowIfCancellationRequested();
+                State = UIViewState.Closed;
+                gameObject.SetActive(false);
+                OpenArgs?.OnClosed?.Invoke();
             }
-            else
+            catch (OperationCanceledException)
             {
-                SetVisible(false, true);
+                if (!_destroyed)
+                {
+                    SetVisible(false, true);
+                    State = UIViewState.Closed;
+                    gameObject.SetActive(false);
+                    OpenArgs?.OnClosed?.Invoke();
+                }
             }
-
-            State = UIViewState.Closed;
-            gameObject.SetActive(false);
-
-            OpenArgs?.OnClosed?.Invoke();
         }
 
         internal void InternalPause()
         {
-            if (State != UIViewState.Opened) return;
+            if (_destroyed || State != UIViewState.Opened)
+            {
+                return;
+            }
 
             SaveLastSelected();
             State = UIViewState.Paused;
             OnPause();
-
-            // 禁用交互
             if (CanvasGroup != null)
             {
                 CanvasGroup.interactable = false;
@@ -230,16 +171,17 @@ namespace ZeroEngine.UI
 
         internal void InternalResume()
         {
-            if (State != UIViewState.Paused) return;
+            if (_destroyed || State != UIViewState.Paused)
+            {
+                return;
+            }
 
             State = UIViewState.Opened;
             OnResume();
-
-            // 启用交互
             if (CanvasGroup != null)
             {
                 CanvasGroup.interactable = true;
-                CanvasGroup.blocksRaycasts = Config.blockInput;
+                CanvasGroup.blocksRaycasts = Config != null && Config.blockInput;
             }
 
             RestoreFocus();
@@ -247,194 +189,273 @@ namespace ZeroEngine.UI
 
         internal void InternalDestroy()
         {
+            if (_destroyed)
+            {
+                return;
+            }
+
+            _destroyed = true;
+            KillActiveAnimations();
             OnViewDestroy();
             State = UIViewState.None;
         }
 
-        #endregion
+        #region Animation
 
-        #region Animation - 动画
+        private CancellationToken BeginTransition()
+        {
+            KillActiveAnimations();
+            _transitionCts.Dispose();
+            _transitionCts = new CancellationTokenSource();
+            return _transitionCts.Token;
+        }
 
-        protected virtual async Task PlayOpenAnimation()
+        /// <summary>取消当前过渡；重复 open/close 或销毁时都会调用。</summary>
+        protected void KillActiveAnimations()
+        {
+            _transitionCts.Cancel();
+#if DOTWEEN
+            DOTween.Kill(transform);
+            if (CanvasGroup != null)
+            {
+                DOTween.Kill(CanvasGroup);
+            }
+
+            if (RectTransform != null)
+            {
+                DOTween.Kill(RectTransform);
+            }
+#endif
+        }
+
+        private static async Task AwaitAnimationAsync(Task animation, CancellationToken token)
+        {
+            if (animation == null)
+            {
+                return;
+            }
+
+            if (!token.CanBeCanceled)
+            {
+                await animation;
+                return;
+            }
+
+            var cancellation = Task.Delay(Timeout.Infinite, token);
+            var completed = await Task.WhenAny(animation, cancellation);
+            if (completed != animation)
+            {
+                throw new OperationCanceledException(token);
+            }
+
+            await animation;
+        }
+
+        protected virtual Task PlayOpenAnimation()
+        {
+            return PlayOpenAnimationCore(_activeTransitionToken);
+        }
+
+        protected virtual Task PlayOpenAnimation(CancellationToken token)
+        {
+            // Calling the legacy overload keeps existing subclass overrides source compatible.
+            return PlayOpenAnimation();
+        }
+
+        private async Task PlayOpenAnimationCore(CancellationToken token)
         {
             SetVisible(true, false);
-
             switch (Config.openAnimation)
             {
                 case UIAnimationType.Fade:
-                    await AnimateFade(0f, 1f, Config.animationDuration);
+                    await AnimateFade(0f, 1f, Config.animationDuration, token);
                     break;
                 case UIAnimationType.Scale:
-                    await AnimateScale(Vector3.zero, Vector3.one, Config.animationDuration);
+                    await AnimateScale(Vector3.zero, Vector3.one, Config.animationDuration, token);
                     break;
                 case UIAnimationType.SlideLeft:
-                    await AnimateSlide(new Vector2(-Screen.width, 0), Vector2.zero, Config.animationDuration);
+                    await AnimateSlide(new Vector2(-Screen.width, 0), Vector2.zero, Config.animationDuration, token);
                     break;
                 case UIAnimationType.SlideRight:
-                    await AnimateSlide(new Vector2(Screen.width, 0), Vector2.zero, Config.animationDuration);
+                    await AnimateSlide(new Vector2(Screen.width, 0), Vector2.zero, Config.animationDuration, token);
                     break;
                 case UIAnimationType.SlideTop:
-                    await AnimateSlide(new Vector2(0, Screen.height), Vector2.zero, Config.animationDuration);
+                    await AnimateSlide(new Vector2(0, Screen.height), Vector2.zero, Config.animationDuration, token);
                     break;
                 case UIAnimationType.SlideBottom:
-                    await AnimateSlide(new Vector2(0, -Screen.height), Vector2.zero, Config.animationDuration);
+                    await AnimateSlide(new Vector2(0, -Screen.height), Vector2.zero, Config.animationDuration, token);
                     break;
                 case UIAnimationType.Custom:
-                    await PlayCustomOpenAnimation();
+                    await PlayCustomOpenAnimation(token);
                     break;
             }
 
+            token.ThrowIfCancellationRequested();
             SetVisible(true, true);
         }
 
-        protected virtual async Task PlayCloseAnimation()
+        protected virtual Task PlayCustomOpenAnimation() => Task.CompletedTask;
+
+        protected virtual Task PlayCustomOpenAnimation(CancellationToken token)
+        {
+            return PlayCustomOpenAnimation();
+        }
+
+        protected virtual Task PlayCloseAnimation()
+        {
+            return PlayCloseAnimationCore(_activeTransitionToken);
+        }
+
+        protected virtual Task PlayCloseAnimation(CancellationToken token)
+        {
+            return PlayCloseAnimation();
+        }
+
+        private async Task PlayCloseAnimationCore(CancellationToken token)
         {
             switch (Config.closeAnimation)
             {
                 case UIAnimationType.Fade:
-                    await AnimateFade(1f, 0f, Config.animationDuration);
+                    await AnimateFade(1f, 0f, Config.animationDuration, token);
                     break;
                 case UIAnimationType.Scale:
-                    await AnimateScale(Vector3.one, Vector3.zero, Config.animationDuration);
+                    await AnimateScale(Vector3.one, Vector3.zero, Config.animationDuration, token);
                     break;
                 case UIAnimationType.SlideLeft:
-                    await AnimateSlide(Vector2.zero, new Vector2(-Screen.width, 0), Config.animationDuration);
+                    await AnimateSlide(Vector2.zero, new Vector2(-Screen.width, 0), Config.animationDuration, token);
                     break;
                 case UIAnimationType.SlideRight:
-                    await AnimateSlide(Vector2.zero, new Vector2(Screen.width, 0), Config.animationDuration);
+                    await AnimateSlide(Vector2.zero, new Vector2(Screen.width, 0), Config.animationDuration, token);
                     break;
                 case UIAnimationType.SlideTop:
-                    await AnimateSlide(Vector2.zero, new Vector2(0, Screen.height), Config.animationDuration);
+                    await AnimateSlide(Vector2.zero, new Vector2(0, Screen.height), Config.animationDuration, token);
                     break;
                 case UIAnimationType.SlideBottom:
-                    await AnimateSlide(Vector2.zero, new Vector2(0, -Screen.height), Config.animationDuration);
+                    await AnimateSlide(Vector2.zero, new Vector2(0, -Screen.height), Config.animationDuration, token);
                     break;
                 case UIAnimationType.Custom:
-                    await PlayCustomCloseAnimation();
+                    await PlayCustomCloseAnimation(token);
                     break;
             }
 
+            token.ThrowIfCancellationRequested();
             SetVisible(false, true);
         }
 
-        /// <summary>
-        /// 自定义打开动画（子类重写）
-        /// </summary>
-        protected virtual Task PlayCustomOpenAnimation() => Task.CompletedTask;
-
-        /// <summary>
-        /// 自定义关闭动画（子类重写）
-        /// </summary>
         protected virtual Task PlayCustomCloseAnimation() => Task.CompletedTask;
 
-#if DOTWEEN
-        // DOTween 实现 - 零 GC 分配
-        private Task AnimateFade(float from, float to, float duration)
+        protected virtual Task PlayCustomCloseAnimation(CancellationToken token)
         {
-            if (CanvasGroup == null) return Task.CompletedTask;
+            return PlayCustomCloseAnimation();
+        }
+
+        private async Task AnimateFade(float from, float to, float duration, CancellationToken token)
+        {
+            if (CanvasGroup == null)
+            {
+                return;
+            }
 
             CanvasGroup.alpha = from;
-            return DOTween.To(() => CanvasGroup.alpha, x => CanvasGroup.alpha = x, to, duration)
-                .SetUpdate(true)
-                .SetEase(Ease.Linear)
-                .AsTask();
-        }
+            duration = Mathf.Max(0f, duration);
+            if (duration <= 0f)
+            {
+                CanvasGroup.alpha = to;
+                return;
+            }
 
-        private Task AnimateScale(Vector3 from, Vector3 to, float duration)
-        {
-            transform.localScale = from;
-            return transform.DOScale(to, duration)
-                .SetUpdate(true)
-                .SetEase(Ease.OutBack)
-                .AsTask();
-        }
-
-        private Task AnimateSlide(Vector2 from, Vector2 to, float duration)
-        {
-            if (RectTransform == null) return Task.CompletedTask;
-
-            RectTransform.anchoredPosition = from;
-            return DOTween.To(() => RectTransform.anchoredPosition, x => RectTransform.anchoredPosition = x, to, duration)
-                .SetUpdate(true)
-                .SetEase(Ease.OutCubic)
-                .AsTask();
-        }
-
-        /// <summary>
-        /// 清理当前动画（防止动画冲突）
-        /// </summary>
-        protected void KillActiveAnimations()
-        {
-            DOTween.Kill(transform);
-            if (CanvasGroup != null)
-                DOTween.Kill(CanvasGroup);
-            if (RectTransform != null)
-                DOTween.Kill(RectTransform);
-        }
-#else
-        // 原生 async/await 实现 - 无 DOTween 依赖时的后备方案
-        private async Task AnimateFade(float from, float to, float duration)
-        {
-            if (CanvasGroup == null) return;
-
-            float elapsed = 0f;
+            var elapsed = 0f;
             while (elapsed < duration)
             {
-                elapsed += Time.unscaledDeltaTime;
-                float t = Mathf.Clamp01(elapsed / duration);
-                CanvasGroup.alpha = Mathf.Lerp(from, to, t);
+                token.ThrowIfCancellationRequested();
+                elapsed += Mathf.Max(Time.unscaledDeltaTime, 0.0001f);
+                CanvasGroup.alpha = Mathf.Lerp(from, to, Mathf.Clamp01(elapsed / duration));
                 await Task.Yield();
             }
 
+            token.ThrowIfCancellationRequested();
             CanvasGroup.alpha = to;
         }
 
-        private async Task AnimateScale(Vector3 from, Vector3 to, float duration)
+        private async Task AnimateScale(Vector3 from, Vector3 to, float duration, CancellationToken token)
         {
-            float elapsed = 0f;
+            var targetTransform = transform;
+            if (targetTransform == null)
+            {
+                return;
+            }
+
+            targetTransform.localScale = from;
+            duration = Mathf.Max(0f, duration);
+            if (duration <= 0f)
+            {
+                targetTransform.localScale = to;
+                return;
+            }
+
+            var elapsed = 0f;
             while (elapsed < duration)
             {
-                elapsed += Time.unscaledDeltaTime;
-                float t = Mathf.Clamp01(elapsed / duration);
-                t = EaseOutBack(t);
-                transform.localScale = Vector3.Lerp(from, to, t);
+                token.ThrowIfCancellationRequested();
+                elapsed += Mathf.Max(Time.unscaledDeltaTime, 0.0001f);
+                var t = EaseOutBack(Mathf.Clamp01(elapsed / duration));
+                targetTransform.localScale = Vector3.Lerp(from, to, t);
                 await Task.Yield();
             }
 
-            transform.localScale = to;
+            token.ThrowIfCancellationRequested();
+            targetTransform.localScale = to;
         }
 
-        private async Task AnimateSlide(Vector2 from, Vector2 to, float duration)
+        private async Task AnimateSlide(Vector2 from, Vector2 to, float duration, CancellationToken token)
         {
-            if (RectTransform == null) return;
+            if (RectTransform == null)
+            {
+                return;
+            }
 
-            float elapsed = 0f;
+            RectTransform.anchoredPosition = from;
+            duration = Mathf.Max(0f, duration);
+            if (duration <= 0f)
+            {
+                RectTransform.anchoredPosition = to;
+                return;
+            }
+
+            var elapsed = 0f;
             while (elapsed < duration)
             {
-                elapsed += Time.unscaledDeltaTime;
-                float t = Mathf.Clamp01(elapsed / duration);
-                t = EaseOutCubic(t);
+                token.ThrowIfCancellationRequested();
+                elapsed += Mathf.Max(Time.unscaledDeltaTime, 0.0001f);
+                var t = EaseOutCubic(Mathf.Clamp01(elapsed / duration));
                 RectTransform.anchoredPosition = Vector2.Lerp(from, to, t);
                 await Task.Yield();
             }
 
+            token.ThrowIfCancellationRequested();
             RectTransform.anchoredPosition = to;
         }
 
-        // 缓动函数（仅非 DOTween 时需要）
-        private float EaseOutBack(float t) => 1 + 2.70158f * Mathf.Pow(t - 1, 3) + 1.70158f * Mathf.Pow(t - 1, 2);
-        private float EaseOutCubic(float t) => 1 - Mathf.Pow(1 - t, 3);
+        private static float EaseOutBack(float t)
+        {
+            return 1 + 2.70158f * Mathf.Pow(t - 1, 3) + 1.70158f * Mathf.Pow(t - 1, 2);
+        }
 
-        protected void KillActiveAnimations() { }
-#endif
+        private static float EaseOutCubic(float t)
+        {
+            return 1 - Mathf.Pow(1 - t, 3);
+        }
 
         #endregion
 
-        #region Visibility - 可见性
+        #region Visibility and focus
 
         protected void SetVisible(bool visible, bool immediate = false)
         {
-            if (CanvasGroup == null) return;
+            if (CanvasGroup == null)
+            {
+                return;
+            }
 
             if (immediate)
             {
@@ -442,46 +463,38 @@ namespace ZeroEngine.UI
             }
 
             CanvasGroup.interactable = visible;
-            CanvasGroup.blocksRaycasts = visible && Config.blockInput;
+            CanvasGroup.blocksRaycasts = visible && (Config == null || Config.blockInput);
         }
 
-        #endregion
-
-        #region Focus - 焦点管理
-
-        /// <summary>
-        /// 恢复焦点
-        /// </summary>
         public virtual void RestoreFocus()
         {
-            if (!gameObject.activeInHierarchy) return;
-            if (EventSystem.current == null) return;
+            if (!gameObject.activeInHierarchy)
+            {
+                return;
+            }
 
-            // 优先恢复上次选中
-            if (_lastSelected != null && _lastSelected.activeInHierarchy)
+            if (CanSelect(_lastSelected))
             {
                 SetSelected(_lastSelected);
                 return;
             }
 
-            // 其次使用默认选中
-            if (defaultSelected != null && defaultSelected.activeInHierarchy)
+            if (CanSelect(defaultSelected))
             {
                 SetSelected(defaultSelected);
                 return;
             }
 
-            // 最后查找第一个可选中对象
-            var selectable = GetComponentInChildren<UnityEngine.UI.Selectable>(true);
-            if (selectable != null && selectable.gameObject.activeInHierarchy)
+            foreach (var selectable in GetComponentsInChildren<UnityEngine.UI.Selectable>(true))
             {
-                SetSelected(selectable.gameObject);
+                if (CanSelect(selectable))
+                {
+                    SetSelected(selectable.gameObject);
+                    return;
+                }
             }
         }
 
-        /// <summary>
-        /// 保存当前选中
-        /// </summary>
         public void SaveLastSelected()
         {
             var current = EventSystem.current?.currentSelectedGameObject;
@@ -491,20 +504,28 @@ namespace ZeroEngine.UI
             }
         }
 
-        /// <summary>
-        /// 设置选中对象
-        /// </summary>
         protected void SetSelected(GameObject go)
         {
-            if (EventSystem.current != null && !EventSystem.current.alreadySelecting)
+            if (!CanSelect(go))
             {
-                EventSystem.current.SetSelectedGameObject(go);
+                return;
             }
+
+            var eventSystem = EventSystem.current;
+            if (eventSystem == null)
+            {
+                ScheduleFocusRetry(go);
+                return;
+            }
+
+            if (!eventSystem.alreadySelecting)
+            {
+                eventSystem.SetSelectedGameObject(go);
+            }
+
+            ScheduleFocusRetry(go);
         }
 
-        /// <summary>
-        /// 清除选中
-        /// </summary>
         protected void ClearSelected()
         {
             if (EventSystem.current != null && !EventSystem.current.alreadySelecting)
@@ -513,63 +534,114 @@ namespace ZeroEngine.UI
             }
         }
 
+        private static bool CanSelect(GameObject go)
+        {
+            return go != null && go.activeInHierarchy && CanSelect(go.GetComponent<UnityEngine.UI.Selectable>());
+        }
+
+        private static bool CanSelect(UnityEngine.UI.Selectable selectable)
+        {
+            return selectable != null
+                && selectable.gameObject.activeInHierarchy
+                && selectable.IsInteractable();
+        }
+
+        private void ScheduleFocusRetry(GameObject target)
+        {
+            if (_pendingFocusTarget == target)
+            {
+                return;
+            }
+
+            _pendingFocusTarget = target;
+            _ = RestoreFocusNextFrameAsync(target);
+        }
+
+        private async Task RestoreFocusNextFrameAsync(GameObject target)
+        {
+            try
+            {
+                for (var attempt = 0; attempt < 3; attempt++)
+                {
+                    await Task.Yield();
+                    if (this == null || _pendingFocusTarget != target || !CanSelect(target))
+                    {
+                        return;
+                    }
+
+                    var eventSystem = EventSystem.current;
+                    if (eventSystem == null || eventSystem.alreadySelecting)
+                    {
+                        continue;
+                    }
+
+                    var current = eventSystem.currentSelectedGameObject;
+                    if (current == null || !CanSelect(current))
+                    {
+                        eventSystem.SetSelectedGameObject(target);
+                    }
+
+                    return;
+                }
+            }
+            finally
+            {
+                if (this != null && _pendingFocusTarget == target)
+                {
+                    _pendingFocusTarget = null;
+                }
+            }
+        }
+
         #endregion
 
-        #region Public API - 公共接口
+        #region Public API
 
-        /// <summary>
-        /// 关闭当前面板
-        /// </summary>
+        /// <summary>让顶层 View 优先处理取消输入。</summary>
+        public virtual bool TryHandleCancelInput()
+        {
+            return false;
+        }
+
         public void Close()
         {
-            UIManager.Instance?.Close(ViewName);
+            UIManager.Instance?.Close(this);
         }
 
-        /// <summary>
-        /// 关闭并返回结果
-        /// </summary>
         public void CloseWithResult(object result)
         {
-            UIManager.Instance?.Close(ViewName, UICloseArgs.Create(result));
+            UIManager.Instance?.Close(this, UICloseArgs.Create(result));
         }
 
-        /// <summary>
-        /// 获取打开时传入的数据
-        /// </summary>
         protected T GetData<T>()
         {
-            if (OpenArgs?.Data is T data)
-                return data;
-            return default;
+            return OpenArgs?.Data is T data ? data : default;
         }
 
         #endregion
-
-        #region Unity Lifecycle
 
         protected virtual void OnDestroy()
         {
-            KillActiveAnimations();
             InternalDestroy();
+            _transitionCts.Dispose();
         }
-
-        #endregion
     }
+
 #if DOTWEEN
-    /// <summary>
-    /// DOTween 桥接扩展
-    /// </summary>
+    /// <summary>DOTween 兼容桥接。</summary>
     public static class DOTweenExtensions
     {
         public static Task AsTask(this Tween tween)
         {
-            if (tween == null) return Task.CompletedTask;
-            if (tween.IsComplete()) return Task.CompletedTask;
+            if (tween == null || tween.IsComplete())
+            {
+                return Task.CompletedTask;
+            }
 
-            var tcs = new TaskCompletionSource<bool>();
-            tween.OnComplete(() => tcs.TrySetResult(true));
-            tween.OnKill(() => tcs.TrySetResult(false));
-            return tcs.Task;
+            var completion = new TaskCompletionSource<bool>();
+            tween.OnComplete(() => completion.TrySetResult(true));
+            tween.OnKill(() => completion.TrySetResult(false));
+            return completion.Task;
         }
     }
 #endif

@@ -391,6 +391,31 @@ namespace ZeroEngine.Interaction
             SetFocusTarget(null);
         }
 
+        /// <summary>
+        /// 通知可交互对象进入检测范围。
+        /// </summary>
+        public void NotifyInteractableEnteredRange(IInteractable interactable)
+        {
+            if (interactable == null) return;
+
+            OnInteractableEnterRange?.Invoke(interactable);
+        }
+
+        /// <summary>
+        /// 通知可交互对象离开检测范围。
+        /// </summary>
+        public void NotifyInteractableExitedRange(IInteractable interactable)
+        {
+            if (interactable == null) return;
+
+            OnInteractableExitRange?.Invoke(interactable);
+
+            if (_currentFocusTarget == interactable)
+            {
+                SetFocusTarget(null);
+            }
+        }
+
         #endregion
 
         #region Quest Integration

@@ -1,11 +1,19 @@
 # ZeroEngine 框架文档
 
-[![Version](https://img.shields.io/badge/version-2.1.1-blue.svg)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-3.0.0-blue.svg)](CHANGELOG.md)
 [![Unity](https://img.shields.io/badge/unity-2022.3+-lightgrey.svg)](https://unity.com)
 
 ## 概述
 
 ZeroEngine 是一个模块化的 Unity 游戏开发框架，提供常用游戏系统的标准化实现。
+
+本包保留历史调试、作者工具和兼容入口；新项目优先安装对应的独立模块。
+3.0.0 与独立 ModSystem 共同安装：中立 `ModManifest` 和加载合同归
+`com.zerogamestudio.zeroengine.modsystem`，旧解析器、热重载、Lua 和旧编辑工具
+只在本包保留一份。旧运行时适配程序集改为 `ZeroEngine.ModSystem.Legacy`；
+`ModHotReloader` 和 `ModSystemIntegration` 保留脚本 GUID 并声明旧程序集来源。
+直接引用旧运行时适配程序集的代码应改引 `ZeroEngine.ModSystem.Legacy`；
+只使用中立合同的代码继续引用 `ZeroEngine.ModSystem`。原有清单字段保持兼容。
 
 ---
 
@@ -103,8 +111,8 @@ ZeroEngine 是一个模块化的 Unity 游戏开发框架，提供常用游戏�
 
 ## 使用方式
 1. 在消费项目的 `Packages/manifest.json` 中通过 Git UPM URL 引用需要的 ZeroEngine 包，并 pin 到测试过的 commit。
-   2.1.1 的 Dashboard 元数据要求同时 pin `com.zerogamestudio.zeroengine.dashboard@3.1.1` 与 `com.zerogamestudio.zeroengine.editor-ui@1.1.1` 到同一 commit；Git UPM 不会传递解析同仓 sibling package。
-2. 若需要控制面板，添加 `com.zerogamestudio.zeroengine.dashboard` 后通过菜单 **ZeroEngine -> Dashboard** 打开。
+   2.1.1 的 Editor 元数据要求同时 pin `com.zerogamestudio.zeroengine.editor-ui@1.3.0` 到同一 commit；Git UPM 不会传递解析同仓 sibling package。Dashboard 是可选包，不再是 Legacy ZeroEngine 的依赖。
+2. 若需要控制面板，添加 `com.zerogamestudio.zeroengine.dashboard@4.6.2` 与其要求的 `com.zerogamestudio.zeroengine.editor-ui@1.4.0`，然后通过菜单 **ZGS -> 工作台** 打开。
 3. 各模块单例在需要时自动初始化。
 
 标准接入和升级流程见根目录的 [Consumer Project Setup](../docs/consumer-project-setup.md)。不要将 `ZeroEngine` 文件夹复制到消费项目中作为正式接入方式。
@@ -242,3 +250,18 @@ Unity.exe -runTests -testPlatform EditMode -projectPath "<项目路径>" -testRe
 ## ZeroEngine Dashboard
 
 主包通过 `Editor/ZeroEngineDashboardModule.json` 声明编辑器工具，并由本包 typed action provider 执行。安装 Dashboard 4.x 后统一从 `ZGS > 工作台` 进入；本包不依赖 Dashboard，窗口业务逻辑仍归本包所有。
+
+
+## Consolidation dependency correction
+
+Legacy translation coverage uses the installed Unity Localization package's
+version define and its Runtime/Editor assemblies. The window keeps its existing
+entry and saved identity. SpineSkin remains gated by `SPINE_UNITY` and references
+the actual `spine-csharp`, `spine-unity`, uGUI and TMP assemblies instead of relying
+on a transitive reference through the diagnostics assembly. SDK presence and
+native runtime behavior require their own verification profile.
+
+The 3.0.0 consolidation candidate explicitly declares Unity's built-in
+JSON Serialize module (`com.unity.modules.jsonserialize`) for this package's
+direct `JsonUtility` calls. Consumers no longer need an unrelated installed
+package to supply that module. This candidate is not a published release.

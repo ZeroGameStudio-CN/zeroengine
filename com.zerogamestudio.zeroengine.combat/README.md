@@ -3,8 +3,10 @@
 战斗系统框架包。
 
 ## 版本
-- **当前版本**: 2.0.0
-- **依赖**: ZeroEngine.Core, ZeroEngine.Data
+- **整合候选版本**: 2.1.0（尚未发布）
+- **依赖**: ZeroEngine.Core, ZeroEngine.Data, ZeroEngine.Economy，以及实际使用的 Physics、Audio、Animation、Particle System 内置模块。
+
+保留 P6 已采用的 `ZeroEngine.Combat.Effects` 效果参数合同；本包定义参数，不依赖项目专属演出或补间插件。
 
 ## 包含模块
 

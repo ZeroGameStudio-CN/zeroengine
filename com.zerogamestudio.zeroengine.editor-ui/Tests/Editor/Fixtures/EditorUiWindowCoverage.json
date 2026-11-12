@@ -20,7 +20,7 @@
       "typeName": "ZeroGameStudio.ConfigPipeline.Editor.ConfigPipelineWindow",
       "technology": "imgui",
       "migrationStatus": "migrated",
-      "integrationMethod": "OnGUI",
+      "integrationMethod": "OnGUI / OnWorkspaceGUI / DrawContent",
       "exceptions": []
     },
     {
@@ -31,7 +31,7 @@
       "typeName": "ZeroEngine.Formula.Editor.FormulaWorkbenchWindow",
       "technology": "imgui",
       "migrationStatus": "migrated",
-      "integrationMethod": "OnGUI",
+      "integrationMethod": "OnGUI / DrawView",
       "exceptions": []
     },
     {
@@ -42,7 +42,7 @@
       "typeName": "ZeroEngine.Formula.Editor.FormulaWorkbenchWindow",
       "technology": "imgui",
       "migrationStatus": "migrated",
-      "integrationMethod": "OnGUI",
+      "integrationMethod": "OnGUI / DrawView",
       "exceptions": []
     },
     {

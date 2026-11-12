@@ -1,0 +1,14 @@
+{
+    "name": "ZeroEngine.Events",
+    "rootNamespace": "ZeroEngine.Events",
+    "references": [],
+    "includePlatforms": [],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": true,
+    "defineConstraints": [],
+    "versionDefines": [],
+    "noEngineReferences": true
+}

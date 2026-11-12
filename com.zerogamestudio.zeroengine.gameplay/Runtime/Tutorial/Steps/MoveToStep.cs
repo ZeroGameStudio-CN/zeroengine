@@ -10,6 +10,7 @@ namespace ZeroEngine.Tutorial
     [Serializable]
     public class MoveToStep : TutorialStep
     {
+        public override bool SupportsAutomaticCompletion => false;
         [Header("Target")]
         [Tooltip("目标位置 (World Space)")]
         public Vector3 TargetPosition;
@@ -28,7 +29,7 @@ namespace ZeroEngine.Tutorial
         public bool ShowPathLine = false;
 
         [Tooltip("在小地图上显示目标")]
-        public bool ShowOnMinimap = true;
+        public bool ShowOnMinimap = false;
 
         [Header("Text")]
         [Tooltip("提示文本")]
@@ -54,6 +55,7 @@ namespace ZeroEngine.Tutorial
         private Transform _targetTransform;
         [NonSerialized]
         private Vector3 _cachedTargetPosition;
+        [NonSerialized] private IDisposable _marker;
 
         public override string StepType => "MoveTo";
 
@@ -90,7 +92,8 @@ namespace ZeroEngine.Tutorial
             // 小地图标记
             if (ShowOnMinimap)
             {
-                // TODO: 与 Minimap 系统集成
+                if (ctx.CreateWorldMarker == null) throw new InvalidOperationException("ShowOnMinimap needs a project world-marker provider.");
+                _marker = ctx.CreateWorldMarker(() => _cachedTargetPosition);
             }
         }
 
@@ -99,7 +102,7 @@ namespace ZeroEngine.Tutorial
             // 超时检查
             if (Timeout > 0 && ctx.StepElapsedTime >= Timeout)
             {
-                _hasArrived = true;
+                ctx.Fail("The destination was not reached before the deadline.");
                 return;
             }
 
@@ -152,11 +155,7 @@ namespace ZeroEngine.Tutorial
             TutorialUIManager.Instance?.HidePrompt();
             TutorialUIManager.Instance?.HideWorldArrow();
 
-            // 移除小地图标记
-            if (ShowOnMinimap)
-            {
-                // TODO: 与 Minimap 系统集成
-            }
+            _marker?.Dispose(); _marker = null;
         }
 
         public override bool IsCompleted(TutorialContext ctx)

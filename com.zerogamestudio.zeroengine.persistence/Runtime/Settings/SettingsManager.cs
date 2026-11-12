@@ -9,6 +9,7 @@ namespace ZeroEngine.Settings
     /// <summary>
     /// 游戏设置管理器
     /// </summary>
+    [Obsolete("ZeroEngine.Settings is retained for compatibility. Use com.zerogamestudio.zeroengine.settings / ZeroEngine.PlayerSettings.", false)]
     public class SettingsManager : MonoSingleton<SettingsManager>, ISaveable
     {
         [Header("设置定义")]
@@ -451,6 +452,7 @@ namespace ZeroEngine.Settings
     #region ScriptableObjects
 
     [CreateAssetMenu(fileName = "Settings Definition", menuName = "ZeroEngine/Settings/Settings Definition")]
+    [Obsolete("ZeroEngine.Settings is retained for compatibility. Use ZeroEngine.PlayerSettings settings catalog.", false)]
     public class SettingsDefinitionSO : ScriptableObject
     {
         public List<SettingDefinition> Settings = new List<SettingDefinition>();
@@ -461,6 +463,7 @@ namespace ZeroEngine.Settings
     #region Save Data
 
     [Serializable]
+    [Obsolete("ZeroEngine.Settings is retained for compatibility. Use ZeroEngine.PlayerSettings settings documents.", false)]
     public class SettingsSaveData
     {
         public Dictionary<string, SettingValue> Values;

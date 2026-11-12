@@ -1,8 +1,8 @@
 {
-    "name": "ZeroEngine.ModSystem",
+    "name": "ZeroEngine.ModSystem.Legacy",
     "rootNamespace": "ZeroEngine.ModSystem",
     "references": [
-        "ZeroEngine",
+        "ZeroEngine.ModSystem",
         "ZeroEngine.Combat",
         "ZeroEngine.Data",
         "ZeroEngine.Economy"

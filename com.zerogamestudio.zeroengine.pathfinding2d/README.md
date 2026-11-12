@@ -4,8 +4,8 @@
 
 ## 版本
 
-- **当前版本**: 1.7.1
-- **依赖**: ZeroEngine.Core >= 1.0.0
+- **候选版本**: 1.7.3（尚未发布）
+- **依赖**: ZeroEngine.Core >= 1.0.0，以及 Unity Physics 2D、Tilemap 内置模块；图生成器直接支持 `TilemapCollider2D`，无需消费者补齐隐藏依赖。
 
 ## 概述
 
@@ -275,3 +275,5 @@ var gui = gameObject.AddComponent<PathfindingDebugGUI>();
 - 跳跃链接计算
 - A* 寻路算法
 - MoveCommand 指令系统
+
+JumpLinkConfig.MaxJumpFlightTime defaults to 2 seconds. Set it to 0 for actor profiles that adapt to tall platforms; finite trajectories, velocity, horizontal speed, and collision checks still apply. JumpMovementHandler.CalculateJump exposes the same optional final argument. Consumers own actor capabilities and must use matching gravity and velocities for execution.

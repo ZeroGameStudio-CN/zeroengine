@@ -1,5 +1,7 @@
 using System;
 using UnityEngine;
+using ZeroEngine.Tutorial.Guidance;
+using ZeroEngine.Tutorial.Presentation;
 
 namespace ZeroEngine.Tutorial
 {
@@ -36,6 +38,8 @@ namespace ZeroEngine.Tutorial
         /// 步骤类型名称 (用于编辑器显示)
         /// </summary>
         public abstract string StepType { get; }
+        public virtual bool OwnsBlockingPresentation => false;
+        public virtual bool SupportsAutomaticCompletion => true;
 
         /// <summary>
         /// 步骤进入时调用
@@ -74,7 +78,7 @@ namespace ZeroEngine.Tutorial
         /// </summary>
         public virtual void OnSkip(TutorialContext ctx)
         {
-            OnExit(ctx);
+            // The runner owns OnExit for every terminal path, including skips.
         }
 
         /// <summary>
@@ -89,194 +93,99 @@ namespace ZeroEngine.Tutorial
         #endregion
     }
 
-    /// <summary>
-    /// 对话步骤 (v1.14.0+)
-    /// </summary>
     [Serializable]
     public class DialogueStep : TutorialStep
     {
-        [Header("Dialogue")]
-        [Tooltip("说话者名称")]
         public string SpeakerName;
-
-        [Tooltip("对话内容")]
-        [TextArea(2, 5)]
-        public string DialogueText;
-
-        [Tooltip("说话者头像")]
+        [TextArea(2, 5)] public string DialogueText;
         public Sprite SpeakerIcon;
-
-        [Tooltip("对话位置")]
         public DialoguePosition Position = DialoguePosition.Bottom;
-
-        [Tooltip("打字机效果速度 (字符/秒，0 禁用)")]
         public float TypewriterSpeed = 30f;
-
-        [Tooltip("等待玩家确认")]
         public bool WaitForConfirm = true;
-
-        [Tooltip("确认按键")]
         public KeyCode ConfirmKey = KeyCode.Space;
-
-        // 运行时状态
-        [NonSerialized]
-        private bool _isConfirmed;
-        [NonSerialized]
-        private bool _typewriterComplete;
-
+        [NonSerialized] private ITutorialPresentation presentation;
         public override string StepType => "Dialogue";
-
+        public override bool OwnsBlockingPresentation => true;
         public override void OnEnter(TutorialContext ctx)
         {
-            _isConfirmed = false;
-            _typewriterComplete = TypewriterSpeed <= 0;
-
-            // 通知 UI 显示对话
-            TutorialUIManager.Instance?.ShowDialogue(DialogueText, SpeakerName, SpeakerIcon);
+            if (ctx.Presentations.DefaultPlayer == null) ctx.Presentations.DefaultPlayer = TutorialUIManager.Instance.GetPresentationPlayer();
+            presentation = ctx.Presentations.Begin(new TutorialMedia {
+                Id = string.IsNullOrEmpty(StepId) ? "inline-dialogue" : StepId, Kind = TutorialMediaKind.Dialogue,
+                Speaker = SpeakerName, Text = DialogueText, Portrait = SpeakerIcon, TypewriterSpeed = TypewriterSpeed,
+                DialogueLayout = Position == DialoguePosition.Top ? TutorialDialogueLayout.Corner : TutorialDialogueLayout.Normal,
+                Advance = WaitForConfirm ? TutorialAdvanceMode.Manual : TutorialAdvanceMode.Timed,
+                Seconds = AutoCompleteDelay > 0 ? AutoCompleteDelay : 3
+            }, ctx, CanSkip && (!ctx.Config || ctx.Config.AllowSkipping));
         }
-
         public override void OnUpdate(TutorialContext ctx)
         {
-            // 检测确认输入
-            if (WaitForConfirm && _typewriterComplete && Input.GetKeyDown(ConfirmKey))
-            {
-                _isConfirmed = true;
-            }
+            presentation.Tick();
+            if (WaitForConfirm && TutorialInputHelper.GetKeyDown(ConfirmKey)) presentation.Continue();
+            if (presentation.Result == TutorialPresentationResult.Failed) ctx.Fail(presentation.Error);
+            else if (presentation.Result == TutorialPresentationResult.Cancelled) ctx.Cancel();
+            else if (presentation.Result == TutorialPresentationResult.Skipped) ctx.RequestStepSkip();
         }
-
-        public override void OnExit(TutorialContext ctx)
-        {
-            TutorialUIManager.Instance?.HideDialogue();
-        }
-
-        public override bool IsCompleted(TutorialContext ctx)
-        {
-            if (!WaitForConfirm)
-            {
-                return _typewriterComplete;
-            }
-
-            return _isConfirmed;
-        }
-
-        private void OnTypewriterComplete()
-        {
-            _typewriterComplete = true;
-        }
-
-        private void OnConfirm()
-        {
-            _isConfirmed = true;
-        }
-
-        public override string GetDisplayText()
-        {
-            return !string.IsNullOrEmpty(SpeakerName)
-                ? $"{SpeakerName}: {DialogueText}"
-                : DialogueText;
-        }
+        public override void OnExit(TutorialContext ctx) { presentation?.Dispose(); presentation = null; }
+        public override bool IsCompleted(TutorialContext ctx) => presentation?.Result == TutorialPresentationResult.Completed;
+        public override string GetDisplayText() => string.IsNullOrEmpty(SpeakerName) ? DialogueText : SpeakerName + ": " + DialogueText;
+        public override bool Validate(out string error) { error = string.IsNullOrWhiteSpace(DialogueText) ? "Dialogue text is required." : null; return error == null; }
     }
 
-    /// <summary>
-    /// 对话位置
-    /// </summary>
-    public enum DialoguePosition
-    {
-        Top,
-        Bottom,
-        Center,
-        Custom
-    }
+    public enum DialoguePosition { Top = 0, Bottom = 1, Center = 2, Custom = 3 }
 
-    /// <summary>
-    /// 高亮步骤 (v1.14.0+)
-    /// </summary>
     [Serializable]
     public class HighlightStep : TutorialStep
     {
-        [Header("Highlight")]
-        [Tooltip("目标路径 (UI 路径或 GameObject 名称)")]
         public string TargetPath;
-
-        [Tooltip("高亮类型")]
         public HighlightType HighlightType = HighlightType.Circle;
-
-        [Tooltip("提示文本")]
-        [TextArea(1, 3)]
-        public string HintText;
-
-        [Tooltip("提示文本位置偏移")]
+        [TextArea(1, 3)] public string HintText;
         public Vector2 HintOffset = Vector2.zero;
-
-        [Tooltip("等待点击目标")]
         public bool WaitForClick = true;
-
-        [Tooltip("超时时间 (秒，0 无限等待)")]
-        public float Timeout = 0f;
-
-        // 运行时状态
-        [NonSerialized]
-        private bool _targetClicked;
-        [NonSerialized]
-        private RectTransform _target;
-
+        public float Timeout;
+        [NonSerialized] private TutorialFocusView view;
+        [NonSerialized] private ITutorialPresentation presentation;
+        [NonSerialized] private IDisposable registration;
+        [NonSerialized] private Func<System.Collections.Generic.IReadOnlyList<RectTransform>> oldExclusions, exclusions;
         public override string StepType => "Highlight";
-
+        public override bool OwnsBlockingPresentation => WaitForClick;
+        public override bool SupportsAutomaticCompletion => !WaitForClick;
         public override void OnEnter(TutorialContext ctx)
         {
-            _targetClicked = false;
-
-            // 查找目标
-            _target = ctx.FindUITarget(TargetPath);
-
-            if (_target != null)
+            view = ctx.FocusView ? ctx.FocusView : TutorialUIManager.Instance.GetFocusView();
+            string id = "highlight:" + TargetPath;
+            var found = ctx.FindUITarget(TargetPath);
+            if (found && !ctx.Focus.Targets.Find(id)) registration = ctx.Focus.Targets.Register(id, found.gameObject);
+            if (!string.IsNullOrEmpty(HintText))
             {
-                TutorialUIManager.Instance?.ShowHighlight(_target, HighlightType, HintText);
+                if (ctx.Presentations.DefaultPlayer == null) ctx.Presentations.DefaultPlayer = TutorialUIManager.Instance.GetPresentationPlayer();
+                presentation = ctx.Presentations.Begin(new TutorialMedia { Id = "highlight-hint", Kind = TutorialMediaKind.Text,
+                    DialogueLayout = TutorialDialogueLayout.Corner, Text = HintText }, ctx, CanSkip && (!ctx.Config || ctx.Config.AllowSkipping));
+                oldExclusions = ctx.Focus.VisibleExclusions; exclusions = () => presentation.VisibleContent; ctx.Focus.VisibleExclusions = exclusions;
+                foreach (var rect in presentation.VisibleContent) rect.anchoredPosition += HintOffset;
             }
-            else
-            {
-                Debug.LogWarning($"[ZeroEngine.Tutorial] Highlight target not found: {TargetPath}");
-            }
+            var options = new TutorialFocusRequest { Interaction = WaitForClick ? TutorialInteraction.Click : TutorialInteraction.Display,
+                BlockOtherInput = WaitForClick, CanSkip = CanSkip && (!ctx.Config || ctx.Config.AllowSkipping),
+                CompletionTimeoutSeconds = WaitForClick ? Timeout : 0, DisplaySeconds = Timeout > 0 ? Timeout : 3 };
+            options.Targets.Add(new TutorialTargetReference { Id = id, Path = TargetPath, Kind = TutorialTargetKind.UI,
+                Shape = HighlightType == HighlightType.Circle ? TutorialMaskShape.Circle : TutorialMaskShape.Rectangle });
+            view.Begin(options, ctx.Focus, ctx.Config ? ctx.Config.FocusStyle : new TutorialFocusStyle());
         }
-
         public override void OnUpdate(TutorialContext ctx)
         {
-            // 超时检查
-            if (Timeout > 0 && ctx.StepElapsedTime >= Timeout)
-            {
-                _targetClicked = true;
-            }
+            presentation?.Tick(true); view?.Tick();
+            if (view && view.Result == TutorialFocusResult.Failed) ctx.Fail(view.Error);
+            else if (view && view.Result == TutorialFocusResult.Cancelled) ctx.Cancel();
+            else if (view && view.Result == TutorialFocusResult.Skipped) ctx.RequestStepSkip();
+            if (presentation?.Result == TutorialPresentationResult.Failed) ctx.Fail(presentation.Error);
         }
-
         public override void OnExit(TutorialContext ctx)
         {
-            TutorialUIManager.Instance?.HideHighlight();
+            if (view) view.Cancel(); view = null;
+            registration?.Dispose(); registration = null;
+            presentation?.Dispose(); presentation = null;
+            if (ReferenceEquals(ctx.Focus.VisibleExclusions, exclusions)) ctx.Focus.VisibleExclusions = oldExclusions;
         }
-
-        public override bool IsCompleted(TutorialContext ctx)
-        {
-            if (!WaitForClick)
-            {
-                return true;
-            }
-
-            return _targetClicked;
-        }
-
-        private void OnTargetClicked()
-        {
-            _targetClicked = true;
-        }
-
-        public override bool Validate(out string error)
-        {
-            if (string.IsNullOrEmpty(TargetPath))
-            {
-                error = "Target path is required";
-                return false;
-            }
-            error = null;
-            return true;
-        }
+        public override bool IsCompleted(TutorialContext ctx) => view && view.Result == TutorialFocusResult.Completed;
+        public override bool Validate(out string error) { error = string.IsNullOrWhiteSpace(TargetPath) ? "A target path is required." : null; return error == null; }
     }
 }

@@ -14,6 +14,30 @@
 
 ---
 
+## EquipmentLoadout（逐角色装备内核）
+
+`ZeroEngine.Equipment.EquipmentLoadout<TSlot, TEquipment>` 是普通 C# 对象，每个角色持有一份；不创建 GameObject，不依赖全局角色、存档服务或项目业务类型。`EquipmentManager` 组件也使用该内核管理槽位和装备属性，组件额外提供套装、强化事件和存档适配。
+
+构造时由宿主提供可用槽位、装备到槽位的映射、`IEnumerable<EquipmentStatModifier>` 属性映射、`Func<StatId, Stat>` 属性查找，以及可选的穿戴资格判断。宿主保留等级、门派、内容 ID、背包转移和事件/存档映射；槽位状态和属性增删只由内核维护。查找/映射函数必须只读，所有装备属性必须能解析到角色已初始化的 `Stat`；不存在的属性、不可用槽位、无效修饰器或资格拒绝均保留旧装备。
+
+- `Equipped` / `GetEquipped(slot)`：唯一槽位状态的只读视图；空槽位不写入字典。
+- `TryEquip(item, out replaced, commitExternal = null)` / `Unequip(slot, commitExternal = null)`：替换和卸装；重复穿戴不累加。内核复制修饰器并按精确对象移除，不会误删共享来源的其他效果。
+- `TryRestore(items)`：先解析全部内容，原子替换整个装备集合；重复槽位或无效内容不会清空旧集合。
+- `RefreshStats()`：强化或宿主重建属性对象后重新绑定现有装备，保留已有装备资格，不重复穿戴。返回 `false` 时保留此前的属性贡献。
+- `Clear()` / `Dispose()`：清除本内核持有的贡献。`Dispose()` 后拒绝后续变更；运行时所有权方应在角色退场时调用。
+
+变更保持受影响 `CurrentStat` 的当前百分比；属性应用异常时撤回本次贡献并恢复旧贡献和当前值。自定义 `Stat` 实现必须支持添加/移除精确修饰器；回滚本身异常会向调用方传播，不能把不可恢复的目标错误当作成功。读取内容或映射函数抛出的异常发生在变更前，同样不会清空旧装备。
+
+可选的 `Func<bool> commitExternal` 用于同线程背包交换：回调可读取暂存的新槽位和属性，返回 `false` 时内核恢复旧槽位、旧修饰器与原始当前资源值。资格或属性预检失败时不调用回调；回调期间拒绝重入写入。回调必须保证失败或抛出异常时外部状态没有变化，成功后不得再抛出异常；这是同步提交边界，不是分布式事务。宿主在整个调用成功返回之后发布业务事件。
+
+`EquipmentInstance.GetStatModifiers()` 与 `GetCalculatedModifiers()` 共用一次基础/强化、附魔和宝石计算；前者保留每条修饰器对应的 `StatId`，避免把某个属性错误地添加到全部基础属性。内置 `StatType` 转为规范化名称（例如 `Attack` → `attack`）；消费项目若使用领域化 ID，应在内容映射时转换到自己的稳定 ID。
+
+组件存档恢复通过 `ResolveEquipmentData` 或 `TryRestore(saveData, resolver)` 解析定义；解析失败保留当前装备，不再先清空后跳过未实现的恢复。
+
+定向 EditMode 程序集：`ZeroEngine.Character.Tests.Editor`。测试 fixture：`ZeroEngine.Tests.Character.EquipmentLoadoutTests`、`ZeroEngine.Tests.Character.EquipmentInstanceStatModifierTests`，覆盖两角色隔离、替换去重、拒绝/部分失败回滚、资源百分比、清理恢复、属性重建和三类属性来源映射。消费项目运行包测试时需将 `com.zerogamestudio.zeroengine.character` 加入测试可见包列表（`testables`）。
+
+---
+
 ## Job System (职业系统) v2.5.0
 
 八方旅人风格的职业系统，支持主职业+副职业、技能学习、JP 经验。
@@ -409,6 +433,23 @@ EquipmentManager.Instance.TryEnhance(weaponSlot, out var result);
 var setEffects = EquipmentManager.Instance.GetActiveSetEffects();
 ```
 
+唯一装备放入背包时使用 `EquipmentInventoryStateCodec`，保留实例身份与强化、精炼、附魔、宝石状态：
+
+```csharp
+var payload = EquipmentInventoryStateCodec.Capture(equipment);
+if (EquipmentInventoryStateCodec.TryRestore(weaponData, payload, out var restored))
+{
+    // restored.InstanceId 与入包前相同，可交给角色的 EquipmentLoadout。
+}
+```
+
+载荷类型固定为 `zeroengine.equipment`，版本为 `1`，不包含 CLR 类型名或 Unity 对象 ID。
+编解码使用包内显式声明的 Newtonsoft Json.NET 依赖，按纯 DTO 合同拒绝缺失必需字段和未知字段，区分合法空集合与缺失集合。
+恢复必须匹配定义 ID 与外层实例 ID；未知格式、缺失身份、越界等级、非法宝石槽和非有限属性均拒绝，
+不会降级为模板物品。`Capture` 遇到无效活状态抛出 `ArgumentException`；`TryRestore` 返回 `false` 和空实例。
+`ExportSaveData` / `ImportSaveData` 深复制嵌套可变状态；导入先验证后替换，不修改无效导入的目标对象。
+直接快照保留宝石 `Icon` 的资产引用，但字符串载荷仅保存宝石 ID、名称和效果；图标需由展示层按定义解析。
+
 ---
 
 ## TalentTree System
@@ -439,6 +480,10 @@ var mods = talentController.GetAllStatModifiers();
 - `com.zerogamestudio.zeroengine.core` (2.0.0) - Core utilities
 - `com.zerogamestudio.zeroengine.data` (2.0.0) - StatSystem, BuffSystem
 - `com.zerogamestudio.zeroengine.persistence` (2.0.0) - Save/Load support
+- `com.zerogamestudio.zeroengine.economy` (2.0.0) - Equipment item definitions and inventory contracts
+- `com.zerogamestudio.zeroengine.formula` (0.6.0) - Preserves formula-backed equipment modifiers
+
+消费项目需在同一 Git commit 显式引用这些 ZE 包；P5 已沿该合同固定全部 ZE 引用，本地 `file:` 验证不作为交付配置。
 
 ---
 
@@ -467,3 +512,49 @@ var mods = talentController.GetAllStatModifiers();
 - 初始模块化发布 (从 ZeroEngine v1.17.0 拆分)
 - Equipment System
 - TalentTree System
+
+## Exploration contact and walked-path primitives
+
+`ExplorationTrailBuffer` owns a fixed-capacity position/distance ring (2–4096 points).
+Append rejects nonfinite, tiny or discontinuous segments without changing history.
+Sampling interpolates the actual polyline, clamps to retained endpoints, and can project
+a point onto its closest retained segment, optionally restricted to a local progress range
+to avoid jumping across an older crossing or chasing an overshot sample. Relocation is an explicit `Reset`; this
+package does not move characters, choose party members, detect collisions or pin scenes.
+
+`FootstepDistanceSampler` implements `zero.character.footstep_sample.v1`, adapting POB's
+spatial sampling to a caller-projected Vector2 ground plane. The caller supplies contact
+enablement, spacing (0.05–10 units) and a relocation limit; output reuses the caller's list,
+is bounded to eight contacts and drops overflow rather than replaying a backlog.
+Disabled/nonfinite inputs reset, relocation emits nothing, and reversed travel resets
+residual distance. Animation contacts, actor clocks, sound/FX and physics remain consumers.
+
+## Actor-owned martial arts
+
+`MartialArtState` implements `IMartialArtist` without a Unity singleton or global event bus.
+Create one state per stable actor id and inject the definition resolver and read-only learning
+requirement query. The Unity `MartialArtManager` delegates to the same implementation for
+existing single-actor scene consumers; parties use independent states directly.
+
+An art occupies one compatible slot. Moving it does not duplicate bonuses or cultivation.
+External realm/stat/sect/item/special requirements require an explicit actor query; missing,
+unknown and compound predicates refuse learning. Content-specific eligibility belongs to the
+consumer. Snapshots keep the existing `MartialArtManagerSaveData` DTO field identities, copy
+mutable arrays, and validate all identities/progress/slots before replacing live state.
+Call `Dispose` when the actor state is retired so retained art instances cannot notify it.
+
+### Prepared skills and snapshot boundary (3.0 candidate)
+
+Prepared skill ids are an explicit ordered selection, independent of learned arts.
+Use `TrySetPreparedSkills` and consume `GetEffectiveSkillIds`; an empty selection
+never expands to all learned skills. Availability comes from equipped/unlocked arts
+or the injected permanent intrinsic-skill query. Set the optional capacity in the
+consumer. Refresh selection after permanent intrinsic grants change; the effective
+view filters revoked ownership even before that refresh. Unequipping, forgetting
+and lowering an art prune invalid selections.
+
+The `preparedSkills` snapshot array is required, including when empty. Old global
+snapshots missing that field are rejected rather than filled from a current default.
+This is a breaking package snapshot contract and uses a 3.0 candidate version.
+Consumer-owned save-format adoption/migration is a separate explicit integration;
+changing this package does not change a consumer's save version or rewrite any saves.

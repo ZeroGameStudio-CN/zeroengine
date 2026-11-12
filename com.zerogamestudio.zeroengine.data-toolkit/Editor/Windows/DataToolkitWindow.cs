@@ -4,6 +4,7 @@ using System.IO;
 using System.Linq;
 using UnityEditor;
 using UnityEngine;
+using ZeroEngine.EditorUI;
 
 namespace ZGS.DataToolkit.Editor
 {
@@ -12,15 +13,18 @@ namespace ZGS.DataToolkit.Editor
     {
         private const float DefaultTypeColumnWidth = 190f;
         private const float DefaultAssetColumnWidth = 240f;
-        private const float MinColumnWidth = 160f;
+        private const float MinColumnWidth = 64f;
         private const float MaxColumnWidth = 520f;
-        private const float MinInspectorWidth = 320f;
+        private const float MinInspectorWidth = 240f;
         private const float WindowPadding = 4f;
         private const float HeaderRowHeight = 38f;
+        private const float CompactHeaderHeight = 64f;
+        private const float CompactHeaderWidth = 820f;
         private const float ProjectToolbarRowHeight = 64f;
         private const float HeaderBodySpacing = 4f;
         private const float HeaderActionSpacing = 6f;
         private const float SplitterWidth = 5f;
+        private const float ThreeColumnMinContentWidth = MinColumnWidth * 2f + MinInspectorWidth + SplitterWidth * 2f;
         private const float RowHeight = 24f;
         private const long LargeAssetInspectorThresholdBytes = 512 * 1024;
         private const string SelectedTypePrefSuffix = "SelectedType";
@@ -28,6 +32,13 @@ namespace ZGS.DataToolkit.Editor
         private const string SelectedAssetPathPrefSuffix = "SelectedAssetPath";
         private const string TypeSearchPrefSuffix = "TypeSearch";
         private const string AssetSearchPrefSuffix = "AssetSearch";
+        private const string TypeScrollXPrefSuffix = "TypeScrollX";
+        private const string TypeScrollYPrefSuffix = "TypeScrollY";
+        private const string AssetScrollXPrefSuffix = "AssetScrollX";
+        private const string AssetScrollYPrefSuffix = "AssetScrollY";
+        private const string InspectorScrollXPrefSuffix = "InspectorScrollX";
+        private const string InspectorScrollYPrefSuffix = "InspectorScrollY";
+        private const string BodyScrollXPrefSuffix = "BodyScrollX";
 
         private readonly CompositeAssetInspector inspector = new();
         private readonly SafeSerializedAssetInspector safeInspector = new();
@@ -53,11 +64,15 @@ namespace ZGS.DataToolkit.Editor
         private Vector2 typeColumnScroll;
         private Vector2 assetColumnScroll;
         private Vector2 inspectorScroll;
+        private Vector2 bodyHorizontalScroll;
         private float typeColumnWidth = DefaultTypeColumnWidth;
         private float assetColumnWidth = DefaultAssetColumnWidth;
         private string activeResizeKey;
         private bool isWarmingAssetCounts;
         private bool allowFullInspectorForSelectedAsset;
+        private bool compactHeaderLayout = true;
+        private bool embeddedHost;
+        private Action repaintRequested;
 
         private readonly struct SelectionSnapshot
         {
@@ -107,10 +122,25 @@ namespace ZGS.DataToolkit.Editor
 
         public static DataToolkitWindow Open(DataToolkitProjectProfile profile)
         {
-            var window = GetWindow<DataToolkitWindow>();
+            var window = Resources.FindObjectsOfTypeAll<DataToolkitWindow>()
+                .FirstOrDefault(candidate => candidate != null && !candidate.embeddedHost);
+            if (window == null)
+            {
+                window = CreateWindow<DataToolkitWindow>();
+            }
             window.Initialize(profile);
             window.Show();
             return window;
+        }
+
+        internal static DataToolkitWindow CreateEmbedded(DataToolkitProjectProfile profile, Action repaint)
+        {
+            var view = CreateInstance<DataToolkitWindow>();
+            view.embeddedHost = true;
+            view.hideFlags = HideFlags.HideAndDontSave;
+            view.repaintRequested = repaint;
+            view.Initialize(profile);
+            return view;
         }
 
         private void Initialize(DataToolkitProjectProfile profile, string serializedProjectIdOverride = null)
@@ -134,7 +164,13 @@ namespace ZGS.DataToolkit.Editor
             assetColumnWidth = Mathf.Clamp(EditorPrefs.GetFloat(settings.PrefKey("AssetColumnWidth"), DefaultAssetColumnWidth), MinColumnWidth, MaxColumnWidth);
             typeSearch = EditorPrefs.GetString(settings.PrefKey(TypeSearchPrefSuffix), string.Empty);
             assetSearch = EditorPrefs.GetString(settings.PrefKey(AssetSearchPrefSuffix), string.Empty);
-            typesToDisplay = ManageableDataTypeDiscovery.GetManageableScriptableObjectTypes().ToArray();
+            typeColumnScroll = LoadScroll(settings, TypeScrollXPrefSuffix, TypeScrollYPrefSuffix);
+            assetColumnScroll = LoadScroll(settings, AssetScrollXPrefSuffix, AssetScrollYPrefSuffix);
+            inspectorScroll = LoadScroll(settings, InspectorScrollXPrefSuffix, InspectorScrollYPrefSuffix);
+            bodyHorizontalScroll = new Vector2(
+                EditorPrefs.GetFloat(settings.PrefKey(BodyScrollXPrefSuffix), 0f),
+                0f);
+            typesToDisplay = ManageableDataTypeDiscovery.GetManageableScriptableObjectTypes(settings).ToArray();
             if (!RestorePersistedSelection())
             {
                 EnsureSelectedType();
@@ -169,6 +205,7 @@ namespace ZGS.DataToolkit.Editor
             StopAssetCountWarmup();
             DataToolkitProjectRegistry.ProfilesChanged -= RestoreRegisteredProfileForSerializedProjectId;
             DataToolkitProjectRegistry.DefaultProfileRegistered -= RestoreDefaultProfileIfUsingGenericFallback;
+            repaintRequested = null;
         }
 
         private void OnProjectChange()
@@ -185,8 +222,8 @@ namespace ZGS.DataToolkit.Editor
             var sharedHeaderAnchor = GUILayoutUtility.GetRect(0f, 0f, GUILayout.ExpandWidth(true));
             var visibleToolbarProviders = GetVisibleToolbarProviders();
             var visibleHeaderActionProviders = GetVisibleHeaderActionProviders();
-            var headerHeight = CalculateHeaderHeight(visibleToolbarProviders.Count);
             var contentWidth = Mathf.Max(0f, position.width - WindowPadding * 2f);
+            var headerHeight = CalculateHeaderHeight(visibleToolbarProviders.Count, contentWidth);
             var sharedHeaderBottom = sharedHeaderAnchor.yMax + HeaderBodySpacing;
             var headerRect = new Rect(WindowPadding, sharedHeaderBottom, contentWidth, headerHeight);
             var bodyRect = new Rect(
@@ -199,12 +236,47 @@ namespace ZGS.DataToolkit.Editor
             DrawBodyLayout(bodyRect);
         }
 
+        internal void DrawEmbedded(Rect rect)
+        {
+            EnsureContext();
+            GUI.BeginGroup(rect);
+            try
+            {
+                var visibleToolbarProviders = GetVisibleToolbarProviders();
+                var visibleHeaderActionProviders = GetVisibleHeaderActionProviders();
+                var contentWidth = Mathf.Max(0f, rect.width - WindowPadding * 2f);
+                var headerHeight = CalculateHeaderHeight(visibleToolbarProviders.Count, contentWidth);
+                var contentHeight = Mathf.Max(0f, rect.height - WindowPadding * 2f);
+                var headerRect = new Rect(WindowPadding, WindowPadding, contentWidth, headerHeight);
+                var bodyRect = new Rect(
+                    WindowPadding,
+                    headerRect.yMax + HeaderBodySpacing,
+                    contentWidth,
+                    Mathf.Max(0f, contentHeight - headerHeight - HeaderBodySpacing));
+
+                DrawHeaderToolbar(headerRect, visibleToolbarProviders, visibleHeaderActionProviders);
+                DrawBodyLayout(bodyRect);
+            }
+            finally
+            {
+                GUI.EndGroup();
+            }
+        }
+
         private void EnsureContext()
         {
             if (context == null)
             {
                 InitializeFromSerializedProjectId();
             }
+        }
+
+        private void RequestRepaint()
+        {
+            if (embeddedHost)
+                repaintRequested?.Invoke();
+            else
+                Repaint();
         }
 
         private void RestoreDefaultProfileIfUsingGenericFallback()
@@ -220,7 +292,7 @@ namespace ZGS.DataToolkit.Editor
             }
 
             Initialize(DataToolkitProjectRegistry.CreateDefaultProfile());
-            Repaint();
+            RequestRepaint();
         }
 
         private void InitializeFromSerializedProjectId()
@@ -260,13 +332,18 @@ namespace ZGS.DataToolkit.Editor
             }
 
             Initialize(profile);
-            Repaint();
+            RequestRepaint();
             return true;
         }
 
-        private float CalculateHeaderHeight(int visibleToolbarCount)
+        private float CalculateHeaderHeight(int visibleToolbarCount, float availableWidth)
         {
-            return HeaderRowHeight + visibleToolbarCount * ProjectToolbarRowHeight;
+            // A resize can change the resolved width after Layout. Keep the same
+            // control tree until the next Layout, including during Repaint.
+            if (Event.current.type == EventType.Layout)
+                compactHeaderLayout = availableWidth < CompactHeaderWidth;
+            float baseHeight = compactHeaderLayout ? CompactHeaderHeight : HeaderRowHeight;
+            return baseHeight + visibleToolbarCount * ProjectToolbarRowHeight;
         }
 
         private IReadOnlyList<IDataToolkitToolbarProvider> GetVisibleToolbarProviders()
@@ -331,30 +408,54 @@ namespace ZGS.DataToolkit.Editor
             GUILayout.BeginArea(rect);
             using (new EditorGUILayout.VerticalScope(EditorStyles.helpBox, GUILayout.ExpandWidth(true), GUILayout.ExpandHeight(true)))
             {
-                EditorGUILayout.BeginHorizontal();
-                GUILayout.Label(context.Settings.WindowTitle, EditorStyles.boldLabel, GUILayout.MinWidth(160f));
-                GUILayout.Label(BuildAssetSummaryText(), EditorStyles.miniLabel, GUILayout.Width(220f));
-                GUILayout.FlexibleSpace();
-                DrawProjectHeaderActions(visibleHeaderActionProviders);
-                if (visibleHeaderActionProviders.Count > 0)
+                if (compactHeaderLayout)
                 {
-                    GUILayout.Space(HeaderActionSpacing);
+                    using (new EditorGUILayout.HorizontalScope())
+                    {
+                        GUILayout.Label(context.Settings.WindowTitle, EditorStyles.boldLabel, GUILayout.MinWidth(160f));
+                        GUILayout.Space(HeaderActionSpacing);
+                        GUILayout.Label(BuildAssetSummaryText(), EditorStyles.miniLabel, GUILayout.Width(220f));
+                    }
+
+                    using (new EditorGUILayout.HorizontalScope())
+                    {
+                        DrawHeaderActionsAndButtons(visibleHeaderActionProviders);
+                    }
+                }
+                else
+                {
+                    using (new EditorGUILayout.HorizontalScope())
+                    {
+                        GUILayout.Label(context.Settings.WindowTitle, EditorStyles.boldLabel, GUILayout.MinWidth(160f));
+                        GUILayout.Label(BuildAssetSummaryText(), EditorStyles.miniLabel, GUILayout.Width(220f));
+                        GUILayout.FlexibleSpace();
+                        DrawHeaderActionsAndButtons(visibleHeaderActionProviders);
+                    }
                 }
 
-                if (GUILayout.Button("Refresh", GUILayout.Width(82f), GUILayout.Height(24f)))
-                {
-                    RefreshCaches();
-                }
-
-                if (GUILayout.Button("Diagnostics", GUILayout.Width(96f), GUILayout.Height(24f)))
-                {
-                    DataToolkitDiagnosticsWindow.Open(context, assetInspectorProviders);
-                }
-
-                EditorGUILayout.EndHorizontal();
                 DrawProjectToolbars(visibleToolbarProviders);
             }
             GUILayout.EndArea();
+        }
+
+        private void DrawHeaderActionsAndButtons(
+            IReadOnlyList<IDataToolkitHeaderActionProvider> visibleHeaderActionProviders)
+        {
+            DrawProjectHeaderActions(visibleHeaderActionProviders);
+            if (visibleHeaderActionProviders.Count > 0)
+            {
+                GUILayout.Space(HeaderActionSpacing);
+            }
+
+            if (GUILayout.Button(context.Settings.UiText.Refresh, GUILayout.Width(82f), GUILayout.Height(24f)))
+            {
+                RefreshCaches();
+            }
+
+            if (GUILayout.Button(context.Settings.UiText.Diagnostics, GUILayout.Width(96f), GUILayout.Height(24f)))
+            {
+                DataToolkitDiagnosticsWindow.Open(context, assetInspectorProviders);
+            }
         }
 
         private void DrawProjectHeaderActions(IReadOnlyList<IDataToolkitHeaderActionProvider> visibleHeaderActionProviders)
@@ -399,6 +500,31 @@ namespace ZGS.DataToolkit.Editor
 
         private void DrawBodyLayout(Rect bodyRect)
         {
+            var contentWidth = ResolveBodyContentWidth(bodyRect.width);
+            if (contentWidth <= bodyRect.width)
+            {
+                DrawThreeColumnBodyLayout(bodyRect);
+                return;
+            }
+
+            var contentRect = new Rect(0f, 0f, contentWidth, bodyRect.height);
+            bodyHorizontalScroll = GUI.BeginScrollView(
+                bodyRect,
+                bodyHorizontalScroll,
+                contentRect,
+                false,
+                false);
+            DrawThreeColumnBodyLayout(contentRect);
+            GUI.EndScrollView();
+        }
+
+        private static float ResolveBodyContentWidth(float bodyWidth)
+        {
+            return Mathf.Max(bodyWidth, ThreeColumnMinContentWidth);
+        }
+
+        private void DrawThreeColumnBodyLayout(Rect bodyRect)
+        {
             var layoutRects = CalculateBodyLayoutRects(bodyRect);
 
             DrawTypeColumn(layoutRects.TypeColumn);
@@ -438,7 +564,7 @@ namespace ZGS.DataToolkit.Editor
             GUILayout.BeginArea(rect);
             using (new EditorGUILayout.VerticalScope(EditorStyles.helpBox, GUILayout.ExpandWidth(true), GUILayout.ExpandHeight(true)))
             {
-                EditorGUILayout.LabelField("Data Types", EditorStyles.boldLabel);
+                EditorGUILayout.LabelField(context.Settings.UiText.DataTypes, EditorStyles.boldLabel);
                 typeSearch = EditorGUILayout.TextField(typeSearch, GUI.skin.FindStyle("ToolbarSearchTextField") ?? EditorStyles.toolbarSearchField);
 
                 typeColumnScroll = EditorGUILayout.BeginScrollView(typeColumnScroll);
@@ -460,7 +586,7 @@ namespace ZGS.DataToolkit.Editor
             GUILayout.BeginArea(rect);
             using (new EditorGUILayout.VerticalScope(EditorStyles.helpBox, GUILayout.ExpandWidth(true), GUILayout.ExpandHeight(true)))
             {
-                EditorGUILayout.LabelField(selectedType == null ? "Assets" : selectedType.Name, EditorStyles.boldLabel);
+                EditorGUILayout.LabelField(selectedType == null ? context.Settings.UiText.Assets : selectedType.Name, EditorStyles.boldLabel);
                 assetSearch = EditorGUILayout.TextField(assetSearch, GUI.skin.FindStyle("ToolbarSearchTextField") ?? EditorStyles.toolbarSearchField);
 
                 assetColumnScroll = EditorGUILayout.BeginScrollView(assetColumnScroll);
@@ -490,7 +616,7 @@ namespace ZGS.DataToolkit.Editor
                 {
                     EditorGUILayout.BeginHorizontal();
                     EditorGUILayout.LabelField(selectedAsset.name, EditorStyles.boldLabel);
-                    if (GUILayout.Button("Ping", GUILayout.Width(64f), GUILayout.Height(22f)))
+                    if (GUILayout.Button(context.Settings.UiText.Ping, GUILayout.Width(64f), GUILayout.Height(22f)))
                     {
                         EditorGUIUtility.PingObject(selectedAsset);
                     }
@@ -524,7 +650,7 @@ namespace ZGS.DataToolkit.Editor
                         if (EditorGUI.EndChangeCheck())
                         {
                             EditorUtility.SetDirty(selectedAsset);
-                            Repaint();
+                            RequestRepaint();
                         }
 
                         EditorGUILayout.EndScrollView();
@@ -543,15 +669,15 @@ namespace ZGS.DataToolkit.Editor
             if (EditorGUI.EndChangeCheck())
             {
                 EditorUtility.SetDirty(selectedAsset);
-                Repaint();
+                RequestRepaint();
             }
 
             EditorGUILayout.Space(8f);
-            if (GUILayout.Button("Open Full Inspector", GUILayout.Height(28f)))
+            if (GUILayout.Button(context.Settings.UiText.OpenFullInspector, GUILayout.Height(28f)))
             {
                 allowFullInspectorForSelectedAsset = true;
                 inspector.SetTarget(selectedAsset);
-                Repaint();
+                RequestRepaint();
             }
 
             EditorGUILayout.EndScrollView();
@@ -566,15 +692,15 @@ namespace ZGS.DataToolkit.Editor
             if (EditorGUI.EndChangeCheck())
             {
                 EditorUtility.SetDirty(selectedAsset);
-                Repaint();
+                RequestRepaint();
             }
 
             EditorGUILayout.Space(8f);
-            if (GUILayout.Button("Open Full Inspector", GUILayout.Height(28f)))
+            if (GUILayout.Button(context.Settings.UiText.OpenFullInspector, GUILayout.Height(28f)))
             {
                 allowFullInspectorForSelectedAsset = true;
                 inspector.SetTarget(selectedAsset);
-                Repaint();
+                RequestRepaint();
             }
 
             EditorGUILayout.EndScrollView();
@@ -582,20 +708,20 @@ namespace ZGS.DataToolkit.Editor
 
         private void DrawEmptyInspectorState()
         {
-            EditorGUILayout.HelpBox("Select a data asset from the middle column.", MessageType.Info);
+            EditorGUILayout.HelpBox(context.Settings.UiText.SelectAssetPrompt, MessageType.Info);
         }
 
         private void DrawDeferredInspectorState()
         {
             DrawInspectorSummary(
-                "This asset is large, so the full inspector is deferred to keep Data Manager responsive.",
+                context.Settings.UiText.LargeAssetDeferred,
                 MessageType.Info);
         }
 
         private void DrawSafeSummaryInspectorState()
         {
             DrawInspectorSummary(
-                "The full inspector is hidden by default to keep Data Manager responsive.",
+                context.Settings.UiText.FullInspectorHidden,
                 MessageType.Info);
         }
 
@@ -605,16 +731,16 @@ namespace ZGS.DataToolkit.Editor
             var sizeInBytes = GetAssetFileSize(assetPath);
 
             EditorGUILayout.HelpBox(message, messageType);
-            EditorGUILayout.LabelField("Type", selectedAsset.GetType().Name);
-            EditorGUILayout.LabelField("Path", string.IsNullOrEmpty(assetPath) ? "(unknown)" : assetPath);
-            EditorGUILayout.LabelField("Size", FormatByteSize(sizeInBytes));
+            EditorGUILayout.LabelField(context.Settings.UiText.Type, selectedAsset.GetType().Name);
+            EditorGUILayout.LabelField(context.Settings.UiText.Path, string.IsNullOrEmpty(assetPath) ? context.Settings.UiText.Unknown : assetPath);
+            EditorGUILayout.LabelField(context.Settings.UiText.Size, FormatByteSize(sizeInBytes));
 
             EditorGUILayout.Space(8f);
-            if (GUILayout.Button("Open Full Inspector", GUILayout.Height(28f)))
+            if (GUILayout.Button(context.Settings.UiText.OpenFullInspector, GUILayout.Height(28f)))
             {
                 allowFullInspectorForSelectedAsset = true;
                 inspector.SetTarget(selectedAsset);
-                Repaint();
+                RequestRepaint();
             }
         }
 
@@ -705,6 +831,30 @@ namespace ZGS.DataToolkit.Editor
             var rect = GUILayoutUtility.GetRect(1f, RowHeight, GUILayout.ExpandWidth(true));
             var currentEvent = Event.current;
             var hovered = rect.Contains(currentEvent.mousePosition);
+            var hasCountText = !string.IsNullOrEmpty(countText);
+            var titleStyle = new GUIStyle(EditorStyles.label)
+            {
+                clipping = TextClipping.Clip,
+                alignment = TextAnchor.MiddleLeft
+            };
+            titleStyle.normal.textColor = selected ? Color.white : EditorStyles.label.normal.textColor;
+            var countStyle = new GUIStyle(EditorStyles.miniLabel)
+            {
+                clipping = TextClipping.Clip,
+                alignment = TextAnchor.MiddleRight
+            };
+            countStyle.normal.textColor = selected
+                ? new Color(0.9f, 0.95f, 1f, 1f)
+                : EditorStyles.miniLabel.normal.textColor;
+
+            float countWidth = ResolveSelectableRowCountWidth(
+                hasCountText ? countStyle.CalcSize(new GUIContent(countText)).x : 0f);
+            bool showCount = ShouldShowSelectableRowCount(
+                rect.width,
+                titleStyle.CalcSize(new GUIContent(title)).x,
+                countWidth,
+                hasCountText);
+            Rect titleRect = BuildSelectableRowTitleRect(rect, showCount, countWidth);
 
             if (currentEvent.type == EventType.Repaint)
             {
@@ -717,35 +867,62 @@ namespace ZGS.DataToolkit.Editor
                     EditorGUI.DrawRect(rect, new Color(1f, 1f, 1f, 0.06f));
                 }
 
-                var hasCountText = !string.IsNullOrEmpty(countText);
-                var titleRect = BuildSelectableRowTitleRect(rect, hasCountText);
-                var titleStyle = new GUIStyle(EditorStyles.label)
-                {
-                    clipping = TextClipping.Clip,
-                    alignment = TextAnchor.MiddleLeft
-                };
-                titleStyle.normal.textColor = selected ? Color.white : EditorStyles.label.normal.textColor;
                 GUI.Label(titleRect, title, titleStyle);
 
-                if (hasCountText)
+                if (showCount)
                 {
-                    var countRect = new Rect(rect.xMax - 46f, rect.y + 2f, 40f, rect.height - 4f);
-                    var countStyle = new GUIStyle(EditorStyles.miniLabel)
-                    {
-                        alignment = TextAnchor.MiddleRight
-                    };
-                    countStyle.normal.textColor = selected ? new Color(0.9f, 0.95f, 1f, 1f) : EditorStyles.miniLabel.normal.textColor;
+                    Rect countRect = BuildSelectableRowCountRect(rect, countWidth);
                     GUI.Label(countRect, countText, countStyle);
                 }
             }
 
-            return GUI.Button(rect, GUIContent.none, GUIStyle.none);
+            return GUI.Button(
+                rect,
+                new GUIContent(string.Empty, BuildSelectableRowTooltip(title, countText)),
+                GUIStyle.none);
         }
 
-        private static Rect BuildSelectableRowTitleRect(Rect rect, bool hasCountText)
+        private static float ResolveSelectableRowCountWidth(float preferredWidth)
         {
-            var rightReservedWidth = hasCountText ? 56f : 12f;
-            return new Rect(rect.x + 6f, rect.y + 2f, Mathf.Max(0f, rect.width - rightReservedWidth), rect.height - 4f);
+            return Mathf.Clamp(Mathf.Ceil(preferredWidth) + 4f, 16f, 48f);
+        }
+
+        private static bool ShouldShowSelectableRowCount(
+            float rowWidth,
+            float titlePreferredWidth,
+            float countWidth,
+            bool hasCountText)
+        {
+            if (!hasCountText)
+            {
+                return false;
+            }
+
+            const float horizontalInsets = 12f;
+            const float titleCountGap = 6f;
+            return titlePreferredWidth + titleCountGap + countWidth <= rowWidth - horizontalInsets;
+        }
+
+        private static Rect BuildSelectableRowTitleRect(Rect rect, bool showCount, float countWidth)
+        {
+            const float horizontalInset = 6f;
+            const float titleCountGap = 6f;
+            float reservedWidth = showCount ? titleCountGap + countWidth : 0f;
+            return new Rect(
+                rect.x + horizontalInset,
+                rect.y + 2f,
+                Mathf.Max(0f, rect.width - horizontalInset * 2f - reservedWidth),
+                rect.height - 4f);
+        }
+
+        private static Rect BuildSelectableRowCountRect(Rect rect, float countWidth)
+        {
+            return new Rect(rect.xMax - 6f - countWidth, rect.y + 2f, countWidth, rect.height - 4f);
+        }
+
+        private static string BuildSelectableRowTooltip(string title, string countText)
+        {
+            return string.IsNullOrEmpty(countText) ? title : title + " · " + countText;
         }
 
         private void DrawColumnResizeHandle(Rect rect, ref float width, string prefsKey, float maxWidthByLayout)
@@ -764,7 +941,7 @@ namespace ZGS.DataToolkit.Editor
             {
                 var maxWidth = Mathf.Max(MinColumnWidth, Mathf.Min(MaxColumnWidth, maxWidthByLayout));
                 width = Mathf.Clamp(width + currentEvent.delta.x, MinColumnWidth, maxWidth);
-                Repaint();
+                RequestRepaint();
                 currentEvent.Use();
             }
 
@@ -888,7 +1065,11 @@ namespace ZGS.DataToolkit.Editor
         {
             var countedAssets = assetCountCache.Values.Sum();
             var suffix = assetCountCache.Count < typesToDisplay.Length ? "+" : string.Empty;
-            return $"{typesToDisplay.Length} types / {countedAssets}{suffix} assets";
+            return string.Format(
+                context.Settings.UiText.AssetSummaryFormat,
+                typesToDisplay.Length,
+                countedAssets,
+                suffix);
         }
 
         private string GetAssetCountLabel(Type type)
@@ -914,11 +1095,11 @@ namespace ZGS.DataToolkit.Editor
             AssetDiscoveryService.ClearCaches();
             assetCountCache.Clear();
             pendingCountTypes.Clear();
-            typesToDisplay = ManageableDataTypeDiscovery.GetManageableScriptableObjectTypes().ToArray();
+            typesToDisplay = ManageableDataTypeDiscovery.GetManageableScriptableObjectTypes(context.Settings).ToArray();
             RestoreSelectionAfterRefresh(selectionSnapshot);
             SavePersistentState();
             StartAssetCountWarmup();
-            Repaint();
+            RequestRepaint();
         }
 
         private void SavePersistentState()
@@ -930,6 +1111,10 @@ namespace ZGS.DataToolkit.Editor
 
             EditorPrefs.SetString(context.Settings.PrefKey(TypeSearchPrefSuffix), typeSearch ?? string.Empty);
             EditorPrefs.SetString(context.Settings.PrefKey(AssetSearchPrefSuffix), assetSearch ?? string.Empty);
+            SaveScroll(context.Settings, TypeScrollXPrefSuffix, TypeScrollYPrefSuffix, typeColumnScroll);
+            SaveScroll(context.Settings, AssetScrollXPrefSuffix, AssetScrollYPrefSuffix, assetColumnScroll);
+            SaveScroll(context.Settings, InspectorScrollXPrefSuffix, InspectorScrollYPrefSuffix, inspectorScroll);
+            EditorPrefs.SetFloat(context.Settings.PrefKey(BodyScrollXPrefSuffix), bodyHorizontalScroll.x);
 
             if (selectedType == null)
             {
@@ -956,6 +1141,23 @@ namespace ZGS.DataToolkit.Editor
 
             EditorPrefs.SetString(context.Settings.PrefKey(SelectedAssetPathPrefSuffix), assetPath);
             EditorPrefs.SetString(context.Settings.PrefKey(SelectedAssetGuidPrefSuffix), AssetDatabase.AssetPathToGUID(assetPath));
+        }
+
+        private static Vector2 LoadScroll(DataToolkitProjectSettings settings, string xSuffix, string ySuffix)
+        {
+            return new Vector2(
+                EditorPrefs.GetFloat(settings.PrefKey(xSuffix), 0f),
+                EditorPrefs.GetFloat(settings.PrefKey(ySuffix), 0f));
+        }
+
+        private static void SaveScroll(
+            DataToolkitProjectSettings settings,
+            string xSuffix,
+            string ySuffix,
+            Vector2 value)
+        {
+            EditorPrefs.SetFloat(settings.PrefKey(xSuffix), value.x);
+            EditorPrefs.SetFloat(settings.PrefKey(ySuffix), value.y);
         }
 
         private bool RestorePersistedSelection()
@@ -1181,7 +1383,7 @@ namespace ZGS.DataToolkit.Editor
             if (pendingCountTypes.Count == 0)
             {
                 StopAssetCountWarmup();
-                Repaint();
+                RequestRepaint();
                 return;
             }
 
@@ -1191,12 +1393,85 @@ namespace ZGS.DataToolkit.Editor
                 CountAssetsForType(type);
             }
 
-            Repaint();
+            RequestRepaint();
             if (pendingCountTypes.Count == 0)
             {
                 StopAssetCountWarmup();
             }
         }
 
+    }
+
+    public sealed class DataToolkitWorkspacePanel : IEditorWorkspacePanel, IEditorWorkspaceFullWidthPanel
+    {
+        private readonly Func<DataToolkitProjectProfile> profileFactory;
+        private DataToolkitWindow embeddedView;
+        private float resolvedWidth = -1f;
+
+        public DataToolkitWorkspacePanel(Func<DataToolkitProjectProfile> profileFactory)
+        {
+            this.profileFactory = profileFactory ?? throw new ArgumentNullException(nameof(profileFactory));
+        }
+
+        public float RefreshInterval => 0f;
+
+        public void Activate(EditorWorkspacePanelContext context)
+        {
+            if (context == null)
+                throw new ArgumentNullException(nameof(context));
+            DisposeView();
+            resolvedWidth = -1f;
+            embeddedView = DataToolkitWindow.CreateEmbedded(profileFactory(), context.RequestRepaint);
+        }
+
+        public void Deactivate()
+        {
+            DisposeView();
+        }
+
+        public void Tick(EditorWorkspacePanelContext context, double timeSinceStartup)
+        {
+        }
+
+        public void OnGUI(EditorWorkspacePanelContext context)
+        {
+            if (context == null)
+                throw new ArgumentNullException(nameof(context));
+            if (embeddedView == null)
+                Activate(context);
+
+            float height = Mathf.Max(440f, context.Owner.position.height - 170f);
+            Rect rect = GUILayoutUtility.GetRect(
+                Mathf.Max(0f, context.AvailableWidth),
+                height,
+                GUILayout.ExpandWidth(true),
+                GUILayout.Height(height));
+            if (Event.current.type == EventType.Layout)
+            {
+                // GetRect returns a placeholder here. Areas need real dimensions
+                // during Layout too, so their controls are sized before Repaint.
+                rect.width = resolvedWidth >= 0f ? resolvedWidth : Mathf.Max(0f, context.AvailableWidth);
+                rect.height = height;
+            }
+            else if (Event.current.type == EventType.Repaint && !Mathf.Approximately(resolvedWidth, rect.width))
+            {
+                resolvedWidth = rect.width;
+                context.RequestRepaint();
+            }
+            embeddedView.DrawEmbedded(rect);
+        }
+
+        public void Dispose()
+        {
+            DisposeView();
+        }
+
+        private void DisposeView()
+        {
+            if (embeddedView == null)
+                return;
+            UnityEngine.Object.DestroyImmediate(embeddedView);
+            embeddedView = null;
+        }
     }
 }

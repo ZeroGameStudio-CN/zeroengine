@@ -299,7 +299,11 @@ namespace ZeroEngine.AI.GOAP
                 if (collider.gameObject == Context.Owner) continue;
 
                 // 检查是否是敌对目标
+#if UNITY_6000_6_OR_NEWER
+                bool isHostile = GetBlackboardValue($"IsHostile_{EntityId.ToULong(collider.gameObject.GetEntityId())}", false);
+#else
                 bool isHostile = GetBlackboardValue($"IsHostile_{collider.gameObject.GetInstanceID()}", false);
+#endif
                 if (!isHostile) continue;
 
                 float distance = Vector3.Distance(Context.Transform.position, collider.transform.position);

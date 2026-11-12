@@ -1,0 +1,150 @@
+// zero.render.surface_footstep.v1 — adapted from POB WaterFootstep, engine-neutral fragment math.
+// Caller supplies uniforms, UV.xy, normalized age.z, stable random.w and color; no engine clock or texture reads.
+float ze_saturate(float value) { return clamp(value, 0.0, 1.0); }
+vec4 ze_surface_footstep(vec4 packed_uv, vec4 fragment_color)
+{
+
+                vec2 p = packed_uv.xy * 2.0 - 1.0;
+                float radius = length(p);
+                float edge = max(fwidth(radius), 0.012);
+                float ring = 1.0 - smoothstep(_Thickness, _Thickness + edge, abs(radius - 0.82));
+                // A weaker near edge keeps the ellipse light instead of a solid white hoop.
+                if (_FootstepStyle < 0.5)
+                {
+                    if (_Tuned > 0.5)
+                    {
+                        // Coherent wave crests and directional glints, not actual scene reflections.
+                        // Age follows the environment clock, including pause and slow motion.
+                        float age = ze_saturate(packed_uv.z);
+                        if (abs(_TravelDirection) > 0.5)
+                        {
+                            // Two open crests spread away from the travel line; no circular foot impacts.
+                            float forward = p.x * _TravelDirection;
+                            float spread = (0.35 - forward) * 0.55 + age * 0.16;
+                            float distanceToWake = abs(abs(p.y) - spread);
+                            float wakeEdge = max(fwidth(distanceToWake), 0.012);
+                            float wake = 1.0 - smoothstep(_Thickness, _Thickness + wakeEdge, distanceToWake);
+                            float ends = smoothstep(-1.0, -0.7, forward) * (1.0 - smoothstep(0.15, 0.5, forward));
+                            float envelope = smoothstep(0.0, 0.04, age) * (1.0 - smoothstep(0.25, 1.0, age));
+                            fragment_color.a *= wake * ends * envelope;
+                            fragment_color.rgb *= 1.0 + _Glow;
+                            return fragment_color;
+                        }
+                        float phase = packed_uv.w * 6.283185;
+                        float angle = ze_atan2(p.y, p.x);
+                        float motion = age * _WaveSpeed;
+                        float warp = (sin(angle * 3.0 + phase + motion * 2.0) * 0.009
+                            + sin(angle * 7.0 - phase - motion * 3.0) * 0.004) * _WaveDetail;
+                        // A small impact spreads quickly, then slows while the broad ring fades.
+                        float travel = ze_saturate(age * _WaveSpeed);
+                        float front = mix(0.025, 0.93, 1.0 - pow(1.0 - travel, 2.0));
+                        float width = max(0.003, _Thickness * mix(1.0, 0.45, age));
+                        float waves = 0.0;
+                        float highlights = 0.0;
+                        // Keep a readable continuous leading crest and one much weaker trailing wave.
+                        for (int w = 0; w < 2; w++)
+                        {
+                            float crestRadius = front - float(w) * mix(0.07, 0.16, travel);
+                            float distanceToCrest = abs(radius + warp * (1.0 + float(w) * 0.3) - crestRadius);
+                            float crest = 1.0 - smoothstep(width, width + edge, distanceToCrest);
+                            float brokenArc = 0.5 + 0.5 * sin(angle * 11.0 + phase + float(w) * 2.4 + motion * 6.0
+                                + sin(angle * 5.0 - motion * 4.0));
+                            float lightFacing = pow(ze_saturate(0.5 + 0.5 * sin(angle + 0.55)), 3.0);
+                            float glint = smoothstep(0.55, 0.95, brokenArc) * (0.2 + 0.8 * lightFacing);
+                            float attenuation = (w == 0 ? 0.9 : 0.24) * smoothstep(0.0, 0.055, crestRadius);
+                            waves += crest * attenuation * mix(0.72, 1.0, ze_saturate(p.y * 0.5 + 0.5))
+                                * mix(1.0, 0.85 + brokenArc * 0.15, _WaveDetail);
+                            highlights += crest * glint * attenuation;
+                        }
+                        float envelope = smoothstep(0.0, 0.018, age)
+                            * (1.0 - smoothstep(clamp(_FadeHold, 0.05, 0.85), 1.0, age));
+                        // Glints shade the crest instead of replacing it with isolated bright spots.
+                        fragment_color.rgb = mix(fragment_color.rgb, vec3(0.92, 0.98, 1.0), ze_saturate(highlights * _Shimmer * 0.4));
+                        fragment_color.rgb *= 1.0 + highlights * _Shimmer * 0.2;
+                        fragment_color.a *= ze_saturate(waves) * envelope;
+                    }
+                    else
+                    fragment_color.a *= ring * mix(0.55, 1.0, ze_saturate(p.y * 0.5 + 0.5));
+                }
+                else
+                {
+                    float shape = 0.0;
+                    float age = _Tuned > 0.5 ? ze_saturate(packed_uv.z) : 0.0;
+                    float seed = _Tuned > 0.5 ? packed_uv.w : 0.0;
+                    float phase = seed * 6.283185;
+                    float tumbleAge = 1.0 - (1.0 - age) * (1.0 - age);
+                    float face = cos(phase + tumbleAge * _Tumble * 6.283185);
+                    float variant = (seed * 2.0 - 1.0) * _ShapeVariation;
+                    float shading = 1.0;
+                    // Separate droplets, soft dust puffs, streaks or pointed grass leaves.
+                    // Particle size/rotation over lifetime supplies movement; no global shader clock.
+                    for (int i = 0; i < 12; i++)
+                    {
+                        if (float(i) >= (_SingleFragment > 0.5 ? 1.0 : _FragmentCount)) break;
+                        float angle = float(i) * 2.39996;
+                        vec2 center = vec2(cos(angle), sin(angle)) * (0.25 + 0.045 * float(i)) * _Spread;
+                        if (_SingleFragment > 0.5) center = vec2(0.0, 0.0);
+                        vec2 q = (p - center) / max(0.5, _FragmentSize);
+                        vec2 rotated = vec2(q.x * cos(angle) - q.y * sin(angle), q.x * sin(angle) + q.y * cos(angle));
+                        if (_SingleFragment > 0.5 && _Tumble > 0.0 && _FootstepStyle > 3.5 && _FootstepStyle < 6.5)
+                        {
+                            rotated.x /= mix(0.28, 1.0, abs(face));
+                            shading = mix(0.66, 1.12, face * 0.5 + 0.5);
+                        }
+                        if (_FootstepStyle < 1.5)
+                        {
+                            float drop = length(q / vec2(0.075 + variant * 0.025, 0.1));
+                            shape = max(shape, 1.0 - smoothstep(0.55, 1.0, drop));
+                            shading = 0.8 + 0.5 * (1.0 - smoothstep(0.0, 0.05, length(q - vec2(-0.018, 0.028))));
+                        }
+                        else if (_FootstepStyle < 2.5)
+                        {
+                            // Fine motes with a soft bright core; retain the untuned legacy dust cloud.
+                            float dustRadius = _SingleFragment > 0.5 ? 0.10 : 0.38;
+                            shape = max(shape, (1.0 - smoothstep(0.0, dustRadius, length(q))) * 0.7);
+                        }
+                        else if (_FootstepStyle < 3.5)
+                        {
+                            float streak = length(rotated / vec2(0.018 + variant * 0.008, mix(0.16, 0.045, age)));
+                            shape = max(shape, 1.0 - smoothstep(0.6, 1.0, streak));
+                            shading = mix(1.35, 0.65, age);
+                        }
+                        else if (_FootstepStyle < 4.5)
+                        {
+                            // Curved blade with a pointed tip, softened by derivatives at small sizes.
+                            float bend = rotated.y * rotated.y * (0.35 + variant);
+                            float leaf = abs(rotated.x + bend) / (0.07 + variant * 0.025) + pow(abs(rotated.y) / 0.21, 1.4 + variant);
+                            shading *= 0.9 + 0.18 * ze_saturate(1.0 - abs(rotated.x + bend) / 0.012);
+                            shape = max(shape, 1.0 - smoothstep(0.75, 1.0, leaf));
+                        }
+                        else if (_FootstepStyle < 5.5)
+                        {
+                            vec2 diagonal = vec2(rotated.x + rotated.y, rotated.y - rotated.x) * 0.707;
+                            float flake = min(length(rotated / vec2(0.09, 0.02)),
+                                min(length(rotated / vec2(0.02, 0.09)), length(diagonal / vec2(0.065, 0.018))));
+                            shape = max(shape, 1.0 - smoothstep(0.7, 1.0, flake));
+                        }
+                        else if (_FootstepStyle < 6.5)
+                        {
+                            vec2 petalUV = rotated;
+                            petalUV.x += rotated.y * rotated.y * (1.2 + variant);
+                            float petal = length(petalUV / vec2(0.09 + variant * 0.025, 0.13));
+                            shading *= mix(0.8, 1.1, ze_saturate(rotated.y * 4.0 + 0.5));
+                            shape = max(shape, 1.0 - smoothstep(0.7, 1.0, petal));
+                        }
+                        else
+                        {
+                            float shard = max(abs(rotated.x) / (0.075 + variant * 0.025),
+                                max(abs(rotated.y + rotated.x * (0.4 + variant)) / 0.065, (rotated.x - rotated.y) / 0.075));
+                            shading = rotated.x + rotated.y > 0.0 ? 1.12 : 0.72;
+                            shape = max(shape, 1.0 - smoothstep(0.7, 1.0, shard));
+                        }
+                    }
+                    if (_SingleFragment < 0.5) fragment_color.rgb = _PreviewTint.rgb;
+                    fragment_color.rgb *= shading;
+                    fragment_color.a *= shape * mix(_PreviewTint.a, 1.0, _Tuned);
+                }
+                fragment_color.rgb *= 1.0 + _Glow;
+                return fragment_color;
+
+}

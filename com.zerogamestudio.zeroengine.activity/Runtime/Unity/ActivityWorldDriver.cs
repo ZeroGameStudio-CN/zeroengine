@@ -39,6 +39,19 @@ namespace ZeroEngine.Activity.Unity
             return !double.IsInfinity(distance) && !double.IsNaN(distance);
         }
 
+        /// <summary>Copy live observer inputs for one caller-owned synchronous read batch.</summary>
+        public void CaptureObservers(ActivityObservationSnapshot snapshot)
+        {
+            if (snapshot == null) throw new ArgumentNullException(nameof(snapshot));
+            snapshot.Clear();
+            for (int i = observers.Count - 1; i >= 0; i--)
+            {
+                var observer = observers[i];
+                if (!observer) { observers.RemoveAt(i); continue; }
+                if (observer.isActiveAndEnabled) snapshot.Add(observer.transform.position, observer.InfluenceRadius);
+            }
+        }
+
         private void Update() => Tick();
 
         /// <summary>Also supports an explicitly owned external update loop.</summary>

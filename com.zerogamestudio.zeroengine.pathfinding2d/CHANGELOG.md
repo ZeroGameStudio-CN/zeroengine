@@ -2,6 +2,11 @@
 
 All notable changes to this package will be documented in this file.
 
+## Unreleased — 1.7.3 consolidation candidate
+
+- Preserve the consumer-adopted 1.7.2 graph, path-search and jump-link fixes.
+- Declare Physics 2D and Tilemap modules used directly by the graph generator.
+
 ## [1.7.1] - 2026-09-11
 
 ### Changed

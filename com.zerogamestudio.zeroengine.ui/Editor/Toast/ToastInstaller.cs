@@ -73,7 +73,11 @@ namespace ZeroEngine.UI.Editor.Toast
             var text = label.GetComponent<TextMeshProUGUI>();
             text.fontSize = 34f;
             text.alignment = TextAlignmentOptions.MidlineLeft;
+#if UNITY_2023_2_OR_NEWER
+            text.textWrappingMode = TMPro.TextWrappingModes.Normal;
+#else
             text.enableWordWrapping = true;
+#endif
             text.raycastTarget = false;
 
             var view = root.GetComponent<ToastItemView>();

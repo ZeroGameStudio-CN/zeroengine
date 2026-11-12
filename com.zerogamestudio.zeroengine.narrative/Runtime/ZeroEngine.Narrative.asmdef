@@ -1,26 +1,28 @@
 {
-    "name": "ZeroEngine.Narrative",
-    "rootNamespace": "ZeroEngine",
-    "references": [
-        "ZeroEngine.Core",
-        "ZeroEngine.Persistence",
-        "ZeroEngine.Data",
-        "ZeroEngine.Economy",
-        "ZeroEngine.Gameplay",
-        "XNode",
-        "com.rlabrecque.steamworks.net",
-        "Steamworks.NET.SteamManager"
-    ],
-    "includePlatforms": [],
-    "excludePlatforms": [],
-    "allowUnsafeCode": false,
-    "overrideReferences": false,
-    "precompiledReferences": [],
-    "autoReferenced": true,
-    "defineConstraints": [],
-    "versionDefines": [
-        { "name": "com.rlabrecque.steamworks.net", "expression": "", "define": "STEAMWORKS_NET" },
-        { "name": "com.github.siccity.xnode", "expression": "", "define": "XNODE_PRESENT" }
-    ],
-    "noEngineReferences": false
+  "name": "ZeroEngine.Narrative",
+  "rootNamespace": "ZeroEngine",
+  "references": [
+    "ZeroEngine.Core",
+    "ZeroEngine.Achievement",
+    "ZeroEngine.Persistence",
+    "ZeroEngine.Data",
+    "ZeroEngine.Economy",
+    "ZeroEngine.Gameplay",
+    "XNode"
+  ],
+  "includePlatforms": [],
+  "excludePlatforms": [],
+  "allowUnsafeCode": false,
+  "overrideReferences": false,
+  "precompiledReferences": [],
+  "autoReferenced": true,
+  "defineConstraints": [],
+  "versionDefines": [
+    {
+      "name": "com.github.siccity.xnode",
+      "expression": "",
+      "define": "XNODE_PRESENT"
+    }
+  ],
+  "noEngineReferences": false
 }

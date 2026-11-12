@@ -1,0 +1,5 @@
+{
+  "name": "ZeroEngine.Tutorial.Samples",
+  "references": ["ZeroEngine.Gameplay", "Unity.InputSystem", "Unity.TextMeshPro", "UnityEngine.UI"],
+  "autoReferenced": true
+}

@@ -715,6 +715,16 @@ namespace ZeroEngine.Pathfinding2D
 
             nextNodeId = source.nextNodeId;
             nextSurfaceGroupId = source.nextSurfaceGroupId;
+            // Surface geometry is shared, but landing centers depend on the actor's body.
+            // Keep the source immutable and reconnect new safe centers through normal walk checks.
+            if (!Mathf.Approximately(config.CharacterRadius, source.Config.CharacterRadius))
+            {
+                foreach (var segment in SurfaceSegments)
+                    AddBodySafeLandingNodes(segment.MinX, segment.MaxX, segment.Y,
+                        segment.Collider, segment.IsOneWay, segment.GroupId);
+                Links.Clear();
+                GenerateWalkLinks();
+            }
             BuildAdjacencyList();
             SpatialGrid = new SpatialGrid2D(config.SpatialGridCellSize);
             SpatialGrid.Build(Nodes);
@@ -1658,30 +1668,33 @@ namespace ZeroEngine.Pathfinding2D
             });
 
             var merged = new List<(float left, float right, float y)>();
-            var current = edges[0];
-
-            for (int i = 1; i < edges.Count; i++)
+            for (int start = 0; start < edges.Count;)
             {
-                var next = edges[i];
-
-                // 检查是否可以合并（Y 坐标接近且 X 范围重叠或相邻）
-                if (Mathf.Abs(current.y - next.y) < threshold &&
-                    next.left <= current.right + threshold)
+                int end = start + 1;
+                while (end < edges.Count && edges[start].y - edges[end].y < threshold) end++;
+                // Composite vertices on one floor can differ by a few ULPs.
+                // Exact-Y sorting alone does not order those intervals by X:
+                // a later left interval could bridge a real gap, then deduplication
+                // could discard both outer floor sections as one lower interval.
+                var band = edges.GetRange(start, end - start);
+                band.Sort((a, b) => a.left.CompareTo(b.left));
+                var current = band[0];
+                for (int i = 1; i < band.Count; i++)
                 {
-                    // 合并
-                    current = (
-                        Mathf.Min(current.left, next.left),
-                        Mathf.Max(current.right, next.right),
-                        (current.y + next.y) / 2f
-                    );
+                    var next = band[i];
+                    if (next.left <= current.right + threshold)
+                    {
+                        current = (current.left, Mathf.Max(current.right, next.right), (current.y + next.y) / 2f);
+                    }
+                    else
+                    {
+                        merged.Add(current);
+                        current = next;
+                    }
                 }
-                else
-                {
-                    merged.Add(current);
-                    current = next;
-                }
+                merged.Add(current);
+                start = end;
             }
-            merged.Add(current);
 
             return merged;
         }
@@ -2013,7 +2026,9 @@ namespace ZeroEngine.Pathfinding2D
 
         private bool HasSurfaceNodeNearPosition(Vector3 position, int surfaceGroupId)
         {
-            float threshold = SurfaceNodeDedupTolerance;
+            // A nearby edge or another actor's landing center can be outside this
+            // actor's support margin. Only merge effectively identical safe centers.
+            const float threshold = 0.001f;
             int minXBucket = GetSurfaceNodeBucket(position.x - threshold);
             int maxXBucket = GetSurfaceNodeBucket(position.x + threshold);
             int minYBucket = GetSurfaceNodeBucket(position.y - threshold);

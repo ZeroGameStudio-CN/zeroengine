@@ -1,0 +1,29 @@
+{
+  "name": "com.zerogamestudio.zeroengine.portrait-speech",
+  "version": "0.1.1",
+  "displayName": "ZeroEngine Portrait Speech",
+  "description": "Text-driven pixel portrait speech, masking-safe uGUI rendering and visual profile authoring.",
+  "unity": "6000.0",
+  "dependencies": {
+    "com.unity.ugui": "1.0.0",
+    "com.unity.modules.imageconversion": "1.0.0",
+    "com.unity.modules.jsonserialize": "1.0.0",
+    "com.zerogamestudio.zeroengine.editor-ui": "1.5.0"
+  },
+  "author": {
+    "name": "Zero Game Studio"
+  },
+  "keywords": [
+    "zeroengine",
+    "portrait",
+    "speech",
+    "pixel",
+    "ugui"
+  ],
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/ZeroGameStudio-CN/zeroengine.git",
+    "directory": "com.zerogamestudio.zeroengine.portrait-speech"
+  }
+}

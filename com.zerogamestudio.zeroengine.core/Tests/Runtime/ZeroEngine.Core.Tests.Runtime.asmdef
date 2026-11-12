@@ -1,0 +1,9 @@
+{
+  "name": "ZeroEngine.Core.Tests.Runtime",
+  "rootNamespace": "ZeroEngine.Core.Tests",
+  "references": ["ZeroEngine.Core", "UnityEngine.TestRunner"],
+  "overrideReferences": true,
+  "precompiledReferences": ["nunit.framework.dll"],
+  "autoReferenced": false,
+  "defineConstraints": ["UNITY_INCLUDE_TESTS"]
+}

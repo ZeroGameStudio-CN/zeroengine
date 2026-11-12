@@ -18,12 +18,12 @@ namespace ZeroEngine.Formula.Tests.Editor
             const BindingFlags flags = BindingFlags.Instance | BindingFlags.NonPublic;
             foreach (var fieldName in new[]
                      {
-                         "lastReport",
-                         "lastBatchReport",
-                         "lastCurveReport",
-                         "lastBatchJson",
-                         "lastBatchMarkdown",
-                         "catalogPane"
+                         "formulaReports",
+                         "formulaStepsExpanded",
+                         "scenarioGroupsExpanded",
+                         "catalogPane",
+                         "savedScenarios",
+                         "loadedScenarioProfileId"
                      })
             {
                 var field = typeof(FormulaWorkbenchWindow).GetField(fieldName, flags);
@@ -66,6 +66,63 @@ namespace ZeroEngine.Formula.Tests.Editor
                 if (formula != null)
                     UnityObject.DestroyImmediate(formula);
             }
+        }
+
+        [Test]
+        public void EvaluateBatch_IncludesLocalScenariosWithoutProjectAssets()
+        {
+            var formula = CreateCoinFormula();
+
+            try
+            {
+                var session = new FormulaWorkbenchSession();
+                var localScenario = new FormulaPreviewScenario(
+                    "local-high",
+                    "本地高金币",
+                    new[] { new FormulaPreviewValue("coin", 50f) });
+
+                var report = session.EvaluateBatch(
+                    formula,
+                    CreateCoinProfile(),
+                    new FormulaPreviewValueSet(new[] { new FormulaPreviewValue("coin", 10f) }),
+                    new[] { localScenario.CreatePreviewCase() });
+
+                Assert.That(report.Results.Count, Is.EqualTo(2));
+                Assert.That(report.Results[0].Case.Id, Is.EqualTo(FormulaWorkbenchSession.CurrentPreviewCaseId));
+                Assert.That(report.Results[0].Value, Is.EqualTo(10f));
+                Assert.That(report.Results[1].Case.Id, Is.EqualTo("local-high"));
+                Assert.That(report.Results[1].Case.DisplayName, Is.EqualTo("本地高金币"));
+                Assert.That(report.Results[1].Value, Is.EqualTo(50f));
+            }
+            finally
+            {
+                if (formula != null)
+                    UnityObject.DestroyImmediate(formula);
+            }
+        }
+
+        [Test]
+        public void PreviewScenarioStore_RoundTripsReadableNameAndValues()
+        {
+            var scenario = new FormulaPreviewScenario(
+                "local-round-trip",
+                "后期测试",
+                new[]
+                {
+                    new FormulaPreviewValue("coin", 250f),
+                    new FormulaPreviewValue("cardCount", 7f),
+                });
+
+            var json = FormulaPreviewScenarioStore.Serialize(new[] { scenario });
+            var restored = FormulaPreviewScenarioStore.Deserialize(json);
+
+            Assert.That(restored.Count, Is.EqualTo(1));
+            Assert.That(restored[0].Id, Is.EqualTo("local-round-trip"));
+            Assert.That(restored[0].DisplayName, Is.EqualTo("后期测试"));
+            Assert.That(restored[0].CreateValueSet().TryGetValue("coin", out var coin), Is.True);
+            Assert.That(coin, Is.EqualTo(250f));
+            Assert.That(restored[0].CreateValueSet().TryGetValue("cardCount", out var cardCount), Is.True);
+            Assert.That(cardCount, Is.EqualTo(7f));
         }
 
         [Test]

@@ -1,0 +1,14 @@
+{
+    "name": "ZeroEngine.Cinematic",
+    "rootNamespace": "ZeroEngine.Cinematic",
+    "references": ["Unity.Timeline"],
+    "includePlatforms": [],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": true,
+    "defineConstraints": [],
+    "versionDefines": [],
+    "noEngineReferences": false
+}

@@ -222,6 +222,21 @@ namespace ZeroEngine.Character.MartialArts
         {
             if (Data == null) return;
 
+            // SetLevel also supports lowering a level; the snapshot must describe its current unlocks.
+            for (var i = UnlockedSkills.Count - 1; i >= 0; i--)
+            {
+                bool eligible = false;
+                foreach (var entry in Data.skills)
+                {
+                    if (entry.unlockLevel <= CurrentLevel && entry.skillId == UnlockedSkills[i])
+                    {
+                        eligible = true;
+                        break;
+                    }
+                }
+                if (!eligible) UnlockedSkills.RemoveAt(i);
+            }
+
             foreach (var skillEntry in Data.skills)
             {
                 if (skillEntry.unlockLevel <= CurrentLevel &&

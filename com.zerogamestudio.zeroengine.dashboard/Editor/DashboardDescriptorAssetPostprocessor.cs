@@ -23,6 +23,7 @@ namespace ZeroEngine.Editor.Dashboard
                 return;
             }
 
+            DashboardCatalogSession.Invalidate();
             DescriptorsChanged?.Invoke();
         }
 

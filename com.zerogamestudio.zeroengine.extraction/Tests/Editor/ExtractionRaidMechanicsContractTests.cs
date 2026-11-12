@@ -5,6 +5,42 @@ namespace POB.Extraction.Tests
 {
     public sealed class ExtractionRaidMechanicsContractTests
     {
+        [TestCase(0f, true)]
+        [TestCase(1f, true)]
+        [TestCase(0.35f, true)]
+        [TestCase(-0.1f, false)]
+        [TestCase(1.1f, false)]
+        [TestCase(float.NaN, false)]
+        [TestCase(float.PositiveInfinity, false)]
+        public void EncounterProbability_DefaultAndBoundsPreserveZeroChanceCandidates(float probability, bool valid)
+        {
+            var encounter = new ExtractionHostileExplorerDefinition("encounter-a", "map-a", "actor-a", "loot-a", 0, 1);
+            Assert.AreEqual(1f, encounter.SpawnProbability);
+            encounter.SpawnProbability = probability;
+            Assert.AreEqual(valid, encounter.IsValid);
+        }
+
+        [Test]
+        public void EncounterProbability_DoesNotChangeWeightedCandidateSelection()
+        {
+            var config = CreateRulesConfig();
+            var first = new ExtractionHostileExplorerDefinition("first", "map-a", "actor-a", "loot-a", 0, 1)
+                { SpawnPointId = "enemy-point", DifficultyLevel = 1 };
+            var second = new ExtractionHostileExplorerDefinition("second", "map-a", "actor-b", "loot-a", 0, 3)
+                { SpawnPointId = "enemy-point", DifficultyLevel = 1 };
+            config.HostileExplorerEncounters.Add(first);
+            config.HostileExplorerEncounters.Add(second);
+            for (int seed = 0; seed < 32; seed++)
+            {
+                first.SpawnProbability = second.SpawnProbability = 1f;
+                Assert.IsTrue(ExtractionRaidMechanicsService.TrySelectEncounter(config, "map-a", "enemy-point", 1, seed, out var before));
+                first.SpawnProbability = 0f;
+                second.SpawnProbability = 0.35f;
+                Assert.IsTrue(ExtractionRaidMechanicsService.TrySelectEncounter(config, "map-a", "enemy-point", 1, seed, out var after));
+                Assert.AreSame(before, after);
+            }
+        }
+
         [TestCase(false)]
         [TestCase(true)]
         public void LegacySnapshot_ProfileRoundTripKeepsAbsenceAndTimeout(bool missingField)

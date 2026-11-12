@@ -18,7 +18,7 @@ if (-not (Test-Path -LiteralPath $UnityPath)) {
 New-Item -ItemType Directory -Path $ResultsDir -Force | Out-Null
 $laneDefinitions = @(
     @{ Name = 'dashboard-only'; Packages = @('com.zerogamestudio.zeroengine.editor-ui', 'com.zerogamestudio.zeroengine.dashboard') },
-    @{ Name = 'dashboard-with-modules'; Packages = @('com.zerogamestudio.zeroengine.editor-ui', 'com.zerogamestudio.zeroengine.dashboard', 'com.zerogamestudio.zeroengine.core', 'com.zerogamestudio.zeroengine.ui', 'com.zerogamestudio.analytics') },
+    @{ Name = 'dashboard-with-modules'; Packages = @('com.zerogamestudio.zeroengine.editor-ui', 'com.zerogamestudio.zeroengine.dashboard', 'com.zerogamestudio.zeroengine.project-atlas', 'com.zerogamestudio.zeroengine.core', 'com.zerogamestudio.zeroengine.ui', 'com.zerogamestudio.analytics') },
     @{ Name = 'modules-only'; Packages = @(Get-ChildItem -LiteralPath $repositoryRoot -Directory |
         Where-Object {
             ($_.Name -like 'com.zerogamestudio.zeroengine.*' -and $_.Name -ne 'com.zerogamestudio.zeroengine.dashboard') -or

@@ -34,13 +34,20 @@ namespace ZeroEngine.Formula.Tests.Editor
             var combinedSource = source + "\n" + guiSource;
 
             StringAssert.Contains("FormulaEditorLabels.Formula", source);
-            StringAssert.Contains("FormulaEditorLabels.Evaluate", source);
-            StringAssert.Contains("FormulaEditorLabels.EvaluateTooltip", source);
+            StringAssert.Contains("FormulaEditorLabels.EvaluatePreviewCases", source);
+            StringAssert.Contains("FormulaEditorLabels.EvaluatePreviewCasesTooltip", source);
             StringAssert.Contains("FormulaEditorLabels.StudioTooltip", source);
-            StringAssert.Contains("FormulaEditorGUILayout.DrawReport", source);
+            StringAssert.Contains("DrawFormulaReport", source);
+            StringAssert.Contains("EvaluateFormula", source);
+            StringAssert.Contains("CollectPreviewFields", source);
             StringAssert.Contains("FormulaEditorLabels.Diagnostics", guiSource);
             StringAssert.Contains("FormulaEditorLabels.StepTrace", guiSource);
             StringAssert.Contains("FormulaEditorLabels.FilterTooltip", guiSource);
+            StringAssert.DoesNotContain("DrawTrendAnalysis", source);
+            StringAssert.DoesNotContain("DrawCurvePreview", source);
+            StringAssert.DoesNotContain("DrawPreviewResults", source);
+            StringAssert.DoesNotContain("lastBatchJson", source);
+            StringAssert.DoesNotContain("lastBatchMarkdown", source);
             StringAssert.DoesNotContain("EditorGUILayout.LabelField(\"Succeeded\"", combinedSource);
             StringAssert.DoesNotContain("EditorGUILayout.LabelField(\"Result\"", combinedSource);
             StringAssert.DoesNotContain("EditorGUILayout.LabelField(\"Diagnostics\"", combinedSource);
@@ -64,6 +71,36 @@ namespace ZeroEngine.Formula.Tests.Editor
             StringAssert.Contains("case \"formula-workbench\"", providerSource);
             StringAssert.DoesNotContain("[MenuItem(", catalogSource);
             StringAssert.DoesNotContain("[MenuItem(", workbenchSource);
+        }
+
+        [Test]
+        public void FormulaCatalog_FirstPaintDoesNotSynchronouslyScanProjectDocuments()
+        {
+            var source = File.ReadAllText(Path.Combine(GetPackageRoot(), "Editor", "FormulaCatalogPane.cs"));
+
+            StringAssert.DoesNotContain("CollectTextDocuments", source);
+            StringAssert.DoesNotContain("FormulaAssetScanner.Scan(profile)", source);
+            StringAssert.DoesNotContain("FormulaEditorLabels.Refresh", source);
+            StringAssert.DoesNotContain("FormulaEditorLabels.UpdateIndex", source);
+            StringAssert.Contains("Task.Run", source);
+            StringAssert.Contains("FormulaReferenceIndexCache", source);
+            StringAssert.Contains("CollectCandidateAssetPaths(profile)", source);
+            StringAssert.Contains("CollectFileSnapshots(candidatePaths)", source);
+            StringAssert.DoesNotContain("CollectFileSnapshots(profile)", source);
+            StringAssert.Contains("generation != observedGeneration", source);
+            StringAssert.Contains("当前项目尚未接入公式适配器", source);
+            StringAssert.Contains("IsConfiguredProfile", source);
+            StringAssert.DoesNotContain("FormulaEditorLabels.AdvancedMaintenance", source);
+            StringAssert.DoesNotContain("FormulaEditorLabels.RebuildIndex", source);
+            StringAssert.Contains("RequestRebuild(profile, true)", source);
+            StringAssert.Contains("EnsureMissingCatalogEntries", source);
+            StringAssert.DoesNotContain("DrawMarkdown", source);
+            StringAssert.DoesNotContain("FormulaEditorLabels.Ping", source);
+            StringAssert.Contains("FormulaEditorLabels.FormulaCardTooltip", source);
+            StringAssert.Contains("Selection.activeObject = row.Formula", source);
+            StringAssert.Contains("currentEvent.clickCount >= 2", source);
+            StringAssert.Contains("GUIStyle.none", source);
+            StringAssert.Contains("GUI.skin.verticalScrollbar", source);
         }
 
         private static string GetPackageRoot()
