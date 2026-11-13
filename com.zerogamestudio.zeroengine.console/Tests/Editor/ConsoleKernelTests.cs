@@ -146,6 +146,29 @@ namespace ZeroEngine.Console.Tests
         }
 
         [Test]
+        public async Task CommandCompletion_FindsNameFragmentsAndAliasesAfterPrefixMatches()
+        {
+            using var registry = new ConsoleRegistry();
+            var aliased = new ConsoleCommand("ze.test.inspect", "inspect", "test", "Inspect",
+                aliases: new[] { "ze-weapon-preview" });
+            using var module = registry.Register("test", new[] {
+                new ConsoleBinding(Command("prime-weapon"), Ok),
+                new ConsoleBinding(Command("weapon-info"), Ok),
+                new ConsoleBinding(aliased, Ok),
+                new ConsoleBinding(Command("private-weapon", capabilities: new[] { "private" }), Ok),
+                new ConsoleBinding(Command("unrelated"), Ok) });
+            using var session = new ConsoleSession(registry);
+
+            const string line = "WEAPON-old argument";
+            var completions = await session.CompleteAsync(line, 6, Editor);
+            Assert.That(completions.Items.Select(item => item.Value),
+                Is.EqualTo(new[] { "weapon-info", "prime-weapon", "ze-weapon-preview" }));
+            Assert.That(completions.Apply(line, 1), Is.EqualTo("prime-weapon argument"));
+            var limited = await session.CompleteAsync("weapon", 6, Editor, limit: 1);
+            Assert.That(limited.Items.Select(item => item.Value), Is.EqualTo(new[] { "weapon-info" }));
+        }
+
+        [Test]
         public async Task Completion_UsesStableIdentityCorrectSpanAndQuotedInsertion()
         {
             using var registry = new ConsoleRegistry();

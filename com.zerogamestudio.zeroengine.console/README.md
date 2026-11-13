@@ -36,8 +36,9 @@ false. Only a handler with an established business outcome returns `Success`.
 A custom completer may return `null` for a parameter it does not own; the session
 then supplies its built-in bool/enum completion, including nullable values and
 the explicit `null` token. An empty list deliberately supplies no candidates.
-Completion searches both the canonical value and its display label; applying a
-candidate always inserts the canonical value with native quoting. Editor resource
+Command names and aliases match any case-insensitive fragment, with prefix
+matches shown first. Parameter completion searches the canonical value and its
+display label; applying a candidate inserts the canonical value with native quoting. Editor resource
 providers can therefore offer metadata-only asset paths under readable labels.
 `ConsoleHost.ExecuteAsync(idOrName, object[])` provides the same main-thread,
 policy-checked path for typed callers. Projects that rely on legacy `Debug.Log`

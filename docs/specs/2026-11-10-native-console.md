@@ -305,3 +305,21 @@ The default Quantum route retained 155 aliases and 344 overloads before and afte
 Native use. Both actual Game view images were inspected; save/audio restoration,
 PlayMode exit and native cleanup were confirmed. This is an internal candidate;
 fresh public package checks and exact consumer adoption remain separate gates.
+
+## Combined consumer compatibility, 2026-11-13
+
+The later consumer fix uses a transient, non-registered Native panel instead of
+the proposed appended panel ID. It preserves Quantum's registered panel and
+uses the existing panel stack for pause/input restoration. With Quantum present,
+the default entry opens Quantum; a missing or disabled widget falls back to
+Native, and the next opening retries Quantum after recovery. This supersedes
+the earlier consumer-only panel-key proposal without renumbering existing keys.
+
+The combined source also retains the ZOS-1091 command-fragment fix: command names
+and aliases can match a case-insensitive substring, prefix matches rank first,
+and parameter completion and invocation remain unchanged. All 28 kernel cases
+passed in the isolated consumer. A fresh real Intro-to-Base PlayMode flow passed
+Quantum default, Native fallback, `weapon` to `pob-add-weapon` insertion without
+execution, lower-left placement, and restored Quantum priority. Both actual
+Game frames were inspected; input/cursor/time, save/audio, PlayMode exit and native
+cleanup were confirmed. Package/consumer publication remain separately recorded.
