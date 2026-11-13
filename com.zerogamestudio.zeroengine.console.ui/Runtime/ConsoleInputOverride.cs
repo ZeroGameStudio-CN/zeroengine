@@ -1,64 +1,45 @@
 using UnityEngine;
 using UnityEngine.EventSystems;
-#if ZE_CONSOLE_INPUT_SYSTEM && ENABLE_INPUT_SYSTEM
-using UnityEngine.InputSystem;
-using UnityEngine.InputSystem.Controls;
-using UnityEngine.InputSystem.LowLevel;
-#endif
 
 namespace ZeroEngine.Console.UI
 {
+    // Keep the existing component/GUID; the optional backend supplies platform input.
     public sealed class ConsoleInputOverride : BaseInput
     {
-#if ZE_CONSOLE_INPUT_SYSTEM && ENABLE_INPUT_SYSTEM
-        private Keyboard keyboard;
-        private string composition = string.Empty;
-        private IMECompositionMode mode;
-        private Vector2 imeCursor;
-        protected override void OnEnable() { base.OnEnable(); RefreshKeyboard(); }
-        private void Update() => RefreshKeyboard();
-        private void RefreshKeyboard()
+        private BaseInput source;
+        protected override void OnEnable()
         {
-            if (keyboard == Keyboard.current) return;
-            if (keyboard != null) keyboard.onIMECompositionChange -= CompositionChanged;
-            keyboard = Keyboard.current;
-            composition = string.Empty;
-            if (keyboard != null) keyboard.onIMECompositionChange += CompositionChanged;
+            base.OnEnable();
+            if (!source) source = ConsoleInputBackend.CreateInputSource(gameObject);
+            if (source == this) source = null;
+            if (source) source.enabled = true;
         }
-        private void CompositionChanged(IMECompositionString value) => composition = value.ToString();
         protected override void OnDisable()
         {
-            if (keyboard != null) keyboard.onIMECompositionChange -= CompositionChanged;
-            keyboard = null; composition = string.Empty;
+            if (source) source.enabled = false;
             base.OnDisable();
         }
-        public override string compositionString => composition;
+        public override string compositionString => source ? source.compositionString : base.compositionString;
         public override IMECompositionMode imeCompositionMode
         {
-            get => mode;
-            set { mode = value; keyboard?.SetIMEEnabled(value != IMECompositionMode.Off); }
+            get => source ? source.imeCompositionMode : base.imeCompositionMode;
+            set { if (source) source.imeCompositionMode = value; else base.imeCompositionMode = value; }
         }
         public override Vector2 compositionCursorPos
         {
-            get => imeCursor;
-            set { imeCursor = value; keyboard?.SetIMECursorPosition(value); }
+            get => source ? source.compositionCursorPos : base.compositionCursorPos;
+            set { if (source) source.compositionCursorPos = value; else base.compositionCursorPos = value; }
         }
-        private static ButtonControl MouseButton(int index)
-        {
-            var mouse = Mouse.current;
-            return mouse == null ? null : index == 0 ? mouse.leftButton : index == 1 ? mouse.rightButton : mouse.middleButton;
-        }
-        public override bool mousePresent => Mouse.current != null;
-        public override Vector2 mousePosition => Mouse.current == null ? Vector2.zero : Mouse.current.position.ReadValue();
-        public override Vector2 mouseScrollDelta => Mouse.current == null ? Vector2.zero : Mouse.current.scroll.ReadValue();
-        public override bool GetMouseButton(int button) => MouseButton(button)?.isPressed ?? false;
-        public override bool GetMouseButtonDown(int button) => MouseButton(button)?.wasPressedThisFrame ?? false;
-        public override bool GetMouseButtonUp(int button) => MouseButton(button)?.wasReleasedThisFrame ?? false;
-        public override bool touchSupported => false;
-        public override int touchCount => 0;
-        public override Touch GetTouch(int index) => default;
-        public override float GetAxisRaw(string axisName) => 0;
-        public override bool GetButtonDown(string buttonName) => false;
-#endif
+        public override bool mousePresent => source ? source.mousePresent : base.mousePresent;
+        public override Vector2 mousePosition => source ? source.mousePosition : base.mousePosition;
+        public override Vector2 mouseScrollDelta => source ? source.mouseScrollDelta : base.mouseScrollDelta;
+        public override bool GetMouseButton(int button) => source ? source.GetMouseButton(button) : base.GetMouseButton(button);
+        public override bool GetMouseButtonDown(int button) => source ? source.GetMouseButtonDown(button) : base.GetMouseButtonDown(button);
+        public override bool GetMouseButtonUp(int button) => source ? source.GetMouseButtonUp(button) : base.GetMouseButtonUp(button);
+        public override bool touchSupported => source ? source.touchSupported : base.touchSupported;
+        public override int touchCount => source ? source.touchCount : base.touchCount;
+        public override Touch GetTouch(int index) => source ? source.GetTouch(index) : base.GetTouch(index);
+        public override float GetAxisRaw(string axisName) => source ? source.GetAxisRaw(axisName) : base.GetAxisRaw(axisName);
+        public override bool GetButtonDown(string buttonName) => source ? source.GetButtonDown(buttonName) : base.GetButtonDown(buttonName);
     }
 }

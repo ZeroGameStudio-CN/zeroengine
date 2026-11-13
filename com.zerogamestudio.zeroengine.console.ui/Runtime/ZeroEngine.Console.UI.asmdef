@@ -1,7 +1,6 @@
 {
   "name": "ZeroEngine.Console.UI",
   "rootNamespace": "ZeroEngine.Console.UI",
-  "references": ["ZeroEngine.Console.Core", "ZeroEngine.Console.Unity", "UnityEngine.UI", "Unity.InputSystem"],
-  "versionDefines": [{ "name": "com.unity.inputsystem", "expression": "", "define": "ZE_CONSOLE_INPUT_SYSTEM" }],
+  "references": ["ZeroEngine.Console.Core", "ZeroEngine.Console.Unity", "UnityEngine.UI"],
   "autoReferenced": true
 }
