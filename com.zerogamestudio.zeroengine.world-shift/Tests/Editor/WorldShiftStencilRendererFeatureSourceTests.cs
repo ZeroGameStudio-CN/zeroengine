@@ -39,7 +39,9 @@ namespace ZeroEngine.WorldShift.Tests.Editor
             StringAssert.Contains("CompareFunction.NotEqual", source);
             StringAssert.Contains("WorldShiftStencilRuntimeState.HasRegisteredController", source);
             StringAssert.Contains("WorldShiftStencilRuntimeState.TryGetActiveState", source);
-            StringAssert.Contains("DrawVisualLayersNormally", source);
+            StringAssert.Contains("context.cmd.DrawRendererList", source);
+            StringAssert.Contains("builder.UseRendererList", source);
+            StringAssert.Contains("builder.SetRenderAttachmentDepth", source);
             StringAssert.Contains("DrawProcedural", source);
             StringAssert.Contains("ScreenScanMaskPassIndex", source);
             StringAssert.Contains("Universal2D", source);
@@ -57,7 +59,7 @@ namespace ZeroEngine.WorldShift.Tests.Editor
                 "../Packages/com.zerogamestudio.zeroengine.world-shift/Runtime/URP/WorldShiftStencilRendererFeature.cs");
             string source = File.ReadAllText(path);
 
-            StringAssert.Contains("DrawScreenScanMask", source);
+            StringAssert.Contains("context.cmd.DrawProcedural", source);
             StringAssert.Contains("ScreenScanMaskPassIndex", source);
             StringAssert.DoesNotContain("maskDrawing.overrideMaterial", source);
             StringAssert.DoesNotContain("context.DrawRenderers(renderingData.cullResults, ref maskDrawing", source);
@@ -99,7 +101,7 @@ namespace ZeroEngine.WorldShift.Tests.Editor
             string material = File.ReadAllText(materialPath);
 
             StringAssert.Contains("TryGetActiveState", feature);
-            StringAssert.Contains("DrawScreenScanMask", feature);
+            StringAssert.Contains("context.cmd.DrawProcedural", feature);
             StringAssert.Contains("ScreenScanMaskPassIndex", feature);
             StringAssert.DoesNotContain("WorldShiftTransitionMode.DoorPortal", feature);
             StringAssert.DoesNotContain("DrawPortalMaskRenderers", feature);
