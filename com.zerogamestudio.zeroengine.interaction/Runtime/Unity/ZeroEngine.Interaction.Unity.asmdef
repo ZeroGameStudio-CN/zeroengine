@@ -1,0 +1,7 @@
+{
+  "name": "ZeroEngine.Interaction.Unity",
+  "rootNamespace": "ZeroEngine.Interaction.Unity",
+  "references": ["ZeroEngine.Interaction.Core"],
+  "autoReferenced": true,
+  "noEngineReferences": false
+}

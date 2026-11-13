@@ -1,0 +1,21 @@
+{
+  "name": "com.zerogamestudio.zeroengine.interaction",
+  "version": "0.1.0",
+  "displayName": "ZeroEngine.Interaction",
+  "description": "Scoped interaction focus, tap/hold/repeat sessions and guarded delayed commits with caller-owned input, clocks and business rules.",
+  "unity": "2022.3",
+  "license": "MIT",
+  "author": { "name": "ZeroGameStudio" },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/ZeroGameStudio-CN/zeroengine.git",
+    "directory": "com.zerogamestudio.zeroengine.interaction"
+  },
+  "samples": [
+    {
+      "displayName": "Interaction Playground",
+      "description": "Two actors, door, talk/gift, pooled pickup and delayed shop confirmation. Requires uGUI and a compatible EventSystem input module.",
+      "path": "Samples~/InteractionPlayground"
+    }
+  ]
+}

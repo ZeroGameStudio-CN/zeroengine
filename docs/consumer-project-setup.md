@@ -153,3 +153,12 @@ must be established by matching build evidence before production adoption.
   `com.zerogamestudio.*` dependency that also needs a manifest entry.
 - Do not edit `Library` or cached package contents; change the manifest, then
   let Unity resolve again.
+## Standalone interaction candidate
+
+`com.zerogamestudio.zeroengine.interaction` is a package-first candidate with no sibling
+UPM dependencies. Pin it to a tested source commit using the same Git URL convention
+as other modules. Its runtime assemblies use `.Core` and `.Unity` namespaces and can
+coexist with the older Interaction module inside Gameplay during consumer migration.
+The optional Interaction Playground sample requires uGUI and the UI module; the
+repository's `interaction` test lane imports the sample into an otherwise isolated project.
+POB integration and retirement of old Gameplay interaction consumers are follow-up work.

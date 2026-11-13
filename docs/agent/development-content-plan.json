@@ -269,10 +269,10 @@
       "availability": "InternalOnly",
       "responsibleChat": "01a1c66f-d77b-7b00-88d4-37f8f3df3b13",
       "chatUrl": "codex://threads/01a1c66f-d77b-7b00-88d4-37f8f3df3b13",
-      "nextAction": "按固定 Git 提交进行内部采用；QC 2.6.7 在该 Windows IL2CPP 配置使用 Native 回退。正式发布另行决定，四份作者保留源码维持原有提交权。",
+      "nextAction": "保留默认 Quantum 与现有指令。左下角 Native UI 及独立面板键候选已作本地验证；待公开包检查和消费者精确接入收口，项目专有指令继续分批迁移。",
       "entrance": "docs/specs/2026-11-10-native-console.md",
       "resourcePath": "com.zerogamestudio.zeroengine.console/README.md",
-      "revision": "2026-11-12：G5／G6 迁移及清理已提交 POB cs19088，包引用 cs19086 固定四包 f44d946；cs19094 移除误依赖本地未提交 BasePanel 扩展的 override，147 源文件离线编译、共享基类覆写和 27 个项目接口声明核对，Editor 已加载 Debugging 与 Runtime 测试程序集。161 条目录摘要保持 b29a7ea；实际目标编译 246 程序集／模式，131 开发链接、非开发包 0 开发链接。G7 项目 Skill 已按实际 44 包同步，最后检查 current／changed[]。3060 Ti 受管 job-9daac5e4e1 在同一 f44d946 构建并运行六配置，1661 文件摘要一致；Native Mono／IL2CPP、QC Mono 与两种非开发默认保护成立，typed 工作线程派发和主／工作线程 text／typed 预取消均验证。QC IL2CPP 全零 MVID 明确 UNSUPPORTED，Native 回退及恢复成立，整轮任务保留失败。已有真实 1080p 比较录制；不据此声称物理 IME、完整 POB IL2CPP 实机或正式用户发布。",
+      "revision": "2026-11-12：G5／G6 迁移及清理已提交 POB cs19088，包引用 cs19086 固定四包 f44d946；cs19094 移除误依赖本地未提交 BasePanel 扩展的 override，147 源文件离线编译、共享基类覆写和 27 个项目接口声明核对，Editor 已加载 Debugging 与 Runtime 测试程序集。161 条目录摘要保持 b29a7ea；实际目标编译 246 程序集／模式，131 开发链接、非开发包 0 开发链接。G7 项目 Skill 已按实际 44 包同步，最后检查 current／changed[]。3060 Ti 受管 job-9daac5e4e1 在同一 f44d946 构建并运行六配置，1661 文件摘要一致；Native Mono／IL2CPP、QC Mono 与两种非开发默认保护成立，typed 工作线程派发和主／工作线程 text／typed 预取消均验证。QC IL2CPP 全零 MVID 明确 UNSUPPORTED，Native 回退及恢复成立，整轮任务保留失败。已有真实 1080p 比较录制；不据此声称物理 IME、完整 POB IL2CPP 实机或正式用户发布。\n2026-11-13：左下角 Native UI 候选增加清空、字号、滚动条、跟随开关和补全翻页，保留 256 条 session 输出且不再额外截断 1024 字符。10 个 UI PlayMode 用例 0 失败／0 跳过。真实流程发现 Native 与 Quantum 面板键冲突，消费者候选使用追加的独立键并保留旧注册；修正后完整 Intro→基地→Quantum→Native→Quantum 通过，Native 156 指令、原 QC 155 别名／344 重载，单次执行、补全、重开和关闭恢复均有证据，存档／音频恢复、退出和 native cleanup 确认。两张真实 Game 画面已回看；正式 cs19159／41 包 adb92428 未改，待公开包检查与精确接入，未批量迁移项目专有指令。",
       "releaseEvidence": "",
       "verificationEvidence": [
         "D:/CodexArtifacts/ze-package-audit-20261110/console-compat-baseline/input-hashes.json",
@@ -330,7 +330,12 @@
         "D:\\CodexArtifacts\\ze-package-audit-20261110\\g9-panel-baseline-fix\\loaded-assemblies.json",
         "D:\\CodexArtifacts\\ze-package-audit-20261110\\g9-pob-skill-final-readback.json",
         "D:\\CodexArtifacts\\ze-package-audit-20261110\\g6-pob-console-flow-v3\\runtime\\console-native-quantum.mp4",
-        "https://github.com/ZeroGameStudio-CN/zeroengine/actions/runs/43090792069"
+        "https://github.com/ZeroGameStudio-CN/zeroengine/actions/runs/43090792069",
+        "D:/CodexArtifacts/ze-native-console-ui-20261113/ui-tests/status.json",
+        "D:/CodexArtifacts/ze-native-console-ui-20261113/package-audit.json",
+        "D:/CodexArtifacts/ze-native-console-ui-20261113/flow-panel-fix/status.json",
+        "D:/CodexArtifacts/ze-native-console-ui-20261113/flow-panel-fix/runtime/native-left-bottom.png",
+        "D:/CodexArtifacts/ze-native-console-ui-20261113/flow-panel-fix/runtime/quantum-preserved.png"
       ],
       "relatedContent": [
         {
@@ -343,6 +348,25 @@
         }
       ],
       "verificationScope": "限 Unity 6000.6.4f1 Windows／QC 2.6.7 精确指纹；QC Mono 最终链接身份一致，IL2CPP 空 MVID 不放宽。CLI 受控组词 0 次提前调用、确认后 1 次；新增 typed 派发与四种预取消组合在真实开发 Player 成立。POB 迁移、目标元数据、PlayMode 比较、44 包 Skill 同步分别有证据；不代表物理系统 IME、正式 POB IL2CPP 包或用户发布。"
+    },
+    {
+      "id": "ze.interaction.scoped-sessions",
+      "title": "独立交互包：按交互者隔离的焦点、按住会话与延迟提交",
+      "stage": "Ready",
+      "targetReleaseId": "",
+      "availability": "TestOnly",
+      "responsibleChat": "01a1d074-3286-7fc3-a8fa-09d3bfbcae2d",
+      "chatUrl": "",
+      "nextAction": "审查包级交付后，按独立适配计划接回 POB；先覆盖门、NPC、拾取物、扣费与联机，不直接搬迁整棵 Pickup 继承树。",
+      "entrance": "Tools/Packages/create_test_project.py --lane interaction；导入 Interaction Playground 示例。",
+      "resourcePath": "com.zerogamestudio.zeroengine.interaction",
+      "revision": "0.1.0 package-first candidate",
+      "candidatePackageVersion": "0.1.0",
+      "releaseEvidence": "",
+      "verificationScope": "Unity 6000.6.4f1：33 项 EditMode＋9 项 PlayMode 无失败、无跳过；20 项包工具检查；62 包边界审计无发现；实际 Game View 1280×900 画面已自查，PlayMode 与后台状态已恢复。未接入 POB，未验证玩家发布。",
+      "verificationEvidence": [
+        "C:\\Users\\2025\\.antigravity_cockpit\\instances\\codex\\eae8558ab409f681\\visualizations\\2026\\11\\12\\01a1d074-3286-7fc3-a8fa-09d3bfbcae2d\\ze-interaction-verification\\summary.json"
+      ]
     }
   ]
 }

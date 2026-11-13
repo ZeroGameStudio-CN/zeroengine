@@ -266,6 +266,120 @@ namespace ZeroEngine.Console.UI.Tests
             finally { Time.timeScale = previousScale; module?.Dispose(); if (root) Object.DestroyImmediate(root); }
         }
 
+        [UnityTest]
+        public IEnumerator NativeView_LowerLeftWindowKeepsInputAndControlsInsideCanvas()
+        {
+            var root = new GameObject("Lower-left Console layout");
+            try
+            {
+                var view = root.AddComponent<NativeConsole>();
+                view.Open();
+                yield return null;
+                yield return null;
+                Canvas.ForceUpdateCanvases();
+                var canvas = view.GetComponentInChildren<Canvas>();
+                var canvasRect = (RectTransform)canvas.transform;
+                var panel = (RectTransform)canvas.transform.Find("Panel");
+                var corners = new Vector3[4]; panel.GetWorldCorners(corners);
+                var lowerLeft = canvasRect.InverseTransformPoint(corners[0]);
+                var upperRight = canvasRect.InverseTransformPoint(corners[2]);
+                Assert.That(lowerLeft.x, Is.EqualTo(canvasRect.rect.xMin + 16).Within(1));
+                Assert.That(lowerLeft.y, Is.EqualTo(canvasRect.rect.yMin + 16).Within(1));
+                Assert.That(upperRight.x, Is.LessThanOrEqualTo(canvasRect.rect.xMax - 15));
+                Assert.That(upperRight.y, Is.LessThanOrEqualTo(canvasRect.rect.yMax - 15));
+                Assert.That(view.InputField.textComponent.rectTransform.rect.width, Is.GreaterThan(100));
+                foreach (var control in view.GetComponentsInChildren<UnityEngine.UI.Button>())
+                {
+                    ((RectTransform)control.transform).GetWorldCorners(corners);
+                    Assert.That(panel.rect.Contains(panel.InverseTransformPoint(corners[0])), Is.True, control.name);
+                    Assert.That(panel.rect.Contains(panel.InverseTransformPoint(corners[2])), Is.True, control.name);
+                }
+                view.Close();
+                view.Open();
+                Assert.That(view.GetComponentsInChildren<Canvas>(true).Length, Is.EqualTo(1));
+            }
+            finally { Object.DestroyImmediate(root); }
+        }
+
+        [UnityTest]
+        public IEnumerator NativeView_OutputToolsKeepLongMessagesAndReadingPosition()
+        {
+            var root = new GameObject("Native output controls");
+            try
+            {
+                var host = root.AddComponent<ConsoleHost>();
+                var view = root.AddComponent<NativeConsole>();
+                string longMessage = new string('长', 1100) + "完整结尾";
+                host.Session.Write(new ConsoleOutput("", ConsoleOutputLevel.Warning, longMessage));
+                for (int i = 0; i < 80; i++) host.Session.Write(new ConsoleOutput("", ConsoleOutputLevel.Info, "日志 " + i));
+                view.Open();
+                yield return null;
+                yield return null;
+                var output = view.GetComponentInChildren<UnityEngine.UI.ScrollRect>();
+                var lines = output.content.GetComponentsInChildren<UnityEngine.UI.Text>();
+                Assert.That(lines.Length, Is.EqualTo(81), "Earlier retained output must remain scrollable.");
+                Assert.That(lines[0].text, Is.EqualTo(longMessage));
+                Button(view, "字号增大").onClick.Invoke();
+                Assert.That(view.InputField.textComponent.fontSize, Is.EqualTo(18));
+                Button(view, "字号减小").onClick.Invoke();
+                Assert.That(view.InputField.textComponent.fontSize, Is.EqualTo(16));
+                Button(view, "跟随").onClick.Invoke();
+                yield return null;
+                output.verticalNormalizedPosition = .6f;
+                float readingPosition = output.content.anchoredPosition.y;
+                host.Session.Write(new ConsoleOutput("", ConsoleOutputLevel.Info, "阅读旧日志时的新消息"));
+                yield return null;
+                yield return null;
+                Assert.That(output.content.anchoredPosition.y, Is.EqualTo(readingPosition).Within(1));
+                Button(view, "跟随").onClick.Invoke();
+                Assert.That(output.verticalNormalizedPosition, Is.EqualTo(0).Within(.01));
+                Button(view, "清空").onClick.Invoke();
+                yield return null;
+                Assert.That(host.Session.GetOutput(), Is.Empty);
+                Assert.That(output.content.GetComponentsInChildren<UnityEngine.UI.Text>(), Is.Empty);
+            }
+            finally { Object.DestroyImmediate(root); }
+        }
+
+        [UnityTest]
+        public IEnumerator DynamicCompletion_CanChooseBeyondFirstPageWithoutExecuting()
+        {
+            var root = new GameObject("Paged native completion");
+            IDisposable module = null;
+            int calls = 0;
+            try
+            {
+                var host = root.AddComponent<ConsoleHost>();
+                var view = root.AddComponent<NativeConsole>();
+                module = host.Registry.Register("pages", new[] {
+                    new ConsoleBinding(new ConsoleCommand("pages.query", "pages-query", "pages", "Select a resource.",
+                        new[] { new ConsoleParameter("id", typeof(string)) }),
+                        (context, args, token) => { calls++; return Task.FromResult(ConsoleResult.Success(args.Get<string>(0))); },
+                        (context, token) => Task.FromResult<System.Collections.Generic.IReadOnlyList<ConsoleCompletionItem>>(
+                            Enumerable.Range(0, 17).Select(index => new ConsoleCompletionItem("resource." + index, "资源 " + index.ToString("00"))).ToArray())) });
+                view.Open();
+                yield return null;
+                view.InputField.text = "pages-query ";
+                view.InputField.caretPosition = view.InputField.text.Length;
+                double deadline = Time.realtimeSinceStartupAsDouble + 5;
+                while (!view.GetComponentsInChildren<UnityEngine.UI.Button>().Any(button => button.name == "Completion") && Time.realtimeSinceStartupAsDouble < deadline)
+                    yield return null;
+                for (int i = 0; i < 9; i++) Button(view, "下一项").onClick.Invoke();
+                var choice = view.GetComponentsInChildren<UnityEngine.UI.Button>().Single(button => button.name == "Completion" &&
+                    button.GetComponentInChildren<UnityEngine.UI.Text>().text == "资源 09");
+                choice.onClick.Invoke();
+                Assert.That(view.InputField.text, Is.EqualTo("pages-query \"资源 09\""));
+                Assert.That(calls, Is.Zero);
+                Button(view, "运行").onClick.Invoke();
+                while (host.Session.IsRunning) yield return null;
+                yield return null;
+                Assert.That(calls, Is.EqualTo(1));
+                Assert.That(host.Session.GetOutput().Any(entry => entry.Message == "资源 09"), Is.True);
+                Assert.That(view.GetComponentsInChildren<UnityEngine.UI.Button>().Any(button => button.name == "Completion"), Is.False);
+            }
+            finally { module?.Dispose(); Object.DestroyImmediate(root); }
+        }
+
         private static UnityEngine.UI.Button Button(NativeConsole view, string name) =>
             view.GetComponentsInChildren<UnityEngine.UI.Button>(true).Single(button => button.gameObject.name == name);
 
