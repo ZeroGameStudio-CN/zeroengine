@@ -34,3 +34,11 @@ Verify actual rendered text, submission, pause/cancel and input restoration
 through the project's authorized route. Read the installed adapter's exact
 Player support boundary; Editor/Mono evidence cannot certify IL2CPP or physical
 system IME behavior.
+
+Native presentation opens at the lower left and supplies clear/copy, bounded
+scrollback, font size and follow-output controls. Up/Down recalls history;
+Page Up/Page Down selects completion candidates across pages and Tab inserts
+the selected value. Selection does not execute a handler. Keep the current
+Quantum entry and command inventory usable while adopting Native explicitly;
+frontend layout changes are not permission to remove project commands or switch
+production defaults.
