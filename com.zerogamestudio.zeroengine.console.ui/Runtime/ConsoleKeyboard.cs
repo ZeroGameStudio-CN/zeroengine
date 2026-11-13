@@ -1,8 +1,5 @@
 using UnityEngine;
 using UnityEngine.EventSystems;
-#if ZE_CONSOLE_INPUT_SYSTEM && ENABLE_INPUT_SYSTEM
-using UnityEngine.InputSystem;
-#endif
 
 namespace ZeroEngine.Console.UI
 {
@@ -25,27 +22,6 @@ namespace ZeroEngine.Console.UI
             }
         }
 
-        public static bool Pressed(KeyCode key)
-        {
-#if ZE_CONSOLE_INPUT_SYSTEM && ENABLE_INPUT_SYSTEM
-            var keyboard = Keyboard.current;
-            if (keyboard == null) return false;
-            switch (key)
-            {
-                case KeyCode.BackQuote: return keyboard.backquoteKey.wasPressedThisFrame;
-                case KeyCode.Return: return keyboard.enterKey.wasPressedThisFrame || keyboard.numpadEnterKey.wasPressedThisFrame;
-                case KeyCode.Escape: return keyboard.escapeKey.wasPressedThisFrame;
-                case KeyCode.Tab: return keyboard.tabKey.wasPressedThisFrame;
-                case KeyCode.UpArrow: return keyboard.upArrowKey.wasPressedThisFrame;
-                case KeyCode.DownArrow: return keyboard.downArrowKey.wasPressedThisFrame;
-                case KeyCode.PageUp: return keyboard.pageUpKey.wasPressedThisFrame;
-                case KeyCode.PageDown: return keyboard.pageDownKey.wasPressedThisFrame;
-                default: return false;
-            }
-#else
-            try { return Input.GetKeyDown(key); }
-            catch (System.InvalidOperationException) { return false; }
-#endif
-        }
+        public static bool Pressed(KeyCode key) => ConsoleInputBackend.Pressed(key);
     }
 }

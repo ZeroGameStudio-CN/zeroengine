@@ -24,7 +24,7 @@ bounded output/history and cancellation. Switching closes the previous view
 and releases its EventSystem/input state before opening the next; it does not
 cancel or replay an already started business command.
 
-The native desktop window opens at the lower left. Its bounded 760 × 440
+The native desktop window opens at the lower left. Its bounded 720 × 400
 reference layout fits inside the current Canvas and leaves the remaining game
 view visible. The toolbar supplies Clear, Copy, font size (12–28) and an explicit
 follow-output switch. Turning follow off keeps the current reading position
@@ -43,3 +43,17 @@ including its `inputOverride`, before falling back to Unity's legacy input.
 Custom input providers must expose their current `compositionString` there.
 Native and Quantum use the same guard and defer submission while that provider
 reports an active composition.
+
+## Dependencies
+
+The native view requires this repository's Console host and Unity's uGUI/UI
+modules. It does not depend on Quantum Console, TextMeshPro, UniTask, a tweening
+library, an icon set or additional font assets. Rounded surfaces are small UI
+meshes; their materials and rendering remain Unity UI's defaults.
+
+The optional `ZeroEngine.Console.UI.InputSystem` assembly is compiled only when
+Unity Input System is installed and enabled. It registers keyboard, EventSystem
+and composition input through `ConsoleInputBackend`; the native UI assembly has
+no reference to `Unity.InputSystem`. Without the adapter, the existing legacy
+input path remains available. New-input-only projects need that official Unity
+package; this package does not install it automatically.

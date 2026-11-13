@@ -323,3 +323,21 @@ Quantum default, Native fallback, `weapon` to `pob-add-weapon` insertion without
 execution, lower-left placement, and restored Quantum priority. Both actual
 Game frames were inspected; input/cursor/time, save/audio, PlayMode exit and native
 cleanup were confirmed. Package/consumer publication remain separately recorded.
+
+## Lightweight presentation revision, 2026-11-13
+
+The lower-left window now uses a bounded 720 × 400 reference layout, rounded
+procedural UI meshes, clearer input focus and an empty-output hint. No image,
+font asset, animation library or third-party runtime was added. Input System
+integration lives in an optional assembly, gated by the installed package and
+active input setting. The native UI assembly itself references neither Input
+System nor Quantum; legacy input remains its fallback.
+
+All 10 native UI PlayMode cases passed after fixing the new graphic's required
+CanvasRenderer. The fresh POB gameplay flow retained Quantum priority, transient
+Native fallback, one command invocation, fragment insertion without execution and
+full state restoration. Both rendered Game frames were inspected. A separate
+clean project resolved and compiled without Input System or Quantum; the optional
+input assembly was absent and the native UI loaded successfully. Its temporary
+Editor closed normally without unsaved scenes. These checks establish dependency
+and interaction compatibility, not a comparative CPU or allocation benchmark.

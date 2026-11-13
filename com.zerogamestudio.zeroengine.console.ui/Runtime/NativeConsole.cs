@@ -5,9 +5,6 @@ using System.Threading.Tasks;
 using UnityEngine;
 using UnityEngine.EventSystems;
 using ZeroEngine.Console.Unity;
-#if ZE_CONSOLE_INPUT_SYSTEM && ENABLE_INPUT_SYSTEM
-using UnityEngine.InputSystem.UI;
-#endif
 
 namespace ZeroEngine.Console.UI
 {
@@ -81,16 +78,17 @@ namespace ZeroEngine.Console.UI
             eventSystemLease = ConsoleEventSystemLease.Acquire(transform);
             IsOpen = true;
             view.SetActive(true);
-#if ZE_CONSOLE_INPUT_SYSTEM && ENABLE_INPUT_SYSTEM && !ENABLE_LEGACY_INPUT_MANAGER
-            borrowedInputModule = EventSystem.current ? EventSystem.current.currentInputModule : null;
-            if (!borrowedInputModule && EventSystem.current) borrowedInputModule = EventSystem.current.GetComponent<BaseInputModule>();
-            if (borrowedInputModule)
+            if (ConsoleInputBackend.NeedsInputOverride)
             {
-                if (!inputOverride) inputOverride = view.AddComponent<ConsoleInputOverride>();
-                previousInputOverride = borrowedInputModule.inputOverride;
-                borrowedInputModule.inputOverride = inputOverride;
+                borrowedInputModule = EventSystem.current ? EventSystem.current.currentInputModule : null;
+                if (!borrowedInputModule && EventSystem.current) borrowedInputModule = EventSystem.current.GetComponent<BaseInputModule>();
+                if (borrowedInputModule)
+                {
+                    if (!inputOverride) inputOverride = view.AddComponent<ConsoleInputOverride>();
+                    previousInputOverride = borrowedInputModule.inputOverride;
+                    borrowedInputModule.inputOverride = inputOverride;
+                }
             }
-#endif
             Cursor.lockState = CursorLockMode.None;
             Cursor.visible = true;
             renderedRevision = -1;
@@ -281,6 +279,7 @@ namespace ZeroEngine.Console.UI
         {
             var snapshot = host.Session.GetOutputSnapshot();
             var entries = snapshot.Entries;
+            if (emptyOutput) emptyOutput.gameObject.SetActive(entries.Count == 0);
             while (outputRows.Count < Mathf.Min(256, entries.Count)) outputRows.Add(Text("Line", outputContent, ""));
             Vector2 readingPosition = outputContent.anchoredPosition;
             int first = Mathf.Max(0, entries.Count - outputRows.Count);

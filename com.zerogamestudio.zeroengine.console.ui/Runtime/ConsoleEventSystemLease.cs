@@ -1,9 +1,6 @@
 using System;
 using UnityEngine;
 using UnityEngine.EventSystems;
-#if ZE_CONSOLE_INPUT_SYSTEM && ENABLE_INPUT_SYSTEM
-using UnityEngine.InputSystem.UI;
-#endif
 
 namespace ZeroEngine.Console.UI
 {
@@ -17,11 +14,7 @@ namespace ZeroEngine.Console.UI
             if (EventSystem.current) return lease;
             lease.owned = new GameObject("ZE Console EventSystem", typeof(EventSystem));
             lease.owned.transform.SetParent(owner, false);
-#if ZE_CONSOLE_INPUT_SYSTEM && ENABLE_INPUT_SYSTEM
-            lease.owned.AddComponent<InputSystemUIInputModule>().AssignDefaultActions();
-#else
-            lease.owned.AddComponent<StandaloneInputModule>();
-#endif
+            ConsoleInputBackend.AddInputModule(lease.owned);
             return lease;
         }
         public void Dispose()
