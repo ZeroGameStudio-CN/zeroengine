@@ -222,7 +222,7 @@ namespace ZeroEngine.Console
             {
                 foreach (ConsoleCommand command in GetCommands(caller))
                     foreach (string name in command.Aliases.Prepend(command.Name))
-                        if (name.StartsWith(prefix, StringComparison.OrdinalIgnoreCase))
+                        if (name.IndexOf(prefix, StringComparison.OrdinalIgnoreCase) >= 0)
                             candidates.Add(new ConsoleCompletionItem(command.Id + ":" + name, name, name, command.Description));
             }
             else if (Registry.TryResolve(tokens[0].Text, out var entry) && policy.Check(entry.Binding.Command, caller).IsSuccess && entry.TryAcquire(out var ownerToken))
@@ -271,7 +271,8 @@ namespace ZeroEngine.Console
                 finally { entry.Release(); }
             }
             var items = candidates.GroupBy(item => item.Id, StringComparer.Ordinal).Select(group => group.First())
-                .OrderBy(item => item.Value, StringComparer.Ordinal).ThenBy(item => item.Id, StringComparer.Ordinal).Take(limit).ToArray();
+                .OrderBy(item => tokenIndex == 0 && !item.Value.StartsWith(prefix, StringComparison.OrdinalIgnoreCase))
+                .ThenBy(item => item.Value, StringComparer.Ordinal).ThenBy(item => item.Id, StringComparer.Ordinal).Take(limit).ToArray();
             int end = caret;
             if (!newToken && ConsoleLexer.TryRead(line, out var completeTokens, out _, true))
                 foreach (var token in completeTokens)
