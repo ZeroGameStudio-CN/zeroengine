@@ -38,6 +38,8 @@ namespace ZeroEngine.Console.UI
                 case KeyCode.Tab: return keyboard.tabKey.wasPressedThisFrame;
                 case KeyCode.UpArrow: return keyboard.upArrowKey.wasPressedThisFrame;
                 case KeyCode.DownArrow: return keyboard.downArrowKey.wasPressedThisFrame;
+                case KeyCode.PageUp: return keyboard.pageUpKey.wasPressedThisFrame;
+                case KeyCode.PageDown: return keyboard.pageDownKey.wasPressedThisFrame;
                 default: return false;
             }
 #else

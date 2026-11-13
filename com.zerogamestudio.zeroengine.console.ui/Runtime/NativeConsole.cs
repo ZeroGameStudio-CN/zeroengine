@@ -13,7 +13,7 @@ namespace ZeroEngine.Console.UI
 {
     [DisallowMultipleComponent]
     [RequireComponent(typeof(ConsoleHost))]
-    public sealed class NativeConsole : MonoBehaviour, IConsoleFrontend
+    public sealed partial class NativeConsole : MonoBehaviour, IConsoleFrontend
     {
         [SerializeField] private ConsoleHost host;
         [SerializeField] private Font font;
@@ -31,7 +31,7 @@ namespace ZeroEngine.Console.UI
         private Task<ConsoleResult> pendingExecution;
         private ConsoleCompletions currentCompletions;
         private string completionInput;
-        private int selectedCompletion;
+        private int selectedCompletion, completionOffset, completionCaret;
         private bool completionDirty;
         private int observedCaret = -1;
         private float completionAt;
@@ -135,6 +135,7 @@ namespace ZeroEngine.Console.UI
             bool composing = IsComposing;
             if (KeyboardShortcutEnabled && !composing && ConsoleKeyboard.Pressed(KeyCode.BackQuote)) Toggle();
             if (!IsOpen || host.Session == null) return;
+            UpdateViewLayout();
             if (input.caretPosition != observedCaret)
             {
                 observedCaret = input.caretPosition;
@@ -144,6 +145,8 @@ namespace ZeroEngine.Console.UI
             if (!composing && input.isFocused)
             {
                 if (ConsoleKeyboard.Pressed(KeyCode.Tab) && currentCompletions != null && currentCompletions.Items.Count > 0) ApplyCompletion(selectedCompletion);
+                else if (ConsoleKeyboard.Pressed(KeyCode.PageUp)) NavigateCompletion(-1);
+                else if (ConsoleKeyboard.Pressed(KeyCode.PageDown)) NavigateCompletion(1);
                 else if (ConsoleKeyboard.Pressed(KeyCode.UpArrow)) NavigateHistory(-1);
                 else if (ConsoleKeyboard.Pressed(KeyCode.DownArrow)) NavigateHistory(1);
             }
@@ -153,14 +156,15 @@ namespace ZeroEngine.Console.UI
                 CancelCompletion();
                 completionCancellation = new CancellationTokenSource();
                 completionInput = input.text;
-                pendingCompletion = host.Session.CompleteAsync(input.text, input.caretPosition, host.CreateCaller(), completionCancellation.Token);
+                completionCaret = input.caretPosition;
+                pendingCompletion = host.Session.CompleteAsync(completionInput, completionCaret, host.CreateCaller(), completionCancellation.Token);
             }
             if (pendingCompletion != null && pendingCompletion.IsCompleted)
             {
                 try
                 {
                     var result = pendingCompletion.GetAwaiter().GetResult();
-                    if (input.text == completionInput) ShowCompletions(result);
+                    if (input.text == completionInput && input.caretPosition == completionCaret) ShowCompletions(result);
                 }
                 catch (OperationCanceledException) { }
                 catch (Exception exception) { host.Session.Write(new ConsoleOutput("", ConsoleOutputLevel.Error, exception.Message)); }
@@ -177,6 +181,7 @@ namespace ZeroEngine.Console.UI
             {
                 wasRunning = host.Session.IsRunning;
                 status.text = wasRunning ? "执行中 · 可取消" : "就绪";
+                cancelButton.interactable = wasRunning;
             }
         }
 
@@ -187,7 +192,7 @@ namespace ZeroEngine.Console.UI
             host.Session.Write(new ConsoleOutput("", ConsoleOutputLevel.Info, "> " + line));
             pendingExecution = host.ExecuteAsync(line);
             historyIndex = -1;
-            if (input) { input.SetTextWithoutNotify(string.Empty); input.ActivateInputField(); }
+            if (input) { input.SetTextWithoutNotify(string.Empty); input.caretPosition = 0; observedCaret = 0; input.ActivateInputField(); }
             CancelCompletion();
             return pendingExecution;
         }
@@ -210,13 +215,36 @@ namespace ZeroEngine.Console.UI
         {
             currentCompletions = result;
             selectedCompletion = 0;
+            RefreshCompletions();
+        }
+
+        private void NavigateCompletion(int direction)
+        {
+            if (currentCompletions == null || currentCompletions.Items.Count == 0 || IsComposing) return;
+            selectedCompletion = (selectedCompletion + direction + currentCompletions.Items.Count) % currentCompletions.Items.Count;
+            RefreshCompletions();
+        }
+
+        private void RefreshCompletions()
+        {
+            if (currentCompletions == null) return;
+            int rowHeight = fontSize + 10;
+            int capacity = Mathf.Clamp(Mathf.FloorToInt((panel.rect.height - 208) / rowHeight), 1, completionRows.Count);
+            completionOffset = selectedCompletion / capacity * capacity;
+            int visibleCount = Mathf.Min(capacity, currentCompletions.Items.Count - completionOffset);
             for (int i = 0; i < completionRows.Count; i++)
             {
-                bool visible = i < result.Items.Count;
+                bool visible = i < visibleCount;
                 completionRows[i].gameObject.SetActive(visible);
-                if (visible) completionRows[i].GetComponentInChildren<UnityEngine.UI.Text>().text = result.Items[i].Label;
+                if (!visible) continue;
+                int index = completionOffset + i;
+                completionRows[i].GetComponentInChildren<UnityEngine.UI.Text>(true).text = currentCompletions.Items[index].Label;
+                completionRows[i].targetGraphic.color = index == selectedCompletion ? SelectedColor : SurfaceColor;
+                completionRows[i].GetComponent<UnityEngine.UI.LayoutElement>().preferredHeight = rowHeight;
             }
-            completions.gameObject.SetActive(result.Items.Count > 0);
+            completionCaption.text = "补全 " + (selectedCompletion + 1) + " / " + currentCompletions.Items.Count + "   Tab 确认";
+            completions.offsetMax = new Vector2(-12, 126 + visibleCount * rowHeight);
+            completions.gameObject.SetActive(visibleCount > 0);
         }
 
         private void ApplyCompletion(int index)
@@ -227,6 +255,7 @@ namespace ZeroEngine.Console.UI
                 string updated = currentCompletions.Apply(input.text, index);
                 input.text = updated;
                 input.caretPosition = updated.Length;
+                observedCaret = updated.Length;
                 input.ActivateInputField();
             }
             catch (InvalidOperationException) { }
@@ -235,6 +264,7 @@ namespace ZeroEngine.Console.UI
 
         private void CancelCompletion()
         {
+            completionDirty = false;
             completionCancellation?.Cancel();
             completionCancellation?.Dispose();
             completionCancellation = null;
@@ -251,6 +281,8 @@ namespace ZeroEngine.Console.UI
         {
             var snapshot = host.Session.GetOutputSnapshot();
             var entries = snapshot.Entries;
+            while (outputRows.Count < Mathf.Min(256, entries.Count)) outputRows.Add(Text("Line", outputContent, ""));
+            Vector2 readingPosition = outputContent.anchoredPosition;
             int first = Mathf.Max(0, entries.Count - outputRows.Count);
             for (int i = 0; i < outputRows.Count; i++)
             {
@@ -259,110 +291,17 @@ namespace ZeroEngine.Console.UI
                 var text = outputRows[i];
                 text.gameObject.SetActive(visible);
                 if (!visible) continue;
-                string message = entries[index].Message;
-                text.text = message.Length <= 1024 ? message : message.Substring(0, 1024) + "…";
+                text.text = entries[index].Message;
                 text.color = entries[index].Level == ConsoleOutputLevel.Error ? new Color(1f, .48f, .48f)
                     : entries[index].Level == ConsoleOutputLevel.Warning ? new Color(1f, .8f, .4f) : new Color(.88f, .91f, .96f);
             }
             Canvas.ForceUpdateCanvases();
-            scroll.verticalNormalizedPosition = 0;
+            if (followOutput) scroll.verticalNormalizedPosition = 0;
+            else outputContent.anchoredPosition = new Vector2(readingPosition.x,
+                Mathf.Clamp(readingPosition.y, 0, Mathf.Max(0, outputContent.rect.height - scroll.viewport.rect.height)));
             renderedRevision = snapshot.Revision;
         }
 
-        private void EnsureView()
-        {
-            if (view) return;
-            if (!font)
-            {
-                try { ownedFont = Font.CreateDynamicFontFromOSFont(new[] { "Microsoft YaHei", "Noto Sans CJK SC", "Arial Unicode MS", "Arial" }, fontSize); }
-                catch (ArgumentException) { }
-                font = ownedFont;
-#if UNITY_6000_0_OR_NEWER
-                if (!font) font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
-#else
-                if (!font) font = Resources.GetBuiltinResource<Font>("Arial.ttf");
-#endif
-            }
-            view = new GameObject("ZE Native Console", typeof(RectTransform), typeof(Canvas), typeof(UnityEngine.UI.CanvasScaler), typeof(UnityEngine.UI.GraphicRaycaster));
-            view.transform.SetParent(transform, false);
-            var canvas = view.GetComponent<Canvas>(); canvas.renderMode = RenderMode.ScreenSpaceOverlay; canvas.sortingOrder = 30000;
-            var scaler = view.GetComponent<UnityEngine.UI.CanvasScaler>(); scaler.uiScaleMode = UnityEngine.UI.CanvasScaler.ScaleMode.ScaleWithScreenSize;
-            scaler.referenceResolution = new Vector2(1280, 720); scaler.matchWidthOrHeight = .5f;
-            var panel = Rect("Panel", view.transform); Stretch(panel, new Vector2(0, .38f), Vector2.one, new Vector2(16, 12), new Vector2(-16, -16));
-            panel.gameObject.AddComponent<UnityEngine.UI.Image>().color = new Color(.045f, .055f, .075f, .97f);
-            var title = Text("Title", panel, "ZE CONSOLE"); Stretch(title.rectTransform, new Vector2(0, 1), Vector2.one, new Vector2(16, -40), new Vector2(-300, -8)); title.fontStyle = FontStyle.Bold;
-            status = Text("Status", panel, "就绪"); Stretch(status.rectTransform, new Vector2(1, 1), Vector2.one, new Vector2(-285, -40), new Vector2(-16, -8)); status.alignment = TextAnchor.MiddleRight;
-            var scrollRoot = Rect("Output", panel); Stretch(scrollRoot, Vector2.zero, Vector2.one, new Vector2(12, 60), new Vector2(-12, -46));
-            scroll = scrollRoot.gameObject.AddComponent<UnityEngine.UI.ScrollRect>(); scroll.horizontal = false; scroll.movementType = UnityEngine.UI.ScrollRect.MovementType.Clamped;
-            var viewport = Rect("Viewport", scrollRoot); Stretch(viewport, Vector2.zero, Vector2.one, Vector2.zero, Vector2.zero);
-            viewport.gameObject.AddComponent<UnityEngine.UI.Image>().color = new Color(.03f, .04f, .055f, .8f);
-            viewport.gameObject.AddComponent<UnityEngine.UI.Mask>().showMaskGraphic = false;
-            outputContent = Rect("Content", viewport); Stretch(outputContent, new Vector2(0, 1), Vector2.one, Vector2.zero, Vector2.zero); outputContent.pivot = new Vector2(.5f, 1);
-            var layout = outputContent.gameObject.AddComponent<UnityEngine.UI.VerticalLayoutGroup>(); layout.spacing = 4; layout.padding = new RectOffset(6, 6, 6, 6); layout.childControlHeight = true; layout.childControlWidth = true; layout.childForceExpandHeight = false;
-            outputContent.gameObject.AddComponent<UnityEngine.UI.ContentSizeFitter>().verticalFit = UnityEngine.UI.ContentSizeFitter.FitMode.PreferredSize;
-            scroll.viewport = viewport; scroll.content = outputContent;
-            for (int i = 0; i < 64; i++) { var row = Text("Line", outputContent, ""); row.gameObject.SetActive(false); outputRows.Add(row); }
-            var field = Rect("Input", panel); Stretch(field, Vector2.zero, new Vector2(1, 0), new Vector2(12, 14), new Vector2(-292, 48));
-            field.gameObject.AddComponent<UnityEngine.UI.Image>().color = new Color(.1f, .13f, .18f);
-            input = field.gameObject.AddComponent<UnityEngine.UI.InputField>(); input.characterLimit = ConsoleLexer.MaximumLineLength;
-            var fieldText = Text("Text", field, ""); Stretch(fieldText.rectTransform, Vector2.zero, Vector2.one, new Vector2(8, 3), new Vector2(-8, -3)); input.textComponent = fieldText;
-            var placeholder = Text("Placeholder", field, "输入 ze-help 查看指令"); Stretch(placeholder.rectTransform, Vector2.zero, Vector2.one, new Vector2(8, 3), new Vector2(-8, -3)); placeholder.color = new Color(.5f, .57f, .67f); input.placeholder = placeholder;
-            input.onValueChanged.AddListener(InputChanged);
-#if UNITY_6000_0_OR_NEWER
-            input.onSubmit.AddListener(SubmitInput);
-#else
-            input.onEndEdit.AddListener(value => { if (ConsoleKeyboard.Pressed(KeyCode.Return)) SubmitInput(value); });
-#endif
-            MakeButton(panel, "运行", -280, 64, () => SubmitInput(input.text));
-            MakeButton(panel, "取消", -212, 64, () => host.Session.CancelCurrent());
-            MakeButton(panel, "复制", -144, 64, CopyOutput);
-            MakeButton(panel, "关闭", -76, 64, Close);
-            completions = Rect("Completions", panel); Stretch(completions, Vector2.zero, new Vector2(1, 0), new Vector2(12, 52), new Vector2(-292, 276));
-            completions.gameObject.AddComponent<UnityEngine.UI.Image>().color = new Color(.07f, .1f, .15f, .98f);
-            var completionLayout = completions.gameObject.AddComponent<UnityEngine.UI.VerticalLayoutGroup>(); completionLayout.childControlHeight = true; completionLayout.childForceExpandHeight = false;
-            for (int i = 0; i < 8; i++)
-            {
-                int index = i;
-                var buttonRoot = Rect("Completion", completions); var button = buttonRoot.gameObject.AddComponent<UnityEngine.UI.Button>();
-                var background = buttonRoot.gameObject.AddComponent<UnityEngine.UI.Image>(); background.color = new Color(.1f, .14f, .21f); button.targetGraphic = background;
-                var label = Text("Label", buttonRoot, ""); Stretch(label.rectTransform, Vector2.zero, Vector2.one, new Vector2(8, 2), new Vector2(-8, -2));
-                buttonRoot.gameObject.AddComponent<UnityEngine.UI.LayoutElement>().preferredHeight = 28;
-                button.onClick.AddListener(() => ApplyCompletion(index)); completionRows.Add(button);
-            }
-            completions.gameObject.SetActive(false);
-            view.SetActive(false);
-        }
-
-        private void CopyOutput()
-        {
-            var values = host.Session.GetOutput();
-            var lines = new string[values.Length];
-            for (int i = 0; i < lines.Length; i++) lines[i] = values[i].Message;
-            GUIUtility.systemCopyBuffer = string.Join("\n", lines);
-        }
-
-        private UnityEngine.UI.Text Text(string name, Transform parent, string value)
-        {
-            var rect = Rect(name, parent); var text = rect.gameObject.AddComponent<UnityEngine.UI.Text>();
-            text.font = font; text.fontSize = fontSize; text.color = new Color(.88f, .91f, .96f); text.text = value;
-            text.supportRichText = false; text.horizontalOverflow = HorizontalWrapMode.Wrap; text.verticalOverflow = VerticalWrapMode.Overflow;
-            text.raycastTarget = false;
-            return text;
-        }
-
-        private void MakeButton(Transform parent, string label, float x, float width, Action action)
-        {
-            var rect = Rect(label, parent); Stretch(rect, new Vector2(1, 0), new Vector2(1, 0), new Vector2(x, 14), new Vector2(x + width, 48));
-            var image = rect.gameObject.AddComponent<UnityEngine.UI.Image>(); image.color = new Color(.15f, .22f, .33f);
-            var button = rect.gameObject.AddComponent<UnityEngine.UI.Button>(); button.targetGraphic = image;
-            button.onClick.AddListener(() => action()); var text = Text("Label", rect, label); text.alignment = TextAnchor.MiddleCenter;
-            Stretch(text.rectTransform, Vector2.zero, Vector2.one, Vector2.zero, Vector2.zero);
-        }
-
-        private static RectTransform Rect(string name, Transform parent)
-        { var result = new GameObject(name, typeof(RectTransform)).GetComponent<RectTransform>(); result.SetParent(parent, false); return result; }
-        private static void Stretch(RectTransform rect, Vector2 min, Vector2 max, Vector2 offsetMin, Vector2 offsetMax)
-        { rect.anchorMin = min; rect.anchorMax = max; rect.offsetMin = offsetMin; rect.offsetMax = offsetMax; }
         private void OnApplicationFocus(bool focus) { if (!focus) Close(); }
         private void OnDisable() => Close();
         private void OnDestroy()

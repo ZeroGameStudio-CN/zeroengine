@@ -1,6 +1,6 @@
 # ZE native Console UI
 
-G4 vertical-slice candidate. Add `ConsoleHost` and `NativeConsole` to an owned
+Native frontend candidate. Add `ConsoleHost` and `NativeConsole` to an owned
 GameObject. The view builds its own bounded hierarchy, uses the host's native
 pipeline and can operate without Quantum Console. A project can supply a font
 and an input-isolation lease; the view restores its own cursor/selection state.
@@ -23,6 +23,20 @@ Both presentations use the same host, policy, quoted argument completion,
 bounded output/history and cancellation. Switching closes the previous view
 and releases its EventSystem/input state before opening the next; it does not
 cancel or replay an already started business command.
+
+The native desktop window opens at the lower left. Its bounded 760 × 440
+reference layout fits inside the current Canvas and leaves the remaining game
+view visible. The toolbar supplies Clear, Copy, font size (12–28) and an explicit
+follow-output switch. Turning follow off keeps the current reading position
+when messages arrive; turning it on returns to the newest output. The scrollable
+view retains up to the last 256 session entries and displays each message up to
+the session's own limit, without an additional 1,024-character UI truncation.
+
+Use Up/Down for history, Page Up/Page Down (or the completion arrows) to select
+across completion pages, Tab to insert the selected value, and Escape to close.
+Completion selection never executes a command. Its visible rows adjust to the
+window and font size; submitting clears the stale suggestions. Projects that
+own the toggle action retain it through `KeyboardShortcutEnabled = false`.
 
 Composition guards read the current EventSystem module's active `BaseInput`,
 including its `inputOverride`, before falling back to Unity's legacy input.
