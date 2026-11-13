@@ -1,6 +1,6 @@
 # ZeroEngine Capture
 
-Editor-only background camera capture for Unity 2022.3 / Unity 6. No ZE gameplay,
+Editor-only background camera capture for Unity 6000.6 or newer. No ZE gameplay,
 Timeline, test-runner, CLI or network dependency. No Player assembly is shipped.
 Compatibility is a validation target until the package spec records both runs.
 

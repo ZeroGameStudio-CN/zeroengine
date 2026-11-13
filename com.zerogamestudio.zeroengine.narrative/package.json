@@ -3,7 +3,7 @@
     "version": "3.1.0",
     "displayName": "ZeroEngine.Narrative",
     "description": "Dialogue, quest and legacy achievement adapters; retains P5 generic dialog commands and quest snapshots.",
-    "unity": "2022.3",
+    "unity": "6000.6",
     "unityRelease": "0f1",
     "dependencies": {
         "com.zerogamestudio.zeroengine.core": "2.0.0",

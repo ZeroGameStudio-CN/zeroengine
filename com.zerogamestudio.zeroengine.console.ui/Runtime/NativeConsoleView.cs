@@ -21,11 +21,7 @@ namespace ZeroEngine.Console.UI
                 try { ownedFont = Font.CreateDynamicFontFromOSFont(new[] { "Microsoft YaHei", "Noto Sans CJK SC", "Arial Unicode MS", "Arial" }, fontSize); }
                 catch (ArgumentException) { }
                 font = ownedFont;
-#if UNITY_6000_0_OR_NEWER
                 if (!font) font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
-#else
-                if (!font) font = Resources.GetBuiltinResource<Font>("Arial.ttf");
-#endif
             }
             view = new GameObject("ZE Native Console", typeof(RectTransform), typeof(Canvas), typeof(CanvasScaler), typeof(GraphicRaycaster));
             view.transform.SetParent(transform, false);
@@ -86,11 +82,7 @@ namespace ZeroEngine.Console.UI
             var placeholder = Text("Placeholder", field, "输入 ze-help 查看指令"); Stretch(placeholder.rectTransform, Vector2.zero, Vector2.one, new Vector2(10, 4), new Vector2(-10, -4));
             placeholder.alignment = TextAnchor.MiddleLeft; placeholder.color = new Color(.45f, .53f, .61f); input.placeholder = placeholder;
             input.onValueChanged.AddListener(InputChanged);
-#if UNITY_6000_0_OR_NEWER
             input.onSubmit.AddListener(SubmitInput);
-#else
-            input.onEndEdit.AddListener(value => { if (ConsoleKeyboard.Pressed(KeyCode.Return)) SubmitInput(value); });
-#endif
             var run = MakeButton(panel, "运行", "运行", new Vector2(1, 0), new Vector2(-152, 36), new Vector2(-84, 74), () => SubmitInput(input.text));
             run.targetGraphic.color = SelectedColor;
             cancelButton = MakeButton(panel, "取消", "取消", new Vector2(1, 0), new Vector2(-78, 36), new Vector2(-12, 74), () => host.Session.CancelCurrent());

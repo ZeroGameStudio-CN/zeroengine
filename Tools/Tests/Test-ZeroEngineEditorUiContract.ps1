@@ -1,3 +1,4 @@
+#Requires -Version 7.0
 param(
     [string]$RepoRoot = (Split-Path (Split-Path $PSScriptRoot -Parent) -Parent)
 )
@@ -122,7 +123,7 @@ $editorUiRoot = Join-Path $RepoRoot 'com.zerogamestudio.zeroengine.editor-ui'
 $editorUiPackage = Read-Json (Join-Path $editorUiRoot 'package.json')
 Assert-Contract ($editorUiPackage.name -eq 'com.zerogamestudio.zeroengine.editor-ui') 'Unexpected editor-ui package name.'
 Assert-Contract ($editorUiPackage.version -eq '1.5.0') 'editor-ui must be version 1.5.0.'
-Assert-Contract ($editorUiPackage.unity -eq '2022.3') 'editor-ui must target Unity 2022.3.'
+Assert-Contract ($editorUiPackage.unity -eq '6000.6') 'editor-ui must target Unity 6000.6.'
 Assert-Contract ($null -eq $editorUiPackage.dependencies -or @($editorUiPackage.dependencies.psobject.Properties).Count -eq 0) 'editor-ui production package must not declare dependencies.'
 
 $editorUiAsmdef = Read-Json (Join-Path $editorUiRoot 'Editor/ZeroEngine.EditorUI.Editor.asmdef')

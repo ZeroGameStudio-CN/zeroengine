@@ -16,7 +16,7 @@ class PackageAuditTests(unittest.TestCase):
         name = "com.zerogamestudio." + suffix
         folder = self.root / name
         folder.mkdir()
-        manifest = dict(name=name, version="1.0.0", displayName=suffix, description="Fixture", unity="2022.3", author=dict(name="Fixture"), license="MIT", repository=dict(url=CANONICAL_REPOSITORY, directory=name), dependencies={"com.zerogamestudio." + x: "1.0.0" for x in dependencies})
+        manifest = dict(name=name, version="1.0.0", displayName=suffix, description="Fixture", unity="6000.6", author=dict(name="Fixture"), license="MIT", repository=dict(url=CANONICAL_REPOSITORY, directory=name), dependencies={"com.zerogamestudio." + x: "1.0.0" for x in dependencies})
         (folder / "package.json").write_text(json.dumps(manifest), encoding="utf-8")
         (folder / "README.md").write_text("Fixture", encoding="utf-8")
         (folder / "Runtime").mkdir()
@@ -26,6 +26,14 @@ class PackageAuditTests(unittest.TestCase):
 
     def codes(self):
         return [x["code"] for x in inspect(self.root)["findings"]]
+
+    def test_package_minimum_cannot_fall_below_supported_editor_baseline(self):
+        folder = self.package("old-minimum")
+        path = folder / "package.json"
+        manifest = json.loads(path.read_text())
+        manifest["unity"] = "6000.5"
+        path.write_text(json.dumps(manifest), encoding="utf-8")
+        self.assertEqual(["metadata.unity-baseline"], self.codes())
 
     def test_declared_transitive_dependency_resolves(self):
         self.package("core")

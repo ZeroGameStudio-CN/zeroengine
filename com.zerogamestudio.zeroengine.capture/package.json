@@ -3,7 +3,7 @@
   "version": "0.1.1",
   "displayName": "ZeroEngine Capture",
   "description": "Project-independent, Editor-only background camera frame capture.",
-  "unity": "2022.3",
+  "unity": "6000.6",
   "dependencies": {
     "com.unity.ugui": "1.0.0",
     "com.unity.modules.jsonserialize": "1.0.0"

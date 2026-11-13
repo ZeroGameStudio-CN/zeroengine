@@ -2,11 +2,7 @@ using System;
 using System.Collections.Generic;
 using UnityEngine;
 
-#if UNITY_6000_2_OR_NEWER
 using PoolObjectId = UnityEngine.EntityId;
-#else
-using PoolObjectId = System.Int32;
-#endif
 
 #if UNITASK_ENABLED
 using System.Threading;
@@ -75,11 +71,7 @@ namespace ZeroEngine.Pool
             {
                 _prefab = prefab;
                 _parent = parent;
-#if UNITY_6000_2_OR_NEWER
                 PrefabId = prefab.GetEntityId();
-#else
-                PrefabId = prefab.GetInstanceID();
-#endif
                 MinSize = minSize;
                 _lastDespawnTime = Time.time;
             }
@@ -312,11 +304,7 @@ namespace ZeroEngine.Pool
 
         private SmartPool GetOrCreatePool(GameObject prefab, PoolType poolType)
         {
-#if UNITY_6000_2_OR_NEWER
             PoolObjectId id = prefab.GetEntityId();
-#else
-            PoolObjectId id = prefab.GetInstanceID();
-#endif
             if (!_poolsById.TryGetValue(id, out var pool))
             {
                 pool = new SmartPool(prefab, _poolParents.GetValueOrDefault(poolType, _poolsRoot));

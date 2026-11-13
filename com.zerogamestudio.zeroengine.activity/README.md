@@ -1,7 +1,7 @@
 # ZeroEngine.Activity
 
 Game-independent Full / Reduced / Dormant activity and per-world budgeted work.
-Requires Unity 2022.3 or later. No POB or third-party package dependency.
+Requires Unity 6000.6 or later. No POB or third-party package dependency.
 
 - `ZeroEngine.Activity` has no Unity engine reference: policy, safe defaults,
   hysteresis, owner-scoped keep-alive handles, decision gating and a work queue.

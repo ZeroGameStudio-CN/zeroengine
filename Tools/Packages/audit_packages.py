@@ -7,6 +7,8 @@ from pathlib import Path
 import re
 import subprocess
 
+from unity_baseline import MINIMUM_UNITY, unity_version
+
 
 CANONICAL_REPOSITORY = "https://github.com/ZeroGameStudio-CN/zeroengine.git"
 
@@ -57,6 +59,12 @@ def inspect(root):
                 finding("metadata.missing", name, packages[name]["path"], key)
         if manifest.get("name") != name:
             finding("metadata.name", name, packages[name]["path"], manifest.get("name"))
+        if manifest.get("unity"):
+            try:
+                if unity_version(manifest["unity"]) < MINIMUM_UNITY:
+                    finding("metadata.unity-baseline", name, packages[name]["path"], "Requires Unity 6000.6 or newer")
+            except (ValueError, TypeError):
+                finding("metadata.unity-baseline", name, packages[name]["path"], "Invalid Unity minimum")
         repository = manifest.get("repository", {})
         if repository.get("url") != CANONICAL_REPOSITORY:
             finding("metadata.repository", name, packages[name]["path"], repository.get("url"))

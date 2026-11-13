@@ -3,7 +3,7 @@
   "version": "0.1.1",
   "displayName": "ZeroEngine Asset Catalog",
   "description": "Editor-only contracts, shared Catalog API client, offline snapshots, credential storage, classification exchange, and personal AI recommendations for reviewable Unity asset catalogs.",
-  "unity": "2022.3",
+  "unity": "6000.6",
   "dependencies": {
     "com.unity.modules.jsonserialize": "1.0.0"
   },

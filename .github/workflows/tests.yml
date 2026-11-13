@@ -27,6 +27,10 @@ permissions:
   checks: write
   pull-requests: write
 
+env:
+  ZEROENGINE_UNITY_VERSION: 6000.6.4f1
+  ZEROENGINE_TEST_FRAMEWORK: 1.8.0
+
 jobs:
   package-quality:
     name: Package boundaries and project selection
@@ -96,7 +100,8 @@ jobs:
           python3 Tools/Packages/create_test_project.py
           --destination TestProject
           --lane "${{ matrix.lane }}"
-          --unity-version 2022.3.62f1
+          --unity-version "${{ env.ZEROENGINE_UNITY_VERSION }}"
+          --test-framework "${{ env.ZEROENGINE_TEST_FRAMEWORK }}"
 
       - name: Validate descriptors and package shape
         shell: pwsh
@@ -109,9 +114,9 @@ jobs:
         uses: actions/cache@v4
         with:
           path: TestProject/Library
-          key: Library-${{ matrix.lane }}-${{ github.run_id }}-${{ hashFiles('com.zerogamestudio*/package.json') }}
+          key: Library-${{ env.ZEROENGINE_UNITY_VERSION }}-${{ matrix.lane }}-${{ github.run_id }}-${{ hashFiles('com.zerogamestudio*/package.json') }}
           restore-keys: |
-            Library-${{ matrix.lane }}-
+            Library-${{ env.ZEROENGINE_UNITY_VERSION }}-${{ matrix.lane }}-
 
       - name: Enforce cold Library
         shell: bash
@@ -126,7 +131,7 @@ jobs:
           UNITY_PASSWORD: ${{ secrets.UNITY_PASSWORD }}
           ZEROENGINE_DASHBOARD_PACKAGE_REMOVAL_TEST: ${{ matrix.lane == 'dashboard-with-modules' && '1' || '0' }}
         with:
-          unityVersion: 2022.3.62f1
+          unityVersion: ${{ env.ZEROENGINE_UNITY_VERSION }}
           cliVersion: v0.1.72
           projectPath: TestProject
           testMode: ${{ matrix.test-mode }}

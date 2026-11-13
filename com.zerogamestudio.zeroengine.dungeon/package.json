@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "displayName": "ZeroEngine.Dungeon",
   "description": "Dungeon exploration framework with procedural node map generation, AI pathfinding, event system, and reward calculation.",
-  "unity": "2022.3",
+  "unity": "6000.6",
   "unityRelease": "0f1",
   "dependencies": {
     "com.zerogamestudio.zeroengine.core": "2.0.0",

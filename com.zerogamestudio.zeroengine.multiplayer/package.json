@@ -3,7 +3,7 @@
   "version": "0.4.0",
   "displayName": "ZeroEngine.Multiplayer",
   "description": "SDK-neutral multiplayer session orchestration with optional FishNet, Steam, and LocalDirect adapters for ZeroEngine projects.",
-  "unity": "2022.3",
+  "unity": "6000.6",
   "unityRelease": "0f1",
   "dependencies": {
     "com.zerogamestudio.zeroengine.editor-ui": "1.5.0"

@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "displayName": "ZeroEngine.Interaction",
   "description": "Scoped interaction focus, tap/hold/repeat sessions and guarded delayed commits with caller-owned input, clocks and business rules.",
-  "unity": "2022.3",
+  "unity": "6000.6",
   "license": "MIT",
   "author": { "name": "ZeroGameStudio" },
   "repository": {

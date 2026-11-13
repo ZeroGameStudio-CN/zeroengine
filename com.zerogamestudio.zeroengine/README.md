@@ -1,7 +1,7 @@
 # ZeroEngine 框架文档
 
 [![Version](https://img.shields.io/badge/version-3.0.0-blue.svg)](CHANGELOG.md)
-[![Unity](https://img.shields.io/badge/unity-2022.3+-lightgrey.svg)](https://unity.com)
+[![Unity](https://img.shields.io/badge/unity-6000.6+-lightgrey.svg)](https://unity.com)
 
 ## 概述
 

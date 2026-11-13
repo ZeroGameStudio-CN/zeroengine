@@ -1,11 +1,7 @@
 using System.Collections.Generic;
 using UnityEngine;
 
-#if UNITY_6000_6_OR_NEWER
 using SpawnObjectId = UnityEngine.EntityId;
-#else
-using SpawnObjectId = System.Int32;
-#endif
 
 namespace ZeroEngine.Spawner
 {
@@ -25,11 +21,7 @@ namespace ZeroEngine.Spawner
         // 对象池
         private static SpawnObjectId GetRuntimeObjectId(UnityEngine.Object value)
         {
-#if UNITY_6000_6_OR_NEWER
             return value.GetEntityId();
-#else
-            return value.GetInstanceID();
-#endif
         }
 
 

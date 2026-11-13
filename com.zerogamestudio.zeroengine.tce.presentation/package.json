@@ -3,7 +3,7 @@
     "version": "0.2.0",
     "displayName": "ZeroEngine TCE Presentation",
     "description": "Presentation-only visual snapshot, afterimage, and soul ghost effects for ZeroEngine TCE.",
-    "unity": "2022.3",
+    "unity": "6000.6",
     "dependencies": {
         "com.zerogamestudio.zeroengine.tce": "0.1.0"
     },

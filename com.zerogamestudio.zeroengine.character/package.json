@@ -3,7 +3,7 @@
   "version": "3.0.0",
   "displayName": "ZeroEngine.Character",
   "description": "Character progression systems for ZeroEngine. Includes Equipment System, Talent Tree System, Party System, Formation System, Job System, Sect System (门派), MartialArts System (武学), and Realm System (境界).",
-  "unity": "2022.3",
+  "unity": "6000.6",
   "unityRelease": "0f1",
   "dependencies": {
     "com.zerogamestudio.zeroengine.core": "2.0.0",

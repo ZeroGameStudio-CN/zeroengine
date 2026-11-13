@@ -42,19 +42,9 @@ namespace ZeroEngine.Editor.Tutorial
         /// Double-click on TutorialSequenceSO to open in editor
         /// </summary>
         [OnOpenAsset(1)]
-#if UNITY_6000_6_OR_NEWER
         public static bool OnOpenAsset(EntityId instanceId, int line)
-#else
-        public static bool OnOpenAsset(int instanceId, int line)
-#endif
         {
-#if UNITY_6000_6_OR_NEWER
             var asset = EditorUtility.EntityIdToObject(instanceId) as TutorialSequenceSO;
-#else
-#pragma warning disable CS0618
-            var asset = EditorUtility.InstanceIDToObject(instanceId) as TutorialSequenceSO;
-#pragma warning restore CS0618
-#endif
             if (asset != null)
             {
                 Open(asset);

@@ -63,11 +63,7 @@ namespace ZeroEngine.Combat
         {
             if (string.IsNullOrEmpty(_targetId))
             {
-#if UNITY_6000_6_OR_NEWER
                 _targetId = $"{gameObject.name}_{EntityId.ToULong(GetEntityId())}";
-#else
-                _targetId = $"{gameObject.name}_{GetInstanceID()}";
-#endif
             }
         }
 
