@@ -274,3 +274,34 @@ local trials, downgrade/schema conflicts and write recovery. Its exporter and a
 complete project-local synchronization were also exercised with the actual
 Editor PackageInfo. POB adoption and exact source submission remain in progress;
 human experience acceptance, physical OS IME and user release stay separate.
+
+## Lower-left Native presentation candidate, 2026-11-13
+
+The consumer's stable baseline remains POB `cs19159`, with its 41 public ZE
+packages pinned together at `adb92428122ffbd4f35c9ede9df884e29fc5259a`.
+The original Quantum entry and command table remain the default. This iteration
+changes the independently selected Native view; it does not batch-migrate new
+project commands or upgrade Unity dependencies.
+
+The Native window now opens at the lower left with a bounded, Canvas-fitting
+layout, clear/copy controls, font sizing, a scrollbar and an explicit output
+follow switch. Completion candidates can be selected beyond the first eight
+rows without executing a command. Scrollback displays up to 256 retained session
+entries and no longer adds a 1,024-character truncation to each message.
+
+Ten focused UI PlayMode cases executed in the isolated POB consumer with zero
+failures or skips and confirmed native cleanup. They include the new placement,
+long-output/reading-position and paged-completion contracts, alongside existing
+composition, cancellation, fallback and input-lease checks. A subsequent real POB
+flow exposed a registration collision when Quantum already owned `ConsolePanel`.
+The consumer candidate gives Native its own appended panel ID and prepares it
+through its owner, leaving the original registered Quantum panel intact. The
+legacy panel loader only accepts a supplied panel when its key matches the
+requested key.
+
+The corrected Intro-to-Base flow passed with Native's 156 project-visible commands,
+one input invocation, completion, reopening and input/cursor/time restoration.
+The default Quantum route retained 155 aliases and 344 overloads before and after
+Native use. Both actual Game view images were inspected; save/audio restoration,
+PlayMode exit and native cleanup were confirmed. This is an internal candidate;
+fresh public package checks and exact consumer adoption remain separate gates.
