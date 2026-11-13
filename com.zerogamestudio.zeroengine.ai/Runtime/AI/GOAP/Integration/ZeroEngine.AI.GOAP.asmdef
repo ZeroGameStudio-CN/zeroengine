@@ -1,0 +1,27 @@
+{
+  "name": "ZeroEngine.AI.GOAP",
+  "rootNamespace": "ZeroEngine.AI.GOAP",
+  "references": [
+    "ZeroEngine.AI",
+    "ZeroEngine.Core",
+    "CrashKonijn.Goap.Runtime",
+    "CrashKonijn.Goap.Core"
+  ],
+  "includePlatforms": [],
+  "excludePlatforms": [],
+  "allowUnsafeCode": false,
+  "overrideReferences": false,
+  "precompiledReferences": [],
+  "autoReferenced": true,
+  "defineConstraints": [
+    "CRASHKONIJN_GOAP"
+  ],
+  "versionDefines": [
+    {
+      "name": "com.crashkonijn.goap",
+      "expression": "",
+      "define": "CRASHKONIJN_GOAP"
+    }
+  ],
+  "noEngineReferences": false
+}

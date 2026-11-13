@@ -267,7 +267,7 @@ namespace ZeroEngine.AI.UtilityAI
             float lastUseTime = context.Blackboard.GetFloat(_cooldownKey);
             if (lastUseTime <= 0f) return 1f;
 
-            float elapsed = Time.time - lastUseTime;
+            float elapsed = context.Now - lastUseTime;
             return Mathf.Clamp01(elapsed / _cooldownDuration);
         }
     }
@@ -292,10 +292,10 @@ namespace ZeroEngine.AI.UtilityAI
 
         protected override float CalculateRawValue(AIContext context)
         {
-            if (Time.time - _lastRefreshTime >= _refreshInterval)
+            if (context.Now - _lastRefreshTime >= _refreshInterval)
             {
                 _cachedValue = UnityEngine.Random.Range(_minValue, _maxValue);
-                _lastRefreshTime = Time.time;
+                _lastRefreshTime = context.Now;
             }
 
             return _cachedValue;
