@@ -115,11 +115,7 @@ namespace ZeroEngine.Interaction.Samples
 
         private void BuildUi()
         {
-#if UNITY_6000_0_OR_NEWER
             font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
-#else
-            font = Resources.GetBuiltinResource<Font>("Arial.ttf");
-#endif
             var canvasObject = new GameObject("Interaction Playground UI", typeof(RectTransform), typeof(Canvas),
                 typeof(UnityEngine.UI.CanvasScaler), typeof(UnityEngine.UI.GraphicRaycaster));
             canvasObject.transform.SetParent(transform, false);
