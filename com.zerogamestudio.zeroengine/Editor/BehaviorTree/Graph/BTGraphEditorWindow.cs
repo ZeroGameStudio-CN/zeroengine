@@ -39,19 +39,9 @@ namespace ZeroEngine.Editor.BehaviorTree
         /// Double-click on BTTreeAsset to open in editor.
         /// </summary>
         [OnOpenAsset(1)]
-#if UNITY_6000_6_OR_NEWER
         public static bool OnOpenAsset(EntityId instanceId, int line)
-#else
-        public static bool OnOpenAsset(int instanceId, int line)
-#endif
         {
-#if UNITY_6000_6_OR_NEWER
             var asset = EditorUtility.EntityIdToObject(instanceId) as BTTreeAsset;
-#else
-#pragma warning disable CS0618
-            var asset = EditorUtility.InstanceIDToObject(instanceId) as BTTreeAsset;
-#pragma warning restore CS0618
-#endif
             if (asset != null)
             {
                 Open(asset);

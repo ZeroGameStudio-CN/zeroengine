@@ -62,11 +62,7 @@ namespace ZeroEngine.Interaction
             {
                 if (string.IsNullOrEmpty(_interactableId))
                 {
-#if UNITY_6000_2_OR_NEWER
                     _interactableId = $"{GetType().Name}_{EntityId.ToULong(GetEntityId())}";
-#else
-                    _interactableId = $"{GetType().Name}_{GetInstanceID()}";
-#endif
                 }
                 return _interactableId;
             }

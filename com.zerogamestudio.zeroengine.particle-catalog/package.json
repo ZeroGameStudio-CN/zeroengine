@@ -3,7 +3,7 @@
   "version": "0.1.1",
   "displayName": "ZeroEngine Particle Catalog",
   "description": "Editor-only particle catalog schema, search, persistence, Ollama classification, and personal DeepSeek recommendation client.",
-  "unity": "2022.3",
+  "unity": "6000.6",
   "dependencies": {
     "com.unity.modules.jsonserialize": "1.0.0"
   },

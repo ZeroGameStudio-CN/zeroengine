@@ -1,6 +1,6 @@
 # ZeroEngine Config Pipeline
 
-Schema-first configuration pipeline for Unity 2022.3 projects. It keeps one
+Schema-first configuration pipeline for Unity 6000.6+ projects. It keeps one
 authoring source, validates through a typed intermediate document, emits
 deterministic artifacts, and loads immutable runtime snapshots.
 
@@ -51,7 +51,7 @@ validation and XLSX import ordering use the complete tuple. Child-sheet joins
 and `x-zgs-ref` targets still require a single-field primary key and fail closed
 for composite parents or partial-key references.
 
-Version 2.1.0 uses `com.zerogamestudio.zeroengine.editor-ui@1.3.0` for its Editor window and typed workbench action. Git URL consumers must directly pin both packages to the same ZeroEngine commit because Unity 2022.3 does not resolve same-repository sibling dependencies transitively.
+Version 2.1.0 uses `com.zerogamestudio.zeroengine.editor-ui@1.3.0` for its Editor window and typed workbench action. Git URL consumers must directly pin both packages to the same ZeroEngine commit because Git UPM dependencies do not resolve same-repository sibling dependencies transitively.
 
 Version 2.1.0 stores transaction scratch state under
 `Library/ZeroEngine/ConfigPipeline`, keeping project-root private-file views

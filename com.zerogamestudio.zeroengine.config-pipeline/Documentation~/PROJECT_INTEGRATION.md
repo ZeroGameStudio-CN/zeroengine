@@ -153,7 +153,7 @@ For example, pass the imported Sample profile as
 `'"Assets/Samples/ZeroEngine Config Pipeline/1.0.0/Minimal Item Drop/Config/config-project.json"'`.
 
 To run the package's CoreContract tests from a consuming project, add
-`com.unity.test-framework` (1.1.33 for the Unity 2022.3 validation baseline) and
+`com.unity.test-framework` (1.8.0 for the Unity 6000.6 validation baseline) and
 `"testables": ["com.zerogamestudio.zeroengine.config-pipeline"]` to that
 project’s `Packages/manifest.json`. The test framework is a consumer test-only
 prerequisite and is intentionally not a runtime dependency of this package.

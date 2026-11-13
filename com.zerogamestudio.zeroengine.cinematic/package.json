@@ -3,7 +3,7 @@
   "version": "2.1.0",
   "displayName": "ZeroEngine.Cinematic",
   "description": "Reusable Timeline-backed cinematic runtime contracts, playback policies, binding resolution, and authoring validation for ZeroEngine projects.",
-  "unity": "2022.3",
+  "unity": "6000.6",
   "unityRelease": "0f1",
   "dependencies": {
     "com.unity.timeline": "1.8.9",

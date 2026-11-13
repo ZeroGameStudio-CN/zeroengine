@@ -3,7 +3,7 @@
   "version": "0.1.2",
   "displayName": "ZeroEngine Portrait Speech",
   "description": "Text-driven pixel portrait speech, masking-safe uGUI rendering and visual profile authoring.",
-  "unity": "6000.0",
+  "unity": "6000.6",
   "dependencies": {
     "com.unity.ugui": "1.0.0",
     "com.unity.modules.imageconversion": "1.0.0",

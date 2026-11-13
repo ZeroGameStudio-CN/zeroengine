@@ -1,9 +1,9 @@
 # CI and release
 
-Add `com.unity.test-framework` (1.1.33 for the Unity 2022.3 validation baseline)
+Add `com.unity.test-framework` (1.8.0 for the Unity 6000.6 validation baseline)
 and `"testables": ["com.zerogamestudio.zeroengine.config-pipeline"]` to the
 consumer project's `Packages/manifest.json`, then run package CoreContract
-EditMode tests in Unity 2022.3.62f3. The test framework is a consumer test-only
+EditMode tests in Unity 6000.6.4f1. The test framework is a consumer test-only
 prerequisite, not a runtime package dependency. Fail CI unless the expected
 tests are discovered and all pass; Unity may exit with code 0 when zero tests
 run. For package 2.1.0, filter EditMode tests by NUnit category

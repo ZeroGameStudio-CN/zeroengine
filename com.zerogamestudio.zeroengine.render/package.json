@@ -3,7 +3,7 @@
   "version": "0.4.4",
   "displayName": "ZeroEngine Render",
   "description": "Caller-clocked pose snapshots, composited body visuals and portable shading primitives.",
-  "unity": "2022.3",
+  "unity": "6000.6",
   "author": {
     "name": "ZeroGameStudio",
     "url": "https://github.com/ZeroGameStudio-CN"

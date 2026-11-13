@@ -1,6 +1,7 @@
+#Requires -Version 7.0
 [CmdletBinding()]
 param(
-    [string]$UnityPath = 'D:\unity\editors\Unity 2022.3.62f3\Editor\Unity.exe',
+    [string]$UnityPath = 'D:\unity\editors\6000.6.4f1\Editor\Unity.exe',
     [string]$ResultsDir = (Join-Path ([IO.Path]::GetTempPath()) ('zeroengine-project-atlas-results-' + [guid]::NewGuid().ToString('N'))),
     [string]$TestFilter = 'ZeroEngine.ProjectAtlas.Tests',
     [switch]$PrepareOnly
@@ -22,7 +23,7 @@ foreach ($packageName in @('com.zerogamestudio.zeroengine.editor-ui', 'com.zerog
 
 $manifest = [ordered]@{
     dependencies = [ordered]@{
-        'com.unity.test-framework' = '1.3.9'
+        'com.unity.test-framework' = '1.8.0'
         'com.unity.modules.imgui' = '1.0.0'
         'com.zerogamestudio.zeroengine.editor-ui' = 'file:com.zerogamestudio.zeroengine.editor-ui'
         'com.zerogamestudio.zeroengine.project-atlas' = 'file:com.zerogamestudio.zeroengine.project-atlas'
@@ -30,7 +31,7 @@ $manifest = [ordered]@{
     testables = @('com.zerogamestudio.zeroengine.project-atlas')
 } | ConvertTo-Json -Depth 8
 Set-Content -LiteralPath (Join-Path $packagesPath 'manifest.json') -Value $manifest -Encoding UTF8
-Set-Content -LiteralPath (Join-Path $projectRoot 'ProjectSettings\ProjectVersion.txt') -Value 'm_EditorVersion: 2022.3.62f3' -Encoding UTF8
+Set-Content -LiteralPath (Join-Path $projectRoot 'ProjectSettings\ProjectVersion.txt') -Value 'm_EditorVersion: 6000.6.4f1' -Encoding UTF8
 
 if ($PrepareOnly) {
     Write-Output $projectRoot

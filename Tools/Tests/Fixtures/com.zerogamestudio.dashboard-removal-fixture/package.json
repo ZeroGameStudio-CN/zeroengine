@@ -3,5 +3,5 @@
   "version": "1.0.0",
   "displayName": "Dashboard Removal Fixture",
   "description": "Synthetic package used only by the Dashboard package-removal CI lane.",
-  "unity": "2022.3"
+  "unity": "6000.6"
 }

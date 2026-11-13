@@ -1,6 +1,7 @@
+#Requires -Version 7.0
 [CmdletBinding()]
 param(
-    [string]$UnityPath = 'D:\unity\editors\Unity 2022.3.62f3\Editor\Unity.exe',
+    [string]$UnityPath = 'D:\unity\editors\6000.6.4f1\Editor\Unity.exe',
     [string]$ResultsDir = (Join-Path ([IO.Path]::GetTempPath()) ('zeroengine-editor-ui-results-' + [guid]::NewGuid().ToString('N'))),
     [ValidateSet('editor-ui', 'analytics', 'config-pipeline', 'formula', 'tce', 'legacy-all')]
     [string[]]$Lanes = @('editor-ui', 'analytics', 'config-pipeline', 'formula', 'tce', 'legacy-all'),
@@ -46,7 +47,7 @@ foreach ($lane in @($laneDefinitions | Where-Object { $Lanes -contains $_.Name }
     }
 
     $dependencies = [ordered]@{
-        'com.unity.test-framework' = '1.3.9'
+        'com.unity.test-framework' = '1.8.0'
         'com.unity.inputsystem' = '1.17.0'
         'com.unity.modules.physics' = '1.0.0'
         'com.unity.modules.physics2d' = '1.0.0'
@@ -69,7 +70,7 @@ foreach ($lane in @($laneDefinitions | Where-Object { $Lanes -contains $_.Name }
         testables = @($editorUiPackage)
     } | ConvertTo-Json -Depth 8
     Set-Content -LiteralPath (Join-Path $packagesPath 'manifest.json') -Value $manifest -Encoding UTF8
-    Set-Content -LiteralPath (Join-Path $settingsPath 'ProjectVersion.txt') -Value 'm_EditorVersion: 2022.3.62f3' -Encoding UTF8
+    Set-Content -LiteralPath (Join-Path $settingsPath 'ProjectVersion.txt') -Value 'm_EditorVersion: 6000.6.4f1' -Encoding UTF8
 
     if ($PrepareOnly) {
         Write-Output $projectRoot

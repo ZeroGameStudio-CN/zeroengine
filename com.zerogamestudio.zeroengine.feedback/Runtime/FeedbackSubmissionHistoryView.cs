@@ -208,11 +208,7 @@ namespace ZeroEngine.Feedback
             label.richText = false;
             label.raycastTarget = false;
             label.text = text;
-#if UNITY_2023_2_OR_NEWER
             label.textWrappingMode = TextWrappingModes.Normal;
-#else
-            label.enableWordWrapping = true;
-#endif
             if (layout) rect.gameObject.AddComponent<UnityEngine.UI.LayoutElement>().minHeight = size + 8;
             return label;
         }

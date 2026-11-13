@@ -3,7 +3,7 @@
   "version": "0.1.1",
   "displayName": "ZeroEngine World Shift",
   "description": "World-space visual transition helpers for swapping overworld and underworld visual layers.",
-  "unity": "2022.3",
+  "unity": "6000.6",
   "dependencies": {
     "com.unity.render-pipelines.universal": "12.1.7"
   },

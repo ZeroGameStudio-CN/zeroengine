@@ -5,8 +5,7 @@ package and behavior you are improving.
 
 ## Development Notes
 
-- Use Unity 2022.3 LTS unless a package explicitly documents a newer
-  requirement.
+- Use Unity 6000.6 or newer; the repository validation baseline is 6000.6.4f1.
 - Prefer package-local changes over framework-wide abstractions.
 - Keep runtime code in `Runtime/` and editor-only code in `Editor/`.
 - Include `.meta` files whenever Unity assets, folders, asmdefs, samples, or

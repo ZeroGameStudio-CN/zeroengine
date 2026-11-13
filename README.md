@@ -2,7 +2,7 @@
 
 [![Unity Tests](https://github.com/ZeroGameStudio-CN/zeroengine/actions/workflows/tests.yml/badge.svg)](https://github.com/ZeroGameStudio-CN/zeroengine/actions/workflows/tests.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
-[![Unity 2022.3+](https://img.shields.io/badge/Unity-2022.3%2B-black.svg)](https://unity.com/releases/editor/archive)
+[![Unity 6000.6+](https://img.shields.io/badge/Unity-6000.6%2B-black.svg)](https://unity.com/releases/editor/archive)
 
 ZeroEngine is the shared Unity codebase I maintain for ZeroGameStudio projects.
 It is split into Unity Package Manager packages so a game can pull in only the
@@ -95,9 +95,9 @@ Repository tooling that is not a general runtime package lives under `Tools/`.
 ## Testing
 
 The repository includes a GitHub Actions workflow that builds temporary Unity
-projects for compatible package sets and runs EditMode tests through GameCI.
-Unity 2022.3 lanes exclude packages declaring a newer minimum; a separate static
-audit checks all package boundaries. See [package tooling](Tools/Packages/README.md).
+projects for compatible package sets on Unity 6000.6.4f1 and runs EditMode and
+PlayMode tests through GameCI. All maintained packages require Unity 6000.6 or
+newer; a separate static audit checks every package boundary and minimum. See [package tooling](Tools/Packages/README.md).
 
 For local work, use the Editor version required by the package's `package.json`
 and run the relevant EditMode or PlayMode tests from Unity Test Runner. Keep
