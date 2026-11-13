@@ -302,6 +302,52 @@ namespace ZeroEngine.Console.UI.Tests
         }
 
         [UnityTest]
+        public IEnumerator NativeView_IconHintsExplainActionsWithoutTakingInputFocus()
+        {
+            var root = new GameObject("Native icon interaction");
+            try
+            {
+                var view = root.AddComponent<NativeConsole>();
+                view.Open();
+                yield return null;
+                yield return null;
+                var events = UnityEngine.EventSystems.EventSystem.current;
+                var selected = events.currentSelectedGameObject;
+                var panel = (RectTransform)view.GetComponentInChildren<Canvas>().transform.Find("Panel");
+                var hint = (RectTransform)panel.Find("ActionHint");
+                var pointer = new UnityEngine.EventSystems.PointerEventData(events);
+                Assert.That(hint.gameObject.activeSelf, Is.False);
+                foreach (string name in new[] { "清空", "复制", "字号减小", "字号增大", "跟随", "运行", "取消", "关闭" })
+                    Assert.That(Button(view, name).GetComponentsInChildren<UnityEngine.UI.Text>(true), Is.Empty, name);
+                var copy = Button(view, "复制");
+                UnityEngine.EventSystems.ExecuteEvents.Execute(copy.gameObject, pointer, UnityEngine.EventSystems.ExecuteEvents.pointerEnterHandler);
+                Assert.That(hint.gameObject.activeSelf, Is.True);
+                Assert.That(hint.GetComponentInChildren<UnityEngine.UI.Text>().text, Is.EqualTo("复制全部日志"));
+                Assert.That(events.currentSelectedGameObject, Is.SameAs(selected));
+                UnityEngine.EventSystems.ExecuteEvents.Execute(copy.gameObject, pointer, UnityEngine.EventSystems.ExecuteEvents.pointerExitHandler);
+                Assert.That(hint.gameObject.activeSelf, Is.False);
+                var close = Button(view, "关闭");
+                UnityEngine.EventSystems.ExecuteEvents.Execute(close.gameObject, pointer, UnityEngine.EventSystems.ExecuteEvents.pointerEnterHandler);
+                var corners = new Vector3[4]; hint.GetWorldCorners(corners);
+                Assert.That(panel.rect.Contains(panel.InverseTransformPoint(corners[0])), Is.True);
+                Assert.That(panel.rect.Contains(panel.InverseTransformPoint(corners[2])), Is.True);
+                var follow = Button(view, "跟随");
+                UnityEngine.EventSystems.ExecuteEvents.Execute(follow.gameObject, pointer, UnityEngine.EventSystems.ExecuteEvents.pointerEnterHandler);
+                follow.onClick.Invoke();
+                Assert.That(hint.GetComponentInChildren<UnityEngine.UI.Text>().text, Does.Contain("关"));
+                view.Close();
+                view.Open();
+                yield return null;
+                yield return null;
+                Assert.That(hint.gameObject.activeSelf, Is.False);
+                UnityEngine.EventSystems.ExecuteEvents.Execute(follow.gameObject, pointer, UnityEngine.EventSystems.ExecuteEvents.pointerEnterHandler);
+                Assert.That(hint.GetComponentInChildren<UnityEngine.UI.Text>().text, Does.Contain("关"));
+                Assert.That(UnityEngine.EventSystems.EventSystem.current.currentSelectedGameObject, Is.SameAs(view.InputField.gameObject));
+            }
+            finally { Object.DestroyImmediate(root); }
+        }
+
+        [UnityTest]
         public IEnumerator NativeView_OutputToolsKeepLongMessagesAndReadingPosition()
         {
             var root = new GameObject("Native output controls");

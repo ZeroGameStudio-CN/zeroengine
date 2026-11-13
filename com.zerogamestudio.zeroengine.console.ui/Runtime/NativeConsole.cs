@@ -18,7 +18,6 @@ namespace ZeroEngine.Console.UI
         private GameObject view;
         private Font ownedFont;
         private UnityEngine.UI.InputField input;
-        private UnityEngine.UI.Text status;
         private UnityEngine.UI.ScrollRect scroll;
         private readonly List<UnityEngine.UI.Text> outputRows = new List<UnityEngine.UI.Text>();
         private readonly List<UnityEngine.UI.Button> completionRows = new List<UnityEngine.UI.Button>();
@@ -178,8 +177,7 @@ namespace ZeroEngine.Console.UI
             if (wasRunning != host.Session.IsRunning)
             {
                 wasRunning = host.Session.IsRunning;
-                status.text = wasRunning ? "执行中 · 可取消" : "就绪";
-                cancelButton.interactable = wasRunning;
+                RefreshActivityState();
             }
         }
 
@@ -240,7 +238,7 @@ namespace ZeroEngine.Console.UI
                 completionRows[i].targetGraphic.color = index == selectedCompletion ? SelectedColor : SurfaceColor;
                 completionRows[i].GetComponent<UnityEngine.UI.LayoutElement>().preferredHeight = rowHeight;
             }
-            completionCaption.text = "补全 " + (selectedCompletion + 1) + " / " + currentCompletions.Items.Count + "   Tab 确认";
+            completionCaption.text = (selectedCompletion + 1) + " / " + currentCompletions.Items.Count + "   ·   Tab";
             completions.offsetMax = new Vector2(-12, 126 + visibleCount * rowHeight);
             completions.gameObject.SetActive(visibleCount > 0);
         }

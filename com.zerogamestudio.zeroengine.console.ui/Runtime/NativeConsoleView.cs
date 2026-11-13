@@ -11,6 +11,11 @@ namespace ZeroEngine.Console.UI
         private RectTransform panel;
         private Text completionCaption, fontSizeLabel, emptyOutput;
         private Button cancelButton, followButton;
+        private ConsoleIcon stateIcon, cancelIcon, followIcon;
+        private ConsoleActionHint stateHint, followHint;
+        private RectTransform actionHint, actionHintTarget;
+        private Text actionHintLabel;
+        private readonly Vector3[] hintCorners = new Vector3[4];
         private bool followOutput = true;
 
         private void EnsureView()
@@ -38,30 +43,35 @@ namespace ZeroEngine.Console.UI
             Surface(fill, new Color(.035f, .052f, .075f, .98f), 9).raycastTarget = false;
             var accent = Rect("Accent", panel); Stretch(accent, new Vector2(0, 1), Vector2.one, new Vector2(12, -2), new Vector2(-12, -1));
             accent.gameObject.AddComponent<Image>().color = new Color(.29f, .78f, .72f);
-            var title = Chrome("Title", panel, "控制台", 18); title.fontStyle = FontStyle.Bold;
-            Stretch(title.rectTransform, new Vector2(0, 1), new Vector2(0, 1), new Vector2(16, -38), new Vector2(90, -8));
+            var terminal = Icon("Terminal", panel, ConsoleGlyph.Terminal);
+            Stretch(terminal.rectTransform, new Vector2(0, 1), new Vector2(0, 1), new Vector2(14, -34), new Vector2(36, -12));
+            var title = Chrome("Title", panel, "CONSOLE", 14); title.fontStyle = FontStyle.Bold;
+            Stretch(title.rectTransform, new Vector2(0, 1), new Vector2(0, 1), new Vector2(44, -38), new Vector2(120, -8));
             var badge = Chrome("Backend", panel, "NATIVE", 10); badge.color = new Color(.48f, .74f, .76f);
-            Stretch(badge.rectTransform, new Vector2(0, 1), new Vector2(0, 1), new Vector2(98, -38), new Vector2(166, -8));
-            status = Chrome("Status", panel, "就绪"); status.alignment = TextAnchor.MiddleRight;
-            status.color = new Color(.46f, .82f, .73f);
-            Stretch(status.rectTransform, new Vector2(1, 1), Vector2.one, new Vector2(-198, -38), new Vector2(-58, -8));
-            MakeButton(panel, "关闭", "×", new Vector2(1, 1), new Vector2(-44, -36), new Vector2(-12, -8), Close, 18);
+            Stretch(badge.rectTransform, new Vector2(0, 1), new Vector2(0, 1), new Vector2(126, -38), new Vector2(184, -8));
+            stateIcon = Icon("Status", panel, ConsoleGlyph.Ready); stateIcon.raycastTarget = true;
+            Stretch(stateIcon.rectTransform, Vector2.one, Vector2.one, new Vector2(-74, -35), new Vector2(-50, -11));
+            stateHint = Hint(stateIcon.gameObject, "就绪");
+            MakeIconButton(panel, "关闭", ConsoleGlyph.Close, "关闭控制台 · Esc", Vector2.one, new Vector2(-44, -36), new Vector2(-12, -8), Close);
 
-            MakeButton(panel, "清空", "清空", new Vector2(0, 1), new Vector2(12, -74), new Vector2(64, -46), () => host.Session.ClearOutput());
-            MakeButton(panel, "复制", "复制", new Vector2(0, 1), new Vector2(70, -74), new Vector2(122, -46), CopyOutput);
-            MakeButton(panel, "字号减小", "A−", new Vector2(0, 1), new Vector2(140, -74), new Vector2(174, -46), () => ChangeFontSize(-2));
-            MakeButton(panel, "字号增大", "A+", new Vector2(0, 1), new Vector2(180, -74), new Vector2(214, -46), () => ChangeFontSize(2));
+            MakeIconButton(panel, "清空", ConsoleGlyph.Clear, "清空日志", new Vector2(0, 1), new Vector2(12, -76), new Vector2(44, -44), () => host.Session.ClearOutput());
+            MakeIconButton(panel, "复制", ConsoleGlyph.Copy, "复制全部日志", new Vector2(0, 1), new Vector2(50, -76), new Vector2(82, -44), CopyOutput);
+            MakeIconButton(panel, "字号减小", ConsoleGlyph.FontSmaller, "减小字号", new Vector2(0, 1), new Vector2(98, -76), new Vector2(130, -44), () => ChangeFontSize(-2));
+            MakeIconButton(panel, "字号增大", ConsoleGlyph.FontLarger, "增大字号", new Vector2(0, 1), new Vector2(136, -76), new Vector2(168, -44), () => ChangeFontSize(2));
             fontSizeLabel = Chrome("FontSize", panel, fontSize.ToString());
-            Stretch(fontSizeLabel.rectTransform, new Vector2(0, 1), new Vector2(0, 1), new Vector2(222, -74), new Vector2(252, -46));
-            followButton = MakeButton(panel, "跟随", "跟随：开", new Vector2(1, 1), new Vector2(-104, -74), new Vector2(-12, -46), ToggleFollow);
+            fontSizeLabel.color = new Color(.49f, .59f, .67f);
+            Stretch(fontSizeLabel.rectTransform, new Vector2(0, 1), new Vector2(0, 1), new Vector2(178, -74), new Vector2(210, -46));
+            followButton = MakeIconButton(panel, "跟随", ConsoleGlyph.Follow, "自动跟随新日志：开 · 点击暂停", new Vector2(1, 1), new Vector2(-44, -76), new Vector2(-12, -44), ToggleFollow);
             followButton.targetGraphic.color = SelectedColor;
+            followIcon = followButton.GetComponentInChildren<ConsoleIcon>();
+            followHint = followButton.GetComponent<ConsoleActionHint>();
 
             var scrollRoot = Rect("Output", panel); Stretch(scrollRoot, Vector2.zero, Vector2.one, new Vector2(12, 90), new Vector2(-12, -86));
             scroll = scrollRoot.gameObject.AddComponent<ScrollRect>(); scroll.horizontal = false; scroll.movementType = ScrollRect.MovementType.Clamped;
             var viewport = Rect("Viewport", scrollRoot); Stretch(viewport, Vector2.zero, Vector2.one, Vector2.zero, new Vector2(-12, 0));
             viewport.gameObject.AddComponent<Image>().color = new Color(.02f, .032f, .048f, .9f);
             viewport.gameObject.AddComponent<RectMask2D>();
-            emptyOutput = Chrome("EmptyOutput", viewport, "暂无输出记录\n输入 ze-help 查看可用指令", 14);
+            emptyOutput = Chrome("EmptyOutput", viewport, "ze-help", 14);
             emptyOutput.alignment = TextAnchor.MiddleCenter; emptyOutput.color = new Color(.43f, .53f, .62f);
             Stretch(emptyOutput.rectTransform, Vector2.zero, Vector2.one, new Vector2(16, 12), new Vector2(-16, -12));
             outputContent = Rect("Content", viewport); Stretch(outputContent, new Vector2(0, 1), Vector2.one, Vector2.zero, Vector2.zero); outputContent.pivot = new Vector2(.5f, 1);
@@ -79,7 +89,7 @@ namespace ZeroEngine.Console.UI
 
             var prompt = Chrome("Prompt", panel, ">", 18); prompt.color = new Color(.42f, .86f, .77f);
             Stretch(prompt.rectTransform, Vector2.zero, Vector2.zero, new Vector2(12, 36), new Vector2(30, 74));
-            var field = Rect("Input", panel); Stretch(field, Vector2.zero, new Vector2(1, 0), new Vector2(34, 36), new Vector2(-162, 74));
+            var field = Rect("Input", panel); Stretch(field, Vector2.zero, new Vector2(1, 0), new Vector2(34, 36), new Vector2(-104, 74));
             var inputSurface = Surface(field, new Color(.09f, .14f, .20f), 5);
             input = field.gameObject.AddComponent<InputField>(); input.characterLimit = ConsoleLexer.MaximumLineLength;
             input.targetGraphic = inputSurface;
@@ -87,24 +97,27 @@ namespace ZeroEngine.Console.UI
             input.selectionColor = new Color(.18f, .53f, .55f, .55f);
             var fieldText = Text("Text", field, ""); Stretch(fieldText.rectTransform, Vector2.zero, Vector2.one, new Vector2(10, 4), new Vector2(-10, -4));
             fieldText.alignment = TextAnchor.MiddleLeft; fieldText.supportRichText = false; input.textComponent = fieldText;
-            var placeholder = Text("Placeholder", field, "输入命令，按 Tab 补全"); Stretch(placeholder.rectTransform, Vector2.zero, Vector2.one, new Vector2(10, 4), new Vector2(-10, -4));
+            var placeholder = Text("Placeholder", field, "ze-help"); Stretch(placeholder.rectTransform, Vector2.zero, Vector2.one, new Vector2(10, 4), new Vector2(-10, -4));
             placeholder.alignment = TextAnchor.MiddleLeft; placeholder.color = new Color(.45f, .53f, .61f); input.placeholder = placeholder;
             input.onValueChanged.AddListener(InputChanged);
             input.onSubmit.AddListener(SubmitInput);
-            var run = MakeButton(panel, "运行", "运行", new Vector2(1, 0), new Vector2(-152, 36), new Vector2(-84, 74), () => SubmitInput(input.text));
+            var run = MakeIconButton(panel, "运行", ConsoleGlyph.Run, "执行命令 · Enter", new Vector2(1, 0), new Vector2(-94, 36), new Vector2(-56, 74), () => SubmitInput(input.text));
             run.targetGraphic.color = SelectedColor;
-            cancelButton = MakeButton(panel, "取消", "取消", new Vector2(1, 0), new Vector2(-78, 36), new Vector2(-12, 74), () => host.Session.CancelCurrent());
-            cancelButton.interactable = host.Session.IsRunning;
-            var hint = Chrome("KeyboardHint", panel, "↑↓ 历史  ·  PgUp/PgDn 选择补全  ·  Esc 关闭", 11);
+            cancelButton = MakeIconButton(panel, "取消", ConsoleGlyph.Stop, "取消当前执行", new Vector2(1, 0), new Vector2(-50, 36), new Vector2(-12, 74), () => host.Session.CancelCurrent());
+            cancelIcon = cancelButton.GetComponentInChildren<ConsoleIcon>();
+            RefreshActivityState();
+            var hint = Chrome("KeyboardHint", panel, "↑↓   ·   PgUp / PgDn   ·   Tab   ·   Esc", 11);
             hint.color = new Color(.49f, .57f, .65f);
             Stretch(hint.rectTransform, Vector2.zero, new Vector2(1, 0), new Vector2(12, 8), new Vector2(-12, 30));
+            hint.raycastTarget = true;
+            Hint(hint.gameObject, "↑↓ 历史 · PgUp/PgDn 选择补全 · Tab 填入 · Esc 关闭");
 
             completions = Rect("Completions", panel); Stretch(completions, Vector2.zero, new Vector2(1, 0), new Vector2(12, 90), new Vector2(-12, 330));
             Surface(completions, new Color(.06f, .095f, .14f, 1), 6);
             completionCaption = Chrome("CompletionCaption", completions, "");
             Stretch(completionCaption.rectTransform, new Vector2(0, 1), Vector2.one, new Vector2(10, -30), new Vector2(-144, -2));
-            MakeButton(completions, "上一项", "↑", new Vector2(1, 1), new Vector2(-78, -28), new Vector2(-44, -4), () => NavigateCompletion(-1));
-            MakeButton(completions, "下一项", "↓", new Vector2(1, 1), new Vector2(-40, -28), new Vector2(-6, -4), () => NavigateCompletion(1));
+            MakeIconButton(completions, "上一项", ConsoleGlyph.Up, "上一条补全", Vector2.one, new Vector2(-78, -28), new Vector2(-44, -4), () => NavigateCompletion(-1));
+            MakeIconButton(completions, "下一项", ConsoleGlyph.Down, "下一条补全", Vector2.one, new Vector2(-40, -28), new Vector2(-6, -4), () => NavigateCompletion(1));
             var list = Rect("Choices", completions); Stretch(list, Vector2.zero, Vector2.one, new Vector2(6, 4), new Vector2(-6, -32));
             var completionLayout = list.gameObject.AddComponent<VerticalLayoutGroup>(); completionLayout.childControlHeight = completionLayout.childControlWidth = true; completionLayout.childForceExpandHeight = false;
             for (int i = 0; i < 8; i++)
@@ -117,6 +130,11 @@ namespace ZeroEngine.Console.UI
                 completionRows.Add(button);
             }
             completions.gameObject.SetActive(false);
+            actionHint = Rect("ActionHint", panel); actionHint.anchorMin = actionHint.anchorMax = actionHint.pivot = Vector2.zero;
+            Surface(actionHint, new Color(.13f, .20f, .25f), 5).raycastTarget = false;
+            actionHintLabel = Chrome("HintText", actionHint, "", 12);
+            Stretch(actionHintLabel.rectTransform, Vector2.zero, Vector2.one, new Vector2(10, 0), new Vector2(-10, 0));
+            actionHint.gameObject.SetActive(false);
             Canvas.ForceUpdateCanvases();
             UpdateViewLayout();
             view.SetActive(false);
@@ -146,9 +164,52 @@ namespace ZeroEngine.Console.UI
         private void ToggleFollow()
         {
             followOutput = !followOutput;
-            followButton.GetComponentInChildren<Text>().text = followOutput ? "跟随：开" : "跟随：关";
+            followIcon.Glyph = followOutput ? ConsoleGlyph.Follow : ConsoleGlyph.FollowPaused;
+            followHint.Message = followOutput ? "自动跟随新日志：开 · 点击暂停" : "自动跟随新日志：关 · 点击恢复";
             followButton.targetGraphic.color = followOutput ? SelectedColor : SurfaceColor;
+            if (actionHintTarget == followHint.transform) ShowActionHint((RectTransform)followHint.transform, followHint.Message);
             if (followOutput) { Canvas.ForceUpdateCanvases(); scroll.verticalNormalizedPosition = 0; }
+        }
+
+        private void RefreshActivityState()
+        {
+            bool running = host.Session.IsRunning;
+            stateIcon.Glyph = running ? ConsoleGlyph.Running : ConsoleGlyph.Ready;
+            stateIcon.color = running ? new Color(.97f, .73f, .35f) : new Color(.46f, .82f, .73f);
+            stateHint.Message = running ? "正在执行 · 可用停止按钮取消" : "就绪";
+            if (actionHintTarget == stateIcon.rectTransform) ShowActionHint(stateIcon.rectTransform, stateHint.Message);
+            cancelButton.interactable = running;
+            cancelIcon.color = running ? new Color(1, .65f, .57f) : new Color(.33f, .40f, .46f);
+        }
+
+        private ConsoleActionHint Hint(GameObject owner, string message)
+        {
+            var result = owner.AddComponent<ConsoleActionHint>(); result.Message = message;
+            result.Show = ShowActionHint; result.Hide = HideActionHint;
+            return result;
+        }
+
+        private void ShowActionHint(RectTransform target, string message)
+        {
+            if (!IsOpen || !actionHint || string.IsNullOrEmpty(message)) return;
+            actionHintTarget = target; actionHintLabel.text = message;
+            float width = Mathf.Min(actionHintLabel.preferredWidth + 20, Mathf.Max(1, panel.rect.width - 16));
+            actionHint.sizeDelta = new Vector2(width, 30);
+            target.GetWorldCorners(hintCorners);
+            var above = (Vector2)panel.InverseTransformPoint(hintCorners[1]);
+            var below = (Vector2)panel.InverseTransformPoint(hintCorners[0]);
+            float y = above.y + 6;
+            if (y + 30 > panel.rect.yMax - 8) y = below.y - 36;
+            actionHint.anchoredPosition = new Vector2(Mathf.Clamp(above.x, 8, Mathf.Max(8, panel.rect.width - width - 8)),
+                Mathf.Clamp(y, 8, Mathf.Max(8, panel.rect.height - 38)));
+            actionHint.SetAsLastSibling(); actionHint.gameObject.SetActive(true);
+        }
+
+        private void HideActionHint(RectTransform target)
+        {
+            if (actionHintTarget != target) return;
+            actionHintTarget = null;
+            if (actionHint) actionHint.gameObject.SetActive(false);
         }
 
         private void CopyOutput()
@@ -177,14 +238,37 @@ namespace ZeroEngine.Console.UI
 
         private Button MakeButton(Transform parent, string name, string label, Vector2 anchor, Vector2 min, Vector2 max, Action action, int size = 12)
         {
+            var button = ButtonFrame(parent, name, anchor, min, max, action);
+            var text = Chrome("Label", button.transform, label, size); text.alignment = TextAnchor.MiddleCenter;
+            Stretch(text.rectTransform, Vector2.zero, Vector2.one, Vector2.zero, Vector2.zero);
+            return button;
+        }
+
+        private Button MakeIconButton(Transform parent, string name, ConsoleGlyph glyph, string hint, Vector2 anchor, Vector2 min, Vector2 max, Action action)
+        {
+            var button = ButtonFrame(parent, name, anchor, min, max, action);
+            var graphic = Icon("Icon", button.transform, glyph);
+            graphic.rectTransform.anchorMin = graphic.rectTransform.anchorMax = new Vector2(.5f, .5f);
+            graphic.rectTransform.sizeDelta = new Vector2(20, 20);
+            Hint(button.gameObject, hint);
+            return button;
+        }
+
+        private static ConsoleIcon Icon(string name, Transform parent, ConsoleGlyph glyph)
+        {
+            var result = Rect(name, parent).gameObject.AddComponent<ConsoleIcon>(); result.Glyph = glyph;
+            result.color = new Color(.79f, .87f, .91f); result.raycastTarget = false;
+            return result;
+        }
+
+        private Button ButtonFrame(Transform parent, string name, Vector2 anchor, Vector2 min, Vector2 max, Action action)
+        {
             var rect = Rect(name, parent); Stretch(rect, anchor, anchor, min, max);
             var image = Surface(rect, SurfaceColor, 4);
             var button = rect.gameObject.AddComponent<Button>(); button.targetGraphic = image;
             button.navigation = new Navigation { mode = Navigation.Mode.None };
             var colors = button.colors; colors.highlightedColor = new Color(1.3f, 1.3f, 1.3f); colors.pressedColor = new Color(.7f, .85f, .9f); colors.disabledColor = new Color(.55f, .62f, .67f, .5f); colors.fadeDuration = .08f; button.colors = colors;
             button.onClick.AddListener(() => { action(); if (IsOpen && input) input.ActivateInputField(); });
-            var text = Chrome("Label", rect, label, size); text.alignment = TextAnchor.MiddleCenter;
-            Stretch(text.rectTransform, Vector2.zero, Vector2.one, Vector2.zero, Vector2.zero);
             return button;
         }
 
