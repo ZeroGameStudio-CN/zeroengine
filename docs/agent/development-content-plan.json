@@ -348,6 +348,25 @@
         }
       ],
       "verificationScope": "限 Unity 6000.6.4f1 Windows／QC 2.6.7 精确指纹；QC Mono 最终链接身份一致，IL2CPP 空 MVID 不放宽。CLI 受控组词 0 次提前调用、确认后 1 次；新增 typed 派发与四种预取消组合在真实开发 Player 成立。POB 迁移、目标元数据、PlayMode 比较、44 包 Skill 同步分别有证据；不代表物理系统 IME、正式 POB IL2CPP 包或用户发布。"
+    },
+    {
+      "id": "ze.interaction.scoped-sessions",
+      "title": "独立交互包：按交互者隔离的焦点、按住会话与延迟提交",
+      "stage": "Ready",
+      "targetReleaseId": "",
+      "availability": "TestOnly",
+      "responsibleChat": "01a1d074-3286-7fc3-a8fa-09d3bfbcae2d",
+      "chatUrl": "",
+      "nextAction": "审查包级交付后，按独立适配计划接回 POB；先覆盖门、NPC、拾取物、扣费与联机，不直接搬迁整棵 Pickup 继承树。",
+      "entrance": "Tools/Packages/create_test_project.py --lane interaction；导入 Interaction Playground 示例。",
+      "resourcePath": "com.zerogamestudio.zeroengine.interaction",
+      "revision": "0.1.0 package-first candidate",
+      "candidatePackageVersion": "0.1.0",
+      "releaseEvidence": "",
+      "verificationScope": "Unity 6000.6.4f1：33 项 EditMode＋9 项 PlayMode 无失败、无跳过；20 项包工具检查；62 包边界审计无发现；实际 Game View 1280×900 画面已自查，PlayMode 与后台状态已恢复。未接入 POB，未验证玩家发布。",
+      "verificationEvidence": [
+        "C:\\Users\\2025\\.antigravity_cockpit\\instances\\codex\\eae8558ab409f681\\visualizations\\2026\\11\\12\\01a1d074-3286-7fc3-a8fa-09d3bfbcae2d\\ze-interaction-verification\\summary.json"
+      ]
     }
   ]
 }

@@ -1,0 +1,5 @@
+{
+  "name": "ZeroEngine.Interaction.Samples",
+  "references": ["ZeroEngine.Interaction.Core", "ZeroEngine.Interaction.Unity", "Unity.ugui"],
+  "autoReferenced": false
+}
