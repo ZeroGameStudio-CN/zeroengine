@@ -162,3 +162,12 @@ coexist with the older Interaction module inside Gameplay during consumer migrat
 The optional Interaction Playground sample requires uGUI and the UI module; the
 repository's `interaction` test lane imports the sample into an otherwise isolated project.
 POB integration and retirement of old Gameplay interaction consumers are follow-up work.
+
+
+## AI 2.1 shared combat tactics candidate
+
+Consume `com.zerogamestudio.zeroengine.ai` and its Core sibling through fixed tested Git commits, following the cohort rule above. The base AI assembly has no GOAP dependency; the optional `ZeroEngine.AI.GOAP` adapter is enabled only when crashkonijn GOAP is installed.
+
+A host supplies observed threats, available weapon/action capabilities, native attack eligibility and actor-local time to `CombatTacticsModel`. Apply its intents through the host's existing authority and action executor. Navigation retains its traversal controls; the host chooses which tactical intents may override them. Item grades, equipment resource costs, project physics scans, damage, saves and networking stay in the consumer.
+
+For UtilityAI, set `AIContext.TimeProvider` when using an actor clock and pass the same clock's delta to `IAIBrain.Tick`. Existing callers retain Unity scaled time by default. A temporary local or version-split test is a recorded trial, not a normal package installation or release.

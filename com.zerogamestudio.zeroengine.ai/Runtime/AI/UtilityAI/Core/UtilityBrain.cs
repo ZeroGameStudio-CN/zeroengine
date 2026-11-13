@@ -86,7 +86,7 @@ namespace ZeroEngine.AI.UtilityAI
         public void Initialize(AIContext context)
         {
             _context = context;
-            _lastEvaluationTime = Time.time;
+            _lastEvaluationTime = _context.Now;
 
             if (_enableDebug)
             {
@@ -100,7 +100,7 @@ namespace ZeroEngine.AI.UtilityAI
 
             // 检查是否需要重新评估
             bool shouldReevaluate = _forceReevaluate ||
-                                    Time.time - _lastEvaluationTime >= _reevaluationInterval ||
+                                    _context.Now - _lastEvaluationTime >= _reevaluationInterval ||
                                     _currentAction == null;
 
             if (shouldReevaluate)
@@ -163,7 +163,7 @@ namespace ZeroEngine.AI.UtilityAI
         /// </summary>
         private void Evaluate()
         {
-            _lastEvaluationTime = Time.time;
+            _lastEvaluationTime = _context.Now;
 
             if (_actions.Count == 0)
             {
