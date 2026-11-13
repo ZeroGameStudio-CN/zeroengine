@@ -80,6 +80,9 @@ jobs:
           - lane: console-quantum
             name: Console optional adapter without vendor SDK
             test-mode: all
+          - lane: interaction
+            name: Interaction core, Unity lifecycle and standalone playground
+            test-mode: all
 
     steps:
       - name: Checkout repository

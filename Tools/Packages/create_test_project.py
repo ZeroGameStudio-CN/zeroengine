@@ -7,7 +7,7 @@ import re
 import shutil
 
 
-LANES = ("legacy", "modular", "dashboard-only", "dashboard-with-modules", "modules-only", "lifecycle", "console-core", "console-native", "console-quantum")
+LANES = ("legacy", "modular", "dashboard-only", "dashboard-with-modules", "modules-only", "lifecycle", "console-core", "console-native", "console-quantum", "interaction")
 PREFIX = "com.zerogamestudio.zeroengine"
 
 
@@ -52,6 +52,8 @@ def select_packages(packages, lane, editor_version):
         seeds = {PREFIX + ".console.ui"}
     elif lane == "console-quantum":
         seeds = {PREFIX + ".console.quantum"}
+    elif lane == "interaction":
+        seeds = {PREFIX + ".interaction"}
     elif lane in ("modular", "modules-only"):
         seeds = compatible - {PREFIX}
         if lane == "modules-only":
@@ -92,6 +94,11 @@ def create_project(root, destination, lane, editor_version, test_framework="1.3.
         shutil.copytree(root / name, destination / "Packages" / name,
                         ignore=shutil.ignore_patterns("__pycache__", "*.pyc"))
         dependencies[name] = "file:" + name
+    if lane == "interaction":
+        dependencies["com.unity.ugui"] = "1.0.0"
+        dependencies["com.unity.modules.ui"] = "1.0.0"
+        sample = root / (PREFIX + ".interaction") / "Samples~/InteractionPlayground"
+        shutil.copytree(sample, destination / "Assets/InteractionPlayground")
     if lane == "dashboard-with-modules":
         fixture = root / "Tools/Tests/Fixtures/com.zerogamestudio.dashboard-removal-fixture"
         shutil.copytree(fixture, destination / "Packages" / fixture.name)

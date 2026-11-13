@@ -1,0 +1,8 @@
+{
+  "name": "ZeroEngine.Interaction.Samples.Tests",
+  "references": ["ZeroEngine.Interaction.Core", "ZeroEngine.Interaction.Unity", "ZeroEngine.Interaction.Samples", "Unity.ugui", "UnityEngine.TestRunner"],
+  "overrideReferences": true,
+  "precompiledReferences": ["nunit.framework.dll"],
+  "autoReferenced": false,
+  "defineConstraints": ["UNITY_INCLUDE_TESTS"]
+}

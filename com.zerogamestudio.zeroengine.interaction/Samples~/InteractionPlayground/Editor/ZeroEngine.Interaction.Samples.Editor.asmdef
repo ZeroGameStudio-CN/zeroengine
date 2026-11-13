@@ -1,0 +1,6 @@
+{
+  "name": "ZeroEngine.Interaction.Samples.Editor",
+  "references": ["ZeroEngine.Interaction.Samples"],
+  "includePlatforms": ["Editor"],
+  "autoReferenced": false
+}
