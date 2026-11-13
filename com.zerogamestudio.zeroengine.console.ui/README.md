@@ -38,6 +38,12 @@ Completion selection never executes a command. Its visible rows adjust to the
 window and font size; submitting clears the stale suggestions. Projects that
 own the toggle action retain it through `KeyboardShortcutEnabled = false`.
 
+Common actions use a consistent set of procedural line icons, with Chinese
+descriptions and shortcut hints on hover. The follow control shows its active or
+paused state; ready/running and cancellation retain distinct visual states.
+Hints stay inside the window and do not take keyboard focus. Icons require no
+sprite sheet, icon font or external UI package.
+
 Composition guards read the current EventSystem module's active `BaseInput`,
 including its `inputOverride`, before falling back to Unity's legacy input.
 Custom input providers must expose their current `compositionString` there.

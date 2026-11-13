@@ -341,3 +341,18 @@ clean project resolved and compiled without Input System or Quantum; the optiona
 input assembly was absent and the native UI loaded successfully. Its temporary
 Editor closed normally without unsaved scenes. These checks establish dependency
 and interaction compatibility, not a comparative CPU or allocation benchmark.
+
+## Icon toolbar revision, 2026-11-13
+
+Common controls now use procedural line icons for clear, copy, font size,
+output follow, execute, cancel, close and completion navigation. Chinese action
+descriptions and shortcut hints appear on hover. Ready/running and follow/paused
+retain distinct visual states. The shared hint stays inside the window, leaves
+input focus alone and clears on close; command, completion and log text remain
+text. No sprite sheet, icon font or package dependency was added.
+
+All 11 UI PlayMode cases passed, including icon-only actions, hover explanations,
+hint bounds, focus preservation and follow-state persistence across reopening.
+The fresh real POB flow also passed Quantum priority, Native fallback, one submit,
+completion insertion and restoration. The icon window, copy hint and recovered
+Quantum Game frames were inspected. Consumer adoption remains a separate step.
