@@ -3,7 +3,7 @@
     "version": "2.0.0",
     "displayName": "ZeroEngine.Events",
     "description": "Typed scoped event bus and Unity event channels for ZeroEngine projects.",
-    "unity": "2022.3",
+    "unity": "6000.6",
     "unityRelease": "0f1",
     "dependencies": {},
     "keywords": [

@@ -11,7 +11,7 @@ not a published release.
 
 Add the package through Unity Package Manager using the Git URL for this repository and the `com.zerogamestudio.zeroengine.data-toolkit` path. Production projects should pin a release tag or reviewed commit.
 
-Version 2.1.1 adds project-configurable Data Toolkit UI text while keeping English defaults. It requires a direct Git pin for `com.zerogamestudio.zeroengine.editor-ui@1.4.0` at the same commit. Unity 2022.3 does not resolve same-repository sibling packages transitively.
+Version 2.1.1 adds project-configurable Data Toolkit UI text while keeping English defaults. It requires a direct Git pin for `com.zerogamestudio.zeroengine.editor-ui@1.4.0` at the same commit. Git UPM dependencies do not resolve same-repository sibling packages transitively.
 
 The current unreleased change keeps row names readable by measuring compact count labels and hiding the count before it can truncate a title that would otherwise fit. Full names and counts remain available in row tooltips.
 

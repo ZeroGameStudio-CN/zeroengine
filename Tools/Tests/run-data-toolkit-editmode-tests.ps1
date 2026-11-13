@@ -1,5 +1,6 @@
+#Requires -Version 7.0
 param(
-    [string]$UnityPath = "D:/unity/editors/Unity 2022.3.62f3/Editor/Unity.exe",
+    [string]$UnityPath = "D:/unity/editors/6000.6.4f1/Editor/Unity.exe",
     [string]$ResultsPath = "$env:TEMP/ZeroEngine-DataToolkit-EditMode.xml",
     [string]$LogPath = "$env:TEMP/ZeroEngine-DataToolkit-EditMode.log",
     [string]$ProjectPath = "$env:TEMP/ZeroEngine-DataToolkitTestProject",
@@ -66,7 +67,7 @@ Copy-Item -LiteralPath $editorUiSourcePackagePath -Destination (Join-Path $proje
 @"
 {
   "dependencies": {
-    "com.unity.test-framework": "1.3.9",
+    "com.unity.test-framework": "1.8.0",
     "com.unity.modules.imgui": "1.0.0",
     "com.unity.modules.ui": "1.0.0",
     "$editorUiPackageName": "file:$editorUiPackageName",
@@ -79,7 +80,7 @@ Copy-Item -LiteralPath $editorUiSourcePackagePath -Destination (Join-Path $proje
 "@ | Set-Content -LiteralPath (Join-Path $projectPackagesPath "manifest.json") -Encoding UTF8
 
 @"
-m_EditorVersion: 2022.3.62f3
+m_EditorVersion: 6000.6.4f1
 "@ | Set-Content -LiteralPath (Join-Path $projectSettingsPath "ProjectVersion.txt") -Encoding UTF8
 
 if ($PrepareOnly) {

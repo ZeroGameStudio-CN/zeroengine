@@ -169,11 +169,7 @@ namespace ZeroEngine.Console.UI
             panel.GetComponent<UnityEngine.UI.Image>().color = new Color(.06f, .08f, .12f, .98f);
             var layout = panel.GetComponent<UnityEngine.UI.VerticalLayoutGroup>(); layout.childControlHeight = true; layout.childForceExpandHeight = false;
             try { ownedFont = Font.CreateDynamicFontFromOSFont(new[] { "Microsoft YaHei", "Noto Sans CJK SC", "Arial" }, 16); } catch (ArgumentException) { }
-#if UNITY_6000_0_OR_NEWER
             Font font = ownedFont ? ownedFont : Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
-#else
-            Font font = ownedFont ? ownedFont : Resources.GetBuiltinResource<Font>("Arial.ttf");
-#endif
             for (int i = 0; i < 8; i++)
             {
                 int index = i;

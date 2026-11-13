@@ -3,7 +3,7 @@
   "version": "1.2.1",
   "displayName": "ZeroEngine Project Atlas",
   "description": "跨项目的人类功能导航，以及独立的技术目录、覆盖与文档投影合同。",
-  "unity": "2022.3",
+  "unity": "6000.6",
   "dependencies": {
     "com.zerogamestudio.zeroengine.editor-ui": "1.5.0",
     "com.unity.nuget.newtonsoft-json": "3.2.1"

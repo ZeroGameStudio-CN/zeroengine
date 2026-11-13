@@ -27,13 +27,14 @@ packages and dependent exclusions in `package-selection.json`. It never deletes
 an existing project, installs an Editor or runs tests. Package Manager resolves
 registry dependencies when the selected Editor opens the new project.
 
-The existing GitHub Actions lanes use Unity 2022.3.62f1 and therefore exclude
-packages declaring a newer minimum. Legacy tests include the legacy bundle's
-actual sibling closure, including ModSystem. Dashboard-only and module-removal
-lanes retain their separate installation contracts. The separate package-quality
-job audits every source package, including packages excluded from those Unity
-2022.3 lanes. A successful 2022.3 lane is not verification of Unity 6-only packages;
-verify those with the matching Editor and package-specific tests before publishing.
+All maintained packages require Unity 6000.6 or newer. GitHub Actions uses
+6000.6.4f1 and Test Framework 1.8.0, matching the test-project generator defaults.
+The generator rejects older Editors before creating any files; the static audit
+rejects package declarations below this baseline. Packages requiring a newer
+Editor and their dependents remain explicitly excluded in the selection receipt.
+Legacy tests refer to the legacy bundle, including ModSystem, on the same current
+Editor. Dashboard-only and module-removal lanes retain their separate installation
+contracts. The package-quality job audits every source package.
 
 The `lifecycle` lane selects Core, Audio, Render and their required siblings. CI
 runs it in PlayMode so singleton shutdown, audio ownership and in-place sprite

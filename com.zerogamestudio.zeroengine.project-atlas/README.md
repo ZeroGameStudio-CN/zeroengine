@@ -22,7 +22,7 @@ Project Atlas 1.2 是可选的跨项目项目导航包，提供 Unity Editor 面
 
 ## 安装
 
-在消费项目中把 Project Atlas、Dashboard 和 editor-ui 直接 pin 到同一个经过验证的 ZeroEngine Git commit。Unity 2022.3 不会为同仓 Git URL 自动解析全部依赖，因此同仓包应保持一致 pin。
+在消费项目中把 Project Atlas、Dashboard 和 editor-ui 直接 pin 到同一个经过验证的 ZeroEngine Git commit。Git UPM 依赖不会为同仓包自动解析全部依赖，因此同仓包应保持一致 pin。
 
 安装后从 `ZGS > 工作台` 打开“项目功能”。面板使用与 Data Manager 一致的“项目领域 → 具体功能 → 功能详情与入口”三栏结构；领域和功能统一使用居中的标准选择按钮，保留明确的底板、边框、悬停与选中反馈，配置状态只在右侧详情中展示，避免把按钮拆成左右信息栏而造成视觉偏斜。岗位说明自动换行；窄窗口通过横向滚动保留三栏，不把领域或功能折叠为下拉。项目尚未创建功能根清单时，面板只显示接入说明，不创建文件；技术目录仍按原 Project Atlas 合同独立验证。
 

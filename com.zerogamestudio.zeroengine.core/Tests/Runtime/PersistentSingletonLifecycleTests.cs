@@ -83,11 +83,7 @@ namespace ZeroEngine.Core.Tests
 
         private static PersistentSingletonProbe[] FindProbes()
         {
-#if UNITY_6000_6_OR_NEWER
             return Object.FindObjectsByType<PersistentSingletonProbe>();
-#else
-            return Object.FindObjectsByType<PersistentSingletonProbe>(FindObjectsSortMode.None);
-#endif
         }
     }
 

@@ -4,7 +4,7 @@ ZeroEngine 框架的核心基础设施包。
 
 ## 版本
 - **整合候选版本**: 2.2.2（尚未发布）
-- **最小 Unity**: 2022.3 LTS
+- **最小 Unity**: 6000.6+
 - **基础依赖**: uGUI 和 UI 引擎模块；现有 `UIUtils` 与 `DOTweenAdapter` 的 Canvas／EventSystem 合同直接使用这些类型。Core 单独安装同样声明它们。
 
 ## 包含模块

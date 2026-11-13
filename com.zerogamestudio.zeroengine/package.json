@@ -3,7 +3,7 @@
   "version": "3.0.0",
   "displayName": "ZeroEngine",
   "description": "Legacy ZeroEngine authoring, debugging and compatibility bundle. Prefer the individual modular packages for new projects.",
-  "unity": "2022.3",
+  "unity": "6000.6",
   "unityRelease": "0f1",
   "dependencies": {
     "com.unity.inputsystem": "1.7.0",

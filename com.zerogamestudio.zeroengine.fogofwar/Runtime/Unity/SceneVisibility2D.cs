@@ -59,11 +59,7 @@ namespace ZeroEngine.FogOfWar.Unity
         private ulong ownerCreationRevision;
         private readonly List<GameObject> sceneRoots = new();
         private readonly List<GameObject> queriedSceneRoots = new();
-#if UNITY_6000_0_OR_NEWER
         private readonly HashSet<ulong> queriedScenes = new();
-#else
-        private readonly HashSet<int> queriedScenes = new();
-#endif
         [UnityEngine.Scripting.Preserve]
         public bool NativeRendererDiscoveryEnabled { get; set; }
         private readonly List<Renderer> queriedRenderers = new();
@@ -499,11 +495,7 @@ namespace ZeroEngine.FogOfWar.Unity
         private void AppendSceneRoots(Scene scene)
         {
             if (!scene.IsValid() || !scene.isLoaded) return;
-#if UNITY_6000_0_OR_NEWER
             if (!queriedScenes.Add(scene.handle.GetRawData())) return;
-#else
-            if (!queriedScenes.Add(scene.handle)) return;
-#endif
             // Unity's List overload needs capacity greater than rootCount to avoid an public array.
             if (queriedSceneRoots.Capacity <= scene.rootCount) queriedSceneRoots.Capacity = scene.rootCount + 1;
             scene.GetRootGameObjects(queriedSceneRoots);

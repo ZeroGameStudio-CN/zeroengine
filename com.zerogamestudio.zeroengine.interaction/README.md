@@ -90,9 +90,8 @@ Import **Interaction Playground** from Package Manager, then open the included
 - pickup once per activation, with explicit pooled respawn;
 - delayed shop confirmation, revalidation and cancellation when leaving range.
 
-The included scene was authored in Unity 6000.6.4f1. To recreate it in an older supported
-Editor, create an empty scene with a Camera, add `InteractionPlayground` to an empty
-GameObject, then enter PlayMode. Its UI and interaction objects are created at runtime.
+The package requires Unity 6000.6 or newer. The included scene was authored in
+Unity 6000.6.4f1. Its UI and interaction objects are created at runtime.
 
 The repository's isolated `interaction` lane imports only this package and this sample:
 
@@ -107,7 +106,7 @@ Unity test route. Test projects are disposable and must not use production save 
 Local verification on Unity 6000.6.4f1 executed 33 EditMode contracts and 9 PlayMode
 lifecycle/example cases with no failures or skipped cases. A composited 1280×900
 Game View capture was inspected and PlayMode/background state was restored.
-The minimum-version CI lane remains a separate compatibility check.
+The isolated CI lane uses the same Unity 6000.6.4f1 baseline.
 
 ## Existing interaction review and later migration
 

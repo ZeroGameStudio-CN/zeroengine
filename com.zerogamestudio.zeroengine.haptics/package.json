@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "displayName": "ZeroEngine Haptics",
   "description": "Platform-agnostic haptic response resolution and bounded pulse arbitration.",
-  "unity": "2022.3",
+  "unity": "6000.6",
   "unityRelease": "0f1",
   "keywords": [
     "zeroengine",

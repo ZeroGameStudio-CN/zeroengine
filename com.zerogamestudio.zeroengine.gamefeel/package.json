@@ -3,7 +3,7 @@
   "version": "0.8.1",
   "displayName": "ZeroEngine Game Feel",
   "description": "Reusable, allocation-free sensory coordination policies for stop, signals, peaks, audio, haptics and particles.",
-  "unity": "2022.3",
+  "unity": "6000.6",
   "dependencies": {},
   "keywords": ["zeroengine", "gamefeel", "feedback"],
   "author": {

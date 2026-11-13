@@ -2,10 +2,8 @@ using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.Rendering;
 using UnityEngine.Rendering.Universal;
-#if UNITY_6000_0_OR_NEWER
 using UnityEngine.Rendering.RendererUtils;
 using UnityEngine.Rendering.RenderGraphModule;
-#endif
 
 namespace ZeroEngine.WorldShift.URP
 {
@@ -70,7 +68,6 @@ namespace ZeroEngine.WorldShift.URP
                 new ShaderTagId("Universal2D"),
                 new ShaderTagId("SRPDefaultUnlit")
             };
-#if UNITY_6000_0_OR_NEWER
             private static readonly ShaderTagId[] RendererListShaderTags = ShaderTags.ToArray();
 
             private sealed class PassData
@@ -81,7 +78,6 @@ namespace ZeroEngine.WorldShift.URP
                 public RendererListHandle firstWorld;
                 public RendererListHandle secondWorld;
             }
-#endif
 
             private readonly Settings settings;
             private readonly RenderQueueRange renderQueueRange;
@@ -109,7 +105,6 @@ namespace ZeroEngine.WorldShift.URP
                 stencilNotEqual = CreateStencilState(CompareFunction.NotEqual, stencilBit);
             }
 
-#if UNITY_6000_0_OR_NEWER
             public override void RecordRenderGraph(RenderGraph renderGraph, ContextContainer frameData)
             {
                 if (settings.stencilMaskMaterial == null)
@@ -224,67 +219,6 @@ namespace ZeroEngine.WorldShift.URP
                 parameters.filteringSettings = filtering;
                 return renderGraph.CreateRendererList(parameters);
             }
-#else
-            public override void Execute(ScriptableRenderContext context, ref RenderingData renderingData)
-            {
-                if (settings.stencilMaskMaterial == null)
-                {
-                    return;
-                }
-
-                SortingCriteria sorting = useOpaqueSorting
-                    ? renderingData.cameraData.defaultOpaqueSortFlags
-                    : SortingCriteria.CommonTransparent;
-                DrawingSettings drawing = CreateDrawingSettings(ShaderTags, ref renderingData, sorting);
-
-                if (!WorldShiftStencilRuntimeState.TryGetActiveState(out WorldShiftStencilRuntimeState.State state))
-                {
-                    DrawVisualLayersNormally(context, ref renderingData, ref drawing);
-                    return;
-                }
-
-                settings.stencilMaskMaterial.SetFloat("_StencilRef", stencilBit);
-                settings.stencilMaskMaterial.SetFloat("_StencilMask", stencilBit);
-
-                DrawScreenScanMask(context);
-                DrawMaskedWorlds(context, ref renderingData, ref drawing, state);
-            }
-
-            private void DrawScreenScanMask(ScriptableRenderContext context)
-            {
-                CommandBuffer cmd = CommandBufferPool.Get("WorldShiftStencilScreenScanMask");
-                cmd.DrawProcedural(Matrix4x4.identity, settings.stencilMaskMaterial, ClearStencilPassIndex, MeshTopology.Triangles, 3);
-                cmd.DrawProcedural(Matrix4x4.identity, settings.stencilMaskMaterial, ScreenScanMaskPassIndex, MeshTopology.Triangles, 3);
-                context.ExecuteCommandBuffer(cmd);
-                CommandBufferPool.Release(cmd);
-            }
-
-            private void DrawMaskedWorlds(
-                ScriptableRenderContext context,
-                ref RenderingData renderingData,
-                ref DrawingSettings drawing,
-                WorldShiftStencilRuntimeState.State state)
-            {
-                if (state.TargetLayer == WorldShiftLayer.Underworld)
-                {
-                    context.DrawRenderers(renderingData.cullResults, ref drawing, ref overworldFiltering, ref stencilNotEqual);
-                    context.DrawRenderers(renderingData.cullResults, ref drawing, ref underworldFiltering, ref stencilEqual);
-                    return;
-                }
-
-                context.DrawRenderers(renderingData.cullResults, ref drawing, ref underworldFiltering, ref stencilNotEqual);
-                context.DrawRenderers(renderingData.cullResults, ref drawing, ref overworldFiltering, ref stencilEqual);
-            }
-
-            private void DrawVisualLayersNormally(
-                ScriptableRenderContext context,
-                ref RenderingData renderingData,
-                ref DrawingSettings drawing)
-            {
-                context.DrawRenderers(renderingData.cullResults, ref drawing, ref overworldFiltering);
-                context.DrawRenderers(renderingData.cullResults, ref drawing, ref underworldFiltering);
-            }
-#endif
 
             private static RenderStateBlock CreateStencilState(CompareFunction compare, int stencilBit)
             {

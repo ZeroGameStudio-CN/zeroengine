@@ -60,7 +60,7 @@ Pin the FishNet and Steamworks.NET source commits; do not track a moving branch.
 "com.rlabrecque.steamworks.net": "https://github.com/rlabrecque/Steamworks.NET.git?path=com.rlabrecque.steamworks.net#a2fc889ab2672981ec3e6225d551d86ce6923121"
 ```
 
-This exact dependency set passed 75/75 package EditMode tests in a fresh Unity 2022.3.62f3 project. A second fresh project with no FishNet, Steamworks.NET, NGO, UGS, or other networking SDK installed passed the 71/71 applicable core/configuration tests. Do not use LLS's Unity-6-modified FishNet copy as the Unity 2022 source, and do not retain Asset-folder copies with the same assembly names when installing these UPM packages.
+Historical dependency validation: this exact dependency set passed 75/75 package EditMode tests in a fresh Unity 2022.3.62f3 project. A second fresh project with no FishNet, Steamworks.NET, NGO, UGS, or other networking SDK installed passed the 71/71 applicable core/configuration tests. The supported Editor baseline is now Unity 6000.6; rerun SDK integration tests in that Editor. Do not retain Asset-folder copies with the same assembly names when installing these UPM packages.
 
 ## Core flow
 
@@ -87,7 +87,7 @@ Import **LocalDirect Room UI** from Package Manager, follow its README to create
 
 Real Steam remains a manual two-account test: compile/setup validation and LocalDirect dual-process testing do not prove overlay, friend invitation, relay connectivity, or account entitlement.
 
-The preceding `0.2.0` GalleryKeeper Unity 6000.3.10f1 integration recorded 67 package EditMode tests inside its 110-test integrated EditMode suite. Its Development Player dual-process smoke covered `Ready`, authoritative start, an unexpected client disconnect, reconnect, restored snapshot, full puzzle completion, and leave. Consumer projects must rerun their own integration gates before updating their pinned commit; this historical result does not replace the fresh Unity 2022 dependency-baseline result above or the real Steam matrix.
+The preceding `0.2.0` GalleryKeeper Unity 6000.3.10f1 integration recorded 67 package EditMode tests inside its 110-test integrated EditMode suite. Its Development Player dual-process smoke covered `Ready`, authoritative start, an unexpected client disconnect, reconnect, restored snapshot, full puzzle completion, and leave. Consumer projects must rerun their own integration gates before updating their pinned commit; this historical result does not replace current-Editor dependency validation or the real Steam matrix.
 
 ## Temporary local development
 

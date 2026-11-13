@@ -3,23 +3,18 @@
 import argparse
 import json
 from pathlib import Path
-import re
 import shutil
+
+from unity_baseline import EDITOR_VERSION, TEST_FRAMEWORK_VERSION, require_supported_editor, unity_version
 
 
 LANES = ("legacy", "modular", "dashboard-only", "dashboard-with-modules", "modules-only", "lifecycle", "console-core", "console-native", "console-quantum", "interaction")
 PREFIX = "com.zerogamestudio.zeroengine"
 
 
-def unity_version(value):
-    match = re.match(r"^(\d+)\.(\d+)(?:\.(\d+))?", value)
-    if not match:
-        raise ValueError("Invalid Unity version: " + value)
-    return tuple(int(part or 0) for part in match.groups())
-
-
 def select_packages(packages, lane, editor_version):
     """Return the lane's compatible sibling closure, with explicit exclusions."""
+    require_supported_editor(editor_version)
     target = unity_version(editor_version)
     compatible = {name for name, manifest in packages.items()
                   if unity_version(manifest["unity"]) <= target}
@@ -74,7 +69,8 @@ def select_packages(packages, lane, editor_version):
     return sorted(selected), excluded
 
 
-def create_project(root, destination, lane, editor_version, test_framework="1.3.9"):
+def create_project(root, destination, lane, editor_version=EDITOR_VERSION, test_framework=TEST_FRAMEWORK_VERSION):
+    require_supported_editor(editor_version)
     root = Path(root).resolve()
     destination = Path(destination).resolve()
     if destination == root or root.is_relative_to(destination):
@@ -118,8 +114,8 @@ def main():
     parser.add_argument("--root", type=Path, default=Path(__file__).resolve().parents[2])
     parser.add_argument("--destination", type=Path, required=True)
     parser.add_argument("--lane", choices=LANES, required=True)
-    parser.add_argument("--unity-version", required=True)
-    parser.add_argument("--test-framework", default="1.3.9")
+    parser.add_argument("--unity-version", default=EDITOR_VERSION)
+    parser.add_argument("--test-framework", default=TEST_FRAMEWORK_VERSION)
     args = parser.parse_args()
     receipt = create_project(args.root, args.destination, args.lane, args.unity_version, args.test_framework)
     print(json.dumps(dict(selected=len(receipt["selected"]), incompatible=receipt["incompatible"])))

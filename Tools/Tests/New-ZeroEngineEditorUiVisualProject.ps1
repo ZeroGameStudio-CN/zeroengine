@@ -1,3 +1,4 @@
+#Requires -Version 7.0
 [CmdletBinding()]
 param(
     [string]$OutputPath = (Join-Path ([IO.Path]::GetTempPath()) ('zeroengine-editor-ui-visual-' + [guid]::NewGuid().ToString('N')))
@@ -24,7 +25,7 @@ $packageNames = @('com.zerogamestudio.analytics') + @(Get-ChildItem -LiteralPath
     Select-Object -ExpandProperty Name)
 
 $dependencies = [ordered]@{
-    'com.unity.test-framework' = '1.3.9'
+    'com.unity.test-framework' = '1.8.0'
     'com.unity.inputsystem' = '1.17.0'
     'com.unity.localization' = '1.4.0'
     'com.unity.addressables' = '1.21.0'
@@ -60,6 +61,6 @@ $manifest = [ordered]@{
     testables = @('com.zerogamestudio.zeroengine.editor-ui')
 } | ConvertTo-Json -Depth 8
 Set-Content -LiteralPath (Join-Path $packagesPath 'manifest.json') -Value $manifest -Encoding UTF8
-Set-Content -LiteralPath (Join-Path $settingsPath 'ProjectVersion.txt') -Value 'm_EditorVersion: 2022.3.62f3' -Encoding UTF8
+Set-Content -LiteralPath (Join-Path $settingsPath 'ProjectVersion.txt') -Value 'm_EditorVersion: 6000.6.4f1' -Encoding UTF8
 
 Write-Output $projectRoot

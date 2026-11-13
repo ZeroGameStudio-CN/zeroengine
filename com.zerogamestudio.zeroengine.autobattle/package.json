@@ -3,7 +3,7 @@
   "version": "2.0.0",
   "displayName": "ZeroEngine.AutoBattle",
   "description": "Headless deterministic tactical grid and auto-battle decision kernel.",
-  "unity": "2022.3",
+  "unity": "6000.6",
   "unityRelease": "0f1",
   "dependencies": {},
   "keywords": [
