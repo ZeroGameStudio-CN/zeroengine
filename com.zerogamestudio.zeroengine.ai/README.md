@@ -3,7 +3,7 @@
 AI 决策系统包，包含 FSM、行为树、效用 AI、GOAP 和 NPC 日程系统。
 
 ## 版本
-- **当前版本**: 2.0.1
+- **候选版本**: 2.1.0（尚未发布）
 - **依赖**: ZeroEngine.Core
 - **可选依赖**: crashkonijn/GOAP
 
@@ -94,4 +94,25 @@ controller.OnScheduleChanged += entry =>
 
 | 宏 | 说明 |
 |----|------|
-| `GOAP_INSTALLED` | 启用 crashkonijn/GOAP 集成 |
+| `GOAP_INSTALLED` | 基础程序集识别可选 GOAP 包 |
+| `CRASHKONIJN_GOAP` | 独立 GOAP 适配程序集内自动启用第三方集成 |
+
+
+## 2.1.0 shared combat tactics candidate
+
+`ZeroEngine.AI.CombatTactics.CombatTacticsModel` is a host-driven, per-actor decision model.
+Supply a capability profile, actor-local Now/Delta, native attack/charge/counter eligibility,
+and observed threats. The decision returns input intents and an action reason; the host owns
+perception, navigation, control authority, action execution, damage and resource accounting.
+Profiles contain capabilities and sensing budgets, never game item grades. Reset the model
+on control/actor lifetime changes. No frame loop, scene scan, future-attack oracle or global clock
+is introduced. Precise input decisions can be stepped independently of high-level UtilityAI ticks.
+
+`AIContext.TimeProvider` optionally supplies the actor clock for UtilityAI evaluation, action
+durations and cooldown considerations. Its default remains Unity's scaled time. Hosts that use
+an actor clock also pass that clock's delta to `IAIBrain.Tick`; the package does not own scheduling.
+
+The base assembly references Core only. Optional crashkonijn GOAP implementation lives in
+`ZeroEngine.AI.GOAP`, enabled only when its package is installed. `GOAPBridge.IsGOAPInstalled`
+remains available in the base assembly. Existing project domain defines retain their adapters.
+This candidate requires consumer compilation and behavior verification; it is not a release claim.

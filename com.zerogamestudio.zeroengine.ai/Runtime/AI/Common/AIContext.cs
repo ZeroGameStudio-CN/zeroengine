@@ -53,19 +53,23 @@ namespace ZeroEngine.AI
 
         #endregion
 
+        /// <summary>Optional actor-local monotonic clock. The host retains tick scheduling and pause policy.</summary>
+        public Func<float> TimeProvider { get; set; }
+        public float Now => TimeProvider != null ? TimeProvider() : UnityEngine.Time.time;
+
         #region Time Info
 
         /// <summary>上次决策时间</summary>
         public float LastDecisionTime { get; set; }
 
         /// <summary>自上次决策经过的时间</summary>
-        public float TimeSinceLastDecision => Time.time - LastDecisionTime;
+        public float TimeSinceLastDecision => Now - LastDecisionTime;
 
         /// <summary>当前行动开始时间</summary>
         public float ActionStartTime { get; set; }
 
         /// <summary>当前行动持续时间</summary>
-        public float ActionDuration => Time.time - ActionStartTime;
+        public float ActionDuration => Now - ActionStartTime;
 
         #endregion
 

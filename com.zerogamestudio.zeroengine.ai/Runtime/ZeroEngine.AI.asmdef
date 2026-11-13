@@ -1,20 +1,22 @@
 {
-    "name": "ZeroEngine.AI",
-    "rootNamespace": "ZeroEngine",
-    "references": [
-        "ZeroEngine.Core",
-        "CrashKonijn.Goap.Runtime",
-        "CrashKonijn.Goap.Core"
-    ],
-    "includePlatforms": [],
-    "excludePlatforms": [],
-    "allowUnsafeCode": false,
-    "overrideReferences": false,
-    "precompiledReferences": [],
-    "autoReferenced": true,
-    "defineConstraints": [],
-    "versionDefines": [
-        { "name": "com.crashkonijn.goap", "expression": "", "define": "GOAP_INSTALLED" }
-    ],
-    "noEngineReferences": false
+  "name": "ZeroEngine.AI",
+  "rootNamespace": "ZeroEngine",
+  "references": [
+    "ZeroEngine.Core"
+  ],
+  "includePlatforms": [],
+  "excludePlatforms": [],
+  "allowUnsafeCode": false,
+  "overrideReferences": false,
+  "precompiledReferences": [],
+  "autoReferenced": true,
+  "defineConstraints": [],
+  "versionDefines": [
+    {
+      "name": "com.crashkonijn.goap",
+      "expression": "",
+      "define": "GOAP_INSTALLED"
+    }
+  ],
+  "noEngineReferences": false
 }

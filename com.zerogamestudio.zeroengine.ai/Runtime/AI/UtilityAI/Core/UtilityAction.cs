@@ -26,7 +26,7 @@ namespace ZeroEngine.AI.UtilityAI
 
         #region Runtime State
 
-        private float _lastExecuteTime;
+        private float _lastExecuteTime = float.NegativeInfinity;
         private float _lastScore;
         private AIActionState _state = AIActionState.Idle;
 
@@ -72,10 +72,13 @@ namespace ZeroEngine.AI.UtilityAI
         public AIActionState State => _state;
 
         /// <summary>是否在冷却中</summary>
-        public bool IsOnCooldown => _cooldown > 0f && Time.time - _lastExecuteTime < _cooldown;
+        private AIContext timeContext;
+        private float Now => timeContext != null ? timeContext.Now : Time.time;
+
+        public bool IsOnCooldown => _cooldown > 0f && Now - _lastExecuteTime < _cooldown;
 
         /// <summary>剩余冷却时间</summary>
-        public float RemainingCooldown => IsOnCooldown ? _cooldown - (Time.time - _lastExecuteTime) : 0f;
+        public float RemainingCooldown => IsOnCooldown ? _cooldown - (Now - _lastExecuteTime) : 0f;
 
         #endregion
 
@@ -118,6 +121,7 @@ namespace ZeroEngine.AI.UtilityAI
         /// </summary>
         public float CalculateScore(AIContext context)
         {
+            timeContext = context;
             if (!_isEnabled || IsOnCooldown)
             {
                 _lastScore = 0f;
@@ -184,10 +188,11 @@ namespace ZeroEngine.AI.UtilityAI
         /// </summary>
         public void Start(AIContext context)
         {
+            timeContext = context;
             if (_state == AIActionState.Running) return;
 
             _state = AIActionState.Running;
-            context.ActionStartTime = Time.time;
+            context.ActionStartTime = context.Now;
 
             OnStart(context);
         }
@@ -207,7 +212,7 @@ namespace ZeroEngine.AI.UtilityAI
             if (result.IsComplete)
             {
                 _state = result.State;
-                _lastExecuteTime = Time.time;
+                _lastExecuteTime = context.Now;
                 OnEnd(context, result);
             }
 

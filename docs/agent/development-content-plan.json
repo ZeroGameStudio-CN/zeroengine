@@ -382,6 +382,32 @@
       "verificationEvidence": [
         "C:\\Users\\2025\\.antigravity_cockpit\\instances\\codex\\eae8558ab409f681\\visualizations\\2026\\11\\12\\01a1d074-3286-7fc3-a8fa-09d3bfbcae2d\\ze-interaction-verification\\summary.json"
       ]
+    },
+    {
+      "id": "ze.ai.shared-combat-tactics",
+      "title": "脑机与自动测试共用的战术决策",
+      "stage": "Previewable",
+      "targetReleaseId": "",
+      "availability": "TestOnly",
+      "responsibleChat": "01a1b5fe-e87f-7a62-be79-388f736a6c1b",
+      "chatUrl": "thread://01a1b5fe-e87f-7a62-be79-388f736a6c1b?hostId=local",
+      "nextAction": "固定已验证的AI包Git来源，并完成POB自动托管输入交接与月读实录。敌人适配后续接入；未建立玩家发布证据。",
+      "entrance": "POB受控Git/本地UPM候选验证；ZeroEngine.AI.Tests与脑机预览、AutoPilot共用CombatTacticsModel。",
+      "resourcePath": "com.zerogamestudio.zeroengine.ai/Runtime/AI/CombatTactics/CombatTacticsModel.cs",
+      "revision": "AI 2.1.0 shared tactics candidate",
+      "releaseEvidence": "",
+      "candidatePackageVersion": "2.1.0",
+      "verificationEvidence": [
+        "C:\\Users\\2025\\AppData\\Local\\Temp\\pob-ze-ai-combat-20261113\\proofs\\native-package-12.json",
+        "C:\\Users\\2025\\AppData\\Local\\Temp\\pob-ze-ai-combat-20261113\\proofs\\native-neural-62.json",
+        "C:\\Users\\2025\\AppData\\Local\\Temp\\pob-ze-ai-combat-20261113\\decision-port-equivalence.json"
+      ],
+      "relatedContent": [
+        {
+          "projectId": "pob",
+          "contentId": "weapon.neural-interface-preview"
+        }
+      ]
     }
   ]
 }
