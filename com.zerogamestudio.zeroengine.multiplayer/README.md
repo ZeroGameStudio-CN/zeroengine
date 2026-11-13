@@ -6,8 +6,9 @@ Configurable room and multiplayer-session orchestration for ZeroEngine projects.
 
 ## Status
 
-Version `0.3.0` promotes the shared room/session implementation to an SDK-neutral
-foundation while retaining the previously validated GalleryKeeper integration:
+Version `0.4.0` adds SDK-neutral replication primitives, a FishNet prediction
+configuration lease, and a reusable Steam invitation contract. The shared
+room/session foundation provides:
 
 - `LocalDevelopmentRoomService` and a stable command-line descriptor for two-process development rooms.
 - `FishNetConnectionDriver` for Tugboat LocalDirect or FishySteamworks SteamP2P, including selected-route control behind one FishNet `Multipass`, plus an identity bridge based on FishNet's authenticated connection event.
@@ -45,6 +46,12 @@ The tested baseline is fixed to:
 | FishNet | 4.7.2 | `de19b5d66459f60400ffd0edc443c4da173a01e7` |
 | FishySteamworks | 4.1.1 | `21e858249249e2c322365fe9fefbe865f290b0d9` |
 | Steamworks.NET | 2024.8.0 | `a2fc889ab2672981ec3e6225d551d86ce6923121` |
+
+For Steamworks.NET installed under `Assets`, the existing `STEAMWORKS_NET`
+scripting symbol explicitly enables the Steam adapter and its tests. This
+route uses the same supported SDK baseline and assembly name as the UPM
+installation; choose one installation per consumer. UPM installs continue
+to use the package version define.
 
 Pin the FishNet and Steamworks.NET source commits; do not track a moving branch. FishNet `4.7.2` is a valid package at `Assets/FishNet` and avoids the invalid four-part manifest version and duplicate compression sources found in the earlier `4.6.15.1` candidate. FishySteamworks `4.1.1` must be imported from the upstream release asset (SHA-256 `5698D16BD29B8B08D35E12A9B817CE69992F70D7C14B64810961691ECD9AFC57`): its Git root package omits the transport source, while its nested package has no asmdef and is therefore not compiled from `Packages/`.
 
@@ -89,7 +96,7 @@ During package development only, add this package to a consumer project's `Packa
 Shared and production branches must instead use a tested commit:
 
 ```json
-"com.zerogamestudio.zeroengine.multiplayer": "https://github.com/liuzqk/zeroengine.git?path=com.zerogamestudio.zeroengine.multiplayer#<tested-commit>"
+"com.zerogamestudio.zeroengine.multiplayer": "https://github.com/ZeroGameStudio-CN/zeroengine.git?path=com.zerogamestudio.zeroengine.multiplayer#<tested-commit>"
 ```
 
 
@@ -100,3 +107,24 @@ The 0.3.1 candidate places the local launcher and read-only setup validation in
 `LocalMultiplayerLauncher.Open()` and `MultiplayerSetupValidator.ValidateInstalledSetup()`
 directly. Editor UI is an Editor-only dependency; the runtime core and Local,
 FishNet and Steam contracts are unchanged.
+
+## Replication primitives
+
+`ZeroEngine.Multiplayer.Replication` is an optional, engine-free assembly for
+wrap-safe sequence/revision admission, 64-bit entity identities and pooled
+generations, and bounded presentation lease ordering/baselines/tombstones.
+It references neither Core session orchestration, Unity, FishNet nor a game.
+Consumers validate their payloads and project policy before passing an identity
+or `ReplicatedLeaseUpdate`. Resource loading, gameplay and rendering stay in adapters.
+
+Consumers supply monotonically ordered instance IDs within an epoch; the
+bounded retirement floor rejects late events for retired instances. Payload
+validation and active/tombstone budgets belong to the consumer.
+Run `ZeroEngine.Multiplayer.Tests.Replication.Editor` for focused Unity cases.
+
+`PredictionTimingLease` owns the temporary FishNet tick/physics, server-input
+queue and replicate-state settings for a session. Consumers supply the tick
+rate and input budget, then dispose the lease on session teardown.
+`ISteamRuntime` lets an existing project Steam owner supply availability and
+identity; `ISteamInviteRouter` shares invitation routing without creating a
+second Steam initialization or callback pump.
