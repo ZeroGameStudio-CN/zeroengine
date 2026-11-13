@@ -82,17 +82,17 @@ dependency is imposed on the runtime bridge.
 
 ## Playground and verification
 
-Import **Interaction Playground** from Package Manager, then open the included scene
-or use **Tools / ZeroEngine / Interaction / Create Playground Scene**. The scene builder
-refuses to overwrite an existing scene. The example covers:
+Import **Interaction Playground** from Package Manager, then open the included
+`InteractionPlayground.unity` scene. The example adds no global Editor menu. It covers:
 
 - independent actor wallets and focus;
 - tap-to-toggle door and tap-to-talk / hold-to-gift NPC;
 - pickup once per activation, with explicit pooled respawn;
 - delayed shop confirmation, revalidation and cancellation when leaving range.
 
-The included scene was authored in Unity 6000.6.4f1. On an older supported Editor,
-use the menu builder to generate the same minimal scene in that Editor's own format.
+The included scene was authored in Unity 6000.6.4f1. To recreate it in an older supported
+Editor, create an empty scene with a Camera, add `InteractionPlayground` to an empty
+GameObject, then enter PlayMode. Its UI and interaction objects are created at runtime.
 
 The repository's isolated `interaction` lane imports only this package and this sample:
 
