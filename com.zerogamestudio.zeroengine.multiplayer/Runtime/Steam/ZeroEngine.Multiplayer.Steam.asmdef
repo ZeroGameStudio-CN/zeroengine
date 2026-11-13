@@ -18,7 +18,7 @@
   "precompiledReferences": [],
   "autoReferenced": true,
   "defineConstraints": [
-    "ZEROENGINE_MULTIPLAYER_STEAMWORKS"
+    "ZEROENGINE_MULTIPLAYER_STEAMWORKS || STEAMWORKS_NET"
   ],
   "versionDefines": [
     {

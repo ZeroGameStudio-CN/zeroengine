@@ -3,7 +3,7 @@ using Steamworks;
 
 namespace ZeroEngine.Multiplayer.Steam
 {
-    public sealed class SteamInviteRouter : IDisposable
+    public sealed class SteamInviteRouter : ISteamInviteRouter
     {
         private readonly Callback<GameLobbyJoinRequested_t> _joinRequested;
         private bool _disposed;

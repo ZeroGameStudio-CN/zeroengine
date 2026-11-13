@@ -1,6 +1,6 @@
 {
   "name": "com.zerogamestudio.zeroengine.multiplayer",
-  "version": "0.3.1",
+  "version": "0.4.0",
   "displayName": "ZeroEngine.Multiplayer",
   "description": "SDK-neutral multiplayer session orchestration with optional FishNet, Steam, and LocalDirect adapters for ZeroEngine projects.",
   "unity": "2022.3",
