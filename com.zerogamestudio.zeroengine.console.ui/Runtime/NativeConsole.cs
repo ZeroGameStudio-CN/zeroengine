@@ -189,7 +189,11 @@ namespace ZeroEngine.Console.UI
             host.Session.Write(new ConsoleOutput("", ConsoleOutputLevel.Info, "> " + line));
             pendingExecution = host.ExecuteAsync(line);
             historyIndex = -1;
-            if (input) { input.SetTextWithoutNotify(string.Empty); input.caretPosition = 0; observedCaret = 0; input.ActivateInputField(); }
+            if (input)
+            {
+                input.SetTextWithoutNotify(string.Empty); input.caretPosition = 0; observedCaret = 0;
+                if (IsOpen) { input.Select(); input.ActivateInputField(); }
+            }
             CancelCompletion();
             return pendingExecution;
         }

@@ -51,6 +51,9 @@ use the current filter. An empty result has an explicit hint. Copy exports the
 matching retained messages while a filter is active; clearing or closing search
 restores the full output and Copy behavior. The displayed pool remains bounded
 to the last 256 matching entries and is reused between filter changes.
+`GetFilteredOutputText()` returns the same plain text without touching the OS
+clipboard, for project-owned exports and headless verification. Toolbar actions
+preserve the selected input field; explicitly running a command selects its draft.
 
 Composition guards read the current EventSystem module's active `BaseInput`,
 including its `inputOverride`, before falling back to Unity's legacy input.

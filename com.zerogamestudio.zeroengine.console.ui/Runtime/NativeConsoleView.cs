@@ -110,7 +110,7 @@ namespace ZeroEngine.Console.UI
             logSearch.placeholder = searchPlaceholder;
             logSearch.onValueChanged.AddListener(SetOutputQuery);
             clearSearchButton = MakeIconButton(searchRow, "清除搜索", ConsoleGlyph.Close, "清除搜索条件", Vector2.one, new Vector2(-32, -32), Vector2.zero,
-                () => { logSearch.text = string.Empty; logSearch.ActivateInputField(); });
+                () => { logSearch.text = string.Empty; logSearch.Select(); logSearch.ActivateInputField(); });
             clearSearchButton.interactable = false;
             searchRow.gameObject.SetActive(false);
 
@@ -239,12 +239,15 @@ namespace ZeroEngine.Console.UI
             if (actionHint) actionHint.gameObject.SetActive(false);
         }
 
-        private void CopyOutput()
+        private void CopyOutput() => GUIUtility.systemCopyBuffer = GetFilteredOutputText();
+
+        public string GetFilteredOutputText()
         {
+            if (!host || host.Session == null) return string.Empty;
             var values = host.Session.GetOutput();
             var lines = new System.Collections.Generic.List<string>(values.Length);
             for (int i = 0; i < values.Length; i++) if (MatchesOutput(values[i])) lines.Add(values[i].Message);
-            GUIUtility.systemCopyBuffer = string.Join("\n", lines);
+            return string.Join("\n", lines);
         }
 
         private bool MatchesOutput(ConsoleOutput value) => string.IsNullOrEmpty(outputQuery)
@@ -274,6 +277,14 @@ namespace ZeroEngine.Console.UI
                 input.Select(); input.ActivateInputField();
             }
             renderedRevision = -1;
+        }
+
+        private void FocusInputAfterAction()
+        {
+            if (!IsOpen || !input) return;
+            var events = UnityEngine.EventSystems.EventSystem.current;
+            var target = logSearch && events && events.currentSelectedGameObject == logSearch.gameObject ? logSearch : input;
+            target.ActivateInputField();
         }
 
         private Text Text(string name, Transform parent, string value)
@@ -324,7 +335,7 @@ namespace ZeroEngine.Console.UI
             var button = rect.gameObject.AddComponent<Button>(); button.targetGraphic = image;
             button.navigation = new Navigation { mode = Navigation.Mode.None };
             var colors = button.colors; colors.highlightedColor = new Color(1.3f, 1.3f, 1.3f); colors.pressedColor = new Color(.7f, .85f, .9f); colors.disabledColor = new Color(.55f, .62f, .67f, .5f); colors.fadeDuration = .08f; button.colors = colors;
-            button.onClick.AddListener(() => { action(); if (IsOpen && input) input.ActivateInputField(); });
+            button.onClick.AddListener(() => { action(); FocusInputAfterAction(); });
             return button;
         }
 

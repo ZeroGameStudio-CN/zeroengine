@@ -351,7 +351,6 @@ namespace ZeroEngine.Console.UI.Tests
         public IEnumerator NativeView_LogSearchPreservesCommandsAndFiltersNewMessagesAndCopy()
         {
             var root = new GameObject("Native log search");
-            string clipboard = GUIUtility.systemCopyBuffer;
             IDisposable module = null;
             int calls = 0;
             try
@@ -371,17 +370,23 @@ namespace ZeroEngine.Console.UI.Tests
                 view.InputField.caretPosition = view.InputField.text.Length;
                 Button(view, "搜索日志").onClick.Invoke();
                 yield return null;
+                yield return null;
                 var search = view.GetComponentsInChildren<UnityEngine.UI.InputField>(true).Single(field => field.name == "LogSearch");
                 var output = view.GetComponentInChildren<UnityEngine.UI.ScrollRect>();
                 Assert.That(search.isFocused, Is.True);
+                Assert.That(view.InputField.isFocused, Is.False, "Only the selected search field may own input.");
                 Assert.That(search.textComponent.rectTransform.rect.width, Is.GreaterThan(100));
                 search.text = "cOnNeCt";
                 yield return null;
                 yield return null;
                 CollectionAssert.AreEqual(new[] { "Connected to MAIN", "connect error" },
                     output.content.GetComponentsInChildren<UnityEngine.UI.Text>().Select(text => text.text).ToArray());
-                Button(view, "复制").onClick.Invoke();
-                Assert.That(GUIUtility.systemCopyBuffer, Is.EqualTo("Connected to MAIN\nconnect error"));
+                Assert.That(view.GetFilteredOutputText(), Is.EqualTo("Connected to MAIN\nconnect error"));
+                Button(view, "字号增大").onClick.Invoke();
+                yield return null;
+                yield return null;
+                Assert.That(search.isFocused, Is.True, "Toolbar actions must preserve search focus.");
+                Assert.That(view.InputField.isFocused, Is.False);
                 search.onSubmit.Invoke("search-test");
                 yield return null;
                 Assert.That(calls, Is.Zero, "Submitting search must never run the command draft.");
@@ -411,16 +416,14 @@ namespace ZeroEngine.Console.UI.Tests
                 Assert.That(view.InputField.text, Is.EqualTo("search-test"));
                 Assert.That(view.InputField.isFocused, Is.True);
                 Assert.That(host.Session.GetOutput().Length, Is.EqualTo(4), "Filtering must preserve retained output.");
-                Button(view, "复制").onClick.Invoke();
-                Assert.That(GUIUtility.systemCopyBuffer, Does.Contain("中文查找：缓存命中"));
-                Assert.That(GUIUtility.systemCopyBuffer, Does.Contain("connect error"));
+                Assert.That(view.GetFilteredOutputText(), Does.Contain("中文查找：缓存命中"));
+                Assert.That(view.GetFilteredOutputText(), Does.Contain("connect error"));
                 view.Close();
             }
             finally
             {
                 module?.Dispose();
                 Object.DestroyImmediate(root);
-                GUIUtility.systemCopyBuffer = clipboard;
             }
         }
 
