@@ -348,6 +348,86 @@ namespace ZeroEngine.Console.UI.Tests
         }
 
         [UnityTest]
+        public IEnumerator NativeView_LogSearchPreservesCommandsAndFiltersNewMessagesAndCopy()
+        {
+            var root = new GameObject("Native log search");
+            IDisposable module = null;
+            int calls = 0;
+            try
+            {
+                var host = root.AddComponent<ConsoleHost>();
+                var view = root.AddComponent<NativeConsole>();
+                module = host.Registry.Register("search-test", new[] {
+                    new ConsoleBinding(new ConsoleCommand("search.test", "search-test", "search-test", "Command draft must remain untouched."),
+                        (context, args, token) => { calls++; return Task.FromResult(ConsoleResult.Success()); }) });
+                host.Session.Write(new ConsoleOutput("", ConsoleOutputLevel.Info, "Connected to MAIN"));
+                host.Session.Write(new ConsoleOutput("", ConsoleOutputLevel.Warning, "中文查找：缓存命中"));
+                host.Session.Write(new ConsoleOutput("", ConsoleOutputLevel.Error, "connect error"));
+                view.Open();
+                yield return null;
+                yield return null;
+                view.InputField.text = "search-test";
+                view.InputField.caretPosition = view.InputField.text.Length;
+                Button(view, "搜索日志").onClick.Invoke();
+                yield return null;
+                yield return null;
+                var search = view.GetComponentsInChildren<UnityEngine.UI.InputField>(true).Single(field => field.name == "LogSearch");
+                var output = view.GetComponentInChildren<UnityEngine.UI.ScrollRect>();
+                Assert.That(search.isFocused, Is.True);
+                Assert.That(view.InputField.isFocused, Is.False, "Only the selected search field may own input.");
+                Assert.That(search.textComponent.rectTransform.rect.width, Is.GreaterThan(100));
+                search.text = "cOnNeCt";
+                yield return null;
+                yield return null;
+                CollectionAssert.AreEqual(new[] { "Connected to MAIN", "connect error" },
+                    output.content.GetComponentsInChildren<UnityEngine.UI.Text>().Select(text => text.text).ToArray());
+                Assert.That(view.GetFilteredOutputText(), Is.EqualTo("Connected to MAIN\nconnect error"));
+                Button(view, "字号增大").onClick.Invoke();
+                yield return null;
+                yield return null;
+                Assert.That(search.isFocused, Is.True, "Toolbar actions must preserve search focus.");
+                Assert.That(view.InputField.isFocused, Is.False);
+                search.onSubmit.Invoke("search-test");
+                yield return null;
+                Assert.That(calls, Is.Zero, "Submitting search must never run the command draft.");
+                Assert.That(host.Session.GetHistory(), Is.Empty);
+                Assert.That(view.InputField.text, Is.EqualTo("search-test"));
+                Assert.That(view.transform.Find("ZE Native Console/Panel/Completions").gameObject.activeSelf, Is.False);
+                search.text = "缓存";
+                yield return null;
+                host.Session.Write(new ConsoleOutput("", ConsoleOutputLevel.Info, "后台缓存刷新"));
+                yield return null;
+                CollectionAssert.AreEqual(new[] { "中文查找：缓存命中", "后台缓存刷新" },
+                    output.content.GetComponentsInChildren<UnityEngine.UI.Text>().Select(text => text.text).ToArray());
+                search.text = "没有这条日志";
+                yield return null;
+                Assert.That(output.content.GetComponentsInChildren<UnityEngine.UI.Text>(), Is.Empty);
+                var empty = view.GetComponentsInChildren<UnityEngine.UI.Text>(true).Single(text => text.name == "EmptyOutput");
+                Assert.That(empty.gameObject.activeSelf, Is.True);
+                Assert.That(empty.text, Is.EqualTo("没有匹配日志"));
+                Button(view, "清除搜索").onClick.Invoke();
+                yield return null;
+                Assert.That(output.content.GetComponentsInChildren<UnityEngine.UI.Text>().Length, Is.EqualTo(4));
+                search.text = "cache";
+                Button(view, "搜索日志").onClick.Invoke();
+                yield return null;
+                yield return null;
+                Assert.That(output.content.GetComponentsInChildren<UnityEngine.UI.Text>().Length, Is.EqualTo(4));
+                Assert.That(view.InputField.text, Is.EqualTo("search-test"));
+                Assert.That(view.InputField.isFocused, Is.True);
+                Assert.That(host.Session.GetOutput().Length, Is.EqualTo(4), "Filtering must preserve retained output.");
+                Assert.That(view.GetFilteredOutputText(), Does.Contain("中文查找：缓存命中"));
+                Assert.That(view.GetFilteredOutputText(), Does.Contain("connect error"));
+                view.Close();
+            }
+            finally
+            {
+                module?.Dispose();
+                Object.DestroyImmediate(root);
+            }
+        }
+
+        [UnityTest]
         public IEnumerator NativeView_OutputToolsKeepLongMessagesAndReadingPosition()
         {
             var root = new GameObject("Native output controls");
