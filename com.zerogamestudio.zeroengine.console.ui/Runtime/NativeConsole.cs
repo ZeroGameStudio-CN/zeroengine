@@ -20,6 +20,7 @@ namespace ZeroEngine.Console.UI
         private UnityEngine.UI.InputField input;
         private UnityEngine.UI.ScrollRect scroll;
         private readonly List<UnityEngine.UI.Text> outputRows = new List<UnityEngine.UI.Text>();
+        private readonly List<ConsoleOutput> visibleOutput = new List<ConsoleOutput>(256);
         private readonly List<UnityEngine.UI.Button> completionRows = new List<UnityEngine.UI.Button>();
         private RectTransform outputContent, completions;
         private CancellationTokenSource completionCancellation;
@@ -133,7 +134,7 @@ namespace ZeroEngine.Console.UI
             if (KeyboardShortcutEnabled && !composing && ConsoleKeyboard.Pressed(KeyCode.BackQuote)) Toggle();
             if (!IsOpen || host.Session == null) return;
             UpdateViewLayout();
-            if (input.caretPosition != observedCaret)
+            if (input.isFocused && input.caretPosition != observedCaret)
             {
                 observedCaret = input.caretPosition;
                 InputChanged(input.text);
@@ -277,20 +278,26 @@ namespace ZeroEngine.Console.UI
         {
             var snapshot = host.Session.GetOutputSnapshot();
             var entries = snapshot.Entries;
-            if (emptyOutput) emptyOutput.gameObject.SetActive(entries.Count == 0);
-            while (outputRows.Count < Mathf.Min(256, entries.Count)) outputRows.Add(Text("Line", outputContent, ""));
+            visibleOutput.Clear();
+            for (int i = entries.Count - 1; i >= 0 && visibleOutput.Count < 256; i--)
+                if (MatchesOutput(entries[i])) visibleOutput.Add(entries[i]);
+            visibleOutput.Reverse();
+            if (emptyOutput)
+            {
+                emptyOutput.text = string.IsNullOrEmpty(outputQuery) ? "ze-help" : "没有匹配日志";
+                emptyOutput.gameObject.SetActive(visibleOutput.Count == 0);
+            }
+            while (outputRows.Count < visibleOutput.Count) outputRows.Add(Text("Line", outputContent, ""));
             Vector2 readingPosition = outputContent.anchoredPosition;
-            int first = Mathf.Max(0, entries.Count - outputRows.Count);
             for (int i = 0; i < outputRows.Count; i++)
             {
-                int index = first + i;
-                bool visible = index < entries.Count;
+                bool visible = i < visibleOutput.Count;
                 var text = outputRows[i];
                 text.gameObject.SetActive(visible);
                 if (!visible) continue;
-                text.text = entries[index].Message;
-                text.color = entries[index].Level == ConsoleOutputLevel.Error ? new Color(1f, .48f, .48f)
-                    : entries[index].Level == ConsoleOutputLevel.Warning ? new Color(1f, .8f, .4f) : new Color(.88f, .91f, .96f);
+                text.text = visibleOutput[i].Message;
+                text.color = visibleOutput[i].Level == ConsoleOutputLevel.Error ? new Color(1f, .48f, .48f)
+                    : visibleOutput[i].Level == ConsoleOutputLevel.Warning ? new Color(1f, .8f, .4f) : new Color(.88f, .91f, .96f);
             }
             Canvas.ForceUpdateCanvases();
             if (followOutput) scroll.verticalNormalizedPosition = 0;

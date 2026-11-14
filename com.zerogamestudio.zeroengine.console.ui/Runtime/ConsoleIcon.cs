@@ -2,7 +2,7 @@ using UnityEngine;
 
 namespace ZeroEngine.Console.UI
 {
-    internal enum ConsoleGlyph { Terminal, Clear, Copy, FontSmaller, FontLarger, Follow, FollowPaused, Run, Stop, Close, Up, Down, Ready, Running }
+    internal enum ConsoleGlyph { Terminal, Clear, Copy, FontSmaller, FontLarger, Follow, FollowPaused, Run, Stop, Close, Up, Down, Ready, Running, Search }
 
     [DisallowMultipleComponent, RequireComponent(typeof(CanvasRenderer))]
     internal sealed class ConsoleIcon : UnityEngine.UI.MaskableGraphic
@@ -54,6 +54,8 @@ namespace ZeroEngine.Console.UI
                 case ConsoleGlyph.Ready: Disc(mesh, new Vector2(12, 12), 4); break;
                 case ConsoleGlyph.Running:
                     Ring(mesh, new Vector2(12, 12), 8); Line(mesh, 12, 12, 12, 17); Line(mesh, 12, 12, 16, 10); break;
+                case ConsoleGlyph.Search:
+                    Ring(mesh, new Vector2(10, 14), 6); Line(mesh, 14, 10, 20, 4); break;
             }
         }
 

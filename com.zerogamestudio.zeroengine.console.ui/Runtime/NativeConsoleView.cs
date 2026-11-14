@@ -17,6 +17,11 @@ namespace ZeroEngine.Console.UI
         private Text actionHintLabel;
         private readonly Vector3[] hintCorners = new Vector3[4];
         private bool followOutput = true;
+        private RectTransform searchRow;
+        private UnityEngine.UI.InputField logSearch;
+        private UnityEngine.UI.Button searchButton, clearSearchButton;
+        private ConsoleActionHint copyHint;
+        private string outputQuery = string.Empty;
 
         private void EnsureView()
         {
@@ -55,12 +60,13 @@ namespace ZeroEngine.Console.UI
             MakeIconButton(panel, "关闭", ConsoleGlyph.Close, "关闭控制台 · Esc", Vector2.one, new Vector2(-44, -36), new Vector2(-12, -8), Close);
 
             MakeIconButton(panel, "清空", ConsoleGlyph.Clear, "清空日志", new Vector2(0, 1), new Vector2(12, -76), new Vector2(44, -44), () => host.Session.ClearOutput());
-            MakeIconButton(panel, "复制", ConsoleGlyph.Copy, "复制全部日志", new Vector2(0, 1), new Vector2(50, -76), new Vector2(82, -44), CopyOutput);
+            copyHint = MakeIconButton(panel, "复制", ConsoleGlyph.Copy, "复制全部日志", new Vector2(0, 1), new Vector2(50, -76), new Vector2(82, -44), CopyOutput).GetComponent<ConsoleActionHint>();
             MakeIconButton(panel, "字号减小", ConsoleGlyph.FontSmaller, "减小字号", new Vector2(0, 1), new Vector2(98, -76), new Vector2(130, -44), () => ChangeFontSize(-2));
             MakeIconButton(panel, "字号增大", ConsoleGlyph.FontLarger, "增大字号", new Vector2(0, 1), new Vector2(136, -76), new Vector2(168, -44), () => ChangeFontSize(2));
             fontSizeLabel = Chrome("FontSize", panel, fontSize.ToString());
             fontSizeLabel.color = new Color(.49f, .59f, .67f);
             Stretch(fontSizeLabel.rectTransform, new Vector2(0, 1), new Vector2(0, 1), new Vector2(178, -74), new Vector2(210, -46));
+            searchButton = MakeIconButton(panel, "搜索日志", ConsoleGlyph.Search, "搜索日志", new Vector2(0, 1), new Vector2(212, -76), new Vector2(244, -44), ToggleLogSearch);
             followButton = MakeIconButton(panel, "跟随", ConsoleGlyph.Follow, "自动跟随新日志：开 · 点击暂停", new Vector2(1, 1), new Vector2(-44, -76), new Vector2(-12, -44), ToggleFollow);
             followButton.targetGraphic.color = SelectedColor;
             followIcon = followButton.GetComponentInChildren<ConsoleIcon>();
@@ -86,6 +92,27 @@ namespace ZeroEngine.Console.UI
             var scrollbar = track.gameObject.AddComponent<Scrollbar>(); scrollbar.handleRect = handle; scrollbar.targetGraphic = handleImage;
             scrollbar.direction = Scrollbar.Direction.BottomToTop; scrollbar.navigation = new Navigation { mode = Navigation.Mode.None };
             scroll.verticalScrollbar = scrollbar; scroll.verticalScrollbarVisibility = ScrollRect.ScrollbarVisibility.AutoHide;
+
+            searchRow = Rect("LogSearchRow", panel);
+            Stretch(searchRow, new Vector2(0, 1), Vector2.one, new Vector2(12, -118), new Vector2(-12, -86));
+            var searchField = Rect("LogSearch", searchRow);
+            Stretch(searchField, Vector2.zero, Vector2.one, Vector2.zero, new Vector2(-38, 0));
+            var searchSurface = Surface(searchField, SurfaceColor, 5);
+            logSearch = searchField.gameObject.AddComponent<UnityEngine.UI.InputField>();
+            logSearch.targetGraphic = searchSurface; logSearch.characterLimit = 256;
+            logSearch.customCaretColor = true; logSearch.caretColor = new Color(.42f, .86f, .77f);
+            var searchText = Chrome("Text", searchField, "", 13);
+            Stretch(searchText.rectTransform, Vector2.zero, Vector2.one, new Vector2(10, 2), new Vector2(-10, -2));
+            logSearch.textComponent = searchText;
+            var searchPlaceholder = Chrome("Placeholder", searchField, "查找日志…", 13);
+            searchPlaceholder.color = new Color(.49f, .59f, .67f);
+            Stretch(searchPlaceholder.rectTransform, Vector2.zero, Vector2.one, new Vector2(10, 2), new Vector2(-10, -2));
+            logSearch.placeholder = searchPlaceholder;
+            logSearch.onValueChanged.AddListener(SetOutputQuery);
+            clearSearchButton = MakeIconButton(searchRow, "清除搜索", ConsoleGlyph.Close, "清除搜索条件", Vector2.one, new Vector2(-32, -32), Vector2.zero,
+                () => { logSearch.text = string.Empty; logSearch.ActivateInputField(); });
+            clearSearchButton.interactable = false;
+            searchRow.gameObject.SetActive(false);
 
             var prompt = Chrome("Prompt", panel, ">", 18); prompt.color = new Color(.42f, .86f, .77f);
             Stretch(prompt.rectTransform, Vector2.zero, Vector2.zero, new Vector2(12, 36), new Vector2(30, 74));
@@ -215,9 +242,38 @@ namespace ZeroEngine.Console.UI
         private void CopyOutput()
         {
             var values = host.Session.GetOutput();
-            var lines = new string[values.Length];
-            for (int i = 0; i < lines.Length; i++) lines[i] = values[i].Message;
+            var lines = new System.Collections.Generic.List<string>(values.Length);
+            for (int i = 0; i < values.Length; i++) if (MatchesOutput(values[i])) lines.Add(values[i].Message);
             GUIUtility.systemCopyBuffer = string.Join("\n", lines);
+        }
+
+        private bool MatchesOutput(ConsoleOutput value) => string.IsNullOrEmpty(outputQuery)
+            || value.Message.IndexOf(outputQuery, StringComparison.OrdinalIgnoreCase) >= 0;
+
+        private void SetOutputQuery(string value)
+        {
+            outputQuery = value ?? string.Empty;
+            renderedRevision = -1;
+            clearSearchButton.interactable = outputQuery.Length > 0;
+            copyHint.Message = outputQuery.Length == 0 ? "复制全部日志" : "复制筛选日志";
+            if (actionHintTarget == copyHint.transform) ShowActionHint((RectTransform)copyHint.transform, copyHint.Message);
+        }
+
+        private void ToggleLogSearch()
+        {
+            bool show = !searchRow.gameObject.activeSelf;
+            searchRow.gameObject.SetActive(show);
+            searchButton.targetGraphic.color = show ? SelectedColor : SurfaceColor;
+            scroll.GetComponent<RectTransform>().offsetMax = new Vector2(-12, show ? -126 : -86);
+            CancelCompletion();
+            if (show) { logSearch.Select(); logSearch.ActivateInputField(); }
+            else
+            {
+                logSearch.SetTextWithoutNotify(string.Empty);
+                SetOutputQuery(string.Empty);
+                input.Select(); input.ActivateInputField();
+            }
+            renderedRevision = -1;
         }
 
         private Text Text(string name, Transform parent, string value)

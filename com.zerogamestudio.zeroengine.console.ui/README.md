@@ -44,6 +44,14 @@ paused state; ready/running and cancellation retain distinct visual states.
 Hints stay inside the window and do not take keyboard focus. Icons require no
 sprite sheet, icon font or external UI package.
 
+The search icon opens a collapsible log-search row. Search matches committed text
+as a literal, case-insensitive substring, including Chinese; it does not run
+commands or change the command draft, history or retained output. New messages
+use the current filter. An empty result has an explicit hint. Copy exports the
+matching retained messages while a filter is active; clearing or closing search
+restores the full output and Copy behavior. The displayed pool remains bounded
+to the last 256 matching entries and is reused between filter changes.
+
 Composition guards read the current EventSystem module's active `BaseInput`,
 including its `inputOverride`, before falling back to Unity's legacy input.
 Custom input providers must expose their current `compositionString` there.
