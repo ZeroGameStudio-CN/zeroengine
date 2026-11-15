@@ -1,10 +1,14 @@
-# Native Console integration
+# ZE Console integration
 
 Read the installed Console README before choosing assemblies. The pure
 `ZeroEngine.Console.Core` owns descriptors, parsing, policy and sessions.
 `ZeroEngine.Console.Unity` supplies main-thread hosting; native uGUI and the
 optional Quantum adapter are separate packages. A project owns its command
 module and gameplay handlers. The vendor SDK is not a business-command registry.
+
+The default host registers only `ze-help`, `ze-clear` and `ze-session`. Register
+feature and project commands explicitly; keep game-specific operations in the
+consumer project and avoid importing a vendor's complete extras catalog.
 
 Register explicit `ConsoleBinding` values and retain the returned disposable
 module handle. Use stable command IDs and names, typed parameter declarations,
@@ -36,9 +40,10 @@ Player support boundary; Editor/Mono evidence cannot certify IL2CPP or physical
 system IME behavior.
 
 Native presentation opens at the lower left and supplies clear/copy, bounded
-scrollback, font size and follow-output controls. Up/Down recalls history;
-Page Up/Page Down selects completion candidates across pages and Tab inserts
-the selected value. Selection does not execute a handler. Keep the current
+scrollback, font size and follow-output controls. Up/Down recalls history, Tab
+inserts a completion, Enter executes and Escape closes. Choose other completions
+with their rows or arrow buttons; touch layouts hide keyboard hints. Completion
+selection does not execute a handler. Keep the current
 Quantum entry and command inventory usable while adopting Native explicitly;
 frontend layout changes are not permission to remove project commands or switch
 production defaults.
