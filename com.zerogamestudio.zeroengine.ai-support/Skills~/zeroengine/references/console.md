@@ -10,6 +10,10 @@ The default host registers only `ze-help`, `ze-clear` and `ze-session`. Register
 feature and project commands explicitly; keep game-specific operations in the
 consumer project and avoid importing a vendor's complete extras catalog.
 
+Frequent log consumers should reuse `CopyOutputTo(ref buffer, out revision)`;
+only the returned prefix is valid and unused entries are cleared. Keep each
+buffer with one consumer. Snapshot APIs remain available for occasional exports.
+
 Register explicit `ConsoleBinding` values and retain the returned disposable
 module handle. Use stable command IDs and names, typed parameter declarations,
 environment/capability policy and the original business guard. Both text and
@@ -47,3 +51,4 @@ selection does not execute a handler. Keep the current
 Quantum entry and command inventory usable while adopting Native explicitly;
 frontend layout changes are not permission to remove project commands or switch
 production defaults.
+Empty drafts keep logs visible; completion is requested only after input begins.
