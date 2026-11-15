@@ -49,6 +49,7 @@ namespace ZeroEngine.Console.UI
         public bool KeyboardShortcutEnabled { get; set; } = true;
         public ConsoleHost Host => host;
         public UnityEngine.UI.InputField InputField => input;
+        public bool TouchLayoutPreview { get; set; }
         public Func<IDisposable> AcquireInputIsolation { get; set; }
         public event Action<bool> OpenChanged;
 
@@ -130,6 +131,7 @@ namespace ZeroEngine.Console.UI
 
         private void Update()
         {
+            if (!IsOpen && !KeyboardShortcutEnabled) return;
             bool composing = IsComposing;
             if (KeyboardShortcutEnabled && !composing && ConsoleKeyboard.Pressed(KeyCode.BackQuote)) Toggle();
             if (!IsOpen || host.Session == null) return;
@@ -310,7 +312,7 @@ namespace ZeroEngine.Console.UI
             renderedRevision = snapshot.Revision;
         }
 
-        private void OnApplicationFocus(bool focus) { if (!focus) Close(); }
+        private void OnApplicationFocus(bool focus) { if (!focus && !TouchScreenKeyboard.visible) Close(); }
         private void OnDisable() => Close();
         private void OnDestroy()
         {

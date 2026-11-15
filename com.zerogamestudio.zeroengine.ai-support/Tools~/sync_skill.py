@@ -12,7 +12,7 @@ import tempfile
 import uuid
 
 PACKAGE = "com.zerogamestudio.zeroengine.ai-support"
-TOOL_VERSION = "0.1.0"
+TOOL_VERSION = "0.2.0"
 SCHEMA = 1
 RECEIPT = ".zeroengine-sync.json"
 MAX_BYTES = 8 * 1024 * 1024
@@ -201,6 +201,51 @@ def prepare(project: Path, snapshot_path: Path, *, allow_version_split=False,
             "inputs": {manifest_path: snapshot["manifestSha256"], lock_path: snapshot["lockSha256"]}}
 
 
+def prepare_remove(project: Path):
+    target = plain(project.resolve() / ".agents/skills/zeroengine")
+    empty = {"target": target, "desired": {}, "before": {}, "changed": [],
+             "packages": 0, "versionSplit": False, "inputs": {}}
+    if not target.exists():
+        return empty
+    receipt_path = target / RECEIPT
+    if not receipt_path.is_file():
+        raise Conflict("Preserve existing unowned project guidance")
+    receipt = load(receipt_path)
+    if receipt.get("schemaVersion") != SCHEMA:
+        raise Conflict("Preserve unknown Skill receipt schema")
+    if version(receipt.get("toolVersion")) > version(TOOL_VERSION):
+        raise Conflict("Preserve guidance from a newer ZE Agent version")
+    files = receipt.get("files")
+    if not isinstance(files, dict) or not 1 <= len(files) <= 512 or "SKILL.md" not in files:
+        raise Conflict("Preserve an incomplete managed-file receipt")
+    before = {}
+    for name, checksum in files.items():
+        name = relative(name)
+        if name == RECEIPT or not re.fullmatch(r"[a-f0-9]{64}", checksum or ""):
+            raise Conflict("Preserve an invalid managed-file receipt")
+        data = read(target / name)
+        if digest(data) != checksum:
+            raise Conflict("Preserve locally modified managed guidance: " + name)
+        before[name] = data
+    if sum(map(len, before.values())) > MAX_BYTES:
+        raise Conflict("Managed guidance exceeds its bounded size")
+    before[RECEIPT] = read(receipt_path)
+    return {**empty, "before": before, "changed": sorted(before),
+            "inputs": {receipt_path: digest(before[RECEIPT])}}
+
+
+def prune_empty_guidance_directories(plan):
+    target = plan["target"]
+    for name in sorted(plan["changed"], key=lambda value: value.count("/"), reverse=True):
+        directory = (target / name).parent
+        while directory == target or target in directory.parents:
+            try:
+                plain(directory).rmdir()
+            except OSError:
+                break
+            directory = directory.parent
+
+
 def replace(path: Path, data: bytes):
     plain(path)
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -290,7 +335,8 @@ def apply(plan):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--project", type=Path, required=True)
-    parser.add_argument("--snapshot", type=Path, required=True)
+    parser.add_argument("--snapshot", type=Path)
+    parser.add_argument("--remove", action="store_true", help="Remove only unchanged generated Skill files; does not uninstall UPM packages.")
     action = parser.add_mutually_exclusive_group()
     action.add_argument("--apply", action="store_true")
     action.add_argument("--check", action="store_true")
@@ -299,11 +345,23 @@ def main():
     parser.add_argument("--accept-current-commit", action="store_true")
     args = parser.parse_args()
     try:
-        plan = prepare(args.project, args.snapshot, allow_version_split=args.allow_version_split,
-                       include_local_trials=args.include_local_trials, accept_current_commit=args.accept_current_commit)
+        if args.remove:
+            if args.snapshot or args.allow_version_split or args.include_local_trials or args.accept_current_commit:
+                raise Conflict("Removal uses the managed-file receipt, not synchronization flags")
+            plan = prepare_remove(args.project)
+            if args.apply and plain(Path(__file__).resolve()).is_relative_to(plan["target"]):
+                raise Conflict("Run the installed ZE Agent Tools~/sync_skill.py before removing its generated Skill; do not delete the running copy")
+        else:
+            if args.snapshot is None:
+                raise Conflict("Synchronization requires --snapshot from actual registered packages")
+            plan = prepare(args.project, args.snapshot, allow_version_split=args.allow_version_split,
+                           include_local_trials=args.include_local_trials, accept_current_commit=args.accept_current_commit)
         if args.apply:
             apply(plan)
-        print(json.dumps({"status": "synchronized" if args.apply else "update-available" if plan["changed"] else "current",
+            if args.remove:
+                prune_empty_guidance_directories(plan)
+        status = ("removed" if args.apply else "removal-available" if plan["changed"] else "absent") if args.remove else ("synchronized" if args.apply else "update-available" if plan["changed"] else "current")
+        print(json.dumps({"status": status,
                           "target": str(plan["target"]), "changed": plan["changed"],
                           "packages": plan["packages"], "versionSplit": plan["versionSplit"]}, ensure_ascii=False))
         return 3 if args.check and plan["changed"] else 0

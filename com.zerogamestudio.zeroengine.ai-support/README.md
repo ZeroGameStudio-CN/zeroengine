@@ -1,44 +1,49 @@
-# ZeroEngine AI Support
+# ZeroEngine Agent
 
-This optional Editor package synchronizes project guidance from the packages
-actually installed in a Unity project. It adds no Player assembly, watcher,
-automatic install, global Skill or machine configuration.
-Its read-only snapshot exporter uses Unity's declared built-in JSON serialization module.
+Optional Editor guidance for all installed ZE modules. The display name is
+**ZeroEngine Agent**; the existing package ID
+`com.zerogamestudio.zeroengine.ai-support` and `ZeroEngine.AiSupport.Editor` API
+stay compatible. No Player assembly or background service is added.
 
-Install through a pinned Git UPM URL, using the same tested commit as the other
-ZeroEngine packages in the consumer. See the repository's consumer rules.
+`Skills~` maintains the project Skill template; `Tools~` provides its lifecycle
+CLI. Module READMEs remain the API source. Generated consumer guidance lives in
+`.agents/skills/zeroengine`, with an inventory and copied module READMEs.
 
-1. In the project's existing Editor/CLI route, evaluate
-   `ZeroEngine.AiSupport.Editor.SkillPackageSnapshot.CreateJson()` and save its
-   returned JSON to an external file. This is read-only and uses actual
-   `PackageInfo`, the manifest and lock digests.
-2. Run the installed package's `Tools~/sync_skill.py` with Python 3.10+:
+## Packages and guidance
 
-   ```text
-   python -B <resolved-package>/Tools~/sync_skill.py --project <project> --snapshot <snapshot.json>
-   python -B <resolved-package>/Tools~/sync_skill.py --project <project> --snapshot <snapshot.json> --apply
-   ```
+Package installation, upgrades and removal use the consumer's existing UPM route
+(`UnityEditor.PackageManager.Client` or Package Manager UI). Keep ZE Git packages
+at one tested commit and include required sibling dependencies.
 
-The first command previews a project-local `.agents/skills/zeroengine` update.
-`--check` returns 0 for current guidance, 3 for an available update and 2 for a
-conflict. `--apply` writes only generated guidance; it does not resolve packages
-or change `Packages`, assets, project settings, other Skills or global files.
+After a package change, export
+`ZeroEngine.AiSupport.Editor.SkillPackageSnapshot.CreateJson()` through that
+project's Editor executor to an external file. Then use Python 3.10+:
 
-Existing unowned guidance, changed managed files, stale package snapshots, newer
-tool versions and unknown receipt schemas stop the update. Local additions are
-preserved. A failed write restores unchanged owned preimages; a conflicting new
-write is preserved with a recovery directory rather than overwritten.
+```text
+python -B <resolved-package>/Tools~/sync_skill.py --project <project> --snapshot <snapshot.json>
+python -B <resolved-package>/Tools~/sync_skill.py --project <project> --snapshot <snapshot.json> --apply
+python -B <resolved-package>/Tools~/sync_skill.py --project <project> --snapshot <snapshot.json> --check
+```
 
-Normal consumer projects should use one tested commit. An explicitly authorized
-version-split investigation may pass `--allow-version-split`; each module still
-gets its own actual version and source. `--include-local-trials` includes existing
-local/embedded trials as unverified local sources. Neither flag changes a pin or
-certifies that the combination is compatible. Replacing a clean receipt with a
-different commit at the same tool version requires `--accept-current-commit`
-after reviewing that exact installed source; a semantic-version downgrade stays
-blocked.
+Preview is read-only. Check returns 0 for current guidance, 3 for drift and 2 for
+a conflict. Apply changes generated guidance only; it never repins packages or
+changes global Skills, assets or project settings. Removed module references are
+cleaned when unchanged. Local additions remain; stale snapshots, modified managed
+files, unknown/newer receipts and failed restoration stop with recovery evidence.
 
-Package instructions live in `Skills~`; deterministic synchronization and its
-isolated CLI tests live in `Tools~`. The exported project Skill links to the
-installed package inventory and copies only those packages' own READMEs for
-progressive lookup. Missing modules never become claimed capabilities.
+Explicit trials use `--include-local-trials` / `--allow-version-split` and keep
+their provenance. A same-tool-version commit change requires reviewed installed
+source and `--accept-current-commit`; semantic-version downgrades are refused.
+
+## Remove generated guidance
+
+Before uninstalling Agent, run the installed package tool, then remove it via UPM:
+
+```text
+python -B <resolved-package>/Tools~/sync_skill.py --project <project> --remove
+python -B <resolved-package>/Tools~/sync_skill.py --project <project> --remove --apply
+```
+
+Removal uses its managed-file receipt without a snapshot, preserves custom files
+and refuses changed ownership. Run the installed tool, not the copy inside the
+Skill being removed. It removes guidance only. Known failures restore preimages.

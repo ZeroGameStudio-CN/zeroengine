@@ -11,6 +11,8 @@ namespace ZeroEngine.Console.UI
         private static Func<KeyCode, bool> pressed;
         private static Action<GameObject> addModule;
         private static Func<GameObject, BaseInput> createInput;
+        private static Func<string> activationText;
+        private static Func<Vector2?> activationPointer;
         public static bool NeedsInputOverride { get; private set; }
 
         public static void Configure(Func<KeyCode, bool> readKey, Action<GameObject> addInputModule,
@@ -34,5 +36,24 @@ namespace ZeroEngine.Console.UI
             else owner.AddComponent<StandaloneInputModule>();
         }
         internal static BaseInput CreateInputSource(GameObject owner) => createInput?.Invoke(owner);
+
+        public static void ConfigureActivationInput(Func<string> readText, Func<Vector2?> readPointerDown)
+        { activationText = readText; activationPointer = readPointerDown; }
+
+        internal static string ReadActivationText()
+        {
+            if (activationText != null) return activationText() ?? string.Empty;
+            try { return Input.inputString; } catch (InvalidOperationException) { return string.Empty; }
+        }
+
+        internal static bool TryReadActivationPointer(out Vector2 point)
+        {
+            if (activationPointer != null)
+            {
+                var value = activationPointer(); point = value ?? Vector2.zero; return value.HasValue;
+            }
+            try { point = Input.mousePosition; return Input.GetMouseButtonDown(0); }
+            catch (InvalidOperationException) { point = Vector2.zero; return false; }
+        }
     }
 }
