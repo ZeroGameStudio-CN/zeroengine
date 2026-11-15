@@ -76,3 +76,11 @@ For MCP-based validation, confirm the selected Unity instance is the intended Ze
 `CinematicPerformanceTimingPattern` describes ordered contacts, typed actor/audio cues and light pulse envelopes independently of gameplay results. `Validate()` rejects invalid duration, ordering, cue identities and pulse bounds; overlapping light pulses use the strongest envelope value. Consumers retain their rule authority and apply playback speed externally.
 
 The serialized fields and numeric cue channels are stable for native Unity author assets. Product-specific rendering, accessibility settings, actor-light adapters and battle outcomes remain in consumer projects.
+
+## Position ownership (2.2.0 candidate)
+
+`CinematicPositionScope` borrows only world position. Its caller supplies the current owner/binding predicate; it does not depend on characters, turn scheduling, TCE, Buff, stats or equipment. `TrySetPosition` and `TryGetPosition` stop permanently after an observed placement, parent, activity or owner change. `TryRestore` supports Timeline sampling without closing the scope; `Dispose` restores only an owned placement and releases once.
+
+Keep the predicate side-effect-free. Revoke its binding generation when a subject is disabled or rebound, including a disable/re-enable between samples. Ordinary playback cancellation can still restore its own placement: retire ownership only for a real handoff. Rotation, scale and parenting are never restored by this scope. No GameObject, global registry or update loop is created.
+
+This is an additive API; existing Timeline assets, serialized IDs and playback contracts are unchanged. Remove the new callers before rolling back to 2.1.0. Package publication and consumer adoption are separate from local candidate verification.
