@@ -33,8 +33,9 @@ when messages arrive; turning it on returns to the newest output. The scrollable
 view retains up to the last 256 session entries and displays each message up to
 the session's own limit, without an additional 1,024-character UI truncation.
 
-Use Up/Down for history, Page Up/Page Down (or the completion arrows) to select
-across completion pages, Tab to insert the selected value, and Escape to close.
+Use Up/Down for history, Tab to insert a completion, Enter to execute, and Escape
+to close. Choose other completions with their rows or arrow buttons. Touch layouts
+hide the keyboard-shortcut footer.
 Completion selection never executes a command. Its visible rows adjust to the
 window and font size; submitting clears the stale suggestions. Projects that
 own the toggle action retain it through `KeyboardShortcutEnabled = false`.
