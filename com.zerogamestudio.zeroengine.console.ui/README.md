@@ -33,11 +33,14 @@ when messages arrive; turning it on returns to the newest output. The scrollable
 view retains up to the last 256 session entries and displays each message up to
 the session's own limit, without an additional 1,024-character UI truncation.
 
-Use Up/Down for history, Page Up/Page Down (or the completion arrows) to select
-across completion pages, Tab to insert the selected value, and Escape to close.
+Use Up/Down for history, Tab to insert a completion, Enter to execute, and Escape
+to close. Choose other completions with their rows or arrow buttons. Touch layouts
+hide the keyboard-shortcut footer.
 Completion selection never executes a command. Its visible rows adjust to the
 window and font size; submitting clears the stale suggestions. Projects that
 own the toggle action retain it through `KeyboardShortcutEnabled = false`.
+An empty or whitespace-only draft keeps the log view clear; suggestions appear
+after text is entered. Clearing the draft also cancels pending suggestions.
 
 Common actions use a consistent set of procedural line icons, with Chinese
 descriptions and shortcut hints on hover. The follow control shows its active or
@@ -75,6 +78,9 @@ use the current filter. An empty result has an explicit hint. Copy exports the
 matching retained messages while a filter is active; clearing or closing search
 restores the full output and Copy behavior. The displayed pool remains bounded
 to the last 256 matching entries and is reused between filter changes.
+Output refreshes reuse a caller-owned session buffer and the existing text rows;
+they do not allocate a new snapshot array for every batch of messages. Hidden rows
+release their old text after filtering or clearing.
 `GetFilteredOutputText()` returns the same plain text without touching the OS
 clipboard, for project-owned exports and headless verification. Toolbar actions
 preserve the selected input field; explicitly running a command selects its draft.
