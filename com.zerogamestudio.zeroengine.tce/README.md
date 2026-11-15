@@ -127,3 +127,13 @@ validation, or editor tooling.
 ## ZeroEngine Dashboard
 
 The optional Dashboard discovers the graph editor and component-catalog generator through the schema v2 descriptor and invokes this package's typed provider. This package does not depend on Dashboard.
+
+## Explicit execution contexts
+
+`TceInstallationContext`, `TceEventContext` and `TceExecutionContext` separate an installed binding, captured event facts and one execution. Pass execution contexts explicitly across conditions, effects, async continuations and child rules. Each execution owns its transient values and commit notifications; completing or canceling a frame prevents new contributions. Events retain event/root/cause IDs, separate subject/target/instigator/emitter references and captured position/direction.
+
+Adapters implement `ITceObjectLifetime`. `TceObjectRef` compares identity, activation and world before resolving a native object. Identity validity and active/living policy are separate: the effect decides whether an inactive or dying object supports its operation. Never reconstruct a retained reference from a pooled object's new activation.
+
+`TceAbilityGrantRegistry` shares an installed child among source owners and releases only the retiring source. It has no duration or charge counter; the host Buff/state system owns those. `TceEffectScope` owns replaceable per-recipient contributions. `TceContributionBatch` selects the strongest contribution in each group and closes before dispatch. `TceAreaGeometry` supplies circle/box segment clipping without a project physics dependency. `ITceVisualTargetReceiver` is an optional explicit target injection point for feedback adapters; it does not spawn or own visuals.
+
+POB consumes these contracts from its existing AbilityHandler and supplies Core/projectile identity, Buff, motion, damage and resource adapters. No POB types or save backend are introduced into this package. The generic graph runtime and its host-owned `ITceStateStore` remain independently usable.
