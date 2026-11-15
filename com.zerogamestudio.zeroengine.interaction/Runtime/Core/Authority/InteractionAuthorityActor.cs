@@ -175,8 +175,13 @@ namespace ZeroEngine.Interaction.Core.Authority
         {
             if (!IsCurrent) return;
             if (dispatching) throw new InvalidOperationException("Tick cannot run inside a command or business callback.");
-            agent.Tick();
-            if (agent.Pending == null) pendingAction = 0;
+            dispatching = true;
+            try { agent.Tick(); }
+            finally
+            {
+                dispatching = false;
+                if (agent.Pending == null) pendingAction = 0;
+            }
         }
 
         private void TrimActions()

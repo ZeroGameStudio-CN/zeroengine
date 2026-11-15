@@ -25,6 +25,7 @@ namespace ZeroEngine.Interaction.Tests
             public bool Deferred, ClaimOnce, ThrowPolicy;
             public int Executions, Mutations, Refunds;
             public InteractionRequest Pending;
+            public Action DuringMutation;
             public readonly List<InteractionGesture> Gestures = new List<InteractionGesture>();
             public InteractionCheck Check(InteractionContext context) => Admission;
             public void Execute(InteractionRequest request)
@@ -34,7 +35,7 @@ namespace ZeroEngine.Interaction.Tests
                 Confirm(request);
             }
             public void Confirm(InteractionRequest request) => request.TryCommit(() =>
-            { Mutations++; Gestures.Add(request.Context.Gesture); if (ClaimOnce) IsAvailable = false; });
+            { DuringMutation?.Invoke(); Mutations++; Gestures.Add(request.Context.Gesture); if (ClaimOnce) IsAvailable = false; });
         }
         private sealed class Fixture : IDisposable
         {
@@ -247,6 +248,22 @@ namespace ZeroEngine.Interaction.Tests
             Assert.That(f.Target.Mutations, Is.Zero);
             f.Actor.Receive(f.Next(press.ActionId, InteractionCommandKind.Release));
             f.Actor.Receive(f.Press()); Assert.That(f.Target.Mutations, Is.EqualTo(1));
+        }
+
+        [Test] public void MutationCannotReenterInputWhileAuthorityTickSettlesAHold()
+        {
+            using var f = new Fixture(); f.Target.Policy = new InteractionPolicy(InteractionMode.Hold, 1, .2);
+            var press = f.Press(); f.Actor.Receive(press);
+            var cancel = f.Next(press.ActionId, InteractionCommandKind.Cancel);
+            InteractionCommandReceipt nested = default;
+            f.Target.DuringMutation = () => nested = f.Actor.Receive(cancel);
+            f.Clock.Now = 1; f.Authority.Tick();
+            Assert.That(nested.Rejection, Is.EqualTo(InteractionCommandRejection.Busy));
+            Assert.That(f.Actor.LastSequence, Is.EqualTo(press.Sequence));
+            Assert.That(f.Actor.TryGetOutcome(press.ActionId, out var settled), Is.True);
+            Assert.That(settled.Status, Is.EqualTo(InteractionStatus.Succeeded));
+            Assert.That(f.Actor.Receive(cancel).Outcome.Value.Status, Is.EqualTo(InteractionStatus.Succeeded));
+            Assert.That(f.Target.Mutations, Is.EqualTo(1));
         }
 
         [Test] public void ReceiptCannotAttachAnOutcomeFromAnotherAction()

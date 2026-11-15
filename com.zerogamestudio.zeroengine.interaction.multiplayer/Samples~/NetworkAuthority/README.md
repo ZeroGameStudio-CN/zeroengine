@@ -4,7 +4,7 @@ Import this sample and the optional interaction-multiplayer package's pinned
 sibling dependencies, then open `NetworkAuthorityPlayground.unity`.
 The sample needs uGUI, the UI module and a compatible EventSystem input module.
 It defaults to Offline. Its own background-execution setting is restored when
-the last sample view stops. It does not load POB, game saves or a platform account.
+the last sample component is disabled. It does not load POB, game saves or a platform account.
 
 Offline, Host and Join use the same authority/core and business providers. Host
 listens only on local loopback; open another sample process and Join its displayed
@@ -32,6 +32,7 @@ python -B com.zerogamestudio.zeroengine.interaction.multiplayer/Tools~/Authority
 
 The driver checks separate host/client PIDs, both observation directions, competing
 pickup order, personal ownership, command replay, confirmation/cancel ordering,
+server-timed holds across pause/resume, release without a trailing tap,
 reordered delayed receipts, server range, pooled generations, spoofed actor/epoch
 headers and disconnect cleanup. Each process must exit normally with its transport
 workers stopped, and the listener must be closed. The emitted JSONL and summary

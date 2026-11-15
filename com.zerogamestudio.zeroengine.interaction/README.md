@@ -53,9 +53,9 @@ No runtime interaction component polls a keyboard or creates an input singleton.
    conditions before allowing the mutation once. Use `TryDeny` or `TryCancel` to settle
    without mutation. Use `Cancelled` to release an action-owned reservation.
 
-All methods, callbacks and completions belong on the owning gameplay thread. This is
-not a network authority implementation. A transport adapter must perform server-side
-validation and map its own player, epoch and request identity before committing.
+All methods, callbacks and completions belong on the owning gameplay thread.
+The authority entry described below receives inputs through authenticated actor
+bindings; its transport adapter supplies the session and player identity.
 
 Focus changes, target unregister/disable, actor disable/disposal, scope disposal, explicit
 cancellation and backwards clock resets invalidate pending work. A pooled target receives
@@ -127,6 +127,8 @@ Session restore, connection authentication, ordered/reliable delivery and POB's
 FishNet/protocol mapping retain their existing owners. Scope or actor disposal
 cancels pending work; rebinding and pooled targets cannot inherit old requests.
 All authority and business calls stay on the owning gameplay thread.
+Commands received reentrantly during an input dispatch or authority Tick return
+Busy without consuming their sequence. Queue those inputs until the current call returns.
 
 ## Playground and verification
 
@@ -151,10 +153,19 @@ Run `ZeroEngine.Interaction.Tests` EditMode contracts, Runtime lifecycle tests a
 `ZeroEngine.Interaction.Samples.Tests` PlayMode example tests using the project's normal
 Unity test route. Test projects are disposable and must not use production save paths.
 
-Local verification on Unity 6000.6.4f1 executed 33 EditMode contracts and 9 PlayMode
+The 0.1 baseline verification on Unity 6000.6.4f1 executed 33 EditMode contracts and 9 PlayMode
 lifecycle/example cases with no failures or skipped cases. A composited 1280×900
 Game View capture was inspected and PlayMode/background state was restored.
 The isolated CI lane uses the same Unity 6000.6.4f1 baseline.
+
+The 0.2 authority candidate was checked on Unity 6000.6.9f1 with 62 core EditMode
+contracts, four optional replication-binding contracts and 12 PlayMode lifecycle/
+sample cases. This includes the original 33 core and nine PlayMode cases,
+gesture-trace comparison against the direct agent, explicit provider rejection,
+reentrant-input protection and transport-worker cleanup. The independent .NET
+example additionally exercises ten scenarios in separate host/client processes,
+including server-clock pause/resume and release without a trailing tap. These
+package checks leave POB's real consumer regression to its integration step.
 
 ## Existing interaction review and later migration
 

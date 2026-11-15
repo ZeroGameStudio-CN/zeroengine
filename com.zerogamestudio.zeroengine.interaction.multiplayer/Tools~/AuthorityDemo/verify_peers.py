@@ -177,6 +177,26 @@ def verify(dll, output):
             assert host.send('state')['View']['PersonalPickups'] == 1
             done('pickup_contention_' + winner + '_and_personal_ownership', host, guest)
 
+    with pair(dll, output / 'remote-hold') as (host, guest):
+        approach(guest, 'npc'); host.send('pause', Flag=True)
+        guest.send('press', Target='npc')
+        guest.wait(lambda r: r.get('Receipt') is not None and r['Receipt']['Sequence'] == 1
+                   and r['Receipt']['Held'], 'server admitted held input')
+        time.sleep(.85)
+        assert guest_actor(host.send('state'))['Gifts'] == 0, 'paused authority clock advanced a hold'
+        host.send('pause', Flag=False)
+        guest.wait(lambda r: self_actor(r)['Gifts'] == 1, 'server-timed remote hold')
+        guest.send('release')
+        guest.wait(lambda r: r['Receipt']['Sequence'] == 2 and not r['Receipt']['Held'], 'server admitted release')
+        time.sleep(.5)
+        value = host.wait(lambda r: guest_actor(r)['Gifts'] == 1, 'host observes the remote gift')
+        assert guest_actor(value)['Coins'] == 2 and self_actor(value)['Gifts'] == 0
+        assert guest_actor(value)['Conversations'] == 0, 'release after hold also triggered tap'
+        tap(guest, 'npc')
+        value = host.wait(lambda r: guest_actor(r)['Conversations'] == 1, 'remote short tap still talks')
+        assert guest_actor(value)['Gifts'] == 1
+        done('remote_hold_uses_authority_clock_and_release_does_not_tap', host, guest)
+
     with pair(dll, output / 'cancel-first') as (host, guest):
         approach(guest, 'shop'); tap(guest, 'shop')
         guest.wait(lambda r: self_actor(r)['Reserved'] == 2, 'reserve')

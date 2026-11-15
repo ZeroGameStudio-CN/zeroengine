@@ -426,20 +426,21 @@
     {
       "id": "ze.interaction.authority",
       "title": "单机与联机共用的交互权威、独立双端示例",
-      "stage": "InProgress",
+      "stage": "Previewable",
       "targetReleaseId": "",
-      "availability": "DevelopmentOnly",
+      "availability": "TestOnly",
       "responsibleChat": "01a1d074-3286-7fc3-a8fa-09d3bfbcae2d",
-      "nextAction": "完成 Unity 6000.6.9 定向回归、原单机行为对照和独立双端示例验证后，交付固定提交给联机对话接回 POB。",
+      "nextAction": "包级候选交付联机对话；通过当前提交 CI 后按固定提交接回 POB，并复验原单机 NPC 加速／松手、扣费预留、房间切换、碰撞与池代次及双端权威。",
       "entrance": "Interaction Authority Playground；可选交互联机绑定；Tools~/AuthorityDemo 独立进程示例。",
       "resourcePath": "com.zerogamestudio.zeroengine.interaction/Runtime/Core/Authority/InteractionAuthority.cs",
       "candidatePackageVersion": "0.2.0",
       "revision": "interaction 0.2.0 + interaction.multiplayer 0.1.0",
       "releaseEvidence": "",
       "verificationEvidence": [
-        "D:/CodexArtifacts/ze-interaction-authority-20261115/peers-r1/summary.json"
+        "D:\\CodexArtifacts\\ze-interaction-authority-20261115\\verification-reviewed.json",
+        "D:\\CodexArtifacts\\ze-interaction-authority-20261115\\authority-playground.png"
       ],
-      "verificationScope": "独立 .NET Host/Client 9 项场景成功；Unity/POB 消费验证分别记账，POB 尚未接入。"
+      "verificationScope": "Unity 6000.6.9：66 项 EditMode、12 项 PlayMode，0 失败／跳过；含原 33 核心与 9 生命周期／样例用例。独立 .NET Host/Client 10 场景成功并验证正常退出与端口关闭；当前样例 Game View 已核查。Unity 双端组件同进程 TCP；独立进程为 .NET 示例。POB 尚未接入。"
     }
   ]
 }
