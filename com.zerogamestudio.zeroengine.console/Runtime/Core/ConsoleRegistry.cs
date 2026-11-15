@@ -19,6 +19,7 @@ namespace ZeroEngine.Console
         private readonly Dictionary<string, ConsoleEntry> ids = new Dictionary<string, ConsoleEntry>(StringComparer.OrdinalIgnoreCase);
         private readonly Dictionary<string, ConsoleEntry> names = new Dictionary<string, ConsoleEntry>(StringComparer.OrdinalIgnoreCase);
         private readonly object sync = new object();
+        private ConsoleEntry[] snapshot;
         private bool disposed;
         public long Revision { get; private set; }
 
@@ -61,6 +62,7 @@ namespace ZeroEngine.Console
                     names.Add(entry.Binding.Command.Name, entry);
                     foreach (string alias in entry.Binding.Command.Aliases) names.Add(alias, entry);
                 }
+                snapshot = null;
                 Revision++;
             }
             return new ModuleLease(this, entries);
@@ -77,7 +79,7 @@ namespace ZeroEngine.Console
 
         internal ConsoleEntry[] Snapshot()
         {
-            lock (sync) return ids.Values.OrderBy(entry => entry.Binding.Command.Id, StringComparer.Ordinal).ToArray();
+            lock (sync) return snapshot ??= ids.Values.OrderBy(entry => entry.Binding.Command.Id, StringComparer.Ordinal).ToArray();
         }
 
         private void Remove(ConsoleEntry[] entries)
@@ -92,6 +94,7 @@ namespace ZeroEngine.Console
                     names.Remove(command.Name);
                     foreach (string alias in command.Aliases) names.Remove(alias);
                 }
+                snapshot = null;
                 Revision++;
             }
             StopEntries(entries);
@@ -105,7 +108,7 @@ namespace ZeroEngine.Console
                 if (disposed) return;
                 disposed = true;
                 entries = ids.Values.ToArray();
-                ids.Clear(); names.Clear(); Revision++;
+                ids.Clear(); names.Clear(); snapshot = Array.Empty<ConsoleEntry>(); Revision++;
             }
             StopEntries(entries);
         }

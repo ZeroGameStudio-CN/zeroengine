@@ -76,10 +76,10 @@ namespace ZeroEngine.Console
             return false;
         }
 
-        internal ConsoleResult Bind(ConsoleCommand command, IReadOnlyList<ConsoleToken> tokens, out ConsoleArguments arguments)
+        internal ConsoleResult Bind(ConsoleCommand command, IReadOnlyList<ConsoleToken> tokens, int start, out ConsoleArguments arguments)
         {
             var values = new object[command.Parameters.Count];
-            int cursor = 0;
+            int cursor = start;
             for (int i = 0; i < values.Length; i++)
             {
                 ConsoleParameter parameter = command.Parameters[i];

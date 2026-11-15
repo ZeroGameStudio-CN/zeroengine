@@ -83,6 +83,37 @@ Only after that vertical contract is verified does G5 migrate all inventory
 entries, followed by G6 experience/cleanup and G7 synchronized Skill delivery.
 The immutable package baseline remains independently reviewable in its own PR.
 
+## Quantum source comparison and remaining parity
+
+The comparison uses the installed Quantum Console 2.6.7 source, including its
+processor, parser, suggestor, serializer, actions, registry and UI. Vendor source
+and assets remain outside ZE. Existing project commands and the Quantum default
+entry remain available while native capabilities are developed independently.
+
+| Area and Quantum source | ZE behavior and remaining work |
+| --- | --- |
+| Command discovery: `QuantumConsoleProcessor`, scan rules, `InjectionLoader` | Explicit, atomic module registration avoids a Player assembly scan. Optional attribute/generated authoring remains future work. |
+| Catalog cache: `GetAllCommands` | Reuse a sorted registry catalog until registration changes; recheck live caller policy for every discovery/completion request. |
+| Parameters: `CommandData`, `QuantumParser`, parsers | Quotes, Unicode, spans, optional/variadic arguments, primitives, enums, nullable values and arrays exist. QC's wider Unity values, collections, tuples, overloads and generics are not native parity yet. |
+| Extensibility: parser/suggestor/serializer injection | Explicit converter/completer leases exist. General result formatting and broader reusable Unity converters still need implementation; avoid unbounded caches of user values. |
+| Suggestions: `QuantumSuggestor`, suggestion stack/display | Fragments, aliases, prefix priority, resource labels, quoting, caret ranges and clickable candidates exist. Rich active-parameter/signature guidance and natural ranking remain to assess. |
+| Results: `QuantumSerializer` | Structured results/data are independent of presentation; generic collections and rich type formatting are not equivalent yet. |
+| Async/actions: `QuantumConsole`, `ActionExecuter` | Tasks, main-thread dispatch, cancellation, deadlines and no-replay behavior exist. Interactive response/action workflows remain an optional capability gap. |
+| Macros/scripts: `QuantumMacros`, preprocessors, external command runner | Not native parity yet. Any reusable implementation must bound expansion and execution and apply normal policy to each resulting command. |
+| Object targets: `InvocationTargetFactory`, `QuantumRegistry` | Projects explicitly bind handlers and own their lifetimes. Optional object-target authoring must not introduce automatic scene scans per invocation. |
+| Logs/history: `LogStorage`, `LogQueue`, `QuantumConsole` | Bounded output/history, thread-safe writes, reusable output buffers, search, copy and follow controls exist. History duplicate policy and richer log formatting remain distinct improvements. |
+| UI/input: theme, localization, key config and UI controllers | Lower-left translucent panel, icons/tooltips, configurable area and font size, common keys and restored input exist. Runtime theme/localization profiles and drag/resize are not equivalent yet. |
+| Mobile/IME | Safe area, keyboard-area fitting and composition guards exist; physical phone keyboard/IME behavior still needs its own evidence. Layout previews do not establish device parity. |
+| Release access | Shared Editor/development access and configured hidden release unlock exist. No universal shipped password; projects supply the unlock policy. |
+| Dependencies and portability | Core has no Unity/QC reference; UI and Input System integration are separate. A Godot frontend does not yet exist. |
+| Performance/build cost | Compare matched workloads and artifacts separately for cold startup, execution, completion, allocations, UI/frame time and stripped Player size. Source size or one microbenchmark does not establish overall superiority. |
+| SDK removal | Keep the optional adapter, typed project backend and serialized resources separate. Removing a backend in a test does not prove physical SDK/package uninstallation. |
+
+Useful Quantum behavior is tracked above even when it is optional rather than
+enabled in every game. Native replacement is not complete until the applicable
+gaps and consumer checks have evidence; a successful default Quantum build does
+not establish native feature parity.
+
 ## Verified Editor slice, 2026-11-11
 
 The optional Quantum package now uses a source-verified 2.6.7 profile, public
