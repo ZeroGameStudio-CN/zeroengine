@@ -318,6 +318,36 @@ namespace ZeroEngine.Console.Tests
         }
 
         [Test]
+        public void OutputCopy_ReusesOwnedBufferAndReleasesClearedEntries()
+        {
+            using var registry = new ConsoleRegistry();
+            using var session = new ConsoleSession(registry, outputCapacity: 2);
+            ConsoleOutput[] buffer = null;
+            Assert.That(session.CopyOutputTo(ref buffer, out long emptyRevision), Is.Zero);
+            Assert.That(buffer, Is.Empty);
+            session.Write(new ConsoleOutput("one", ConsoleOutputLevel.Info, "one"));
+            session.Write(new ConsoleOutput("two", ConsoleOutputLevel.Info, "two"));
+            session.Write(new ConsoleOutput("three", ConsoleOutputLevel.Info, "three"));
+            var snapshot = session.GetOutputSnapshot();
+            Assert.That(session.CopyOutputTo(ref buffer, out long revision), Is.EqualTo(2));
+            Assert.That(buffer.Take(2).Select(entry => entry.Message), Is.EqualTo(new[] { "two", "three" }));
+            Assert.That(revision, Is.EqualTo(snapshot.Revision).And.GreaterThan(emptyRevision));
+            var reused = buffer;
+            buffer[0] = new ConsoleOutput("caller", ConsoleOutputLevel.Error, "caller-owned");
+            Assert.That(session.GetOutput()[0].Message, Is.EqualTo("two"));
+            session.Write(new ConsoleOutput("four", ConsoleOutputLevel.Info, "four"));
+            Assert.That(session.CopyOutputTo(ref buffer, out revision), Is.EqualTo(2));
+            Assert.That(buffer, Is.SameAs(reused));
+            Assert.That(buffer.Take(2).Select(entry => entry.Message), Is.EqualTo(new[] { "three", "four" }));
+            Assert.That(snapshot.Entries.Select(entry => entry.Message), Is.EqualTo(new[] { "two", "three" }));
+            session.ClearOutput();
+            Assert.That(session.CopyOutputTo(ref buffer, out long clearedRevision), Is.Zero);
+            Assert.That(clearedRevision, Is.GreaterThan(revision));
+            Assert.That(buffer.All(entry => entry.Message == null), Is.True);
+            Assert.That(buffer, Is.SameAs(reused));
+        }
+
+        [Test]
         public void OutputSnapshot_IdentifiesClearEvenWhenOutputCountStaysTheSame()
         {
             using var registry = new ConsoleRegistry();

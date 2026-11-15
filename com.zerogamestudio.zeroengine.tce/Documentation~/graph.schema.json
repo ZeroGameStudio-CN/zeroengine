@@ -96,7 +96,8 @@
           "type": "object",
           "additionalProperties": false,
           "properties": {
-            "MaxAcceptedExecutions": { "description": "Maximum number of accepted executions allowed.", "type": "integer" }
+            "MaxAcceptedExecutions": { "description": "Maximum number of accepted executions allowed.", "type": "integer" },
+            "StateKey": { "description": "Optional stable runtime-state key. Empty retains an installation-local count; the host owns lifetime and saving.", "type": "string" }
           }
         }
       }
