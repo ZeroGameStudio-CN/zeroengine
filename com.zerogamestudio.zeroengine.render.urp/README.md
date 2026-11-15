@@ -192,3 +192,5 @@ Native point and spot rim participation retains a symmetric rear contour at the 
 Version 0.4.3 requires Render 0.4.4 at the same Git commit, including the existing blood-resource loader and shaders.
 It also preserves `faafbd1f`'s thin rear and opposed-light contours, including the faint inward transition and continuous center projection.
 The adopted `e54a5509` correction excludes occluded native lights from each art cell's directional style mix, preserving the visible light's contour and transition.
+
+The 0.4.4 adapter consumes ZeroEngine.Render 0.5.0 from the same pinned Git commit; the surface-attachment extraction adds no URP-specific behavior.
