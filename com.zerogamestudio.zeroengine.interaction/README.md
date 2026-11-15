@@ -66,6 +66,11 @@ survives release but is cancelled when its focus/lifetime ends.
 `TryCommit` prevents a second invocation; it cannot roll back arbitrary partial side effects
 if a business callback throws. Such a callback reports Faulted and remains settled.
 Consumers own atomic wallet/reward transactions and reservation commit/cancel semantics.
+For a provider that returns business acceptance, use the separately named
+`TryCommitResult(() => providerAccepted ? InteractionCheck.Permit : InteractionCheck.Deny(reason))`.
+A false/rejected business result settles Denied once. Existing `TryCommit(Action)`
+callers, including assignment/expression lambdas, keep their original semantics.
+Neither path can undo arbitrary partial provider side effects.
 When `TryCommit` returns false, release any action-owned reservation; the cancellation
 event covers automatic cancellation, while a business denial/fault still belongs to its caller.
 Observers should not throw; state is finalized before completion notifications.
