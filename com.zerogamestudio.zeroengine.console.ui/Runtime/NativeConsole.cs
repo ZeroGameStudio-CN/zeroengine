@@ -15,6 +15,8 @@ namespace ZeroEngine.Console.UI
         [SerializeField] private ConsoleHost host;
         [SerializeField] private Font font;
         [SerializeField, Range(12, 28)] private int fontSize = 16;
+        [SerializeField, Tooltip("Preferred panel size in Canvas reference units; fitted to the available screen and keyboard area.")]
+        private Vector2 preferredSize = new Vector2(880, 480);
         private GameObject view;
         private Font ownedFont;
         private UnityEngine.UI.InputField input;
@@ -50,8 +52,19 @@ namespace ZeroEngine.Console.UI
         public ConsoleHost Host => host;
         public UnityEngine.UI.InputField InputField => input;
         public bool TouchLayoutPreview { get; set; }
+        public Vector2 PreferredSize
+        {
+            get => preferredSize;
+            set => preferredSize = ClampPreferredSize(value);
+        }
         public Func<IDisposable> AcquireInputIsolation { get; set; }
         public event Action<bool> OpenChanged;
+
+        private void OnValidate() => preferredSize = ClampPreferredSize(preferredSize);
+
+        private static Vector2 ClampPreferredSize(Vector2 value) => new Vector2(
+            float.IsNaN(value.x) || float.IsInfinity(value.x) ? 880 : Mathf.Max(320, value.x),
+            float.IsNaN(value.y) || float.IsInfinity(value.y) ? 480 : Mathf.Max(240, value.y));
 
         public bool TryInitialize(ConsoleHost owner, out string reason)
         {
@@ -145,8 +158,6 @@ namespace ZeroEngine.Console.UI
             if (!composing && input.isFocused)
             {
                 if (ConsoleKeyboard.Pressed(KeyCode.Tab) && currentCompletions != null && currentCompletions.Items.Count > 0) ApplyCompletion(selectedCompletion);
-                else if (ConsoleKeyboard.Pressed(KeyCode.PageUp)) NavigateCompletion(-1);
-                else if (ConsoleKeyboard.Pressed(KeyCode.PageDown)) NavigateCompletion(1);
                 else if (ConsoleKeyboard.Pressed(KeyCode.UpArrow)) NavigateHistory(-1);
                 else if (ConsoleKeyboard.Pressed(KeyCode.DownArrow)) NavigateHistory(1);
             }
