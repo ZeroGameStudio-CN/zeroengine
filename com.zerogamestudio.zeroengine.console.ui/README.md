@@ -24,19 +24,23 @@ bounded output/history and cancellation. Switching closes the previous view
 and releases its EventSystem/input state before opening the next; it does not
 cancel or replay an already started business command.
 
-The native desktop window opens at the lower left. Its bounded 720 × 400
-reference layout fits inside the current Canvas and leaves the remaining game
-view visible. The toolbar supplies Clear, Copy, font size (12–28) and an explicit
+The desktop window opens at the lower left, defaulting to 880 × 480 reference
+units. Adjust **Preferred Size** in the Inspector or `NativeConsole.PreferredSize`
+at runtime; it fits inside the available Canvas and soft-keyboard area. The
+toolbar supplies Clear, Copy, font size (12–28) and an explicit
 follow-output switch. Turning follow off keeps the current reading position
 when messages arrive; turning it on returns to the newest output. The scrollable
 view retains up to the last 256 session entries and displays each message up to
 the session's own limit, without an additional 1,024-character UI truncation.
 
-Use Up/Down for history, Page Up/Page Down (or the completion arrows) to select
-across completion pages, Tab to insert the selected value, and Escape to close.
+Use Up/Down for history, Tab to insert a completion, Enter to execute, and Escape
+to close. Choose other completions with their rows or arrow buttons. Touch layouts
+hide the keyboard-shortcut footer.
 Completion selection never executes a command. Its visible rows adjust to the
 window and font size; submitting clears the stale suggestions. Projects that
 own the toggle action retain it through `KeyboardShortcutEnabled = false`.
+An empty or whitespace-only draft keeps the log view clear; suggestions appear
+after text is entered. Clearing the draft also cancels pending suggestions.
 
 Common actions use a consistent set of procedural line icons, with Chinese
 descriptions and shortcut hints on hover. The follow control shows its active or
@@ -47,7 +51,9 @@ sprite sheet, icon font or external UI package.
 The visible title is **ZE Console**. Graphite translucent surfaces and restrained
 blue-gray accents retain contrast without a blur pass or additional texture.
 `TouchLayoutPreview` previews the mobile canvas scale in the Editor; mobile builds
-select it automatically and account for the reported soft-keyboard height.
+select it automatically, choose landscape or portrait scaling from the actual
+screen dimensions, and account for the reported soft-keyboard height. The package
+uses the project's screen orientation settings.
 
 ## Shared access
 
@@ -72,6 +78,9 @@ use the current filter. An empty result has an explicit hint. Copy exports the
 matching retained messages while a filter is active; clearing or closing search
 restores the full output and Copy behavior. The displayed pool remains bounded
 to the last 256 matching entries and is reused between filter changes.
+Output refreshes reuse a caller-owned session buffer and the existing text rows;
+they do not allocate a new snapshot array for every batch of messages. Hidden rows
+release their old text after filtering or clearing.
 `GetFilteredOutputText()` returns the same plain text without touching the OS
 clipboard, for project-owned exports and headless verification. Toolbar actions
 preserve the selected input field; explicitly running a command selects its draft.

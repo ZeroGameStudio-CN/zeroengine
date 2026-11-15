@@ -15,12 +15,14 @@ namespace ZeroEngine.Console.UI
         [SerializeField] private ConsoleHost host;
         [SerializeField] private Font font;
         [SerializeField, Range(12, 28)] private int fontSize = 16;
+        [SerializeField, Tooltip("Preferred panel size in Canvas reference units; fitted to the available screen and keyboard area.")]
+        private Vector2 preferredSize = new Vector2(880, 480);
         private GameObject view;
         private Font ownedFont;
         private UnityEngine.UI.InputField input;
         private UnityEngine.UI.ScrollRect scroll;
         private readonly List<UnityEngine.UI.Text> outputRows = new List<UnityEngine.UI.Text>();
-        private readonly List<ConsoleOutput> visibleOutput = new List<ConsoleOutput>(256);
+        private ConsoleOutput[] visibleOutput = Array.Empty<ConsoleOutput>();
         private readonly List<UnityEngine.UI.Button> completionRows = new List<UnityEngine.UI.Button>();
         private RectTransform outputContent, completions;
         private CancellationTokenSource completionCancellation;
@@ -50,8 +52,19 @@ namespace ZeroEngine.Console.UI
         public ConsoleHost Host => host;
         public UnityEngine.UI.InputField InputField => input;
         public bool TouchLayoutPreview { get; set; }
+        public Vector2 PreferredSize
+        {
+            get => preferredSize;
+            set => preferredSize = ClampPreferredSize(value);
+        }
         public Func<IDisposable> AcquireInputIsolation { get; set; }
         public event Action<bool> OpenChanged;
+
+        private void OnValidate() => preferredSize = ClampPreferredSize(preferredSize);
+
+        private static Vector2 ClampPreferredSize(Vector2 value) => new Vector2(
+            float.IsNaN(value.x) || float.IsInfinity(value.x) ? 880 : Mathf.Max(320, value.x),
+            float.IsNaN(value.y) || float.IsInfinity(value.y) ? 480 : Mathf.Max(240, value.y));
 
         public bool TryInitialize(ConsoleHost owner, out string reason)
         {
@@ -145,8 +158,6 @@ namespace ZeroEngine.Console.UI
             if (!composing && input.isFocused)
             {
                 if (ConsoleKeyboard.Pressed(KeyCode.Tab) && currentCompletions != null && currentCompletions.Items.Count > 0) ApplyCompletion(selectedCompletion);
-                else if (ConsoleKeyboard.Pressed(KeyCode.PageUp)) NavigateCompletion(-1);
-                else if (ConsoleKeyboard.Pressed(KeyCode.PageDown)) NavigateCompletion(1);
                 else if (ConsoleKeyboard.Pressed(KeyCode.UpArrow)) NavigateHistory(-1);
                 else if (ConsoleKeyboard.Pressed(KeyCode.DownArrow)) NavigateHistory(1);
             }
@@ -202,7 +213,12 @@ namespace ZeroEngine.Console.UI
 
         public bool IsComposing => ConsoleKeyboard.IsComposing;
         private void SubmitInput(string line) { if (!IsComposing) _ = SubmitAsync(line); }
-        private void InputChanged(string value) { CancelCompletion(); completionDirty = true; completionAt = Time.unscaledTime + .04f; }
+        private void InputChanged(string value)
+        {
+            CancelCompletion();
+            completionDirty = !string.IsNullOrWhiteSpace(value);
+            completionAt = Time.unscaledTime + .04f;
+        }
 
         private void NavigateHistory(int direction)
         {
@@ -282,25 +298,33 @@ namespace ZeroEngine.Console.UI
 
         private void RenderOutput()
         {
-            var snapshot = host.Session.GetOutputSnapshot();
-            var entries = snapshot.Entries;
-            visibleOutput.Clear();
-            for (int i = entries.Count - 1; i >= 0 && visibleOutput.Count < 256; i--)
-                if (MatchesOutput(entries[i])) visibleOutput.Add(entries[i]);
-            visibleOutput.Reverse();
+            int count = host.Session.CopyOutputTo(ref visibleOutput, out long revision);
+            if (!string.IsNullOrEmpty(outputQuery))
+            {
+                int matched = 0;
+                for (int i = 0; i < count; i++)
+                    if (MatchesOutput(visibleOutput[i])) visibleOutput[matched++] = visibleOutput[i];
+                count = matched;
+            }
+            if (count > 256)
+            {
+                Array.Copy(visibleOutput, count - 256, visibleOutput, 0, 256);
+                count = 256;
+            }
+            if (count < visibleOutput.Length) Array.Clear(visibleOutput, count, visibleOutput.Length - count);
             if (emptyOutput)
             {
                 emptyOutput.text = string.IsNullOrEmpty(outputQuery) ? "ze-help" : "没有匹配日志";
-                emptyOutput.gameObject.SetActive(visibleOutput.Count == 0);
+                emptyOutput.gameObject.SetActive(count == 0);
             }
-            while (outputRows.Count < visibleOutput.Count) outputRows.Add(Text("Line", outputContent, ""));
+            while (outputRows.Count < count) outputRows.Add(Text("Line", outputContent, ""));
             Vector2 readingPosition = outputContent.anchoredPosition;
             for (int i = 0; i < outputRows.Count; i++)
             {
-                bool visible = i < visibleOutput.Count;
+                bool visible = i < count;
                 var text = outputRows[i];
-                text.gameObject.SetActive(visible);
-                if (!visible) continue;
+                if (text.gameObject.activeSelf != visible) text.gameObject.SetActive(visible);
+                if (!visible) { text.text = string.Empty; continue; }
                 text.text = visibleOutput[i].Message;
                 text.color = visibleOutput[i].Level == ConsoleOutputLevel.Error ? new Color(1f, .48f, .48f)
                     : visibleOutput[i].Level == ConsoleOutputLevel.Warning ? new Color(1f, .8f, .4f) : new Color(.88f, .91f, .96f);
@@ -309,7 +333,7 @@ namespace ZeroEngine.Console.UI
             if (followOutput) scroll.verticalNormalizedPosition = 0;
             else outputContent.anchoredPosition = new Vector2(readingPosition.x,
                 Mathf.Clamp(readingPosition.y, 0, Mathf.Max(0, outputContent.rect.height - scroll.viewport.rect.height)));
-            renderedRevision = snapshot.Revision;
+            renderedRevision = revision;
         }
 
         private void OnApplicationFocus(bool focus) { if (!focus && !TouchScreenKeyboard.visible) Close(); }

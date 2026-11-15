@@ -14,7 +14,72 @@ namespace ZeroEngine.Console.UI.Tests
     public sealed class NativeConsoleTests
     {
         [UnityTest]
-        public IEnumerator NativeView_ClosedProjectOwnedInputHasNoManagedAllocation()
+        public IEnumerator NativeView_EmptyDraftKeepsLogsVisibleAndClearingCancelsSuggestions()
+        {
+            var root = new GameObject("Quiet console draft");
+            try
+            {
+                var view = root.AddComponent<NativeConsole>();
+                view.Open();
+                var suggestions = view.transform.Find("ZE Console/Panel/Completions").gameObject;
+                yield return new WaitForSecondsRealtime(.1f);
+                Assert.That(suggestions.activeSelf, Is.False);
+                view.InputField.text = "ze-";
+                view.InputField.caretPosition = 3;
+                double deadline = Time.realtimeSinceStartupAsDouble + 1;
+                while (!suggestions.activeSelf && Time.realtimeSinceStartupAsDouble < deadline) yield return null;
+                Assert.That(suggestions.activeSelf, Is.True);
+                view.InputField.text = string.Empty;
+                yield return new WaitForSecondsRealtime(.1f);
+                Assert.That(suggestions.activeSelf, Is.False);
+                view.InputField.text = "   ";
+                yield return new WaitForSecondsRealtime(.1f);
+                Assert.That(suggestions.activeSelf, Is.False);
+                Assert.That(view.Host.Session.GetHistory(), Is.Empty);
+            }
+            finally { Object.DestroyImmediate(root); }
+        }
+
+        [UnityTest]
+        public IEnumerator NativeView_ConfigurableSizeAndTouchOrientationStayInsideCanvas()
+        {
+            var root = new GameObject("Console size and orientation");
+            try
+            {
+                var view = root.AddComponent<NativeConsole>();
+                Assert.That(view.PreferredSize, Is.EqualTo(new Vector2(880, 480)));
+                view.Open();
+                yield return null;
+                var canvas = view.GetComponentInChildren<Canvas>();
+                var area = (RectTransform)canvas.transform;
+                var panel = (RectTransform)canvas.transform.Find("Panel");
+                var initial = panel.rect.size;
+                view.PreferredSize = new Vector2(640, 360);
+                yield return null;
+                Assert.That(panel.rect.width, Is.LessThan(initial.x));
+                Assert.That(panel.rect.height, Is.LessThan(initial.y));
+                view.TouchLayoutPreview = true;
+                yield return null;
+                yield return null;
+                var scaler = canvas.GetComponent<UnityEngine.UI.CanvasScaler>();
+                Assert.That(scaler.referenceResolution, Is.EqualTo(Screen.width >= Screen.height
+                    ? new Vector2(854, 480) : new Vector2(480, 854)));
+                view.PreferredSize = new Vector2(10000, 10000);
+                yield return null;
+                var corners = new Vector3[4]; panel.GetWorldCorners(corners);
+                foreach (var corner in corners)
+                {
+                    var point = area.InverseTransformPoint(corner);
+                    Assert.That(point.x, Is.InRange(area.rect.xMin - 1, area.rect.xMax + 1));
+                    Assert.That(point.y, Is.InRange(area.rect.yMin - 1, area.rect.yMax + 1));
+                }
+                view.Close();
+            }
+            finally { Object.DestroyImmediate(root); }
+        }
+
+        [UnityTest]
+        public IEnumerator NativeView_ClosedProjectOwnedInputRemainsIdle()
         {
             var root = new GameObject("Closed console allocation probe");
             try
@@ -24,13 +89,23 @@ namespace ZeroEngine.Console.UI.Tests
                 var method = typeof(NativeConsole).GetMethod("Update", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
                 var update = (Action)Delegate.CreateDelegate(typeof(Action), view, method);
                 for (int i = 0; i < 100; i++) update();
+                long controlBefore = GC.GetAllocatedBytesForCurrentThread();
+                var control = new byte[1024];
+                GC.KeepAlive(control);
+                bool allocationCounterAvailable = GC.GetAllocatedBytesForCurrentThread() - controlBefore >= 1024;
                 long before = GC.GetAllocatedBytesForCurrentThread();
                 var clock = System.Diagnostics.Stopwatch.StartNew();
                 for (int i = 0; i < 10000; i++) update();
                 clock.Stop();
                 long allocated = GC.GetAllocatedBytesForCurrentThread() - before;
-                Assert.That(allocated, Is.LessThanOrEqualTo(128), "The closed view must not poll input or allocate per update.");
-                TestContext.WriteLine("closed-update probe: 10000 calls, allocated=" + allocated + ", elapsedTicks=" + clock.ElapsedTicks);
+                Assert.That(view.IsOpen, Is.False);
+                Assert.That(view.InputField, Is.Null, "Closed updates must not construct the view.");
+                Assert.That(view.Host.Session.GetHistory(), Is.Empty);
+                Assert.That(view.Host.Session.GetOutput(), Is.Empty);
+                if (allocationCounterAvailable)
+                    Assert.That(allocated, Is.LessThanOrEqualTo(128), "The closed view must not allocate per update.");
+                TestContext.WriteLine("closed-update probe: 10000 calls, allocated=" +
+                    (allocationCounterAvailable ? allocated.ToString() : "unavailable (positive control failed)") + ", elapsedTicks=" + clock.ElapsedTicks);
                 yield return null;
             }
             finally { Object.DestroyImmediate(root); }

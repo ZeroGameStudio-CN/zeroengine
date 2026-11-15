@@ -52,10 +52,10 @@ namespace ZeroEngine.Feedback.Tests.Editor
             }
         }
 
-        [TestCase(FeedbackTextId.Uploading, "提交中…")]
-        [TestCase(FeedbackTextId.Retrying, "自动重试中…")]
-        [TestCase(FeedbackTextId.Uploaded, "提交成功，感谢反馈。")]
-        [TestCase(FeedbackTextId.UploadFailed, "提交失败")]
+        [TestCase(FeedbackTextId.Uploading, "反馈提交中…")]
+        [TestCase(FeedbackTextId.Retrying, "反馈正在重试…")]
+        [TestCase(FeedbackTextId.Uploaded, "反馈提交成功，感谢反馈。")]
+        [TestCase(FeedbackTextId.UploadFailed, "反馈提交失败")]
         public void SubmissionCatalog_KeepsApprovedChineseStatusMapping(FeedbackTextId id, string expected)
         {
             Assert.AreEqual(expected, FeedbackTextCatalog.ResolveSubmissionStatus(id, "zh-CN"));
@@ -273,14 +273,85 @@ namespace ZeroEngine.Feedback.Tests.Editor
                     ((_, completed) => CompleteSyntheticUpload(completed, ++calls > 1)));
                 Exhaust(FeedbackUploadQueue.ProcessPendingUploads());
                 FeedbackStatusCoordinator.HandleUploadFailed(new FeedbackUploadFailure(id, "F403", 403));
-                CollectionAssert.AreEqual(new[] { "提交中…", "自动重试中…" }, presenter.Texts);
+                CollectionAssert.AreEqual(new[] { "反馈提交中…", "反馈正在重试…" }, presenter.Texts);
                 Exhaust(FeedbackUploadQueue.ProcessPendingUploads());
-                CollectionAssert.AreEqual(new[] { "提交中…", "自动重试中…", "提交成功，感谢反馈。" }, presenter.Texts);
+                CollectionAssert.AreEqual(new[] { "反馈提交中…", "反馈正在重试…", "反馈提交成功，感谢反馈。" }, presenter.Texts);
                 IsolatedQueueScope.Set("_pendingUploads", null);
                 Assert.IsTrue(FeedbackUploadQueue.GetRecentSubmissions()[0].SuccessNotified);
                 FeedbackStatusCoordinator.HandleLocalResult(new FeedbackSubmissionResult("local-failure", false,
                     FeedbackSubmissionFailure.QueuePersistenceFailed));
-                Assert.AreEqual("提交失败（F102）", presenter.Texts[presenter.Texts.Count - 1]);
+                Assert.AreEqual("反馈提交失败（F102）", presenter.Texts[presenter.Texts.Count - 1]);
+            }
+        }
+
+        [Test]
+        public void DeliveryMode_RestoredQueueRetriesSilentlyAndRetainsItsReceipt()
+        {
+            using (var queue = new IsolatedQueueScope())
+            {
+                string id = Guid.NewGuid().ToString("N");
+                Assert.IsTrue(FeedbackUploadQueue.TryEnqueue(id, queue.ZipPath, "Synthetic", "Old feedback"));
+                IsolatedQueueScope.Set("_tryUploadOverride",
+                    (Func<FeedbackUploadQueue.PendingUpload, Action<bool>, IEnumerator>)
+                    ((_, completed) => CompleteSyntheticUpload(completed, false)));
+                Exhaust(FeedbackUploadQueue.ProcessPendingUploads());
+                Assert.IsTrue(FeedbackUploadQueue.GetRecentSubmissions()[0].AutomaticRetryScheduled);
+
+                var presenter = new RecordingPresenter();
+                var configuration = new FeedbackUiConfiguration
+                {
+                    UseDeliveryStatus = true, ShowUploadingStatus = true,
+                    LanguageCodeResolver = () => "zh-CN", StatusPresenter = presenter
+                };
+                FeedbackStatusCoordinator.Configure(configuration);
+                FeedbackStatusCoordinator.Configure(configuration);
+                Exhaust(FeedbackUploadQueue.ProcessPendingUploads());
+                Assert.AreEqual(0, FeedbackStatusCoordinator.TrackedSubmissionCount);
+                Assert.IsEmpty(presenter.Statuses, "Startup and repeated background attempts must stay silent.");
+
+                IsolatedQueueScope.Set("_tryUploadOverride",
+                    (Func<FeedbackUploadQueue.PendingUpload, Action<bool>, IEnumerator>)
+                    ((_, completed) => CompleteSyntheticUpload(completed, true)));
+                Exhaust(FeedbackUploadQueue.ProcessPendingUploads());
+                FeedbackSubmissionStatus delivered = FeedbackUploadQueue.GetRecentSubmissions()[0];
+                Assert.AreEqual(id, delivered.SubmissionId);
+                Assert.AreEqual(FeedbackDeliveryState.Received, delivered.State);
+                Assert.IsFalse(delivered.SuccessNotified, "A silent delivery must not claim a success toast was shown.");
+                Assert.IsEmpty(presenter.Statuses);
+            }
+        }
+
+        [Test]
+        public void DeliveryMode_HiddenProgressKeepsCurrentSubmissionAcrossReconfiguration()
+        {
+            using (var queue = new IsolatedQueueScope())
+            {
+                var presenter = new RecordingPresenter();
+                var configuration = new FeedbackUiConfiguration
+                {
+                    UseDeliveryStatus = true, ShowUploadingStatus = false,
+                    LanguageCodeResolver = () => "zh-CN", StatusPresenter = presenter
+                };
+                FeedbackStatusCoordinator.Configure(configuration);
+                FeedbackStatusCoordinator.HandleSubmitting();
+                string id = Guid.NewGuid().ToString("N");
+                Assert.IsTrue(FeedbackUploadQueue.TryEnqueue(id, queue.ZipPath, "Synthetic", "Current feedback"));
+                FeedbackStatusCoordinator.HandleLocalResult(new FeedbackSubmissionResult(id, true, FeedbackSubmissionFailure.None));
+                IsolatedQueueScope.Set("_tryUploadOverride",
+                    (Func<FeedbackUploadQueue.PendingUpload, Action<bool>, IEnumerator>)
+                    ((_, completed) => CompleteSyntheticUpload(completed, false)));
+                Exhaust(FeedbackUploadQueue.ProcessPendingUploads());
+                FeedbackStatusCoordinator.Configure(configuration);
+                Assert.AreEqual(1, FeedbackStatusCoordinator.TrackedSubmissionCount);
+                Assert.IsEmpty(presenter.Statuses, "Hidden progress includes retry notices, not just the first upload.");
+
+                IsolatedQueueScope.Set("_tryUploadOverride",
+                    (Func<FeedbackUploadQueue.PendingUpload, Action<bool>, IEnumerator>)
+                    ((_, completed) => CompleteSyntheticUpload(completed, true)));
+                Exhaust(FeedbackUploadQueue.ProcessPendingUploads());
+                CollectionAssert.AreEqual(new[] { FeedbackTextId.Uploaded }, presenter.Statuses);
+                Assert.IsTrue(FeedbackUploadQueue.GetRecentSubmissions()[0].SuccessNotified);
+                Assert.AreEqual(0, FeedbackStatusCoordinator.TrackedSubmissionCount);
             }
         }
 
@@ -319,7 +390,7 @@ namespace ZeroEngine.Feedback.Tests.Editor
                 AnalyticsConfig.ServerUrl = "http://127.0.0.1:1";
                 AnalyticsConfig.Secret = string.Empty;
                 AnalyticsConfig.UploadSecret = "synthetic-test-secret";
-                root = Path.Combine(Path.GetTempPath(), key);
+                root = Path.Combine(Application.temporaryCachePath, key);
                 Directory.CreateDirectory(root);
                 ZipPath = Path.Combine(root, "synthetic.zip");
                 File.WriteAllText(ZipPath, "synthetic");
@@ -340,7 +411,7 @@ namespace ZeroEngine.Feedback.Tests.Editor
                 AnalyticsConfig.ServerUrl = previousUrl;
                 AnalyticsConfig.Secret = previousSecret;
                 AnalyticsConfig.UploadSecret = previousUploadSecret;
-                if (Path.GetFullPath(root).StartsWith(Path.GetFullPath(Path.GetTempPath()), StringComparison.OrdinalIgnoreCase)
+                if (Path.GetFullPath(root).StartsWith(Path.GetFullPath(Application.temporaryCachePath) + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase)
                     && Path.GetFileName(root) == key && Directory.Exists(root)) Directory.Delete(root, true);
             }
         }

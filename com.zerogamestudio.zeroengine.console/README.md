@@ -29,6 +29,12 @@ Dispose registrations when a module unloads, then dispose the session and regist
 when their owner ends. A Unity owner can use `ConsoleHost`; its dispatcher keeps
 handlers on the main thread, including calls submitted from a worker.
 
+For frequent output refreshes, use `CopyOutputTo(ref buffer, out revision)` with
+a caller-owned `ConsoleOutput[]`. It grows the buffer when needed, returns the
+valid entry count and captures the revision under the same lock. Unused entries
+are cleared. Reuse that buffer on one consuming thread; `GetOutput` and
+`GetOutputSnapshot` remain independent allocating snapshots for occasional reads.
+
 Legacy wrappers can return `ConsoleResult.Unconfirmed` after a `void` or string
 handler returns, or `ConsoleResult.Started` for work whose completion cannot be
 observed. Both preserve optional data, report warning output and keep `IsSuccess`
