@@ -472,7 +472,7 @@ namespace ZeroEngine.Render.Tests.Runtime
             try
             {
                 pipeline.supportsHDR = true;
-                material.SetVector("_BaseColor", new Vector4(.01f, .01f, .01f, 1));
+                material.SetVector("_BaseColor", new Vector4(.1f, .1f, .1f, 1));
                 light.transform.position = actor.bounds.center + new Vector3(-.4f, 0, .3f);
                 light.color = Color.green; light.intensity = 1.3f; source.DarkEdgeFill = 0;
                 profile.WeakDistance = profile.StrongDistance = 1; profile.StrongScale = 0;
@@ -498,6 +498,7 @@ namespace ZeroEngine.Render.Tests.Runtime
                 AssertSameImage(soft, restored, "Zero contour strength must restore the previous soft response.");
 
                 profile.ContourStrength = .85f;
+                VerifyContourMaterialValues(camera, material, light);
                 material.SetVector("_BaseColor", new Vector4(2.4f, .6f, .1f, 1));
                 source.enabled = false; hdrBase = Render(camera); source.enabled = true; hdrLit = Render(camera);
                 Assert.That(hdrBase.GetPixel(34, 18).r, Is.GreaterThan(1.5f), "The test must contain actual incoming HDR.");
@@ -518,6 +519,33 @@ namespace ZeroEngine.Render.Tests.Runtime
                 profile.WeakDistance = weak; profile.StrongDistance = strong; profile.StrongScale = scale;
                 pipeline.supportsHDR = hdr;
                 foreach (var image in new[] { soft, crisp, restored, hdrBase, hdrLit }) if (image) Object.DestroyImmediate(image);
+            }
+        }
+
+        private static void VerifyContourMaterialValues(Camera camera, Material material, Light light)
+        {
+            var savedColor = material.GetVector("_BaseColor"); var savedLight = light.color;
+            float savedIntensity = light.intensity;
+            Texture2D black = null, dark = null, pale = null, painted = null;
+            try
+            {
+                light.color = Color.white;
+                material.SetVector("_BaseColor", new Vector4(0, 0, 0, 1)); black = Render(camera);
+                material.SetVector("_BaseColor", new Vector4(.003f, .003f, .003f, 1)); dark = Render(camera);
+                material.SetVector("_BaseColor", new Vector4(.12f, .12f, .12f, 1)); pale = Render(camera);
+                light.intensity = .65f;
+                material.SetVector("_BaseColor", new Vector4(.2f, .03f, .003f, 1)); painted = Render(camera);
+                var zero = black.GetPixel(34, 18); var low = dark.GetPixel(34, 18);
+                var high = pale.GetPixel(34, 18); var hue = painted.GetPixel(34, 18);
+                Assert.That(zero.g, Is.InRange(.0001f, .012f), "Black art gets only a faint bounded visibility floor.");
+                Assert.That(low.g, Is.LessThan(high.g * .35f), "Dark and pale cloth must retain visibly different contour values under identical light.");
+                Assert.That(hue.r, Is.GreaterThan(hue.g * 1.5f), "Neutral light must retain the painted red channel.");
+                Assert.That(hue.g, Is.GreaterThan(hue.b * 1.5f), "A dark blue channel must not become a uniform bright white contour.");
+            }
+            finally
+            {
+                material.SetVector("_BaseColor", savedColor); light.color = savedLight; light.intensity = savedIntensity;
+                foreach (var image in new[] { black, dark, pale, painted }) if (image) Object.DestroyImmediate(image);
             }
         }
 

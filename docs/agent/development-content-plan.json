@@ -431,10 +431,10 @@
       "availability": "DevelopmentOnly",
       "responsibleChat": "01a16e60-157f-7f63-8f5a-7a6bdbe07a81",
       "chatUrl": "",
-      "nextAction": "待共享调试依赖收尾后，以消费者的新依赖基线合并受光候选并固定 Git UPM，启用基地自定义配置，再验证玩家与 NPC 的正式包正常镜头受光。",
+      "nextAction": "用户选择保留 Editor、先看静态效果。保留中断请求 19781a1b8b764a489d0d5ac090216e16 与本轮临时 fixture，先恢复并核验世界／音频状态，再清理临时脚本和补录正常镜头行走；画面确认后才按最新依赖基线完成正式包接入。",
       "entrance": "POB 受控 PlayMode 的 RimFireColorTestRoom，以及包内 SpriteRimLightingRenderTests。",
       "resourcePath": "com.zerogamestudio.zeroengine.render.urp/Runtime/Resources/ZeroEngine/SpriteRimLighting.shader",
-      "revision": "clear-contour-core-20261115",
+      "revision": "painted-colour-response-20261115",
       "candidatePackageVersion": "0.4.4",
       "releaseEvidence": "",
       "verificationEvidence": [
@@ -442,9 +442,11 @@
         "C:/Users/2025/AppData/Local/Temp/pob-rim-fused-20261115/run-v4-status.json",
         "C:/Users/2025/AppData/Local/Temp/pob-rim-fused-20261115/flow-v4/runtime/candidate-package-gpu.json",
         "C:/Users/2025/.antigravity_cockpit/instances/codex/eae8558ab409f681/visualizations/2026/10/24/01a16e60-157f-7f63-8f5a-7a6bdbe07a81/rim-fused-preview-20261115/evidence/delivery.json",
-        "C:/Users/2025/.antigravity_cockpit/instances/codex/eae8558ab409f681/visualizations/2026/10/24/01a16e60-157f-7f63-8f5a-7a6bdbe07a81/rim-fused-preview-20261115/comparison.mp4"
+        "C:/Users/2025/.antigravity_cockpit/instances/codex/eae8558ab409f681/visualizations/2026/10/24/01a16e60-157f-7f63-8f5a-7a6bdbe07a81/rim-fused-preview-20261115/comparison.mp4",
+        "C:/Users/2025/.antigravity_cockpit/instances/codex/eae8558ab409f681/visualizations/2026/10/24/01a16e60-157f-7f63-8f5a-7a6bdbe07a81/rim-material-response-20261115/static-proof.json",
+        "C:/Users/2025/.antigravity_cockpit/instances/codex/eae8558ab409f681/visualizations/2026/10/24/01a16e60-157f-7f63-8f5a-7a6bdbe07a81/rim-material-response-20261115/evidence/package-gpu.json"
       ],
-      "verificationScope": "最终候选 Shader d7edc6fd 已在 POB 正常 Game View 完成参考机制兼容移植与 ZE 融合候选的 8 个同姿势采样，以及两版分别经过暖、冷光源中心的连续行走实录。此次只临时注入候选 Shader 和两个新增材质参数，复用未改变的原生受光 CPU 路径；manifest、lock 与反馈／多人本地调试引用未改。完整候选运行时此前经命名空间隔离跑完 5 组 GPU 检查，覆盖稀疏轮廓、HDR、遮挡与中心对称性。普通消费者仍使用旧包，未声明正式包接入或用户发布。"
+      "verificationScope": "底色响应候选 Shader 6901a460 在命名空间隔离的完整受光运行时中跑完 5 组 GPU 检查，包括黑色保底、深浅明度、彩色通道、腿缝与孤立像素、遮挡和 HDR。正常 Game View 已记录参考机制兼容移植／旧融合／新融合的 12 个同姿势采样，静态视频尺寸与时长检查合格。整体流程在超时取消时中断，行走未完成；原生资源清理已释放，但世界和音频恢复证明不完整，不能把本轮称为完整 PlayMode 验收。未更改消费者包引用。"
     }
   ]
 }

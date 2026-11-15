@@ -33,8 +33,11 @@ The clear native core compares complete art cells along the light direction.
 Near a rear light's projected center, it blends into the symmetric one-cell
 backlight contour. Filtered inward wrap remains separate, so small islands,
 inner leg gaps and clothing cutouts can brighten without filling the body.
-The core uses bounded screen composition after the soft-light cap: it adds no
-new HDR emission and preserves existing HDR source energy. Multiple colors
+The core uses the painted RGB in a bounded color-dodge response, preserving
+dark cloth and pale highlights instead of adding a uniform colored line. A very
+weak visibility floor remains for black art; the older dark fill is reduced
+while the clear core is enabled. Zero ContourStrength keeps the old response.
+It adds no new HDR emission and preserves existing HDR source energy. Multiple colors
 blend at the strongest core contribution's peak; shadow visibility applies to
 the core and to the existing light response.
 

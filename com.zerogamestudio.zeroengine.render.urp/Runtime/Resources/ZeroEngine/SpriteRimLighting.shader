@@ -88,16 +88,22 @@ Shader "Hidden/ZeroEngine/SpriteRimLighting"
             float3 incomingHdr = limitAddedHdr ? max(original - 1, 0) : 0;
             float3 incomingBase = limitAddedHdr ? min(original, 1) : original;
             float3 baseColor = gammaBlend ? LinearToSRGB(incomingBase) : incomingBase;
+            float contourStrength = _RimEnhanceLightCount > 0 && _RimEnhanceShapes[0].x > 2.5 ? _RimEnhanceContourStrength : 0;
             float3 dodge = baseColor / max(1 - light.rgb, .000001);
             // Saturated channels retain their own light color.
             dodge = float3(light.r >= 1 ? light.r : dodge.r, light.g >= 1 ? light.g : dodge.g, light.b >= 1 ? light.b : dodge.b);
+            // The clear-core style also keeps its soft shell material-dependent at
+            // saturation. Fade the change in near zero to retain the legacy setting.
+            float paintedResponse = smoothstep(0, .15, contourStrength);
+            dodge = lerp(dodge, baseColor / max(1 - light.rgb, .15), paintedResponse);
             float3 color = min(lerp(baseColor, dodge, light.a), meta.y) * meta.x;
             if (limitAddedHdr) color = saturate(color);
             float3 response = gammaBlend ? SRGBToLinear(color) : color;
             float incomingPeak = max(max(incomingBase.r, incomingBase.g), incomingBase.b);
             // Dark art needs a colored contribution independent of the original channel values.
             // Let it fade out before it reaches highlights, in the same color space as the scene.
-            response += darkEdgeLight * saturate(1 - incomingPeak * 4);
+            float darkFillScale = lerp(1, .2, contourStrength);
+            response += darkEdgeLight * (saturate(1 - incomingPeak * 4) * darkFillScale);
             if (limitAddedHdr)
             {
                 // The profile raises dark contours independently of incoming bright art and HDR emission.
@@ -105,10 +111,23 @@ Shader "Hidden/ZeroEngine/SpriteRimLighting"
                 float responsePeak = max(max(response.r, response.g), response.b);
                 response *= min(1, max(incomingPeak, darkLimit) / max(responsePeak, .000001));
             }
-            // Keep the soft wrap's limit separate from the clear one-cell contour.
-            // Screen composition raises even black art without creating new HDR energy.
-            float3 core = saturate(contourLight * _RimEnhanceContourStrength * _RimRefStyle.z) * meta.x;
-            response += core * saturate(1 - response);
+            UNITY_BRANCH
+            if (contourStrength > 0)
+            {
+                // The one-cell contour retains the painted RGB response. An independent
+                // screen fill would flatten dark cloth and pale hair into a similar neon line.
+                float3 core = saturate(contourLight) * contourStrength;
+                float3 gain = baseColor * core / max(1 - core, .05);
+                float3 coreColor = min(baseColor + gain * _RimRefStyle.z, meta.y) * meta.x;
+                if (limitAddedHdr) coreColor = saturate(coreColor);
+                float3 coreResponse = gammaBlend ? SRGBToLinear(coreColor) : coreColor;
+                // A small bounded floor keeps genuinely black detail readable; it does
+                // not replace the material-dependent response or grow with dodge gain.
+                float3 floorLight = gammaBlend ? SRGBToLinear(core) : core;
+                coreResponse += floorLight * (.008 * _RimRefStyle.z * meta.x) * saturate(1 - incomingPeak * 16);
+                if (limitAddedHdr) coreResponse = saturate(coreResponse);
+                response = max(response, coreResponse);
+            }
             return response + incomingHdr;
         }
         float EnhancedPower(float value, float power)
@@ -295,9 +314,7 @@ Shader "Hidden/ZeroEngine/SpriteRimLighting"
                     if (centerBackFacing > 0 && centerFade < 1)
                         coreCoverage = max(coreCoverage, saturate(1 - BackContourCoverage(uv, texel * min(bandWidth, 1))) * centerBackFacing * (1 - centerFade));
                     float3 hue = saturate(_RimEnhanceColors[i].rgb);
-                #if !defined(UNITY_COLORSPACE_GAMMA)
-                    hue = SRGBToLinear(hue);
-                #endif
+                    // Match the existing color-dodge light input's working color space.
                     float3 coreColor = hue * max(_RimRefEdgeTint.rgb, 0) *
                         (amount * band.w * coreCoverage * max(_RimRefEdgeTint.a, 0));
                     if (mixNativeLights) AccumulateRimColor(contourMix, coreColor);
