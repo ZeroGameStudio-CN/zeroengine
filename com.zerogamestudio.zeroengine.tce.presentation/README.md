@@ -11,6 +11,17 @@ The package depends on `ZeroEngine.TCE` and UnityEngine renderer APIs. It does n
 - `TceVisualSnapshot`, `TceMeshSnapshot`, `TceSpriteSnapshot`, and `TceSpriteLayerSnapshot` are the supported snapshot models.
 - `TcePresentationPlaybackSettings` controls style, tint, duration, fade window, alpha curve, material override, sprite sorting override, renderer tint property name, mesh texture property name, offset, direction, and texture copy policy.
 - `SpawnSnapshotEffectData` and `SpawnSoulGhostEffectData` are catalog-visible TCE effects.
+- `TceVisualPrefab` admits and reconstructs an authored visual-only hierarchy of particles, sprites, static meshes, lights, and trails. Mesh resources are shared without requiring readable CPU data.
+
+## Authored visual projections
+
+`TceVisualPrefab.TryCreate(prefab, sourceOnlyBehaviour, out recipe, out reason)` checks the whole hierarchy before cloning. The optional local adapter may identify known source-only visual/lifetime helpers; the inactive copy removes those helpers before activation. Unknown scripts, missing scripts, physics, audio, Animator and Timeline components remain explicit qualification failures. This surface does not provide animation or Timeline playback.
+
+`recipe.Instantiate(parent)` returns an inactive display object. The caller owns its pose, clock, seed, rendering budget and destruction; a network adapter reuses its existing identity and lifetime contract. The recipe is revalidated before instantiation, so adding an unadmitted component after initial qualification cannot enter the display. Particle stop callbacks are disabled and source renderer suppression is not inherited. `TceVisualPrefab.Destroy(instance)` ends only the display copy.
+
+The factory creates no TCE graph, transport service, target search, collider, or source lifecycle. Original TCE effects and local producers retain their authoritative behaviour. Pure render construction can also be used without a network session.
+
+`TceVisualVisibility` captures renderer suppression and light culling masks. `SetHidden` pairs host-source hiding with restoration without changing enabled/playback state. Display owners may set `preserveRendererSuppression: false`; their visibility follows the existing display lease instead of source suppression. The helper owns no objects, network identity or clock.
 
 ## Quick Integration
 

@@ -18,6 +18,7 @@ The presentation test assembly must cover:
 - sprite material and sorting overrides;
 - sprite and mesh material override plus configurable tint/main-texture shader properties;
 - readable/unreadable mesh snapshot boundaries.
+- mixed renderer graphs, shared unreadable mesh resources, source-only callback exclusion, and rejection after a qualified resource changes.
 
 ## Static Source Gates
 
@@ -39,16 +40,18 @@ Expected result: no matches.
 
 ## Package Manager Gate
 
-Confirm Unity resolves the package as embedded and sees the graduated package version:
+Confirm Unity resolves the tested package and sees its expected version. Read
+`PackageInfo.FindForAssembly(typeof(TceVisualPrefab).Assembly)` from the consumer's
+Editor and retain the package ID, source and resolved path:
 
 ```text
-manage_packages get_package_info com.zerogamestudio.zeroengine.tce.presentation
+PackageInfo.FindForAssembly(typeof(TceVisualPrefab).Assembly)
 ```
 
 Expected result:
 
-- source: `Embedded`
-- version: `0.2.0`
+- source: `Git` at the tested pinned commit for handoff (`Local` is a temporary trial only)
+- version: `0.3.0`
 - dependency_count: `1`
 - dependency: `com.zerogamestudio.zeroengine.tce`
 

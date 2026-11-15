@@ -474,15 +474,39 @@
       "availability": "TestOnly",
       "responsibleChat": "01a1b9db-fe8f-7500-8df5-997d4703224e",
       "chatUrl": "thread://01a1b9db-fe8f-7500-8df5-997d4703224e?hostId=local",
-      "nextAction": "按已验证的固定Git提交接回POB并核对包来源；R3复杂外观和R4宿主成本／整局验收分开推进。",
+      "nextAction": "R3第一批已验证原跟随Mesh外观；继续其余复杂外观与领域接线，R4宿主成本及整局验收分开推进。",
       "entrance": "dotnet test com.zerogamestudio.zeroengine.multiplayer/Tools~/Motion.Tests/Motion.Tests.csproj",
       "resourcePath": "com.zerogamestudio.zeroengine.multiplayer/Runtime/Motion",
-      "revision": "0.5.0 candidate: engine-free steering, speed curves, delayed gravity, parabola and display-anchor following; composed flight, explicit clocks, bounded fixed-step continuation. 31 portable cases and 39 POB native cases passed. Same-code independent host/client protocol72, client120ms latency: all five models visible and advanced without new receipts; render-only views and session restoration verified. Original following Mesh appearance stays R3; a Sprite fixture exercises its original following component. Failed pre-entry compile and observer I/O rounds are retained. No full-run performance or player release claim.",
+      "revision": "0.5.0 candidate: engine-free steering, speed curves, delayed gravity, parabola and display-anchor following; composed flight, explicit clocks, bounded fixed-step continuation. 31 portable cases and 39 POB native cases passed. Same-code independent host/client protocol72, client120ms latency: all five models visible and advanced without new receipts; render-only views and session restoration verified. Original following Mesh appearance stays R3; a Sprite fixture exercises its original following component. Failed pre-entry compile and observer I/O rounds are retained. No full-run performance or player release claim. R3 projection0.3.0 later verifies the original following Mesh in POB; the historical R2 Sprite-fixture evidence remains unchanged.",
       "releaseEvidence": "",
       "candidatePackageVersion": "0.5.0",
       "verificationEvidence": [
         "D:/unity/artifacts/pob-ze-motion-20261115"
       ],
+      "relatedContent": [
+        {
+          "projectId": "pob",
+          "contentId": "multiplayer.shared-world-presentation"
+        }
+      ]
+    },
+    {
+      "id": "ze.tce.visual-prefab-projection",
+      "title": "原资源驱动的纯显示图与可见性配对",
+      "stage": "Previewable",
+      "targetReleaseId": "",
+      "availability": "TestOnly",
+      "responsibleChat": "01a1b9db-fe8f-7500-8df5-997d4703224e",
+      "chatUrl": "thread://01a1b9db-fe8f-7500-8df5-997d4703224e?hostId=local",
+      "nextAction": "接回POB固定Git包并核对已安装来源；其余Animator／Timeline／URP附加数据／CFX辅助、召唤和掉落领域接线继续按R3，宿主成本与整局验收留R4。",
+      "entrance": "Unity Test Runner: ZeroEngine.TCE.Presentation.Tests.Editor",
+      "resourcePath": "com.zerogamestudio.zeroengine.tce.presentation/Runtime/Projection",
+      "revision": "0.3.0 candidate. TceVisualPrefab validates authored renderer/particle graphs and constructs inactive display copies; admitted source-only lifetime helpers are removed before activation. TceVisualVisibility pairs whole-graph renderer suppression and Light masks with exact restoration. No new network identity, source lifetime, budget or gameplay producer. Current TCE namespace166 passed and2 optional ModSystem bridge skips; Presentation47/47 and POB124/124 passed. Independent same-code protocol73 peers at120ms: five original projectile resources through original TCE/components are visible and advance without new receipts; original following3-Mesh and CardMaster2-Mesh appearances both verified. 11 of38 rejected visual resources now qualify;27 visual resources and domain wiring remain. Failed partial import, fixture/pre-entry and case4 environmental observations retained. No whole PVE/performance or release claim.",
+      "candidatePackageVersion": "0.3.0",
+      "verificationEvidence": [
+        "D:/unity/artifacts/pob-ze-visual-projection-20261115"
+      ],
+      "releaseEvidence": "",
       "relatedContent": [
         {
           "projectId": "pob",

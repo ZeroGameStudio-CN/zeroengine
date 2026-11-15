@@ -1,6 +1,6 @@
 {
     "name": "com.zerogamestudio.zeroengine.tce.presentation",
-    "version": "0.2.0",
+    "version": "0.3.0",
     "displayName": "ZeroEngine TCE Presentation",
     "description": "Presentation-only visual snapshot, afterimage, and soul ghost effects for ZeroEngine TCE.",
     "unity": "6000.6",

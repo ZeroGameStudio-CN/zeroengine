@@ -16,7 +16,7 @@ namespace ZeroEngine.TCE.Presentation.Tests.Editor
             PackageInfo packageInfo = PackageInfo.FindForAssetPath($"{PackagePath}/package.json");
 
             Assert.IsNotNull(packageInfo);
-            Assert.AreEqual("0.2.0", packageInfo.version);
+            Assert.AreEqual("0.3.0", packageInfo.version);
             Assert.AreEqual(1, packageInfo.dependencies.Length);
             Assert.AreEqual("com.zerogamestudio.zeroengine.tce", packageInfo.dependencies[0].name);
             Assert.AreEqual("0.1.0", packageInfo.dependencies[0].version);
@@ -37,7 +37,7 @@ namespace ZeroEngine.TCE.Presentation.Tests.Editor
             StringAssert.Contains("failed = 0", document);
             StringAssert.Contains("rg -n", document);
             StringAssert.Contains("cm status --short", document);
-            StringAssert.Contains("manage_packages get_package_info com.zerogamestudio.zeroengine.tce.presentation", document);
+            StringAssert.Contains("PackageInfo.FindForAssembly", document);
             StringAssert.Contains("release evidence", document);
         }
 
