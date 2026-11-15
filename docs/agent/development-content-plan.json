@@ -446,6 +446,30 @@
       ],
       "verificationScope": "从POB cs:19242提取已验证的XY轮廓选点、体型适应、透视对齐和caller-clocked回弹；消费者保持伤害、时钟、池化和召回所有权。",
       "sourceCommit": "12bcaf3d58b74c6ad7755fc995e4dc3c24ecf4ba"
+    },
+    {
+      "id": "ze.multiplayer.resolved-motion",
+      "title": "权威描述驱动的通用显示运动",
+      "stage": "Previewable",
+      "targetReleaseId": "",
+      "availability": "TestOnly",
+      "responsibleChat": "01a1b9db-fe8f-7500-8df5-997d4703224e",
+      "chatUrl": "thread://01a1b9db-fe8f-7500-8df5-997d4703224e?hostId=local",
+      "nextAction": "按已验证的固定Git提交接回POB并核对包来源；R3复杂外观和R4宿主成本／整局验收分开推进。",
+      "entrance": "dotnet test com.zerogamestudio.zeroengine.multiplayer/Tools~/Motion.Tests/Motion.Tests.csproj",
+      "resourcePath": "com.zerogamestudio.zeroengine.multiplayer/Runtime/Motion",
+      "revision": "0.5.0 candidate: engine-free steering, speed curves, delayed gravity, parabola and display-anchor following; composed flight, explicit clocks, bounded fixed-step continuation. 31 portable cases and 39 POB native cases passed. Same-code independent host/client protocol72, client120ms latency: all five models visible and advanced without new receipts; render-only views and session restoration verified. Original following Mesh appearance stays R3; a Sprite fixture exercises its original following component. Failed pre-entry compile and observer I/O rounds are retained. No full-run performance or player release claim.",
+      "releaseEvidence": "",
+      "candidatePackageVersion": "0.5.0",
+      "verificationEvidence": [
+        "D:/unity/artifacts/pob-ze-motion-20261115"
+      ],
+      "relatedContent": [
+        {
+          "projectId": "pob",
+          "contentId": "multiplayer.shared-world-presentation"
+        }
+      ]
     }
   ]
 }
