@@ -109,6 +109,7 @@ namespace ZeroEngine.Pool
             public bool Despawn(GameObject obj)
             {
                 if (!_activeObjects.Remove(obj)) return false;
+                if (obj == null) return true;
 
                 obj.transform.SetParent(_parent);
                 _queue.Enqueue(obj);
@@ -154,7 +155,16 @@ namespace ZeroEngine.Pool
         private readonly Dictionary<string, SmartPool> _poolsByAddressableKey = new();
 #endif
 
-        private readonly Dictionary<GameObject, SmartPool> _globalActiveLookup = new();
+        private readonly struct ActiveSpawn
+        {
+            public SmartPool Pool { get; }
+            public ulong Version { get; }
+            public ActiveSpawn(SmartPool pool, ulong version) { Pool = pool; Version = version; }
+        }
+
+        private readonly Dictionary<GameObject, ActiveSpawn> _globalActiveLookup = new();
+        private ulong _spawnVersion;
+        private bool _destroying;
         private readonly Dictionary<PoolType, Transform> _poolParents = new();
 
 #if ADDRESSABLES_ENABLED
@@ -193,9 +203,17 @@ namespace ZeroEngine.Pool
         /// </summary>
         public GameObject Spawn(GameObject prefab, Vector3 position, Quaternion rotation, PoolType poolType = PoolType.None, bool autoActive = true)
         {
-            if (prefab == null) return null;
+            if (prefab == null || _destroying) return null;
             var pool = GetOrCreatePool(prefab, poolType);
             return SpawnInternal(pool, position, rotation, autoActive);
+        }
+
+        /// <summary>Borrows one exact spawn. Copies share the same idempotent return right.</summary>
+        public PoolSpawnLease SpawnLease(GameObject prefab, Vector3 position, Quaternion rotation,
+            PoolType poolType = PoolType.None, bool autoActive = true)
+        {
+            if (!Application.isPlaying || _destroying || prefab == null) return default;
+            return SpawnInternalLease(GetOrCreatePool(prefab, poolType), position, rotation, autoActive);
         }
 
         /// <summary>
@@ -215,14 +233,9 @@ namespace ZeroEngine.Pool
             if (!Application.isPlaying) return;
             if (obj == null) return;
 
-            if (_globalActiveLookup.TryGetValue(obj, out var pool))
+            if (_globalActiveLookup.TryGetValue(obj, out var spawn))
             {
-                if (pool.Despawn(obj))
-                {
-                    _globalActiveLookup.Remove(obj);
-                    if (obj.TryGetComponent<IPoolable>(out var poolable)) poolable.OnDespawn();
-                    obj.SetActive(false);
-                }
+                DespawnCurrent(obj, spawn);
             }
             else
             {
@@ -242,6 +255,7 @@ namespace ZeroEngine.Pool
         public async UniTask PreloadAsync(GameObject prefab, int count, PoolType poolType = PoolType.None, int minSize = 0)
         {
             var pool = GetOrCreatePool(prefab, poolType);
+            if (pool == null) return;
             pool.MinSize = Math.Max(pool.MinSize, minSize);
             for (int i = 0; i < count; i++)
             {
@@ -299,19 +313,66 @@ namespace ZeroEngine.Pool
 
         private GameObject SpawnInternal(SmartPool pool, Vector3 position, Quaternion rotation, bool autoActive)
         {
-            if (pool == null) return null;
+            var lease = SpawnInternalLease(pool, position, rotation, autoActive);
+            var instance = lease.Instance;
+            if (instance == null) lease.Dispose();
+            return instance;
+        }
+
+        private PoolSpawnLease SpawnInternalLease(SmartPool pool, Vector3 position, Quaternion rotation, bool autoActive)
+        {
+            if (this == null || _destroying || pool == null) return default;
             var obj = pool.Spawn(position, rotation);
-            if (obj != null)
+            if (obj == null) return default;
+            ulong version = unchecked(++_spawnVersion);
+            _globalActiveLookup[obj] = new ActiveSpawn(pool, version);
+            var lease = new PoolSpawnLease(this, obj, version);
+            try
             {
-                _globalActiveLookup[obj] = pool;
                 if (obj.TryGetComponent<IPoolable>(out var poolable)) poolable.OnSpawn();
-                obj.SetActive(autoActive);
+                if (lease.IsCurrent) obj.SetActive(autoActive);
+                return lease;
             }
-            return obj;
+            catch
+            {
+                try { lease.Dispose(); }
+                catch (Exception cleanupError) { Debug.LogException(cleanupError); }
+                throw;
+            }
+        }
+
+        internal bool IsSpawnCurrent(GameObject instance, ulong version) =>
+            this != null && !_destroying && instance != null
+            && _globalActiveLookup.TryGetValue(instance, out var current) && current.Version == version;
+
+        internal bool TryDespawnLease(GameObject instance, ulong version)
+        {
+            // A destroyed Unity wrapper still identifies its bookkeeping entry.
+            if (this == null || ReferenceEquals(instance, null)
+                || !_globalActiveLookup.TryGetValue(instance, out var current) || current.Version != version)
+                return false;
+            return DespawnCurrent(instance, current);
+        }
+
+        private bool DespawnCurrent(GameObject instance, ActiveSpawn spawn)
+        {
+            _globalActiveLookup.Remove(instance);
+            try
+            {
+                if (!spawn.Pool.Despawn(instance)) return false;
+                if (instance != null && instance.TryGetComponent<IPoolable>(out var poolable)) poolable.OnDespawn();
+                return true;
+            }
+            finally
+            {
+                // An OnDespawn callback may already have borrowed this object again.
+                if (instance != null && !_globalActiveLookup.ContainsKey(instance)) instance.SetActive(false);
+            }
         }
 
         private SmartPool GetOrCreatePool(GameObject prefab, PoolType poolType)
         {
+            if (this == null || _destroying || prefab == null) return null;
 #if UNITY_6000_2_OR_NEWER
             PoolObjectId id = prefab.GetEntityId();
 #else
@@ -393,9 +454,11 @@ namespace ZeroEngine.Pool
         }
 #endif
 
-        private void OnDestroy()
+        protected override void OnDestroy()
         {
-            ClearAllPools();
+            _destroying = true;
+            try { ClearAllPools(); }
+            finally { base.OnDestroy(); }
         }
 
         /// <summary>
@@ -403,20 +466,21 @@ namespace ZeroEngine.Pool
         /// </summary>
         public void ClearAllPools()
         {
-            foreach (var pool in _poolsById.Values) pool.Clear();
+            var pools = new List<SmartPool>(_poolsById.Values);
             _poolsById.Clear();
 #if ADDRESSABLES_ENABLED
-            foreach (var pool in _poolsByAddressableKey.Values) pool.Clear();
+            var addressablePools = new List<SmartPool>(_poolsByAddressableKey.Values);
+            var handles = new List<AsyncOperationHandle<GameObject>>(_addressableHandles.Values);
             _poolsByAddressableKey.Clear();
-#endif
-            _globalActiveLookup.Clear();
-
-#if ADDRESSABLES_ENABLED
-            foreach (var handle in _addressableHandles.Values)
-            {
-                if (handle.IsValid()) Addressables.Release(handle);
-            }
             _addressableHandles.Clear();
+#endif
+            // Revoke the old snapshot before Unity destruction can invoke user callbacks.
+            _globalActiveLookup.Clear();
+            foreach (var pool in pools) pool.Clear();
+#if ADDRESSABLES_ENABLED
+            foreach (var pool in addressablePools) pool.Clear();
+            foreach (var handle in handles)
+                if (handle.IsValid()) Addressables.Release(handle);
 #endif
         }
 

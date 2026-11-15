@@ -102,6 +102,9 @@ namespace ZeroEngine.Core
         {
             get
             {
+                if (SingletonRuntimeState.ApplicationIsQuitting)
+                    return _instance;
+
                 lock (_lock)
                 {
                     if (_instance == null)
@@ -113,10 +116,10 @@ namespace ZeroEngine.Core
                             GameObject singletonObject = new GameObject();
                             _instance = singletonObject.AddComponent<T>();
                             singletonObject.name = $"[{typeof(T)}]";
-                                if (Application.isPlaying)
-                                {
-                                    DontDestroyOnLoad(singletonObject);
-                                }
+                            if (Application.isPlaying)
+                            {
+                                DontDestroyOnLoad(singletonObject);
+                            }
                         }
                     }
 
@@ -144,6 +147,17 @@ namespace ZeroEngine.Core
             {
                 Destroy(gameObject);
             }
+        }
+
+        protected virtual void OnDestroy()
+        {
+            if (_instance == this)
+                _instance = null;
+        }
+
+        protected virtual void OnApplicationQuit()
+        {
+            SingletonRuntimeState.ApplicationIsQuitting = true;
         }
     }
 }
