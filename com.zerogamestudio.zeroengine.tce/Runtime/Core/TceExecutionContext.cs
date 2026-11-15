@@ -117,7 +117,17 @@ namespace ZeroEngine.TCE
         private readonly Func<bool> isCurrent;
         private Dictionary<Type, object> values;
         private List<Action> commitNotifications;
+        private Dictionary<(TceObjectRef Owner, string Key), ResourceCost> resourceCosts;
+        private bool committing;
         private bool completed;
+
+        private sealed class ResourceCost
+        {
+            public TceObjectRef Owner;
+            public int Amount;
+            public Func<int> Available;
+            public Action<int, Action<Action>> Consume;
+        }
 
         public TceExecutionContext(TceInstallationContext installation, TceEventContext eventContext,
             Func<bool> isCurrent = null, long parentExecutionId = 0)
@@ -143,11 +153,64 @@ namespace ZeroEngine.TCE
             else (commitNotifications ??= new List<Action>()).Add(notification);
         }
 
-        public void Commit()
+        /// <summary>
+        /// Reserves a cost without changing its resource. Equal owner/key pairs share one total.
+        /// Availability reads must be pure. Consume must be synchronous, non-rejecting after validation,
+        /// and defer observable callbacks through the supplied notification sink.
+        /// </summary>
+        public bool TryReserveResource(TceObjectRef owner, string key, int amount,
+            Func<int> available, Action<int, Action<Action>> consume)
         {
             RequireCurrent();
-            if (IsCommitted) return;
-            IsCommitted = true;
+            if (IsCommitted || committing) throw new InvalidOperationException("Admission has already ended.");
+            if (string.IsNullOrEmpty(key)) throw new ArgumentException("A resource identity is required.", nameof(key));
+            if (amount < 1) throw new ArgumentOutOfRangeException(nameof(amount));
+            if (available == null) throw new ArgumentNullException(nameof(available));
+            if (consume == null) throw new ArgumentNullException(nameof(consume));
+            if (!owner.IsCurrent) return false;
+            var identity = (owner, key);
+            resourceCosts ??= new Dictionary<(TceObjectRef, string), ResourceCost>();
+            resourceCosts.TryGetValue(identity, out var cost);
+            long total = (long)(cost?.Amount ?? 0) + amount;
+            if (total > int.MaxValue || (cost?.Available ?? available)() < total) return false;
+            if (cost == null)
+                resourceCosts.Add(identity, cost = new ResourceCost { Owner = owner, Available = available, Consume = consume });
+            cost.Amount = (int)total;
+            return true;
+        }
+
+        /// <summary>Revalidates all costs before any mutation, then commits state before publishing callbacks.</summary>
+        public bool TryCommit(Action commitState = null)
+        {
+            RequireCurrent();
+            if (IsCommitted) return true;
+            if (committing) throw new InvalidOperationException("A commit cannot reenter its own admission.");
+            committing = true;
+            try
+            {
+                if (resourceCosts != null)
+                {
+                    foreach (var cost in resourceCosts.Values)
+                        if (!cost.Owner.IsCurrent || cost.Available() < cost.Amount) return false;
+                    foreach (var cost in resourceCosts.Values)
+                        cost.Consume(cost.Amount, DeferCommitNotification);
+                }
+                commitState?.Invoke();
+                IsCommitted = true;
+                resourceCosts?.Clear();
+                PublishCommitNotifications();
+                return true;
+            }
+            finally { committing = false; }
+        }
+
+        public void Commit()
+        {
+            if (!TryCommit()) throw new InvalidOperationException("An admission resource is no longer available.");
+        }
+
+        private void PublishCommitNotifications()
+        {
             var pending = commitNotifications;
             commitNotifications = null;
             if (pending == null) return;
@@ -163,6 +226,7 @@ namespace ZeroEngine.TCE
             completed = true;
             values?.Clear();
             commitNotifications?.Clear();
+            resourceCosts?.Clear();
         }
 
         private void RequireCurrent()
