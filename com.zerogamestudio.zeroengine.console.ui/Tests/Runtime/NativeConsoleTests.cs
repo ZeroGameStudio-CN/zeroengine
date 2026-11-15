@@ -79,7 +79,7 @@ namespace ZeroEngine.Console.UI.Tests
         }
 
         [UnityTest]
-        public IEnumerator NativeView_ClosedProjectOwnedInputHasNoManagedAllocation()
+        public IEnumerator NativeView_ClosedProjectOwnedInputRemainsIdle()
         {
             var root = new GameObject("Closed console allocation probe");
             try
@@ -89,13 +89,23 @@ namespace ZeroEngine.Console.UI.Tests
                 var method = typeof(NativeConsole).GetMethod("Update", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
                 var update = (Action)Delegate.CreateDelegate(typeof(Action), view, method);
                 for (int i = 0; i < 100; i++) update();
+                long controlBefore = GC.GetAllocatedBytesForCurrentThread();
+                var control = new byte[1024];
+                GC.KeepAlive(control);
+                bool allocationCounterAvailable = GC.GetAllocatedBytesForCurrentThread() - controlBefore >= 1024;
                 long before = GC.GetAllocatedBytesForCurrentThread();
                 var clock = System.Diagnostics.Stopwatch.StartNew();
                 for (int i = 0; i < 10000; i++) update();
                 clock.Stop();
                 long allocated = GC.GetAllocatedBytesForCurrentThread() - before;
-                Assert.That(allocated, Is.LessThanOrEqualTo(128), "The closed view must not poll input or allocate per update.");
-                TestContext.WriteLine("closed-update probe: 10000 calls, allocated=" + allocated + ", elapsedTicks=" + clock.ElapsedTicks);
+                Assert.That(view.IsOpen, Is.False);
+                Assert.That(view.InputField, Is.Null, "Closed updates must not construct the view.");
+                Assert.That(view.Host.Session.GetHistory(), Is.Empty);
+                Assert.That(view.Host.Session.GetOutput(), Is.Empty);
+                if (allocationCounterAvailable)
+                    Assert.That(allocated, Is.LessThanOrEqualTo(128), "The closed view must not allocate per update.");
+                TestContext.WriteLine("closed-update probe: 10000 calls, allocated=" +
+                    (allocationCounterAvailable ? allocated.ToString() : "unavailable (positive control failed)") + ", elapsedTicks=" + clock.ElapsedTicks);
                 yield return null;
             }
             finally { Object.DestroyImmediate(root); }
