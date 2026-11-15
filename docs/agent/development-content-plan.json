@@ -431,10 +431,10 @@
       "availability": "DevelopmentOnly",
       "responsibleChat": "01a16e60-157f-7f63-8f5a-7a6bdbe07a81",
       "chatUrl": "",
-      "nextAction": "用户选择保留 Editor、先看静态效果。保留中断请求 19781a1b8b764a489d0d5ac090216e16 与本轮临时 fixture，先恢复并核验世界／音频状态，再清理临时脚本和补录正常镜头行走；画面确认后才按最新依赖基线完成正式包接入。",
+      "nextAction": "本轮按用户要求只提供同光源静态对照，供判断亮度与暗部响应，再决定候选的正式接入。保留旧中断请求 19781a1b8b764a489d0d5ac090216e16 的世界／音频恢复缺口，独立静态 rig 不代替该项恢复。",
       "entrance": "POB 受控 PlayMode 的 RimFireColorTestRoom，以及包内 SpriteRimLightingRenderTests。",
       "resourcePath": "com.zerogamestudio.zeroengine.render.urp/Runtime/Resources/ZeroEngine/SpriteRimLighting.shader",
-      "revision": "painted-colour-response-20261115",
+      "revision": "same-source-material-response-20261115",
       "candidatePackageVersion": "0.4.4",
       "releaseEvidence": "",
       "verificationEvidence": [
@@ -444,9 +444,12 @@
         "C:/Users/2025/.antigravity_cockpit/instances/codex/eae8558ab409f681/visualizations/2026/10/24/01a16e60-157f-7f63-8f5a-7a6bdbe07a81/rim-fused-preview-20261115/evidence/delivery.json",
         "C:/Users/2025/.antigravity_cockpit/instances/codex/eae8558ab409f681/visualizations/2026/10/24/01a16e60-157f-7f63-8f5a-7a6bdbe07a81/rim-fused-preview-20261115/comparison.mp4",
         "C:/Users/2025/.antigravity_cockpit/instances/codex/eae8558ab409f681/visualizations/2026/10/24/01a16e60-157f-7f63-8f5a-7a6bdbe07a81/rim-material-response-20261115/static-proof.json",
-        "C:/Users/2025/.antigravity_cockpit/instances/codex/eae8558ab409f681/visualizations/2026/10/24/01a16e60-157f-7f63-8f5a-7a6bdbe07a81/rim-material-response-20261115/evidence/package-gpu.json"
+        "C:/Users/2025/.antigravity_cockpit/instances/codex/eae8558ab409f681/visualizations/2026/10/24/01a16e60-157f-7f63-8f5a-7a6bdbe07a81/rim-material-response-20261115/evidence/package-gpu.json",
+        "C:/Users/2025/.antigravity_cockpit/instances/codex/eae8558ab409f681/visualizations/2026/10/24/01a16e60-157f-7f63-8f5a-7a6bdbe07a81/rim-same-light-20261115/comparison-proof.json",
+        "C:/Users/2025/.antigravity_cockpit/instances/codex/eae8558ab409f681/visualizations/2026/10/24/01a16e60-157f-7f63-8f5a-7a6bdbe07a81/rim-same-light-20261115/evidence/test-result.json",
+        "C:/Users/2025/.antigravity_cockpit/instances/codex/eae8558ab409f681/visualizations/2026/10/24/01a16e60-157f-7f63-8f5a-7a6bdbe07a81/rim-same-light-20261115/evidence/capture-check.json"
       ],
-      "verificationScope": "底色响应候选 Shader 6901a460 在命名空间隔离的完整受光运行时中跑完 5 组 GPU 检查，包括黑色保底、深浅明度、彩色通道、腿缝与孤立像素、遮挡和 HDR。正常 Game View 已记录参考机制兼容移植／旧融合／新融合的 12 个同姿势采样，静态视频尺寸与时长检查合格。整体流程在超时取消时中断，行走未完成；原生资源清理已释放，但世界和音频恢复证明不完整，不能把本轮称为完整 PlayMode 验收。未更改消费者包引用。"
+      "verificationScope": "Shader dcba3ff4 在 POB 独立静态 PlayMode rig 中通过 1 项针对性采集检查：同一 Point Light、角色、位置与姿势，除 CompositeColor 外 Shader 代码一致，两次实际受光 PNG 哈希相同。原生 Game View 录制 180 帧，交付视频 1920x1080／6.017 秒，逐帧检查无青色编译占位；ze.png 的提前诊断占位截图不用于交付，并排图取自实录第 1／5 秒。临时管线、Game View、异步编译设置与自建对象恢复均有读回。参考侧仅复用原作对应颜色合成公式，共享本地采样与轮廓，不是原作完整管线复刻。旧 Shader 6901a460 的 5 组 GPU 回归证据保留，未将其计作本次新 Shader 的 5 组回归。未更改消费者依赖，旧中断流程的世界／音频恢复缺口仍保留。"
     }
   ]
 }

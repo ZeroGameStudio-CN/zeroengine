@@ -116,15 +116,19 @@ Shader "Hidden/ZeroEngine/SpriteRimLighting"
             {
                 // The one-cell contour retains the painted RGB response. An independent
                 // screen fill would flatten dark cloth and pale hair into a similar neon line.
-                float3 core = saturate(contourLight) * contourStrength;
+                float3 core = saturate(contourLight);
+                float coreCoverage = max(core.r, max(core.g, core.b));
                 float3 gain = baseColor * core / max(1 - core, .05);
-                float3 coreColor = min(baseColor + gain * _RimRefStyle.z, meta.y) * meta.x;
+                // Strength controls the blend, not the dodge denominator. This keeps
+                // the response calibrated to the same input field as the reference.
+                float coreBlend = saturate(coreCoverage * _RimRefStyle.z * contourStrength);
+                float3 coreColor = min(baseColor + gain * coreBlend, meta.y) * meta.x;
                 if (limitAddedHdr) coreColor = saturate(coreColor);
                 float3 coreResponse = gammaBlend ? SRGBToLinear(coreColor) : coreColor;
                 // A small bounded floor keeps genuinely black detail readable; it does
                 // not replace the material-dependent response or grow with dodge gain.
                 float3 floorLight = gammaBlend ? SRGBToLinear(core) : core;
-                coreResponse += floorLight * (.008 * _RimRefStyle.z * meta.x) * saturate(1 - incomingPeak * 16);
+                coreResponse += floorLight * (.022 * _RimRefStyle.z * contourStrength * meta.x) * saturate(1 - incomingPeak * 16);
                 if (limitAddedHdr) coreResponse = saturate(coreResponse);
                 response = max(response, coreResponse);
             }

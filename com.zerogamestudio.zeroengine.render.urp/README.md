@@ -13,7 +13,7 @@ pooling and project assets stay in the consumer. The existing UnityEngine-only
    art cells. The deeper artwork retains its original exposure.
    ContourStrength adds a clear one-art-cell core to marked native lights,
    including small isolated cells and the edges of gaps inside a silhouette.
-   The shared default uses 0.85; older custom profiles keep zero until enabled.
+   The shared default uses 1; older custom profiles keep zero until enabled.
    The existing soft band and inward transition retain their own settings.
 3. Create a dedicated light with `GameObject > Light > 角色边缘点光` or
    `角色边缘聚光`; the Editor-only authoring assembly adds the native light and
@@ -37,6 +37,7 @@ The core uses the painted RGB in a bounded color-dodge response, preserving
 dark cloth and pale highlights instead of adding a uniform colored line. A very
 weak visibility floor remains for black art; the older dark fill is reduced
 while the clear core is enabled. Zero ContourStrength keeps the old response.
+Core strength controls the blend rather than reducing the input light energy.
 It adds no new HDR emission and preserves existing HDR source energy. Multiple colors
 blend at the strongest core contribution's peak; shadow visibility applies to
 the core and to the existing light response.

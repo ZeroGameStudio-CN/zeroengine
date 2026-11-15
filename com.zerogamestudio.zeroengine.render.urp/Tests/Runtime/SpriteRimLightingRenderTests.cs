@@ -537,7 +537,7 @@ namespace ZeroEngine.Render.Tests.Runtime
                 material.SetVector("_BaseColor", new Vector4(.2f, .03f, .003f, 1)); painted = Render(camera);
                 var zero = black.GetPixel(34, 18); var low = dark.GetPixel(34, 18);
                 var high = pale.GetPixel(34, 18); var hue = painted.GetPixel(34, 18);
-                Assert.That(zero.g, Is.InRange(.0001f, .012f), "Black art gets only a faint bounded visibility floor.");
+                Assert.That(zero.g, Is.InRange(.0001f, .025f), "Black art remains visible with a weak bounded floor, distinct from pale material.");
                 Assert.That(low.g, Is.LessThan(high.g * .35f), "Dark and pale cloth must retain visibly different contour values under identical light.");
                 Assert.That(hue.r, Is.GreaterThan(hue.g * 1.5f), "Neutral light must retain the painted red channel.");
                 Assert.That(hue.g, Is.GreaterThan(hue.b * 1.5f), "A dark blue channel must not become a uniform bright white contour.");
