@@ -26,6 +26,7 @@ namespace ZeroEngine.Console.UI
         private ConsoleActionHint copyHint;
         private string outputQuery = string.Empty;
         private bool usingTouchLayout;
+        private bool usingLandscapeLayout;
         private Canvas viewCanvas;
         private CanvasScaler viewScaler;
 
@@ -156,11 +157,15 @@ namespace ZeroEngine.Console.UI
         private void UpdateViewLayout()
         {
             bool touch = Application.isMobilePlatform || TouchLayoutPreview;
-            if (usingTouchLayout != touch)
+            bool landscape = Screen.width >= Screen.height;
+            if (usingTouchLayout != touch || usingLandscapeLayout != landscape)
             {
                 usingTouchLayout = touch;
+                usingLandscapeLayout = landscape;
                 var scaler = viewScaler;
-                scaler.referenceResolution = touch ? new Vector2(480, 854) : new Vector2(1280, 720);
+                scaler.referenceResolution = touch
+                    ? landscape ? new Vector2(854, 480) : new Vector2(480, 854)
+                    : new Vector2(1280, 720);
                 scaler.matchWidthOrHeight = touch ? 0 : .5f;
             }
             var area = ((RectTransform)view.transform).rect.size;
@@ -170,8 +175,8 @@ namespace ZeroEngine.Console.UI
             float keyboard = touch && TouchScreenKeyboard.visible ? TouchScreenKeyboard.area.height / viewCanvas.scaleFactor : 0;
             var position = new Vector2(16, 16 + keyboard);
             if (panel.anchoredPosition != position) panel.anchoredPosition = position;
-            var size = new Vector2(Mathf.Min(720, Mathf.Max(0, area.x - 32) / scale),
-                Mathf.Min(touch ? 560 : 400, Mathf.Max(0, area.y - keyboard - 32) / scale));
+            var size = new Vector2(Mathf.Min(preferredSize.x, Mathf.Max(0, area.x - 32) / scale),
+                Mathf.Min(preferredSize.y, Mathf.Max(0, area.y - keyboard - 32) / scale));
             if (panel.sizeDelta == size) return;
             panel.sizeDelta = size;
             RefreshCompletions();

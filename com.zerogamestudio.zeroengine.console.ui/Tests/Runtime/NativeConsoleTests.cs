@@ -14,6 +14,44 @@ namespace ZeroEngine.Console.UI.Tests
     public sealed class NativeConsoleTests
     {
         [UnityTest]
+        public IEnumerator NativeView_ConfigurableSizeAndTouchOrientationStayInsideCanvas()
+        {
+            var root = new GameObject("Console size and orientation");
+            try
+            {
+                var view = root.AddComponent<NativeConsole>();
+                Assert.That(view.PreferredSize, Is.EqualTo(new Vector2(880, 480)));
+                view.Open();
+                yield return null;
+                var canvas = view.GetComponentInChildren<Canvas>();
+                var area = (RectTransform)canvas.transform;
+                var panel = (RectTransform)canvas.transform.Find("Panel");
+                var initial = panel.rect.size;
+                view.PreferredSize = new Vector2(640, 360);
+                yield return null;
+                Assert.That(panel.rect.width, Is.LessThan(initial.x));
+                Assert.That(panel.rect.height, Is.LessThan(initial.y));
+                view.TouchLayoutPreview = true;
+                yield return null;
+                yield return null;
+                var scaler = canvas.GetComponent<UnityEngine.UI.CanvasScaler>();
+                Assert.That(scaler.referenceResolution, Is.EqualTo(Screen.width >= Screen.height
+                    ? new Vector2(854, 480) : new Vector2(480, 854)));
+                view.PreferredSize = new Vector2(10000, 10000);
+                yield return null;
+                var corners = new Vector3[4]; panel.GetWorldCorners(corners);
+                foreach (var corner in corners)
+                {
+                    var point = area.InverseTransformPoint(corner);
+                    Assert.That(point.x, Is.InRange(area.rect.xMin - 1, area.rect.xMax + 1));
+                    Assert.That(point.y, Is.InRange(area.rect.yMin - 1, area.rect.yMax + 1));
+                }
+                view.Close();
+            }
+            finally { Object.DestroyImmediate(root); }
+        }
+
+        [UnityTest]
         public IEnumerator NativeView_ClosedProjectOwnedInputHasNoManagedAllocation()
         {
             var root = new GameObject("Closed console allocation probe");

@@ -24,9 +24,10 @@ bounded output/history and cancellation. Switching closes the previous view
 and releases its EventSystem/input state before opening the next; it does not
 cancel or replay an already started business command.
 
-The native desktop window opens at the lower left. Its bounded 720 × 400
-reference layout fits inside the current Canvas and leaves the remaining game
-view visible. The toolbar supplies Clear, Copy, font size (12–28) and an explicit
+The desktop window opens at the lower left, defaulting to 880 × 480 reference
+units. Adjust **Preferred Size** in the Inspector or `NativeConsole.PreferredSize`
+at runtime; it fits inside the available Canvas and soft-keyboard area. The
+toolbar supplies Clear, Copy, font size (12–28) and an explicit
 follow-output switch. Turning follow off keeps the current reading position
 when messages arrive; turning it on returns to the newest output. The scrollable
 view retains up to the last 256 session entries and displays each message up to
@@ -47,7 +48,9 @@ sprite sheet, icon font or external UI package.
 The visible title is **ZE Console**. Graphite translucent surfaces and restrained
 blue-gray accents retain contrast without a blur pass or additional texture.
 `TouchLayoutPreview` previews the mobile canvas scale in the Editor; mobile builds
-select it automatically and account for the reported soft-keyboard height.
+select it automatically, choose landscape or portrait scaling from the actual
+screen dimensions, and account for the reported soft-keyboard height. The package
+uses the project's screen orientation settings.
 
 ## Shared access
 
