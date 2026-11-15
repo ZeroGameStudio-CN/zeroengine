@@ -6,6 +6,8 @@ namespace ZeroEngine.Console.UI
 {
     internal static class InputSystemConsoleBackend
     {
+        private static Keyboard activationKeyboard;
+        private static readonly System.Text.StringBuilder activationText = new System.Text.StringBuilder(128);
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
         private static void Initialize()
         {
@@ -18,6 +20,7 @@ namespace ZeroEngine.Console.UI
                 true
 #endif
             );
+            ConsoleInputBackend.ConfigureActivationInput(ReadText, PointerDown);
         }
 #if UNITY_EDITOR
         [UnityEditor.InitializeOnLoadMethod]
@@ -41,6 +44,32 @@ namespace ZeroEngine.Console.UI
                 case KeyCode.PageDown: return keyboard.pageDownKey.wasPressedThisFrame;
                 default: return false;
             }
+        }
+
+        private static string ReadText()
+        {
+            if (activationKeyboard != Keyboard.current)
+            {
+                if (activationKeyboard != null) activationKeyboard.onTextInput -= ReceiveText;
+                activationKeyboard = Keyboard.current; activationText.Clear();
+                if (activationKeyboard != null) activationKeyboard.onTextInput += ReceiveText;
+            }
+            if (activationText.Length == 0) return string.Empty;
+            string value = activationText.ToString(); activationText.Clear(); return value;
+        }
+
+        private static void ReceiveText(char value)
+        {
+            if (activationText.Length == 128) activationText.Clear();
+            activationText.Append(value);
+        }
+
+        private static Vector2? PointerDown()
+        {
+            var touch = Touchscreen.current;
+            if (touch != null && touch.primaryTouch.press.wasPressedThisFrame) return touch.primaryTouch.position.ReadValue();
+            var mouse = Mouse.current;
+            return mouse != null && mouse.leftButton.wasPressedThisFrame ? mouse.position.ReadValue() : (Vector2?)null;
         }
     }
 }

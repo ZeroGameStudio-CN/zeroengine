@@ -54,9 +54,37 @@ namespace ZeroEngine.Console.UI
         public override bool GetMouseButton(int button) => MouseButton(button)?.isPressed ?? false;
         public override bool GetMouseButtonDown(int button) => MouseButton(button)?.wasPressedThisFrame ?? false;
         public override bool GetMouseButtonUp(int button) => MouseButton(button)?.wasReleasedThisFrame ?? false;
-        public override bool touchSupported => false;
-        public override int touchCount => 0;
-        public override Touch GetTouch(int index) => default;
+        public override bool touchSupported => Touchscreen.current != null;
+        public override int touchCount
+        {
+            get
+            {
+                var screen = Touchscreen.current;
+                if (screen == null) return 0;
+                int count = 0;
+                foreach (var touch in screen.touches) if (touch.isInProgress || touch.press.wasReleasedThisFrame) count++;
+                return count;
+            }
+        }
+        public override Touch GetTouch(int index)
+        {
+            var screen = Touchscreen.current;
+            if (screen == null) return default;
+            foreach (var touch in screen.touches)
+            {
+                if (!touch.isInProgress && !touch.press.wasReleasedThisFrame) continue;
+                if (index-- != 0) continue;
+                var phase = touch.phase.ReadValue();
+                return new Touch { fingerId = touch.touchId.ReadValue(), position = touch.position.ReadValue(),
+                    rawPosition = touch.position.ReadValue(), deltaPosition = touch.delta.ReadValue(),
+                    pressure = touch.pressure.ReadValue(), maximumPossiblePressure = 1,
+                    phase = phase == UnityEngine.InputSystem.TouchPhase.Began ? UnityEngine.TouchPhase.Began :
+                        phase == UnityEngine.InputSystem.TouchPhase.Moved ? UnityEngine.TouchPhase.Moved :
+                        phase == UnityEngine.InputSystem.TouchPhase.Stationary ? UnityEngine.TouchPhase.Stationary :
+                        phase == UnityEngine.InputSystem.TouchPhase.Ended ? UnityEngine.TouchPhase.Ended : UnityEngine.TouchPhase.Canceled };
+            }
+            return default;
+        }
         public override float GetAxisRaw(string axisName) => 0;
         public override bool GetButtonDown(string buttonName) => false;
 #endif

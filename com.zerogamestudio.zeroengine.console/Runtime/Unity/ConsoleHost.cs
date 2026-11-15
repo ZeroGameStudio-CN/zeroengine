@@ -14,6 +14,7 @@ namespace ZeroEngine.Console.Unity
         private UnityConsoleDispatcher dispatcher;
         private IDisposable common;
         private bool capturingUnityLogs;
+        private bool sessionReleaseAccess;
         public ConsoleRegistry Registry { get; private set; }
         public ConsoleSession Session { get; private set; }
         public Func<ConsoleCaller> CallerFactory { get; set; }
@@ -30,13 +31,20 @@ namespace ZeroEngine.Console.Unity
         public void Initialize()
         {
             if (Session != null || !isActiveAndEnabled) return;
-            if (!Application.isEditor && !Debug.isDebugBuild && !allowInRelease) return;
+            if (!Application.isEditor && !Debug.isDebugBuild && !allowInRelease && !sessionReleaseAccess) return;
             dispatcher = new UnityConsoleDispatcher();
             Registry = new ConsoleRegistry();
             Session = new ConsoleSession(Registry, dispatcher: dispatcher);
             common = ConsoleCommonCommands.Register(Session);
             UpdateLogCapture();
             Started?.Invoke(this);
+        }
+
+        public void SetReleaseAccessForSession(bool allowed)
+        {
+            sessionReleaseAccess = allowed;
+            if (allowed) Initialize();
+            else if (!Application.isEditor && !Debug.isDebugBuild && !allowInRelease) Shutdown();
         }
 
         public ConsoleCaller CreateCaller()
@@ -87,7 +95,9 @@ namespace ZeroEngine.Console.Unity
             session?.Write(new ConsoleOutput("unity", level, message));
         }
 
-        private void OnDisable()
+        private void OnDisable() => Shutdown();
+
+        private void Shutdown()
         {
             if (capturingUnityLogs)
             {

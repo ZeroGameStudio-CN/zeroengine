@@ -1,6 +1,6 @@
-# ZE native Console UI
+# ZE Console UI
 
-Native frontend candidate. Add `ConsoleHost` and `NativeConsole` to an owned
+Add `ConsoleHost` and `NativeConsole` to an owned
 GameObject. The view builds its own bounded hierarchy, uses the host's native
 pipeline and can operate without Quantum Console. A project can supply a font
 and an input-isolation lease; the view restores its own cursor/selection state.
@@ -43,6 +43,27 @@ descriptions and shortcut hints on hover. The follow control shows its active or
 paused state; ready/running and cancellation retain distinct visual states.
 Hints stay inside the window and do not take keyboard focus. Icons require no
 sprite sheet, icon font or external UI package.
+
+The visible title is **ZE Console**. Graphite translucent surfaces and restrained
+blue-gray accents retain contrast without a blur pass or additional texture.
+`TouchLayoutPreview` previews the mobile canvas scale in the Editor; mobile builds
+select it automatically and account for the reported soft-keyboard height.
+
+## Shared access
+
+Add `ConsoleAccessController` on the same owner to reuse Editor access and hidden
+release activation. Editor/development builds open directly; release builds stay
+hidden until the configured text sequence, seven upper-left corner taps, or a
+project's existing hidden path calls `TryUnlock` / `Unlock`. Configure the text
+sequence and tap count once; zero taps disables the gesture. There is no shared
+default password or always-visible release button.
+
+`Lock` revokes access for this session. Unlocking initializes the host; `Toggle`
+opens the view. Command environments and capabilities still
+apply. Existing project unlock paths can call this component instead of
+reimplementing its gate. Supply the existing input-isolation lease where needed.
+Touch/soft-keyboard behavior requires device acceptance; an Editor preview alone
+does not establish Android or iOS support.
 
 The search icon opens a collapsible log-search row. Search matches committed text
 as a literal, case-insensitive substring, including Chinese; it does not run

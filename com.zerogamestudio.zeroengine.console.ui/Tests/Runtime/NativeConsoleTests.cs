@@ -14,6 +14,59 @@ namespace ZeroEngine.Console.UI.Tests
     public sealed class NativeConsoleTests
     {
         [UnityTest]
+        public IEnumerator NativeView_ClosedProjectOwnedInputHasNoManagedAllocation()
+        {
+            var root = new GameObject("Closed console allocation probe");
+            try
+            {
+                var view = root.AddComponent<NativeConsole>();
+                view.KeyboardShortcutEnabled = false;
+                var method = typeof(NativeConsole).GetMethod("Update", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+                var update = (Action)Delegate.CreateDelegate(typeof(Action), view, method);
+                for (int i = 0; i < 100; i++) update();
+                long before = GC.GetAllocatedBytesForCurrentThread();
+                var clock = System.Diagnostics.Stopwatch.StartNew();
+                for (int i = 0; i < 10000; i++) update();
+                clock.Stop();
+                long allocated = GC.GetAllocatedBytesForCurrentThread() - before;
+                Assert.That(allocated, Is.LessThanOrEqualTo(128), "The closed view must not poll input or allocate per update.");
+                TestContext.WriteLine("closed-update probe: 10000 calls, allocated=" + allocated + ", elapsedTicks=" + clock.ElapsedTicks);
+                yield return null;
+            }
+            finally { Object.DestroyImmediate(root); }
+        }
+
+        [UnityTest]
+        public IEnumerator AccessController_ReusesHiddenSequenceAndRestoresShortcutOwnership()
+        {
+            var root = new GameObject("Shared console access");
+            root.SetActive(false);
+            try
+            {
+                var view = root.AddComponent<NativeConsole>();
+                var access = root.AddComponent<ConsoleAccessController>();
+                access.ConfigureHiddenPath("aaab", 0);
+                root.SetActive(true);
+                Assert.That(access.CanOpen, Is.True, "Editor access requires no unlock.");
+                Assert.That(view.KeyboardShortcutEnabled, Is.False);
+                Assert.That(access.IsReleaseUnlocked, Is.False);
+                Assert.That(access.TryUnlock("incorrect"), Is.False);
+                Assert.That(access.FeedHiddenInput("aaa"), Is.False);
+                Assert.That(access.FeedHiddenInput("ab"), Is.True, "Overlapping prefixes must be accepted.");
+                Assert.That(access.IsReleaseUnlocked, Is.True);
+                access.Toggle();
+                yield return null;
+                Assert.That(view.IsOpen, Is.True);
+                access.Lock();
+                Assert.That(access.IsReleaseUnlocked, Is.False);
+                Assert.That(view.IsOpen, Is.False);
+                access.enabled = false;
+                Assert.That(view.KeyboardShortcutEnabled, Is.True);
+            }
+            finally { Object.DestroyImmediate(root); }
+        }
+
+        [UnityTest]
         public IEnumerator Selector_InactiveNativeConfigurationOpensWithoutAQuantumWarning()
         {
             var root = new GameObject("Explicit project input owner");
@@ -314,6 +367,8 @@ namespace ZeroEngine.Console.UI.Tests
                 var events = UnityEngine.EventSystems.EventSystem.current;
                 var selected = events.currentSelectedGameObject;
                 var panel = (RectTransform)view.GetComponentInChildren<Canvas>().transform.Find("Panel");
+                Assert.That(panel.Find("Title").GetComponent<UnityEngine.UI.Text>().text, Is.EqualTo("ZE Console"));
+                Assert.That(panel.Find("Backend"), Is.Null);
                 var hint = (RectTransform)panel.Find("ActionHint");
                 var pointer = new UnityEngine.EventSystems.PointerEventData(events);
                 Assert.That(hint.gameObject.activeSelf, Is.False);
@@ -392,7 +447,7 @@ namespace ZeroEngine.Console.UI.Tests
                 Assert.That(calls, Is.Zero, "Submitting search must never run the command draft.");
                 Assert.That(host.Session.GetHistory(), Is.Empty);
                 Assert.That(view.InputField.text, Is.EqualTo("search-test"));
-                Assert.That(view.transform.Find("ZE Native Console/Panel/Completions").gameObject.activeSelf, Is.False);
+                Assert.That(view.transform.Find("ZE Console/Panel/Completions").gameObject.activeSelf, Is.False);
                 search.text = "缓存";
                 yield return null;
                 host.Session.Write(new ConsoleOutput("", ConsoleOutputLevel.Info, "后台缓存刷新"));
