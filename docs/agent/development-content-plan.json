@@ -426,6 +426,28 @@
       "releaseEvidence": ""
     },
     {
+      "id": "ze.render.surface-attachment",
+      "title": "可复用的表面附着、轮廓选点与弹性回弹",
+      "stage": "Ready",
+      "targetReleaseId": "",
+      "availability": "TestOnly",
+      "responsibleChat": "01a1d41e-aaaa-72a1-a875-15843fe79b39",
+      "chatUrl": "",
+      "nextAction": "完成POB精确提交与共享ZE包cohort对齐；实际玩家版本发布时另行关联证据。",
+      "entrance": "ZeroEngine.Render.Tests.SurfaceAttachmentTests; POB原生召回弹体与扎墙/扎地组件",
+      "resourcePath": "com.zerogamestudio.zeroengine.render/Runtime/Attachments",
+      "candidatePackageVersion": "0.5.0",
+      "releaseEvidence": "Git source candidate: https://github.com/ZeroGameStudio-CN/zeroengine/pull/103; no Player release or human acceptance asserted.",
+      "verificationEvidence": [
+        "Native Editor batch 19e1c82adac544dca821c8a81692915b: exact 24/24, no failures or skips, cleanupVerified; 13 package contracts and 11 consumer regressions.",
+        "Native PlayMode f10c5767c43d4d36a8461d78c5f6d18a: original gameplay entry, 13 impacts/recalls across R1/G1 normal, 4x, .25x, .125x, thin(.12,1.6) and mixed group; cleanupVerified, isolated storage unchanged.",
+        "Actual consumer Render 0.5.0 and Render URP 0.4.4 loaded from immutable Git 12bcaf3d58b74c6ad7755fc995e4dc3c24ecf4ba; reflection confirms POB delegates to ZeroEngine.Render.Attachments.SurfaceAttachmentPose.",
+        "Native 1920x1080 original-speed capture 19.681367 seconds inspected, including settled body crops and impact motion frames; source/package boundary audit has no findings."
+      ],
+      "verificationScope": "从POB cs:19242提取已验证的XY轮廓选点、体型适应、透视对齐和caller-clocked回弹；消费者保持伤害、时钟、池化和召回所有权。",
+      "sourceCommit": "12bcaf3d58b74c6ad7755fc995e4dc3c24ecf4ba"
+    },
+    {
       "id": "ze.interaction.authority",
       "title": "单机与联机共用的交互权威、独立双端示例",
       "stage": "Previewable",
