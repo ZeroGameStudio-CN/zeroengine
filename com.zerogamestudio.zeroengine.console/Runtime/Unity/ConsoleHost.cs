@@ -34,7 +34,7 @@ namespace ZeroEngine.Console.Unity
             if (!Application.isEditor && !Debug.isDebugBuild && !allowInRelease && !sessionReleaseAccess) return;
             dispatcher = new UnityConsoleDispatcher();
             Registry = new ConsoleRegistry();
-            Session = new ConsoleSession(Registry, dispatcher: dispatcher);
+            Session = new ConsoleSession(Registry, new ConsoleValues(UnityConsoleValues.TryConvert), dispatcher: dispatcher);
             common = ConsoleCommonCommands.Register(Session);
             UpdateLogCapture();
             Started?.Invoke(this);

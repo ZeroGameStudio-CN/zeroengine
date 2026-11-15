@@ -10,6 +10,11 @@ namespace ZeroEngine.Console
     {
         private readonly Dictionary<Type, ConsoleValueConverter> converters = new Dictionary<Type, ConsoleValueConverter>();
         private readonly object sync = new object();
+        private readonly ConsoleValueConverter fallback;
+
+        public ConsoleValues() { }
+        public ConsoleValues(ConsoleValueConverter fallback)
+            => this.fallback = fallback ?? throw new ArgumentNullException(nameof(fallback));
 
         public IDisposable Register(Type type, ConsoleValueConverter converter)
         {
@@ -76,6 +81,11 @@ namespace ZeroEngine.Console
                 }
                 value = array;
                 return true;
+            }
+            if (fallback != null)
+            {
+                bool converted = fallback(token, target, out value, out error);
+                if (converted || !string.IsNullOrEmpty(error)) return converted;
             }
             error = "Invalid " + target.Name + " value: " + text;
             return false;

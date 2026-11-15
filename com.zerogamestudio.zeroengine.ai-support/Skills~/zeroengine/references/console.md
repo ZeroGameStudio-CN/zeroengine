@@ -23,6 +23,8 @@ compile command code at Player startup.
 
 Catalog caching must preserve live caller/policy checks; never cache authorized
 command lists across callers or unlock changes. Keep deadline timers optional.
+Use the Host's standard Unity value conversions before adding project parsers.
+The pure core accepts an explicit fallback; scoped type converters override it.
 
 Only a handler with an established business outcome returns `Success`.
 `Unconfirmed` preserves a legacy void/string result without claiming success;

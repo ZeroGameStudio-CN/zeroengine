@@ -300,6 +300,37 @@ namespace ZeroEngine.Console.Tests
         }
 
         [Test]
+        public void ValueFallback_ComposesWithBuiltinsArraysAndScopedOverrides()
+        {
+            int calls = 0;
+            var expected = new DateTime(2000, 1, 1);
+            var values = new ConsoleValues((ConsoleToken token, Type type, out object value, out string error) =>
+            {
+                calls++; value = null; error = null;
+                if (type != typeof(DateTime)) return false;
+                if (token.Text != "epoch") { error = "Expected epoch."; return false; }
+                value = expected; error = string.Empty; return true;
+            });
+            Assert.That(values.TryConvert(new ConsoleToken("42", "42", 0), typeof(int), out _, out _), Is.True);
+            Assert.That(calls, Is.Zero);
+            var date = new ConsoleToken("epoch", "epoch", 0);
+            Assert.That(values.TryConvert(date, typeof(DateTime), out var parsed, out _), Is.True);
+            Assert.That(parsed, Is.EqualTo(expected));
+            using (values.Register(typeof(DateTime), (ConsoleToken token, Type type, out object value, out string error) =>
+                { value = expected.AddDays(1); error = null; return true; }))
+            {
+                Assert.That(values.TryConvert(date, typeof(DateTime), out parsed, out _), Is.True);
+                Assert.That(parsed, Is.EqualTo(expected.AddDays(1)));
+            }
+            Assert.That(values.TryConvert(date, typeof(DateTime), out parsed, out _), Is.True);
+            Assert.That(parsed, Is.EqualTo(expected));
+            Assert.That(values.TryConvert(new ConsoleToken("[epoch,epoch]", "[epoch,epoch]", 0), typeof(DateTime[]), out parsed, out _), Is.True);
+            Assert.That(parsed, Is.EqualTo(new[] { expected, expected }));
+            Assert.That(values.TryConvert(new ConsoleToken("invalid", "invalid", 0), typeof(DateTime), out _, out var error), Is.False);
+            Assert.That(error, Is.EqualTo("Expected epoch."));
+        }
+
+        [Test]
         public async Task CommandCompletion_FindsNameFragmentsAndAliasesAfterPrefixMatches()
         {
             using var registry = new ConsoleRegistry();
