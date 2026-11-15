@@ -1,0 +1,23 @@
+{
+  "name": "com.zerogamestudio.zeroengine.interaction.multiplayer",
+  "version": "0.1.0",
+  "displayName": "ZeroEngine Interaction Multiplayer",
+  "description": "Transport-neutral binding of interaction authority to ZE replication identities, with an isolated offline/host/client example.",
+  "unity": "6000.6",
+  "dependencies": {
+    "com.zerogamestudio.zeroengine.interaction": "0.2.0",
+    "com.zerogamestudio.zeroengine.multiplayer": "0.4.0"
+  },
+  "author": { "name": "ZeroGameStudio" },
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/ZeroGameStudio-CN/zeroengine.git",
+    "directory": "com.zerogamestudio.zeroengine.interaction.multiplayer"
+  },
+  "samples": [{
+    "displayName": "Interaction Authority Playground",
+    "description": "One authority core used offline or by independent loopback TCP peers. The sample transport is not a game networking SDK replacement.",
+    "path": "Samples~/NetworkAuthority"
+  }]
+}

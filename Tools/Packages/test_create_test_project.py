@@ -7,6 +7,19 @@ from create_test_project import create_project, select_packages
 
 
 class TestProjectSelectionTests(unittest.TestCase):
+    def test_network_interaction_lane_keeps_only_authority_and_replication_closure(self):
+        prefix = "com.zerogamestudio.zeroengine"
+        packages = {
+            prefix + ".interaction": dict(unity="6000.6"),
+            prefix + ".multiplayer": dict(unity="6000.6", dependencies={prefix + ".editor-ui": "1.5.0"}),
+            prefix + ".editor-ui": dict(unity="6000.6"),
+            prefix + ".interaction.multiplayer": dict(unity="6000.6", dependencies={prefix + ".interaction": "0.2.0", prefix + ".multiplayer": "0.4.0"}),
+            prefix + ".gameplay": dict(unity="6000.6"),
+        }
+        selected, excluded = select_packages(packages, "interaction-network", "6000.6.9f1")
+        self.assertEqual({}, excluded)
+        self.assertCountEqual(selected, [key for key in packages if not key.endswith(".gameplay")])
+
     def test_interaction_lane_excludes_gameplay_inventory_and_other_framework_modules(self):
         packages = {PREFIX: dict(unity="6000.6") for PREFIX in (
             "com.zerogamestudio.zeroengine.interaction",

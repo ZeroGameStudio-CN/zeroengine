@@ -8,7 +8,7 @@ import shutil
 from unity_baseline import EDITOR_VERSION, TEST_FRAMEWORK_VERSION, require_supported_editor, unity_version
 
 
-LANES = ("legacy", "modular", "dashboard-only", "dashboard-with-modules", "modules-only", "lifecycle", "console-core", "console-native", "console-quantum", "interaction")
+LANES = ("legacy", "modular", "dashboard-only", "dashboard-with-modules", "modules-only", "lifecycle", "console-core", "console-native", "console-quantum", "interaction", "interaction-network")
 PREFIX = "com.zerogamestudio.zeroengine"
 
 
@@ -49,6 +49,8 @@ def select_packages(packages, lane, editor_version):
         seeds = {PREFIX + ".console.quantum"}
     elif lane == "interaction":
         seeds = {PREFIX + ".interaction"}
+    elif lane == "interaction-network":
+        seeds = {PREFIX + ".interaction.multiplayer"}
     elif lane in ("modular", "modules-only"):
         seeds = compatible - {PREFIX}
         if lane == "modules-only":
@@ -90,16 +92,20 @@ def create_project(root, destination, lane, editor_version=EDITOR_VERSION, test_
         shutil.copytree(root / name, destination / "Packages" / name,
                         ignore=shutil.ignore_patterns("__pycache__", "*.pyc"))
         dependencies[name] = "file:" + name
-    if lane == "interaction":
+    if lane in ("interaction", "interaction-network"):
         dependencies["com.unity.ugui"] = "1.0.0"
         dependencies["com.unity.modules.ui"] = "1.0.0"
         sample = root / (PREFIX + ".interaction") / "Samples~/InteractionPlayground"
         shutil.copytree(sample, destination / "Assets/InteractionPlayground")
+        if lane == "interaction-network":
+            network_sample = root / (PREFIX + ".interaction.multiplayer") / "Samples~/NetworkAuthority"
+            shutil.copytree(network_sample, destination / "Assets/NetworkAuthority")
     if lane == "dashboard-with-modules":
         fixture = root / "Tools/Tests/Fixtures/com.zerogamestudio.dashboard-removal-fixture"
         shutil.copytree(fixture, destination / "Packages" / fixture.name)
         dependencies[fixture.name] = "file:" + fixture.name
-    manifest = dict(dependencies=dependencies, testables=selected)
+    testables = [name for name in selected if name in (PREFIX + ".interaction", PREFIX + ".interaction.multiplayer")] if lane == "interaction-network" else selected
+    manifest = dict(dependencies=dependencies, testables=testables)
     (destination / "Packages/manifest.json").write_text(json.dumps(manifest, indent=2) + "\n", encoding="utf-8")
     (destination / "ProjectSettings/ProjectVersion.txt").write_text(
         "m_EditorVersion: " + editor_version + "\n", encoding="utf-8")

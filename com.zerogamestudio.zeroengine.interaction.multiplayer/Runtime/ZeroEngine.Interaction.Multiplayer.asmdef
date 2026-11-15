@@ -1,0 +1,7 @@
+{
+  "name": "ZeroEngine.Interaction.Multiplayer",
+  "rootNamespace": "ZeroEngine.Interaction.Multiplayer",
+  "references": ["ZeroEngine.Interaction.Core", "ZeroEngine.Multiplayer.Replication"],
+  "autoReferenced": true,
+  "noEngineReferences": true
+}

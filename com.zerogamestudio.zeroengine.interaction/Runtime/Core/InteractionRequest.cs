@@ -25,6 +25,14 @@ namespace ZeroEngine.Interaction.Core
             return owner.Commit(this, mutation);
         }
 
+        /// <summary>For providers with an explicit business result. Kept separately named so existing Action lambdas retain their binding and semantics.</summary>
+        public bool TryCommitResult(Func<InteractionCheck> mutation)
+        {
+            if (mutation == null) throw new ArgumentNullException(nameof(mutation));
+            if (IsSettled) return false;
+            return owner.CommitResult(this, mutation);
+        }
+
         public bool TryDeny(string reason) => owner.Settle(this, InteractionStatus.Denied, reason);
         public bool TryCancel(string reason = "Cancelled by caller.") => owner.Settle(this, InteractionStatus.Cancelled, reason);
 

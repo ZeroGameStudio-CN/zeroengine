@@ -1,0 +1,6 @@
+{
+  "name": "ZeroEngine.Interaction.NetworkSample.Model",
+  "references": ["ZeroEngine.Interaction.Core", "ZeroEngine.Interaction.Multiplayer", "ZeroEngine.Multiplayer.Replication"],
+  "autoReferenced": false,
+  "noEngineReferences": true
+}

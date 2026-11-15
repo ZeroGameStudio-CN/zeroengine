@@ -205,7 +205,10 @@ namespace ZeroEngine.Interaction.Core
             catch (Exception exception) { denial = exception.Message; return false; }
         }
 
-        internal bool Commit(InteractionRequest request, Action mutation)
+        internal bool Commit(InteractionRequest request, Action mutation) => CommitCore(request, mutation, null);
+        internal bool CommitResult(InteractionRequest request, Func<InteractionCheck> mutation) => CommitCore(request, null, mutation);
+
+        private bool CommitCore(InteractionRequest request, Action mutation, Func<InteractionCheck> resultMutation)
         {
             if (request.IsSettled || !ReferenceEquals(pending, request)) return false;
             if (!Validate(request, out _, out var denial))
@@ -214,7 +217,15 @@ namespace ZeroEngine.Interaction.Core
             request.MarkSettled(); pending = null; request.ClearCallbacks(); committing = true;
             var status = InteractionStatus.Succeeded;
             string reason = null;
-            try { mutation?.Invoke(); }
+            try
+            {
+                if (resultMutation == null) mutation?.Invoke();
+                else
+                {
+                    var result = resultMutation();
+                    if (!result.Allowed) { status = InteractionStatus.Denied; reason = result.Reason; }
+                }
+            }
             catch (Exception exception) { status = InteractionStatus.Faulted; reason = exception.Message; }
             finally { committing = false; }
             Completed?.Invoke(new InteractionResult(request.Context, request.Id, status, reason));
