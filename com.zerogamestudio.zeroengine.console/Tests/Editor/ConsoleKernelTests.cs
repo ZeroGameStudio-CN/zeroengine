@@ -19,6 +19,24 @@ namespace ZeroEngine.Console.Tests
         private static Task<ConsoleResult> Ok(ConsoleInvocation invocation, ConsoleArguments arguments, CancellationToken token) =>
             Task.FromResult(ConsoleResult.Success("done", arguments.Count));
 
+        [Test]
+        public void ResultSuccess_EmptyChecksDoNotRetainAnotherCallsMessageOrData()
+        {
+            var empty = ConsoleResult.Success();
+            var payload = new object();
+            var populated = ConsoleResult.Success("read value", payload);
+            Assert.That(populated.Message, Is.EqualTo("read value"));
+            Assert.That(populated.Data, Is.SameAs(payload));
+            foreach (var result in new[] { empty, ConsoleResult.Success(), ConsoleResult.Success(null) })
+            {
+                Assert.That(result.IsSuccess, Is.True);
+                Assert.That(result.Code, Is.EqualTo("ok"));
+                Assert.That(result.Message, Is.Empty);
+                Assert.That(result.Data, Is.Null);
+                Assert.That(result.Position, Is.Null);
+            }
+        }
+
         [TestCase("say \"\" '中文 空格' -12", new[] { "say", "", "中文 空格", "-12" })]
         [TestCase("say a\\ b C:\\temp\\file", new[] { "say", "a b", "C:\\temp\\file" })]
         [TestCase("say [1, 2, [3, 4]] (1, 2, 3)", new[] { "say", "[1, 2, [3, 4]]", "(1, 2, 3)" })]
@@ -78,6 +96,60 @@ namespace ZeroEngine.Console.Tests
         }
 
         [Test]
+        public async Task Discovery_TracksModuleChangesWithoutSharingMutableResults()
+        {
+            using var registry = new ConsoleRegistry();
+            using var session = new ConsoleSession(registry);
+            Assert.That(session.GetCommands(Editor), Is.Empty);
+            var first = registry.Register("test", new[] { new ConsoleBinding(Command("zeta"), Ok) });
+            var returned = session.GetCommands(Editor);
+            returned[0] = null;
+            Assert.That(session.GetCommands(Editor).Single().Name, Is.EqualTo("zeta"));
+            using var second = registry.Register("test", new[] { new ConsoleBinding(Command("alpha"), Ok) });
+            Assert.That(session.GetCommands(Editor).Select(command => command.Name), Is.EqualTo(new[] { "alpha", "zeta" }));
+            first.Dispose();
+            Assert.That(session.GetCommands(Editor).Select(command => command.Name), Is.EqualTo(new[] { "alpha" }));
+            Assert.That((await session.CompleteAsync("z", 1, Editor)).Items, Is.Empty);
+            using var replacement = registry.Register("test", new[] { new ConsoleBinding(Command("zeta"), Ok) });
+            first.Dispose();
+            Assert.That((await session.CompleteAsync("z", 1, Editor)).Items.Single().Value, Is.EqualTo("zeta"));
+            registry.Dispose();
+            Assert.That(session.GetCommands(Editor), Is.Empty);
+            Assert.That((await session.CompleteAsync("", 0, Editor)).Items, Is.Empty);
+        }
+
+        [Test]
+        public async Task DiscoveryAndCompletion_RecheckRevokedPolicyAndCallerCapabilities()
+        {
+            using var registry = new ConsoleRegistry();
+            var policy = new RevocablePolicy();
+            using var session = new ConsoleSession(registry, policy: policy);
+            var command = Command(capabilities: new[] { "write" });
+            using var module = registry.Register("test", new[] { new ConsoleBinding(command, Ok) });
+            var permitted = new ConsoleCaller(ConsoleEnvironment.Editor, capabilities: new[] { "write" });
+            Assert.That(session.GetCommands(permitted), Has.Length.EqualTo(1));
+            Assert.That((await session.CompleteAsync("ze", 2, permitted)).Items.Count, Is.EqualTo(1));
+            Assert.That(session.GetCommands(Editor), Is.Empty);
+            Assert.That((await session.CompleteAsync("ze", 2, Editor)).Items, Is.Empty);
+            policy.Allowed = false;
+            Assert.That(session.GetCommands(permitted), Is.Empty);
+            Assert.That((await session.CompleteAsync("ze", 2, permitted)).Items, Is.Empty);
+            Assert.That((await session.ExecuteLineAsync(command.Name, permitted)).Code, Is.EqualTo("revoked"));
+            Assert.That((await session.ExecuteAsync(command.Id, null, permitted)).Code, Is.EqualTo("revoked"));
+            policy.Allowed = true;
+            Assert.That(session.GetCommands(permitted), Has.Length.EqualTo(1));
+            Assert.That((await session.ExecuteLineAsync(command.Name, permitted)).IsSuccess, Is.True);
+        }
+
+        private sealed class RevocablePolicy : IConsolePolicy
+        {
+            private readonly DefaultConsolePolicy inner = new DefaultConsolePolicy();
+            public bool Allowed = true;
+            public ConsoleResult Check(ConsoleCommand command, ConsoleCaller caller) => Allowed
+                ? inner.Check(command, caller) : ConsoleResult.Failure("revoked", "Access was revoked.");
+        }
+
+        [Test]
         public async Task Policy_IsIdenticalForDiscoveryCompletionTextAndTypedCalls()
         {
             using var registry = new ConsoleRegistry();
@@ -121,6 +193,29 @@ namespace ZeroEngine.Console.Tests
             finally { CultureInfo.CurrentCulture = previous; }
         }
 
+        [Test]
+        public async Task Binding_PreservesDefaultsAndOriginalArgumentErrorPositions()
+        {
+            using var registry = new ConsoleRegistry();
+            var command = Command(parameters: new[] {
+                new ConsoleParameter("number", typeof(int)),
+                new ConsoleParameter("count", typeof(int), optional: true, defaultValue: 7) });
+            using var module = registry.Register("test", new[] { new ConsoleBinding(command, (context, args, token) =>
+                Task.FromResult(ConsoleResult.Success(data: new[] { args.Get<int>(0), args.Get<int>(1) }))) });
+            using var session = new ConsoleSession(registry);
+            Assert.That((await session.ExecuteLineAsync("  ze-echo 11", Editor)).Data, Is.EqualTo(new[] { 11, 7 }));
+            Assert.That((await session.ExecuteLineAsync("ze-echo 11 9", Editor)).Data, Is.EqualTo(new[] { 11, 9 }));
+            Assert.That((await session.ExecuteLineAsync("ze-echo", Editor)).Code, Is.EqualTo("missing-argument"));
+            const string invalid = "  ze-echo 11 oops";
+            var invalidResult = await session.ExecuteLineAsync(invalid, Editor);
+            Assert.That(invalidResult.Code, Is.EqualTo("invalid-argument"));
+            Assert.That(invalidResult.Position, Is.EqualTo(invalid.IndexOf("oops", StringComparison.Ordinal)));
+            const string extra = "ze-echo 11 9 extra";
+            var extraResult = await session.ExecuteLineAsync(extra, Editor);
+            Assert.That(extraResult.Code, Is.EqualTo("too-many-arguments"));
+            Assert.That(extraResult.Position, Is.EqualTo(extra.IndexOf("extra", StringComparison.Ordinal)));
+        }
+
         [UnityTest]
         public IEnumerator VariadicAndOptionalBinding_RejectsMissingAndExtraArguments()
         {
@@ -143,6 +238,114 @@ namespace ZeroEngine.Console.Tests
             Assert.That((await session.ExecuteLineAsync("ze-echo actor 1 2 -3", Editor)).Data, Is.EqualTo(3));
             Assert.That((await session.ExecuteLineAsync("ze-echo actor", Editor)).Data, Is.EqualTo(0));
             Assert.That((await session.ExecuteLineAsync("ze-echo", Editor)).Code, Is.EqualTo("missing-argument"));
+            const string invalid = "ze-echo actor 1 invalid";
+            var result = await session.ExecuteLineAsync(invalid, Editor);
+            Assert.That(result.Code, Is.EqualTo("invalid-argument"));
+            Assert.That(result.Position, Is.EqualTo(invalid.IndexOf("invalid", StringComparison.Ordinal)));
+        }
+
+        [TestCase(typeof(byte), "0", (byte)0)]
+        [TestCase(typeof(byte), "255", (byte)255)]
+        [TestCase(typeof(sbyte), "-128", (sbyte)-128)]
+        [TestCase(typeof(sbyte), "127", (sbyte)127)]
+        [TestCase(typeof(short), "-32768", (short)-32768)]
+        [TestCase(typeof(short), "32767", (short)32767)]
+        [TestCase(typeof(ushort), "0", (ushort)0)]
+        [TestCase(typeof(ushort), "65535", (ushort)65535)]
+        [TestCase(typeof(char), "中", '中')]
+        [TestCase(typeof(char), " ", ' ')]
+        public async Task ScalarBinding_PreservesSmallIntegerTypesAndQuotedCharacters(Type type, string text, object expected)
+        {
+            using var registry = new ConsoleRegistry();
+            using var module = registry.Register("test", new[] { new ConsoleBinding(
+                Command(parameters: new[] { new ConsoleParameter("value", type) }),
+                (context, args, token) => Task.FromResult(ConsoleResult.Success(data: args[0]))) });
+            using var session = new ConsoleSession(registry);
+            var result = await session.ExecuteLineAsync("ze-echo " + ConsoleLexer.Quote(text), Editor);
+            Assert.That(result.IsSuccess, Is.True, result.Message);
+            Assert.That(result.Data, Is.TypeOf(type));
+            Assert.That(result.Data, Is.EqualTo(expected));
+        }
+
+        [TestCase(typeof(byte), "-1")]
+        [TestCase(typeof(byte), "256")]
+        [TestCase(typeof(sbyte), "-129")]
+        [TestCase(typeof(sbyte), "128")]
+        [TestCase(typeof(short), "-32769")]
+        [TestCase(typeof(short), "32768")]
+        [TestCase(typeof(ushort), "-1")]
+        [TestCase(typeof(ushort), "65536")]
+        [TestCase(typeof(byte), "1.5")]
+        [TestCase(typeof(short), "not-a-number")]
+        [TestCase(typeof(char), "")]
+        [TestCase(typeof(char), "ab")]
+        [TestCase(typeof(char), "😀")]
+        public async Task ScalarBinding_RejectsOverflowAndInvalidCharacterWithoutCallingHandler(Type type, string text)
+        {
+            using var registry = new ConsoleRegistry();
+            int calls = 0;
+            using var module = registry.Register("test", new[] { new ConsoleBinding(
+                Command(parameters: new[] { new ConsoleParameter("value", type) }),
+                (context, args, token) => { calls++; return Ok(context, args, token); }) });
+            using var session = new ConsoleSession(registry);
+            var result = await session.ExecuteLineAsync("ze-echo " + ConsoleLexer.Quote(text), Editor);
+            Assert.That(result.Code, Is.EqualTo("invalid-argument"));
+            Assert.That(result.Position, Is.EqualTo(8));
+            Assert.That(calls, Is.Zero);
+        }
+
+        [Test]
+        public async Task ScalarBinding_ComposesNullableArraysAndScopedCustomConverters()
+        {
+            using var registry = new ConsoleRegistry();
+            var values = new ConsoleValues();
+            using var session = new ConsoleSession(registry, values);
+            using var module = registry.Register("test", new[] { new ConsoleBinding(
+                Command(parameters: new[] { new ConsoleParameter("items", typeof(byte[])), new ConsoleParameter("optional", typeof(short?)) }),
+                (context, args, token) => Task.FromResult(ConsoleResult.Success(data: new object[] { args.Get<byte[]>(0), args.Get<short?>(1) }))) });
+            var result = await session.ExecuteLineAsync("ze-echo [0,255] null", Editor);
+            Assert.That(((object[])result.Data)[0], Is.EqualTo(new byte[] { 0, 255 }));
+            Assert.That(((object[])result.Data)[1], Is.Null);
+            using (values.Register(typeof(byte), (ConsoleToken token, Type target, out object value, out string error) =>
+                { value = (byte)42; error = null; return true; }))
+            {
+                result = await session.ExecuteLineAsync("ze-echo [custom] -32768", Editor);
+                Assert.That(result.IsSuccess, Is.True, result.Message);
+                Assert.That(((object[])result.Data)[0], Is.EqualTo(new byte[] { 42 }));
+                Assert.That(((object[])result.Data)[1], Is.EqualTo((short)-32768));
+            }
+            Assert.That((await session.ExecuteLineAsync("ze-echo [custom] null", Editor)).Code, Is.EqualTo("invalid-argument"));
+        }
+
+        [Test]
+        public void ValueFallback_ComposesWithBuiltinsArraysAndScopedOverrides()
+        {
+            int calls = 0;
+            var expected = new DateTime(2000, 1, 1);
+            var values = new ConsoleValues((ConsoleToken token, Type type, out object value, out string error) =>
+            {
+                calls++; value = null; error = null;
+                if (type != typeof(DateTime)) return false;
+                if (token.Text != "epoch") { error = "Expected epoch."; return false; }
+                value = expected; error = string.Empty; return true;
+            });
+            Assert.That(values.TryConvert(new ConsoleToken("42", "42", 0), typeof(int), out _, out _), Is.True);
+            Assert.That(calls, Is.Zero);
+            var date = new ConsoleToken("epoch", "epoch", 0);
+            Assert.That(values.TryConvert(date, typeof(DateTime), out var parsed, out _), Is.True);
+            Assert.That(parsed, Is.EqualTo(expected));
+            using (values.Register(typeof(DateTime), (ConsoleToken token, Type type, out object value, out string error) =>
+                { value = expected.AddDays(1); error = null; return true; }))
+            {
+                Assert.That(values.TryConvert(date, typeof(DateTime), out parsed, out _), Is.True);
+                Assert.That(parsed, Is.EqualTo(expected.AddDays(1)));
+            }
+            Assert.That(values.TryConvert(date, typeof(DateTime), out parsed, out _), Is.True);
+            Assert.That(parsed, Is.EqualTo(expected));
+            Assert.That(values.TryConvert(new ConsoleToken("[epoch,epoch]", "[epoch,epoch]", 0), typeof(DateTime[]), out parsed, out _), Is.True);
+            Assert.That(parsed, Is.EqualTo(new[] { expected, expected }));
+            Assert.That(values.TryConvert(new ConsoleToken("invalid", "invalid", 0), typeof(DateTime), out _, out var error), Is.False);
+            Assert.That(error, Is.EqualTo("Expected epoch."));
         }
 
         [Test]
@@ -293,15 +496,87 @@ namespace ZeroEngine.Console.Tests
             Assert.That(calls, Is.EqualTo(1));
         }
 
-        [Test]
-        public async Task Deadline_CancelsWithoutReclassifyingAResultAsSuccess()
+        [TestCase(false)]
+        [TestCase(true)]
+        public async Task Deadline_CancelsWithoutReclassifyingAResultAsSuccess(bool externalCancellation)
         {
             using var registry = new ConsoleRegistry();
             using var module = registry.Register("test", new[] { new ConsoleBinding(Command(), async (context, args, token) => {
                 await Task.Delay(Timeout.Infinite, token).ConfigureAwait(false); return ConsoleResult.Success();
             }) });
             using var session = new ConsoleSession(registry);
-            Assert.That((await session.ExecuteLineAsync("ze-echo", Editor, timeout: TimeSpan.FromMilliseconds(25)).ConfigureAwait(false)).Status, Is.EqualTo(ConsoleResultStatus.TimedOut));
+            using var cancellation = new CancellationTokenSource();
+            Assert.That((await session.ExecuteLineAsync("ze-echo", Editor,
+                externalCancellation ? cancellation.Token : default, TimeSpan.FromMilliseconds(25)).ConfigureAwait(false)).Status,
+                Is.EqualTo(ConsoleResultStatus.TimedOut));
+        }
+
+        [TestCase(false)]
+        [TestCase(true)]
+        public async Task ExternalCancellation_StopsHandlerWithAndWithoutDeadline(bool deadline)
+        {
+            using var registry = new ConsoleRegistry();
+            int calls = 0;
+            using var module = registry.Register("test", new[] { new ConsoleBinding(Command(), async (context, args, token) => {
+                calls++;
+                await Task.Delay(Timeout.Infinite, token).ConfigureAwait(false);
+                return ConsoleResult.Success();
+            }) });
+            using var session = new ConsoleSession(registry);
+            using var cancellation = new CancellationTokenSource();
+            var execution = session.ExecuteLineAsync("ze-echo", Editor, cancellation.Token,
+                deadline ? TimeSpan.FromSeconds(5) : (TimeSpan?)null);
+            Assert.That(calls, Is.EqualTo(1));
+            cancellation.Cancel();
+            Assert.That((await execution.ConfigureAwait(false)).Status, Is.EqualTo(ConsoleResultStatus.Cancelled));
+            Assert.That(session.IsRunning, Is.False);
+            Assert.That(calls, Is.EqualTo(1));
+        }
+
+        [TestCase(false, false)]
+        [TestCase(false, true)]
+        [TestCase(true, false)]
+        [TestCase(true, true)]
+        public async Task SessionDisposal_CancelsOwnedInvocation(bool externalCancellation, bool deadline)
+        {
+            using var registry = new ConsoleRegistry();
+            using var module = registry.Register("test", new[] { new ConsoleBinding(Command(), async (context, args, token) => {
+                await Task.Delay(Timeout.Infinite, token).ConfigureAwait(false);
+                return ConsoleResult.Success();
+            }) });
+            using var session = new ConsoleSession(registry);
+            using var cancellation = new CancellationTokenSource();
+            var execution = session.ExecuteLineAsync("ze-echo", Editor,
+                externalCancellation ? cancellation.Token : default, deadline ? TimeSpan.FromSeconds(5) : (TimeSpan?)null);
+            Assert.That(session.IsRunning, Is.True);
+            session.Dispose();
+            Assert.That((await execution.ConfigureAwait(false)).Status, Is.EqualTo(ConsoleResultStatus.Cancelled));
+            Assert.That(session.IsRunning, Is.False);
+            Assert.That((await session.ExecuteLineAsync("ze-echo", Editor)).Code, Is.EqualTo("session-disposed"));
+        }
+
+        [Test]
+        public async Task SessionDisposal_CancelsCompletionEvenWhenAnExecutionCallbackThrows()
+        {
+            using var registry = new ConsoleRegistry();
+            var finish = new TaskCompletionSource<ConsoleResult>();
+            using var module = registry.Register("test", new[] { new ConsoleBinding(
+                Command(parameters: new[] { new ConsoleParameter("value", typeof(string), optional: true, defaultValue: "") }),
+                (context, args, token) => {
+                    token.Register(() => throw new InvalidOperationException("Callback failure."));
+                    return finish.Task;
+                }, async (context, token) => {
+                    await Task.Delay(Timeout.Infinite, token).ConfigureAwait(false);
+                    return Array.Empty<ConsoleCompletionItem>();
+                }) });
+            using var session = new ConsoleSession(registry);
+            var execution = session.ExecuteLineAsync("ze-echo", Editor);
+            var completion = session.CompleteAsync("ze-echo ", 8, Editor);
+            Assert.Throws<AggregateException>(() => session.Dispose());
+            try { await completion.ConfigureAwait(false); Assert.Fail("Completion must observe session cancellation."); }
+            catch (OperationCanceledException) { }
+            finish.SetResult(ConsoleResult.Success());
+            Assert.That((await execution.ConfigureAwait(false)).Status, Is.EqualTo(ConsoleResultStatus.Cancelled));
         }
 
         [Test]

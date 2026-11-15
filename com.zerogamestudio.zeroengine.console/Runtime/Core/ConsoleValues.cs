@@ -10,6 +10,11 @@ namespace ZeroEngine.Console
     {
         private readonly Dictionary<Type, ConsoleValueConverter> converters = new Dictionary<Type, ConsoleValueConverter>();
         private readonly object sync = new object();
+        private readonly ConsoleValueConverter fallback;
+
+        public ConsoleValues() { }
+        public ConsoleValues(ConsoleValueConverter fallback)
+            => this.fallback = fallback ?? throw new ArgumentNullException(nameof(fallback));
 
         public IDisposable Register(Type type, ConsoleValueConverter converter)
         {
@@ -48,6 +53,11 @@ namespace ZeroEngine.Console
             if (target == typeof(double) && double.TryParse(text, NumberStyles.Float, CultureInfo.InvariantCulture, out double real) && !double.IsNaN(real) && !double.IsInfinity(real)) { value = real; return true; }
             if (target == typeof(decimal) && decimal.TryParse(text, NumberStyles.Float, CultureInfo.InvariantCulture, out decimal precise)) { value = precise; return true; }
             if (target == typeof(Guid) && Guid.TryParse(text, out Guid guid)) { value = guid; return true; }
+            if (target == typeof(byte) && byte.TryParse(text, NumberStyles.Integer, CultureInfo.InvariantCulture, out byte unsignedByte)) { value = unsignedByte; return true; }
+            if (target == typeof(sbyte) && sbyte.TryParse(text, NumberStyles.Integer, CultureInfo.InvariantCulture, out sbyte signedByte)) { value = signedByte; return true; }
+            if (target == typeof(short) && short.TryParse(text, NumberStyles.Integer, CultureInfo.InvariantCulture, out short shortInteger)) { value = shortInteger; return true; }
+            if (target == typeof(ushort) && ushort.TryParse(text, NumberStyles.Integer, CultureInfo.InvariantCulture, out ushort unsignedShort)) { value = unsignedShort; return true; }
+            if (target == typeof(char) && char.TryParse(text, out char character)) { value = character; return true; }
             if (target.IsEnum)
             {
                 try { value = Enum.Parse(target, text, true); return true; }
@@ -72,14 +82,19 @@ namespace ZeroEngine.Console
                 value = array;
                 return true;
             }
+            if (fallback != null)
+            {
+                bool converted = fallback(token, target, out value, out error);
+                if (converted || !string.IsNullOrEmpty(error)) return converted;
+            }
             error = "Invalid " + target.Name + " value: " + text;
             return false;
         }
 
-        internal ConsoleResult Bind(ConsoleCommand command, IReadOnlyList<ConsoleToken> tokens, out ConsoleArguments arguments)
+        internal ConsoleResult Bind(ConsoleCommand command, IReadOnlyList<ConsoleToken> tokens, int start, out ConsoleArguments arguments)
         {
             var values = new object[command.Parameters.Count];
-            int cursor = 0;
+            int cursor = start;
             for (int i = 0; i < values.Length; i++)
             {
                 ConsoleParameter parameter = command.Parameters[i];

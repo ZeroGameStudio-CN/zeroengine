@@ -119,8 +119,7 @@ namespace ZeroEngine.Console
                 return Report(ConsoleResult.Failure("unknown-command", "Unknown command: " + tokens[0].Text, tokens[0].Start));
             return ExecuteEntryAsync(entry, caller, () =>
             {
-                var args = tokens.Skip(1).ToArray();
-                ConsoleResult bound = Values.Bind(entry.Binding.Command, args, out var values);
+                ConsoleResult bound = Values.Bind(entry.Binding.Command, tokens, 1, out var values);
                 return (bound, values);
             }, cancellation, timeout);
         }
@@ -162,9 +161,17 @@ namespace ZeroEngine.Console
                         Write(new ConsoleOutput(invocationId, ConsoleOutputLevel.Error, busy.Message));
                         return busy;
                     }
-                    deadline = new CancellationTokenSource();
-                    if (timeout.HasValue) deadline.CancelAfter(timeout.Value);
-                    execution = CancellationTokenSource.CreateLinkedTokenSource(cancellation, ownerToken, lifetimeToken, deadline.Token);
+                    if (timeout.HasValue)
+                    {
+                        deadline = new CancellationTokenSource();
+                        deadline.CancelAfter(timeout.Value);
+                        execution = cancellation.CanBeCanceled
+                            ? CancellationTokenSource.CreateLinkedTokenSource(cancellation, ownerToken, deadline.Token)
+                            : CancellationTokenSource.CreateLinkedTokenSource(ownerToken, deadline.Token);
+                    }
+                    else execution = cancellation.CanBeCanceled
+                        ? CancellationTokenSource.CreateLinkedTokenSource(cancellation, ownerToken)
+                        : CancellationTokenSource.CreateLinkedTokenSource(ownerToken, CancellationToken.None);
                     current = execution;
                 }
                 execution.Token.ThrowIfCancellationRequested();
@@ -182,7 +189,7 @@ namespace ZeroEngine.Console
                     }, execution.Token).ConfigureAwait(false);
                     if (result == null) result = ConsoleResult.Failure("missing-result", "Handler did not return a structured result.");
                     if (execution.IsCancellationRequested)
-                        result = deadline.IsCancellationRequested ? ConsoleResult.TimedOut() : ConsoleResult.Cancelled("Cancellation was requested; completed side effects are not rolled back.");
+                        result = deadline != null && deadline.IsCancellationRequested ? ConsoleResult.TimedOut() : ConsoleResult.Cancelled("Cancellation was requested; completed side effects are not rolled back.");
                 }
             }
             catch (OperationCanceledException)
@@ -304,9 +311,16 @@ namespace ZeroEngine.Console
             {
                 if (disposed) return;
                 disposed = true;
-                lifetime.Cancel();
-                lifetime.Dispose();
-                output.Clear(); history.Clear(); outputRevision++;
+                try { current?.Cancel(); }
+                finally
+                {
+                    try { lifetime.Cancel(); }
+                    finally
+                    {
+                        lifetime.Dispose();
+                        output.Clear(); history.Clear(); outputRevision++;
+                    }
+                }
             }
         }
     }
