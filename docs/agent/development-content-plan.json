@@ -431,7 +431,7 @@
       "availability": "DevelopmentOnly",
       "responsibleChat": "01a16e60-157f-7f63-8f5a-7a6bdbe07a81",
       "chatUrl": "",
-      "nextAction": "固定通过候选验证的 Git UPM 提交，验证基地玩家与 NPC 的正常镜头受光，再完成消费者接入。",
+      "nextAction": "待共享调试依赖收尾后，以消费者的新依赖基线合并受光候选并固定 Git UPM，启用基地自定义配置，再验证玩家与 NPC 的正式包正常镜头受光。",
       "entrance": "POB 受控 PlayMode 的 RimFireColorTestRoom，以及包内 SpriteRimLightingRenderTests。",
       "resourcePath": "com.zerogamestudio.zeroengine.render.urp/Runtime/Resources/ZeroEngine/SpriteRimLighting.shader",
       "revision": "clear-contour-core-20261115",
@@ -440,9 +440,11 @@
       "verificationEvidence": [
         "C:/Users/2025/AppData/Local/Temp/pob-rim-fused-20261115/run-v2-status.json",
         "C:/Users/2025/AppData/Local/Temp/pob-rim-fused-20261115/run-v4-status.json",
-        "C:/Users/2025/AppData/Local/Temp/pob-rim-fused-20261115/flow-v4/runtime/candidate-package-gpu.json"
+        "C:/Users/2025/AppData/Local/Temp/pob-rim-fused-20261115/flow-v4/runtime/candidate-package-gpu.json",
+        "C:/Users/2025/.antigravity_cockpit/instances/codex/eae8558ab409f681/visualizations/2026/10/24/01a16e60-157f-7f63-8f5a-7a6bdbe07a81/rim-fused-preview-20261115/evidence/delivery.json",
+        "C:/Users/2025/.antigravity_cockpit/instances/codex/eae8558ab409f681/visualizations/2026/10/24/01a16e60-157f-7f63-8f5a-7a6bdbe07a81/rim-fused-preview-20261115/comparison.mp4"
       ],
-      "verificationScope": "正常镜头同姿势三版对照与 12 个采样已验证；源包的 8 个受光运行时文件和 GPU 测试做命名空间隔离、资源注入后，在主工程跑完 5 组 GPU 场景，包含稀疏轮廓、HDR、遮挡和中心对称性。普通消费者仍使用旧包，未声明用户发布。"
+      "verificationScope": "最终候选 Shader d7edc6fd 已在 POB 正常 Game View 完成参考机制兼容移植与 ZE 融合候选的 8 个同姿势采样，以及两版分别经过暖、冷光源中心的连续行走实录。此次只临时注入候选 Shader 和两个新增材质参数，复用未改变的原生受光 CPU 路径；manifest、lock 与反馈／多人本地调试引用未改。完整候选运行时此前经命名空间隔离跑完 5 组 GPU 检查，覆盖稀疏轮廓、HDR、遮挡与中心对称性。普通消费者仍使用旧包，未声明正式包接入或用户发布。"
     }
   ]
 }
