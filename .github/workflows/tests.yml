@@ -87,6 +87,9 @@ jobs:
           - lane: interaction
             name: Interaction core, Unity lifecycle and standalone playground
             test-mode: all
+          - lane: interaction-network
+            name: Interaction authority, replication binding and network playground
+            test-mode: all
 
     steps:
       - name: Checkout repository
@@ -155,3 +158,25 @@ jobs:
         with:
           files: TestResults/*.xml
           check_name: Unity Test Report (${{ matrix.name }})
+
+  interaction-independent-peers:
+    name: Interaction independent host and client processes
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+      - name: Build the sample from the same core and replication sources
+        run: dotnet build 'com.zerogamestudio.zeroengine.interaction.multiplayer/Tools~/AuthorityDemo/AuthorityDemo.csproj' --nologo -o "$RUNNER_TEMP/authority-demo"
+      - name: Verify offline semantics and independent peer lifecycle
+        run: >-
+          python3 -B com.zerogamestudio.zeroengine.interaction.multiplayer/Tools~/AuthorityDemo/verify_peers.py
+          --dll "$RUNNER_TEMP/authority-demo/AuthorityDemo.dll"
+          --output "$RUNNER_TEMP/authority-peer-results"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: Interaction independent peer evidence
+          path: ${{ runner.temp }}/authority-peer-results
+          retention-days: 14

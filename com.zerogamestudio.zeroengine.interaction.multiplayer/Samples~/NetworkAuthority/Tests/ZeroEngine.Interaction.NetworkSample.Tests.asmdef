@@ -1,0 +1,8 @@
+{
+  "name": "ZeroEngine.Interaction.NetworkSample.Tests",
+  "references": ["ZeroEngine.Interaction.Core", "ZeroEngine.Interaction.Multiplayer", "ZeroEngine.Interaction.NetworkSample.Model", "ZeroEngine.Interaction.NetworkSample.Unity", "ZeroEngine.Multiplayer.Replication", "Unity.ugui", "UnityEngine.TestRunner"],
+  "overrideReferences": true,
+  "precompiledReferences": ["nunit.framework.dll"],
+  "autoReferenced": false,
+  "defineConstraints": ["UNITY_INCLUDE_TESTS"]
+}

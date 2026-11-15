@@ -1,0 +1,16 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <LangVersion>9.0</LangVersion>
+    <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
+    <RestoreIgnoreFailedSources>true</RestoreIgnoreFailedSources>
+  </PropertyGroup>
+  <ItemGroup>
+    <Compile Include="../../../com.zerogamestudio.zeroengine.interaction/Runtime/Core/**/*.cs" LinkBase="InteractionCore" />
+    <Compile Include="../../../com.zerogamestudio.zeroengine.multiplayer/Runtime/Replication/*.cs" LinkBase="Replication" />
+    <Compile Include="../../Runtime/*.cs" LinkBase="Bindings" />
+    <Compile Include="../../Samples~/NetworkAuthority/Shared/*.cs" LinkBase="SharedSample" />
+    <Compile Include="Program.cs" />
+  </ItemGroup>
+</Project>
