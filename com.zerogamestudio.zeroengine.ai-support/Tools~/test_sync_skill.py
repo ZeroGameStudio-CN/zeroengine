@@ -3,6 +3,8 @@ import importlib.util
 import json
 from pathlib import Path
 import shutil
+import subprocess
+import sys
 import tempfile
 import unittest
 from unittest import mock
@@ -23,9 +25,10 @@ class SynchronizationTests(unittest.TestCase):
         for name in (SYNC.PACKAGE, "com.zerogamestudio.zeroengine.console"):
             source = self.root / "cache" / name
             source.mkdir(parents=True)
-            (source / "package.json").write_bytes(SYNC.encode({"name": name, "version": "0.1.0"}))
+            package_version = SYNC.TOOL_VERSION if name == SYNC.PACKAGE else "0.1.0"
+            (source / "package.json").write_bytes(SYNC.encode({"name": name, "version": package_version}))
             (source / "README.md").write_text("# " + name + "\n已安装模块说明。\n", encoding="utf-8")
-            self.packages.append({"name": name, "version": "0.1.0", "source": "Git",
+            self.packages.append({"name": name, "version": package_version, "source": "Git",
                                   "gitHash": "a" * 40, "resolvedPath": str(source)})
         source = Path(self.packages[0]["resolvedPath"])
         (source / "Tools~").mkdir()
@@ -76,6 +79,78 @@ class SynchronizationTests(unittest.TestCase):
         with self.assertRaisesRegex(SYNC.Conflict, "locally modified"):
             self.prepare()
         self.assertEqual("local edits", (target / "SKILL.md").read_text(encoding="utf-8"))
+
+    def test_remove_preserves_local_additions_and_project_packages(self):
+        target = self.installed()
+        extra = target / "personal-notes.md"
+        extra.write_text("keep", encoding="utf-8")
+        packages = (self.project / "Packages/manifest.json").read_bytes()
+        plan = SYNC.prepare_remove(self.project)
+        self.assertTrue(plan["changed"])
+        SYNC.apply(plan)
+        SYNC.prune_empty_guidance_directories(plan)
+        self.assertEqual(extra.read_text(), "keep")
+        self.assertFalse((target / SYNC.RECEIPT).exists())
+        self.assertEqual(packages, (self.project / "Packages/manifest.json").read_bytes())
+
+    def test_remove_absent_and_empty_owned_guidance(self):
+        self.assertEqual(SYNC.prepare_remove(self.project)["changed"], [])
+        target = self.installed()
+        plan = SYNC.prepare_remove(self.project)
+        SYNC.apply(plan)
+        SYNC.prune_empty_guidance_directories(plan)
+        self.assertFalse(target.exists())
+
+    def test_remove_cli_preview_check_and_apply(self):
+        target = self.installed()
+        args = [sys.executable, "-B", "-X", "utf8", str(SCRIPT), "--project", str(self.project), "--remove"]
+        preview = subprocess.run(args + ["--check"], capture_output=True, text=True, encoding="utf-8", timeout=15)
+        self.assertEqual(preview.returncode, 3, preview.stdout + preview.stderr)
+        self.assertEqual(json.loads(preview.stdout)["status"], "removal-available")
+        self.assertTrue(target.exists())
+        result = subprocess.run(args + ["--apply"], capture_output=True, text=True, encoding="utf-8", timeout=15)
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertEqual(json.loads(result.stdout)["status"], "removed")
+        self.assertFalse(target.exists())
+
+    def test_remove_cli_refuses_deleting_its_running_copy(self):
+        target = self.installed()
+        result = subprocess.run([sys.executable, "-B", "-X", "utf8", str(target / "scripts/sync_skill.py"),
+            "--project", str(self.project), "--remove", "--apply"], capture_output=True, text=True, encoding="utf-8", timeout=15)
+        self.assertEqual(result.returncode, 2, result.stdout + result.stderr)
+        self.assertIn("running copy", result.stdout)
+        self.assertTrue((target / SYNC.RECEIPT).exists())
+
+    def test_remove_refuses_modified_files_and_unknown_schema(self):
+        target = self.installed()
+        skill = target / "SKILL.md"
+        original = skill.read_bytes()
+        skill.write_text("local changes", encoding="utf-8")
+        with self.assertRaisesRegex(SYNC.Conflict, "modified"):
+            SYNC.prepare_remove(self.project)
+        self.assertTrue((target / SYNC.RECEIPT).exists())
+        skill.write_bytes(original)
+        receipt = SYNC.load(target / SYNC.RECEIPT)
+        (target / SYNC.RECEIPT).write_bytes(SYNC.encode(dict(receipt, schemaVersion=99)))
+        with self.assertRaisesRegex(SYNC.Conflict, "schema"):
+            SYNC.prepare_remove(self.project)
+
+    def test_remove_known_failure_restores_guidance(self):
+        target = self.installed()
+        before = {path.relative_to(target).as_posix(): path.read_bytes() for path in target.rglob("*") if path.is_file()}
+        plan = SYNC.prepare_remove(self.project)
+        original = Path.unlink
+        calls = 0
+        def fail_second(path, *args, **kwargs):
+            nonlocal calls
+            if path.is_relative_to(target):
+                calls += 1
+                if calls == 2:
+                    raise OSError("controlled failure")
+            return original(path, *args, **kwargs)
+        with mock.patch.object(Path, "unlink", fail_second), self.assertRaises(OSError):
+            SYNC.apply(plan)
+        self.assertEqual(before, {path.relative_to(target).as_posix(): path.read_bytes() for path in target.rglob("*") if path.is_file()})
 
     def test_unowned_target_is_preserved(self):
         target = self.project / ".agents/skills/zeroengine"

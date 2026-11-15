@@ -12,6 +12,19 @@ Development-content records and their format follow
 Do not tell consumer projects to copy a `ZeroEngine` folder into `Assets` or to
 depend on this local checkout as their normal setup.
 
+## Agent Guidance
+
+ZE Agent's maintained source is
+[the Agent package](com.zerogamestudio.zeroengine.ai-support/README.md):
+`Skills~` owns the project Skill template and `Tools~` its explicit lifecycle CLI.
+Consumer `.agents/skills/zeroengine` files are generated from actual installed
+packages; maintain the source template and module READMEs here.
+
+When a module's API, dependencies or usage changes, update its README and any
+affected Agent guidance together. After consumer package installation, removal or
+upgrade, refresh the inventory and run the Skill check. Keep this `AGENTS.md`
+current when repository architecture or source entrances change.
+
 ## Consumer Project Rules
 
 - Use Git UPM URLs in `Packages/manifest.json`:

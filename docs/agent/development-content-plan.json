@@ -408,6 +408,20 @@
           "contentId": "weapon.neural-interface-preview"
         }
       ]
+    },
+    {
+      "id": "ze.agent",
+      "title": "ZE Agent 项目指导与 Skill 生命周期",
+      "stage": "Previewable",
+      "targetReleaseId": "",
+      "availability": "EditorOnly",
+      "responsibleChat": "01a1c66f-d77b-7b00-88d4-37f8f3df3b13",
+      "chatUrl": "codex://threads/01a1c66f-d77b-7b00-88d4-37f8f3df3b13",
+      "entrance": "com.zerogamestudio.zeroengine.ai-support/README.md",
+      "resourcePath": "com.zerogamestudio.zeroengine.ai-support/Skills~/zeroengine/SKILL.md",
+      "nextAction": "消费项目按实际安装包同步 ZE Agent 指导；包安装／升级／卸载通过既有 UPM 入口，随后刷新清单。模块变动同步维护 README 与受影响的 Skill，仓库架构入口变化维护 AGENTS.md。",
+      "revision": "2026-11-15：显示名称改为 ZeroEngine Agent，技术包 ID／C# API 保持兼容，候选版本 0.2.0。Skill 覆盖全体已安装 ZE 模块及包生命周期；轻量 CLI 提供同步、检查和按受管收据移除指导，不另造包解析器。20 项 Python 合同与 CLI 用例无失败，覆盖中文路径、移除预览、应用、本地自定义保留、修改冲突、未知版本、失败恢复和拒绝自删。AGENTS.md 已登记唯一维护源与更新责任；Skill validator、62 包审计成功。源码／候选验证不代表消费项目已升级或用户发布。",
+      "releaseEvidence": ""
     }
   ]
 }
