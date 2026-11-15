@@ -422,6 +422,24 @@
       "nextAction": "消费项目按实际安装包同步 ZE Agent 指导；包安装／升级／卸载通过既有 UPM 入口，随后刷新清单。模块变动同步维护 README 与受影响的 Skill，仓库架构入口变化维护 AGENTS.md。",
       "revision": "2026-11-15：显示名称改为 ZeroEngine Agent，技术包 ID／C# API 保持兼容，候选版本 0.2.0。Skill 覆盖全体已安装 ZE 模块及包生命周期；轻量 CLI 提供同步、检查和按受管收据移除指导，不另造包解析器。20 项 Python 合同与 CLI 用例无失败，覆盖中文路径、移除预览、应用、本地自定义保留、修改冲突、未知版本、失败恢复和拒绝自删。AGENTS.md 已登记唯一维护源与更新责任；Skill validator、62 包审计成功。源码／候选验证不代表消费项目已升级或用户发布。",
       "releaseEvidence": ""
+    },
+    {
+      "id": "ze.interaction.authority",
+      "title": "单机与联机共用的交互权威、独立双端示例",
+      "stage": "InProgress",
+      "targetReleaseId": "",
+      "availability": "DevelopmentOnly",
+      "responsibleChat": "01a1d074-3286-7fc3-a8fa-09d3bfbcae2d",
+      "nextAction": "完成 Unity 6000.6.9 定向回归、原单机行为对照和独立双端示例验证后，交付固定提交给联机对话接回 POB。",
+      "entrance": "Interaction Authority Playground；可选交互联机绑定；Tools~/AuthorityDemo 独立进程示例。",
+      "resourcePath": "com.zerogamestudio.zeroengine.interaction/Runtime/Core/Authority/InteractionAuthority.cs",
+      "candidatePackageVersion": "0.2.0",
+      "revision": "interaction 0.2.0 + interaction.multiplayer 0.1.0",
+      "releaseEvidence": "",
+      "verificationEvidence": [
+        "D:/CodexArtifacts/ze-interaction-authority-20261115/peers-r1/summary.json"
+      ],
+      "verificationScope": "独立 .NET Host/Client 9 项场景成功；Unity/POB 消费验证分别记账，POB 尚未接入。"
     }
   ]
 }

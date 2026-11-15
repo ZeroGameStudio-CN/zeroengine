@@ -51,3 +51,10 @@ without other ZE gameplay packages, QC or Input System as incidental dependencie
 closure, with no vendor SDK or licensed assets. It protects physical SDK absence
 and cannot certify a particular vendor version; that compatibility needs the
 project's licensed prefab, explicit profile and focused integration evidence.
+
+`interaction` retains the independent interaction-only installation and original
+single-player/lifecycle sample. `interaction-network` installs the optional ZE
+replication binding and imports both original and network playground samples.
+It has no FishNet or POB dependency. The independent-peer job builds the shared
+sample model with .NET and executes separate host/client processes; Unity lanes
+cover the same core and actual sample component/UI lifecycle.

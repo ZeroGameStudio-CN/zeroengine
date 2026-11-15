@@ -1,7 +1,8 @@
 # ZeroEngine.Interaction
 
 Game-independent interactions with one explicit world scope and one input session per actor.
-Version 0.1.0 is a package-first candidate. POB adoption and retirement of the older
+Version 0.2.0 adds a shared offline/server authority receiver while preserving the
+existing Core/Unity entry points and single-player gesture semantics. POB adoption and retirement of the older
 `ZeroEngine.Gameplay/Interaction` implementation are separate follow-up work.
 
 ## Boundaries
@@ -79,6 +80,48 @@ the core target/range interfaces directly. An unbound action denies
 interaction. Bind input via the actor's public methods. Configure a custom game clock
 before starting an input session. No Physics, singleton search, scene-manager or UI
 dependency is imposed on the runtime bridge.
+
+## Offline and network authority
+
+`Core.Authority.InteractionAuthority` runs the same `InteractionAgent` for local
+calls and authenticated remote actor bindings. The core still has no sibling,
+Unity, transport or networking SDK dependency. The optional
+`com.zerogamestudio.zeroengine.interaction.multiplayer` module maps the existing
+ZE `NetworkEntityKey` identities to this receiver and supplies an isolated
+offline/host/client playground.
+
+An authority owns one nonzero epoch. Its actor binding and target lease expose
+activation identities; a command cannot select a receiver from a claimed actor
+ID. The transport routes to its authenticated binding. `Press`, `Release`,
+`Cancel` and optional `Confirm` commands carry positive, strictly increasing
+64-bit sequences. A press's action ID is its first sequence. Sequences never
+wrap or reset inside a binding; reconnect creates a new binding activation.
+The authority evaluates hold/repeat on its supplied game clock and checks the
+explicit requested target, rather than redirecting the request to another
+nearby object. Caller focus changes send Cancel; server range, availability and
+conditions remain authoritative.
+
+Matching retries return a cached admission receipt with the latest retained
+outcome. Reusing a sequence for a different command is rejected. Evicted old
+commands remain stale and can never execute again. Receipt `Handled` and
+`InputAdmitted` are not business success: observe the settled outcome and the
+authority's domain state. Bounded outcome notifications are transient; older
+state is recovered from domain snapshots, not by replaying gameplay.
+
+Local input cancellation and authoritative settlement are separate. Cancel
+before a deferred commit invalidates it; cancel after a completed commit never
+undoes it. `InteractionOutcomeMirror` accepts a late valid success even after
+local focus/input cancellation and ignores stale actor/epoch/revision data. It
+never grants an item or charges a wallet on a client. A registered confirmation
+callback belongs to the authority and must use the guarded request to commit.
+Reservation refund/commit, shared versus personal loot and atomic reward/cost
+transactions remain provider responsibilities.
+
+These are live-session at-most-once guards, not durable distributed transactions.
+Session restore, connection authentication, ordered/reliable delivery and POB's
+FishNet/protocol mapping retain their existing owners. Scope or actor disposal
+cancels pending work; rebinding and pooled targets cannot inherit old requests.
+All authority and business calls stay on the owning gameplay thread.
 
 ## Playground and verification
 
