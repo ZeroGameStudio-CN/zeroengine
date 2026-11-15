@@ -12,7 +12,7 @@ namespace ZeroEngine.Console.UI
         private static readonly Color TextColor = new Color(.88f, .90f, .93f);
         private static readonly Color MutedColor = new Color(.51f, .55f, .62f);
         private RectTransform panel;
-        private Text completionCaption, fontSizeLabel, emptyOutput;
+        private Text completionCaption, fontSizeLabel, emptyOutput, keyboardHint;
         private Button cancelButton, followButton;
         private ConsoleIcon stateIcon, cancelIcon, followIcon;
         private ConsoleActionHint stateHint, followHint;
@@ -120,11 +120,11 @@ namespace ZeroEngine.Console.UI
             cancelButton = MakeIconButton(panel, "取消", ConsoleGlyph.Stop, "取消当前执行", new Vector2(1, 0), new Vector2(-50, 36), new Vector2(-12, 74), () => host.Session.CancelCurrent());
             cancelIcon = cancelButton.GetComponentInChildren<ConsoleIcon>();
             RefreshActivityState();
-            var hint = Chrome("KeyboardHint", panel, "↑↓   ·   PgUp / PgDn   ·   Tab   ·   Esc", 11);
-            hint.color = MutedColor;
-            Stretch(hint.rectTransform, Vector2.zero, new Vector2(1, 0), new Vector2(12, 8), new Vector2(-12, 30));
-            hint.raycastTarget = true;
-            Hint(hint.gameObject, "↑↓ 历史 · PgUp/PgDn 选择补全 · Tab 填入 · Esc 关闭");
+            keyboardHint = Chrome("KeyboardHint", panel, "↑↓   ·   Tab   ·   Enter   ·   Esc", 11);
+            keyboardHint.color = MutedColor;
+            Stretch(keyboardHint.rectTransform, Vector2.zero, new Vector2(1, 0), new Vector2(12, 8), new Vector2(-12, 30));
+            keyboardHint.raycastTarget = true;
+            Hint(keyboardHint.gameObject, "↑↓ 历史 · Tab 补全 · Enter 执行 · Esc 关闭");
 
             completions = Rect("Completions", panel); Stretch(completions, Vector2.zero, new Vector2(1, 0), new Vector2(12, 90), new Vector2(-12, 330));
             Surface(completions, new Color(.065f, .078f, .105f, .96f), 6);
@@ -162,6 +162,7 @@ namespace ZeroEngine.Console.UI
             {
                 usingTouchLayout = touch;
                 usingLandscapeLayout = landscape;
+                keyboardHint.gameObject.SetActive(!touch);
                 var scaler = viewScaler;
                 scaler.referenceResolution = touch
                     ? landscape ? new Vector2(854, 480) : new Vector2(480, 854)

@@ -158,8 +158,6 @@ namespace ZeroEngine.Console.UI
             if (!composing && input.isFocused)
             {
                 if (ConsoleKeyboard.Pressed(KeyCode.Tab) && currentCompletions != null && currentCompletions.Items.Count > 0) ApplyCompletion(selectedCompletion);
-                else if (ConsoleKeyboard.Pressed(KeyCode.PageUp)) NavigateCompletion(-1);
-                else if (ConsoleKeyboard.Pressed(KeyCode.PageDown)) NavigateCompletion(1);
                 else if (ConsoleKeyboard.Pressed(KeyCode.UpArrow)) NavigateHistory(-1);
                 else if (ConsoleKeyboard.Pressed(KeyCode.DownArrow)) NavigateHistory(1);
             }
