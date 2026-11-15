@@ -1,6 +1,6 @@
 # ZeroEngine.Data
 
-属性和 Buff 的通用运行时包。当前整合候选版本为 2.2.2，保留 StatId、StatBlock 与存档合同，并合入无观察者时的 Buff 批量计算；存在观察者时仍逐层通知。依赖 ZeroEngine.Core、ZeroEngine.Formula 与 ZeroEngine.Persistence，消费者需使用同一验证提交的包组合。候选尚未发布。
+属性和 Buff 的通用运行时包。当前整合候选版本为 2.3.0，保留 StatId、StatBlock 与存档合同，并加入可耗尽 Buff 的发放状态；存在观察者时仍逐层通知。依赖 ZeroEngine.Core、ZeroEngine.Formula 与 ZeroEngine.Persistence，消费者需使用同一验证提交的包组合。候选尚未发布。
 
 `RepeatedModifiers<T>` 保留 POB 已采用的只读 `ICollection<T>` 和稳定模板块复制合同。`StatSortLayoutCache<TModifier,TSource,TAdapter>` 只复用逐项引用和 Order 完全一致的排序排列，不缓存数值；首次排序使用当前运行时的真实 `List.Sort`。它有条目和引用槽上限，非线程安全，宿主须在世界或会话边界调用 `Clear()`。原 `StatKernel.Sort` 比较器入口不变。
 
@@ -52,6 +52,12 @@ handler.RemoveStacks(1);
 既有 `BuffHandler` 共用聚合层数和时钟算术，同时保留 `IBuffStatTarget`／`StatId`、时长覆盖、恢复、旧 signed count 算术及先过期后 Tick 的顺序。`StatBlock`、规范化标识与旧序列化不变。不为项目增加第二套属性或 Buff 兼容适配。
 
 ## 验证与采用
+
+`BuffChargeState` 持有一次发放的 `Initialized` 事实和唯一的 `BuffStackState`。可见 Buff
+借用该层数状态；卸载显示对象不清除次数，消费最后一层仍保留已发放事实。只有宿主的新局／
+明确重置边界调用 `Reset()`。普通 Buff 的零层释放行为不变。
+`Capture()/Restore()` 复制快照并在替换前校验，不读写文件、不重放效果；角色／来源身份、
+存档格式和新旧数据转换由宿主适配器拥有。不要另存一份 used-count。
 
 包内 `BuffHandlerStatIdTests` 覆盖 Buff 对标识的消费、作者／旧序列化标识等价，以及规范化 ASCII 的字符串复用。P5 的属性用例和真实探索／战斗调用用于验证消费者。
 

@@ -64,6 +64,17 @@ Use `TceGraphValidator.Validate(graph)` before saving or executing authored cont
 
 ## Generic Components
 
+### Host-owned execution state (0.3.0)
+
+`ExecutionCountConditionData.StateKey` optionally binds the accepted count to an
+`ITceStateSource` on the install source or actor. Its `ITceStateStore` exposes
+runtime numbers/text only. The host owns stable identities, reset scope, capture,
+restore and storage; TCE never calls a save API or depends on a Buff implementation.
+An empty key keeps the existing installation-local counter. A nonempty key without
+a state source fails explicitly. Accepted executions consume after all conditions
+pass and before effects, including synchronous reentry; reinstalling does not reset
+host-owned state. Future host adapters may back that contract with Buff state.
+
 - `OnInstallTrigger`
 - `NumericSourceCondition`
 - `CooldownCondition`
