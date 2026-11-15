@@ -181,7 +181,10 @@ def verify(dll, output):
         approach(guest, 'shop'); tap(guest, 'shop')
         guest.wait(lambda r: self_actor(r)['Reserved'] == 2, 'reserve')
         guest.send('cancel'); guest.send('replay'); guest.send('confirm')
-        value = host.wait(lambda r: guest_actor(r)['Reserved'] == 0, 'cancel refund')
+        # The host's local projection may still predate the reservation. Zero reserved
+        # alone also matches that older snapshot, so observe the settlement counters.
+        value = host.wait(lambda r: guest_actor(r)['Reserved'] == 0
+                          and r['View']['Reservations'] == 1 and r['View']['Refunds'] == 1, 'cancel refund')
         assert guest_actor(value)['Coins'] == 3 and guest_actor(value)['Purchases'] == 0
         assert value['View']['Reservations'] == 1 and value['View']['Refunds'] == 1
         done('cancel_before_confirmation_refunds_once', host, guest)
@@ -205,7 +208,7 @@ def verify(dll, output):
         approach(guest, 'shop'); tap(guest, 'shop'); guest.send('capture')
         guest.wait(lambda r: self_actor(r)['Reserved'] == 2, 'reserve')
         guest.send('leave')
-        host.wait(lambda r: guest_actor(r)['Reserved'] == 0, 'range cancellation')
+        host.wait(lambda r: guest_actor(r)['Reserved'] == 0 and r['View']['Refunds'] == 1, 'range cancellation')
         host.send('repool'); guest.send('replayCaptured'); guest.send('confirm')
         guest.wait(lambda r: next(t for t in r['View']['Targets'] if t['Name'] == 'shop')['Generation'] == 2, 'new pooled activation')
         assert host.send('state')['View']['Commits'] == 0
