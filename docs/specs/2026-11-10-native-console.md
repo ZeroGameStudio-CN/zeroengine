@@ -94,8 +94,8 @@ entry remain available while native capabilities are developed independently.
 | --- | --- |
 | Command discovery: `QuantumConsoleProcessor`, scan rules, `InjectionLoader` | Explicit, atomic module registration avoids a Player assembly scan. Optional attribute/generated authoring remains future work. |
 | Catalog cache: `GetAllCommands` | Reuse a sorted registry catalog until registration changes; recheck live caller policy for every discovery/completion request. |
-| Parameters: `CommandData`, `QuantumParser`, parsers | Quotes, Unicode, spans, optional/variadic arguments, primitives, enums, nullable values and arrays exist. QC's wider Unity values, collections, tuples, overloads and generics are not native parity yet. |
-| Extensibility: parser/suggestor/serializer injection | Explicit converter/completer leases exist. General result formatting and broader reusable Unity converters still need implementation; avoid unbounded caches of user values. |
+| Parameters: `CommandData`, `QuantumParser`, parsers | Quotes, Unicode, spans, optional/variadic arguments, primitives, enums, nullable values and arrays exist. Host defaults also parse vectors, integer vectors, quaternions and colors. Object-reference parsing, broader collections, tuples, overloads and generics remain gaps. |
+| Extensibility: parser/suggestor/serializer injection | Explicit converter/completer leases and an engine-independent conversion fallback exist. General result formatting remains a gap; avoid unbounded caches of user values. |
 | Suggestions: `QuantumSuggestor`, suggestion stack/display | Fragments, aliases, prefix priority, resource labels, quoting, caret ranges and clickable candidates exist. Rich active-parameter/signature guidance and natural ranking remain to assess. |
 | Results: `QuantumSerializer` | Structured results/data are independent of presentation; generic collections and rich type formatting are not equivalent yet. |
 | Async/actions: `QuantumConsole`, `ActionExecuter` | Tasks, main-thread dispatch, cancellation, deadlines and no-replay behavior exist. Interactive response/action workflows remain an optional capability gap. |

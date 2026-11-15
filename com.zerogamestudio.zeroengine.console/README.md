@@ -36,6 +36,30 @@ module/session cancellation with an optional caller token and creates a deadline
 timer only when requested. Cancelling an uncooperative handler keeps the session
 busy until that handler ends, without replaying it or claiming rollback.
 
+Built-in scalar conversion includes `byte`, `sbyte`, `short`, `ushort` and `char`
+alongside the larger integer, floating-point, decimal, bool, enum, string and Guid
+types. Integer bounds are enforced; `char` requires one UTF-16 code unit. Nullable
+and array conversion reuse the same rules, with explicit custom converters taking
+precedence for their registration lifetime.
+
+`ConsoleHost` also supplies `Vector2/3/4`, `Vector2Int/3Int`, `Quaternion`, `Color`
+and `Color32` conversion. Use comma-separated components, optionally enclosed in
+parentheses or brackets; vector/quaternion component counts must match the type.
+Colors accept normalized RGB/RGBA components, HTML/named colors and `0xRRGGBB[AA]`.
+Nonfinite components, integer overflow and colors outside `[0,1]` are rejected.
+These rules also compose with nullable values and arrays.
+
+The pure core keeps its parameterless `ConsoleValues` constructor and engine
+independence. `new ConsoleValues(fallback)` supplies an explicit conversion
+fallback after built-ins; return false with no error for an unclaimed type.
+Type-specific `Register` converters take precedence and disposing their handle
+restores the default behavior. No value or scene-object cache is created.
+
+Results are immutable. Empty successes may be shared; use the invocation ID on
+the context/output to identify a call, and read status/code/data from the result.
+Session disposal cancels its active invocation and pending completion separately,
+so execution does not need a second per-call session cancellation registration.
+
 For frequent output refreshes, use `CopyOutputTo(ref buffer, out revision)` with
 a caller-owned `ConsoleOutput[]`. It grows the buffer when needed, returns the
 valid entry count and captures the revision under the same lock. Unused entries

@@ -22,6 +22,7 @@ namespace ZeroEngine.Console
 
     public sealed class ConsoleResult
     {
+        private static readonly ConsoleResult emptySuccess = new ConsoleResult(ConsoleResultStatus.Succeeded, "ok", "", null, null);
         public ConsoleResultStatus Status { get; }
         public string Code { get; }
         public string Message { get; }
@@ -39,7 +40,8 @@ namespace ZeroEngine.Console
         }
 
         public static ConsoleResult Success(string message = "", object data = null) =>
-            new ConsoleResult(ConsoleResultStatus.Succeeded, "ok", message, data, null);
+            string.IsNullOrEmpty(message) && data == null ? emptySuccess :
+                new ConsoleResult(ConsoleResultStatus.Succeeded, "ok", message, data, null);
         public static ConsoleResult Failure(string code, string message, int? position = null) =>
             new ConsoleResult(ConsoleResultStatus.Failed, code, message, null, position);
         public static ConsoleResult Cancelled(string message = "Cancellation requested.") =>
