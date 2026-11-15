@@ -7,19 +7,19 @@ namespace ZeroEngine.Feedback
     {
         private static readonly Dictionary<SystemLanguage, string[]> SubmissionTexts = new()
         {
-            [SystemLanguage.ChineseSimplified] = new[] { "提交中…", "自动重试中…", "提交成功，感谢反馈。", "提交失败" },
-            [SystemLanguage.ChineseTraditional] = new[] { "提交中…", "自動重試中…", "提交成功，感謝回饋。", "提交失敗" },
-            [SystemLanguage.English] = new[] { "Submitting…", "Retrying automatically…", "Submitted. Thanks for your feedback.", "Submission failed" },
-            [SystemLanguage.Japanese] = new[] { "送信中…", "自動再試行中…", "送信しました。ご報告ありがとうございます。", "送信失敗" },
-            [SystemLanguage.Korean] = new[] { "제출 중…", "자동 재시도 중…", "제출되었습니다. 제보 감사합니다.", "제출 실패" },
-            [SystemLanguage.German] = new[] { "Wird gesendet…", "Automatischer Neuversuch…", "Gesendet. Danke für dein Feedback.", "Senden fehlgeschlagen" },
-            [SystemLanguage.French] = new[] { "Envoi en cours…", "Nouvel essai automatique…", "Envoyé. Merci pour votre retour.", "Échec de l’envoi" },
-            [SystemLanguage.Spanish] = new[] { "Enviando…", "Reintentando automáticamente…", "Enviado. Gracias por tus comentarios.", "Error al enviar" },
-            [SystemLanguage.Russian] = new[] { "Отправка…", "Автоматическая повторная попытка…", "Отправлено. Спасибо за отзыв.", "Не удалось отправить" },
-            [SystemLanguage.Portuguese] = new[] { "Enviando…", "Tentando novamente…", "Enviado. Obrigado pelo feedback.", "Falha no envio" },
-            [SystemLanguage.Italian] = new[] { "Invio…", "Nuovo tentativo automatico…", "Inviato. Grazie per il feedback.", "Invio non riuscito" },
-            [SystemLanguage.Dutch] = new[] { "Versturen…", "Automatisch opnieuw proberen…", "Verstuurd. Bedankt voor je feedback.", "Versturen mislukt" },
-            [SystemLanguage.Polish] = new[] { "Wysyłanie…", "Automatyczna ponowna próba…", "Wysłano. Dziękujemy za opinię.", "Wysyłanie nie powiodło się" }
+            [SystemLanguage.ChineseSimplified] = new[] { "反馈提交中…", "反馈正在重试…", "反馈提交成功，感谢反馈。", "反馈提交失败" },
+            [SystemLanguage.ChineseTraditional] = new[] { "回饋提交中…", "回饋正在重試…", "回饋提交成功，感謝回饋。", "回饋提交失敗" },
+            [SystemLanguage.English] = new[] { "Submitting feedback…", "Retrying feedback…", "Feedback submitted. Thank you.", "Feedback submission failed" },
+            [SystemLanguage.Japanese] = new[] { "フィードバック送信中…", "フィードバックを再試行中…", "フィードバックを送信しました。", "フィードバック送信失敗" },
+            [SystemLanguage.Korean] = new[] { "피드백 제출 중…", "피드백 다시 시도 중…", "피드백이 제출되었습니다. 감사합니다.", "피드백 제출 실패" },
+            [SystemLanguage.German] = new[] { "Feedback wird gesendet…", "Feedback wird erneut gesendet…", "Feedback gesendet. Vielen Dank.", "Feedback konnte nicht gesendet werden" },
+            [SystemLanguage.French] = new[] { "Envoi du retour…", "Nouvel essai d’envoi du retour…", "Retour envoyé. Merci.", "Échec de l’envoi du retour" },
+            [SystemLanguage.Spanish] = new[] { "Enviando comentarios…", "Reintentando enviar comentarios…", "Comentarios enviados. Gracias.", "Error al enviar comentarios" },
+            [SystemLanguage.Russian] = new[] { "Отправка отзыва…", "Повторная отправка отзыва…", "Отзыв отправлен. Спасибо.", "Не удалось отправить отзыв" },
+            [SystemLanguage.Portuguese] = new[] { "Enviando feedback…", "Reenviando feedback…", "Feedback enviado. Obrigado.", "Falha ao enviar feedback" },
+            [SystemLanguage.Italian] = new[] { "Invio del feedback…", "Nuovo tentativo di invio del feedback…", "Feedback inviato. Grazie.", "Invio del feedback non riuscito" },
+            [SystemLanguage.Dutch] = new[] { "Feedback versturen…", "Feedback opnieuw proberen…", "Feedback verstuurd. Bedankt.", "Feedback versturen mislukt" },
+            [SystemLanguage.Polish] = new[] { "Wysyłanie opinii…", "Ponowna próba wysłania opinii…", "Opinia wysłana. Dziękujemy.", "Nie udało się wysłać opinii" }
         };
 
         public static string ResolveSubmissionStatus(FeedbackTextId id, string languageCode) =>

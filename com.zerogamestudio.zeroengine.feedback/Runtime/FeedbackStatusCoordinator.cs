@@ -34,19 +34,9 @@ namespace ZeroEngine.Feedback
         {
             _configuration = configuration ?? new FeedbackUiConfiguration();
             EnsureSubscribed();
-            if (_configuration.UseDeliveryStatus)
-            {
-                bool restoredRetry = false;
-                foreach (FeedbackSubmissionStatus item in FeedbackSubmissionService.GetRecentSubmissions())
-                {
-                    if (item.State == FeedbackDeliveryState.Received || item.State == FeedbackDeliveryState.Stopped)
-                        continue;
-                    CurrentSubmissions.Add(item.SubmissionId);
-                    if (item.AutomaticRetryScheduled && RetryNotifications.Add(item.SubmissionId))
-                        restoredRetry = true;
-                }
-                if (restoredRetry) Present(FeedbackTextId.Retrying);
-            }
+            // Notifications belong to submissions made in this process. Restoring
+            // the durable queue must not turn background delivery into a startup alert.
+            // Queue processing and the receipt/history view retain their own state.
         }
 
         internal static void HandleSubmitting()
@@ -112,7 +102,8 @@ namespace ZeroEngine.Feedback
                      status.State != FeedbackDeliveryState.Queued)
             {
                 FailureNotifications.Remove(status.SubmissionId);
-                if (RetryNotifications.Add(status.SubmissionId)) Present(FeedbackTextId.Retrying);
+                if (_configuration.ShowUploadingStatus && RetryNotifications.Add(status.SubmissionId))
+                    Present(FeedbackTextId.Retrying);
             }
         }
 
@@ -144,7 +135,9 @@ namespace ZeroEngine.Feedback
                 if (string.IsNullOrWhiteSpace(text))
                     text = FeedbackTextCatalog.ResolveShortFailure(Application.systemLanguage);
                 string code = string.IsNullOrEmpty(failureCode) ? FeedbackFailureCodes.Unknown : failureCode;
-                text += text == "提交失败" || text == "提交失敗" ? "（" + code + "）" : " (" + code + ")";
+                bool chinese = text == "提交失败" || text == "提交失敗" ||
+                               text == "反馈提交失败" || text == "回饋提交失敗";
+                text += chinese ? "（" + code + "）" : " (" + code + ")";
             }
             if (_configuration.StatusPresenter != null)
             {

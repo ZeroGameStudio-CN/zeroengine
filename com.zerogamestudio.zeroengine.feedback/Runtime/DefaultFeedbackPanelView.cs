@@ -30,6 +30,7 @@ namespace ZeroEngine.Feedback
         private UnityEngine.UI.Button _historyButton;
         private FeedbackSubmissionResult? _lastLocalFailure;
         private FeedbackSubmissionHistoryView _ownedDetails;
+        private bool _ownsTheme;
 
         public bool IsSubmitting => _controller != null && _controller.IsSubmitting;
 
@@ -58,6 +59,7 @@ namespace ZeroEngine.Feedback
             _theme = _configuration.Theme != null
                 ? _configuration.Theme
                 : FeedbackUiTheme.CreateRuntimeDefault();
+            _ownsTheme = _configuration.Theme == null;
             _controller = new FeedbackSubmissionController(_configuration);
 
             if (!_built)
@@ -139,6 +141,7 @@ namespace ZeroEngine.Feedback
 
             RectTransform viewport = CreateRect("Viewport", scrollRoot);
             Stretch(viewport);
+            viewport.gameObject.AddComponent<Image>().color = Color.clear;
             viewport.gameObject.AddComponent<RectMask2D>();
             scrollRect.viewport = viewport;
 
@@ -357,7 +360,12 @@ namespace ZeroEngine.Feedback
             }
         }
 
-        private void OnDestroy() => FeedbackPanel.CloseSubmissionDetails(_ownedDetails);
+        private void OnDestroy()
+        {
+            FeedbackPanel.CloseSubmissionDetails(_ownedDetails);
+            if (_ownsTheme && _theme != null)
+                Destroy(_theme);
+        }
 
         private void SetSubmitting(bool submitting)
         {

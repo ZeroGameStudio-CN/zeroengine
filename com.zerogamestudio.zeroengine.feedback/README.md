@@ -2,7 +2,7 @@
 
 Minimal player feedback UI on top of the queue-first ZGS Analytics submission service.
 
-## Confirmed delivery presentation (1.2.1)
+## Confirmed delivery presentation (1.2.2)
 
 Requires Analytics 2.3.1. Existing receivers returning `status: ok` with the
 uploaded ZIP URL are supported without a server upgrade. Strict version-1 receipt
@@ -20,10 +20,16 @@ FeedbackPanel.Configure(new FeedbackUiConfiguration
 });
 ```
 
-The four Simplified Chinese notifications are `提交中…`, `自动重试中…`,
-`提交成功，感谢反馈。`, and `提交失败（Fxxx）`. Thirteen locales are included.
+The four Simplified Chinese notifications are `反馈提交中…`, `反馈正在重试…`,
+`反馈提交成功，感谢反馈。`, and `反馈提交失败（Fxxx）`. Thirteen locales are included.
 `IFeedbackTextResolver` may override them; return `null` for shared-catalog fallback.
-Automatic retries are notified once, not once per network attempt. A raw transport
+Only submissions made in the current process produce notifications. Restoring
+pending feedback at startup continues delivery silently; its progress, receipt and
+failure reason remain available in recent submissions. Reopening/configuring the
+form does not adopt historical submissions as foreground operations.
+Automatic retries of a current submission are notified once, not once per network
+attempt; `ShowUploadingStatus = false` suppresses both progress and retry notices,
+while confirmed outcomes remain visible. A raw transport
 failure never directly produces the failure notification in this mode. A rejection
 after a lost acknowledgement remains unconfirmed until delivery can be established.
 
@@ -31,9 +37,13 @@ The default form offers recent submissions. Custom forms can call
 `FeedbackPanel.OpenSubmissionDetails(lastLocalFailure)`; retain the returned view
 and call `CloseSubmissionDetails(view)` when the owning form exits. This preserves
 focus and prevents a stale owner from closing a newer view. Details show receipt
-state, retained error hints, partial attachments and stopped retries. Their Retry
+state (including active upload and retry), retained error hints, partial attachments
+and stopped retries. Their Retry
 action reuses the original queue identity and ZIP. No extra status notifications
-are added for these details.
+are added for these details. Status refreshes preserve the selected row action and
+scroll position; when a completed submission loses its Retry action, focus moves
+to Copy ID for the same submission. The default form accepts scrolling over the
+whole viewport and releases its runtime-created theme on close.
 
 See [delivery contract and verification](../docs/specs/2026-11-02-feedback-delivery-state.md).
 
