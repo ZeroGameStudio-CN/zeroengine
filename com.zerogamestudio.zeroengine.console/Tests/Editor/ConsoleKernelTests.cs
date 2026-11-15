@@ -19,6 +19,24 @@ namespace ZeroEngine.Console.Tests
         private static Task<ConsoleResult> Ok(ConsoleInvocation invocation, ConsoleArguments arguments, CancellationToken token) =>
             Task.FromResult(ConsoleResult.Success("done", arguments.Count));
 
+        [Test]
+        public void ResultSuccess_EmptyChecksDoNotRetainAnotherCallsMessageOrData()
+        {
+            var empty = ConsoleResult.Success();
+            var payload = new object();
+            var populated = ConsoleResult.Success("read value", payload);
+            Assert.That(populated.Message, Is.EqualTo("read value"));
+            Assert.That(populated.Data, Is.SameAs(payload));
+            foreach (var result in new[] { empty, ConsoleResult.Success(), ConsoleResult.Success(null) })
+            {
+                Assert.That(result.IsSuccess, Is.True);
+                Assert.That(result.Code, Is.EqualTo("ok"));
+                Assert.That(result.Message, Is.Empty);
+                Assert.That(result.Data, Is.Null);
+                Assert.That(result.Position, Is.Null);
+            }
+        }
+
         [TestCase("say \"\" '中文 空格' -12", new[] { "say", "", "中文 空格", "-12" })]
         [TestCase("say a\\ b C:\\temp\\file", new[] { "say", "a b", "C:\\temp\\file" })]
         [TestCase("say [1, 2, [3, 4]] (1, 2, 3)", new[] { "say", "[1, 2, [3, 4]]", "(1, 2, 3)" })]
@@ -515,8 +533,11 @@ namespace ZeroEngine.Console.Tests
             Assert.That(calls, Is.EqualTo(1));
         }
 
-        [Test]
-        public async Task SessionDisposal_CancelsOwnedInvocationWithoutDeadline()
+        [TestCase(false, false)]
+        [TestCase(false, true)]
+        [TestCase(true, false)]
+        [TestCase(true, true)]
+        public async Task SessionDisposal_CancelsOwnedInvocation(bool externalCancellation, bool deadline)
         {
             using var registry = new ConsoleRegistry();
             using var module = registry.Register("test", new[] { new ConsoleBinding(Command(), async (context, args, token) => {
@@ -524,12 +545,38 @@ namespace ZeroEngine.Console.Tests
                 return ConsoleResult.Success();
             }) });
             using var session = new ConsoleSession(registry);
-            var execution = session.ExecuteLineAsync("ze-echo", Editor);
+            using var cancellation = new CancellationTokenSource();
+            var execution = session.ExecuteLineAsync("ze-echo", Editor,
+                externalCancellation ? cancellation.Token : default, deadline ? TimeSpan.FromSeconds(5) : (TimeSpan?)null);
             Assert.That(session.IsRunning, Is.True);
             session.Dispose();
             Assert.That((await execution.ConfigureAwait(false)).Status, Is.EqualTo(ConsoleResultStatus.Cancelled));
             Assert.That(session.IsRunning, Is.False);
             Assert.That((await session.ExecuteLineAsync("ze-echo", Editor)).Code, Is.EqualTo("session-disposed"));
+        }
+
+        [Test]
+        public async Task SessionDisposal_CancelsCompletionEvenWhenAnExecutionCallbackThrows()
+        {
+            using var registry = new ConsoleRegistry();
+            var finish = new TaskCompletionSource<ConsoleResult>();
+            using var module = registry.Register("test", new[] { new ConsoleBinding(
+                Command(parameters: new[] { new ConsoleParameter("value", typeof(string), optional: true, defaultValue: "") }),
+                (context, args, token) => {
+                    token.Register(() => throw new InvalidOperationException("Callback failure."));
+                    return finish.Task;
+                }, async (context, token) => {
+                    await Task.Delay(Timeout.Infinite, token).ConfigureAwait(false);
+                    return Array.Empty<ConsoleCompletionItem>();
+                }) });
+            using var session = new ConsoleSession(registry);
+            var execution = session.ExecuteLineAsync("ze-echo", Editor);
+            var completion = session.CompleteAsync("ze-echo ", 8, Editor);
+            Assert.Throws<AggregateException>(() => session.Dispose());
+            try { await completion.ConfigureAwait(false); Assert.Fail("Completion must observe session cancellation."); }
+            catch (OperationCanceledException) { }
+            finish.SetResult(ConsoleResult.Success());
+            Assert.That((await execution.ConfigureAwait(false)).Status, Is.EqualTo(ConsoleResultStatus.Cancelled));
         }
 
         [Test]

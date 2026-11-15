@@ -166,12 +166,12 @@ namespace ZeroEngine.Console
                         deadline = new CancellationTokenSource();
                         deadline.CancelAfter(timeout.Value);
                         execution = cancellation.CanBeCanceled
-                            ? CancellationTokenSource.CreateLinkedTokenSource(cancellation, ownerToken, lifetimeToken, deadline.Token)
-                            : CancellationTokenSource.CreateLinkedTokenSource(ownerToken, lifetimeToken, deadline.Token);
+                            ? CancellationTokenSource.CreateLinkedTokenSource(cancellation, ownerToken, deadline.Token)
+                            : CancellationTokenSource.CreateLinkedTokenSource(ownerToken, deadline.Token);
                     }
                     else execution = cancellation.CanBeCanceled
-                        ? CancellationTokenSource.CreateLinkedTokenSource(cancellation, ownerToken, lifetimeToken)
-                        : CancellationTokenSource.CreateLinkedTokenSource(ownerToken, lifetimeToken);
+                        ? CancellationTokenSource.CreateLinkedTokenSource(cancellation, ownerToken)
+                        : CancellationTokenSource.CreateLinkedTokenSource(ownerToken, CancellationToken.None);
                     current = execution;
                 }
                 execution.Token.ThrowIfCancellationRequested();
@@ -311,9 +311,16 @@ namespace ZeroEngine.Console
             {
                 if (disposed) return;
                 disposed = true;
-                lifetime.Cancel();
-                lifetime.Dispose();
-                output.Clear(); history.Clear(); outputRevision++;
+                try { current?.Cancel(); }
+                finally
+                {
+                    try { lifetime.Cancel(); }
+                    finally
+                    {
+                        lifetime.Dispose();
+                        output.Clear(); history.Clear(); outputRevision++;
+                    }
+                }
             }
         }
     }

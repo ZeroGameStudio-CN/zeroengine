@@ -55,6 +55,11 @@ fallback after built-ins; return false with no error for an unclaimed type.
 Type-specific `Register` converters take precedence and disposing their handle
 restores the default behavior. No value or scene-object cache is created.
 
+Results are immutable. Empty successes may be shared; use the invocation ID on
+the context/output to identify a call, and read status/code/data from the result.
+Session disposal cancels its active invocation and pending completion separately,
+so execution does not need a second per-call session cancellation registration.
+
 For frequent output refreshes, use `CopyOutputTo(ref buffer, out revision)` with
 a caller-owned `ConsoleOutput[]`. It grows the buffer when needed, returns the
 valid entry count and captures the revision under the same lock. Unused entries
