@@ -14,6 +14,33 @@ namespace ZeroEngine.Console.UI.Tests
     public sealed class NativeConsoleTests
     {
         [UnityTest]
+        public IEnumerator NativeView_EmptyDraftKeepsLogsVisibleAndClearingCancelsSuggestions()
+        {
+            var root = new GameObject("Quiet console draft");
+            try
+            {
+                var view = root.AddComponent<NativeConsole>();
+                view.Open();
+                var suggestions = view.transform.Find("ZE Console/Panel/Completions").gameObject;
+                yield return new WaitForSecondsRealtime(.1f);
+                Assert.That(suggestions.activeSelf, Is.False);
+                view.InputField.text = "ze-";
+                view.InputField.caretPosition = 3;
+                double deadline = Time.realtimeSinceStartupAsDouble + 1;
+                while (!suggestions.activeSelf && Time.realtimeSinceStartupAsDouble < deadline) yield return null;
+                Assert.That(suggestions.activeSelf, Is.True);
+                view.InputField.text = string.Empty;
+                yield return new WaitForSecondsRealtime(.1f);
+                Assert.That(suggestions.activeSelf, Is.False);
+                view.InputField.text = "   ";
+                yield return new WaitForSecondsRealtime(.1f);
+                Assert.That(suggestions.activeSelf, Is.False);
+                Assert.That(view.Host.Session.GetHistory(), Is.Empty);
+            }
+            finally { Object.DestroyImmediate(root); }
+        }
+
+        [UnityTest]
         public IEnumerator NativeView_ConfigurableSizeAndTouchOrientationStayInsideCanvas()
         {
             var root = new GameObject("Console size and orientation");

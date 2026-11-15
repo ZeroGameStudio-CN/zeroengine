@@ -39,6 +39,8 @@ hide the keyboard-shortcut footer.
 Completion selection never executes a command. Its visible rows adjust to the
 window and font size; submitting clears the stale suggestions. Projects that
 own the toggle action retain it through `KeyboardShortcutEnabled = false`.
+An empty or whitespace-only draft keeps the log view clear; suggestions appear
+after text is entered. Clearing the draft also cancels pending suggestions.
 
 Common actions use a consistent set of procedural line icons, with Chinese
 descriptions and shortcut hints on hover. The follow control shows its active or
@@ -76,6 +78,9 @@ use the current filter. An empty result has an explicit hint. Copy exports the
 matching retained messages while a filter is active; clearing or closing search
 restores the full output and Copy behavior. The displayed pool remains bounded
 to the last 256 matching entries and is reused between filter changes.
+Output refreshes reuse a caller-owned session buffer and the existing text rows;
+they do not allocate a new snapshot array for every batch of messages. Hidden rows
+release their old text after filtering or clearing.
 `GetFilteredOutputText()` returns the same plain text without touching the OS
 clipboard, for project-owned exports and headless verification. Toolbar actions
 preserve the selected input field; explicitly running a command selects its draft.
