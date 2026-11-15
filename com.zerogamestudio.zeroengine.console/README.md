@@ -29,6 +29,13 @@ Dispose registrations when a module unloads, then dispose the session and regist
 when their owner ends. A Unity owner can use `ConsoleHost`; its dispatcher keeps
 handlers on the main thread, including calls submitted from a worker.
 
+The registry reuses its sorted catalog until a module registers or unloads.
+Discovery and completion still check the current caller and policy on every
+request; returned command arrays remain caller-owned snapshots. Execution links
+module/session cancellation with an optional caller token and creates a deadline
+timer only when requested. Cancelling an uncooperative handler keeps the session
+busy until that handler ends, without replaying it or claiming rollback.
+
 For frequent output refreshes, use `CopyOutputTo(ref buffer, out revision)` with
 a caller-owned `ConsoleOutput[]`. It grows the buffer when needed, returns the
 valid entry count and captures the revision under the same lock. Unused entries
@@ -56,6 +63,6 @@ Both Host execution overloads return a structured `Cancelled` result when the
 request token is cancelled before main-thread dispatch. The handler is not run;
 this applies to requests made on the Unity thread and on worker threads.
 
-The current focused Unity 6 evidence covers 27 kernel cases and five Host cases.
-Native UI/QC compatibility and project migration retain their separate gates;
-these counts do not establish Player or consumer adoption.
+Kernel EditMode cases cover binding, live policy, registration lifetime and
+cancellation. Host PlayMode cases cover Unity dispatch and lifecycle. Native
+UI/QC compatibility, Player behavior and consumer adoption have separate checks.
