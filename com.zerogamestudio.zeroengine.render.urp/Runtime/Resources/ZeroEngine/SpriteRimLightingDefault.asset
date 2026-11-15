@@ -15,6 +15,7 @@ MonoBehaviour:
   Strength: 0.85
   InnerWrapWidth: 2
   InnerWrapStrength: 0.22
+  ContourStrength: 0.85
   DarkEdgeBrightness: 0.42
   WeakDistance: 2
   StrongDistance: 1

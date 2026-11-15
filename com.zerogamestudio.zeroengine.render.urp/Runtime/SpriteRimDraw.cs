@@ -209,11 +209,14 @@ namespace ZeroEngine.Render.Urp
                 material.SetVector("_RimRefRow0", Silhouette.WorldToMask.GetRow(0));
                 material.SetVector("_RimRefRow1", Silhouette.WorldToMask.GetRow(1));
                 material.SetVector("_RimRefMaskInfo", Silhouette.Info); material.SetVector("_RimRefFrame", Silhouette.ReferenceFrame);
+                var center = Renderer.bounds.center;
+                material.SetVector("_RimRefCenterWS", new Vector4(center.x, center.y, center.z, 0));
                 material.SetVector("_RimRefStyle", new Vector4(exposure, Mathf.Max(.01f, profile.MaximumLight), Mathf.Clamp01(profile.Strength),
                     (profile.GammaBlend && QualitySettings.activeColorSpace == ColorSpace.Linear ? 1 : 0) + (profile.LimitAddedHdr ? 2 : 0)));
                 var edge = profile.EdgeTint; var inner = profile.InnerTint;
                 material.SetVector("_RimRefEdgeTint", new Vector4(edge.r, edge.g, edge.b, edge.a));
                 material.SetVector("_RimRefInnerTint", new Vector4(inner.r, inner.g, inner.b, inner.a));
+                material.SetFloat("_RimEnhanceContourStrength", float.IsFinite(profile.ContourStrength) ? Mathf.Clamp01(profile.ContourStrength) : 0);
                 if (changes == -1 || uploadedCount != selectedCount) material.SetInt(CountId, selectedCount);
                 if ((changes & 1) != 0) material.SetVectorArray(Rows0Id, rows0);
                 if ((changes & 2) != 0) material.SetVectorArray(Rows1Id, rows1);

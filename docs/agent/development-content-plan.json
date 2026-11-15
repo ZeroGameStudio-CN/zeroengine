@@ -422,6 +422,27 @@
       "nextAction": "消费项目按实际安装包同步 ZE Agent 指导；包安装／升级／卸载通过既有 UPM 入口，随后刷新清单。模块变动同步维护 README 与受影响的 Skill，仓库架构入口变化维护 AGENTS.md。",
       "revision": "2026-11-15：显示名称改为 ZeroEngine Agent，技术包 ID／C# API 保持兼容，候选版本 0.2.0。Skill 覆盖全体已安装 ZE 模块及包生命周期；轻量 CLI 提供同步、检查和按受管收据移除指导，不另造包解析器。20 项 Python 合同与 CLI 用例无失败，覆盖中文路径、移除预览、应用、本地自定义保留、修改冲突、未知版本、失败恢复和拒绝自删。AGENTS.md 已登记唯一维护源与更新责任；Skill validator、62 包审计成功。源码／候选验证不代表消费项目已升级或用户发布。",
       "releaseEvidence": ""
+    },
+    {
+      "id": "ze.render.pixel-contour-core",
+      "title": "像素受光的清晰局部轮廓与柔和内侧过渡",
+      "stage": "Previewable",
+      "targetReleaseId": "",
+      "availability": "DevelopmentOnly",
+      "responsibleChat": "01a16e60-157f-7f63-8f5a-7a6bdbe07a81",
+      "chatUrl": "",
+      "nextAction": "固定通过候选验证的 Git UPM 提交，验证基地玩家与 NPC 的正常镜头受光，再完成消费者接入。",
+      "entrance": "POB 受控 PlayMode 的 RimFireColorTestRoom，以及包内 SpriteRimLightingRenderTests。",
+      "resourcePath": "com.zerogamestudio.zeroengine.render.urp/Runtime/Resources/ZeroEngine/SpriteRimLighting.shader",
+      "revision": "clear-contour-core-20261115",
+      "candidatePackageVersion": "0.4.4",
+      "releaseEvidence": "",
+      "verificationEvidence": [
+        "C:/Users/2025/AppData/Local/Temp/pob-rim-fused-20261115/run-v2-status.json",
+        "C:/Users/2025/AppData/Local/Temp/pob-rim-fused-20261115/run-v4-status.json",
+        "C:/Users/2025/AppData/Local/Temp/pob-rim-fused-20261115/flow-v4/runtime/candidate-package-gpu.json"
+      ],
+      "verificationScope": "正常镜头同姿势三版对照与 12 个采样已验证；源包的 8 个受光运行时文件和 GPU 测试做命名空间隔离、资源注入后，在主工程跑完 5 组 GPU 场景，包含稀疏轮廓、HDR、遮挡和中心对称性。普通消费者仍使用旧包，未声明用户发布。"
     }
   ]
 }

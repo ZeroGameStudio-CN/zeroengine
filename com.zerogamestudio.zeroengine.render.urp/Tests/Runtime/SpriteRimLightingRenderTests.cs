@@ -29,7 +29,10 @@ namespace ZeroEngine.Render.Tests.Runtime
         [UnityTest]
         public IEnumerator SceneLights_IgnoreSkyDirectional_KeepLocalPointSpotAndCullingMasks() => VerifyComposite(false, false, true);
 
-        private IEnumerator VerifyComposite(bool verifyWrap = false, bool verifySpatial = false, bool verifyNative = false)
+        [UnityTest]
+        public IEnumerator NativeContourCore_LightsInnerGapsAndIslandsWithoutBodyFillOrExtraHdr() => VerifyComposite(false, false, true, true);
+
+        private IEnumerator VerifyComposite(bool verifyWrap = false, bool verifySpatial = false, bool verifyNative = false, bool verifyContour = false)
         {
             Assert.That(Application.isPlaying, Is.True);
             RenderPipelineAsset previous = QualitySettings.renderPipeline;
@@ -231,6 +234,7 @@ namespace ZeroEngine.Render.Tests.Runtime
                         VerifyRearContourWrap(camera, actor, material, native, participation, profile, pipeline);
                         VerifyLocalShadows(camera, material, native, participation, profile, pipeline);
                         VerifyDarkContourStyle(camera, material, native, participation, profile);
+                        if (verifyContour) VerifyContourCore(camera, actor, texture, material, native, participation, profile, pipeline);
                         participation.enabled=false;unselectedImage=Render(camera);
                         Assert.That(lighting.ActiveTargetCount,Is.Zero,"The source component checkbox must remove participation immediately.");
                         AssertSameImage(baseline,unselectedImage,"Disabling rim participation must leave native source lighting alone.");
@@ -452,6 +456,68 @@ namespace ZeroEngine.Render.Tests.Runtime
                 profile.StrongDistance = strong;
                 profile.StrongScale = scale;
                 profile.MinimumExposure = exposure;
+            }
+        }
+
+        private static void VerifyContourCore(Camera camera, Renderer actor, Texture2D texture, Material material,
+            Light light, SpriteRimLightSource source, SpriteRimLightingProfile profile, UniversalRenderPipelineAsset pipeline)
+        {
+            var pixels = texture.GetPixels(); var oldColor = material.GetVector("_BaseColor");
+            var position = light.transform.position; var color = light.color;
+            float intensity = light.intensity, fill = source.DarkEdgeFill;
+            float coreStrength = profile.ContourStrength, wrap = profile.InnerWrapStrength;
+            float weak = profile.WeakDistance, strong = profile.StrongDistance, scale = profile.StrongScale;
+            bool hdr = pipeline.supportsHDR;
+            Texture2D soft = null, crisp = null, restored = null, hdrBase = null, hdrLit = null;
+            try
+            {
+                pipeline.supportsHDR = true;
+                material.SetVector("_BaseColor", new Vector4(.01f, .01f, .01f, 1));
+                light.transform.position = actor.bounds.center + new Vector3(-.4f, 0, .3f);
+                light.color = Color.green; light.intensity = 1.3f; source.DarkEdgeFill = 0;
+                profile.WeakDistance = profile.StrongDistance = 1; profile.StrongScale = 0;
+                profile.InnerWrapStrength = 0; profile.ContourStrength = 0;
+                var detail = (Color[])pixels.Clone();
+                for (int y = 2; y <= 6; y++) detail[y * 16 + 7] = Color.clear;
+                detail[9 * 16 + 13] = Color.white;
+                texture.SetPixels(detail); texture.Apply();
+                soft = Render(camera);
+                profile.ContourStrength = .85f; crisp = Render(camera);
+                Assert.That(crisp.GetPixel(34, 18).g, Is.GreaterThan(soft.GetPixel(34, 18).g + .05f),
+                    "The inner edge of a separated leg must receive a clear art-cell contour.");
+                Assert.That(crisp.GetPixel(54, 38).g, Is.GreaterThan(soft.GetPixel(54, 38).g + .05f),
+                    "An isolated art cell must not disappear into the filtered weak-light response.");
+                Assert.That(crisp.GetPixel(26, 34).g, Is.EqualTo(soft.GetPixel(26, 34).g).Within(.003f),
+                    "The clear contour must not spread into the opaque body interior.");
+                Assert.That(crisp.GetPixel(30, 18).g, Is.EqualTo(soft.GetPixel(30, 18).g).Within(.003f),
+                    "The transparent gap itself must retain the background.");
+                foreach (var pixel in crisp.GetPixels())
+                    Assert.That(Mathf.Max(pixel.r, Mathf.Max(pixel.g, pixel.b)), Is.LessThanOrEqualTo(1.001f),
+                        "A clear contour adds no new HDR energy to LDR art.");
+                profile.ContourStrength = 0; restored = Render(camera);
+                AssertSameImage(soft, restored, "Zero contour strength must restore the previous soft response.");
+
+                profile.ContourStrength = .85f;
+                material.SetVector("_BaseColor", new Vector4(2.4f, .6f, .1f, 1));
+                source.enabled = false; hdrBase = Render(camera); source.enabled = true; hdrLit = Render(camera);
+                Assert.That(hdrBase.GetPixel(34, 18).r, Is.GreaterThan(1.5f), "The test must contain actual incoming HDR.");
+                Assert.That(hdrLit.GetPixel(34, 18).r, Is.EqualTo(hdrBase.GetPixel(34, 18).r).Within(.015f),
+                    "The contour must preserve the existing HDR source instead of adding emission to it.");
+
+                texture.SetPixels(pixels); texture.Apply();
+                material.SetVector("_BaseColor", new Vector4(.04f, .04f, .04f, 1));
+                VerifyNativeBacklight(camera, actor, light, source, profile);
+                VerifyLocalShadows(camera, material, light, source, profile, pipeline);
+            }
+            finally
+            {
+                texture.SetPixels(pixels); texture.Apply(); material.SetVector("_BaseColor", oldColor);
+                light.transform.position = position; light.color = color; light.intensity = intensity;
+                source.enabled = true; source.DarkEdgeFill = fill;
+                profile.ContourStrength = coreStrength; profile.InnerWrapStrength = wrap;
+                profile.WeakDistance = weak; profile.StrongDistance = strong; profile.StrongScale = scale;
+                pipeline.supportsHDR = hdr;
+                foreach (var image in new[] { soft, crisp, restored, hdrBase, hdrLit }) if (image) Object.DestroyImmediate(image);
             }
         }
 

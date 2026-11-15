@@ -11,6 +11,10 @@ pooling and project assets stay in the consumer. The existing UnityEngine-only
 2. Add `SpriteRimLighting` to an actor and call `Configure(renderers, profile)`.
    A null profile keeps a clear contour with a faint inward transition over two
    art cells. The deeper artwork retains its original exposure.
+   ContourStrength adds a clear one-art-cell core to marked native lights,
+   including small isolated cells and the edges of gaps inside a silhouette.
+   The shared default uses 0.85; older custom profiles keep zero until enabled.
+   The existing soft band and inward transition retain their own settings.
 3. Create a dedicated light with `GameObject > Light > 角色边缘点光` or
    `角色边缘聚光`; the Editor-only authoring assembly adds the native light and
    `SpriteRimLightSource` together, with ordinary Undo support. For an existing
@@ -24,6 +28,15 @@ pooling and project assets stay in the consumer. The existing UnityEngine-only
 For authored 2D fields, create `SpriteRimLight` components and pass their explicit
 array to `Configure(renderers, lights, profile)`. Both inputs use the same enhanced
 composite. The old preview tint and reference MRT implementations are removed.
+
+The clear native core compares complete art cells along the light direction.
+Near a rear light's projected center, it blends into the symmetric one-cell
+backlight contour. Filtered inward wrap remains separate, so small islands,
+inner leg gaps and clothing cutouts can brighten without filling the body.
+The core uses bounded screen composition after the soft-light cap: it adds no
+new HDR emission and preserves existing HDR source energy. Multiple colors
+blend at the strongest core contribution's peak; shadow visibility applies to
+the core and to the existing light response.
 
 Consumers can enroll their Player/entity renderers at their normal enable and
 renderer-replacement entry points. Disable the lighting component when the actor

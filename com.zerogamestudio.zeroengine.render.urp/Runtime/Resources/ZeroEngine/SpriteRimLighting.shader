@@ -21,8 +21,10 @@ Shader "Hidden/ZeroEngine/SpriteRimLighting"
         float4 _RimEnhanceShadows[4];
         float4x4 _RimEnhanceFallbackBoxes[4];
         float _RimEnhanceAdditionalShadowDistanceSq;
+        float _RimEnhanceContourStrength;
         float4 _RimRefActorST, _RimRefRow0, _RimRefRow1, _RimRefMaskInfo, _RimRefFrame, _RimRefStyle;
         float4 _RimRefEdgeTint, _RimRefInnerTint;
+        float3 _RimRefCenterWS;
         struct ActorAttributes
         {
             float3 positionOS : POSITION;
@@ -79,7 +81,7 @@ Shader "Hidden/ZeroEngine/SpriteRimLighting"
             clip(MaskAlpha(cell) - .00001);
             return cell;
         }
-        float3 CompositeColor(float3 original, float4 light, float3 darkEdgeLight, float4 meta)
+        float3 CompositeColor(float3 original, float4 light, float3 darkEdgeLight, float3 contourLight, float4 meta)
         {
             bool gammaBlend = fmod(meta.z, 2) > .5;
             bool limitAddedHdr = meta.z >= 2;
@@ -103,6 +105,10 @@ Shader "Hidden/ZeroEngine/SpriteRimLighting"
                 float responsePeak = max(max(response.r, response.g), response.b);
                 response *= min(1, max(incomingPeak, darkLimit) / max(responsePeak, .000001));
             }
+            // Keep the soft wrap's limit separate from the clear one-cell contour.
+            // Screen composition raises even black art without creating new HDR energy.
+            float3 core = saturate(contourLight * _RimEnhanceContourStrength * _RimRefStyle.z) * meta.x;
+            response += core * saturate(1 - response);
             return response + incomingHdr;
         }
         float EnhancedPower(float value, float power)
@@ -181,11 +187,13 @@ Shader "Hidden/ZeroEngine/SpriteRimLighting"
             float2 texel = max(_RimRefMaskInfo.xy, .000001);
             float3 energy = 0; float blend = 0;
             float3 darkEdgeLight = 0;
+            float3 contourLight = 0;
             // Native lights can illuminate the same art cell. Bound brightness by the
             // strongest contribution and let stronger colors lead a continuous hue mix.
             bool mixNativeLights = _RimEnhanceLightCount > 1 && _RimEnhanceShapes[0].x > 2.5;
             RimColorMix rimMix = (RimColorMix)0;
             RimColorMix darkMix = (RimColorMix)0;
+            RimColorMix contourMix = (RimColorMix)0;
             float unshadowedAlpha = 0;
             float visibleAlpha = 0;
             float3 cellWS = ArtCellWorldPosition(input.positionWS, cellOffset);
@@ -247,6 +255,7 @@ Shader "Hidden/ZeroEngine/SpriteRimLighting"
                 float amount = alpha * alpha * visibility;
                 float4 band = _RimEnhanceBands[i];
                 float backFacing = 0;
+                float3 nativeToLight = 0;
                 float bandWidth = _RimEnhancePowers[i].x;
                 float directionalStyle = 1;
                 if (_RimEnhanceShapes[i].x > 2.5)
@@ -262,6 +271,7 @@ Shader "Hidden/ZeroEngine/SpriteRimLighting"
                     float3 toLight = -(_RimEnhanceRows0[i].xyz * cellQ.x + _RimEnhanceRows1[i].xyz * cellQ.y +
                         _RimEnhanceRows2[i].xyz * cellQ.z) / max(dot(_RimEnhanceRows0[i].xyz, _RimEnhanceRows0[i].xyz), .00000001);
                     float3 view = GetWorldSpaceNormalizeViewDir(cellWS);
+                    nativeToLight = toLight;
                     float depth = dot(toLight, view);
                     float lightDistance = max(length(toLight), .00001);
                     backFacing = saturate(-depth / lightDistance);
@@ -270,6 +280,29 @@ Shader "Hidden/ZeroEngine/SpriteRimLighting"
                     if (backFacing > 0) band.xy *= saturate(_RimEnhancePowers[i].y);
                 }
                 float2 scale = (_RimRefFrame.zw + band.z) / max(_RimRefFrame.zw, 1);
+                UNITY_BRANCH
+                if (_RimEnhanceContourStrength > 0 && _RimEnhanceShapes[i].x > 2.5)
+                {
+                    // A full art-cell comparison retains islands and internal gaps that a
+                    // fractionally shifted, filtered mask can almost erase on dark artwork.
+                    float2 coreShift = band.xy / max(length(band.xy), .00001) * min(bandWidth, 1);
+                    float2 coreUV = (uv - _RimRefFrame.xy) / max(scale, .00001) + _RimRefFrame.xy - coreShift * texel;
+                    float centerFade = smoothstep(0, .2, saturate(_RimEnhancePowers[i].y));
+                    float coreCoverage = saturate(1 - MaskAlpha(coreUV)) * centerFade;
+                    float3 centerToLight = nativeToLight + cellWS - _RimRefCenterWS;
+                    float3 centerView = GetWorldSpaceNormalizeViewDir(_RimRefCenterWS);
+                    float centerBackFacing = saturate(-dot(centerToLight, centerView) / max(length(centerToLight), .00001));
+                    if (centerBackFacing > 0 && centerFade < 1)
+                        coreCoverage = max(coreCoverage, saturate(1 - BackContourCoverage(uv, texel * min(bandWidth, 1))) * centerBackFacing * (1 - centerFade));
+                    float3 hue = saturate(_RimEnhanceColors[i].rgb);
+                #if !defined(UNITY_COLORSPACE_GAMMA)
+                    hue = SRGBToLinear(hue);
+                #endif
+                    float3 coreColor = hue * max(_RimRefEdgeTint.rgb, 0) *
+                        (amount * band.w * coreCoverage * max(_RimRefEdgeTint.a, 0));
+                    if (mixNativeLights) AccumulateRimColor(contourMix, coreColor);
+                    else contourLight += coreColor;
+                }
                 float2 shifted = (uv - _RimRefFrame.xy) / max(scale, .00001) + _RimRefFrame.xy - band.xy * texel;
                 // Filter only contour coverage, never source art: every art cell retains a uniform shade.
                 float directionalOccupied = FilteredMaskAlpha(shifted);
@@ -328,6 +361,9 @@ Shader "Hidden/ZeroEngine/SpriteRimLighting"
             {
                 energy = ResolveRimColor(rimMix);
                 darkEdgeLight = ResolveRimColor(darkMix);
+                contourLight = ResolveRimColor(contourMix);
+                float mixedPeak = max(max(contourLight.r, contourLight.g), contourLight.b);
+                contourLight *= contourMix.peak / max(mixedPeak, .00000001);
             }
             float2 sceneUV = GetNormalizedScreenSpaceUV(input.positionCS) * _RimEnhanceSceneScaleBias.xy + _RimEnhanceSceneScaleBias.zw;
             float4 original = SAMPLE_TEXTURE2D_X(_RimEnhanceSceneColor, sampler_PointClamp, sceneUV);
@@ -338,7 +374,7 @@ Shader "Hidden/ZeroEngine/SpriteRimLighting"
                 exposure = lerp(1, exposure, visibleAlpha / unshadowedAlpha);
             }
             float4 light = float4(saturate(energy), saturate(blend) * _RimRefStyle.z);
-            original.rgb = CompositeColor(original.rgb, light, min(darkEdgeLight, .25) * _RimRefStyle.z,
+            original.rgb = CompositeColor(original.rgb, light, min(darkEdgeLight, .25) * _RimRefStyle.z, contourLight,
                 float4(exposure, _RimRefStyle.y, _RimRefStyle.w, 1));
             return original;
         }
