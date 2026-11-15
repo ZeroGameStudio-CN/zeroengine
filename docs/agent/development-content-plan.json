@@ -422,6 +422,30 @@
       "nextAction": "消费项目按实际安装包同步 ZE Agent 指导；包安装／升级／卸载通过既有 UPM 入口，随后刷新清单。模块变动同步维护 README 与受影响的 Skill，仓库架构入口变化维护 AGENTS.md。",
       "revision": "2026-11-15：显示名称改为 ZeroEngine Agent，技术包 ID／C# API 保持兼容，候选版本 0.2.0。Skill 覆盖全体已安装 ZE 模块及包生命周期；轻量 CLI 提供同步、检查和按受管收据移除指导，不另造包解析器。20 项 Python 合同与 CLI 用例无失败，覆盖中文路径、移除预览、应用、本地自定义保留、修改冲突、未知版本、失败恢复和拒绝自删。AGENTS.md 已登记唯一维护源与更新责任；Skill validator、62 包审计成功。源码／候选验证不代表消费项目已升级或用户发布。",
       "releaseEvidence": ""
+    },
+    {
+      "id": "ze.multiplayer.resolved-motion",
+      "title": "权威描述驱动的通用显示运动",
+      "stage": "Previewable",
+      "targetReleaseId": "",
+      "availability": "TestOnly",
+      "responsibleChat": "01a1b9db-fe8f-7500-8df5-997d4703224e",
+      "chatUrl": "thread://01a1b9db-fe8f-7500-8df5-997d4703224e?hostId=local",
+      "nextAction": "按已验证的固定Git提交接回POB并核对包来源；R3复杂外观和R4宿主成本／整局验收分开推进。",
+      "entrance": "dotnet test com.zerogamestudio.zeroengine.multiplayer/Tools~/Motion.Tests/Motion.Tests.csproj",
+      "resourcePath": "com.zerogamestudio.zeroengine.multiplayer/Runtime/Motion",
+      "revision": "0.5.0 candidate: engine-free steering, speed curves, delayed gravity, parabola and display-anchor following; composed flight, explicit clocks, bounded fixed-step continuation. 31 portable cases and 39 POB native cases passed. Same-code independent host/client protocol72, client120ms latency: all five models visible and advanced without new receipts; render-only views and session restoration verified. Original following Mesh appearance stays R3; a Sprite fixture exercises its original following component. Failed pre-entry compile and observer I/O rounds are retained. No full-run performance or player release claim.",
+      "releaseEvidence": "",
+      "candidatePackageVersion": "0.5.0",
+      "verificationEvidence": [
+        "D:/unity/artifacts/pob-ze-motion-20261115"
+      ],
+      "relatedContent": [
+        {
+          "projectId": "pob",
+          "contentId": "multiplayer.shared-world-presentation"
+        }
+      ]
     }
   ]
 }
