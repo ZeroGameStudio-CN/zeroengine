@@ -15,7 +15,10 @@ namespace ZeroEngine.Feedback
         private bool ownsTheme;
         private RectTransform content;
         private FeedbackSubmissionResult? localFailure;
-        private readonly List<UnityEngine.UI.Button> retryButtons = new();
+        private readonly Dictionary<string, UnityEngine.UI.Button> retryButtons = new();
+        private readonly Dictionary<string, UnityEngine.UI.Button> copyButtons = new();
+        private UnityEngine.UI.Button closeButton;
+        private UnityEngine.UI.ScrollRect scroll;
         private Action close;
         private UnityEngine.EventSystems.EventSystem eventSystem;
         private GameObject previousSelection;
@@ -68,7 +71,7 @@ namespace ZeroEngine.Feedback
             Stretch(scrollRoot);
             scrollRoot.offsetMin = new Vector2(24, 86);
             scrollRoot.offsetMax = new Vector2(-24, -86);
-            var scroll = scrollRoot.gameObject.AddComponent<UnityEngine.UI.ScrollRect>();
+            scroll = scrollRoot.gameObject.AddComponent<UnityEngine.UI.ScrollRect>();
             scroll.horizontal = false;
             scroll.vertical = true;
             scroll.movementType = UnityEngine.UI.ScrollRect.MovementType.Clamped;
@@ -93,24 +96,37 @@ namespace ZeroEngine.Feedback
             footer.anchorMax = new Vector2(1, 0);
             footer.offsetMin = new Vector2(24, 18);
             footer.offsetMax = new Vector2(-24, 70);
-            UnityEngine.UI.Button button = Button(footer, Text(FeedbackDetailTextId.Close), 52);
-            Stretch((RectTransform)button.transform);
-            button.onClick.AddListener(() => close());
-            if (eventSystem != null) eventSystem.SetSelectedGameObject(button.gameObject);
+            closeButton = Button(footer, Text(FeedbackDetailTextId.Close), 52);
+            Stretch((RectTransform)closeButton.transform);
+            closeButton.onClick.AddListener(() => close());
+            if (eventSystem != null) eventSystem.SetSelectedGameObject(closeButton.gameObject);
         }
 
         private void OnStatusChanged(FeedbackSubmissionStatus _) => Refresh();
 
         private void Update()
         {
-            foreach (UnityEngine.UI.Button button in retryButtons)
+            foreach (UnityEngine.UI.Button button in retryButtons.Values)
                 if (button != null) button.interactable = !FeedbackUploadQueue.IsProcessing;
         }
 
         public void Refresh()
         {
             if (content == null) return;
+            GameObject selected = eventSystem != null ? eventSystem.currentSelectedGameObject : null;
+            string selectedId = null;
+            bool selectedRetry = false;
+            foreach (var entry in copyButtons)
+                if (entry.Value != null && entry.Value.gameObject == selected) selectedId = entry.Key;
+            foreach (var entry in retryButtons)
+                if (entry.Value != null && entry.Value.gameObject == selected)
+                {
+                    selectedId = entry.Key;
+                    selectedRetry = true;
+                }
+            float scrollPosition = scroll.verticalNormalizedPosition;
             retryButtons.Clear();
+            copyButtons.Clear();
             for (int i = content.childCount - 1; i >= 0; i--)
             {
                 GameObject child = content.GetChild(i).gameObject;
@@ -134,6 +150,10 @@ namespace ZeroEngine.Feedback
                 string status = record.State == FeedbackDeliveryState.Received
                     ? FeedbackTextCatalog.ResolveSubmissionStatus(FeedbackTextId.Uploaded, Language)
                     : record.State == FeedbackDeliveryState.Failed ? FailureTitle(record.FailureCode)
+                    : record.State == FeedbackDeliveryState.Uploading
+                        ? FeedbackTextCatalog.ResolveSubmissionStatus(FeedbackTextId.Uploading, Language)
+                    : record.State == FeedbackDeliveryState.Retrying
+                        ? FeedbackTextCatalog.ResolveSubmissionStatus(FeedbackTextId.Retrying, Language)
                     : Text(FeedbackDetailTextId.Pending);
                 string date = record.CreatedAt > 0 && record.CreatedAt < 253402300799
                     ? DateTimeOffset.FromUnixTimeSeconds(record.CreatedAt).LocalDateTime.ToString("g") + "  " : string.Empty;
@@ -146,6 +166,15 @@ namespace ZeroEngine.Feedback
                     explanation += " (" + record.FailureCode + ")";
                 AddRow(date + status, record.SubmissionId, explanation,
                     record.State != FeedbackDeliveryState.Received && record.State != FeedbackDeliveryState.Stopped);
+            }
+            UnityEngine.UI.LayoutRebuilder.ForceRebuildLayoutImmediate(content);
+            scroll.verticalNormalizedPosition = scrollPosition;
+            if (selectedId != null && eventSystem != null)
+            {
+                UnityEngine.UI.Button target = null;
+                if (selectedRetry) retryButtons.TryGetValue(selectedId, out target);
+                if (target == null || !target.IsInteractable()) copyButtons.TryGetValue(selectedId, out target);
+                eventSystem.SetSelectedGameObject(target != null ? target.gameObject : closeButton.gameObject);
             }
         }
 
@@ -188,12 +217,15 @@ namespace ZeroEngine.Feedback
             layout.childForceExpandWidth = false;
             layout.childControlHeight = true;
             layout.childControlWidth = true;
-            Button(actions, Text(FeedbackDetailTextId.CopyNumber), 44).onClick.AddListener(() => GUIUtility.systemCopyBuffer = id);
+            UnityEngine.UI.Button copy = Button(actions, Text(FeedbackDetailTextId.CopyNumber), 44);
+            copy.onClick.AddListener(() => GUIUtility.systemCopyBuffer = id);
+            copyButtons[id] = copy;
             if (retry)
             {
                 UnityEngine.UI.Button button = Button(actions, Text(FeedbackDetailTextId.Retry), 44);
                 button.onClick.AddListener(() => { FeedbackSubmissionService.RetrySubmission(id); Refresh(); });
-                retryButtons.Add(button);
+                button.interactable = !FeedbackUploadQueue.IsProcessing;
+                retryButtons[id] = button;
             }
         }
 
