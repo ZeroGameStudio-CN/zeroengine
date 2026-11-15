@@ -226,6 +226,79 @@ namespace ZeroEngine.Console.Tests
             Assert.That(result.Position, Is.EqualTo(invalid.IndexOf("invalid", StringComparison.Ordinal)));
         }
 
+        [TestCase(typeof(byte), "0", (byte)0)]
+        [TestCase(typeof(byte), "255", (byte)255)]
+        [TestCase(typeof(sbyte), "-128", (sbyte)-128)]
+        [TestCase(typeof(sbyte), "127", (sbyte)127)]
+        [TestCase(typeof(short), "-32768", (short)-32768)]
+        [TestCase(typeof(short), "32767", (short)32767)]
+        [TestCase(typeof(ushort), "0", (ushort)0)]
+        [TestCase(typeof(ushort), "65535", (ushort)65535)]
+        [TestCase(typeof(char), "中", '中')]
+        [TestCase(typeof(char), " ", ' ')]
+        public async Task ScalarBinding_PreservesSmallIntegerTypesAndQuotedCharacters(Type type, string text, object expected)
+        {
+            using var registry = new ConsoleRegistry();
+            using var module = registry.Register("test", new[] { new ConsoleBinding(
+                Command(parameters: new[] { new ConsoleParameter("value", type) }),
+                (context, args, token) => Task.FromResult(ConsoleResult.Success(data: args[0]))) });
+            using var session = new ConsoleSession(registry);
+            var result = await session.ExecuteLineAsync("ze-echo " + ConsoleLexer.Quote(text), Editor);
+            Assert.That(result.IsSuccess, Is.True, result.Message);
+            Assert.That(result.Data, Is.TypeOf(type));
+            Assert.That(result.Data, Is.EqualTo(expected));
+        }
+
+        [TestCase(typeof(byte), "-1")]
+        [TestCase(typeof(byte), "256")]
+        [TestCase(typeof(sbyte), "-129")]
+        [TestCase(typeof(sbyte), "128")]
+        [TestCase(typeof(short), "-32769")]
+        [TestCase(typeof(short), "32768")]
+        [TestCase(typeof(ushort), "-1")]
+        [TestCase(typeof(ushort), "65536")]
+        [TestCase(typeof(byte), "1.5")]
+        [TestCase(typeof(short), "not-a-number")]
+        [TestCase(typeof(char), "")]
+        [TestCase(typeof(char), "ab")]
+        [TestCase(typeof(char), "😀")]
+        public async Task ScalarBinding_RejectsOverflowAndInvalidCharacterWithoutCallingHandler(Type type, string text)
+        {
+            using var registry = new ConsoleRegistry();
+            int calls = 0;
+            using var module = registry.Register("test", new[] { new ConsoleBinding(
+                Command(parameters: new[] { new ConsoleParameter("value", type) }),
+                (context, args, token) => { calls++; return Ok(context, args, token); }) });
+            using var session = new ConsoleSession(registry);
+            var result = await session.ExecuteLineAsync("ze-echo " + ConsoleLexer.Quote(text), Editor);
+            Assert.That(result.Code, Is.EqualTo("invalid-argument"));
+            Assert.That(result.Position, Is.EqualTo(8));
+            Assert.That(calls, Is.Zero);
+        }
+
+        [Test]
+        public async Task ScalarBinding_ComposesNullableArraysAndScopedCustomConverters()
+        {
+            using var registry = new ConsoleRegistry();
+            var values = new ConsoleValues();
+            using var session = new ConsoleSession(registry, values);
+            using var module = registry.Register("test", new[] { new ConsoleBinding(
+                Command(parameters: new[] { new ConsoleParameter("items", typeof(byte[])), new ConsoleParameter("optional", typeof(short?)) }),
+                (context, args, token) => Task.FromResult(ConsoleResult.Success(data: new object[] { args.Get<byte[]>(0), args.Get<short?>(1) }))) });
+            var result = await session.ExecuteLineAsync("ze-echo [0,255] null", Editor);
+            Assert.That(((object[])result.Data)[0], Is.EqualTo(new byte[] { 0, 255 }));
+            Assert.That(((object[])result.Data)[1], Is.Null);
+            using (values.Register(typeof(byte), (ConsoleToken token, Type target, out object value, out string error) =>
+                { value = (byte)42; error = null; return true; }))
+            {
+                result = await session.ExecuteLineAsync("ze-echo [custom] -32768", Editor);
+                Assert.That(result.IsSuccess, Is.True, result.Message);
+                Assert.That(((object[])result.Data)[0], Is.EqualTo(new byte[] { 42 }));
+                Assert.That(((object[])result.Data)[1], Is.EqualTo((short)-32768));
+            }
+            Assert.That((await session.ExecuteLineAsync("ze-echo [custom] null", Editor)).Code, Is.EqualTo("invalid-argument"));
+        }
+
         [Test]
         public async Task CommandCompletion_FindsNameFragmentsAndAliasesAfterPrefixMatches()
         {

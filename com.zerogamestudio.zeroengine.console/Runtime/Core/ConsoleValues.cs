@@ -48,6 +48,11 @@ namespace ZeroEngine.Console
             if (target == typeof(double) && double.TryParse(text, NumberStyles.Float, CultureInfo.InvariantCulture, out double real) && !double.IsNaN(real) && !double.IsInfinity(real)) { value = real; return true; }
             if (target == typeof(decimal) && decimal.TryParse(text, NumberStyles.Float, CultureInfo.InvariantCulture, out decimal precise)) { value = precise; return true; }
             if (target == typeof(Guid) && Guid.TryParse(text, out Guid guid)) { value = guid; return true; }
+            if (target == typeof(byte) && byte.TryParse(text, NumberStyles.Integer, CultureInfo.InvariantCulture, out byte unsignedByte)) { value = unsignedByte; return true; }
+            if (target == typeof(sbyte) && sbyte.TryParse(text, NumberStyles.Integer, CultureInfo.InvariantCulture, out sbyte signedByte)) { value = signedByte; return true; }
+            if (target == typeof(short) && short.TryParse(text, NumberStyles.Integer, CultureInfo.InvariantCulture, out short shortInteger)) { value = shortInteger; return true; }
+            if (target == typeof(ushort) && ushort.TryParse(text, NumberStyles.Integer, CultureInfo.InvariantCulture, out ushort unsignedShort)) { value = unsignedShort; return true; }
+            if (target == typeof(char) && char.TryParse(text, out char character)) { value = character; return true; }
             if (target.IsEnum)
             {
                 try { value = Enum.Parse(target, text, true); return true; }

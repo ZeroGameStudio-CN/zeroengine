@@ -36,6 +36,12 @@ module/session cancellation with an optional caller token and creates a deadline
 timer only when requested. Cancelling an uncooperative handler keeps the session
 busy until that handler ends, without replaying it or claiming rollback.
 
+Built-in scalar conversion includes `byte`, `sbyte`, `short`, `ushort` and `char`
+alongside the larger integer, floating-point, decimal, bool, enum, string and Guid
+types. Integer bounds are enforced; `char` requires one UTF-16 code unit. Nullable
+and array conversion reuse the same rules, with explicit custom converters taking
+precedence for their registration lifetime.
+
 For frequent output refreshes, use `CopyOutputTo(ref buffer, out revision)` with
 a caller-owned `ConsoleOutput[]`. It grows the buffer when needed, returns the
 valid entry count and captures the revision under the same lock. Unused entries
