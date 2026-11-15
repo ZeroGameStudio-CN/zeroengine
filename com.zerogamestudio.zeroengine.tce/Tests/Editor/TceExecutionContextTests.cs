@@ -95,6 +95,86 @@ namespace ZeroEngine.TCE.Tests.Editor
         }
 
         [Test]
+        public void RefusedAdmission_CompletesWithoutSpendingOrPublishing()
+        {
+            var execution = Execution();
+            int remaining = 1, notifications = 0;
+            Assert.That(execution.TryReserveResource(execution.Installation.Host, "charge", 1, () => remaining,
+                (amount, defer) => { remaining -= amount; defer(() => notifications++); }), Is.True);
+            execution.Complete();
+            Assert.That(remaining, Is.EqualTo(1));
+            Assert.That(notifications, Is.Zero);
+            Assert.That(execution.IsCommitted, Is.False);
+        }
+
+        [Test]
+        public void SameResource_CombinesReservationsBeforeAnyPayment()
+        {
+            var execution = Execution();
+            int remaining = 1;
+            Action<int, Action<Action>> consume = (amount, _) => remaining -= amount;
+            Assert.That(execution.TryReserveResource(execution.Installation.Host, "charge", 1, () => remaining, consume), Is.True);
+            Assert.That(execution.TryReserveResource(execution.Installation.Host, "charge", 1, () => remaining, consume), Is.False);
+            execution.Complete();
+            Assert.That(remaining, Is.EqualTo(1));
+        }
+
+        [Test]
+        public void ChangedResource_RejectsAllPaymentsAndStateCommits()
+        {
+            var execution = Execution();
+            int first = 1, second = 1, stateCommits = 0;
+            Assert.That(execution.TryReserveResource(execution.Installation.Host, "first", 1, () => first,
+                (amount, _) => first -= amount), Is.True);
+            Assert.That(execution.TryReserveResource(execution.Installation.Host, "second", 1, () => second,
+                (amount, _) => second -= amount), Is.True);
+            second = 0;
+            Assert.That(execution.TryCommit(() => stateCommits++), Is.False);
+            Assert.That(first, Is.EqualTo(1));
+            Assert.That(stateCommits, Is.Zero);
+            Assert.That(execution.IsCommitted, Is.False);
+            execution.Complete();
+        }
+
+        [Test]
+        public void ResourcePaymentsAndState_AreCompleteBeforeLifecycleNotifications()
+        {
+            var execution = Execution();
+            int first = 1, second = 2, state = 0, callbacks = 0;
+            Assert.That(execution.TryReserveResource(execution.Installation.Host, "first", 1, () => first,
+                (amount, defer) =>
+                {
+                    first -= amount;
+                    defer(() =>
+                    {
+                        callbacks++;
+                        Assert.That(first + second, Is.Zero);
+                        Assert.That(state, Is.EqualTo(1));
+                        Assert.That(execution.IsCommitted, Is.True);
+                    });
+                }), Is.True);
+            Assert.That(execution.TryReserveResource(execution.Installation.Host, "second", 2, () => second,
+                (amount, _) => second -= amount), Is.True);
+            Assert.That(execution.TryCommit(() => state++), Is.True);
+            Assert.That(execution.TryCommit(() => state++), Is.True);
+            Assert.That(callbacks, Is.EqualTo(1));
+            Assert.That(state, Is.EqualTo(1));
+        }
+
+        [Test]
+        public void RecycledResourceOwner_RejectsCommitWithoutPayment()
+        {
+            var execution = Execution();
+            var resourceOwner = new Lifetime();
+            int remaining = 1;
+            Assert.That(execution.TryReserveResource(new TceObjectRef(resourceOwner), "charge", 1, () => remaining,
+                (amount, _) => remaining -= amount), Is.True);
+            resourceOwner.Activation++;
+            Assert.That(execution.TryCommit(), Is.False);
+            Assert.That(remaining, Is.EqualTo(1));
+        }
+
+        [Test]
         public void CanceledAndCompletedFrames_CannotPublishNewContributions()
         {
             bool current = true;
