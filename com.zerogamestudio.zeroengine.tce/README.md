@@ -127,3 +127,15 @@ validation, or editor tooling.
 ## ZeroEngine Dashboard
 
 The optional Dashboard discovers the graph editor and component-catalog generator through the schema v2 descriptor and invokes this package's typed provider. This package does not depend on Dashboard.
+
+## Explicit execution contexts
+
+`TceInstallationContext`, `TceEventContext` and `TceExecutionContext` separate an installed binding, captured event facts and one execution. Pass execution contexts explicitly across conditions, effects, async continuations and child rules. Each execution owns its transient values and commit notifications; completing or canceling a frame prevents new contributions. Events retain event/root/cause IDs, separate subject/target/instigator/emitter references and captured position/direction.
+
+Admission costs use `TryReserveResource(owner, key, amount, available, consume)`: reservation never spends the resource, and requests for the same captured owner/key share a total. After every condition accepts, call `TryCommit(commitState)`; it rechecks all totals before any payment, applies the adapter's non-rejecting synchronous payments and ordinary state commits, then publishes deferred callbacks. A refused admission completes its context without committing. Availability callbacks must be pure, and payment adapters must defer lifecycle/event callbacks through the supplied sink so one payment cannot invalidate a later payment halfway through the batch. `Commit()` remains the throwing convenience for callers that do not expect resource refusal. Buff definitions, actual layer mutations and save policy remain host responsibilities.
+
+Adapters implement `ITceObjectLifetime`. `TceObjectRef` compares identity, activation and world before resolving a native object. Identity validity and active/living policy are separate: the effect decides whether an inactive or dying object supports its operation. Never reconstruct a retained reference from a pooled object's new activation.
+
+`TceAbilityGrantRegistry` shares an installed child among source owners and releases only the retiring source. It has no duration or charge counter; the host Buff/state system owns those. `TceEffectScope` owns replaceable per-recipient contributions. `TceContributionBatch` selects the strongest contribution in each group and closes before dispatch. `TceAreaGeometry` supplies circle/box segment clipping without a project physics dependency. `ITceVisualTargetReceiver` is an optional explicit target injection point for feedback adapters; it does not spawn or own visuals.
+
+POB consumes these contracts from its existing AbilityHandler and supplies Core/projectile identity, Buff, motion, damage and resource adapters. No POB types or save backend are introduced into this package. The generic graph runtime and its host-owned `ITceStateStore` remain independently usable.
