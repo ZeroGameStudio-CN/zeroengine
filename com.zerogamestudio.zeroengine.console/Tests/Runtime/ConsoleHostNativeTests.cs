@@ -12,6 +12,26 @@ namespace ZeroEngine.Console.Tests.Runtime
 {
     public sealed class ConsoleHostNativeTests
     {
+        [UnityTest]
+        public IEnumerator HostFormatsUnityResultsAndPreservesOriginalData()
+        {
+            var root = new GameObject("Console Unity formatted data");
+            IDisposable module = null;
+            try
+            {
+                var host = root.AddComponent<ConsoleHost>();
+                object value = new Vector3(1.25f, 2, 3);
+                module = host.Registry.Register("test", new[] { new ConsoleBinding(new ConsoleCommand("test.result", "test-result", "test", "Return vector."),
+                    (context, args, token) => Task.FromResult(ConsoleResult.Success(data: value))) });
+                var result = host.ExecuteAsync("test-result");
+                yield return Wait(result);
+                Assert.That(result.Result.Data, Is.SameAs(value));
+                Assert.That(host.Session.GetOutput().Length, Is.EqualTo(1));
+                Assert.That(host.Session.GetOutput()[0].Message, Is.EqualTo("(1.25, 2, 3)"));
+            }
+            finally { module?.Dispose(); Object.DestroyImmediate(root); }
+        }
+
         [TestCase(typeof(Vector2), "(-1.5, 2)")]
         [TestCase(typeof(Vector3), "(-1.5, 2, 3)")]
         [TestCase(typeof(Vector4), "[-1.5, 2, 3, 4]")]

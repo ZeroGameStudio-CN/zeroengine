@@ -39,11 +39,17 @@ namespace ZeroEngine.Console
         public int Start { get; }
         public int Length { get; }
         public IReadOnlyList<ConsoleCompletionItem> Items { get; }
+        public ConsoleCommandHint Hint { get; }
         private readonly string source;
         internal ConsoleCompletions(int start, int length, IReadOnlyList<ConsoleCompletionItem> items, string source)
-        { Start = start; Length = length; Items = items; this.source = source; }
+            : this(start, length, items, source, null) { }
+        internal ConsoleCompletions(int start, int length, IReadOnlyList<ConsoleCompletionItem> items, string source, ConsoleCommandHint hint)
+        { Start = start; Length = length; Items = items; this.source = source; Hint = hint; }
 
         public string Apply(string line, int index)
+            => Apply(line, index, out _);
+
+        public string Apply(string line, int index, out int caret)
         {
             if (line == null) throw new ArgumentNullException(nameof(line));
             if (!string.Equals(line, source, StringComparison.Ordinal)) throw new InvalidOperationException("Completion input changed.");
@@ -51,7 +57,9 @@ namespace ZeroEngine.Console
             string value = Items[index].Value;
             bool quote = value.Length == 0;
             foreach (char c in value) quote |= char.IsWhiteSpace(c) || c == '"' || c == '\'' || c == '\\' || c == '[' || c == ']' || c == '(' || c == ')';
-            return line.Substring(0, Start) + (quote ? ConsoleLexer.Quote(value) : value) + line.Substring(Start + Length);
+            string inserted = quote ? ConsoleLexer.Quote(value) : value;
+            caret = Start + inserted.Length;
+            return line.Substring(0, Start) + inserted + line.Substring(Start + Length);
         }
     }
 

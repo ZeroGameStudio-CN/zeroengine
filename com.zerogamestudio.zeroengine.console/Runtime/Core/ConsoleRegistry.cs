@@ -141,8 +141,34 @@ namespace ZeroEngine.Console
         private bool cancelling;
         private int leases;
         public ConsoleBinding Binding { get; }
+        public ConsoleCompletionItem[] NameCompletions { get; }
+        public ConsoleCompletionItem[][] DefaultCompletions { get; }
         public bool IsActive { get { lock (sync) return active; } }
-        public ConsoleEntry(ConsoleBinding binding) => Binding = binding;
+        public ConsoleEntry(ConsoleBinding binding)
+        {
+            Binding = binding;
+            ConsoleCommand command = binding.Command;
+            NameCompletions = new ConsoleCompletionItem[command.Aliases.Count + 1];
+            NameCompletions[0] = new ConsoleCompletionItem(command.Id + ":" + command.Name, command.Name, description: command.Description);
+            for (int i = 0; i < command.Aliases.Count; i++)
+            {
+                string alias = command.Aliases[i];
+                NameCompletions[i + 1] = new ConsoleCompletionItem(command.Id + ":" + alias, alias, description: command.Description);
+            }
+            DefaultCompletions = new ConsoleCompletionItem[command.Parameters.Count][];
+            for (int i = 0; i < command.Parameters.Count; i++)
+            {
+                Type type = command.Parameters[i].ValueType;
+                if (command.Parameters[i].IsVariadic) type = type.GetElementType();
+                Type nullable = Nullable.GetUnderlyingType(type);
+                type = nullable ?? type;
+                string[] values = type == typeof(bool) ? new[] { "false", "true" } : type.IsEnum ? Enum.GetNames(type) : Array.Empty<string>();
+                var defaults = new ConsoleCompletionItem[values.Length + (nullable != null ? 1 : 0)];
+                for (int j = 0; j < values.Length; j++) defaults[j] = new ConsoleCompletionItem(command.Id + ":" + i + ":" + values[j], values[j]);
+                if (nullable != null) defaults[defaults.Length - 1] = new ConsoleCompletionItem(command.Id + ":" + i + ":null", "null");
+                DefaultCompletions[i] = defaults;
+            }
+        }
 
         public bool TryAcquire(out CancellationToken token)
         {

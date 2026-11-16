@@ -33,30 +33,34 @@ namespace ZeroEngine.Console
                 return false;
             }
             int index = 0;
+            Span<char> groups = stackalloc char[32];
             while (index < line.Length)
             {
                 while (index < line.Length && (char.IsWhiteSpace(line[index]) || commaSeparates && line[index] == ',')) index++;
                 if (index == line.Length) break;
                 int start = index;
-                var value = new StringBuilder();
-                var groups = new Stack<char>();
+                StringBuilder value = null;
+                int depth = 0;
                 char quote = '\0';
                 int quoteStart = -1;
                 while (index < line.Length)
                 {
                     char c = line[index];
-                    if (quote == '\0' && groups.Count == 0 && (char.IsWhiteSpace(c) || commaSeparates && c == ',')) break;
+                    if (quote == '\0' && depth == 0 && (char.IsWhiteSpace(c) || commaSeparates && c == ',')) break;
                     if (c == '\\')
                     {
                         if (index + 1 < line.Length)
                         {
                             char next = line[index + 1];
                             if (next == '\\' || next == '"' || next == '\'' || char.IsWhiteSpace(next))
-                            { value.Append(next); index += 2; continue; }
+                            {
+                                if (value == null) value = new StringBuilder().Append(line, start, index - start);
+                                value.Append(next); index += 2; continue;
+                            }
                             if (quote != '\0' && (next == 'n' || next == 'r' || next == 't'))
                             { value.Append(next == 'n' ? '\n' : next == 'r' ? '\r' : '\t'); index += 2; continue; }
                         }
-                        value.Append(c); index++; continue;
+                        value?.Append(c); index++; continue;
                     }
                     if (quote != '\0')
                     {
@@ -64,26 +68,31 @@ namespace ZeroEngine.Console
                         else value.Append(c);
                         index++; continue;
                     }
-                    if (c == '"' || c == '\'') { quote = c; quoteStart = index++; continue; }
+                    if (c == '"' || c == '\'')
+                    {
+                        if (value == null) value = new StringBuilder().Append(line, start, index - start);
+                        quote = c; quoteStart = index++; continue;
+                    }
                     if (c == '[' || c == '(' || c == '{')
                     {
-                        if (groups.Count == 32)
+                        if (depth == groups.Length)
                         { error = ConsoleResult.Failure("group-too-deep", "Argument nesting exceeds the limit.", index); return false; }
-                        groups.Push(c);
+                        groups[depth++] = c;
                     }
                     else if (c == ']' || c == ')' || c == '}')
                     {
                         char expected = c == ']' ? '[' : c == ')' ? '(' : '{';
-                        if (groups.Count == 0 || groups.Pop() != expected)
+                        if (depth == 0 || groups[--depth] != expected)
                         { error = ConsoleResult.Failure("unexpected-group-end", "Mismatched closing delimiter.", index); return false; }
                     }
-                    value.Append(c); index++;
+                    value?.Append(c); index++;
                 }
                 if (!allowIncomplete && quote != '\0')
                 { error = ConsoleResult.Failure("unterminated-quote", "Unterminated quoted argument.", quoteStart); return false; }
-                if (!allowIncomplete && groups.Count != 0)
+                if (!allowIncomplete && depth != 0)
                 { error = ConsoleResult.Failure("unterminated-group", "Unterminated argument group.", start); return false; }
-                result.Add(new ConsoleToken(value.ToString(), line.Substring(start, index - start), start));
+                string raw = line.Substring(start, index - start);
+                result.Add(new ConsoleToken(value == null ? raw : value.ToString(), raw, start));
                 if (result.Count > 256)
                 { error = ConsoleResult.Failure("too-many-tokens", "The command exceeds the token limit.", start); return false; }
             }
