@@ -1,7 +1,8 @@
 # ZeroEngine.Interaction
 
 Game-independent interactions with one explicit world scope and one input session per actor.
-Version 0.1.0 is a package-first candidate. POB adoption and retirement of the older
+Version 0.2.0 adds a shared offline/server authority receiver while preserving the
+existing Core/Unity entry points and single-player gesture semantics. POB adoption and retirement of the older
 `ZeroEngine.Gameplay/Interaction` implementation are separate follow-up work.
 
 ## Boundaries
@@ -52,9 +53,9 @@ No runtime interaction component polls a keyboard or creates an input singleton.
    conditions before allowing the mutation once. Use `TryDeny` or `TryCancel` to settle
    without mutation. Use `Cancelled` to release an action-owned reservation.
 
-All methods, callbacks and completions belong on the owning gameplay thread. This is
-not a network authority implementation. A transport adapter must perform server-side
-validation and map its own player, epoch and request identity before committing.
+All methods, callbacks and completions belong on the owning gameplay thread.
+The authority entry described below receives inputs through authenticated actor
+bindings; its transport adapter supplies the session and player identity.
 
 Focus changes, target unregister/disable, actor disable/disposal, scope disposal, explicit
 cancellation and backwards clock resets invalidate pending work. A pooled target receives
@@ -65,6 +66,11 @@ survives release but is cancelled when its focus/lifetime ends.
 `TryCommit` prevents a second invocation; it cannot roll back arbitrary partial side effects
 if a business callback throws. Such a callback reports Faulted and remains settled.
 Consumers own atomic wallet/reward transactions and reservation commit/cancel semantics.
+For a provider that returns business acceptance, use the separately named
+`TryCommitResult(() => providerAccepted ? InteractionCheck.Permit : InteractionCheck.Deny(reason))`.
+A false/rejected business result settles Denied once. Existing `TryCommit(Action)`
+callers, including assignment/expression lambdas, keep their original semantics.
+Neither path can undo arbitrary partial provider side effects.
 When `TryCommit` returns false, release any action-owned reservation; the cancellation
 event covers automatic cancellation, while a business denial/fault still belongs to its caller.
 Observers should not throw; state is finalized before completion notifications.
@@ -79,6 +85,50 @@ the core target/range interfaces directly. An unbound action denies
 interaction. Bind input via the actor's public methods. Configure a custom game clock
 before starting an input session. No Physics, singleton search, scene-manager or UI
 dependency is imposed on the runtime bridge.
+
+## Offline and network authority
+
+`Core.Authority.InteractionAuthority` runs the same `InteractionAgent` for local
+calls and authenticated remote actor bindings. The core still has no sibling,
+Unity, transport or networking SDK dependency. The optional
+`com.zerogamestudio.zeroengine.interaction.multiplayer` module maps the existing
+ZE `NetworkEntityKey` identities to this receiver and supplies an isolated
+offline/host/client playground.
+
+An authority owns one nonzero epoch. Its actor binding and target lease expose
+activation identities; a command cannot select a receiver from a claimed actor
+ID. The transport routes to its authenticated binding. `Press`, `Release`,
+`Cancel` and optional `Confirm` commands carry positive, strictly increasing
+64-bit sequences. A press's action ID is its first sequence. Sequences never
+wrap or reset inside a binding; reconnect creates a new binding activation.
+The authority evaluates hold/repeat on its supplied game clock and checks the
+explicit requested target, rather than redirecting the request to another
+nearby object. Caller focus changes send Cancel; server range, availability and
+conditions remain authoritative.
+
+Matching retries return a cached admission receipt with the latest retained
+outcome. Reusing a sequence for a different command is rejected. Evicted old
+commands remain stale and can never execute again. Receipt `Handled` and
+`InputAdmitted` are not business success: observe the settled outcome and the
+authority's domain state. Bounded outcome notifications are transient; older
+state is recovered from domain snapshots, not by replaying gameplay.
+
+Local input cancellation and authoritative settlement are separate. Cancel
+before a deferred commit invalidates it; cancel after a completed commit never
+undoes it. `InteractionOutcomeMirror` accepts a late valid success even after
+local focus/input cancellation and ignores stale actor/epoch/revision data. It
+never grants an item or charges a wallet on a client. A registered confirmation
+callback belongs to the authority and must use the guarded request to commit.
+Reservation refund/commit, shared versus personal loot and atomic reward/cost
+transactions remain provider responsibilities.
+
+These are live-session at-most-once guards, not durable distributed transactions.
+Session restore, connection authentication, ordered/reliable delivery and POB's
+FishNet/protocol mapping retain their existing owners. Scope or actor disposal
+cancels pending work; rebinding and pooled targets cannot inherit old requests.
+All authority and business calls stay on the owning gameplay thread.
+Commands received reentrantly during an input dispatch or authority Tick return
+Busy without consuming their sequence. Queue those inputs until the current call returns.
 
 ## Playground and verification
 
@@ -103,10 +153,19 @@ Run `ZeroEngine.Interaction.Tests` EditMode contracts, Runtime lifecycle tests a
 `ZeroEngine.Interaction.Samples.Tests` PlayMode example tests using the project's normal
 Unity test route. Test projects are disposable and must not use production save paths.
 
-Local verification on Unity 6000.6.4f1 executed 33 EditMode contracts and 9 PlayMode
+The 0.1 baseline verification on Unity 6000.6.4f1 executed 33 EditMode contracts and 9 PlayMode
 lifecycle/example cases with no failures or skipped cases. A composited 1280×900
 Game View capture was inspected and PlayMode/background state was restored.
 The isolated CI lane uses the same Unity 6000.6.4f1 baseline.
+
+The 0.2 authority candidate was checked on Unity 6000.6.9f1 with 62 core EditMode
+contracts, four optional replication-binding contracts and 12 PlayMode lifecycle/
+sample cases. This includes the original 33 core and nine PlayMode cases,
+gesture-trace comparison against the direct agent, explicit provider rejection,
+reentrant-input protection and transport-worker cleanup. The independent .NET
+example additionally exercises ten scenarios in separate host/client processes,
+including server-clock pause/resume and release without a trailing tap. These
+package checks leave POB's real consumer regression to its integration step.
 
 ## Existing interaction review and later migration
 

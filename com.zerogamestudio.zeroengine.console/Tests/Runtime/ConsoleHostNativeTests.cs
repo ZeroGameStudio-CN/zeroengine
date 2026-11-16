@@ -13,6 +13,102 @@ namespace ZeroEngine.Console.Tests.Runtime
     public sealed class ConsoleHostNativeTests
     {
         [UnityTest]
+        public IEnumerator HostFormatsUnityResultsAndPreservesOriginalData()
+        {
+            var root = new GameObject("Console Unity formatted data");
+            IDisposable module = null;
+            try
+            {
+                var host = root.AddComponent<ConsoleHost>();
+                object value = new Vector3(1.25f, 2, 3);
+                module = host.Registry.Register("test", new[] { new ConsoleBinding(new ConsoleCommand("test.result", "test-result", "test", "Return vector."),
+                    (context, args, token) => Task.FromResult(ConsoleResult.Success(data: value))) });
+                var result = host.ExecuteAsync("test-result");
+                yield return Wait(result);
+                Assert.That(result.Result.Data, Is.SameAs(value));
+                Assert.That(host.Session.GetOutput().Length, Is.EqualTo(1));
+                Assert.That(host.Session.GetOutput()[0].Message, Is.EqualTo("(1.25, 2, 3)"));
+            }
+            finally { module?.Dispose(); Object.DestroyImmediate(root); }
+        }
+
+        [TestCase(typeof(Vector2), "(-1.5, 2)")]
+        [TestCase(typeof(Vector3), "(-1.5, 2, 3)")]
+        [TestCase(typeof(Vector4), "[-1.5, 2, 3, 4]")]
+        [TestCase(typeof(Vector2Int), "(-1, 2)")]
+        [TestCase(typeof(Vector3Int), "(-1, 2, 3)")]
+        [TestCase(typeof(Quaternion), "(0, 0, 0, 1)")]
+        [TestCase(typeof(Color), "red")]
+        [TestCase(typeof(Color), "#ff0000")]
+        [TestCase(typeof(Color), "0xFF0000FF")]
+        [TestCase(typeof(Color), "(1,0,0)")]
+        [TestCase(typeof(Color32), "#ff0000ff")]
+        public void UnityValues_ParseInvariantComponentsAndColors(Type type, string text)
+        {
+            var previous = System.Globalization.CultureInfo.CurrentCulture;
+            try
+            {
+                System.Globalization.CultureInfo.CurrentCulture = System.Globalization.CultureInfo.GetCultureInfo("fr-FR");
+                var values = new ConsoleValues(UnityConsoleValues.TryConvert);
+                Assert.That(values.TryConvert(new ConsoleToken(text, text, 0), type, out var parsed, out var error), Is.True, error);
+                object expected = type == typeof(Vector2) ? (object)new Vector2(-1.5f, 2) :
+                    type == typeof(Vector3) ? new Vector3(-1.5f, 2, 3) :
+                    type == typeof(Vector4) ? new Vector4(-1.5f, 2, 3, 4) :
+                    type == typeof(Vector2Int) ? new Vector2Int(-1, 2) :
+                    type == typeof(Vector3Int) ? new Vector3Int(-1, 2, 3) :
+                    type == typeof(Quaternion) ? Quaternion.identity :
+                    type == typeof(Color32) ? (object)new Color32(255, 0, 0, 255) : Color.red;
+                Assert.That(parsed, Is.TypeOf(type));
+                Assert.That(parsed, Is.EqualTo(expected));
+            }
+            finally { System.Globalization.CultureInfo.CurrentCulture = previous; }
+        }
+
+        [TestCase(typeof(Vector2), "(1,2,3)")]
+        [TestCase(typeof(Vector3), "(1,2)")]
+        [TestCase(typeof(Vector4), "(1,2,3,4,5)")]
+        [TestCase(typeof(Vector3), "(NaN,2,3)")]
+        [TestCase(typeof(Vector3), "(Infinity,2,3)")]
+        [TestCase(typeof(Vector2Int), "(1.5,2)")]
+        [TestCase(typeof(Vector3Int), "(2147483648,2,3)")]
+        [TestCase(typeof(Quaternion), "(0,0,1)")]
+        [TestCase(typeof(Color), "(1.1,0,0)")]
+        [TestCase(typeof(Color), "(-1,0,0)")]
+        [TestCase(typeof(Color), "not-a-color")]
+        public void UnityValues_RejectInvalidComponents(Type type, string text)
+        {
+            var values = new ConsoleValues(UnityConsoleValues.TryConvert);
+            Assert.That(values.TryConvert(new ConsoleToken(text, text, 0), type, out _, out var error), Is.False);
+            Assert.That(error, Is.Not.Empty);
+        }
+
+        [UnityTest]
+        public IEnumerator Host_ParsesUnityArgumentsByDefaultAndRetainsTypedCalls()
+        {
+            var root = new GameObject("Console Unity value owner");
+            IDisposable module = null;
+            try
+            {
+                var host = root.AddComponent<ConsoleHost>();
+                var command = new ConsoleCommand("unity.values", "unity-values", "unity", "Read structured values.", new[] {
+                    new ConsoleParameter("points", typeof(Vector3[])), new ConsoleParameter("color", typeof(Color?)) });
+                module = host.Registry.Register("unity", new[] { new ConsoleBinding(command, (context, args, token) =>
+                    Task.FromResult(ConsoleResult.Success(data: new object[] { args.Get<Vector3[]>(0), args.Get<Color?>(1) }))) });
+                var result = host.ExecuteAsync("unity-values [(1,2,3),(4,5,6)] null");
+                yield return Wait(result);
+                Assert.That(result.Result.IsSuccess, Is.True, result.Result.Message);
+                var data = (object[])result.Result.Data;
+                Assert.That(data[0], Is.EqualTo(new[] { new Vector3(1, 2, 3), new Vector3(4, 5, 6) }));
+                Assert.That(data[1], Is.Null);
+                result = host.ExecuteAsync(command.Id, new object[] { new[] { Vector3.one }, Color.red });
+                yield return Wait(result);
+                Assert.That(result.Result.IsSuccess, Is.True, result.Result.Message);
+                Assert.That(((object[])result.Result.Data)[1], Is.EqualTo(Color.red));
+            }
+            finally { module?.Dispose(); Object.DestroyImmediate(root); }
+        }
+
+        [UnityTest]
         public IEnumerator CancelledBeforeDispatch_ReturnsStructuredResultWithoutInvokingTheHandler()
         {
             var root = new GameObject("Console cancelled request owner");

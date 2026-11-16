@@ -21,6 +21,18 @@ typed execution traverse the same session. Dispose registrations and owned
 subscriptions with their module/scene lifetime; do not scan all assemblies or
 compile command code at Player startup.
 
+Catalog caching must preserve live caller/policy checks; never cache authorized
+command lists across callers or unlock changes. Keep deadline timers optional.
+Use the Host's standard Unity value conversions before adding project parsers.
+The pure core accepts an explicit fallback; scoped type converters override it.
+
+Use completion `Hint` or policy-checked `GetHint` for parameter guidance; never
+execute a command to discover its signature. Apply the returned insertion caret
+when retaining text after a completion. Unity hosts format data-only returns;
+an explicit message takes precedence. Bare sessions opt in through
+`ResultFormatter`; keep status/data intact and use bounded explicit formatters
+instead of property reflection or scene-object inspection.
+
 Only a handler with an established business outcome returns `Success`.
 `Unconfirmed` preserves a legacy void/string result without claiming success;
 `Started` means completion is unobserved. Neither makes `IsSuccess` true.
@@ -52,3 +64,14 @@ Quantum entry and command inventory usable while adopting Native explicitly;
 frontend layout changes are not permission to remove project commands or switch
 production defaults.
 Empty drafts keep logs visible; completion is requested only after input begins.
+
+Native fonts default to a reused dynamic OS family chain with no bundled font
+files. Preserve a project's font via the Inspector or `ConfigureFont(Font)`;
+`FontProvider` can return its active localization font once per open. Borrowed
+fonts/materials and shared TMP/global fallback assets must remain unchanged and
+project-owned. Call `ConfigureFont` on a locale-change event for a live view;
+null resets OS selection. The input overlay has the same local configuration.
+Keep project font leases while visible. OS fallback is device-dependent, bitmap
+fonts keep their existing glyph set, and legacy uGUI does not gain complex-script
+shaping or RTL layout from adding fallback families. Do not advertise universal
+language/device support or bundle a second project font collection by default.

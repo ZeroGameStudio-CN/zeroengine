@@ -83,6 +83,37 @@ Only after that vertical contract is verified does G5 migrate all inventory
 entries, followed by G6 experience/cleanup and G7 synchronized Skill delivery.
 The immutable package baseline remains independently reviewable in its own PR.
 
+## Quantum source comparison and remaining parity
+
+The comparison uses the installed Quantum Console 2.6.7 source, including its
+processor, parser, suggestor, serializer, actions, registry and UI. Vendor source
+and assets remain outside ZE. Existing project commands and the Quantum default
+entry remain available while native capabilities are developed independently.
+
+| Area and Quantum source | ZE behavior and remaining work |
+| --- | --- |
+| Command discovery: `QuantumConsoleProcessor`, scan rules, `InjectionLoader` | Explicit, atomic module registration avoids a Player assembly scan. Optional attribute/generated authoring remains future work. |
+| Catalog cache: `GetAllCommands` | Reuse a sorted registry catalog until registration changes; recheck live caller policy for every discovery/completion request. |
+| Parameters: `CommandData`, `QuantumParser`, parsers | Quotes, Unicode, spans, optional/variadic arguments, primitives, enums, nullable values and arrays exist. Host defaults also parse vectors, integer vectors, quaternions and colors. Object-reference parsing, broader collections, tuples, overloads and generics remain gaps. |
+| Extensibility: parser/suggestor/serializer injection | Explicit converter/completer leases, conversion fallback and bounded result formatter extension exist. Avoid unbounded caches of user values or reflective object inspection. |
+| Suggestions: `QuantumSuggestor`, suggestion stack/display | Fragments, aliases, prefix priority, resource labels, quoting, insertion caret, clickable candidates and active-parameter/signature guidance exist. Natural ranking remains a separate improvement. |
+| Results: `QuantumSerializer` | Data-only Unity Host results use invariant bounded formatting for scalars, dictionaries, tuples, sequences and Unity values. Explicit messages and structured status/data retain precedence and identity. |
+| Async/actions: `QuantumConsole`, `ActionExecuter` | Tasks, main-thread dispatch, cancellation, deadlines and no-replay behavior exist. Interactive response/action workflows remain an optional capability gap. |
+| Macros/scripts: `QuantumMacros`, preprocessors, external command runner | Not native parity yet. Any reusable implementation must bound expansion and execution and apply normal policy to each resulting command. |
+| Object targets: `InvocationTargetFactory`, `QuantumRegistry` | Projects explicitly bind handlers and own their lifetimes. Optional object-target authoring must not introduce automatic scene scans per invocation. |
+| Logs/history: `LogStorage`, `LogQueue`, `QuantumConsole` | Bounded output/history, thread-safe writes, reusable output buffers, search, copy and follow controls exist. History duplicate policy and richer log formatting remain distinct improvements. |
+| UI/input: theme, localization, key config and UI controllers | Lower-left translucent panel, icons/tooltips, configurable area and font size, common keys and restored input exist. Runtime theme/localization profiles and drag/resize are not equivalent yet. |
+| Mobile/IME | Safe area, keyboard-area fitting and composition guards exist; physical phone keyboard/IME behavior still needs its own evidence. Layout previews do not establish device parity. |
+| Release access | Shared Editor/development access and configured hidden release unlock exist. No universal shipped password; projects supply the unlock policy. |
+| Dependencies and portability | Core has no Unity/QC reference; UI and Input System integration are separate. A Godot frontend does not yet exist. |
+| Performance/build cost | Compare matched workloads and artifacts separately for cold startup, execution, completion, allocations, UI/frame time and stripped Player size. Source size or one microbenchmark does not establish overall superiority. |
+| SDK removal | Keep the optional adapter, typed project backend and serialized resources separate. Removing a backend in a test does not prove physical SDK/package uninstallation. |
+
+Useful Quantum behavior is tracked above even when it is optional rather than
+enabled in every game. Native replacement is not complete until the applicable
+gaps and consumer checks have evidence; a successful default Quantum build does
+not establish native feature parity.
+
 ## Verified Editor slice, 2026-11-11
 
 The optional Quantum package now uses a source-verified 2.6.7 profile, public
@@ -356,3 +387,35 @@ hint bounds, focus preservation and follow-state persistence across reopening.
 The fresh real POB flow also passed Quantum priority, Native fallback, one submit,
 completion insertion and restoration. The icon window, copy hint and recovered
 Quantum Game frames were inspected. Consumer adoption remains a separate step.
+
+## Font adaptation and comparison, 2026-11-16
+
+Native and the shared completion overlay now reuse a lazy OS font family chain
+without bundling font files or an atlas. An assigned project Font is borrowed
+unchanged, with its existing fallback rules; only console-owned labels change.
+The package never edits font names, materials, import settings, TMP assets or
+global fallback tables, and never destroys a borrowed Font. ConfigureFont updates
+an open view without resetting its draft/history. FontProvider resolves the
+project's active language once per open; unavailable providers retain the last
+valid font and unloaded fonts fall back on reopening.
+
+The final isolated Windows PlayMode run covered 55 Host/UI cases, including seven
+font lifetime/configuration regressions. A separate native PlayMode case checked
+actual system/project glyphs and three 1920x1080 Game View frames, with unchanged
+project font assets, restored settings and verified native cleanup. The existing
+Liberation Sans face and the default OS chain rendered the desktop CJK/Latin
+acceptance samples. This establishes this machine's glyph coverage, not universal
+language support: complex-script shaping, RTL, color emoji, physical IME, WebGL
+project font coverage and mobile devices retain explicit verification gaps.
+
+The current comparison records narrower dependencies, smaller unstripped Editor
+DLLs and the preceding matched core benchmark advantage. It does not establish
+whole-Player size, startup, frame cost or full Quantum feature parity. Macros,
+interactive action/coroutine workflows, object addressing, grammar extensions and
+a Godot frontend remain outside the implemented native baseline. POB keeps
+Quantum and its existing commands. Consumer package/Skill consolidation waits
+for the Motion/TCE Presentation owner's tested commit and handoff.
+
+Evidence: D:/CodexArtifacts/pob-ze-cohort-fonts-20261116/verification.json and
+comparison.md. The earlier supported API/core benchmark evidence remains in
+D:/CodexArtifacts/ze-console-polish-20261116; no new Player result is inferred.

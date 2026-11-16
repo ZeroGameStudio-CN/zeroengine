@@ -14,6 +14,100 @@ namespace ZeroEngine.Console.UI.Tests
     public sealed class NativeConsoleTests
     {
         [UnityTest]
+        public IEnumerator ThirdPartyInputOverlay_ShowsPolicyCheckedHintsWithoutSubmitting()
+        {
+            var root = new GameObject("Third-party input contract");
+            IDisposable module = null;
+            try
+            {
+                var host = root.AddComponent<ConsoleHost>();
+                int calls = 0;
+                module = host.Registry.Register("sample", new[] { new ConsoleBinding(new ConsoleCommand("sample.flag", "sample-flag", "sample", "Set a flag.",
+                    new[] { new ConsoleParameter("enabled", typeof(bool), "开关") }),
+                    (context, args, token) => { calls++; return Task.FromResult(ConsoleResult.Success()); }) });
+                string text = "sample-flag "; int caret = text.Length;
+                var overlay = root.AddComponent<ConsoleInputOverlay>();
+                overlay.Initialize(host, new ConsoleInputAccess(() => text, value => { text = value; caret = value.Length; },
+                    () => caret, () => true, () => false));
+                double deadline = Time.realtimeSinceStartupAsDouble + 5;
+                UnityEngine.UI.Text detail = null;
+                while (!detail && Time.realtimeSinceStartupAsDouble < deadline)
+                {
+                    detail = root.GetComponentsInChildren<UnityEngine.UI.Text>().FirstOrDefault(label => label.name == "Parameter" && label.text.Contains("enabled"));
+                    yield return null;
+                }
+                Assert.That(detail, Is.Not.Null);
+                Assert.That(detail.text, Does.Contain("enabled: bool").And.Contain("开关"));
+                Assert.That(calls, Is.Zero);
+                var choice = root.GetComponentsInChildren<UnityEngine.UI.Button>().First(button => button.name == "Native completion");
+                choice.onClick.Invoke();
+                Assert.That(text, Is.EqualTo("sample-flag false"));
+                Assert.That(calls, Is.Zero);
+                overlay.ResetAfterSubmit();
+                Assert.That(detail.transform.parent.gameObject.activeSelf, Is.False);
+            }
+            finally { module?.Dispose(); Object.DestroyImmediate(root); }
+        }
+
+        [UnityTest]
+        public IEnumerator CommandHint_TracksCaretWithoutExecutingAndReleasesOutputAreaWhenCleared()
+        {
+            var root = new GameObject("Native contextual parameter hint");
+            IDisposable module = null;
+            try
+            {
+                var host = root.AddComponent<ConsoleHost>();
+                var view = root.AddComponent<NativeConsole>();
+                int calls = 0;
+                module = host.Registry.Register("sample", new[] { new ConsoleBinding(new ConsoleCommand("sample.build", "sample-build", "sample", "Create an item.", new[] {
+                    new ConsoleParameter("name", typeof(string), "物品名称"),
+                    new ConsoleParameter("count", typeof(int), "数量", optional: true, defaultValue: 1) }),
+                    (context, args, token) => { calls++; return Task.FromResult(ConsoleResult.Success()); }) });
+                view.Open();
+                yield return null;
+                view.InputField.text = "sample-build \"中文 空格\" ";
+                view.InputField.caretPosition = view.InputField.text.Length;
+                var hint = view.transform.Find("ZE Console/Panel/CommandHint");
+                var detail = hint.Find("Parameter").GetComponent<UnityEngine.UI.Text>();
+                double deadline = Time.realtimeSinceStartupAsDouble + 5;
+                while ((!hint.gameObject.activeSelf || !detail.text.Contains("count")) && Time.realtimeSinceStartupAsDouble < deadline) yield return null;
+                Assert.That(detail.text, Does.Contain("count: int").And.Contain("数量"));
+                Assert.That(hint.Find("Signature").GetComponent<UnityEngine.UI.Text>().text, Does.Contain("[count: int = 1]"));
+                Assert.That(calls, Is.Zero);
+                Assert.That(host.Session.GetHistory(), Is.Empty);
+                var output = view.transform.Find("ZE Console/Panel/Output").GetComponent<RectTransform>();
+                Assert.That(output.offsetMin.y, Is.GreaterThan(90));
+                view.InputField.text = string.Empty;
+                yield return null;
+                Assert.That(hint.gameObject.activeSelf, Is.False);
+                Assert.That(output.offsetMin.y, Is.EqualTo(90));
+            }
+            finally { module?.Dispose(); Object.DestroyImmediate(root); }
+        }
+
+        [UnityTest]
+        public IEnumerator DataOnlyResult_FormatsOnceThroughTheSharedHost()
+        {
+            var root = new GameObject("Native formatted result");
+            IDisposable module = null;
+            try
+            {
+                var host = root.AddComponent<ConsoleHost>();
+                var view = root.AddComponent<NativeConsole>();
+                module = host.Registry.Register("sample", new[] { new ConsoleBinding(new ConsoleCommand("sample.values", "sample-values", "sample", "Read values."),
+                    (context, args, token) => Task.FromResult(ConsoleResult.Success(data: new object[] { "中文", 1.25 }))) });
+                view.Open();
+                var result = view.SubmitAsync("sample-values");
+                yield return Wait(result);
+                yield return null;
+                Assert.That(result.Result.IsSuccess, Is.True);
+                Assert.That(host.Session.GetOutput().Count(row => row.Message == "[\"中文\", 1.25]"), Is.EqualTo(1));
+                Assert.That(view.GetFilteredOutputText(), Does.Contain("[\"中文\", 1.25]"));
+            }
+            finally { module?.Dispose(); Object.DestroyImmediate(root); }
+        }
+
+        [UnityTest]
         public IEnumerator NativeView_EmptyDraftKeepsLogsVisibleAndClearingCancelsSuggestions()
         {
             var root = new GameObject("Quiet console draft");

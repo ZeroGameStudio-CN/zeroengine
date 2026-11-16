@@ -29,6 +29,58 @@ Dispose registrations when a module unloads, then dispose the session and regist
 when their owner ends. A Unity owner can use `ConsoleHost`; its dispatcher keeps
 handlers on the main thread, including calls submitted from a worker.
 
+The registry reuses its sorted catalog until a module registers or unloads.
+Discovery and completion still check the current caller and policy on every
+request; returned command arrays remain caller-owned snapshots. Execution links
+module/session cancellation with an optional caller token and creates a deadline
+timer only when requested. Cancelling an uncooperative handler keeps the session
+busy until that handler ends, without replaying it or claiming rollback.
+
+Built-in scalar conversion includes `byte`, `sbyte`, `short`, `ushort` and `char`
+alongside the larger integer, floating-point, decimal, bool, enum, string and Guid
+types. Integer bounds are enforced; `char` requires one UTF-16 code unit. Nullable
+and array conversion reuse the same rules, with explicit custom converters taking
+precedence for their registration lifetime.
+
+`ConsoleHost` also supplies `Vector2/3/4`, `Vector2Int/3Int`, `Quaternion`, `Color`
+and `Color32` conversion. Use comma-separated components, optionally enclosed in
+parentheses or brackets; vector/quaternion component counts must match the type.
+Colors accept normalized RGB/RGBA components, HTML/named colors and `0xRRGGBB[AA]`.
+Nonfinite components, integer overflow and colors outside `[0,1]` are rejected.
+These rules also compose with nullable values and arrays.
+
+The pure core keeps its parameterless `ConsoleValues` constructor and engine
+independence. `new ConsoleValues(fallback)` supplies an explicit conversion
+fallback after built-ins; return false with no error for an unclaimed type.
+Type-specific `Register` converters take precedence and disposing their handle
+restores the default behavior. No value or scene-object cache is created.
+
+Results are immutable. Empty successes may be shared; use the invocation ID on
+the context/output to identify a call, and read status/code/data from the result.
+Session disposal cancels its active invocation and pending completion separately,
+so execution does not need a second per-call session cancellation registration.
+
+`ConsoleCommand.Signature` caches readable parameter types, optional defaults and
+variadic markers. `session.GetHint(line, caret, caller)` returns the current
+parameter and description without executing anything. Completion responses carry
+the same metadata in `Hint`; both paths apply the caller's live policy. Use
+`Apply(line, index, out caret)` when editing the middle of a line so the insertion
+caret stays before the retained tail. Cached completion metadata is unfiltered;
+caller permissions are checked for each request and again after async providers.
+
+Unity hosts format data-only results by default. An explicit result message takes
+precedence, and the original status/data remain unchanged. Bare core sessions
+keep presentation opt-in: set `ResultFormatter = ConsoleValueFormatter.Default`
+or supply `IConsoleValueFormatter`. Set it to `null` for data-only automation.
+The default formats invariant scalars, quoted collection strings, dictionaries,
+tuples and nested sequences, with depth/item/length limits and cycle detection.
+It does not inspect arbitrary properties or call unknown objects' `ToString`.
+Override `TryFormatAtom` for explicit application types; Unity values stay in
+`UnityConsoleValueFormatter`. Formatting errors do not turn a completed business
+operation into a failure or execute it again.
+Custom formatters may run on the completion thread; restrict them to safe data
+formatting and dispatch scene-object work explicitly through the Unity owner.
+
 For frequent output refreshes, use `CopyOutputTo(ref buffer, out revision)` with
 a caller-owned `ConsoleOutput[]`. It grows the buffer when needed, returns the
 valid entry count and captures the revision under the same lock. Unused entries
@@ -56,6 +108,6 @@ Both Host execution overloads return a structured `Cancelled` result when the
 request token is cancelled before main-thread dispatch. The handler is not run;
 this applies to requests made on the Unity thread and on worker threads.
 
-The current focused Unity 6 evidence covers 27 kernel cases and five Host cases.
-Native UI/QC compatibility and project migration retain their separate gates;
-these counts do not establish Player or consumer adoption.
+Kernel EditMode cases cover binding, live policy, registration lifetime and
+cancellation. Host PlayMode cases cover Unity dispatch and lifecycle. Native
+UI/QC compatibility, Player behavior and consumer adoption have separate checks.

@@ -18,7 +18,8 @@ namespace ZeroEngine.Console.UI
         [SerializeField, Tooltip("Preferred panel size in Canvas reference units; fitted to the available screen and keyboard area.")]
         private Vector2 preferredSize = new Vector2(880, 480);
         private GameObject view;
-        private Font ownedFont;
+        private readonly ConsoleFontResolver fonts = new ConsoleFontResolver();
+        private Font viewFont;
         private UnityEngine.UI.InputField input;
         private UnityEngine.UI.ScrollRect scroll;
         private readonly List<UnityEngine.UI.Text> outputRows = new List<UnityEngine.UI.Text>();
@@ -35,6 +36,7 @@ namespace ZeroEngine.Console.UI
         private int observedCaret = -1;
         private float completionAt;
         private long renderedRevision = -1;
+        private long completionRevision = -1;
         private bool wasRunning;
         private int historyIndex = -1;
         private string draftInput = string.Empty;
@@ -58,7 +60,23 @@ namespace ZeroEngine.Console.UI
             set => preferredSize = ClampPreferredSize(value);
         }
         public Func<IDisposable> AcquireInputIsolation { get; set; }
+        public Func<Font> FontProvider { get; set; }
         public event Action<bool> OpenChanged;
+
+        public void ConfigureFont(Font value)
+        {
+            font = value;
+            if (view) RefreshFont();
+        }
+
+        private void RefreshFont()
+        {
+            var resolved = fonts.Resolve(font, fontSize);
+            if (viewFont == resolved) return;
+            viewFont = resolved;
+            if (view)
+                foreach (var label in view.GetComponentsInChildren<UnityEngine.UI.Text>(true)) label.font = resolved;
+        }
 
         private void OnValidate() => preferredSize = ClampPreferredSize(preferredSize);
 
@@ -84,6 +102,11 @@ namespace ZeroEngine.Console.UI
         public void Open()
         {
             if (IsOpen || !host || host.Session == null) return;
+            if (FontProvider != null)
+            {
+                try { var supplied = FontProvider(); if (supplied) ConfigureFont(supplied); }
+                catch (Exception) { host.Session.Write(new ConsoleOutput("font", ConsoleOutputLevel.Warning, "Console font provider is unavailable; retaining the current font.")); }
+            }
             EnsureView();
             previousLock = Cursor.lockState;
             previousCursor = Cursor.visible;
@@ -149,6 +172,11 @@ namespace ZeroEngine.Console.UI
             if (KeyboardShortcutEnabled && !composing && ConsoleKeyboard.Pressed(KeyCode.BackQuote)) Toggle();
             if (!IsOpen || host.Session == null) return;
             UpdateViewLayout();
+            if (completionRevision != host.Registry.Revision)
+            {
+                completionRevision = host.Registry.Revision;
+                if (!string.IsNullOrWhiteSpace(input.text)) InputChanged(input.text);
+            }
             if (input.isFocused && input.caretPosition != observedCaret)
             {
                 observedCaret = input.caretPosition;
@@ -215,8 +243,9 @@ namespace ZeroEngine.Console.UI
         private void SubmitInput(string line) { if (!IsComposing) _ = SubmitAsync(line); }
         private void InputChanged(string value)
         {
-            CancelCompletion();
-            completionDirty = !string.IsNullOrWhiteSpace(value);
+            bool hasDraft = !string.IsNullOrWhiteSpace(value);
+            CancelCompletion(!hasDraft);
+            completionDirty = hasDraft;
             completionAt = Time.unscaledTime + .04f;
         }
 
@@ -233,6 +262,8 @@ namespace ZeroEngine.Console.UI
         private void ShowCompletions(ConsoleCompletions result)
         {
             currentCompletions = result;
+            commandHint.Show(result.Hint);
+            UpdateHintLayout();
             selectedCompletion = 0;
             RefreshCompletions();
         }
@@ -248,7 +279,7 @@ namespace ZeroEngine.Console.UI
         {
             if (currentCompletions == null) return;
             int rowHeight = fontSize + 10;
-            int capacity = Mathf.Clamp(Mathf.FloorToInt((panel.rect.height - 208) / rowHeight), 1, completionRows.Count);
+            int capacity = Mathf.Clamp(Mathf.FloorToInt((panel.rect.height - 208 - HintHeight) / rowHeight), 1, completionRows.Count);
             completionOffset = selectedCompletion / capacity * capacity;
             int visibleCount = Mathf.Min(capacity, currentCompletions.Items.Count - completionOffset);
             for (int i = 0; i < completionRows.Count; i++)
@@ -261,8 +292,8 @@ namespace ZeroEngine.Console.UI
                 completionRows[i].targetGraphic.color = index == selectedCompletion ? SelectedColor : SurfaceColor;
                 completionRows[i].GetComponent<UnityEngine.UI.LayoutElement>().preferredHeight = rowHeight;
             }
-            completionCaption.text = (selectedCompletion + 1) + " / " + currentCompletions.Items.Count + "   ·   Tab";
-            completions.offsetMax = new Vector2(-12, 126 + visibleCount * rowHeight);
+            completionCaption.text = (selectedCompletion + 1) + " / " + currentCompletions.Items.Count + (usingTouchLayout ? "" : "   ·   Tab");
+            completions.offsetMax = new Vector2(-12, 126 + HintHeight + visibleCount * rowHeight);
             completions.gameObject.SetActive(visibleCount > 0);
         }
 
@@ -271,17 +302,19 @@ namespace ZeroEngine.Console.UI
             if (currentCompletions == null || index >= currentCompletions.Items.Count) return;
             try
             {
-                string updated = currentCompletions.Apply(input.text, index);
+                string updated = currentCompletions.Apply(input.text, index, out int caret);
                 input.text = updated;
-                input.caretPosition = updated.Length;
-                observedCaret = updated.Length;
+                input.caretPosition = caret;
+                observedCaret = caret;
                 input.ActivateInputField();
+                commandHint.Show(host.Session.GetHint(updated, caret, host.CreateCaller()));
+                UpdateHintLayout();
             }
             catch (InvalidOperationException) { }
-            CancelCompletion();
+            CancelCompletion(false);
         }
 
-        private void CancelCompletion()
+        private void CancelCompletion(bool clearHint = true)
         {
             completionDirty = false;
             completionCancellation?.Cancel();
@@ -294,6 +327,7 @@ namespace ZeroEngine.Console.UI
                     TaskContinuationOptions.OnlyOnFaulted | TaskContinuationOptions.ExecuteSynchronously, TaskScheduler.Default);
             currentCompletions = null;
             if (completions) completions.gameObject.SetActive(false);
+            if (clearHint && commandHint != null) { commandHint.Show(null); UpdateHintLayout(); }
         }
 
         private void RenderOutput()
@@ -342,7 +376,7 @@ namespace ZeroEngine.Console.UI
         {
             Close();
             if (view) Destroy(view);
-            if (ownedFont) Destroy(ownedFont);
+            fonts.Dispose();
         }
     }
 }
