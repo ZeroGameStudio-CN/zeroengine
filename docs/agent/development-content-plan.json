@@ -450,18 +450,24 @@
     {
       "id": "ze.gamefeel.damage-number-semantics",
       "title": "伤害数字按攻击语义分组与连续流自适应聚合",
-      "stage": "InProgress",
+      "stage": "Ready",
       "targetReleaseId": "",
       "availability": "TestOnly",
       "responsibleChat": "01a1e334-b947-7100-a28a-15a02442e3ab",
       "chatUrl": "",
-      "nextAction": "在 POB 接入并完成定向 Unity 和渲染验证；保持原有逐击结算与随机序列。",
+      "nextAction": "POB 正式源码提交及既有版本流程；尚未发布。",
       "entrance": "ZeroEngine.GameFeel.Tests.FeedbackNumberPolicyTests",
       "resourcePath": "com.zerogamestudio.zeroengine.gamefeel/Runtime/FeedbackNumberPolicy.cs",
       "revision": "2026-11-16 semantic numbers",
       "candidatePackageVersion": "0.9.0",
       "releaseEvidence": "",
-      "verificationScope": "26 项 .NET 定向测试，覆盖语义分组、迟到弹丸、迟滞、窗口上限、容量回收及预热后分配；Unity 接入待验证。 射击/弹片分离取样覆盖慢射散射与提速连射。"
+      "verificationScope": "26 项 Unity 原生包合约与 26 项 .NET 定向检查无失败；7 项 POB PlayMode 回归无失败，逐击回调与随机序列保留。加特林实际配置为 Automatic、1 攻击槽、1 动作段，满足连续流默认接入。",
+      "relatedContent": [
+        {
+          "projectId": "pob",
+          "contentId": "feedback.damage-number-semantics"
+        }
+      ]
     }
   ]
 }
