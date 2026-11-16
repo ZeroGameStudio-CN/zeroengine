@@ -25,6 +25,14 @@ Catalog caching must preserve live caller/policy checks; never cache authorized
 command lists across callers or unlock changes. Keep deadline timers optional.
 Use the Host's standard Unity value conversions before adding project parsers.
 The pure core accepts an explicit fallback; scoped type converters override it.
+Standard collections use bracket syntax; dictionary entries are `(key, value)`
+pairs. Preserve converter/fallback priority. Arithmetic and per-session `#name`
+macros require explicit opt-in; keep their bounded parsing and live policy checks.
+Macros affect execution, not caret hints/completion. Explicit `ConsoleMethodBinding`
+can bind a selected method with defaults, params and Task results; it does not scan
+assemblies or resolve overloads. Async void/custom awaitables need an outcome
+adapter. Preserve reflected methods and generic collection instantiations for
+stripping/AOT; Editor checks alone do not establish IL2CPP support.
 
 Use completion `Hint` or policy-checked `GetHint` for parameter guidance; never
 execute a command to discover its signature. Apply the returned insertion caret

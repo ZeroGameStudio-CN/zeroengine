@@ -55,6 +55,35 @@ fallback after built-ins; return false with no error for an unclaimed type.
 Type-specific `Register` converters take precedence and disposing their handle
 restores the default behavior. No value or scene-object cache is created.
 
+Standard generic collections also accept `[item, item]`, including nested values.
+List/collection interfaces use `List<T>`, set interfaces use `HashSet<T>`; queue
+and stack construction follows their normal enumerable constructors. Dictionaries
+use `[(key, value), (key, value)]` and reject duplicate or null keys. Explicit
+converters and the existing fallback retain priority over these collection rules.
+
+Numeric arithmetic is opt-in through `session.Values.EnableArithmetic = true`.
+It supports `+ - * / %`, unary signs and parentheses, with bounded depth/work,
+invariant literals and checked numeric ranges. Integer division truncates at each
+division. Enclose an expression containing spaces in parentheses or quotes so it
+remains one command argument. It does not evaluate C#, functions or object access.
+
+`session.Macros = new ConsoleMacros()` opts that session into explicit `#name`
+substitution. `Define`, `Remove`, `Clear` and `Snapshot` belong to its owner;
+expansion is bounded and cycles fail before any handler runs. History keeps the
+typed line, and expanded commands still pass the normal parser and live policy.
+Unknown names remain unchanged. Macro-aware caret hints/completion are not
+provided; use ordinary command text when requesting parameter guidance.
+
+`ConsoleMethodBinding.Create` explicitly binds one selected `MethodInfo` and an
+optional instance. It maps optional/params parameters, injects `CancellationToken`
+and awaits `Task`/`Task<T>`. A returned `ConsoleResult` preserves its business
+status; ordinary values become data, while void/untyped tasks remain unconfirmed.
+Async void, custom awaitables, open generics and ref/out/pointer parameters require
+explicit adapters. There is no automatic assembly scan or overload resolver.
+Reflection bindings and dynamically constructed generic collections require the
+consumer's normal stripping/AOT preservation; these additions have Editor coverage,
+not a new IL2CPP support claim.
+
 Results are immutable. Empty successes may be shared; use the invocation ID on
 the context/output to identify a call, and read status/code/data from the result.
 Session disposal cancels its active invocation and pending completion separately,
