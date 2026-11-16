@@ -33,7 +33,10 @@ namespace ZeroEngine.Render.Tests.Runtime
         [UnityTest]
         public IEnumerator NativeContourCore_LightsInnerGapsAndIslandsWithoutBodyFillOrExtraHdr() => VerifyComposite(false, false, true, true);
 
-        private IEnumerator VerifyComposite(bool verifyWrap = false, bool verifySpatial = false, bool verifyNative = false, bool verifyContour = false)
+        [UnityTest]
+        public IEnumerator ReferenceEdges_PreserveSceneBody_KeepOpposedSides_AndFadeOnlyNearTheContour() => VerifyComposite(true, true, false, false, true);
+
+        private IEnumerator VerifyComposite(bool verifyWrap = false, bool verifySpatial = false, bool verifyNative = false, bool verifyContour = false, bool verifyReference = false)
         {
             Assert.That(Application.isPlaying, Is.True);
             RenderPipelineAsset previous = QualitySettings.renderPipeline;
@@ -107,6 +110,7 @@ namespace ZeroEngine.Render.Tests.Runtime
                 profile.WeakDistance=4;profile.StrongDistance=1.5f;profile.ResponsePower=.5f;
                 profile.StrongScale=-.05f;profile.MinimumExposure=.9f;profile.MaximumLight=3;
                 profile.GammaBlend=true;profile.LimitAddedHdr=true;
+                profile.ReferenceEdgeResponse=verifyReference;
                 var lighting=actorHost.AddComponent<SpriteRimLighting>();lighting.enabled=false;
                 lighting.Configure(new Renderer[]{actor},new[]{light},profile);
                 yield return null;
@@ -119,7 +123,15 @@ namespace ZeroEngine.Render.Tests.Runtime
                 Assert.That(edge.r,Is.EqualTo(expectedEdge.r).Within(.004f));
                 Assert.That(edge.g,Is.EqualTo(expectedEdge.g).Within(.004f),"The rendered contour must match the recovered light-field and Gamma blend formula.");
                 Assert.That(edge.g,Is.GreaterThan(edge.r+.02f),"The chosen green light must visibly tint the contour.");
-                Assert.That(inside.g,Is.LessThan(baseline.GetPixel(29,28).g),"The reference local exposure must operate on the covered interior.");
+                if(verifyReference)
+                {
+                    var body=baseline.GetPixel(29,28);
+                    Assert.That(inside.r,Is.EqualTo(body.r).Within(.0001f));
+                    Assert.That(inside.g,Is.EqualTo(body.g).Within(.0001f));
+                    Assert.That(inside.b,Is.EqualTo(body.b).Within(.0001f),
+                        "White source art on a dark material must retain its shaded body, even when a rim is active.");
+                }
+                else Assert.That(inside.g,Is.LessThan(baseline.GetPixel(29,28).g),"The legacy local exposure remains compatible for custom profiles.");
                 Assert.That(lit.GetPixel(5,5).r,Is.EqualTo(baseline.GetPixel(5,5).r).Within(.001f),"Background pixels must not be recolored.");
                 Assert.That(lit.GetPixel(13,16).g,Is.EqualTo(baseline.GetPixel(13,16).g).Within(.001f),"A foreground occluder must not receive the hidden actor's rim.");
                 lampHost.transform.position=new Vector3(0,.5f,0);lighting.UpdateLighting();upper=Render(camera);
@@ -1032,10 +1044,14 @@ namespace ZeroEngine.Render.Tests.Runtime
             for(int i=0;i<3;i++){
                 float f=Mathf.Clamp01(c[i]*light.Intensity*fieldAlpha)*response;
                 float dodge=f>=1?f:b[i]/(1-f);
-                value[i]=Mathf.Min(Mathf.Lerp(b[i],dodge,blend),profile.MaximumLight)*exposure;
+                value[i]=Mathf.Min(Mathf.Lerp(b[i],dodge,blend),profile.MaximumLight)*(profile.ReferenceEdgeResponse?1:exposure);
             }
             var result=new Color(value[0],value[1],value[2],source.a);
-            return profile.GammaBlend && QualitySettings.activeColorSpace==ColorSpace.Linear?result.linear:result;
+            if(profile.ReferenceEdgeResponse&&profile.LimitAddedHdr)result=new Color(Mathf.Clamp01(result.r),Mathf.Clamp01(result.g),Mathf.Clamp01(result.b),source.a);
+            if(profile.GammaBlend && QualitySettings.activeColorSpace==ColorSpace.Linear)result=result.linear;
+            if(!profile.ReferenceEdgeResponse)return result;
+            return new Color(source.r+Mathf.Max(0,result.r-source.r)*exposure,
+                source.g+Mathf.Max(0,result.g-source.g)*exposure,source.b+Mathf.Max(0,result.b-source.b)*exposure,source.a);
         }
         private static void AssertSameImage(Texture2D expected,Texture2D actual,string reason) => AssertImageDelta(expected,actual,.004f,reason);
         private static void AssertImageDelta(Texture2D expected,Texture2D actual,float tolerance,string reason)

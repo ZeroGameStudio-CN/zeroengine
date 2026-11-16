@@ -12,18 +12,19 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 834b3f961de94c6aab106062cc0eece8, type: 3}
   m_Name: SpriteRimLightingDefault
   m_EditorClassIdentifier: 
+  ReferenceEdgeResponse: 1
   Strength: 0.85
   InnerWrapWidth: 2
-  InnerWrapStrength: 0.22
-  ContourStrength: 1
-  DarkEdgeBrightness: 0.42
-  WeakDistance: 2
+  InnerWrapStrength: 0.08
+  ContourStrength: 0
+  DarkEdgeBrightness: 1
+  WeakDistance: 1
   StrongDistance: 1
   ResponsePower: 0.5
-  StrongScale: -0.05
+  StrongScale: 0
   EdgeTint: {r: 1, g: 1, b: 1, a: 1}
   InnerTint: {r: 0, g: 0, b: 0, a: 1}
-  MaximumLight: 3
+  MaximumLight: 1
   MinimumExposure: 1
   GammaBlend: 1
   LimitAddedHdr: 1

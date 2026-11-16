@@ -425,16 +425,16 @@
     },
     {
       "id": "ze.render.pixel-contour-core",
-      "title": "像素边缘受光：原作机制还原与 ZE 通路对照",
+      "title": "像素边缘受光：参考明暗、多方向与浅内侧过渡",
       "stage": "Previewable",
       "targetReleaseId": "",
       "availability": "DevelopmentOnly",
       "responsibleChat": "01a16e60-157f-7f63-8f5a-7a6bdbe07a81",
       "chatUrl": "",
-      "nextAction": "先以新还原通路作为原作活动受光主链的准确基线复看，再决定与 ZE 场景明暗、HDR 控制和遮挡的融合；保留现版默认，不把本次白发更亮的原作预设直接接入正式场景。原中断测试 19781a1b8b764a489d0d5ac090216e16 的历史恢复缺口保留原记录，不由这次成功运行覆盖。",
-      "entrance": "SpriteRimLightingProfile.UseOriginalMechanism；POB 受控 PlayMode 的 RimFireColorTestRoom，以及包内 SpriteRimOriginalRenderTests / SpriteRimLightingRenderTests。",
-      "resourcePath": "com.zerogamestudio.zeroengine.render.urp/Runtime/SpriteRimLightingProfile.cs",
-      "revision": "original-mechanism-parity-20261116",
+      "nextAction": "复看本轮同位置参考移植／新版／此前 ZE 对照与正常镜头实录。正式消费者接入仍需全部 ZE 包使用同一已测试 Git 提交，本轮未改消费者固定依赖。原中断请求 19781a1b8b764a489d0d5ac090216e16 的历史恢复缺口保持原记录，不由新成功流程覆盖。",
+      "entrance": "SpriteRimLighting 的共享默认配置；POB 受控 PlayMode 的 RimFireColorTestRoom 与包内 SpriteRimLightingRenderTests。",
+      "resourcePath": "com.zerogamestudio.zeroengine.render.urp/Runtime/Resources/ZeroEngine/SpriteRimLighting.shader",
+      "revision": "reference-scene-color-multidirection-soft-20261117",
       "candidatePackageVersion": "0.4.4",
       "releaseEvidence": "",
       "verificationEvidence": [
@@ -463,9 +463,14 @@
         "C:/Users/2025/.antigravity_cockpit/instances/codex/eae8558ab409f681/visualizations/2026/10/24/01a16e60-157f-7f63-8f5a-7a6bdbe07a81/rim-original-parity-20261116/evidence/candidate-gpu.json",
         "C:/Users/2025/.antigravity_cockpit/instances/codex/eae8558ab409f681/visualizations/2026/10/24/01a16e60-157f-7f63-8f5a-7a6bdbe07a81/rim-original-parity-20261116/evidence/test-terminal.json",
         "C:/Users/2025/.antigravity_cockpit/instances/codex/eae8558ab409f681/visualizations/2026/10/24/01a16e60-157f-7f63-8f5a-7a6bdbe07a81/rim-original-parity-20261116/evidence/flow-state.json",
-        "C:/Users/2025/.antigravity_cockpit/instances/codex/eae8558ab409f681/visualizations/2026/10/24/01a16e60-157f-7f63-8f5a-7a6bdbe07a81/rim-original-parity-20261116/comparison.mp4"
+        "C:/Users/2025/.antigravity_cockpit/instances/codex/eae8558ab409f681/visualizations/2026/10/24/01a16e60-157f-7f63-8f5a-7a6bdbe07a81/rim-original-parity-20261116/comparison.mp4",
+        "C:/Users/2025/.antigravity_cockpit/instances/codex/eae8558ab409f681/visualizations/2026/10/24/01a16e60-157f-7f63-8f5a-7a6bdbe07a81/rim-reference-soft-20261116/review-v5/composition.json",
+        "C:/Users/2025/.antigravity_cockpit/instances/codex/eae8558ab409f681/visualizations/2026/10/24/01a16e60-157f-7f63-8f5a-7a6bdbe07a81/rim-reference-soft-20261116/review-v5/evidence/test-terminal.json",
+        "C:/Users/2025/.antigravity_cockpit/instances/codex/eae8558ab409f681/visualizations/2026/10/24/01a16e60-157f-7f63-8f5a-7a6bdbe07a81/rim-reference-soft-20261116/review-v5/evidence/candidate-gpu.json",
+        "C:/Users/2025/.antigravity_cockpit/instances/codex/eae8558ab409f681/visualizations/2026/10/24/01a16e60-157f-7f63-8f5a-7a6bdbe07a81/rim-reference-soft-20261116/review-v5/evidence/flow-state.json",
+        "C:/Users/2025/.antigravity_cockpit/instances/codex/eae8558ab409f681/visualizations/2026/10/24/01a16e60-157f-7f63-8f5a-7a6bdbe07a81/rim-reference-soft-20261116/review-v5/comparison.mp4"
       ],
-      "verificationScope": "从 Lost Ruins 1.0.9a 安装包的编译 Shader、托管 CIL、PlayerRim 预设、光相机及 RenderTexture 配置还原活动 light/rim/exposure 主链。144 组编译 Shader 回放最大绝对误差 2.384185791015625e-7；36 组 RGBA8 SrcAlpha/One 帧缓冲回放逐字节一致，正确清屏值为黑色 Alpha=1。保留最强灯按接收体枢轴决定位移、全部光色叠加、九种混色、偏移/缩放/透明度响应、局部曝光、每接收体忽略灯与原有饱和通道分支。5 组同源隔离包 Unity 检查实测成功，覆盖暗蓝保色、六灯、忽略灯仍贡献颜色、sRGB/线性贴图、原作黄金样本及现版空间/原生灯回归。POB 主 Editor 当前版本实录 12 张同姿势快照与 13 个正常 MainCamera 行走/攻击/技能节点，实际观察太刀、两次技能和闪避，世界、音频、存储与 Game View 已恢复。新模式直接使用贴图原色及原作预设，因此白发和浅色部位更亮；这是一份功能基准，不是最终融合外观。非原作游戏直接运行，也非整个原作材质全部可选调色/投影分支的复刻。正式消费依赖未切换。"
+      "verificationScope": "按用户纠正撤回 94c48655 的贴图原色整身重绘，历史还原证据保留为已撤回候选。共享默认改用场景已渲染 RGB 的参考式 Color Dodge，源贴图只供轮廓 Alpha；多灯各自计算方向，原生灯按颜色通道保留最强的局部贡献，避免平均压暗和累加造成暗边霓虹化。明确单像素主边配 0.08 强度、两层美术像素的浅内侧过渡；不加暗部固定底色、不提升深层身体曝光，保留原有 HDR。原生灯亮度映射到参考的世界 XY 径向场，原生聚光锥、前后方向与遮挡保留。4 组同源包 GPU 检查覆盖暗材质身体 RGB 不变、双侧轮廓与浅层过渡、空间与透明材质、原生灯筛选及既有清晰核心回归。主 POB 录制单暖光、左右双色、四色重叠、前后交叉共 12 张同姿势同灯快照，随后恢复正常 MainCamera、物理和输入，实录往返、太刀攻击、两次技能与闪避。Native 1/1，世界、存档、音频和播放退出已恢复，cleanupVerified=true。参考是此前场景颜色兼容移植，不是原作可执行程序；本轮源码候选不代表正式消费者升级或用户验收。"
     }
   ]
 }

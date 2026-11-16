@@ -9,12 +9,10 @@ pooling and project assets stay in the consumer. The existing UnityEngine-only
 
 1. Add `SpriteRimRendererFeature` to each URP Renderer used by the game cameras.
 2. Add `SpriteRimLighting` to an actor and call `Configure(renderers, profile)`.
-   A null profile keeps a clear contour with a faint inward transition over two
-   art cells. The deeper artwork retains its original exposure.
-   ContourStrength adds a clear one-art-cell core to marked native lights,
-   including small isolated cells and the edges of gaps inside a silhouette.
-   The shared default uses 1; older custom profiles keep zero until enabled.
-   The existing soft band and inward transition retain their own settings.
+   A null profile uses the reference-style color-dodge response on a one-art-cell
+   contour, with a faint inward transition over two art cells. The body keeps its
+   existing scene shading. `ReferenceEdgeResponse` is enabled in the shared default;
+   existing custom profiles retain their previous response until explicitly enabled.
 3. Create a dedicated light with `GameObject > Light > 角色边缘点光` or
    `角色边缘聚光`; the Editor-only authoring assembly adds the native light and
    `SpriteRimLightSource` together, with ordinary Undo support. For an existing
@@ -23,20 +21,37 @@ pooling and project assets stay in the consumer. The existing UnityEngine-only
    continue to illuminate source materials without creating an actor rim.
    URP visibility, culling masks and the camera frustum select up to four marked
    local lights per actor. Directional lights and sky illumination remain excluded.
-   HDR intensity controls coverage separately from hue, preserving colored edges.
+   The reference response includes the light multiplier in RGB and coverage;
+   the previous stronger-core style retains its separate hue/coverage mapping.
 
 For authored 2D fields, create `SpriteRimLight` components and pass their explicit
 array to `Configure(renderers, lights, profile)`. Both inputs use the same enhanced
 composite. The old preview tint and reference MRT implementations are removed.
 
-The clear native core compares complete art cells along the light direction.
+The default starts from the already rendered scene color. Source textures supply
+alpha coverage only: it never redraws the actor with unlit texture RGB. Each light
+gets its own contour direction, so opposed lamps can illuminate both sides without
+switching to one strongest side. Native lights retain the strongest masked
+contribution per color channel, avoiding both dim averaging and repeated brightening
+of dark art. The narrow inward wrap fades away within two art
+cells. Its strength is 0.08 in the shared default; the deep interior is unchanged.
+Exposure scales only the added edge gain. Existing HDR/emission is preserved and
+added LDR light is capped at one. There is no uniform black-edge floor in this
+response, so dark colored art retains its own color-dependent brightness.
+Marked native lamps use the reference's world-XY field falloff for this response;
+native spot cones, front/back direction, source visibility and shadow attenuation
+remain active. The outer edge uses the reference's definite alpha boundary;
+filtering is reserved for the faint inward shell.
+
+The previous optional native core compares complete art cells along the light direction.
 Near a rear light's projected center, it blends into the symmetric one-cell
 backlight contour. Filtered inward wrap remains separate, so small islands,
 inner leg gaps and clothing cutouts can brighten without filling the body.
 The core uses the painted RGB in a bounded color-dodge response, preserving
 dark cloth and pale highlights instead of adding a uniform colored line. A small
 bounded visibility floor keeps black art readable; the older dark fill is reduced
-while the clear core is enabled. Zero ContourStrength keeps the old response.
+while the clear core is enabled. These stronger-core controls remain available to
+custom profiles with `ReferenceEdgeResponse=false`; they are not part of the new default.
 Core strength controls the blend rather than reducing the input light energy.
 The one-cell core applies native distance and shadow visibility once. The softer
 shell keeps its separate response, so brighter edges do not raise body exposure.
@@ -70,59 +85,7 @@ it does not add normal maps or independently reproduce shadow attenuation.
 Only registered actors visible to a game base camera update their silhouette.
 Scene lights are captured from that camera's URP culling results. Disabling an
 actor or removing its light removes its contribution in the same camera render.
-Existing profiles keep this ZE path. The explicit original-mechanism mode below
-is independent; it is never selected as an automatic fallback.
-
-## Original mechanism compatibility
-
-Set `SpriteRimLightingProfile.UseOriginalMechanism` for the recovered
-light/rim/exposure model. Enrollment still uses `SpriteRimLighting.Configure`;
-there is no second actor component or source-material replacement. Use explicit
-`SpriteRimLight` inputs for the original 2D Point, Directional and Spot fields.
-The reconstruction uses the shipped Lost Ruins 1.0.9a sprite/light programs,
-camera/render-target configuration and PlayerRim preset as its reference.
-
-This path clears a non-sRGB 480×270 RGBA8 field to black with alpha **one**,
-then accumulates every field light with `SrcAlpha/One`. Its light blend therefore
-does not inherit the extra weak-light attenuation of a transparent-black field.
-It chooses one strongest rim-enabled light at the receiver's
-transform pivot. The selector's intensity does not depend on light color.
-`AffectsRim=false` retains that light's field contribution without letting it
-choose the mask direction. The recovered Spot selector intentionally differs
-from the Spot field shader: it uses angle/range while the field uses
-1−angle/range. Equal strengths retain the first source's direction.
-`SpriteRimLighting.OriginalIgnoredLights` provides per-receiver exclusions for
-direction selection without removing those colors from the field. The recovered
-manager's maximum selection distance defaults to 4 in normalized light space.
-
-The source Sprite alpha, pivot and rectangle drive the shifted mask directly:
-there is no art-cell snapping or alpha=0.5 threshold. The original
-`TransformVector` offset and scale response are retained. The PlayerRim defaults
-are distance 0.04→0.015 (100 texture-texel units), scale 0→−0.05, alpha 0→1,
-response powers 0.5, local exposure minimum 0.9, blend 1 and maximum light 3.
-`SpriteRimOriginalSettings` also exposes all nine original blend modes and
-thresholded exposure. Color Dodge retains the shipped saturated-channel branch.
-
-Unlike the ZE composite, this mode uses texture color before scene lighting and
-reconstructs the original Gamma-space blend in a Linear URP project. Dark blue
-and other nonzero dark colors therefore retain their material-dependent
-response, without a uniform brightness floor. It also retains the original
-additive saturation and highlight behavior. The ZE highlight cap, inward wrap
-and independent per-light contours do not participate in this mode.
-
-This is a reconstruction of the active light/rim/exposure mechanism, not the
-original game executable or every optional source-shader feature. The URP
-adapter uses the existing opaque/alpha-clipped depth coverage; transparent
-source materials are skipped. Posed meshes use the current posed silhouette
-adapter because the original source-alpha shift targets SpriteRenderer art.
-Native marked Point/Spot lights can supply mapped 2D inputs; this mapping is
-separate from the original model and does not reproduce URP 3D attenuation or
-its light-shadow atlas. Keep the ZE model for that shadow-aware workflow.
-
-Verification includes synthetic replay against the shipped compiled sprite and
-three light-shape shaders, plus portable golden samples in
-`SpriteRimOriginalGoldenSamples`. The package ships only its own implementation
-and synthetic inputs/results; no game binaries or artwork are included.
+Both response styles use the same scene-color composite.
 
 ## Validation and consumption
 
@@ -245,15 +208,16 @@ Registered MeshRenderers react to `SurfaceWeatherMaterialSources.NotifyRendererM
 
 ## Marked native lights and dark contours
 
-`SpriteRimLightSource.DarkEdgeFill` adds bounded light color to dark contour cells;
-zero retains the original fill response. `SpriteRimLightingProfile.DarkEdgeBrightness`
-limits added brightness on dark artwork. Marked point/spot lights use the available
+The previous custom response can use `SpriteRimLightSource.DarkEdgeFill` and
+`SpriteRimLightingProfile.DarkEdgeBrightness`. Reference-style edges instead retain
+the material-dependent dodge response without adding a fixed-color fill.
+Marked point/spot lights use the available
 URP additional-shadow atlas. An optional opaque `FallbackOccluder` supplies oriented
 mesh bounds when realtime shadows cannot represent that light; it does not replace
 scene physics, game visibility or the original sprite material.
 
-The consolidated default asset retains the adopted POB inner-wrap and dark-edge
-values. Projects can pass an explicit profile to `SpriteRimLighting.Configure` for
+The shared default uses a one-cell edge, zero silhouette scaling, an LDR maximum
+of one and a 0.08 two-cell inner wrap. Projects can pass an explicit profile to `SpriteRimLighting.Configure` for
 their own appearance. The body/weather backends and their package dependency remain
 available independently of this rim-light extension.
 

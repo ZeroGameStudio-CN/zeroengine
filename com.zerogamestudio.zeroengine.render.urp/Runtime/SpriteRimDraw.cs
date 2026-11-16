@@ -216,7 +216,8 @@ namespace ZeroEngine.Render.Urp
                 var edge = profile.EdgeTint; var inner = profile.InnerTint;
                 material.SetVector("_RimRefEdgeTint", new Vector4(edge.r, edge.g, edge.b, edge.a));
                 material.SetVector("_RimRefInnerTint", new Vector4(inner.r, inner.g, inner.b, inner.a));
-                material.SetFloat("_RimEnhanceContourStrength", float.IsFinite(profile.ContourStrength) ? Mathf.Clamp01(profile.ContourStrength) : 0);
+                material.SetFloat("_RimReferenceEdgeResponse", profile.ReferenceEdgeResponse ? 1 : 0);
+                material.SetFloat("_RimEnhanceContourStrength", !profile.ReferenceEdgeResponse && float.IsFinite(profile.ContourStrength) ? Mathf.Clamp01(profile.ContourStrength) : 0);
                 if (changes == -1 || uploadedCount != selectedCount) material.SetInt(CountId, selectedCount);
                 if ((changes & 1) != 0) material.SetVectorArray(Rows0Id, rows0);
                 if ((changes & 2) != 0) material.SetVectorArray(Rows1Id, rows1);

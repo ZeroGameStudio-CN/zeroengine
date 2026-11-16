@@ -7,9 +7,8 @@ namespace ZeroEngine.Render.Urp
     [CreateAssetMenu(menuName = "ZeroEngine/Rendering/Pixel Rim Lighting", fileName = "PixelRimLighting")]
     public sealed class SpriteRimLightingProfile : ScriptableObject
     {
-        [Tooltip("Explicit compatibility mode. Uses the recovered 2D light field, strongest-light mask and source-color blend. Existing profiles keep the ZE composite.")]
-        [InspectorName("原作机制兼容模式")] public bool UseOriginalMechanism;
-        public SpriteRimOriginalSettings Original = new();
+        [Tooltip("Reference color-dodge on the shaded scene, with per-light contours and a faint inner wrap. Keeps the body and existing HDR unchanged. Enabled by the shared default; existing custom profiles retain their earlier response.")]
+        [InspectorName("参考式边缘（保留场景明暗）")] public bool ReferenceEdgeResponse;
 
         [Range(0f, 1f), InspectorName("受光强度")] public float Strength = .85f;
         [Min(0f), InspectorName("弱光边带（美术像素）")] public float WeakDistance = 2f;
@@ -27,7 +26,7 @@ namespace ZeroEngine.Render.Urp
         [Tooltip("Filters only silhouette coverage. Source artwork remains point sampled."), Range(0f, .35f)]
         [InspectorName("内侧绕光强度")] public float InnerWrapStrength = .05f;
 
-        [Tooltip("A clear one-art-cell core also catches small islands and inward silhouette gaps. Zero keeps the soft contour response."), Range(0f, 1f)]
+        [Tooltip("Optional stronger ZE core. Zero uses the reference edge response with a faint inward transition and preserves the shaded body."), Range(0f, 1f)]
         [InspectorName("清晰亮边强度")] public float ContourStrength;
 
         [Range(.01f, 1f), InspectorName("暗部受光亮度上限")]

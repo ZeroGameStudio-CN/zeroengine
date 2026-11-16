@@ -26,8 +26,6 @@ namespace ZeroEngine.Render.Urp
         {
             private readonly List<SpriteRimDraw> draws = new();
             private readonly List<SpriteRimNativeSource> nativeSources = new();
-            private readonly List<SpriteRimOriginalGroup> originalGroups = new();
-            private readonly SpriteRimOriginalPass originalPass = new();
             private readonly Plane[] planes = new Plane[6];
             private static readonly int SceneColorId = Shader.PropertyToID("_RimEnhanceSceneColor");
             private static readonly int SceneScaleId = Shader.PropertyToID("_RimEnhanceSceneScaleBias");
@@ -58,8 +56,8 @@ namespace ZeroEngine.Render.Urp
                     nativeSources.Add(new SpriteRimNativeSource(light, source, shadowIndex));
                 }
                 GeometryUtility.CalculateFrustumPlanes(camera, planes);
-                SpriteRimRegistry.Collect(camera, planes, nativeSources, draws, originalGroups);
-                return draws.Count > 0 || originalGroups.Count > 0;
+                SpriteRimRegistry.Collect(camera, planes, nativeSources, draws);
+                return draws.Count > 0;
             }
 
             private static bool HasPackedShadowIndices(ScriptableRenderer renderer)
@@ -90,8 +88,6 @@ namespace ZeroEngine.Render.Urp
                 var resources = frameData.Get<UniversalResourceData>();
                 var camera = frameData.Get<UniversalCameraData>();
                 if (resources.isActiveTargetBackBuffer || !resources.cameraDepthTexture.IsValid()) return;
-                if (originalGroups.Count > 0) originalPass.Record(renderGraph, resources, camera, originalGroups);
-                if (draws.Count == 0) return;
                 var source = resources.activeColorTexture;
                 var desc = renderGraph.GetTextureDesc(source);
                 desc.name = "Pixel rim camera color"; desc.clearBuffer = false;
@@ -135,7 +131,6 @@ namespace ZeroEngine.Render.Urp
             {
                 nativeSources.Clear();
                 draws.Clear();
-                originalGroups.Clear(); originalPass.Dispose();
             }
         }
     }
