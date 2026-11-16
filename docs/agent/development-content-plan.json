@@ -425,16 +425,16 @@
     },
     {
       "id": "ze.render.pixel-contour-core",
-      "title": "像素受光的清晰局部轮廓与柔和内侧过渡",
+      "title": "像素边缘受光：原作机制还原与 ZE 通路对照",
       "stage": "Previewable",
       "targetReleaseId": "",
       "availability": "DevelopmentOnly",
       "responsibleChat": "01a16e60-157f-7f63-8f5a-7a6bdbe07a81",
       "chatUrl": "",
-      "nextAction": "提供旧 ZE、新 ZE、原作机制兼容移植的四组同姿势对照与新候选四灯正常镜头实录供用户确认；正式消费者接入仍使用全部 ZE 包同提交的固定 Git 依赖。旧中断请求 19781a1b8b764a489d0d5ac090216e16 的历史恢复缺口保持原记录，不以新流程覆盖。",
-      "entrance": "POB 受控 PlayMode 的 RimFireColorTestRoom，以及包内 SpriteRimLightingRenderTests。",
-      "resourcePath": "com.zerogamestudio.zeroengine.render.urp/Runtime/Resources/ZeroEngine/SpriteRimLighting.shader",
-      "revision": "native-dark-multilight-final-20261116",
+      "nextAction": "先以新还原通路作为原作活动受光主链的准确基线复看，再决定与 ZE 场景明暗、HDR 控制和遮挡的融合；保留现版默认，不把本次白发更亮的原作预设直接接入正式场景。原中断测试 19781a1b8b764a489d0d5ac090216e16 的历史恢复缺口保留原记录，不由这次成功运行覆盖。",
+      "entrance": "SpriteRimLightingProfile.UseOriginalMechanism；POB 受控 PlayMode 的 RimFireColorTestRoom，以及包内 SpriteRimOriginalRenderTests / SpriteRimLightingRenderTests。",
+      "resourcePath": "com.zerogamestudio.zeroengine.render.urp/Runtime/SpriteRimLightingProfile.cs",
+      "revision": "original-mechanism-parity-20261116",
       "candidatePackageVersion": "0.4.4",
       "releaseEvidence": "",
       "verificationEvidence": [
@@ -456,9 +456,16 @@
         "C:/Users/2025/.antigravity_cockpit/instances/codex/eae8558ab409f681/visualizations/2026/10/24/01a16e60-157f-7f63-8f5a-7a6bdbe07a81/rim-final-polish-20261116/evidence/candidate-gpu.json",
         "C:/Users/2025/.antigravity_cockpit/instances/codex/eae8558ab409f681/visualizations/2026/10/24/01a16e60-157f-7f63-8f5a-7a6bdbe07a81/rim-final-polish-20261116/evidence/test-terminal.json",
         "C:/Users/2025/.antigravity_cockpit/instances/codex/eae8558ab409f681/visualizations/2026/10/24/01a16e60-157f-7f63-8f5a-7a6bdbe07a81/rim-final-polish-20261116/evidence/capture-verification.json",
-        "C:/Users/2025/.antigravity_cockpit/instances/codex/eae8558ab409f681/visualizations/2026/10/24/01a16e60-157f-7f63-8f5a-7a6bdbe07a81/rim-final-polish-20261116/comparison.mp4"
+        "C:/Users/2025/.antigravity_cockpit/instances/codex/eae8558ab409f681/visualizations/2026/10/24/01a16e60-157f-7f63-8f5a-7a6bdbe07a81/rim-final-polish-20261116/comparison.mp4",
+        "C:/Users/2025/.antigravity_cockpit/instances/codex/eae8558ab409f681/visualizations/2026/10/24/01a16e60-157f-7f63-8f5a-7a6bdbe07a81/rim-original-parity-20261116/comparison-proof.json",
+        "C:/Users/2025/.antigravity_cockpit/instances/codex/eae8558ab409f681/visualizations/2026/10/24/01a16e60-157f-7f63-8f5a-7a6bdbe07a81/rim-original-parity-20261116/evidence/production-core-proof.json",
+        "C:/Users/2025/.antigravity_cockpit/instances/codex/eae8558ab409f681/visualizations/2026/10/24/01a16e60-157f-7f63-8f5a-7a6bdbe07a81/rim-original-parity-20261116/evidence/field-framebuffer-proof.json",
+        "C:/Users/2025/.antigravity_cockpit/instances/codex/eae8558ab409f681/visualizations/2026/10/24/01a16e60-157f-7f63-8f5a-7a6bdbe07a81/rim-original-parity-20261116/evidence/candidate-gpu.json",
+        "C:/Users/2025/.antigravity_cockpit/instances/codex/eae8558ab409f681/visualizations/2026/10/24/01a16e60-157f-7f63-8f5a-7a6bdbe07a81/rim-original-parity-20261116/evidence/test-terminal.json",
+        "C:/Users/2025/.antigravity_cockpit/instances/codex/eae8558ab409f681/visualizations/2026/10/24/01a16e60-157f-7f63-8f5a-7a6bdbe07a81/rim-original-parity-20261116/evidence/flow-state.json",
+        "C:/Users/2025/.antigravity_cockpit/instances/codex/eae8558ab409f681/visualizations/2026/10/24/01a16e60-157f-7f63-8f5a-7a6bdbe07a81/rim-original-parity-20261116/comparison.mp4"
       ],
-      "verificationScope": "Shader 1ec7a023 温和提高黑色核心保底与已配置暗边补光，深浅材质响应继续分层。清晰核心以 sqrt(peak) 参与混色，柔光场仍用原权重；保留最强贡献的亮度上限、遮挡、单像素主边与弱内侧过渡。5 组同源 8 文件包运行时 GPU 检查成功，包含黑色下限、弱色光渐入、四灯顺序不变、重复灯不增亮，以及缝隙／孤立像素、深层内部、阴影与原有 HDR。POB 主工程采集单暖光、左右双色、四色重叠、前后交叉各三版，共 12 张同姿势同灯参数快照；静态段暂停角色动画、物理和火焰粒子，随后恢复正常 MainCamera、物理及输入，录到四灯往返 13 节点、太刀攻击、两次技能和闪避。26.49 秒 1080p 原片通过尺寸／时间检查，存档、音频、播放退出与世界释放有读回。对照保留原作机制兼容移植的完整二维光场与饱和通道分支，不称为原游戏直接运行。新候选未在本轮切换消费者依赖。"
+      "verificationScope": "从 Lost Ruins 1.0.9a 安装包的编译 Shader、托管 CIL、PlayerRim 预设、光相机及 RenderTexture 配置还原活动 light/rim/exposure 主链。144 组编译 Shader 回放最大绝对误差 2.384185791015625e-7；36 组 RGBA8 SrcAlpha/One 帧缓冲回放逐字节一致，正确清屏值为黑色 Alpha=1。保留最强灯按接收体枢轴决定位移、全部光色叠加、九种混色、偏移/缩放/透明度响应、局部曝光、每接收体忽略灯与原有饱和通道分支。5 组同源隔离包 Unity 检查实测成功，覆盖暗蓝保色、六灯、忽略灯仍贡献颜色、sRGB/线性贴图、原作黄金样本及现版空间/原生灯回归。POB 主 Editor 当前版本实录 12 张同姿势快照与 13 个正常 MainCamera 行走/攻击/技能节点，实际观察太刀、两次技能和闪避，世界、音频、存储与 Game View 已恢复。新模式直接使用贴图原色及原作预设，因此白发和浅色部位更亮；这是一份功能基准，不是最终融合外观。非原作游戏直接运行，也非整个原作材质全部可选调色/投影分支的复刻。正式消费依赖未切换。"
     }
   ]
 }

@@ -70,7 +70,59 @@ it does not add normal maps or independently reproduce shadow attenuation.
 Only registered actors visible to a game base camera update their silhouette.
 Scene lights are captured from that camera's URP culling results. Disabling an
 actor or removing its light removes its contribution in the same camera render.
-No optional legacy rendering path or automatic fallback is installed.
+Existing profiles keep this ZE path. The explicit original-mechanism mode below
+is independent; it is never selected as an automatic fallback.
+
+## Original mechanism compatibility
+
+Set `SpriteRimLightingProfile.UseOriginalMechanism` for the recovered
+light/rim/exposure model. Enrollment still uses `SpriteRimLighting.Configure`;
+there is no second actor component or source-material replacement. Use explicit
+`SpriteRimLight` inputs for the original 2D Point, Directional and Spot fields.
+The reconstruction uses the shipped Lost Ruins 1.0.9a sprite/light programs,
+camera/render-target configuration and PlayerRim preset as its reference.
+
+This path clears a non-sRGB 480×270 RGBA8 field to black with alpha **one**,
+then accumulates every field light with `SrcAlpha/One`. Its light blend therefore
+does not inherit the extra weak-light attenuation of a transparent-black field.
+It chooses one strongest rim-enabled light at the receiver's
+transform pivot. The selector's intensity does not depend on light color.
+`AffectsRim=false` retains that light's field contribution without letting it
+choose the mask direction. The recovered Spot selector intentionally differs
+from the Spot field shader: it uses angle/range while the field uses
+1−angle/range. Equal strengths retain the first source's direction.
+`SpriteRimLighting.OriginalIgnoredLights` provides per-receiver exclusions for
+direction selection without removing those colors from the field. The recovered
+manager's maximum selection distance defaults to 4 in normalized light space.
+
+The source Sprite alpha, pivot and rectangle drive the shifted mask directly:
+there is no art-cell snapping or alpha=0.5 threshold. The original
+`TransformVector` offset and scale response are retained. The PlayerRim defaults
+are distance 0.04→0.015 (100 texture-texel units), scale 0→−0.05, alpha 0→1,
+response powers 0.5, local exposure minimum 0.9, blend 1 and maximum light 3.
+`SpriteRimOriginalSettings` also exposes all nine original blend modes and
+thresholded exposure. Color Dodge retains the shipped saturated-channel branch.
+
+Unlike the ZE composite, this mode uses texture color before scene lighting and
+reconstructs the original Gamma-space blend in a Linear URP project. Dark blue
+and other nonzero dark colors therefore retain their material-dependent
+response, without a uniform brightness floor. It also retains the original
+additive saturation and highlight behavior. The ZE highlight cap, inward wrap
+and independent per-light contours do not participate in this mode.
+
+This is a reconstruction of the active light/rim/exposure mechanism, not the
+original game executable or every optional source-shader feature. The URP
+adapter uses the existing opaque/alpha-clipped depth coverage; transparent
+source materials are skipped. Posed meshes use the current posed silhouette
+adapter because the original source-alpha shift targets SpriteRenderer art.
+Native marked Point/Spot lights can supply mapped 2D inputs; this mapping is
+separate from the original model and does not reproduce URP 3D attenuation or
+its light-shadow atlas. Keep the ZE model for that shadow-aware workflow.
+
+Verification includes synthetic replay against the shipped compiled sprite and
+three light-shape shaders, plus portable golden samples in
+`SpriteRimOriginalGoldenSamples`. The package ships only its own implementation
+and synthetic inputs/results; no game binaries or artwork are included.
 
 ## Validation and consumption
 

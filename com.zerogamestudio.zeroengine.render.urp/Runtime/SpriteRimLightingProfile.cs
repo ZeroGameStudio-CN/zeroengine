@@ -7,6 +7,10 @@ namespace ZeroEngine.Render.Urp
     [CreateAssetMenu(menuName = "ZeroEngine/Rendering/Pixel Rim Lighting", fileName = "PixelRimLighting")]
     public sealed class SpriteRimLightingProfile : ScriptableObject
     {
+        [Tooltip("Explicit compatibility mode. Uses the recovered 2D light field, strongest-light mask and source-color blend. Existing profiles keep the ZE composite.")]
+        [InspectorName("原作机制兼容模式")] public bool UseOriginalMechanism;
+        public SpriteRimOriginalSettings Original = new();
+
         [Range(0f, 1f), InspectorName("受光强度")] public float Strength = .85f;
         [Min(0f), InspectorName("弱光边带（美术像素）")] public float WeakDistance = 2f;
         [Min(0f), InspectorName("强光边带（美术像素）")] public float StrongDistance = 1f;
