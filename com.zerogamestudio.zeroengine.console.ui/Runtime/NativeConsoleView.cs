@@ -34,14 +34,8 @@ namespace ZeroEngine.Console.UI
 
         private void EnsureView()
         {
+            RefreshFont();
             if (view) return;
-            if (!font)
-            {
-                try { ownedFont = Font.CreateDynamicFontFromOSFont(new[] { "Microsoft YaHei", "Noto Sans CJK SC", "Arial Unicode MS", "Arial" }, fontSize); }
-                catch (ArgumentException) { }
-                font = ownedFont;
-                if (!font) font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
-            }
             view = new GameObject("ZE Console", typeof(RectTransform), typeof(Canvas), typeof(CanvasScaler), typeof(GraphicRaycaster));
             view.transform.SetParent(transform, false);
             var canvas = view.GetComponent<Canvas>(); canvas.renderMode = RenderMode.ScreenSpaceOverlay; canvas.sortingOrder = 30000;
@@ -128,7 +122,7 @@ namespace ZeroEngine.Console.UI
             keyboardHint.raycastTarget = true;
             Hint(keyboardHint.gameObject, "↑↓ 历史 · Tab 补全 · Enter 执行 · Esc 关闭");
 
-            commandHint = new ConsoleCommandHintView(panel, font, fontSize);
+            commandHint = new ConsoleCommandHintView(panel, viewFont, fontSize);
             Stretch(commandHint.Root, Vector2.zero, new Vector2(1, 0), new Vector2(12, 84), new Vector2(-12, 84 + commandHint.Height));
 
             completions = Rect("Completions", panel); Stretch(completions, Vector2.zero, new Vector2(1, 0), new Vector2(12, 90), new Vector2(-12, 330));
@@ -312,7 +306,7 @@ namespace ZeroEngine.Console.UI
         private Text Text(string name, Transform parent, string value)
         {
             var rect = Rect(name, parent); var text = rect.gameObject.AddComponent<Text>();
-            text.font = font; text.fontSize = fontSize; text.color = TextColor; text.text = value;
+            text.font = viewFont; text.fontSize = fontSize; text.color = TextColor; text.text = value;
             text.supportRichText = false; text.horizontalOverflow = HorizontalWrapMode.Wrap; text.verticalOverflow = VerticalWrapMode.Overflow;
             text.raycastTarget = false;
             return text;
