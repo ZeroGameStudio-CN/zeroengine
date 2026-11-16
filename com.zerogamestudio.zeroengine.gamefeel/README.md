@@ -156,3 +156,8 @@ Full live capacity falls back to individual output instead of stealing a group
 or dropping damage. Clocks, pooled target/display lifetimes, formatting, rendering
 and per-hit gameplay callbacks remain consumer-owned. Rendering random draws must
 not silently change the gameplay random sequence during consumer optimization.
+
+Set BeatId for a semantic shot or tick. Fragments of that beat can share its
+number while stream cadence samples only distinct beats, so a slow shotgun is
+not mistaken for a rapid-fire weapon. A successful continuous pulse supplies a
+new beat; group/session ownership remains unchanged.

@@ -80,16 +80,20 @@ namespace ZeroEngine.GameFeel
             internal readonly bool Unscaled;
             internal Key(TStyle style, FeedbackNumberContext context, bool unscaled)
             { Style = style; Context = context; Unscaled = unscaled; }
-            public bool Equals(Key other) => Style.Equals(other.Style) && Context.Equals(other.Context) && Unscaled == other.Unscaled;
+            public bool Equals(Key other) => Style.Equals(other.Style) && Unscaled == other.Unscaled &&
+                Context.Mode == other.Context.Mode && Context.OwnerId == other.Context.OwnerId &&
+                Context.SourceId == other.Context.SourceId && Context.GroupId == other.Context.GroupId;
             public override bool Equals(object obj) => obj is Key other && Equals(other);
-            public override int GetHashCode() => HashCode.Combine(Style, Context, Unscaled);
+            public override int GetHashCode() => HashCode.Combine(Style, (int)Context.Mode, Context.OwnerId,
+                Context.SourceId, Context.GroupId, Unscaled);
         }
         private sealed class Window
         {
             internal Key Key;
             internal TDisplay Display;
             internal uint Activation;
-            internal double Start, Total, Duration, Last, Interval;
+            internal double Start, Total, Duration, Last, Interval, BeatTime;
+            internal long Beat;
             internal int Count;
             internal bool HasInterval, Dense;
         }
@@ -164,9 +168,10 @@ namespace ZeroEngine.GameFeel
                 state.Windows.Add(key, window);
             }
 
-            if (context.Mode == FeedbackNumberMode.AdaptiveStream && existing)
+            bool sameBeat = existing && context.BeatId > 0 && context.BeatId == window.Beat;
+            if (context.Mode == FeedbackNumberMode.AdaptiveStream && existing && !sameBeat)
             {
-                double interval = now - window.Last;
+                double interval = now - window.BeatTime;
                 if (interval >= policy.IdleSeconds) window.Dense = window.HasInterval = false;
                 else
                 {
@@ -175,8 +180,9 @@ namespace ZeroEngine.GameFeel
                     window.Dense = window.Interval <= (window.Dense ? policy.ExitInterval : policy.EnterInterval);
                 }
             }
+            if (!sameBeat) { window.BeatTime = now; window.Beat = context.BeatId; }
             window.Last = now;
-            bool eligible = context.Mode == FeedbackNumberMode.Action || window.Dense;
+            bool eligible = context.Mode == FeedbackNumberMode.Action || sameBeat || window.Dense;
             if (existing && eligible && (!legacy || window.Duration == duration) &&
                 now - window.Start < window.Duration && displayIsCurrent(window.Display, window.Activation))
             {

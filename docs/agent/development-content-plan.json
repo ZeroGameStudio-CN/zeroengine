@@ -461,7 +461,7 @@
       "revision": "2026-11-16 semantic numbers",
       "candidatePackageVersion": "0.9.0",
       "releaseEvidence": "",
-      "verificationScope": "25 项 .NET 定向测试，覆盖语义分组、迟到弹丸、迟滞、窗口上限、容量回收及预热后分配；Unity 接入待验证。"
+      "verificationScope": "26 项 .NET 定向测试，覆盖语义分组、迟到弹丸、迟滞、窗口上限、容量回收及预热后分配；Unity 接入待验证。 射击/弹片分离取样覆盖慢射散射与提速连射。"
     }
   ]
 }

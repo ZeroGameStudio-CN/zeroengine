@@ -147,6 +147,25 @@ namespace ZeroEngine.GameFeel.Tests
         }
 
         [Test]
+        public void StreamCadenceCountsShotsRatherThanPelletsOrDamageFragments()
+        {
+            var n = Numbers(); var t = new Target();
+            for (int shot = 1; shot <= 10; shot++)
+            {
+                var c = new FeedbackNumberContext(FeedbackNumberMode.AdaptiveStream, 1, 1, 1, beatId: shot);
+                Assert.That(Add(n, t, c, shot * .3, window: .6).Merged, Is.False);
+                Assert.That(Add(n, t, c, shot * .3 + .001, window: .6).Total, Is.EqualTo(20));
+                Assert.That(Add(n, t, c, shot * .3 + .002, window: .6).Total, Is.EqualTo(30));
+            }
+            var fast = new FeedbackNumberContext(FeedbackNumberMode.AdaptiveStream, 1, 1, 1, beatId: 11);
+            Add(n, t, fast, 3.03, window: .6);
+            fast = new FeedbackNumberContext(FeedbackNumberMode.AdaptiveStream, 1, 1, 1, beatId: 12);
+            Add(n, t, fast, 3.06, window: .6);
+            fast = new FeedbackNumberContext(FeedbackNumberMode.AdaptiveStream, 1, 1, 1, beatId: 13);
+            Assert.That(Add(n, t, fast, 3.09, window: .6).Merged, Is.True);
+        }
+
+        [Test]
         public void WarmExpiredGroupChurnDoesNotAllocatePerHit()
         {
             var n = Numbers(2); var t = new Target(); var d = new Display();
