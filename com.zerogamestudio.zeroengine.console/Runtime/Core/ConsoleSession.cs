@@ -34,6 +34,7 @@ namespace ZeroEngine.Console
         public ConsoleRegistry Registry { get; }
         public ConsoleValues Values { get; }
         public IConsoleValueFormatter ResultFormatter { get; set; }
+        public ConsoleMacros Macros { get; set; }
         public long OutputRevision { get { lock (sync) return outputRevision; } }
         public bool IsRunning { get { lock (sync) return current != null; } }
 
@@ -114,6 +115,9 @@ namespace ZeroEngine.Console
                     history.Enqueue(line);
                 }
             }
+            var macros = Macros;
+            if (macros != null && !macros.TryExpand(line, out line, out var macroError))
+                return Report(ConsoleResult.Failure("macro-expansion-failed", macroError));
             if (!ConsoleLexer.TryRead(line, out var tokens, out var error)) return Report(error);
             if (tokens.Count == 0) return Task.FromResult(ConsoleResult.Success());
             if (!Registry.TryResolve(tokens[0].Text, out var entry))

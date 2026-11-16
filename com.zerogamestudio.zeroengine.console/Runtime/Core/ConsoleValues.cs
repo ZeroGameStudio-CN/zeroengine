@@ -11,6 +11,7 @@ namespace ZeroEngine.Console
         private readonly Dictionary<Type, ConsoleValueConverter> converters = new Dictionary<Type, ConsoleValueConverter>();
         private readonly object sync = new object();
         private readonly ConsoleValueConverter fallback;
+        public bool EnableArithmetic { get; set; }
 
         public ConsoleValues() { }
         public ConsoleValues(ConsoleValueConverter fallback)
@@ -87,6 +88,10 @@ namespace ZeroEngine.Console
                 bool converted = fallback(token, target, out value, out error);
                 if (converted || !string.IsNullOrEmpty(error)) return converted;
             }
+            if (ConsoleCollections.Supports(target))
+                return ConsoleCollections.TryConvert(this, token, target, out value, out error);
+            if (EnableArithmetic && ConsoleArithmetic.Supports(target))
+                return ConsoleArithmetic.TryConvert(token.Text, target, out value, out error);
             error = "Invalid " + target.Name + " value: " + text;
             return false;
         }
