@@ -499,6 +499,7 @@ namespace ZeroEngine.Render.Tests.Runtime
 
                 profile.ContourStrength = .85f;
                 VerifyContourMaterialValues(camera, material, light);
+                VerifyNativeContourEnergy(camera, material, light, source);
                 material.SetVector("_BaseColor", new Vector4(2.4f, .6f, .1f, 1));
                 source.enabled = false; hdrBase = Render(camera); source.enabled = true; hdrLit = Render(camera);
                 Assert.That(hdrBase.GetPixel(34, 18).r, Is.GreaterThan(1.5f), "The test must contain actual incoming HDR.");
@@ -519,6 +520,57 @@ namespace ZeroEngine.Render.Tests.Runtime
                 profile.WeakDistance = weak; profile.StrongDistance = strong; profile.StrongScale = scale;
                 pipeline.supportsHDR = hdr;
                 foreach (var image in new[] { soft, crisp, restored, hdrBase, hdrLit }) if (image) Object.DestroyImmediate(image);
+            }
+        }
+
+        private static void VerifyNativeContourEnergy(Camera camera, Material material, Light light, SpriteRimLightSource source)
+        {
+            var savedColor = material.GetVector("_BaseColor"); var savedLight = light.color;
+            float savedIntensity = light.intensity;
+            Texture2D baseline = null, weak = null, duplicate = null, opposed = null;
+            GameObject duplicateHost = null;
+            try
+            {
+                // The shader Color property is converted from sRGB: .35 reads back
+                // near .1 linear. Verify that this is a midtone, not the dark-art case.
+                material.SetVector("_BaseColor", new Vector4(.35f, .35f, .35f, 1));
+                light.color = Color.green; light.intensity = .35f;
+                source.enabled = false; baseline = Render(camera); source.enabled = true; weak = Render(camera);
+                Assert.That(baseline.GetPixel(34, 18).g, Is.InRange(.08f, .15f), "Calibrate the weak-core fixture to a linear midtone.");
+                Assert.That(weak.GetPixel(34, 18).g, Is.GreaterThan(baseline.GetPixel(34, 18).g + .025f),
+                    "Weak native light must retain a readable core without repeated energy attenuation.");
+                Assert.That(weak.GetPixel(26, 34).g, Is.EqualTo(baseline.GetPixel(26, 34).g).Within(.003f),
+                    "Core brightness must not raise the opaque body interior.");
+
+                duplicateHost = new GameObject("Duplicate native contour light");
+                SceneManager.MoveGameObjectToScene(duplicateHost, light.gameObject.scene);
+                var second = duplicateHost.AddComponent<Light>(); second.type = light.type;
+                second.transform.SetPositionAndRotation(light.transform.position, light.transform.rotation);
+                second.range = light.range; second.color = light.color; second.intensity = light.intensity;
+                second.cullingMask = light.cullingMask; second.shadows = LightShadows.None;
+                duplicateHost.AddComponent<SpriteRimLightSource>(); duplicate = Render(camera);
+                AssertSameImage(weak, duplicate, "Duplicating a native light must not double the core or wash its color out.");
+
+                light.intensity = second.intensity = 1.3f; second.color = Color.blue;
+                second.transform.position += Vector3.right * .8f; opposed = Render(camera);
+                int colored = 0;
+                for (int y = 0; y < opposed.height; y++) for (int x = 0; x < opposed.width; x++)
+                {
+                    var value = opposed.GetPixel(x, y); var original = baseline.GetPixel(x, y);
+                    Assert.That(Mathf.Max(value.r, Mathf.Max(value.g, value.b)), Is.LessThanOrEqualTo(1.001f),
+                        "Opposing colored cores must remain bounded for LDR art.");
+                    Assert.That(value.r, Is.LessThanOrEqualTo(original.r + .006f),
+                        "Green and blue lights must not introduce a white red-channel contribution.");
+                    if (value.g + value.b > original.g + original.b + .05f) colored++;
+                }
+                Assert.That(colored, Is.GreaterThan(3), "The opposing-light check must contain actual illuminated contour pixels.");
+            }
+            finally
+            {
+                if (duplicateHost) Object.DestroyImmediate(duplicateHost);
+                material.SetVector("_BaseColor", savedColor); light.color = savedLight; light.intensity = savedIntensity;
+                source.enabled = true;
+                foreach (var image in new[] { baseline, weak, duplicate, opposed }) if (image) Object.DestroyImmediate(image);
             }
         }
 

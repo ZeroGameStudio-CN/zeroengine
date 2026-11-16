@@ -117,11 +117,10 @@ Shader "Hidden/ZeroEngine/SpriteRimLighting"
                 // The one-cell contour retains the painted RGB response. An independent
                 // screen fill would flatten dark cloth and pale hair into a similar neon line.
                 float3 core = saturate(contourLight);
-                float coreCoverage = max(core.r, max(core.g, core.b));
                 float3 gain = baseColor * core / max(1 - core, .05);
-                // Strength controls the blend, not the dodge denominator. This keeps
-                // the response calibrated to the same input field as the reference.
-                float coreBlend = saturate(coreCoverage * _RimRefStyle.z * contourStrength);
+                // Core already contains geometric coverage, distance and visibility.
+                // Blending by its peak again would attenuate the same light twice.
+                float coreBlend = saturate(_RimRefStyle.z * contourStrength);
                 float3 coreColor = min(baseColor + gain * coreBlend, meta.y) * meta.x;
                 if (limitAddedHdr) coreColor = saturate(coreColor);
                 float3 coreResponse = gammaBlend ? SRGBToLinear(coreColor) : coreColor;
@@ -318,9 +317,10 @@ Shader "Hidden/ZeroEngine/SpriteRimLighting"
                     if (centerBackFacing > 0 && centerFade < 1)
                         coreCoverage = max(coreCoverage, saturate(1 - BackContourCoverage(uv, texel * min(bandWidth, 1))) * centerBackFacing * (1 - centerFade));
                     float3 hue = saturate(_RimEnhanceColors[i].rgb);
-                    // Match the existing color-dodge light input's working color space.
+                    // A clear core uses native irradiance once. The squared soft-shell
+                    // field and its response weight must not dim this one-cell contour.
                     float3 coreColor = hue * max(_RimRefEdgeTint.rgb, 0) *
-                        (amount * band.w * coreCoverage * max(_RimRefEdgeTint.a, 0));
+                        (alpha * visibility * coreCoverage * max(_RimRefEdgeTint.a, 0));
                     if (mixNativeLights) AccumulateRimColor(contourMix, coreColor);
                     else contourLight += coreColor;
                 }
