@@ -5,10 +5,32 @@ GameObject. The view builds its own bounded hierarchy, uses the host's native
 pipeline and can operate without Quantum Console. A project can supply a font
 and an input-isolation lease; the view restores its own cursor/selection state.
 
-The default desktop font prefers an installed CJK family, with Unity's built-in
-font as a fallback. Projects targeting platforms without a suitable OS font must
-assign their own font. Target-platform input and font support require the matching
-native checks; source presence does not certify them.
+Fonts are resolved lazily when the view opens. Without a project font, one dynamic
+OS font uses an ordered family list for Latin, CJK and other installed scripts,
+falling back to Unity's built-in font. Unity selects an available face per glyph;
+the package includes no font files or baked atlas. Reopening reuses the same font.
+
+Assign the Inspector **Font**, or call `ConfigureFont(projectFont)`, to borrow the
+project's existing `UnityEngine.Font` unchanged, including its own fallback rules.
+This never rewrites font names, materials, import settings, TMP assets or global
+fallback tables, and never destroys the borrowed font. Font changes update only
+the console's labels without rebuilding its view or clearing draft/history.
+`ConfigureFont(null)` restores automatic OS selection. The third-party
+`ConsoleInputOverlay` exposes the same configuration for its own labels and leaves
+the external input widget untouched.
+
+For project localization, set `FontProvider` once to return the active source
+`UnityEngine.Font`; it is queried once per open, not every frame. A null result or
+provider failure retains the current valid font; an unloaded font falls back on
+reopen. Keep the project's font lease while the console is open. A locale-change
+event can call `ConfigureFont` directly to update an already open view.
+
+OS coverage varies by device. A supplied bitmap font keeps its fixed glyph set;
+platforms without accessible OS fonts, such as WebGL, need a project-supplied font
+with the required glyphs. No bundled universal font means no guarantee of every
+Unicode character. Legacy uGUI glyph fallback does not add complex-script shaping,
+bidirectional layout or color emoji support. Target-platform rendering and input
+still require their matching native checks; Editor coverage does not certify them.
 
 Use `ConsoleFrontendSelector` on the same owner for `Auto / Native / Quantum`
 selection. Supply an optional frontend component using `ConfigureQuantum` and

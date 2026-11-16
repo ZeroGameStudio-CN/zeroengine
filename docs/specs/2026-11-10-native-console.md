@@ -387,3 +387,35 @@ hint bounds, focus preservation and follow-state persistence across reopening.
 The fresh real POB flow also passed Quantum priority, Native fallback, one submit,
 completion insertion and restoration. The icon window, copy hint and recovered
 Quantum Game frames were inspected. Consumer adoption remains a separate step.
+
+## Font adaptation and comparison, 2026-11-16
+
+Native and the shared completion overlay now reuse a lazy OS font family chain
+without bundling font files or an atlas. An assigned project Font is borrowed
+unchanged, with its existing fallback rules; only console-owned labels change.
+The package never edits font names, materials, import settings, TMP assets or
+global fallback tables, and never destroys a borrowed Font. ConfigureFont updates
+an open view without resetting its draft/history. FontProvider resolves the
+project's active language once per open; unavailable providers retain the last
+valid font and unloaded fonts fall back on reopening.
+
+The final isolated Windows PlayMode run covered 55 Host/UI cases, including seven
+font lifetime/configuration regressions. A separate native PlayMode case checked
+actual system/project glyphs and three 1920x1080 Game View frames, with unchanged
+project font assets, restored settings and verified native cleanup. The existing
+Liberation Sans face and the default OS chain rendered the desktop CJK/Latin
+acceptance samples. This establishes this machine's glyph coverage, not universal
+language support: complex-script shaping, RTL, color emoji, physical IME, WebGL
+project font coverage and mobile devices retain explicit verification gaps.
+
+The current comparison records narrower dependencies, smaller unstripped Editor
+DLLs and the preceding matched core benchmark advantage. It does not establish
+whole-Player size, startup, frame cost or full Quantum feature parity. Macros,
+interactive action/coroutine workflows, object addressing, grammar extensions and
+a Godot frontend remain outside the implemented native baseline. POB keeps
+Quantum and its existing commands. Consumer package/Skill consolidation waits
+for the Motion/TCE Presentation owner's tested commit and handoff.
+
+Evidence: D:/CodexArtifacts/pob-ze-cohort-fonts-20261116/verification.json and
+comparison.md. The earlier supported API/core benchmark evidence remains in
+D:/CodexArtifacts/ze-console-polish-20261116; no new Player result is inferred.

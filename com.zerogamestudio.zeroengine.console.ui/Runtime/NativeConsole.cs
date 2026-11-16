@@ -18,7 +18,8 @@ namespace ZeroEngine.Console.UI
         [SerializeField, Tooltip("Preferred panel size in Canvas reference units; fitted to the available screen and keyboard area.")]
         private Vector2 preferredSize = new Vector2(880, 480);
         private GameObject view;
-        private Font ownedFont;
+        private readonly ConsoleFontResolver fonts = new ConsoleFontResolver();
+        private Font viewFont;
         private UnityEngine.UI.InputField input;
         private UnityEngine.UI.ScrollRect scroll;
         private readonly List<UnityEngine.UI.Text> outputRows = new List<UnityEngine.UI.Text>();
@@ -59,7 +60,23 @@ namespace ZeroEngine.Console.UI
             set => preferredSize = ClampPreferredSize(value);
         }
         public Func<IDisposable> AcquireInputIsolation { get; set; }
+        public Func<Font> FontProvider { get; set; }
         public event Action<bool> OpenChanged;
+
+        public void ConfigureFont(Font value)
+        {
+            font = value;
+            if (view) RefreshFont();
+        }
+
+        private void RefreshFont()
+        {
+            var resolved = fonts.Resolve(font, fontSize);
+            if (viewFont == resolved) return;
+            viewFont = resolved;
+            if (view)
+                foreach (var label in view.GetComponentsInChildren<UnityEngine.UI.Text>(true)) label.font = resolved;
+        }
 
         private void OnValidate() => preferredSize = ClampPreferredSize(preferredSize);
 
@@ -85,6 +102,11 @@ namespace ZeroEngine.Console.UI
         public void Open()
         {
             if (IsOpen || !host || host.Session == null) return;
+            if (FontProvider != null)
+            {
+                try { var supplied = FontProvider(); if (supplied) ConfigureFont(supplied); }
+                catch (Exception) { host.Session.Write(new ConsoleOutput("font", ConsoleOutputLevel.Warning, "Console font provider is unavailable; retaining the current font.")); }
+            }
             EnsureView();
             previousLock = Cursor.lockState;
             previousCursor = Cursor.visible;
@@ -354,7 +376,7 @@ namespace ZeroEngine.Console.UI
         {
             Close();
             if (view) Destroy(view);
-            if (ownedFont) Destroy(ownedFont);
+            fonts.Dispose();
         }
     }
 }
