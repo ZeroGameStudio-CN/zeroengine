@@ -431,10 +431,10 @@
       "availability": "DevelopmentOnly",
       "responsibleChat": "01a16e60-157f-7f63-8f5a-7a6bdbe07a81",
       "chatUrl": "",
-      "nextAction": "提供核心提亮和双灯保色的同灯前后图／视频，依据用户反馈确定候选；正式消费者接入仍使用同提交的 Git 固定依赖。旧中断请求 19781a1b8b764a489d0d5ac090216e16 的历史恢复缺口保持原始记录，不以新流程覆盖。",
+      "nextAction": "提供旧 ZE、新 ZE、原作机制兼容移植的四组同姿势对照与新候选四灯正常镜头实录供用户确认；正式消费者接入仍使用全部 ZE 包同提交的固定 Git 依赖。旧中断请求 19781a1b8b764a489d0d5ac090216e16 的历史恢复缺口保持原记录，不以新流程覆盖。",
       "entrance": "POB 受控 PlayMode 的 RimFireColorTestRoom，以及包内 SpriteRimLightingRenderTests。",
       "resourcePath": "com.zerogamestudio.zeroengine.render.urp/Runtime/Resources/ZeroEngine/SpriteRimLighting.shader",
-      "revision": "native-core-energy-20261116",
+      "revision": "native-dark-multilight-final-20261116",
       "candidatePackageVersion": "0.4.4",
       "releaseEvidence": "",
       "verificationEvidence": [
@@ -451,9 +451,14 @@
         "C:/Users/2025/.antigravity_cockpit/instances/codex/eae8558ab409f681/visualizations/2026/10/24/01a16e60-157f-7f63-8f5a-7a6bdbe07a81/rim-core-energy-20261116/comparison-proof.json",
         "C:/Users/2025/.antigravity_cockpit/instances/codex/eae8558ab409f681/visualizations/2026/10/24/01a16e60-157f-7f63-8f5a-7a6bdbe07a81/rim-core-energy-20261116/evidence/candidate-gpu.json",
         "C:/Users/2025/.antigravity_cockpit/instances/codex/eae8558ab409f681/visualizations/2026/10/24/01a16e60-157f-7f63-8f5a-7a6bdbe07a81/rim-core-energy-20261116/evidence/test-result.json",
-        "C:/Users/2025/.antigravity_cockpit/instances/codex/eae8558ab409f681/visualizations/2026/10/24/01a16e60-157f-7f63-8f5a-7a6bdbe07a81/rim-core-energy-20261116/evidence/capture-check.json"
+        "C:/Users/2025/.antigravity_cockpit/instances/codex/eae8558ab409f681/visualizations/2026/10/24/01a16e60-157f-7f63-8f5a-7a6bdbe07a81/rim-core-energy-20261116/evidence/capture-check.json",
+        "C:/Users/2025/.antigravity_cockpit/instances/codex/eae8558ab409f681/visualizations/2026/10/24/01a16e60-157f-7f63-8f5a-7a6bdbe07a81/rim-final-polish-20261116/comparison-proof.json",
+        "C:/Users/2025/.antigravity_cockpit/instances/codex/eae8558ab409f681/visualizations/2026/10/24/01a16e60-157f-7f63-8f5a-7a6bdbe07a81/rim-final-polish-20261116/evidence/candidate-gpu.json",
+        "C:/Users/2025/.antigravity_cockpit/instances/codex/eae8558ab409f681/visualizations/2026/10/24/01a16e60-157f-7f63-8f5a-7a6bdbe07a81/rim-final-polish-20261116/evidence/test-terminal.json",
+        "C:/Users/2025/.antigravity_cockpit/instances/codex/eae8558ab409f681/visualizations/2026/10/24/01a16e60-157f-7f63-8f5a-7a6bdbe07a81/rim-final-polish-20261116/evidence/capture-verification.json",
+        "C:/Users/2025/.antigravity_cockpit/instances/codex/eae8558ab409f681/visualizations/2026/10/24/01a16e60-157f-7f63-8f5a-7a6bdbe07a81/rim-final-polish-20261116/comparison.mp4"
       ],
-      "verificationScope": "Shader 9aa5dba3 的清晰核心只应用一次原生距离／遮挡能量，去掉平方柔光场、响应权重和合成峰值的重复衰减。5 组包级 GPU 检查在命名空间隔离的同源 8 文件运行时完成，新增线性中间调弱光可见度、相同灯重复不增亮、绿蓝相向光不抬红通道／不产生新增 HDR，并保留暗色区分、缝隙孤立像素、内部背景、遮挡与 HDR 检查。POB 原火堆房的实际玩家及 MainCamera 已用同一标准预设、姿势和灯参数记录 7003eb46 前版与新候选；12.43 秒实录和逐组参数哈希匹配，画面、存档、音频和播放退出恢复有读回。本轮比较为 ZE 调整前后，原作机制兼容移植的参照保留独立证据，未将公式包装称作原作完整实现。消费者依赖未切换。"
+      "verificationScope": "Shader 1ec7a023 温和提高黑色核心保底与已配置暗边补光，深浅材质响应继续分层。清晰核心以 sqrt(peak) 参与混色，柔光场仍用原权重；保留最强贡献的亮度上限、遮挡、单像素主边与弱内侧过渡。5 组同源 8 文件包运行时 GPU 检查成功，包含黑色下限、弱色光渐入、四灯顺序不变、重复灯不增亮，以及缝隙／孤立像素、深层内部、阴影与原有 HDR。POB 主工程采集单暖光、左右双色、四色重叠、前后交叉各三版，共 12 张同姿势同灯参数快照；静态段暂停角色动画、物理和火焰粒子，随后恢复正常 MainCamera、物理及输入，录到四灯往返 13 节点、太刀攻击、两次技能和闪避。26.49 秒 1080p 原片通过尺寸／时间检查，存档、音频、播放退出与世界释放有读回。对照保留原作机制兼容移植的完整二维光场与饱和通道分支，不称为原游戏直接运行。新候选未在本轮切换消费者依赖。"
     }
   ]
 }

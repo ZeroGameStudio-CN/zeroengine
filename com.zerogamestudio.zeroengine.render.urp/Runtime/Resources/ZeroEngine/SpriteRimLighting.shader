@@ -102,7 +102,7 @@ Shader "Hidden/ZeroEngine/SpriteRimLighting"
             float incomingPeak = max(max(incomingBase.r, incomingBase.g), incomingBase.b);
             // Dark art needs a colored contribution independent of the original channel values.
             // Let it fade out before it reaches highlights, in the same color space as the scene.
-            float darkFillScale = lerp(1, .2, contourStrength);
+            float darkFillScale = lerp(1, .26, contourStrength);
             response += darkEdgeLight * (saturate(1 - incomingPeak * 4) * darkFillScale);
             if (limitAddedHdr)
             {
@@ -127,7 +127,7 @@ Shader "Hidden/ZeroEngine/SpriteRimLighting"
                 // A small bounded floor keeps genuinely black detail readable; it does
                 // not replace the material-dependent response or grow with dodge gain.
                 float3 floorLight = gammaBlend ? SRGBToLinear(core) : core;
-                coreResponse += floorLight * (.022 * _RimRefStyle.z * contourStrength * meta.x) * saturate(1 - incomingPeak * 16);
+                coreResponse += floorLight * (.032 * _RimRefStyle.z * contourStrength * meta.x) * saturate(1 - incomingPeak * 16);
                 if (limitAddedHdr) coreResponse = saturate(coreResponse);
                 response = max(response, coreResponse);
             }
@@ -168,11 +168,14 @@ Shader "Hidden/ZeroEngine/SpriteRimLighting"
             float peak;
         };
 
-        float AccumulateRimColor(inout RimColorMix mix, float3 color)
+        float AccumulateRimColor(inout RimColorMix mix, float3 color, bool clearCore)
         {
             float peak = max(0, max(max(color.r, color.g), color.b));
-            mix.weightedColor += color * peak;
-            mix.weights += peak * peak;
+            // A weaker lamp must retain a little color beside the dominant one.
+            // The clear core uses a gentler weight; the soft inward field stays unchanged.
+            float weight = clearCore ? sqrt(peak) : peak;
+            mix.weightedColor += color * weight;
+            mix.weights += peak * weight;
             mix.peak = max(mix.peak, peak);
             return peak;
         }
@@ -321,7 +324,7 @@ Shader "Hidden/ZeroEngine/SpriteRimLighting"
                     // field and its response weight must not dim this one-cell contour.
                     float3 coreColor = hue * max(_RimRefEdgeTint.rgb, 0) *
                         (alpha * visibility * coreCoverage * max(_RimRefEdgeTint.a, 0));
-                    if (mixNativeLights) AccumulateRimColor(contourMix, coreColor);
+                    if (mixNativeLights) AccumulateRimColor(contourMix, coreColor, true);
                     else contourLight += coreColor;
                 }
                 float2 shifted = (uv - _RimRefFrame.xy) / max(scale, .00001) + _RimRefFrame.xy - band.xy * texel;
@@ -368,8 +371,8 @@ Shader "Hidden/ZeroEngine/SpriteRimLighting"
                     _RimEnhanceColors[i].rgb * (alpha * visibility * _RimEnhanceShapes[i].w) * saturate(modulation) : 0;
                 if (mixNativeLights)
                 {
-                    if (AccumulateRimColor(rimMix, rimColor) > 0) blend = max(blend, amount);
-                    AccumulateRimColor(darkMix, darkColor);
+                    if (AccumulateRimColor(rimMix, rimColor, false) > 0) blend = max(blend, amount);
+                    AccumulateRimColor(darkMix, darkColor, false);
                 }
                 else
                 {

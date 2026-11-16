@@ -1,6 +1,7 @@
 #if UNITY_EDITOR
 using System;
 using System.Collections;
+using System.Collections.Generic;
 using System.Reflection;
 using NUnit.Framework;
 using ZeroEngine.Render.Urp;
@@ -500,6 +501,7 @@ namespace ZeroEngine.Render.Tests.Runtime
                 profile.ContourStrength = .85f;
                 VerifyContourMaterialValues(camera, material, light);
                 VerifyNativeContourEnergy(camera, material, light, source);
+                VerifyNativeContourColorHandoff(camera, material, light, source);
                 material.SetVector("_BaseColor", new Vector4(2.4f, .6f, .1f, 1));
                 source.enabled = false; hdrBase = Render(camera); source.enabled = true; hdrLit = Render(camera);
                 Assert.That(hdrBase.GetPixel(34, 18).r, Is.GreaterThan(1.5f), "The test must contain actual incoming HDR.");
@@ -574,6 +576,73 @@ namespace ZeroEngine.Render.Tests.Runtime
             }
         }
 
+        private static void VerifyNativeContourColorHandoff(Camera camera, Material material, Light light,
+            SpriteRimLightSource source)
+        {
+            var savedColor = material.GetVector("_BaseColor"); var savedLight = light.color;
+            float savedIntensity = light.intensity, savedFill = source.DarkEdgeFill;
+            var hosts = new List<GameObject>(); var extraLights = new List<Light>();
+            var extraSources = new List<SpriteRimLightSource>(); var images = new List<Texture2D>();
+            Texture2D Capture() { var image = Render(camera); images.Add(image); return image; }
+            try
+            {
+                material.SetVector("_BaseColor", new Vector4(.35f, .35f, .35f, 1));
+                light.color = Color.green; light.intensity = 1.3f; source.DarkEdgeFill = 0;
+                for (int i = 0; i < 3; i++)
+                {
+                    var host = new GameObject("Native color handoff " + i); hosts.Add(host);
+                    SceneManager.MoveGameObjectToScene(host, light.gameObject.scene);
+                    var extra = host.AddComponent<Light>(); extra.type = light.type;
+                    extra.transform.SetPositionAndRotation(light.transform.position, light.transform.rotation);
+                    extra.range = light.range; extra.cullingMask = light.cullingMask; extra.shadows = LightShadows.None;
+                    var participation = host.AddComponent<SpriteRimLightSource>(); participation.enabled = false;
+                    extraLights.Add(extra); extraSources.Add(participation);
+                }
+                var green = Capture();
+                extraLights[0].color = Color.blue; extraSources[0].enabled = true;
+                float previousBlue = green.GetPixel(34, 18).b;
+                for (int i = 0; i <= 5; i++)
+                {
+                    extraLights[0].intensity = .065f * i;
+                    var mixed = Capture(); var cell = mixed.GetPixel(34, 18);
+                    Assert.That(cell.b, Is.GreaterThanOrEqualTo(previousBlue - .001f),
+                        "A weaker colored lamp must enter continuously without a reverse color step.");
+                    Assert.That(cell.b - previousBlue, Is.LessThan(.02f),
+                        "Adjacent light strengths must not cause an abrupt color handoff.");
+                    Assert.That(cell.g, Is.GreaterThanOrEqualTo(green.GetPixel(34, 18).g - .003f),
+                        "A weaker blue lamp must not dim the dominant green core.");
+                    previousBlue = cell.b;
+                }
+                Assert.That(previousBlue, Is.GreaterThan(green.GetPixel(34, 18).b + .018f),
+                    "A quarter-strength secondary color must remain visible on the same contour cell.");
+
+                extraLights[1].color = Color.red; extraLights[1].intensity = .39f;
+                extraLights[2].color = new Color(.25f, .05f, 1f); extraLights[2].intensity = .2f;
+                extraSources[1].enabled = extraSources[2].enabled = true;
+                var four = Capture();
+                var firstColor = light.color; float firstIntensity = light.intensity;
+                light.color = extraLights[2].color; light.intensity = extraLights[2].intensity;
+                extraLights[2].color = firstColor; extraLights[2].intensity = firstIntensity;
+                var secondColor = extraLights[0].color; float secondIntensity = extraLights[0].intensity;
+                extraLights[0].color = extraLights[1].color; extraLights[0].intensity = extraLights[1].intensity;
+                extraLights[1].color = secondColor; extraLights[1].intensity = secondIntensity;
+                var reordered = Capture();
+                AssertSameImage(four, reordered, "The same four colored lamps must keep their result when light order changes.");
+                Assert.That(four.GetPixel(26, 34).b, Is.EqualTo(green.GetPixel(26, 34).b).Within(.003f),
+                    "The multi-light color handoff must leave the deeper body interior unchanged.");
+                foreach (var pixel in four.GetPixels())
+                    Assert.That(Mathf.Max(pixel.r, Mathf.Max(pixel.g, pixel.b)), Is.LessThanOrEqualTo(1.001f),
+                        "Four colored cores must not add HDR emission to LDR art.");
+            }
+            finally
+            {
+                foreach (var host in hosts) if (host) Object.DestroyImmediate(host);
+                foreach (var image in images) if (image) Object.DestroyImmediate(image);
+                material.SetVector("_BaseColor", savedColor); light.color = savedLight;
+                light.intensity = savedIntensity; source.DarkEdgeFill = savedFill;
+            }
+        }
+
         private static void VerifyContourMaterialValues(Camera camera, Material material, Light light)
         {
             var savedColor = material.GetVector("_BaseColor"); var savedLight = light.color;
@@ -589,7 +658,7 @@ namespace ZeroEngine.Render.Tests.Runtime
                 material.SetVector("_BaseColor", new Vector4(.2f, .03f, .003f, 1)); painted = Render(camera);
                 var zero = black.GetPixel(34, 18); var low = dark.GetPixel(34, 18);
                 var high = pale.GetPixel(34, 18); var hue = painted.GetPixel(34, 18);
-                Assert.That(zero.g, Is.InRange(.0001f, .025f), "Black art remains visible with a weak bounded floor, distinct from pale material.");
+                Assert.That(zero.g, Is.InRange(.02f, .035f), "Black art needs a readable bounded floor, distinct from pale material.");
                 Assert.That(low.g, Is.LessThan(high.g * .35f), "Dark and pale cloth must retain visibly different contour values under identical light.");
                 Assert.That(hue.r, Is.GreaterThan(hue.g * 1.5f), "Neutral light must retain the painted red channel.");
                 Assert.That(hue.g, Is.GreaterThan(hue.b * 1.5f), "A dark blue channel must not become a uniform bright white contour.");

@@ -34,15 +34,17 @@ Near a rear light's projected center, it blends into the symmetric one-cell
 backlight contour. Filtered inward wrap remains separate, so small islands,
 inner leg gaps and clothing cutouts can brighten without filling the body.
 The core uses the painted RGB in a bounded color-dodge response, preserving
-dark cloth and pale highlights instead of adding a uniform colored line. A very
-weak visibility floor remains for black art; the older dark fill is reduced
+dark cloth and pale highlights instead of adding a uniform colored line. A small
+bounded visibility floor keeps black art readable; the older dark fill is reduced
 while the clear core is enabled. Zero ContourStrength keeps the old response.
 Core strength controls the blend rather than reducing the input light energy.
 The one-cell core applies native distance and shadow visibility once. The softer
 shell keeps its separate response, so brighter edges do not raise body exposure.
 It adds no new HDR emission and preserves existing HDR source energy. Multiple colors
-blend at the strongest core contribution's peak; shadow visibility applies to
-the core and to the existing light response.
+blend at the strongest core contribution's peak. A gentler core-only color weight
+keeps weaker colored lamps visible through the handoff without raising the inward
+field. Identical lamps do not multiply brightness, and light order does not change
+the result. Shadow visibility applies to the core and to the existing light response.
 
 Consumers can enroll their Player/entity renderers at their normal enable and
 renderer-replacement entry points. Disable the lighting component when the actor
