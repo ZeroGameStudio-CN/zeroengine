@@ -18,6 +18,7 @@ namespace ZeroEngine.Audio
         private bool _isFinishing;
 
         public AudioCueSO CurrentCue { get; private set; }
+        internal ulong PlaybackGeneration { get; private set; }
 
         public AudioSource Source
         {
@@ -39,6 +40,7 @@ namespace ZeroEngine.Audio
 
         public void OnSpawn()
         {
+            AdvancePlaybackGeneration();
             _isFinishing = false;
             CurrentCue = null;
         }
@@ -59,6 +61,7 @@ namespace ZeroEngine.Audio
 
         public void Play(AudioCueSO cue)
         {
+            AdvancePlaybackGeneration();
             if (_playingRoutine != null) StopCoroutine(_playingRoutine);
 
             CurrentCue = cue;
@@ -95,6 +98,15 @@ namespace ZeroEngine.Audio
             {
                 // Schedule return
                 _playingRoutine = StartCoroutine(WaitForFinish(clip.length / Mathf.Abs(_source.pitch)));
+            }
+        }
+
+        private void AdvancePlaybackGeneration()
+        {
+            unchecked
+            {
+                PlaybackGeneration++;
+                if (PlaybackGeneration == 0) PlaybackGeneration++;
             }
         }
 

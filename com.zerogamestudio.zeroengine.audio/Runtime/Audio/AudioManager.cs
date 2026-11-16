@@ -47,6 +47,7 @@ namespace ZeroEngine.Audio
         private int _activeMusicSourceIndex;
         private Coroutine _bgmRoutine;
         private AudioMusicSO _currentMusic;
+        private ulong _musicPlaybackGeneration;
         private float _masterVolume = 1f;
         private float _musicVolume = 1f;
         private float _sfxVolume = 1f;
@@ -232,6 +233,20 @@ namespace ZeroEngine.Audio
 
         public bool TryPlaySFX(AudioCueSO cue, Vector3 position = default)
         {
+            return TryStartSfx(cue, position, out _);
+        }
+
+        public bool TryPlaySFX(AudioCueSO cue, out IAudioPlayback playback, Vector3 position = default)
+        {
+            playback = null;
+            if (!TryStartSfx(cue, position, out var emitter)) return false;
+            playback = new Playback(this, emitter, emitter.PlaybackGeneration, cue.Loop);
+            return true;
+        }
+
+        private bool TryStartSfx(AudioCueSO cue, Vector3 position, out AudioEmitter emitter)
+        {
+            emitter = null;
             if (cue == null || !cue.HasPlayableClip())
             {
                 return false;
@@ -259,7 +274,7 @@ namespace ZeroEngine.Audio
                 }
             }
 
-            AudioEmitter emitter = AcquireEmitter();
+            emitter = AcquireEmitter();
             if (emitter == null)
             {
                 return false;
@@ -281,7 +296,7 @@ namespace ZeroEngine.Audio
             }
 
             emitter.Play(cue);
-            return true;
+            return OwnsEmitter(emitter, emitter.PlaybackGeneration);
         }
 
         public void StopSFX(AudioCueSO cue)
@@ -348,13 +363,66 @@ namespace ZeroEngine.Audio
                 return;
             }
 #endif
-            StartCoroutine(ReturnEmitterDelayed(emitter, clip.length + 0.1f));
+            StartCoroutine(ReturnEmitterDelayed(emitter, emitter.PlaybackGeneration, clip.length + 0.1f));
         }
 
-        private IEnumerator ReturnEmitterDelayed(AudioEmitter emitter, float delay)
+        private IEnumerator ReturnEmitterDelayed(AudioEmitter emitter, ulong generation, float delay)
         {
             yield return new WaitForSecondsRealtime(delay);
-            OnEmitterFinished(emitter);
+            if (!OwnsEmitter(emitter, generation)) yield break;
+            if (emitter == null) ForgetDestroyedEmitter(emitter);
+            else OnEmitterFinished(emitter);
+        }
+
+        private bool OwnsEmitter(AudioEmitter emitter, ulong generation)
+        {
+            return !ReferenceEquals(emitter, null) && generation != 0
+                && emitter.PlaybackGeneration == generation && _activeEmitters.Contains(emitter);
+        }
+
+        private void ForgetDestroyedEmitter(AudioEmitter emitter)
+        {
+            if (_activeEmitters.Remove(emitter)) _createdEmitterCount = Mathf.Max(0, _createdEmitterCount - 1);
+        }
+
+        private sealed class Playback : IAudioPlayback
+        {
+            private readonly AudioManager _owner;
+            private readonly AudioEmitter _emitter;
+            private readonly ulong _generation;
+            private readonly bool _music;
+            public bool IsLooping { get; }
+
+            public Playback(AudioManager owner, AudioEmitter emitter, ulong generation, bool looping)
+            {
+                _owner = owner; _emitter = emitter; _generation = generation; IsLooping = looping;
+            }
+
+            public Playback(AudioManager owner, ulong generation, bool looping)
+            {
+                _owner = owner; _generation = generation; IsLooping = looping; _music = true;
+            }
+
+            public bool IsCurrent => _owner != null && (_music
+                ? _owner._currentMusic != null && _owner._musicPlaybackGeneration == _generation
+                : _emitter != null && _owner.OwnsEmitter(_emitter, _generation));
+
+            public bool TryStop()
+            {
+                if (_owner == null) return false;
+                if (_music)
+                {
+                    if (!IsCurrent) return false;
+                    _owner.StopMusic(0f);
+                    return true;
+                }
+                if (!_owner.OwnsEmitter(_emitter, _generation)) return false;
+                if (_emitter == null) _owner.ForgetDestroyedEmitter(_emitter);
+                else _emitter.Stop();
+                return true;
+            }
+
+            public void Dispose() => TryStop();
         }
 
         #endregion
@@ -383,6 +451,22 @@ namespace ZeroEngine.Audio
             }
         }
 
+        public IAudioPlayback PlayMusicScoped(AudioMusicSO music, float fadeDuration = -1f)
+        {
+            if (music == null || (music.IntroClip == null && music.LoopClip == null)) return null;
+            PlayMusic(music, fadeDuration);
+            return new Playback(this, _musicPlaybackGeneration, music.LoopClip != null);
+        }
+
+        private void AdvanceMusicGeneration()
+        {
+            unchecked
+            {
+                _musicPlaybackGeneration++;
+                if (_musicPlaybackGeneration == 0) _musicPlaybackGeneration++;
+            }
+        }
+
         public void PlayMusic(AudioMusicSO music, float fadeDuration = -1f)
         {
             if (music == null || (music.IntroClip == null && music.LoopClip == null))
@@ -390,6 +474,7 @@ namespace ZeroEngine.Audio
                 return;
             }
 
+            AdvanceMusicGeneration();
             AudioSource activeSource = _musicSources[_activeMusicSourceIndex];
             if (_currentMusic == music && activeSource != null && activeSource.isPlaying)
             {
@@ -422,6 +507,7 @@ namespace ZeroEngine.Audio
 
         public void StopMusic(float fadeDuration = -1f)
         {
+            AdvanceMusicGeneration();
             AudioMusicSO stoppingMusic = _currentMusic;
             _currentMusic = null;
             float duration = fadeDuration >= 0f

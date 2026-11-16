@@ -8,7 +8,7 @@ namespace ZeroEngine.Audio
     /// Stable event-id facade over the Unity AudioManager backend.
     /// Audio banks can be registered and unregistered with a content scope.
     /// </summary>
-    public sealed class UnityAudioEventService : MonoBehaviour, IAudioEventService
+    public sealed class UnityAudioEventService : MonoBehaviour, IAudioEventService, IAudioPlaybackService
     {
         [SerializeField] private AudioManager _audioManager;
         [SerializeField] private List<AudioBankSO> _banks = new();
@@ -128,6 +128,16 @@ namespace ZeroEngine.Audio
             }
         }
 
+        public IAudioPlayback PlayScoped(AudioEventId eventId, Vector3 position = default)
+        {
+            ResolveAudioManager();
+            if (_audioManager == null) return null;
+            string key = eventId.ToString();
+            if (_sfxById.TryGetValue(key, out AudioCueSO cue))
+                return _audioManager.TryPlaySFX(cue, out var playback, position) ? playback : null;
+            return _musicById.TryGetValue(key, out AudioMusicSO music) ? _audioManager.PlayMusicScoped(music) : null;
+        }
+
         public void Stop(AudioEventId eventId)
         {
             ResolveAudioManager();
@@ -142,7 +152,7 @@ namespace ZeroEngine.Audio
                 _audioManager.StopSFX(cue);
             }
 
-            if (_musicById.ContainsKey(key))
+            if (_musicById.TryGetValue(key, out AudioMusicSO music) && _audioManager.CurrentMusic == music)
             {
                 _audioManager.StopMusic();
             }

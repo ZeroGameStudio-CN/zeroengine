@@ -47,3 +47,28 @@ those defaults.
 
 2.2.1 - Unique runtime `IAudioEventService` ownership with deterministic
 enable/disable registration.
+
+
+## Owned playback (2.3)
+
+`IAudioEventService` remains unchanged. The default Unity facade additionally implements
+`IAudioPlaybackService`. `PlayScoped(id, position)` returns a backend-neutral `IAudioPlayback`,
+or null for an unknown/invalid/rejected request. `IsCurrent` describes resource ownership,
+not audible output; `IsLooping` records the authored loop policy. `TryStop` and `Dispose`
+stop only the returned playback and are safe after completion, reuse or manager destruction.
+
+Direct backends can use `AudioManager.TryPlaySFX(cue, out playback, position)` and
+`PlayMusicScoped`. Ordinary legacy SFX calls allocate no playback handles. All existing
+start paths advance the same emitter/music generations, including raw clips and repeated
+requests for the same music. Old raw-clip timers cannot return a reused emitter.
+
+Music handles own one intro/loop/crossfade transition. A later music request transfers
+ownership even when it reuses the same track; disposal of the former handle cannot stop it.
+Music disposal is immediate. Legacy `Stop(eventId)` remains a cue-level operation; it only
+stops music if that event resolves to the current music definition. Use scoped playback
+for local cleanup instead of stopping every voice mapped to an event.
+
+One-shots may be left with the manager to finish naturally. Retain looping playback in the
+calling lifetime and dispose it on cancellation/disable/exit. Use backend start methods,
+rather than changing a borrowed emitter's AudioSource directly, to transfer ownership.
+No project, TCE/Buff, middleware SDK or new asset schema dependency is introduced.
