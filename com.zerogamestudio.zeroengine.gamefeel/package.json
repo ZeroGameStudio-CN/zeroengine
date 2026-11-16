@@ -1,6 +1,6 @@
 {
   "name": "com.zerogamestudio.zeroengine.gamefeel",
-  "version": "0.8.1",
+  "version": "0.9.0",
   "displayName": "ZeroEngine Game Feel",
   "description": "Reusable, allocation-free sensory coordination policies for stop, signals, peaks, audio, haptics and particles.",
   "unity": "6000.6",

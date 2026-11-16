@@ -132,3 +132,27 @@ checks and comparable recordings. Microbenchmarks do not establish Player FPS,
 GPU cost or physical haptic feel.
 
 The consolidated baseline retains the POB-consumed adaptive feedback, channel coordination, visual-effect leases/budgets and coalescing APIs from `7ba1d752`. Their original `ZeroEngine.GameFeel` contracts and regression tests are preserved.
+
+## Damage number intent and adaptive streams
+
+Pass a captured FeedbackNumberContext to FeedbackNumberMerger.Add. Individual
+and Important requests always retain their own output. Action requests aggregate
+only within the same owner, source, action/beat, target lifetime and style. Use a
+new group ID for each authored beat or shotgun volley. AdaptiveStream requests
+share a captured firing/buff session: sparse hits stay individual, dense hits
+accumulate with separate entry/exit thresholds. A projectile inherits its source
+session at launch; do not use each projectile as a new stream or query the current
+weapon at impact. New sessions never absorb old in-flight projectiles.
+
+The first hit is immediate. Windows anchor to that hit, retain their duration
+when density changes, and are capped by FeedbackNumberPolicy.MaximumWindow.
+Style remains consumer-owned (for example damage type and critical state).
+HitCount and Total cover exactly the merged contributions; important individual
+hits do not also enter an ordinary accumulator. Unknown intent falls back to
+individual output. Existing callers without context retain the legacy API.
+
+Per-target storage is bounded and recycles expired or invalid display groups.
+Full live capacity falls back to individual output instead of stealing a group
+or dropping damage. Clocks, pooled target/display lifetimes, formatting, rendering
+and per-hit gameplay callbacks remain consumer-owned. Rendering random draws must
+not silently change the gameplay random sequence during consumer optimization.

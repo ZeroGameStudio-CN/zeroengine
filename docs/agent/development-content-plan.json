@@ -446,6 +446,22 @@
       ],
       "verificationScope": "从POB cs:19242提取已验证的XY轮廓选点、体型适应、透视对齐和caller-clocked回弹；消费者保持伤害、时钟、池化和召回所有权。",
       "sourceCommit": "12bcaf3d58b74c6ad7755fc995e4dc3c24ecf4ba"
+    },
+    {
+      "id": "ze.gamefeel.damage-number-semantics",
+      "title": "伤害数字按攻击语义分组与连续流自适应聚合",
+      "stage": "InProgress",
+      "targetReleaseId": "",
+      "availability": "TestOnly",
+      "responsibleChat": "01a1e334-b947-7100-a28a-15a02442e3ab",
+      "chatUrl": "",
+      "nextAction": "在 POB 接入并完成定向 Unity 和渲染验证；保持原有逐击结算与随机序列。",
+      "entrance": "ZeroEngine.GameFeel.Tests.FeedbackNumberPolicyTests",
+      "resourcePath": "com.zerogamestudio.zeroengine.gamefeel/Runtime/FeedbackNumberPolicy.cs",
+      "revision": "2026-11-16 semantic numbers",
+      "candidatePackageVersion": "0.9.0",
+      "releaseEvidence": "",
+      "verificationScope": "25 项 .NET 定向测试，覆盖语义分组、迟到弹丸、迟滞、窗口上限、容量回收及预热后分配；Unity 接入待验证。"
     }
   ]
 }
