@@ -35,6 +35,7 @@ namespace ZeroEngine.Console.Unity
             dispatcher = new UnityConsoleDispatcher();
             Registry = new ConsoleRegistry();
             Session = new ConsoleSession(Registry, new ConsoleValues(UnityConsoleValues.TryConvert), dispatcher: dispatcher);
+            Session.ResultFormatter = new UnityConsoleValueFormatter();
             common = ConsoleCommonCommands.Register(Session);
             UpdateLogCapture();
             Started?.Invoke(this);

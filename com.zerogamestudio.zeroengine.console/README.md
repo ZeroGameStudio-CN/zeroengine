@@ -60,6 +60,27 @@ the context/output to identify a call, and read status/code/data from the result
 Session disposal cancels its active invocation and pending completion separately,
 so execution does not need a second per-call session cancellation registration.
 
+`ConsoleCommand.Signature` caches readable parameter types, optional defaults and
+variadic markers. `session.GetHint(line, caret, caller)` returns the current
+parameter and description without executing anything. Completion responses carry
+the same metadata in `Hint`; both paths apply the caller's live policy. Use
+`Apply(line, index, out caret)` when editing the middle of a line so the insertion
+caret stays before the retained tail. Cached completion metadata is unfiltered;
+caller permissions are checked for each request and again after async providers.
+
+Unity hosts format data-only results by default. An explicit result message takes
+precedence, and the original status/data remain unchanged. Bare core sessions
+keep presentation opt-in: set `ResultFormatter = ConsoleValueFormatter.Default`
+or supply `IConsoleValueFormatter`. Set it to `null` for data-only automation.
+The default formats invariant scalars, quoted collection strings, dictionaries,
+tuples and nested sequences, with depth/item/length limits and cycle detection.
+It does not inspect arbitrary properties or call unknown objects' `ToString`.
+Override `TryFormatAtom` for explicit application types; Unity values stay in
+`UnityConsoleValueFormatter`. Formatting errors do not turn a completed business
+operation into a failure or execute it again.
+Custom formatters may run on the completion thread; restrict them to safe data
+formatting and dispatch scene-object work explicitly through the Unity owner.
+
 For frequent output refreshes, use `CopyOutputTo(ref buffer, out revision)` with
 a caller-owned `ConsoleOutput[]`. It grows the buffer when needed, returns the
 valid entry count and captures the revision under the same lock. Unused entries

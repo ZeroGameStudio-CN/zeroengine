@@ -43,6 +43,7 @@ namespace ZeroEngine.Console.UI
         private float due;
         private bool dirty;
         private Action submit;
+        private ConsoleCommandHintView commandHint;
 
         public void Initialize(ConsoleHost owner, ConsoleInputAccess access, Action submitInput = null, Action close = null)
         {
@@ -88,6 +89,10 @@ namespace ZeroEngine.Console.UI
                 if (input.ReadText() == requestedText && input.ReadCaret() == observedCaret)
                 {
                     completions = result;
+                    commandHint.Show(input.IsFocused() ? result.Hint : null);
+                    var panelRect = panel.GetComponent<RectTransform>();
+                    float hintHeight = commandHint.IsVisible ? commandHint.Height + 6 : 0;
+                    panelRect.offsetMin = new Vector2(0, 70 + hintHeight); panelRect.offsetMax = new Vector2(0, 300 + hintHeight);
                     for (int i = 0; i < rows.Count; i++)
                     {
                         bool active = i < result.Items.Count;
@@ -120,7 +125,7 @@ namespace ZeroEngine.Console.UI
             input.WriteText(historyIndex < 0 ? draft : history[history.Length - 1 - historyIndex]);
         }
 
-        public void ResetAfterSubmit() { historyIndex = -1; completions = null; if (panel) panel.SetActive(false); }
+        public void ResetAfterSubmit() { historyIndex = -1; completions = null; if (panel) panel.SetActive(false); commandHint?.Show(null); }
 
         private void BuildControls(Action close)
         {
@@ -170,6 +175,9 @@ namespace ZeroEngine.Console.UI
             var layout = panel.GetComponent<UnityEngine.UI.VerticalLayoutGroup>(); layout.childControlHeight = true; layout.childForceExpandHeight = false;
             try { ownedFont = Font.CreateDynamicFontFromOSFont(new[] { "Microsoft YaHei", "Noto Sans CJK SC", "Arial" }, 16); } catch (ArgumentException) { }
             Font font = ownedFont ? ownedFont : Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
+            commandHint = new ConsoleCommandHintView(canvasRoot.transform, font, 16);
+            commandHint.Root.anchorMin = new Vector2(.05f, 0); commandHint.Root.anchorMax = new Vector2(.7f, 0);
+            commandHint.Root.offsetMin = new Vector2(0, 56); commandHint.Root.offsetMax = new Vector2(0, 56 + commandHint.Height);
             for (int i = 0; i < 8; i++)
             {
                 int index = i;

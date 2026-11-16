@@ -42,6 +42,15 @@ own the toggle action retain it through `KeyboardShortcutEnabled = false`.
 An empty or whitespace-only draft keeps the log view clear; suggestions appear
 after text is entered. Clearing the draft also cancels pending suggestions.
 
+Resolved commands show a compact signature and the active parameter's type and
+description above the input. Optional defaults and variadic parameters stay in
+the signature; quoted arguments and a caret in the middle select the correct
+parameter. The hint uses the same policy as completion, reserves its own area
+above the input, and releases that space when the draft clears. Applying a
+completion retains the remaining text and puts the caret after the inserted value.
+Data-only command returns use the shared Host formatter; existing result messages
+remain authoritative and business status is preserved.
+
 Common actions use a consistent set of procedural line icons, with Chinese
 descriptions and shortcut hints on hover. The follow control shows its active or
 paused state; ready/running and cancellation retain distinct visual states.

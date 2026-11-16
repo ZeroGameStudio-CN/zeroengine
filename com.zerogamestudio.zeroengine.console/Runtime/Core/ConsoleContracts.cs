@@ -129,6 +129,8 @@ namespace ZeroEngine.Console
         public IReadOnlyList<string> Capabilities { get; }
         public IReadOnlyList<ConsoleParameter> Parameters { get; }
         public ConsoleEnvironment Environments { get; }
+        public string Signature { get; }
+        internal string[] ParameterHints { get; }
 
         public ConsoleCommand(string id, string name, string module, string description,
             IEnumerable<ConsoleParameter> parameters = null, IEnumerable<string> aliases = null,
@@ -163,6 +165,11 @@ namespace ZeroEngine.Console
             Parameters = new ReadOnlyCollection<ConsoleParameter>(args);
             Capabilities = new ReadOnlyCollection<string>((capabilities ?? Array.Empty<string>()).Distinct(StringComparer.Ordinal).ToArray());
             Examples = new ReadOnlyCollection<string>((examples ?? Array.Empty<string>()).ToArray());
+            Signature = ConsoleCommandDisplay.Signature(this);
+            ParameterHints = new string[args.Length];
+            for (int i = 0; i < args.Length; i++)
+                ParameterHints[i] = args[i].Name + ": " + ConsoleCommandDisplay.TypeName(args[i].ValueType) +
+                    (string.IsNullOrEmpty(args[i].Description) ? "" : " · " + args[i].Description);
         }
 
         private static void RequireIdentifier(string value, string parameter)

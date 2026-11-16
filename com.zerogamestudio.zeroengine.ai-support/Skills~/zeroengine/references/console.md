@@ -26,6 +26,13 @@ command lists across callers or unlock changes. Keep deadline timers optional.
 Use the Host's standard Unity value conversions before adding project parsers.
 The pure core accepts an explicit fallback; scoped type converters override it.
 
+Use completion `Hint` or policy-checked `GetHint` for parameter guidance; never
+execute a command to discover its signature. Apply the returned insertion caret
+when retaining text after a completion. Unity hosts format data-only returns;
+an explicit message takes precedence. Bare sessions opt in through
+`ResultFormatter`; keep status/data intact and use bounded explicit formatters
+instead of property reflection or scene-object inspection.
+
 Only a handler with an established business outcome returns `Success`.
 `Unconfirmed` preserves a legacy void/string result without claiming success;
 `Started` means completion is unobserved. Neither makes `IsSuccess` true.

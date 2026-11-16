@@ -29,6 +29,8 @@ namespace ZeroEngine.Console.UI
         private bool usingLandscapeLayout;
         private Canvas viewCanvas;
         private CanvasScaler viewScaler;
+        private ConsoleCommandHintView commandHint;
+        private float HintHeight => commandHint != null && commandHint.IsVisible ? commandHint.Height + 6 : 0;
 
         private void EnsureView()
         {
@@ -126,6 +128,9 @@ namespace ZeroEngine.Console.UI
             keyboardHint.raycastTarget = true;
             Hint(keyboardHint.gameObject, "↑↓ 历史 · Tab 补全 · Enter 执行 · Esc 关闭");
 
+            commandHint = new ConsoleCommandHintView(panel, font, fontSize);
+            Stretch(commandHint.Root, Vector2.zero, new Vector2(1, 0), new Vector2(12, 84), new Vector2(-12, 84 + commandHint.Height));
+
             completions = Rect("Completions", panel); Stretch(completions, Vector2.zero, new Vector2(1, 0), new Vector2(12, 90), new Vector2(-12, 330));
             Surface(completions, new Color(.065f, .078f, .105f, .96f), 6);
             completionCaption = Chrome("CompletionCaption", completions, "");
@@ -191,8 +196,18 @@ namespace ZeroEngine.Console.UI
             input.textComponent.fontSize = fontSize;
             ((Text)input.placeholder).fontSize = fontSize;
             fontSizeLabel.text = fontSize.ToString();
+            commandHint.SetFontSize(fontSize);
+            UpdateHintLayout();
             RefreshCompletions();
             renderedRevision = -1;
+        }
+
+        private void UpdateHintLayout()
+        {
+            if (commandHint == null) return;
+            commandHint.Root.offsetMax = new Vector2(-12, 84 + commandHint.Height);
+            if (scroll) scroll.GetComponent<RectTransform>().offsetMin = new Vector2(12, 90 + HintHeight);
+            if (completions) completions.offsetMin = new Vector2(12, 90 + HintHeight);
         }
 
         private void ToggleFollow()
