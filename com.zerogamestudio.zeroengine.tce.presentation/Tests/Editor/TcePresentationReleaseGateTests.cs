@@ -16,7 +16,7 @@ namespace ZeroEngine.TCE.Presentation.Tests.Editor
             PackageInfo packageInfo = PackageInfo.FindForAssembly(typeof(TceVisualPrefab).Assembly);
 
             Assert.IsNotNull(packageInfo);
-            Assert.AreEqual("0.4.0", packageInfo.version);
+            Assert.AreEqual("0.5.0", packageInfo.version);
             Assert.AreEqual(2, packageInfo.dependencies.Length);
             Assert.AreEqual("com.zerogamestudio.zeroengine.tce", packageInfo.dependencies[0].name);
             Assert.AreEqual("0.1.0", packageInfo.dependencies[0].version);

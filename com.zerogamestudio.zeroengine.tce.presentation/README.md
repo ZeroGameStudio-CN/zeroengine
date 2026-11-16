@@ -14,6 +14,7 @@ The package depends on `ZeroEngine.TCE`, Unity Timeline 6.6 and UnityEngine rend
 - `TceVisualPrefab` admits and reconstructs an authored visual-only hierarchy of particles, sprites, static meshes, lights, and trails. Mesh resources are shared without requiring readable CPU data.
 - `TceVisualProjectionPolicy` declares source-only components, rendering data and generated-mesh adapters.
 - `TceVisualDynamics` and `TceVisualFrame` capture resolved visual controls and continue display playback locally.
+- `TceVisualDynamics.CreateSourceCapture(instance, authoredTemplate)` captures the live authored graph while excluding runtime-only UI/helper children. Authored node/component removal or reordering is refused. Keep the capture within that pooled activation and dispose it before the producer is reused.
 
 ## Authored visual projections
 

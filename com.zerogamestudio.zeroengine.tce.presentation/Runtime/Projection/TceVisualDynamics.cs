@@ -76,23 +76,69 @@ namespace ZeroEngine.TCE.Presentation
         }
 
         public TceVisualDynamics(GameObject instance, GameObject authoredTemplate = null)
+            : this(instance, authoredTemplate, false) { }
+
+        /// <summary>Capture live controls for the authored graph, excluding runtime-only UI and helper children.</summary>
+        public static TceVisualDynamics CreateSourceCapture(GameObject instance, GameObject authoredTemplate)
         {
-            root=instance;nodes=instance.GetComponentsInChildren<Transform>(true);
-            display=authoredTemplate;
+            if (!instance) throw new ArgumentNullException(nameof(instance));
+            if (!authoredTemplate) throw new ArgumentNullException(nameof(authoredTemplate));
+            return new TceVisualDynamics(instance, authoredTemplate, true);
+        }
+
+        /// <summary>Suppress only this capture's bound graph, retaining runtime-only child ownership.</summary>
+        public TceVisualVisibility CreateVisibility(bool preserveRendererSuppression = true)
+            => new TceVisualVisibility(renderers, lights, preserveRendererSuppression);
+
+        private TceVisualDynamics(GameObject instance, GameObject authoredTemplate, bool captureSource)
+        {
+            root=instance;
+            display=authoredTemplate && !captureSource;
             var template=authoredTemplate?authoredTemplate:instance;
             var templateNodes=template.GetComponentsInChildren<Transform>(true);
-            animators=template.GetComponentsInChildren<Animator>(true);
-            directors=template.GetComponentsInChildren<PlayableDirector>(true);
-            lights=instance.GetComponentsInChildren<Light>(true);renderers=instance.GetComponentsInChildren<Renderer>(true);
-            trails=instance.GetComponentsInChildren<TrailRenderer>(true);
+            Transform BindNode(Transform authored)
+            {
+                var path=new Stack<int>();
+                for(var node=authored;node!=template.transform;node=node.parent)
+                {
+                    if(!node)throw new InvalidOperationException("authored-node-outside-template");
+                    path.Push(node.GetSiblingIndex());
+                }
+                var target=instance.transform;
+                while(path.Count!=0)
+                {
+                    int index=path.Pop();
+                    if(index>=target.childCount)throw new InvalidOperationException("authored-node-missing");
+                    target=target.GetChild(index);
+                }
+                if(authored!=template.transform && target.name!=authored.name)
+                    throw new InvalidOperationException("authored-node-reordered");
+                return target;
+            }
+            T BindComponent<T>(T authored) where T:Component
+            {
+                var components=BindNode(authored.transform).GetComponents<T>();
+                int index=Array.IndexOf(authored.GetComponents<T>(),authored);
+                if(index<0 || index>=components.Length || components[index].GetType()!=authored.GetType())
+                    throw new InvalidOperationException("authored-component-missing");
+                return components[index];
+            }
+            nodes=captureSource?templateNodes.Select(BindNode).ToArray():instance.GetComponentsInChildren<Transform>(true);
+            var templateAnimators=template.GetComponentsInChildren<Animator>(true);
+            animators=captureSource?templateAnimators.Select(BindComponent).ToArray():templateAnimators;
+            var templateDirectors=template.GetComponentsInChildren<PlayableDirector>(true);
+            directors=captureSource?templateDirectors.Select(BindComponent).ToArray():templateDirectors;
+            lights=captureSource?template.GetComponentsInChildren<Light>(true).Select(BindComponent).ToArray():instance.GetComponentsInChildren<Light>(true);
+            renderers=captureSource?template.GetComponentsInChildren<Renderer>(true).Select(BindComponent).ToArray():instance.GetComponentsInChildren<Renderer>(true);
+            trails=captureSource?template.GetComponentsInChildren<TrailRenderer>(true).Select(BindComponent).ToArray():instance.GetComponentsInChildren<TrailRenderer>(true);
             clips=new AnimationClip[animators.Length][];animatorNodes=new int[animators.Length];
             for(int i=0;i<animators.Length;i++)
             {
                 clips[i]=animators[i].runtimeAnimatorController?animators[i].runtimeAnimatorController.animationClips.Distinct().ToArray():Array.Empty<AnimationClip>();
-                animatorNodes[i]=Array.IndexOf(templateNodes,animators[i].transform);
+                animatorNodes[i]=Array.IndexOf(templateNodes,templateAnimators[i].transform);
             }
             timelines=new TimelineBinding[directors.Length][];
-            for(int i=0;i<directors.Length;i++)timelines[i]=PrepareTimeline(directors[i],templateNodes);
+            for(int i=0;i<directors.Length;i++)timelines[i]=PrepareTimeline(directors[i],captureSource?nodes:templateNodes);
             if(display)
             {
                 foreach(var group in clips)foreach(var clip in group)PrepareClip(clip);

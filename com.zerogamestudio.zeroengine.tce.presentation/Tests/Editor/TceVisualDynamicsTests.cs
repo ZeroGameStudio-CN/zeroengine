@@ -91,6 +91,37 @@ namespace ZeroEngine.TCE.Presentation.Tests
             Copy();var state=new TceVisualDynamics(source).Capture();player.Receive(state,0);var target=copy.GetComponent<Light>();Assert.That(target.intensity,Is.EqualTo(2));Assert.That(target.color,Is.EqualTo(Color.blue));
             Assert.That(target.cullingMask,Is.EqualTo(16));
         }
+        [Test] public void AuthoredSourceCaptureReadsLiveControlsAndExcludesRuntimeOnlyChildren()
+        {
+            Source();source.AddComponent<Light>().intensity=1;
+            var live=UnityEngine.Object.Instantiate(source);
+            try
+            {
+                live.GetComponent<Light>().intensity=7;
+                var runtimeUi=new GameObject("Runtime UI");runtimeUi.transform.SetParent(live.transform,false);
+                runtimeUi.AddComponent<SpriteRenderer>();var extraLight=runtimeUi.AddComponent<Light>();extraLight.intensity=99;extraLight.cullingMask=16;
+                using var capture=TceVisualDynamics.CreateSourceCapture(live,source);
+                var frame=capture.Capture();
+                Assert.That(frame.Lights.Length,Is.EqualTo(1));Assert.That(frame.Lights[0].Intensity,Is.EqualTo(7));
+                Copy();Assert.That(player.Receive(frame,0),Is.True);Assert.That(copy.GetComponent<Light>().intensity,Is.EqualTo(7));
+                var visibility=capture.CreateVisibility();visibility.SetHidden(true);
+                Assert.That(live.GetComponent<Light>().cullingMask,Is.Zero);Assert.That(extraLight.cullingMask,Is.EqualTo(16));
+                visibility.Restore();
+                Assert.That(live.transform.childCount,Is.EqualTo(1));Assert.That(runtimeUi.activeSelf,Is.True);
+            }
+            finally { UnityEngine.Object.DestroyImmediate(live); }
+        }
+        [Test] public void AuthoredSourceCaptureRefusesAChangedAuthoredHierarchy()
+        {
+            Source();new GameObject("Authored child").transform.SetParent(source.transform,false);
+            var live=UnityEngine.Object.Instantiate(source);
+            try
+            {
+                UnityEngine.Object.DestroyImmediate(live.transform.GetChild(0).gameObject);
+                Assert.Throws<InvalidOperationException>(()=>TceVisualDynamics.CreateSourceCapture(live,source));
+            }
+            finally { UnityEngine.Object.DestroyImmediate(live); }
+        }
     }
     public sealed class ForbiddenVisualReceiver:MonoBehaviour
     {

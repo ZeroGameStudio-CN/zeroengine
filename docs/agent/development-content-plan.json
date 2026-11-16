@@ -515,6 +515,31 @@
           "contentId": "multiplayer.shared-world-presentation"
         }
       ]
+    },
+    {
+      "id": "ze.tce.authoritative-world-presentation",
+      "title": "权威世界实体与完整视觉图投影",
+      "stage": "Previewable",
+      "targetReleaseId": "",
+      "availability": "TestOnly",
+      "responsibleChat": "01a1e419-5187-7af1-a1ff-a3d295cbaf66",
+      "chatUrl": "",
+      "nextAction": "POB 保持默认关闭；继续 R4 镜头反馈、宿主成本、全客户端帧耗及整局常规 PVE。",
+      "entrance": "TCE Presentation Editor tests; POB shared-world presentation candidate through its native two-Editor session.",
+      "resourcePath": "com.zerogamestudio.zeroengine.tce.presentation",
+      "candidatePackageVersion": "0.5.0",
+      "releaseEvidence": "",
+      "verificationEvidence": [
+        "C:\\Users\\2025\\AppData\\Local\\Temp\\pob-shared-domain-20261116\\dual\\run-r3\\verified-summons.json",
+        "C:\\Users\\2025\\AppData\\Local\\Temp\\pob-shared-domain-20261116\\dual\\run-r5\\domain-proof.json"
+      ],
+      "relatedContent": [
+        {
+          "projectId": "pob",
+          "contentId": "multiplayer.shared-world-presentation"
+        }
+      ],
+      "verificationScope": "54 package cases covered by initial native run plus corrected version assertion. Independent POB peers verified eight summon types and ten actual pickup prefab types; source capture excludes runtime UI and preserves original gameplay authority. No full-game or player release acceptance."
     }
   ]
 }
