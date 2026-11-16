@@ -493,20 +493,22 @@
     {
       "id": "ze.tce.visual-prefab-projection",
       "title": "原资源驱动的纯显示图与可见性配对",
-      "stage": "Previewable",
+      "sourceKey": "",
+      "stage": "Playable",
       "targetReleaseId": "",
       "availability": "TestOnly",
-      "responsibleChat": "01a1b9db-fe8f-7500-8df5-997d4703224e",
-      "chatUrl": "thread://01a1b9db-fe8f-7500-8df5-997d4703224e?hostId=local",
-      "nextAction": "继续R3剩余27个视觉拒绝、8条Trail-only的通用适配及召唤／掉落接线；R4宿主成本与整局验收独立。POB已固定源码e67bfae5并提交cs:19267。",
+      "responsibleChat": "01a1e419-5187-7af1-a1ff-a3d295cbaf66",
+      "chatUrl": "thread://01a1e419-5187-7af1-a1ff-a3d295cbaf66?hostId=local",
+      "nextAction": "接续10个玩法掉落物／18份召唤定义的领域接线及R4镜头反馈、宿主成本、全客户端帧耗和整局常规PVE。",
       "entrance": "Unity Test Runner: ZeroEngine.TCE.Presentation.Tests.Editor",
       "resourcePath": "com.zerogamestudio.zeroengine.tce.presentation/Runtime/Projection",
-      "revision": "0.3.0 candidate. TceVisualPrefab validates authored renderer/particle graphs and constructs inactive display copies; admitted source-only lifetime helpers are removed before activation. TceVisualVisibility pairs whole-graph renderer suppression and Light masks with exact restoration. No new network identity, source lifetime, budget or gameplay producer. Current TCE namespace171 passed and2 optional ModSystem bridge skips; Presentation47/47 and POB124/124 passed. Independent same-code protocol73 peers at120ms: five original projectile resources through original TCE/components are visible and advance without new receipts; original following3-Mesh and CardMaster2-Mesh appearances both verified. 11 of38 rejected visual resources now qualify;27 visual resources and domain wiring remain. Failed partial import, fixture/pre-entry and case4 environmental observations retained. No whole PVE/performance or release claim. Adopted admission Core2c7 is retained exactly; fresh native namespace gate173 total,171 passed,0 failed,2 optional bridge skips (Presentation47, Core124 passed). Final fixed-cohort dual verification follows source readback. POB adoption cs19267:20 server leaves and live originals hash-verified; Core/Presentation pinned to e67bfae5 with canonical runtime35/9 source equality and installed guidance current. Current fixed-Git R5 flight data reviewed (extra audit failure and stationary-follow condition retained); focused R6 following original3-Mesh passed with10/10 continuation samples and full cleanup. Independent304-resource audit admits267, preserves all256 prior admissions and exposes8 trail-only projections.27 visual rejections and domain/full-session gates remain open.",
-      "candidatePackageVersion": "0.3.0",
-      "verificationEvidence": [
-        "D:/unity/artifacts/pob-ze-visual-projection-20261115"
-      ],
+      "revision": "TCE Presentation0.4.0 adds bounded resolved animation/Timeline clocks, light/material controls, trail emission and resolved2D motion to the authored display graph. Source controllers, animation events, audio, physics and lifecycle helpers never execute on displays. POB retains content policy and its existing event-free Spine renderer. Protocol74 uses the same Weapon/TCE resources, WorldPresentation leases, budgets and end ownership; no compatibility reader or new weapon. Current304-resource API data admits294, retains267 prior admissions and promotes all35 target resources to whole graphs; trail-only count0.10 gameplay pickups and18 summon definitions remain domain work. Camera/post effects, all110 motion recipes and full-session performance remain separate. 当前原生Presentation门槛52项、POB定向162项有逐用例通过回执；原生入口保护另有40项通过及1项既有程序集边界失败保留。cs19297净候选12个相关程序集合编0错误。R7按精确配方重审确认35份原资源在同版本独立双端可见，Sprite换帧、Spine网格、Timeline无新回执推进与弹壳淡出均有动态记录；其短寿命狙击弹连续帧不足与源灯光恒定误断言，由R8在不改原参数的六次发射和源灯光对应检查中补齐。原失败批次保持失败，补验请求d54e79d7ba7649848c50cbed3e8913dc为completed且cleanupVerified=true。两轮均保留独立1080p原片；不作为整局PVE或性能验收。",
       "releaseEvidence": "",
+      "candidatePackageVersion": "0.4.0",
+      "verificationEvidence": [
+        "D:/unity/artifacts/pob-ze-visual-projection-20261115",
+        "D:/unity/artifacts/pob-ze-visual-dynamics-20261116"
+      ],
       "relatedContent": [
         {
           "projectId": "pob",

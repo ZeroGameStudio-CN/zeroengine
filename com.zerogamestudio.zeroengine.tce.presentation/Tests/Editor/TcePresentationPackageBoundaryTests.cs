@@ -6,14 +6,15 @@ namespace ZeroEngine.TCE.Presentation.Tests.Editor
     [TestFixture]
     public sealed class TcePresentationPackageBoundaryTests
     {
-        private const string PackagePath = "Packages/com.zerogamestudio.zeroengine.tce.presentation";
+        private static string PackagePath => UnityEditor.PackageManager.PackageInfo.FindForAssembly(typeof(TceVisualPrefab).Assembly).resolvedPath;
 
         [Test]
-        public void RuntimeAsmdef_ReferencesTceOnly()
+        public void RuntimeAsmdef_ReferencesTceAndTimeline()
         {
             string asmdef = File.ReadAllText($"{PackagePath}/Runtime/ZeroEngine.TCE.Presentation.asmdef");
 
             StringAssert.Contains("\"ZeroEngine.TCE\"", asmdef);
+            StringAssert.Contains("\"Unity.Timeline\"", asmdef);
             StringAssert.DoesNotContain("POB", asmdef);
             StringAssert.DoesNotContain("DOTween", asmdef);
             StringAssert.DoesNotContain("Sirenix", asmdef);

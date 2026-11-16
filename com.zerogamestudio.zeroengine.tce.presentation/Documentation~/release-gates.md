@@ -51,9 +51,10 @@ PackageInfo.FindForAssembly(typeof(TceVisualPrefab).Assembly)
 Expected result:
 
 - source: `Git` at the tested pinned commit for handoff (`Local` is a temporary trial only)
-- version: `0.3.0`
-- dependency_count: `1`
+- version: `0.4.0`
+- dependency_count: `2`
 - dependency: `com.zerogamestudio.zeroengine.tce`
+- dependency: `com.unity.timeline` at `6.6.0`
 
 ## Plastic Gate
 
@@ -75,3 +76,5 @@ Record release evidence with:
 - Unity test assembly names and pass totals;
 - static scan commands and no-match results;
 - Plastic status scope and any unrelated pending files.
+
+For authored graph integration run `TceVisualDynamicsTests`: event/controller/audio/physics exclusion, safe Timeline bindings, continuous local sampling and malformed payload rejection. Technology adapters must retain source ownership and prove current source/display resource layout equality. Run the package tests against their actual Package Manager resolved path, including Git and temporary local sources; an unselected test assembly is not a passing gate.

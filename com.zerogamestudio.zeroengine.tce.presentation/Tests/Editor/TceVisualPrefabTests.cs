@@ -40,8 +40,6 @@ namespace ZeroEngine.TCE.Presentation.Tests
         }
 
         [TestCase(typeof(BoxCollider))]
-        [TestCase(typeof(AudioSource))]
-        [TestCase(typeof(Animator))]
         public void UnadmittedComponentsAreRejectedBeforeCreatingAnyCopy(System.Type component)
         {
             source = new GameObject("Rejected source");
@@ -100,7 +98,7 @@ namespace ZeroEngine.TCE.Presentation.Tests
             source.AddComponent<SpriteRenderer>();
             source.AddComponent<VisualLifetimeProbe>();
             VisualLifetimeProbe.Awakes = 0;
-            Assert.That(TceVisualPrefab.TryCreate(source, b => b is VisualLifetimeProbe, out var recipe, out _), Is.True);
+            Assert.That(TceVisualPrefab.TryCreate(source, new TceVisualProjectionPolicy { SourceOnly = b => b is VisualLifetimeProbe }, out var recipe, out _), Is.True);
             copy = recipe.Instantiate(); copy.SetActive(true);
             Assert.That(copy.GetComponentsInChildren<MonoBehaviour>(true), Is.Empty);
             Assert.That(VisualLifetimeProbe.Awakes, Is.Zero);

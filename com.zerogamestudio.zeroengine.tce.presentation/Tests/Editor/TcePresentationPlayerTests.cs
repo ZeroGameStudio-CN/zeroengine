@@ -10,7 +10,7 @@ namespace ZeroEngine.TCE.Presentation.Tests.Editor
     [TestFixture]
     public sealed class TcePresentationPlayerTests
     {
-        private const string PackagePath = "Packages/com.zerogamestudio.zeroengine.tce.presentation";
+        private static string PackagePath => UnityEditor.PackageManager.PackageInfo.FindForAssembly(typeof(TceVisualPrefab).Assembly).resolvedPath;
 
         [Test]
         public void Play_NullSnapshot_ReturnsDisposedHandle()
