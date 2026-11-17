@@ -62,12 +62,24 @@ def committed_files(repository, commit, package):
     return result
 
 
-def pack(output, files, version, commit, tree):
+def pack(output, files, version, commit, tree, name=NAME, sibling_version=None):
     original = json.loads(files['package.json'])
-    if original['name'] != NAME or original.get('dependencies'):
-        raise ValueError('This trial requires the dependency-free Console Core package')
+    if original['name'] != name:
+        raise ValueError('Package identity differs from the selected Git tree')
     metadata = dict(original, version=version, zgsPilot={'sourceCommit': commit, 'sourceTree': tree,
         'purpose': 'consumer-locked-source-transport-trial'})
+    if name == NAME:
+        if original.get('dependencies'):
+            raise ValueError('This trial requires the dependency-free Console Core package')
+    else:
+        siblings = {NAME} if name == NAME + '.ui' else {NAME, NAME + '.ui'}
+        if name not in SIBLINGS[1:3] or sibling_version != version:
+            raise ValueError('Require the matching frozen Console cohort version')
+        dependencies = original['dependencies']
+        if {key for key in dependencies if key.startswith('com.zerogamestudio.')} != siblings:
+            raise ValueError('Unexpected ZE dependencies in ' + name)
+        metadata['dependencies'] = {key: sibling_version if key in siblings else value
+                                    for key, value in dependencies.items()}
     payload = dict(files, **{'package.json': (json.dumps(metadata, indent=2) + '\n').encode()})
     raw = io.BytesIO()
     with tarfile.open(fileobj=raw, mode='w', format=tarfile.USTAR_FORMAT) as archive:
@@ -77,12 +89,15 @@ def pack(output, files, version, commit, tree):
             archive.addfile(info, io.BytesIO(data))
     import gzip
     packed = gzip.compress(raw.getvalue(), mtime=0)
-    asset = NAME + '-' + version + '.tgz'
+    asset = name + '-' + version + '.tgz'
     with (output / asset).open('xb') as stream:
         stream.write(packed)
-    return {'asset': asset, 'bytes': len(packed), 'sha256': hashlib.sha256(packed).hexdigest(),
+    record = {'asset': asset, 'bytes': len(packed), 'sha256': hashlib.sha256(packed).hexdigest(),
             'sha512': 'sha512-' + base64.b64encode(hashlib.sha512(packed).digest()).decode(),
             'sourceCommit': commit, 'sourceTree': tree, 'runtimeFilesUnchanged': True}
+    if name != NAME:
+        record['dependencies'] = metadata['dependencies']
+    return record
 
 
 def prepare(repository, project, output, release_tag):
@@ -114,15 +129,40 @@ def prepare(repository, project, output, release_tag):
     return result
 
 
+def prepare_frontends(repository, project, output, release_tag, core_version):
+    commit, baseline = read_pin(project)
+    core_files = committed_files(repository, commit, NAME)
+    base = json.loads(core_files['package.json'])['version']
+    if not re.fullmatch(re.escape(f'{base}-ze-pob.{commit[:8]}.') + r'[1-9]\d*', core_version):
+        raise ValueError('The trial version does not identify the current Core pin')
+    output.mkdir(parents=True)
+    github_base = REPOSITORY.removesuffix('.git') + '/releases/download/' + release_tag + '/'
+    result = {'sourceCommit': commit, 'baseline': baseline, 'version': core_version, 'packages': {}}
+    for name in SIBLINGS[1:3]:
+        tree = git(repository, 'rev-parse', commit + ':' + name).decode().strip()
+        files = committed_files(repository, commit, name)
+        artifact = pack(output, files, core_version, commit, tree, name, core_version)
+        result['packages'][name] = {'githubBase': github_base, 'metadataAsset': name + '-registry.json',
+                                    'versions': {core_version: artifact}}
+    (output / 'frontend-catalog.json').write_bytes((json.dumps(result, indent=2) + '\n').encode())
+    return result
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--project', required=True, type=Path)
     parser.add_argument('--output', required=True, type=Path)
     parser.add_argument('--release-tag', required=True)
+    parser.add_argument('--with-core-version', help='Package the two frontends for an already qualified Core version')
     args = parser.parse_args()
-    if not re.fullmatch(r'ze-upm-pob-core-[a-f0-9]{8}-\d{8}', args.release_tag):
+    kind = 'console' if args.with_core_version else 'core'
+    if not re.fullmatch(r'ze-upm-pob-' + kind + r'-[a-f0-9]{8}-\d{8}', args.release_tag):
         raise ValueError('Use a unique scoped pilot tag')
     repository = Path(__file__).resolve().parents[3]
+    if args.with_core_version:
+        result = prepare_frontends(repository, args.project.resolve(), args.output.resolve(), args.release_tag, args.with_core_version)
+        print(json.dumps({'sourceCommit': result['sourceCommit'], 'version': result['version'], 'frontends': list(result['packages'])}))
+        return
     result = prepare(repository, args.project.resolve(), args.output.resolve(), args.release_tag)
     print(json.dumps({'sourceCommit': result['sourceCommit'], 'sourceTree': result['sourceTree'],
                       'versions': list(result['versions']), 'runtimeFilesUnchanged': True}))
