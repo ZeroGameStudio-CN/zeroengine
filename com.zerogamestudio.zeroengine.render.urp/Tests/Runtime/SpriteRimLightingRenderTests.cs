@@ -1036,7 +1036,9 @@ namespace ZeroEngine.Render.Tests.Runtime
             var position=light.transform.position;var shape=light.Shape;float intensity=light.Intensity;
             float weak=profile.WeakDistance,strong=profile.StrongDistance,scale=profile.StrongScale;
             float wrap=profile.InnerWrapStrength,strength=profile.Strength,exposure=profile.MinimumExposure,maximum=profile.MaximumLight;
+            var edgeTint=profile.EdgeTint;
             var images=new List<Texture2D>();GameObject secondHost=null;
+            var extraHosts=new List<GameObject>();
             Texture2D Capture(){var image=Render(camera);images.Add(image);return image;}
             try
             {
@@ -1071,9 +1073,9 @@ namespace ZeroEngine.Render.Tests.Runtime
                 profile.Strength=0;lighting.UpdateLighting();var bodyBase=Capture();profile.Strength=1;
                 second.enabled=false;lighting.UpdateLighting();var darkSingle=Capture();
                 second.enabled=true;lighting.UpdateLighting();var combined=Capture();
-                Assert.That(combined.GetPixel(13,28).b,Is.GreaterThan(darkSingle.GetPixel(13,28).b*2+.0005f),
-                    "Additional incident light must restore a visible dark-blue contour, rather than maxing each lamp's dim result.");
-                Assert.That(combined.GetPixel(42,28).b,Is.GreaterThan(.005f),
+                Assert.That(combined.GetPixel(13,28).b,Is.EqualTo(darkSingle.GetPixel(13,28).b).Within(.0001f),
+                    "The opposite lamp must not brighten or saturate this lamp's contour.");
+                Assert.That(combined.GetPixel(42,28).b,Is.GreaterThan(bodyBase.GetPixel(42,28).b+.00005f),
                     "The colored dark edge must remain visible on the opposed contour.");
                 var body=combined.GetPixel(29,28);var unlitBody=bodyBase.GetPixel(29,28);
                 Assert.That(body.r,Is.EqualTo(unlitBody.r).Within(.0001f));
@@ -1082,6 +1084,53 @@ namespace ZeroEngine.Render.Tests.Runtime
                     "The dark body between the contours must retain its scene shading.");
                 second.enabled=false;lighting.UpdateLighting();var removed=Capture();
                 AssertSameImage(darkSingle,removed,"Disabling the extra field must immediately restore the single-light image.");
+
+                second.enabled=true;secondHost.transform.position=light.transform.position;
+                lighting.UpdateLighting();var overlap=Capture();
+                float singleGain=darkSingle.GetPixel(13,28).b-bodyBase.GetPixel(13,28).b;
+                float overlapGain=overlap.GetPixel(13,28).b-bodyBase.GetPixel(13,28).b;
+                Assert.That(singleGain,Is.GreaterThan(.00005f));
+                Assert.That(overlapGain,Is.InRange(singleGain,singleGain*1.23f),
+                    "A duplicate lamp may gently increase the edge response without triggering a shared Color Dodge singularity.");
+                var overlappingLights=new List<SpriteRimLight>{light,second};
+                for(int i=0;i<2;i++)
+                {
+                    var host=new GameObject("Additional overlapping reference light");extraHosts.Add(host);
+                    SceneManager.MoveGameObjectToScene(host,actor.gameObject.scene);host.transform.position=light.transform.position;
+                    var extra=host.AddComponent<SpriteRimLight>();extra.Radius=light.Radius;
+                    extra.LightColor=Color.white;extra.Intensity=light.Intensity;overlappingLights.Add(extra);
+                }
+                lighting.Configure(new[]{actor},overlappingLights.ToArray(),profile);lighting.UpdateLighting();var four=Capture();
+                float fourGain=four.GetPixel(13,28).b-bodyBase.GetPixel(13,28).b;
+                Assert.That(fourGain,Is.InRange(overlapGain,singleGain*1.45f),
+                    "Four overlapping lamps must remain below 1.45 times the single-lamp added response.");
+                Assert.That(four.GetPixel(29,28).b,Is.EqualTo(unlitBody.b).Within(.0001f));
+                foreach(var host in extraHosts)Object.DestroyImmediate(host);extraHosts.Clear();
+                secondHost.transform.position=new Vector3(.5f,0,0);
+                lighting.Configure(new[]{actor},new[]{light,second},profile);
+
+                second.enabled=false;profile.EdgeTint=new Color(2,2,2,1);
+                lighting.UpdateLighting();var tinted=Capture();
+                Assert.That(tinted.GetPixel(13,28).b,Is.InRange(darkSingle.GetPixel(13,28).b,.1f),
+                    "HDR tint must retain the single-light mask bound instead of saturating a dark material to white.");
+                profile.EdgeTint=edgeTint;
+
+                second.enabled=true;secondHost.transform.position=light.transform.position;
+                light.Intensity=second.Intensity=2;
+                light.LightColor=new Color(1,.3f,.1f,1);second.LightColor=new Color(.08f,.66f,1,1);
+                material.SetVector("_BaseColor",new Vector4(.12f,.2f,.3f,1));
+                profile.Strength=0;lighting.UpdateLighting();var colorBase=Capture();
+                profile.Strength=1;lighting.UpdateLighting();var colorMix=Capture();
+                var colorEdge=colorMix.GetPixel(13,28);var baseEdge=colorBase.GetPixel(13,28);
+                Assert.That(colorEdge.r-baseEdge.r,Is.GreaterThan(colorEdge.g-baseEdge.g),
+                    "Strong warm/cool overlap must retain the dominant warm hue instead of the reference saturation branch's green cast.");
+                Assert.That(colorEdge.b,Is.GreaterThan(baseEdge.b+.005f),
+                    "The cool lamp must still contribute blue when its reference saturated branch would borrow a darker red channel.");
+                var colorBody=colorMix.GetPixel(29,28);var baseBody=colorBase.GetPixel(29,28);
+                Assert.That(colorBody.r,Is.EqualTo(baseBody.r).Within(.0001f));
+                Assert.That(colorBody.g,Is.EqualTo(baseBody.g).Within(.0001f));
+                Assert.That(colorBody.b,Is.EqualTo(baseBody.b).Within(.0001f));
+                light.LightColor=second.LightColor=Color.white;secondHost.transform.position=new Vector3(.5f,0,0);
 
                 material.SetVector("_BaseColor",new Vector4(0,0,0,1));
                 second.enabled=true;light.Intensity=second.Intensity=2;
@@ -1116,11 +1165,13 @@ namespace ZeroEngine.Render.Tests.Runtime
             finally
             {
                 if(secondHost)Object.DestroyImmediate(secondHost);
+                foreach(var host in extraHosts)if(host)Object.DestroyImmediate(host);
                 foreach(var image in images)Object.DestroyImmediate(image);
                 material.SetVector("_BaseColor",color);light.LightColor=lightColor;light.Intensity=intensity;
                 light.Shape=shape;light.transform.position=position;
                 profile.WeakDistance=weak;profile.StrongDistance=strong;profile.StrongScale=scale;
                 profile.InnerWrapStrength=wrap;profile.Strength=strength;profile.MinimumExposure=exposure;profile.MaximumLight=maximum;
+                profile.EdgeTint=edgeTint;
                 lighting.Configure(new[]{actor},new[]{light},profile);lighting.UpdateLighting();
             }
         }

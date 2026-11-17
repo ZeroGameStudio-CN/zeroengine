@@ -214,6 +214,48 @@ Shader "Hidden/ZeroEngine/SpriteRimLighting"
             return mix.weightedColor * (mix.peak / max(mix.weights, .00000001));
         }
 
+        struct RimResponseMix
+        {
+            float3 addedColor;
+            float magnitudes;
+            float fourthPowers;
+        };
+
+        void AccumulateRimResponse(inout RimResponseMix mix, float3 gain)
+        {
+            float magnitude = max(gain.r, max(gain.g, gain.b));
+            mix.addedColor += gain;
+            mix.magnitudes += magnitude;
+            float squared = magnitude * magnitude;
+            mix.fourthPowers += squared * squared;
+        }
+
+        float3 ResolveRimResponse(RimResponseMix mix)
+        {
+            // Fuse material responses in linear color. A fourth-power envelope
+            // preserves one lamp and allows only gentle growth on overlapping edges.
+            // Color still includes every local contribution, without max-channel picking.
+            return mix.addedColor * (sqrt(sqrt(mix.fourthPowers)) / max(mix.magnitudes, .00000001));
+        }
+
+        float3 ReferenceFusionGain(float3 original, float3 localGain, float4 light, float3 hue, float4 meta)
+        {
+            bool gammaBlend = fmod(meta.z, 2) > .5;
+            float3 incomingBase = meta.z >= 2 ? min(original, 1) : original;
+            float3 baseColor = gammaBlend ? LinearToSRGB(incomingBase) : incomingBase;
+            // A finite independent-channel response supplies the missing hue when
+            // the reference's saturated green/blue branch borrows its red channel.
+            float3 dodge = baseColor / max(1 - light.rgb, .1);
+            float3 color = min(lerp(baseColor, dodge, light.a), meta.y);
+            if (meta.z >= 2) color = saturate(color);
+            float3 response = gammaBlend ? SRGBToLinear(color) : color;
+            float3 gain = max(localGain, max(response - incomingBase, 0) * meta.x) * saturate(hue);
+            float materialPeak = max(incomingBase.r, max(incomingBase.g, incomingBase.b));
+            float budget = max(materialPeak, max(localGain.r, max(localGain.g, localGain.b)));
+            float peak = max(gain.r, max(gain.g, gain.b));
+            return gain * min(1, budget / max(peak, .00000001));
+        }
+
         float3 ArtCellWorldPosition(float3 positionWS, float2 cellOffset)
         {
             float3 axisX = TransformObjectToWorldDir(float3(1, 0, 0), false);
@@ -240,7 +282,6 @@ Shader "Hidden/ZeroEngine/SpriteRimLighting"
             float2 uv = CoveredArtCell(input, cellOffset);
             float2 texel = max(_RimRefMaskInfo.xy, .000001);
             float3 energy = 0; float blend = 0;
-            float3 referenceField = 0;
             float4 referenceResponses = 0;
             bool referenceResponse = _RimReferenceEdgeResponse > .5;
             float3 darkEdgeLight = 0;
@@ -251,6 +292,9 @@ Shader "Hidden/ZeroEngine/SpriteRimLighting"
             RimColorMix rimMix = (RimColorMix)0;
             RimColorMix darkMix = (RimColorMix)0;
             RimColorMix contourMix = (RimColorMix)0;
+            RimResponseMix referenceMix = (RimResponseMix)0;
+            RimResponseMix referenceTintedMix = (RimResponseMix)0;
+            float fusionWeights = 0, dominantFusionWeight = 0;
             float unshadowedAlpha = 0;
             float visibleAlpha = 0;
             float3 cellWS = ArtCellWorldPosition(input.positionWS, cellOffset);
@@ -328,6 +372,14 @@ Shader "Hidden/ZeroEngine/SpriteRimLighting"
             }
             float coherence = saturate(length(weightedDirection) / max(directionalWeight, .000001));
             float nativeDirectionalStyle = smoothstep(.55, .9, coherence);
+            float2 sceneUV = GetNormalizedScreenSpaceUV(input.positionCS) * _RimEnhanceSceneScaleBias.xy + _RimEnhanceSceneScaleBias.zw;
+            float4 original = SAMPLE_TEXTURE2D_X(_RimEnhanceSceneColor, sampler_PointClamp, sceneUV);
+            float exposure = _RimRefStyle.x;
+            if (visibleAlpha < unshadowedAlpha)
+            {
+                if (visibleAlpha <= 0) return original;
+                exposure = lerp(1, exposure, visibleAlpha / unshadowedAlpha);
+            }
             [unroll] for (int i = 0; i < 4; i++)
             {
                 if (i >= _RimEnhanceLightCount) break;
@@ -440,14 +492,21 @@ Shader "Hidden/ZeroEngine/SpriteRimLighting"
                 if (_RimReferenceEdgeResponse > .5 && _RimEnhanceShapes[i].x > 2.5) fieldColor *= _RimEnhanceColors[i].a;
                 if (referenceResponse)
                 {
-                    // The reference shares light color before applying its mask.
-                    // Extend that mask to all eligible directions. Do not average
-                    // away their coverage or add several masks into a brighter line.
+                    // Resolve each lamp under its own mask before fusion. An
+                    // opposing lamp must not saturate another side's Color Dodge.
                     float4 incident = ReferenceFieldContribution(fieldColor, alpha, visibility);
-                    referenceField += incident.rgb;
                     float response = _RimEnhanceShapes[i].x > 2.5 ? referenceResponses[i] : band.w;
-                    energy = max(energy, modulation * response);
-                    blend += incident.a;
+                    float4 localLight = float4(incident.rgb * saturate(modulation * response), incident.a * _RimRefStyle.z);
+                    float3 localColor = CompositeColor(original.rgb, localLight, 0, 0,
+                        float4(exposure, _RimRefStyle.y, _RimRefStyle.w, 1));
+                    float3 gain = max(localColor - original.rgb, 0);
+                    AccumulateRimResponse(referenceMix, gain);
+                    float3 hue = fieldColor / max(max(fieldColor.r, max(fieldColor.g, fieldColor.b)), .00000001);
+                    AccumulateRimResponse(referenceTintedMix, ReferenceFusionGain(original.rgb, gain, localLight, hue,
+                        float4(exposure, _RimRefStyle.y, _RimRefStyle.w, 1)));
+                    float weight = max(localLight.r, max(localLight.g, localLight.b)) * localLight.a;
+                    fusionWeights += weight;
+                    dominantFusionWeight = max(dominantFusionWeight, weight);
                     continue;
                 }
                 float3 rimColor = saturate(fieldColor * amount) * modulation * band.w;
@@ -470,7 +529,13 @@ Shader "Hidden/ZeroEngine/SpriteRimLighting"
             }
             if (referenceResponse)
             {
-                energy = saturate(referenceField) * saturate(energy);
+                // No overlap retains the original single-lamp response exactly.
+                // Chroma correction grows continuously as another local lamp arrives.
+                float overlap = smoothstep(0, .5, 1 - dominantFusionWeight / max(fusionWeights, .00000001));
+                float3 gain = lerp(ResolveRimResponse(referenceMix), ResolveRimResponse(referenceTintedMix), overlap);
+                if (_RimRefStyle.w >= 2) gain = min(gain, max(1 - min(original.rgb, 1), 0));
+                original.rgb += gain;
+                return original;
             }
             if (mixNativeLights)
             {
@@ -479,14 +544,6 @@ Shader "Hidden/ZeroEngine/SpriteRimLighting"
                 contourLight = ResolveRimColor(contourMix);
                 float mixedPeak = max(max(contourLight.r, contourLight.g), contourLight.b);
                 contourLight *= contourMix.peak / max(mixedPeak, .00000001);
-            }
-            float2 sceneUV = GetNormalizedScreenSpaceUV(input.positionCS) * _RimEnhanceSceneScaleBias.xy + _RimEnhanceSceneScaleBias.zw;
-            float4 original = SAMPLE_TEXTURE2D_X(_RimEnhanceSceneColor, sampler_PointClamp, sceneUV);
-            float exposure = _RimRefStyle.x;
-            if (visibleAlpha < unshadowedAlpha)
-            {
-                if (visibleAlpha <= 0) return original;
-                exposure = lerp(1, exposure, visibleAlpha / unshadowedAlpha);
             }
             float4 light = float4(saturate(energy), saturate(blend) * _RimRefStyle.z);
             original.rgb = CompositeColor(original.rgb, light, min(darkEdgeLight, .25) * _RimRefStyle.z, contourLight,

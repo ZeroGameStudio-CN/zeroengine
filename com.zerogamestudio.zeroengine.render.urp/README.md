@@ -31,16 +31,25 @@ composite. The old preview tint and reference MRT implementations are removed.
 The default starts from the already rendered scene color. Source textures supply
 alpha coverage only: it never redraws the actor with unlit texture RGB. Each light
 gets its own contour direction, so opposed lamps can illuminate both sides without
-switching to one strongest side. Visible lights first accumulate the reference
-incident field with its RGBA8 UNorm source bounds and blending. The union of
-directional contours modulates that shared field before Color Dodge, retaining
-the painted material response on dark art. Native field lookup follows the camera
+switching to one strongest side. Each lamp resolves the reference response under
+its own contour mask, with RGBA8 UNorm source bounds and blending. Positive added
+light is then fused in linear color with a fourth-power magnitude envelope.
+This preserves a single lamp and permits gentle growth where lights overlap,
+without feeding their sum into a shared Color Dodge denominator. Every local
+color participates; an opposed lamp cannot brighten an edge outside its mask.
+Two or four identical overlapping white lamps produce about 1.19 or 1.41 times the
+single-lamp added light before the LDR cap; the body is composed only once.
+Within overlap, a bounded independent-channel response restores the actual lamp
+hues when the reference saturation branch borrows another channel. Its budget
+comes from the material brightness and reference gain. This color correction
+fades in with local overlap, leaving single-lamp and disjoint contours unchanged.
+Native field lookup follows the camera
 ray to each source's XY plane. The reference's XY center response attenuates
 contour RGB before Color Dodge, preserving weak colored detail below saturation;
 native 3D selection still controls source eligibility and contour direction.
 These masks never replace the shaded body. The narrow inward wrap fades away within two art
 cells. Its strength is 0.08 in the shared default; the deep interior is unchanged.
-The reference's mixed-color saturation branch retains a weaker colored response
+The single-lamp reference's mixed-color saturation branch retains a weaker colored response
 on black art at full saturation. Isolated saturated channels keep ZE's
 nonzero-color fallback.
 Exposure scales only the added edge gain. Existing HDR/emission is preserved and
