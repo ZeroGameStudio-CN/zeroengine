@@ -562,24 +562,25 @@
     },
     {
       "id": "ze.packages.registry-preview",
-      "title": "ZE 单包 HTTPS 分发与自动回退试点",
+      "title": "ZE Console 包组 HTTPS 分发与自动回退试点",
       "stage": "Previewable",
       "targetReleaseId": "",
       "availability": "InternalOnly",
       "responsibleChat": "01a1c66f-d77b-7b00-88d4-37f8f3df3b13",
       "chatUrl": "codex://threads/01a1c66f-d77b-7b00-88d4-37f8f3df3b13",
-      "nextAction": "仅保留 Console 两个试点版本。Worker01 主源、同一地址自动回退 GitHub、恢复后自动回主源均已核对，上海旧试点退役；POB 未修改。后续再决定整组版本发布、Agent Registry 来源校验与消费者迁移，不据单次试点宣称长期稳定。",
+      "nextAction": "以 POB 当前锁定提交验证 Core 与 Console 包组。正式接入使用同一批清单和锁文件，完成实际加载核对后刷新已安装包的 Skill 来源记录。",
       "entrance": "https://packages-preview.zerogamestudio.com/com.zerogamestudio.zeroengine.console",
       "resourcePath": "Tools/Packages/registry-preview/README.md",
-      "revision": "Worker01 使用独立 Verdaccio 7.1.1、Node 24.11.1、只读密钥门与专用 Tunnel；Cloudflare 固定入口按冻结清单校验来源与包哈希，主源不可用时读取 GitHub 不可变备份。Windows／M5 真实 HTTPS 断源及恢复、M5 冷缓存三次 Unity 解析与 API 切换、私有备份隔离恢复均有证据；个人配置保持。Cloudflare 本身仍是共同入口故障域。",
+      "revision": "以 d194ba36 的同一份 Console Core、UI、Quantum 桥接源码产出固定版本。Worker01 和 GitHub 备份按包校验来源、依赖及哈希。主源和断源时均以冷缓存加载三包，Quantum 2.6.7 在隔离 PlayMode 打开、执行一次命令并关闭，已安装的 Agent 工具识别 Registry 来源。",
       "releaseEvidence": "",
-      "candidatePackageVersion": "0.1.0-ze-pilot.2",
+      "candidatePackageVersion": "0.1.0-ze-pob.d194ba36.2",
       "verificationEvidence": [
         "D:/CodexArtifacts/ze-upm-https-20261117/verification.json",
-        "D:/CodexArtifacts/ze-upm-worker-20261117/verification.json"
+        "D:/CodexArtifacts/ze-upm-worker-20261117/verification.json",
+        "D:/CodexArtifacts/ze-core-registry-pob-20261117/verification.json"
       ],
       "relatedContent": [],
-      "verificationScope": "仅单包 Preview 与两份试点版本；Unity 6000.6.9f1，未升级 POB，未验证整个 ZE 批次或完整 Player。"
+      "verificationScope": "Unity 6000.6.9f1。覆盖 Core 安装、升级、回滚及包组在主源和备份上的安装、Quantum 和 Skill，范围为独立工程。POB 清单和锁文件候选基于 Plastic 基线准备，接入单独记录。"
     }
   ]
 }

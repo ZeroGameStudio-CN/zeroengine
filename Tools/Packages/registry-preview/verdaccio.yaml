@@ -12,6 +12,14 @@ packages:
     access: $all
     publish: ze-preview-publisher
     unpublish: []
+  'com.zerogamestudio.zeroengine.console.ui':
+    access: $all
+    publish: ze-preview-publisher
+    unpublish: []
+  'com.zerogamestudio.zeroengine.console.quantum':
+    access: $all
+    publish: ze-preview-publisher
+    unpublish: []
   '**':
     access: []
     publish: []

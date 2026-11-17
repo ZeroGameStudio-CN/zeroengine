@@ -3,7 +3,7 @@ import fs from 'node:fs';
 import crypto from 'node:crypto';
 
 const secret = fs.readFileSync(`${process.env.CREDENTIALS_DIRECTORY}/origin-key`, 'utf8').trim();
-const allowed = /^\/(com\.zerogamestudio\.zeroengine\.console(\/.*)?|-\/ping|-\/v1\/search|-\/all)$/;
+const allowed = /^\/(com\.zerogamestudio\.zeroengine\.console(?:\.ui|\.quantum)?(?:\/.*)?|-\/ping|-\/v1\/search|-\/all)$/;
 http.createServer((req, res) => {
   const supplied = Buffer.from(String(req.headers['x-ze-origin-key'] ?? ''));
   const expected = Buffer.from(secret);
