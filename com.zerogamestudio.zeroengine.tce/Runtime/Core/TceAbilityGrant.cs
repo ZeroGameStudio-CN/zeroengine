@@ -31,6 +31,7 @@ namespace ZeroEngine.TCE
         private sealed class Entry
         {
             public IDisposable Ability;
+            public bool Installing;
             public readonly HashSet<object> Sources = new(ReferenceComparer.Instance);
         }
 
@@ -42,23 +43,44 @@ namespace ZeroEngine.TCE
         }
 
         private readonly Dictionary<TceAbilityGrantKey, Entry> entries = new();
+        private bool clearing;
         public int Count => entries.Count;
 
         public bool TryGrant(TceAbilityGrantKey key, object source, Func<IDisposable> install, out IDisposable ability)
         {
             ability = null;
-            if (!key.Receiver.IsCurrent || key.Definition == null || source == null) return false;
-            if (!entries.TryGetValue(key, out var entry))
+            if (clearing || !key.Receiver.IsCurrent || key.Definition == null || source == null) return false;
+            if (entries.TryGetValue(key, out var entry))
             {
-                ability = install?.Invoke();
-                if (ability == null) return false;
-                if (!key.Receiver.IsCurrent) { ability.Dispose(); ability = null; return false; }
-                entry = new Entry { Ability = ability };
-                entries.Add(key, entry);
+                if (entry.Installing) return false;
+                entry.Sources.Add(source);
+                ability = entry.Ability;
+                return true;
             }
+            entry = new Entry { Installing = true };
             entry.Sources.Add(source);
-            ability = entry.Ability;
-            return true;
+            entries.Add(key, entry);
+            IDisposable installed = null;
+            try
+            {
+                installed = install?.Invoke();
+                if (installed == null || !key.Receiver.IsCurrent ||
+                    !entries.TryGetValue(key, out var current) || !ReferenceEquals(current, entry))
+                {
+                    if (entries.TryGetValue(key, out current) && ReferenceEquals(current, entry)) entries.Remove(key);
+                    installed?.Dispose();
+                    return false;
+                }
+                entry.Ability = installed;
+                entry.Installing = false;
+                ability = installed;
+                return true;
+            }
+            catch
+            {
+                if (entries.TryGetValue(key, out var current) && ReferenceEquals(current, entry)) entries.Remove(key);
+                throw;
+            }
         }
 
         public void Revoke(TceAbilityGrantKey key, object source)
@@ -82,14 +104,24 @@ namespace ZeroEngine.TCE
 
         public void Clear()
         {
-            foreach (var key in new List<TceAbilityGrantKey>(entries.Keys)) Remove(key);
+            if (clearing) return;
+            clearing = true;
+            List<Exception> errors = null;
+            try
+            {
+                foreach (var key in new List<TceAbilityGrantKey>(entries.Keys))
+                    try { Remove(key); }
+                    catch (Exception error) { (errors ??= new List<Exception>()).Add(error); }
+            }
+            finally { clearing = false; }
+            if (errors != null) throw new AggregateException(errors);
         }
 
         private void Remove(TceAbilityGrantKey key)
         {
             if (!entries.TryGetValue(key, out var entry)) return;
             entries.Remove(key);
-            entry.Ability.Dispose();
+            entry.Ability?.Dispose();
         }
     }
 }

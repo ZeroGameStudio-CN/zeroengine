@@ -174,5 +174,93 @@ namespace ZeroEngine.GameFeel.Tests
             for (int i = 101; i <= 1100; i++) Add(n, t, Context(FeedbackNumberMode.Action, i), i, display: d);
             Assert.That(GC.GetAllocatedBytesForCurrentThread() - before, Is.Zero);
         }
+
+        [Test]
+        public void PreparedAccumulatorCreatesFirstImmediately_AndEndsAtFirstRequestDeadline()
+        {
+            var n = Numbers(); var t = new Target(); var c = Context(FeedbackNumberMode.Accumulate);
+            var first = n.Prepare(t, 0, c, 10, 1, .25, false);
+            Assert.That(first.ShouldCreate, Is.True); Assert.That(first.EndsAt, Is.EqualTo(1.25));
+            var display = new Display(); Assert.That(n.Commit(first, display, 1), Is.True);
+            var second = n.Prepare(t, 0, c, 20, 1.12, .6, false);
+            Assert.That(second.ShouldCreate, Is.False, "Explicit accumulation does not guess intent from frequency.");
+            Assert.That(second.Merge.Display, Is.SameAs(display)); Assert.That(second.Merge.Total, Is.EqualTo(30));
+            Assert.That(n.Prepare(t, 0, c, 7, 1.251, .25, false).ShouldCreate, Is.True);
+        }
+
+        [Test]
+        public void PreparedHighFrequencyInputDoesNotRequireOneDisplayPerHit()
+        {
+            var n = Numbers(); var t = new Target(); var c = Context(FeedbackNumberMode.Accumulate);
+            int created = 0;
+            for (int i = 0; i < 1000; i++)
+            {
+                var request = n.Prepare(t, 0, c, 10, i * .01, .25, false);
+                if (!request.ShouldCreate) continue;
+                created++; Assert.That(n.Commit(request, new Display(), 1), Is.True);
+            }
+            Assert.That(created, Is.LessThanOrEqualTo(41));
+            Assert.That(n.Requests, Is.EqualTo(1000));
+            Assert.That(n.MergedRequests, Is.EqualTo(1000 - created));
+        }
+
+        [Test]
+        public void FailedSpawnAndReentryCannotCommitOverNewerOutput()
+        {
+            var n = Numbers(); var t = new Target(); var c = Context(FeedbackNumberMode.Accumulate);
+            var failed = n.Prepare(t, 0, c, 10, 0, .25, false); // No output: do not commit.
+            var next = n.Prepare(t, 0, c, 20, .01, .25, false);
+            var display = new Display();
+            Assert.That(next.ShouldCreate, Is.True);
+            Assert.That(n.Commit(next, display, 1), Is.True);
+            Assert.That(n.Commit(failed, new Display(), 1), Is.False);
+            Assert.That(n.Commit(next, display, 1), Is.False, "Commit is single use.");
+            Assert.That(n.Prepare(t, 0, c, 7, .02, .25, false).Merge.Total, Is.EqualTo(27));
+        }
+
+        [Test]
+        public void PendingDisplayIsInvalidAfterClearTargetReuseOrSlotReuse()
+        {
+            var n = Numbers(1); var t = new Target(); var c = Context(FeedbackNumberMode.Accumulate);
+            var old = n.Prepare(t, 0, c, 10, 0, .25, false);
+            n.Clear(); Assert.That(n.Commit(old, new Display(), 1), Is.False);
+            old = n.Prepare(t, 0, c, 10, .01, .25, false);
+            t.Generation++; Assert.That(n.Commit(old, new Display(), 1), Is.False);
+            old = n.Prepare(t, 0, c, 10, .02, .25, false);
+            var newer = n.Prepare(t, 0, Context(FeedbackNumberMode.Accumulate, group: 2), 20, .03, .25, false);
+            Assert.That(n.Commit(newer, new Display(), 1), Is.True);
+            Assert.That(n.Commit(old, new Display(), 1), Is.False);
+        }
+
+        [Test]
+        public void PreparedIndividualAndImportantRequestsRemainIndependent()
+        {
+            var n = Numbers(); var t = new Target();
+            foreach (var c in new[] { Context(FeedbackNumberMode.Individual), Context(FeedbackNumberMode.Accumulate, important: true) })
+            {
+                var request = n.Prepare(t, 0, c, 1000, 0, .25, false);
+                Assert.That(request.ShouldCreate, Is.True); Assert.That(request.IsTracked, Is.False);
+                Assert.That(n.Commit(request, new Display(), 1), Is.False);
+            }
+            Assert.That(n.MergedRequests, Is.Zero);
+        }
+
+        [Test]
+        public void WarmPreparationAndCommitDoNotAllocatePerHit()
+        {
+            var n = Numbers(); var t = new Target(); var d = new Display(); var c = Context(FeedbackNumberMode.Accumulate);
+            for (int i = 0; i < 100; i++)
+            {
+                var request = n.Prepare(t, 0, c, 10, i * .01, .25, false);
+                if (request.ShouldCreate) n.Commit(request, d, 1);
+            }
+            long before = GC.GetAllocatedBytesForCurrentThread();
+            for (int i = 100; i < 1100; i++)
+            {
+                var request = n.Prepare(t, 0, c, 10, i * .01, .25, false);
+                if (request.ShouldCreate) n.Commit(request, d, 1);
+            }
+            Assert.That(GC.GetAllocatedBytesForCurrentThread() - before, Is.Zero);
+        }
     }
 }

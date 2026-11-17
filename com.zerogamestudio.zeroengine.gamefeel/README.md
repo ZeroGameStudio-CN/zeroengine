@@ -135,6 +135,33 @@ The consolidated baseline retains the POB-consumed adaptive feedback, channel co
 
 ## Damage number intent and adaptive streams
 
+For new renderers, decide before creating a number:
+
+```csharp
+var request = numbers.Prepare(target, style, context, value, now, windowSeconds, unscaled);
+if (request.Merge.Merged)
+    sink.SetTotal(request.Merge.Display, request.Merge.Total);
+else
+{
+    var display = sink.TrySpawn(value);
+    if (display != null) numbers.Commit(request, display, display.Activation);
+}
+```
+
+`sink` is the consumer's formatting/pool/rendering adapter. A merged request creates
+no emitter or text mesh. Failed output needs no commit; stale, repeated or reentrant
+commits cannot replace newer output. Default/untracked requests still require an
+individual output. `EndsAt` is the tracked first-request deadline, so a consumer may
+throttle intermediate refreshes while flushing the final total by that deadline.
+Existing `Add` overloads retain their post-spawn compatibility behavior.
+
+`FeedbackNumberMode.Accumulate` is explicit short-window accumulation for a
+producer-declared group. It needs no cadence inference: the consumer chooses which
+events belong to that group, ends it on release, and starts a fresh ID on restart.
+It shares the existing source/owner/target/style and lifetime protections, preserves
+important output, and never extends a window after its first event. The package
+does not identify weapons, author gameplay events, own pools or delay damage.
+
 Pass a captured FeedbackNumberContext to FeedbackNumberMerger.Add. Individual
 and Important requests always retain their own output. Action requests aggregate
 only within the same owner, source, action/beat, target lifetime and style. Use a
