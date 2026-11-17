@@ -1,0 +1,15 @@
+{
+  "name": "com.zerogamestudio.zeroengine.cinematic.cinemachine",
+  "version": "0.1.0",
+  "displayName": "ZeroEngine Cinematic Cinemachine",
+  "description": "Optional native Cinemachine Timeline bindings and owner-scoped camera override release.",
+  "unity": "6000.6",
+  "dependencies": {
+    "com.zerogamestudio.zeroengine.cinematic": "2.3.0",
+    "com.unity.cinemachine": "6.6.0",
+    "com.unity.timeline": "6.6.0"
+  },
+  "author": {
+    "name": "ZeroGameStudio"
+  }
+}

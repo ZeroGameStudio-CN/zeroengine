@@ -2,6 +2,20 @@
 
 Reusable cinematic runtime contracts and validation for Timeline-backed authored performances.
 
+Version 2.3 adds explicit service-managed Timeline track bindings. Set
+`CinematicBindingRequirement.ManagedByProjectService` through the three-argument
+constructor when an integration owns a native track's binding. The track must
+still exist in the sequence and pass normal authoring validation. The service
+must bind it during `EnterCinematic`; playback checks the actual binding after
+Enter and before start commands or graph playback, and aborts/returns entered
+services if it is missing. Ordinary requirements keep registry binding behavior
+and existing serialized assets default to ordinary mode. The base package has no
+Cinemachine dependency.
+
+`CinematicBindingRegistry.TryResolve(PropertyName, out Object)` resolves native
+exposed-reference identity against stable registered names. `PropertyName.ToString()`
+is diagnostic text and is not a round-trip stable key.
+
 This package intentionally contains project-agnostic playback policy, sequence catalogs, binding resolution, watchdog timeout handling, and authoring validation. Downstream projects provide adapters for input, camera, lifecycle events, narrative commands, UI, save, battle, quest, and other business systems.
 
 ## Runtime Responsibilities

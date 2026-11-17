@@ -88,6 +88,13 @@ namespace ZeroEngine.Cinematic
             for (var i = 0; i < bindingRequirements.Count; i++)
             {
                 var requirement = bindingRequirements[i];
+                if (requirement.ManagedByProjectService)
+                {
+                    if (requirement.Track == null)
+                        return new CinematicPlayResult(CinematicPlayStatus.BindingMissing,
+                            $"Managed Cinematic binding '{requirement.BindingKey}' has no track.", sequenceId: sequence.SequenceId);
+                    continue;
+                }
                 if (!registry.TryResolve(requirement.BindingKey, out var binding))
                 {
                     return new CinematicPlayResult(
@@ -101,7 +108,7 @@ namespace ZeroEngine.Cinematic
             for (var i = 0; i < bindingRequirements.Count; i++)
             {
                 var requirement = bindingRequirements[i];
-                if (requirement.Track != null && registry.TryResolve(requirement.BindingKey, out var binding))
+                if (!requirement.ManagedByProjectService && requirement.Track != null && registry.TryResolve(requirement.BindingKey, out var binding))
                 {
                     director.SetGenericBinding(requirement.Track, binding);
                 }
@@ -119,6 +126,17 @@ namespace ZeroEngine.Cinematic
             _activeServices = services;
             _activeCommandExecutor = commandExecutor;
             _hasActivePlayback = true;
+
+            // Native integrations own their binding lifetime, but cannot omit the binding.
+            // Check after Enter and before commands or graph playback can run.
+            for (var i = 0; i < bindingRequirements.Count; i++)
+            {
+                var requirement = bindingRequirements[i];
+                if (requirement.ManagedByProjectService && director.GetGenericBinding(requirement.Track) == null)
+                    return StopWithResult(director, new CinematicPlayResult(CinematicPlayStatus.BindingMissing,
+                        $"Project service did not bind Cinematic track '{requirement.BindingKey}'.",
+                        requiresAbortCleanup: true, sequenceId: sequence.SequenceId));
+            }
 
             var startCommandResult = ExecuteCommands(CinematicCommandPhase.OnStart, sequence, context, commandExecutor);
             if (!startCommandResult.Succeeded)

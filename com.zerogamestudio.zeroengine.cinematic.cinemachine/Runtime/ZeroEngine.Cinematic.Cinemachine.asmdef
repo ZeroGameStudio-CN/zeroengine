@@ -1,0 +1,7 @@
+{
+  "name": "ZeroEngine.Cinematic.Cinemachine",
+  "rootNamespace": "ZeroEngine.Cinematic.Cinemachine",
+  "references": ["ZeroEngine.Cinematic", "Unity.Cinemachine", "Unity.Timeline"],
+  "autoReferenced": true,
+  "noEngineReferences": false
+}

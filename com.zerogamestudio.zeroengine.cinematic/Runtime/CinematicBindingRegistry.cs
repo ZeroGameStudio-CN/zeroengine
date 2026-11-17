@@ -45,6 +45,17 @@ namespace ZeroEngine.Cinematic
             return false;
         }
 
+        /// <summary>Resolve an exposed Timeline reference by native identity, never by diagnostic ToString text.</summary>
+        public bool TryResolve(PropertyName bindingKey, out Object binding)
+        {
+            if (!PropertyName.IsNullOrEmpty(bindingKey))
+                foreach (var key in _bindings.Keys)
+                    if (new PropertyName(key) == bindingKey)
+                        return TryResolve(key, out binding);
+            binding = null;
+            return false;
+        }
+
         public bool Unregister(string bindingKey, Object binding)
         {
             var normalizedBindingKey = NormalizeBindingKey(bindingKey);

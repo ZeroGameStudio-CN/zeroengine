@@ -1,0 +1,14 @@
+{
+    "name": "ZeroEngine.Cinematic.Cinemachine.Tests.Editor",
+    "rootNamespace": "ZeroEngine.Cinematic.Cinemachine.Tests",
+    "references": ["ZeroEngine.Cinematic.Cinemachine", "ZeroEngine.Cinematic", "Unity.Cinemachine", "Unity.Timeline", "Unity.Splines", "Unity.Mathematics"],
+    "includePlatforms": ["Editor"],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": true,
+    "precompiledReferences": ["nunit.framework.dll"],
+    "autoReferenced": false,
+    "defineConstraints": ["UNITY_INCLUDE_TESTS"],
+    "versionDefines": [],
+    "noEngineReferences": false
+}
