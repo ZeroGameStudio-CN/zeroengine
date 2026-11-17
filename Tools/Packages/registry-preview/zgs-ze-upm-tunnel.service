@@ -1,0 +1,26 @@
+[Unit]
+Description=ZE Worker01 independent package origin tunnel
+After=network-online.target zgs-ze-upm-origin-gate.service
+Wants=network-online.target
+Requires=zgs-ze-upm-origin-gate.service
+
+[Service]
+Type=simple
+DynamicUser=yes
+User=zgs-ze-upm-tunnel
+LoadCredential=tunnel-token:/etc/zgs-ze-upm-preview/tunnel-token
+ExecStart=/usr/local/bin/cloudflared --no-autoupdate tunnel run --token-file %d/tunnel-token
+Restart=on-failure
+RestartSec=5
+MemoryMax=128M
+CPUQuota=25%
+TasksMax=48
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectSystem=strict
+ProtectHome=yes
+CapabilityBoundingSet=
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+
+[Install]
+WantedBy=multi-user.target

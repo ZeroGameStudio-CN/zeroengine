@@ -1,38 +1,76 @@
-# Single-package UPM HTTPS Preview
+# ZE package distribution Preview
 
-An isolated distribution trial for `com.zerogamestudio.zeroengine.console`.
-It does not repin consumer projects or establish a production package service.
+The isolated feed serves `com.zerogamestudio.zeroengine.console` at
+`https://packages-preview.zerogamestudio.com`. It is a single-package Preview;
+consumer projects and the full ZE cohort are not migrated by this deployment.
 
-- Public origin: `https://packages-preview.zerogamestudio.com`.
-- Public access: anonymous GET/HEAD for this package, npm search and ping only.
-  Publishing, account endpoints and unrelated packages are not publicly routed.
-- Runtime: Verdaccio 7.1.1 with Node 24.11.1, pinned npm lock, no uplinks or web UI.
-- Publication: server-local authenticated maintainer; immutable versioned tarballs.
-- State: `/var/lib/zgs-ze-upm-preview`; runtime releases:
-  `/opt/zgs-ze-upm-preview/releases/<source-commit>`. Credentials remain server-local.
-- Unit: `zgs-ze-upm-preview.service`, loopback `19196`, DynamicUser,
-  256 MiB memory and 50% CPU limits. It needs no Worker or GitHub for reads.
+## Read path
 
-The project manifest carries the registry URL and the exact version; the lock
-file carries its resolved registry provenance. Teammates receive those files
-through their existing SCM. Their personal npm/UPM/Git configuration is not an
-installation prerequisite for this anonymous read-only feed.
+```text
+Unity / npm -> one Cloudflare Worker hostname
+             -> Worker01 Tunnel -> read-only origin gate -> Verdaccio
+             -> immutable GitHub release backup when the origin is unavailable
+```
 
-Stage the source files, verified Node archive and the two trial tarballs in an
-owned maintenance directory. `preview_registry.py dns` snapshots/creates only this DNS
-record using the existing server-local Cloudflare credential. `preview_registry.py install`
-creates a previously absent runtime/unit; it does not replace an existing service.
-Issue the dedicated DNS-01 certificate with the existing Certbot account, then
-`preview_registry.py edge` validates and activates only the new Nginx vhost. Publish the
-two versions over loopback before user-facing verification. Existing Node,
-website, Analytics and Ops services remain separate.
+The public hostname stays the same during fallback and recovery. Metadata keeps
+tarball URLs on that hostname. The edge admits only versions in
+[`release-manifest.mjs`](release-manifest.mjs), verifies source commit, integrity,
+size and SHA-256, and labels responses `X-ZE-Package-Source: worker01|github`.
+Network errors, timeouts, unavailable responses and invalid artifacts select the
+backup; origin authorization failures stay closed. Both invalid sources return
+503. New versions become visible only after their backup and manifest are ready.
 
-Verification must include normal certificate validation, direct public DNS,
-metadata/tarball hashes, public write rejection, cold-cache install/upgrade/
-rollback through the Unity Client API and a second fresh project opening from
-only the checked-in project configuration. A local-only test is not public-network
-evidence. Agent Registry provenance and whole-cohort migration remain separate work.
+Anonymous GET/HEAD supports the exact package, versioned tarballs, search and
+ping. Public writes, account routes and unrelated packages are rejected. The
+origin gate requires a private header supplied by the edge; client credentials
+and cookies are never forwarded. Cloudflare remains a shared entry dependency;
+GitHub fallback does not cover a Cloudflare outage or guarantee every network.
 
-Rollback stops/disables only this unit and removes only its unchanged vhost and
-owned DNS record, with `nginx -t` before reload. Preserve package state and the
-deployment receipt. Do not remove unrelated certificates, credentials or routes.
+The project manifest carries the scoped registry and exact version; its lock
+file carries registry provenance. Teammates receive those project files through
+SCM. They need no personal npm/UPM/Git settings or GitHub access for normal reads.
+See the [minimal project](sample/README.md). This trial keeps the existing POB
+dependencies and Console entry unchanged.
+
+## Maintainer deployment
+
+Worker01 owns the runtime and state. Shanghai is not in the current read path.
+Verdaccio 7.1.1 and Node 24.11.1 use the pinned npm lock and a private Node release;
+no global Node upgrade, npm uplink, web UI, or shared Caddy/Tunnel change is needed.
+
+| Component | Boundary |
+| --- | --- |
+| `zgs-ze-upm-preview.service` | Loopback `19196`, DynamicUser, 256 MiB / 50% CPU |
+| `zgs-ze-upm-origin-gate.service` | Loopback `19473`, systemd origin-key credential, 96 MiB / 25% CPU |
+| `zgs-ze-upm-tunnel.service` | Dedicated remote-managed Tunnel and token credential, 128 MiB / 25% CPU |
+| Runtime | `/opt/zgs-ze-upm-preview/releases/<source-commit>`; atomic `current` symlink |
+| State | `/var/lib/zgs-ze-upm-preview`; private storage and publisher authentication |
+| Configuration | `/etc/zgs-ze-upm-preview`; secrets root-only and outside source control |
+
+Install only into a verified absent target or use a reviewed update with a state
+snapshot. Validate units before activation. Configure the dedicated Tunnel's
+origin hostname to `http://127.0.0.1:19473`, with a catch-all 404. Install its token
+and the origin key as root-only systemd credentials. Put the matching origin key
+in the edge's `ORIGIN_KEY` secret binding. [`wrangler.toml`](wrangler.toml) declares
+the edge and canonical domain; it contains no credentials. Preserve the current
+secret binding during source updates. Publishing remains authenticated and
+server-local, with immutable versioned tarballs.
+
+For an upgrade, publish the candidate over loopback, upload identical immutable
+GitHub release assets and metadata, then update the admission manifest and edge
+together after verification. Never overwrite a published version. No background
+GitHub puller or automatic consumer repin is installed by this Preview.
+
+Verify normal TLS, anonymous origin denial, public write rejection, both artifact
+hashes, and a controlled origin outage/recovery through the same hostname. Use a
+cold UPM cache to install, upgrade and roll back from project manifest/lock files;
+verify `PackageSource.Registry`, source commit and actual API compilation. Keep
+client profile files unchanged and retain receipts outside the repository.
+
+Before retiring an earlier origin, snapshot its exact DNS/vhost/service state and
+private package data, verify restore inputs, drain DNS caches, and prove the new
+route with the old origin stopped. Rollback restores only owned records and
+units from those snapshots. Preserve unrelated routes, certificates and secrets.
+The earlier Shanghai bootstrap files (`preview_registry.py`, `nginx.conf`, and
+the certificate hook) are retained as historical recovery inputs, not the active
+deployment path.
