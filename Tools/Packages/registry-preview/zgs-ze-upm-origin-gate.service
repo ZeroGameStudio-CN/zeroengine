@@ -1,0 +1,27 @@
+[Unit]
+Description=ZE package origin read-only secret gate
+After=network.target zgs-ze-upm-preview.service
+Requires=zgs-ze-upm-preview.service
+
+[Service]
+Type=simple
+DynamicUser=yes
+User=zgs-ze-upm-origin
+LoadCredential=origin-key:/etc/zgs-ze-upm-preview/origin-key
+ExecStart=/opt/zgs-ze-upm-preview/current/node/bin/node /opt/zgs-ze-upm-preview/current/origin-gate.mjs
+Restart=on-failure
+RestartSec=3
+MemoryMax=96M
+CPUQuota=25%
+TasksMax=32
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectSystem=strict
+ProtectHome=yes
+CapabilityBoundingSet=
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+IPAddressDeny=any
+IPAddressAllow=localhost
+
+[Install]
+WantedBy=multi-user.target
