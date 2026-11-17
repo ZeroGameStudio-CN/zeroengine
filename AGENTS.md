@@ -22,8 +22,8 @@ packages; maintain the source template and module READMEs here.
 
 The isolated package distribution Preview is maintained in
 [the registry tools](Tools/Packages/registry-preview/README.md). It tests a
-Worker01 origin with same-address GitHub fallback; normal consumer Git pins and
-full-cohort adoption remain separate from this single-package trial.
+Worker01 origin with same-address GitHub fallback for the three Console packages.
+The opt-in trial uses the exact versions recorded in its admission manifest.
 
 When a module's API, dependencies or usage changes, update its README and any
 affected Agent guidance together. After consumer package installation, removal or
