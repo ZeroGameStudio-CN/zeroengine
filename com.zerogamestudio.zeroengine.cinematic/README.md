@@ -84,3 +84,7 @@ The serialized fields and numeric cue channels are stable for native Unity autho
 Keep the predicate side-effect-free. Revoke its binding generation when a subject is disabled or rebound, including a disable/re-enable between samples. Ordinary playback cancellation can still restore its own placement: retire ownership only for a real handoff. Rotation, scale and parenting are never restored by this scope. No GameObject, global registry or update loop is created.
 
 This is an additive API; existing Timeline assets, serialized IDs and playback contracts are unchanged. Remove the new callers before rolling back to 2.1.0. Package publication and consumer adoption are separate from local candidate verification.
+
+## Terminal callback reentry
+
+Completion, cancellation, skip and timeout finish one captured playback. Reentrant stop/timeout calls from its terminal commands or project-service exits return `None` and do not repeat cleanup. An interrupting play request made from that same terminal stack returns `AlreadyPlaying`; it cannot take over a Director that the old stack is still restoring. Start the next sequence after the terminal call has returned. Normal external interruption, later replay and failure results keep their existing contracts. This does not change cancellation during an initial Enter callback or add a request queue.

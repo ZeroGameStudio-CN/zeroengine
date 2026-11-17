@@ -9,6 +9,7 @@ namespace ZeroEngine.Cinematic
         private CinematicProjectPlaybackServices _activeServices = CinematicProjectPlaybackServices.None;
         private ICinematicCommandExecutor _activeCommandExecutor;
         private bool _hasActivePlayback;
+        private bool _isTerminating;
 
         public CinematicPlayResult Play(
             CinematicSequenceDefinition sequence,
@@ -50,7 +51,7 @@ namespace ZeroEngine.Cinematic
                     sequenceId: request.SequenceId);
             }
 
-            if (_hasActivePlayback)
+            if (_isTerminating || _hasActivePlayback)
             {
                 return new CinematicPlayResult(
                     CinematicPlayStatus.AlreadyPlaying,
@@ -140,7 +141,7 @@ namespace ZeroEngine.Cinematic
 
         public CinematicPlayResult Stop(PlayableDirector director, CinematicPlayStatus terminalStatus)
         {
-            if (!_hasActivePlayback)
+            if (_isTerminating || !_hasActivePlayback)
             {
                 return CinematicPlayResult.None;
             }
@@ -151,7 +152,7 @@ namespace ZeroEngine.Cinematic
 
         public CinematicPlayResult EvaluateTimeout(PlayableDirector director, float elapsedSeconds)
         {
-            if (!_hasActivePlayback)
+            if (_isTerminating || !_hasActivePlayback)
             {
                 return CinematicPlayResult.None;
             }
@@ -169,52 +170,64 @@ namespace ZeroEngine.Cinematic
 
         private CinematicPlayResult StopWithResult(PlayableDirector director, CinematicPlayResult result)
         {
-            if (director != null)
+            if (_isTerminating)
             {
-                director.Stop();
+                return CinematicPlayResult.None;
             }
-
-            if (_hasActivePlayback)
+            _isTerminating = true;
+            try
             {
-                var terminalCommandPhase = GetTerminalCommandPhase(result.Status, _activeContext.Sequence);
-                var commandResult = ExecuteCommands(
-                    terminalCommandPhase,
-                    _activeContext.Sequence,
-                    _activeContext,
-                    _activeCommandExecutor);
-                if (!commandResult.Succeeded)
+                if (director != null)
                 {
-                    result = new CinematicPlayResult(
-                        CinematicPlayStatus.Failed,
-                        commandResult.Message,
-                        requiresAbortCleanup: true,
-                        sequenceId: _activeContext.Request.SequenceId);
-                    if (terminalCommandPhase != CinematicCommandPhase.OnAbort)
+                    director.Stop();
+                }
+
+                if (_hasActivePlayback)
+                {
+                    var terminalCommandPhase = GetTerminalCommandPhase(result.Status, _activeContext.Sequence);
+                    var commandResult = ExecuteCommands(
+                        terminalCommandPhase,
+                        _activeContext.Sequence,
+                        _activeContext,
+                        _activeCommandExecutor);
+                    if (!commandResult.Succeeded)
                     {
-                        var abortCommandResult = ExecuteCommands(
-                            CinematicCommandPhase.OnAbort,
-                            _activeContext.Sequence,
-                            _activeContext,
-                            _activeCommandExecutor);
-                        if (!abortCommandResult.Succeeded)
+                        result = new CinematicPlayResult(
+                            CinematicPlayStatus.Failed,
+                            commandResult.Message,
+                            requiresAbortCleanup: true,
+                            sequenceId: _activeContext.Request.SequenceId);
+                        if (terminalCommandPhase != CinematicCommandPhase.OnAbort)
                         {
-                            result = new CinematicPlayResult(
-                                CinematicPlayStatus.Failed,
-                                abortCommandResult.Message,
-                                requiresAbortCleanup: true,
-                                sequenceId: _activeContext.Request.SequenceId);
+                            var abortCommandResult = ExecuteCommands(
+                                CinematicCommandPhase.OnAbort,
+                                _activeContext.Sequence,
+                                _activeContext,
+                                _activeCommandExecutor);
+                            if (!abortCommandResult.Succeeded)
+                            {
+                                result = new CinematicPlayResult(
+                                    CinematicPlayStatus.Failed,
+                                    abortCommandResult.Message,
+                                    requiresAbortCleanup: true,
+                                    sequenceId: _activeContext.Request.SequenceId);
+                            }
                         }
                     }
                 }
-            }
 
-            if (_hasActivePlayback)
+                if (_hasActivePlayback)
+                {
+                    result = _activeServices.Exit(_activeContext, result);
+                }
+
+                ClearActivePlayback();
+                return result;
+            }
+            finally
             {
-                result = _activeServices.Exit(_activeContext, result);
+                _isTerminating = false;
             }
-
-            ClearActivePlayback();
-            return result;
         }
 
         private void ClearActivePlayback()

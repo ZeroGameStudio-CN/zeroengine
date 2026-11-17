@@ -14,6 +14,7 @@ namespace ZeroEngine.Cinematic
         private CinematicSequenceDefinition _activeSequence;
         private float _activeElapsedSeconds;
         private bool _hasActivePlayback;
+        private bool _isTerminating;
 
         public CinematicPlaybackService(
             CinematicSequenceCatalog catalog,
@@ -82,7 +83,7 @@ namespace ZeroEngine.Cinematic
 
         public CinematicPlayResult Play(string sequenceId)
         {
-            if (_hasActivePlayback)
+            if (_isTerminating || _hasActivePlayback)
             {
                 return CreateAlreadyPlayingResult();
             }
@@ -101,7 +102,7 @@ namespace ZeroEngine.Cinematic
 
         public CinematicPlayResult Play(CinematicPlayRequest request)
         {
-            if (_hasActivePlayback && !request.AllowInterrupt)
+            if (_isTerminating || (_hasActivePlayback && !request.AllowInterrupt))
             {
                 return CreateAlreadyPlayingResult();
             }
@@ -140,14 +141,26 @@ namespace ZeroEngine.Cinematic
 
         public CinematicPlayResult Stop(CinematicPlayStatus terminalStatus)
         {
-            var result = _directorAdapter.Stop(_director, terminalStatus);
-            if (result.Status != CinematicPlayStatus.None &&
-                result.Status != CinematicPlayStatus.SkipNotAllowed)
+            if (_isTerminating)
             {
-                ClearActivePlayback();
+                return CinematicPlayResult.None;
             }
+            _isTerminating = true;
+            try
+            {
+                var result = _directorAdapter.Stop(_director, terminalStatus);
+                if (result.Status != CinematicPlayStatus.None &&
+                    result.Status != CinematicPlayStatus.SkipNotAllowed)
+                {
+                    ClearActivePlayback();
+                }
 
-            return result;
+                return result;
+            }
+            finally
+            {
+                _isTerminating = false;
+            }
         }
 
         public CinematicPlayResult Cancel()
@@ -162,18 +175,30 @@ namespace ZeroEngine.Cinematic
 
         public CinematicPlayResult EvaluateTimeout(float elapsedSeconds)
         {
-            var result = _directorAdapter.EvaluateTimeout(_director, elapsedSeconds);
-            if (result.Status != CinematicPlayStatus.None)
+            if (_isTerminating)
             {
-                ClearActivePlayback();
+                return CinematicPlayResult.None;
             }
+            _isTerminating = true;
+            try
+            {
+                var result = _directorAdapter.EvaluateTimeout(_director, elapsedSeconds);
+                if (result.Status != CinematicPlayStatus.None)
+                {
+                    ClearActivePlayback();
+                }
 
-            return result;
+                return result;
+            }
+            finally
+            {
+                _isTerminating = false;
+            }
         }
 
         public CinematicPlayResult Tick(float deltaSeconds)
         {
-            if (!_hasActivePlayback)
+            if (_isTerminating || !_hasActivePlayback)
             {
                 return CinematicPlayResult.None;
             }
@@ -221,7 +246,7 @@ namespace ZeroEngine.Cinematic
 
         public CinematicPlayResult Skip(float elapsedSeconds)
         {
-            if (!_hasActivePlayback)
+            if (_isTerminating || !_hasActivePlayback)
             {
                 return CinematicPlayResult.None;
             }
