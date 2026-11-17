@@ -30,6 +30,19 @@ These TCE component IDs are stable:
 - `zeroengine.tce.presentation.effect.spawn_snapshot`
 - `zeroengine.tce.presentation.effect.spawn_soul_ghost`
 
+## Authored projections in 0.4.0
+
+The development-stage authored-graph API is revised directly in `0.4.0`.
+`TceVisualPrefab.TryCreate` accepts `TceVisualProjectionPolicy`; the former
+source-only delegate overload is removed. Adapters use the policy to classify
+source producers, pure rendering data and generated meshes.
+
+`TceVisualDynamics` captures resolved visual controls and samples event-free
+display clips. `TryGetParticlePlayback` resolves Timeline-driven particle clocks
+that Unity reports as manually simulated. `TceVisualFrame` carries bounded
+visual state; the consumer retains transport, identity, budgets and lifetime.
+These authored-projection APIs are outside the snapshot baseline above.
+
 ## Evolvable Surface
 
 These areas may evolve in minor versions while preserving the stable contracts above:

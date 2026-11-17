@@ -5,7 +5,8 @@
     "ZeroEngine.TCE",
     "ZeroEngine.TCE.Presentation",
     "UnityEngine.TestRunner",
-    "UnityEditor.TestRunner"
+    "UnityEditor.TestRunner",
+    "Unity.Timeline"
   ],
   "includePlatforms": [
     "Editor"

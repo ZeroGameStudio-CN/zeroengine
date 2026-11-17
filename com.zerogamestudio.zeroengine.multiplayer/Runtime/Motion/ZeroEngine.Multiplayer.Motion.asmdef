@@ -1,0 +1,7 @@
+{
+  "name": "ZeroEngine.Multiplayer.Motion",
+  "rootNamespace": "ZeroEngine.Multiplayer.Motion",
+  "references": [],
+  "autoReferenced": false,
+  "noEngineReferences": true
+}

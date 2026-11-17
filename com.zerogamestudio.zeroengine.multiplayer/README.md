@@ -6,8 +6,8 @@ Configurable room and multiplayer-session orchestration for ZeroEngine projects.
 
 ## Status
 
-Version `0.4.0` adds SDK-neutral replication primitives, a FishNet prediction
-configuration lease, and a reusable Steam invitation contract. The shared
+Version `0.5.0` adds engine-free resolved motion continuation for steering, speed curves, delayed gravity, parabola, and following display anchors. The existing SDK-neutral replication primitives, FishNet prediction
+configuration lease, and reusable Steam invitation contract are retained. The shared
 room/session foundation provides:
 
 - `LocalDevelopmentRoomService` and a stable command-line descriptor for two-process development rooms.
@@ -107,6 +107,32 @@ The 0.3.1 candidate places the local launcher and read-only setup validation in
 `LocalMultiplayerLauncher.Open()` and `MultiplayerSetupValidator.ValidateInstalledSetup()`
 directly. Editor UI is an Editor-only dependency; the runtime core and Local,
 FishNet and Steam contracts are unchanged.
+
+## Resolved visual motion
+
+`ZeroEngine.Multiplayer.Motion` is an optional engine-free assembly with no Core,
+Unity, FishNet, TCE, or game dependency. It consumes `MotionSnapshot` descriptions
+and evaluates display poses with `MotionPrediction`. `MotionCurve` preserves
+weighted handles, step tangents, and clamp/loop/ping-pong wrapping.
+
+Flight descriptions compose authoritative steering, speed curves, and delayed
+gravity. Parabola and follow-anchor descriptions use their own resolved inputs.
+Callers supply selected target/anchor poses, resolved speed, curve ages, the
+original fixed step, and explicit physics/domain/velocity scales. The kernel
+never searches for targets, reads physics, applies damage, or retires an entity.
+Use a new snapshot for authority corrections and clock/phase changes; keep
+admitted curve arrays immutable while a prediction is in use.
+
+`Sample(seconds)` commits whole original steps and evaluates a fractional copy
+for rendering. Continuation is bounded to three seconds. `Matches(next)` checks
+whether a fresh authority snapshot needs a semantic revision; transport identity,
+epoch/revision rejection, baselines, resource loading, and lifetime remain with
+the existing replication and game adapters. `Follow(displayAnchor, facing)` lets
+a consumer use its already interpolated anchor instead of stale network poses.
+
+Run `ZeroEngine.Multiplayer.Tests.Motion.Editor` in Unity, or the same engine-free
+cases with `dotnet test com.zerogamestudio.zeroengine.multiplayer/Tools~/Motion.Tests/Motion.Tests.csproj`.
+A passing kernel run does not establish consumer integration or visual acceptance.
 
 ## Replication primitives
 

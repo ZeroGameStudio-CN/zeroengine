@@ -18,6 +18,7 @@ The presentation test assembly must cover:
 - sprite material and sorting overrides;
 - sprite and mesh material override plus configurable tint/main-texture shader properties;
 - readable/unreadable mesh snapshot boundaries.
+- mixed renderer graphs, shared unreadable mesh resources, source-only callback exclusion, and rejection after a qualified resource changes.
 
 ## Static Source Gates
 
@@ -39,18 +40,21 @@ Expected result: no matches.
 
 ## Package Manager Gate
 
-Confirm Unity resolves the package as embedded and sees the graduated package version:
+Confirm Unity resolves the tested package and sees its expected version. Read
+`PackageInfo.FindForAssembly(typeof(TceVisualPrefab).Assembly)` from the consumer's
+Editor and retain the package ID, source and resolved path:
 
 ```text
-manage_packages get_package_info com.zerogamestudio.zeroengine.tce.presentation
+PackageInfo.FindForAssembly(typeof(TceVisualPrefab).Assembly)
 ```
 
 Expected result:
 
-- source: `Embedded`
-- version: `0.2.0`
-- dependency_count: `1`
+- source: `Git` at the tested pinned commit for handoff (`Local` is a temporary trial only)
+- version: `0.4.0`
+- dependency_count: `2`
 - dependency: `com.zerogamestudio.zeroengine.tce`
+- dependency: `com.unity.timeline` at `6.6.0`
 
 ## Plastic Gate
 
@@ -72,3 +76,5 @@ Record release evidence with:
 - Unity test assembly names and pass totals;
 - static scan commands and no-match results;
 - Plastic status scope and any unrelated pending files.
+
+For authored graph integration run `TceVisualDynamicsTests`: event/controller/audio/physics exclusion, safe Timeline bindings, continuous local sampling and malformed payload rejection. Technology adapters must retain source ownership and prove current source/display resource layout equality. Run the package tests against their actual Package Manager resolved path, including Git and temporary local sources; an unselected test assembly is not a passing gate.

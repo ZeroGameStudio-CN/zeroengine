@@ -506,6 +506,57 @@
           "contentId": "feedback.damage-number-semantics"
         }
       ]
+    },
+    {
+      "id": "ze.multiplayer.resolved-motion",
+      "title": "权威描述驱动的通用显示运动",
+      "stage": "Previewable",
+      "targetReleaseId": "",
+      "availability": "TestOnly",
+      "responsibleChat": "01a1b9db-fe8f-7500-8df5-997d4703224e",
+      "chatUrl": "thread://01a1b9db-fe8f-7500-8df5-997d4703224e?hostId=local",
+      "nextAction": "R3第一批已验证原跟随Mesh外观；继续其余复杂外观与领域接线，R4宿主成本及整局验收分开推进。",
+      "entrance": "dotnet test com.zerogamestudio.zeroengine.multiplayer/Tools~/Motion.Tests/Motion.Tests.csproj",
+      "resourcePath": "com.zerogamestudio.zeroengine.multiplayer/Runtime/Motion",
+      "revision": "0.5.0 candidate: engine-free steering, speed curves, delayed gravity, parabola and display-anchor following; composed flight, explicit clocks, bounded fixed-step continuation. 31 portable cases and 39 POB native cases passed. Same-code independent host/client protocol72, client120ms latency: all five models visible and advanced without new receipts; render-only views and session restoration verified. Original following Mesh appearance stays R3; a Sprite fixture exercises its original following component. Failed pre-entry compile and observer I/O rounds are retained. No full-run performance or player release claim. R3 projection0.3.0 later verifies the original following Mesh in POB; the historical R2 Sprite-fixture evidence remains unchanged.",
+      "releaseEvidence": "",
+      "candidatePackageVersion": "0.5.0",
+      "verificationEvidence": [
+        "D:/unity/artifacts/pob-ze-motion-20261115"
+      ],
+      "relatedContent": [
+        {
+          "projectId": "pob",
+          "contentId": "multiplayer.shared-world-presentation"
+        }
+      ]
+    },
+    {
+      "id": "ze.tce.visual-prefab-projection",
+      "title": "原资源驱动的纯显示图与可见性配对",
+      "sourceKey": "",
+      "stage": "Playable",
+      "targetReleaseId": "",
+      "availability": "TestOnly",
+      "responsibleChat": "01a1e419-5187-7af1-a1ff-a3d295cbaf66",
+      "chatUrl": "thread://01a1e419-5187-7af1-a1ff-a3d295cbaf66?hostId=local",
+      "nextAction": "R4 镜头反馈、宿主成本、全客户端帧耗、110份弹体逐内容及整局常规 PVE；保持 POB 全局默认关闭，独立记录人工接受与发布。",
+      "entrance": "Unity Test Runner: ZeroEngine.TCE.Presentation.Tests.Editor",
+      "resourcePath": "com.zerogamestudio.zeroengine.tce.presentation/Runtime/Projection",
+      "revision": "TCE Presentation0.4.0 adds bounded resolved animation/Timeline clocks, light/material controls, trail emission and resolved2D motion to the authored display graph. Source controllers, animation events, audio, physics and lifecycle helpers never execute on displays. POB retains content policy and its existing event-free Spine renderer. Protocol74 uses the same Weapon/TCE resources, WorldPresentation leases, budgets and end ownership; no compatibility reader or new weapon. Current304-resource API data admits294, retains267 prior admissions and promotes all35 target resources to whole graphs; trail-only count0.10 gameplay pickups and18 summon definitions remain domain work. Camera/post effects, all110 motion recipes and full-session performance remain separate. 当前原生Presentation门槛52项、POB定向162项有逐用例通过回执；原生入口保护另有40项通过及1项既有程序集边界失败保留。cs19297净候选12个相关程序集合编0错误。R7按精确配方重审确认35份原资源在同版本独立双端可见，Sprite换帧、Spine网格、Timeline无新回执推进与弹壳淡出均有动态记录；其短寿命狙击弹连续帧不足与源灯光恒定误断言，由R8在不改原参数的六次发射和源灯光对应检查中补齐。原失败批次保持失败，补验请求d54e79d7ba7649848c50cbed3e8913dc为completed且cleanupVerified=true。两轮均保留独立1080p原片；不作为整局PVE或性能验收。 2026-11-17 R3领域接线：Presentation0.5.0新增按原Prefab边界采集实时视觉控制，排除运行时价格UI等子物体；可见性只遮罩相同原图。POB协议75接入10类实际玩法掉落物和18份召唤定义的全部8个实体名，客端保持纯显示与原生个人选牌/装备提交。54项包门槛及36项POB领域用例分别有原生证据；初次失败由定向修复验证关闭，不改写原失败批次。独立双端120ms记录确认8类召唤的同租约出生/显示/退役与10类掉落领取、扭蛋扣费50、客端装牌/武器及宿主钱包隔离。净候选15相关程序集合编0错误；完整PVE、性能与发布仍未接受。",
+      "releaseEvidence": "",
+      "candidatePackageVersion": "0.5.0",
+      "verificationEvidence": [
+        "D:/unity/artifacts/pob-ze-visual-projection-20261115",
+        "D:/unity/artifacts/pob-ze-visual-dynamics-20261116",
+        "D:/unity/artifacts/pob-shared-domain-20261117"
+      ],
+      "relatedContent": [
+        {
+          "projectId": "pob",
+          "contentId": "multiplayer.shared-world-presentation"
+        }
+      ]
     }
   ]
 }
