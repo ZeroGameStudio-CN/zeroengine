@@ -58,3 +58,9 @@ replication binding and imports both original and network playground samples.
 It has no FishNet or POB dependency. The independent-peer job builds the shared
 sample model with .NET and executes separate host/client processes; Unity lanes
 cover the same core and actual sample component/UI lifecycle.
+
+## Registry Preview
+
+The [single-package HTTPS Preview](registry-preview/README.md) owns its isolated
+server configuration and consumer sample. It does not replace the pinned Git
+cohort or migrate POB automatically.

@@ -1,0 +1,14 @@
+{
+  "dependencies": {
+    "com.zerogamestudio.zeroengine.console": "0.1.0-ze-pilot.1"
+  },
+  "scopedRegistries": [
+    {
+      "name": "ZE domestic HTTPS Preview",
+      "url": "https://packages-preview.zerogamestudio.com",
+      "scopes": [
+        "com.zerogamestudio.zeroengine.console"
+      ]
+    }
+  ]
+}

@@ -1,0 +1,27 @@
+storage: /var/lib/zgs-ze-upm-preview/storage
+listen: 127.0.0.1:19196
+auth:
+  htpasswd:
+    file: /var/lib/zgs-ze-upm-preview/htpasswd
+    max_users: 1
+uplinks: {}
+server:
+  trustProxy: '127.0.0.1'
+packages:
+  'com.zerogamestudio.zeroengine.console':
+    access: $all
+    publish: ze-preview-publisher
+    unpublish: []
+  '**':
+    access: []
+    publish: []
+    unpublish: []
+web:
+  enable: false
+middlewares:
+  audit:
+    enabled: false
+log:
+  type: stdout
+  format: json
+  level: warn
