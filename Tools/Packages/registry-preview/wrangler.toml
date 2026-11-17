@@ -1,0 +1,11 @@
+name = "zgs-ze-upm-preview"
+main = "edge-router.mjs"
+compatibility_date = "2026-11-01"
+workers_dev = false
+
+[[routes]]
+pattern = "packages-preview.zerogamestudio.com"
+custom_domain = true
+
+[vars]
+ORIGIN_URL = "https://packages-origin-preview.zerogamestudio.com"
