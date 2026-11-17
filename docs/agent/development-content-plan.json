@@ -585,12 +585,12 @@
     {
       "id": "ze.narrative.quest-reliability",
       "title": "任务核心可靠发奖、独立条件身份与隐藏解锁配置",
-      "stage": "Ready",
+      "stage": "Previewable",
       "targetReleaseId": "",
       "availability": "TestOnly",
       "responsibleChat": "01a1e909-18dd-7cd0-aa92-551bd8f57bf3",
       "chatUrl": "",
-      "nextAction": "提交 Narrative 3.2.0 包候选供代码审查；合并与 POB 消费接入分别处理。",
+      "nextAction": "代码审查与恢复仓库 Unity CI 的授权配置后再合并；POB 消费接入单独进行。",
       "entrance": "包级 QuestReliabilityTests 与原有 Quest EditMode 回归；消费者在配置和存档就绪后显式 ActivateConfiguredQuests。",
       "resourcePath": "com.zerogamestudio.zeroengine.narrative/Runtime/Quest",
       "revision": "候选已验证：可靠领奖与稳定回执、独立条件身份、隐藏任务显式激活、已达标进度恢复、保留累计历史的每局限次基线，以及旧数据迁移/作者校验。",
@@ -600,7 +600,9 @@
         "D:/CodexTemp/narrative-quest-reliability-20261117/verification.json",
         "D:/CodexTemp/narrative-quest-reliability-20261117/release-results/results.xml"
       ],
-      "verificationScope": "Unity 6000.6.9f1 独立工程 EditMode：65/65，0失败、0跳过，含37项新增行为回归；全部编译输入与源包逐文件比对。包工具24例、63包静态审计0项问题。未修改 POB manifest/lock，未开放任务玩法。"
+      "verificationScope": "Unity 6000.6.9f1 独立工程 EditMode：65/65，0失败、0跳过，含37项新增行为回归；全部编译输入与源包逐文件比对。包工具24例、63包静态审计0项问题。未修改 POB manifest/lock，未开放任务玩法。 GitHub Actions 44111353720：包边界与独立进程检查成功；Unity 矩阵在许可激活阶段停止，未运行用例，Dashboard 对照通道同因失败。",
+      "pullRequest": "https://github.com/ZeroGameStudio-CN/zeroengine/pull/10",
+      "ciEvidence": "https://github.com/ZeroGameStudio-CN/zeroengine/actions/runs/44111353720"
     }
   ]
 }
