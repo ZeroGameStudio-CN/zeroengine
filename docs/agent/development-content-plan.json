@@ -495,13 +495,13 @@
       "availability": "TestOnly",
       "responsibleChat": "01a1e334-b947-7100-a28a-15a02442e3ab",
       "chatUrl": "",
-      "nextAction": "POB 正式源码提交及既有版本流程；尚未发布。",
+      "nextAction": "按既有消费者版本流程提交；保留用户画面验收与正式发布边界。",
       "entrance": "ZeroEngine.GameFeel.Tests.FeedbackNumberPolicyTests",
       "resourcePath": "com.zerogamestudio.zeroengine.gamefeel/Runtime/FeedbackNumberPolicy.cs",
-      "revision": "2026-11-16 semantic numbers",
-      "candidatePackageVersion": "0.9.0",
+      "revision": "2026-11-17 pre-spawn accumulation",
+      "candidatePackageVersion": "0.9.1",
       "releaseEvidence": "",
-      "verificationScope": "26 项 Unity 原生包合约与 26 项 .NET 定向检查无失败；7 项 POB PlayMode 回归无失败，逐击回调与随机序列保留。加特林实际配置为 Automatic、1 攻击槽、1 动作段，满足连续流默认接入。",
+      "verificationScope": "32 项 .NET 定向合约、32 项 Unity 原生包合约及 2 项 POB 上下文合约无失败；8 项飘字生命周期回归与真实武器录像流程无失败。太刀 13 次命中生成 13 个独立数字；加特林 328 次命中累计 310 次，仅生成 18 个数字。",
       "relatedContent": [
         {
           "projectId": "pob",

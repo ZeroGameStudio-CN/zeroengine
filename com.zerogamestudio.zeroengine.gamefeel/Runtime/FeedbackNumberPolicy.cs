@@ -2,7 +2,7 @@ using System;
 
 namespace ZeroEngine.GameFeel
 {
-    public enum FeedbackNumberMode { Individual, Action, AdaptiveStream }
+    public enum FeedbackNumberMode { Individual, Action, AdaptiveStream, Accumulate }
 
     /// <summary>Captured producer intent. IDs identify lifetimes, not asset names or physics callbacks.</summary>
     public readonly struct FeedbackNumberContext : IEquatable<FeedbackNumberContext>
@@ -12,7 +12,7 @@ namespace ZeroEngine.GameFeel
         public readonly long GroupId, BeatId;
         public readonly bool Important;
         public bool CanMerge => !Important && OwnerId != 0 && SourceId != 0 && GroupId > 0 &&
-            (Mode == FeedbackNumberMode.Action || Mode == FeedbackNumberMode.AdaptiveStream);
+            (Mode == FeedbackNumberMode.Action || Mode == FeedbackNumberMode.AdaptiveStream || Mode == FeedbackNumberMode.Accumulate);
 
         public FeedbackNumberContext(FeedbackNumberMode mode, ulong ownerId, ulong sourceId, long groupId,
             bool important = false, long beatId = 0)
