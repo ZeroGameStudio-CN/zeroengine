@@ -74,3 +74,23 @@ units from those snapshots. Preserve unrelated routes, certificates and secrets.
 The earlier Shanghai bootstrap files (`preview_registry.py`, `nginx.conf`, and
 the certificate hook) are retained as historical recovery inputs, not the active
 deployment path.
+
+## Consumer-locked Core trial
+
+`prepare_pob_core.py` reads an existing consumer's manifest and lock, requires
+matching Core/UI/Quantum/Agent Git pins, and packages Core from those committed
+objects. It creates two distinct immutable trial versions with identical runtime
+source and metadata GUIDs. Only package version and transport provenance change;
+the consumer's files are read-only. The embedded Agent copy is instrumentation
+for a disposable project and is never offered as a consumer installation route.
+
+```text
+python -B Tools/Packages/registry-preview/prepare_pob_core.py --project <consumer> --output <new-owned-output> --release-tag ze-upm-pob-core-<commit-prefix>-<YYYYMMDD>
+```
+
+Use the small project for cold install/upgrade/rollback, real command execution,
+origin-offline fallback and actual PackageInfo/Skill checks first. A large Manual
+workspace is useful for integration only when its package/source baseline and
+ownership are suitable; it is not needed to prove Core transport. Any consumer
+adoption keeps the existing frontend, bindings and game commands and must use its
+normal package/SCM route after verification.
