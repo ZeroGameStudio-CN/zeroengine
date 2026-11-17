@@ -6,7 +6,7 @@ gameplay packages do not acquire a Console dependency.
 
 The pure `ZeroEngine.Console.Core` assembly references neither Unity nor Quantum
 Console. Unity hosting and frontends are separate boundaries. See the
-[protocol specification](https://github.com/ZeroGameStudio-CN/zeroengine/blob/codex/ze-native-console-20261110/docs/specs/2026-11-10-native-console.md) for the slice
+[protocol specification](https://github.com/ZeroGameStudio-CN/zeroengine/blob/main/docs/specs/2026-11-10-native-console.md) for the slice
 and migration gates. No consumer adoption or release is established by this source.
 
 ```csharp
@@ -35,6 +35,19 @@ request; returned command arrays remain caller-owned snapshots. Execution links
 module/session cancellation with an optional caller token and creates a deadline
 timer only when requested. Cancelling an uncooperative handler keeps the session
 busy until that handler ends, without replaying it or claiming rollback.
+
+`RegisterOverloads(module, bindings)` explicitly registers a command family with
+distinct stable IDs and a shared name/aliases. Ordinary `Register` still rejects
+duplicate names; another registration cannot append to or shadow a family.
+Each name has at most 32 variants. Text dispatch prefers fixed arity, then defaults,
+then variadic parameters; within that shape, typed conversions precede unquoted
+string fallback, while quoted strings prefer string parameters. Equally valid
+conversions return `ambiguous-overload` without calling a handler; use its stable
+ID to select explicitly. Typed invocation prefers exact supplied types.
+Converters can be consulted for multiple variants and must be free of business
+side effects. Chosen arguments are reused rather than converted again.
+Completion deduplicates insertion values and hints expose only policy-visible
+alternative signatures through `ConsoleCommandHint.Alternatives`.
 
 Built-in scalar conversion includes `byte`, `sbyte`, `short`, `ushort` and `char`
 alongside the larger integer, floating-point, decimal, bool, enum, string and Guid
@@ -71,15 +84,22 @@ remains one command argument. It does not evaluate C#, functions or object acces
 substitution. `Define`, `Remove`, `Clear` and `Snapshot` belong to its owner;
 expansion is bounded and cycles fail before any handler runs. History keeps the
 typed line, and expanded commands still pass the normal parser and live policy.
-Unknown names remain unchanged. Macro-aware caret hints/completion are not
-provided; use ordinary command text when requesting parameter guidance.
+Unknown names remain unchanged. Caret hints use the expanded parameter index,
+while applying a completion preserves the original macro, quotes and suffix.
+`#name` completion respects the target command's live policy. Cycles fail without
+calling providers, and an async response is discarded if definitions changed.
+Names are case-sensitive, cached until mutation, and limited to 256 per session.
 
 `ConsoleMethodBinding.Create` explicitly binds one selected `MethodInfo` and an
 optional instance. It maps optional/params parameters, injects `CancellationToken`
-and awaits `Task`/`Task<T>`. A returned `ConsoleResult` preserves its business
+and awaits `Task`/`Task<T>` and `ValueTask`/`ValueTask<T>` exactly once. A returned `ConsoleResult` preserves its business
 status; ordinary values become data, while void/untyped tasks remain unconfirmed.
-Async void, custom awaitables, open generics and ref/out/pointer parameters require
-explicit adapters. There is no automatic assembly scan or overload resolver.
+Async void, custom awaitables and ref/out/pointer parameters require
+explicit adapters. `CreateGeneric` closes an explicitly supplied method and type
+list, checking constraints at registration. Register aliases such as `echo<int>`
+for the types the application permits; unknown type names do not trigger a type
+scan or create a new method. Use `RegisterOverloads` for shared-name dispatch.
+There is no automatic assembly or scene-object scan.
 Reflection bindings and dynamically constructed generic collections require the
 consumer's normal stripping/AOT preservation; these additions have Editor coverage,
 not a new IL2CPP support claim.

@@ -121,7 +121,9 @@ namespace ZeroEngine.Console
             if (!ConsoleLexer.TryRead(line, out var tokens, out var error)) return Report(error);
             if (tokens.Count == 0) return Task.FromResult(ConsoleResult.Success());
             if (!Registry.TryResolve(tokens[0].Text, out var entry))
-                return Report(ConsoleResult.Failure("unknown-command", "Unknown command: " + tokens[0].Text, tokens[0].Start));
+                return Registry.TryResolveOverloads(tokens[0].Text, out var family)
+                    ? ExecuteOverloadsAsync(family, caller, tokens, null, cancellation, timeout)
+                    : Report(ConsoleResult.Failure("unknown-command", "Unknown command: " + tokens[0].Text, tokens[0].Start));
             return ExecuteEntryAsync(entry, caller, tokens, null, cancellation, timeout);
         }
 
@@ -129,13 +131,32 @@ namespace ZeroEngine.Console
             CancellationToken cancellation = default, TimeSpan? timeout = null)
         {
             if (caller == null) throw new ArgumentNullException(nameof(caller));
-            if (!Registry.TryResolve(idOrName, out var entry)) return Report(ConsoleResult.Failure("unknown-command", "Unknown command: " + idOrName));
             object[] captured = arguments == null ? Array.Empty<object>() : (object[])arguments.Clone();
+            if (!Registry.TryResolve(idOrName, out var entry))
+                return Registry.TryResolveOverloads(idOrName, out var family)
+                    ? ExecuteOverloadsAsync(family, caller, null, captured, cancellation, timeout)
+                    : Report(ConsoleResult.Failure("unknown-command", "Unknown command: " + idOrName));
             return ExecuteEntryAsync(entry, caller, null, captured, cancellation, timeout);
         }
 
-        private async Task<ConsoleResult> ExecuteEntryAsync(ConsoleEntry entry, ConsoleCaller caller,
+        private Task<ConsoleResult> ExecuteOverloadsAsync(ConsoleEntry[] entries, ConsoleCaller caller,
             IReadOnlyList<ConsoleToken> tokens, object[] supplied, CancellationToken cancellation, TimeSpan? timeout)
+        {
+            if (cancellation.IsCancellationRequested) return Report(ConsoleResult.Cancelled());
+            if (timeout.HasValue && (timeout.Value <= TimeSpan.Zero || timeout.Value.TotalMilliseconds > int.MaxValue))
+                return Report(ConsoleResult.Failure("invalid-deadline", "A positive bounded deadline is required."));
+            lock (sync)
+            {
+                if (disposed) return Task.FromResult(ConsoleResult.Failure("session-disposed", "Console session has ended."));
+                if (current != null) return Report(ConsoleResult.Failure("busy", "Another command is still running."));
+            }
+            var selected = ConsoleOverloads.Select(entries, Values, policy, caller, tokens, supplied, out var entry, out var arguments);
+            return selected.IsSuccess ? ExecuteEntryAsync(entry, caller, tokens, supplied, cancellation, timeout, arguments) : Report(selected);
+        }
+
+        private async Task<ConsoleResult> ExecuteEntryAsync(ConsoleEntry entry, ConsoleCaller caller,
+            IReadOnlyList<ConsoleToken> tokens, object[] supplied, CancellationToken cancellation, TimeSpan? timeout,
+            ConsoleArguments prepared = null)
         {
             if (timeout.HasValue && (timeout.Value <= TimeSpan.Zero || timeout.Value.TotalMilliseconds > int.MaxValue))
                 return await Report(ConsoleResult.Failure("invalid-deadline", "A positive bounded deadline is required.")).ConfigureAwait(false);
@@ -173,7 +194,9 @@ namespace ZeroEngine.Console
                 }
                 execution.Token.ThrowIfCancellationRequested();
                 ConsoleArguments arguments;
-                ConsoleResult bound = tokens != null ? Values.Bind(entry.Binding.Command, tokens, 1, out arguments)
+                ConsoleResult bound;
+                if (prepared != null) { arguments = prepared; bound = ConsoleResult.Success(); }
+                else bound = tokens != null ? Values.Bind(entry.Binding.Command, tokens, 1, out arguments)
                     : Values.BindTyped(entry.Binding.Command, supplied, out arguments);
                 if (!bound.IsSuccess) result = bound;
                 else
@@ -245,21 +268,79 @@ namespace ZeroEngine.Console
             if (caret < 0 || caret > line.Length) throw new ArgumentOutOfRangeException(nameof(caret));
             lock (sync) if (disposed) return null;
             string before = caret == line.Length ? line : line.Substring(0, caret);
-            if (!ConsoleLexer.TryRead(before, out var tokens, out _, true) || tokens.Count == 0 ||
-                !Registry.TryResolve(tokens[0].Text, out var entry) || !entry.IsActive || !policy.Check(entry.Binding.Command, caller).IsSuccess) return null;
-            bool newToken = tokens[tokens.Count - 1].Start + tokens[tokens.Count - 1].Length < caret;
-            return Hint(entry.Binding.Command, newToken ? tokens.Count : tokens.Count - 1);
+            var macros = Macros;
+            if (macros != null && !macros.TryExpand(before, out before, out _)) return null;
+            if (!ConsoleLexer.TryRead(before, out var tokens, out _, true) || tokens.Count == 0) return null;
+            bool newToken = tokens[tokens.Count - 1].Start + tokens[tokens.Count - 1].Length < before.Length;
+            int tokenIndex = newToken ? tokens.Count : tokens.Count - 1;
+            if (Registry.TryResolve(tokens[0].Text, out var entry))
+                return entry.IsActive && policy.Check(entry.Binding.Command, caller).IsSuccess ? Hint(entry.Binding.Command, tokenIndex) : null;
+            if (!Registry.TryResolveOverloads(tokens[0].Text, out var family)) return null;
+            var variants = ConsoleOverloads.Hints(family, policy, caller, tokenIndex);
+            return variants.Length == 0 ? null : Hint(variants[0].Binding.Command, tokenIndex, variants);
         }
 
-        private static ConsoleCommandHint Hint(ConsoleCommand command, int tokenIndex)
+        private static ConsoleCommandHint Hint(ConsoleCommand command, int tokenIndex, ConsoleEntry[] variants = null)
         {
             int parameter = tokenIndex - 1;
             if (parameter >= command.Parameters.Count)
                 parameter = command.Parameters.Count > 0 && command.Parameters[command.Parameters.Count - 1].IsVariadic ? command.Parameters.Count - 1 : -1;
-            return new ConsoleCommandHint(command, parameter);
+            return new ConsoleCommandHint(command, parameter, variants);
         }
 
-        public async Task<ConsoleCompletions> CompleteAsync(string line, int caret, ConsoleCaller caller,
+        public Task<ConsoleCompletions> CompleteAsync(string line, int caret, ConsoleCaller caller,
+            CancellationToken cancellation = default, int limit = 32)
+        {
+            var macros = Macros;
+            if (macros == null) return CompleteCoreAsync(line, caret, caller, cancellation, limit);
+            if (caller == null) throw new ArgumentNullException(nameof(caller));
+            line ??= string.Empty;
+            if (caret < 0 || caret > line.Length) throw new ArgumentOutOfRangeException(nameof(caret));
+            var empty = new ConsoleCompletions(caret, 0, Array.Empty<ConsoleCompletionItem>(), line);
+            lock (sync) if (disposed) return Task.FromResult(empty);
+            cancellation.ThrowIfCancellationRequested();
+            if (line.Length > ConsoleLexer.MaximumLineLength) return Task.FromResult(empty);
+            if (ConsoleMacros.NameSpan(line, caret, out int start, out int length, out string prefix))
+            {
+                var items = new List<ConsoleCompletionItem>();
+                foreach (string name in macros.Names())
+                {
+                    if (!name.StartsWith(prefix, StringComparison.Ordinal)) continue;
+                    string candidate = line.Substring(0, start) + "#" + name + line.Substring(start + length);
+                    if (!macros.TryExpand(candidate, out candidate, out _) ||
+                        !ConsoleLexer.TryRead(candidate, out var tokens, out _, true) || tokens.Count == 0) continue;
+                    bool visible = Registry.TryResolve(tokens[0].Text, out var entry)
+                        ? entry.IsActive && policy.Check(entry.Binding.Command, caller).IsSuccess
+                        : Registry.TryResolveOverloads(tokens[0].Text, out var family) &&
+                            family.Any(variant => variant.IsActive && policy.Check(variant.Binding.Command, caller).IsSuccess);
+                    if (!visible) continue;
+                    items.Add(new ConsoleCompletionItem("macro:" + name, "#" + name, description: "Session macro"));
+                    if (items.Count == Math.Max(1, Math.Min(128, limit))) break;
+                }
+                return Task.FromResult(new ConsoleCompletions(start, length, items.ToArray(), line, GetHint(line, caret, caller)));
+            }
+            string before = line.Substring(0, caret);
+            if (!ConsoleLexer.TryRead(before, out var partial, out _, true)) return Task.FromResult(empty);
+            int boundary = partial.Count == 0 || partial.Last().Start + partial.Last().Length < caret ? caret : partial.Last().Start;
+            string head = line.Substring(0, boundary);
+            long revision = macros.Revision;
+            if (!macros.TryExpand(head, out var expanded, out _)) return Task.FromResult(empty);
+            if (ReferenceEquals(head, expanded) && head.IndexOf('#') < 0) return CompleteCoreAsync(line, caret, caller, cancellation, limit);
+            if (expanded.Length + line.Length - boundary > ConsoleLexer.MaximumLineLength) return Task.FromResult(empty);
+            return CompleteProjectedAsync(macros, revision, line, caret, caller, cancellation, limit, boundary, expanded);
+        }
+
+        private async Task<ConsoleCompletions> CompleteProjectedAsync(ConsoleMacros macros, long revision, string line,
+            int caret, ConsoleCaller caller, CancellationToken cancellation, int limit, int boundary, string expanded)
+        {
+            int delta = boundary - expanded.Length;
+            var completed = await CompleteCoreAsync(expanded + line.Substring(boundary), caret - delta, caller, cancellation, limit).ConfigureAwait(false);
+            if (!ReferenceEquals(Macros, macros) || revision != macros.Revision || completed.Start < expanded.Length)
+                return new ConsoleCompletions(caret, 0, Array.Empty<ConsoleCompletionItem>(), line);
+            return new ConsoleCompletions(completed.Start + delta, completed.Length, completed.Items, line, completed.Hint);
+        }
+
+        private async Task<ConsoleCompletions> CompleteCoreAsync(string line, int caret, ConsoleCaller caller,
             CancellationToken cancellation = default, int limit = 32)
         {
             if (caller == null) throw new ArgumentNullException(nameof(caller));
@@ -276,59 +357,71 @@ namespace ZeroEngine.Console
             int start = newToken ? caret : tokens[tokenIndex].Start;
             string prefix = newToken ? string.Empty : tokens[tokenIndex].Text;
             ConsoleEntry resolved = null;
+            ConsoleEntry[] variants = null;
             if (tokens.Count > 0 && Registry.TryResolve(tokens[0].Text, out var found) && found.IsActive && policy.Check(found.Binding.Command, caller).IsSuccess)
                 resolved = found;
-            ConsoleCommandHint hint = resolved == null ? null : Hint(resolved.Binding.Command, tokenIndex);
+            else if (tokens.Count > 0 && Registry.TryResolveOverloads(tokens[0].Text, out var family))
+            {
+                variants = ConsoleOverloads.Hints(family, policy, caller, tokenIndex);
+                if (variants.Length > 0) resolved = variants[0];
+            }
+            ConsoleCommandHint hint = resolved == null ? null : Hint(resolved.Binding.Command, tokenIndex, variants);
             var candidates = new List<ConsoleCompletionItem>();
             if (tokenIndex == 0)
             {
+                var offered = Registry.HasOverloads ? new HashSet<string>(StringComparer.OrdinalIgnoreCase) : null;
                 foreach (ConsoleEntry commandEntry in Registry.Snapshot())
                 {
                     if (!commandEntry.IsActive || !policy.Check(commandEntry.Binding.Command, caller).IsSuccess) continue;
                     foreach (ConsoleCompletionItem candidate in commandEntry.NameCompletions)
-                        if (candidate.Value.IndexOf(prefix, StringComparison.OrdinalIgnoreCase) >= 0) candidates.Add(candidate);
+                        if (candidate.Value.IndexOf(prefix, StringComparison.OrdinalIgnoreCase) >= 0 && (offered == null || offered.Add(candidate.Value))) candidates.Add(candidate);
                 }
             }
-            else if (resolved != null && resolved.TryAcquire(out var ownerToken))
+            else if (resolved != null)
             {
-                ConsoleEntry entry = resolved;
-                try
+                for (int variant = 0; variant < (variants?.Length ?? 1); variant++)
                 {
-                    ConsoleCommand command = entry.Binding.Command;
-                    int parameterIndex = tokenIndex - 1;
-                    if (command.Parameters.Count == 0) return new ConsoleCompletions(caret, 0, Array.Empty<ConsoleCompletionItem>(), line, hint);
-                    if (parameterIndex >= command.Parameters.Count)
+                    ConsoleEntry entry = variants == null ? resolved : variants[variant];
+                    if (!entry.TryAcquire(out var ownerToken)) continue;
+                    try
                     {
-                        if (!command.Parameters[command.Parameters.Count - 1].IsVariadic) return new ConsoleCompletions(caret, 0, Array.Empty<ConsoleCompletionItem>(), line, hint);
-                        parameterIndex = command.Parameters.Count - 1;
-                    }
-                    IReadOnlyList<ConsoleCompletionItem> supplied = null;
-                    if (entry.Binding.Completer != null)
-                    {
-                        using (var linked = cancellation.CanBeCanceled
-                            ? CancellationTokenSource.CreateLinkedTokenSource(cancellation, ownerToken, lifetimeToken)
-                            : CancellationTokenSource.CreateLinkedTokenSource(ownerToken, lifetimeToken))
+                        ConsoleCommand command = entry.Binding.Command;
+                        int parameterIndex = tokenIndex - 1;
+                        if (command.Parameters.Count == 0) continue;
+                        if (parameterIndex >= command.Parameters.Count)
                         {
-                            var context = new ConsoleCompletionContext(command, caller, line, caret, parameterIndex, prefix, limit);
-                            supplied = await entry.Binding.Completer(context, linked.Token).ConfigureAwait(false);
-                            linked.Token.ThrowIfCancellationRequested();
+                            if (!command.Parameters[command.Parameters.Count - 1].IsVariadic) continue;
+                            parameterIndex = command.Parameters.Count - 1;
                         }
-                        if (!entry.IsActive || !policy.Check(command, caller).IsSuccess) return empty;
-                    }
-                    bool suppliedByProvider = supplied != null;
-                    if (supplied == null) supplied = entry.DefaultCompletions[parameterIndex];
-                    var suppliedIds = suppliedByProvider ? new HashSet<string>(StringComparer.Ordinal) : null;
-                    foreach (var candidate in supplied)
-                    {
-                        if (candidate != null && (candidate.Value.StartsWith(prefix, StringComparison.OrdinalIgnoreCase) ||
-                            candidate.Label.StartsWith(prefix, StringComparison.OrdinalIgnoreCase)) && (suppliedIds == null || suppliedIds.Add(candidate.Id)))
+                        IReadOnlyList<ConsoleCompletionItem> supplied = null;
+                        if (entry.Binding.Completer != null)
                         {
-                            candidates.Add(candidate);
-                            if (suppliedByProvider && candidates.Count == limit) break;
+                            using (var linked = cancellation.CanBeCanceled
+                                ? CancellationTokenSource.CreateLinkedTokenSource(cancellation, ownerToken, lifetimeToken)
+                                : CancellationTokenSource.CreateLinkedTokenSource(ownerToken, lifetimeToken))
+                            {
+                                var context = new ConsoleCompletionContext(command, caller, line, caret, parameterIndex, prefix, limit);
+                                supplied = await entry.Binding.Completer(context, linked.Token).ConfigureAwait(false);
+                                linked.Token.ThrowIfCancellationRequested();
+                            }
+                            if (!entry.IsActive || !policy.Check(command, caller).IsSuccess) return empty;
+                        }
+                        bool suppliedByProvider = supplied != null;
+                        if (supplied == null) supplied = entry.DefaultCompletions[parameterIndex];
+                        var suppliedIds = suppliedByProvider ? new HashSet<string>(StringComparer.Ordinal) : null;
+                        int accepted = 0;
+                        foreach (var candidate in supplied)
+                        {
+                            if (candidate != null && (candidate.Value.StartsWith(prefix, StringComparison.OrdinalIgnoreCase) ||
+                                candidate.Label.StartsWith(prefix, StringComparison.OrdinalIgnoreCase)) && (suppliedIds == null || suppliedIds.Add(candidate.Id)))
+                            {
+                                candidates.Add(candidate);
+                                if (suppliedByProvider && ++accepted == limit) break;
+                            }
                         }
                     }
+                    finally { entry.Release(); }
                 }
-                finally { entry.Release(); }
             }
             candidates.Sort((a, b) =>
             {
@@ -341,6 +434,12 @@ namespace ZeroEngine.Console
                 int value = StringComparer.Ordinal.Compare(a.Value, b.Value);
                 return value != 0 ? value : StringComparer.Ordinal.Compare(a.Id, b.Id);
             });
+            if (variants != null)
+            {
+                if (variants.Any(entry => !entry.IsActive || !policy.Check(entry.Binding.Command, caller).IsSuccess)) return empty;
+                var offered = new HashSet<string>(StringComparer.Ordinal);
+                candidates.RemoveAll(candidate => !offered.Add(candidate.Value));
+            }
             if (candidates.Count > limit) candidates.RemoveRange(limit, candidates.Count - limit);
             var items = candidates.ToArray();
             int end = caret;

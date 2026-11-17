@@ -2,6 +2,7 @@ using System;
 using System.Reflection;
 using System.Threading;
 using System.Threading.Tasks;
+using System.Threading.Tasks.Sources;
 using NUnit.Framework;
 
 namespace ZeroEngine.Console.Tests
@@ -72,6 +73,53 @@ namespace ZeroEngine.Console.Tests
             Assert.Throws<ArgumentException>(() => Binding("unobserved", nameof(Unobserved)));
         }
 
+        [Test]
+        public async Task ValueTaskMethods_AwaitTypedUntypedAndStructuredResults()
+        {
+            using var registry = new ConsoleRegistry();
+            using var session = new ConsoleSession(registry);
+            using var lease = registry.Register("method", new[] {
+                Binding("value", nameof(Value)), Binding("empty-value", nameof(EmptyValue)), Binding("business-value", nameof(BusinessValue)) });
+            Assert.That((await session.ExecuteLineAsync("value 8", Editor)).Data, Is.EqualTo(8));
+            Assert.That((await session.ExecuteLineAsync("empty-value", Editor)).Status, Is.EqualTo(ConsoleResultStatus.Unconfirmed));
+            Assert.That((await session.ExecuteLineAsync("business-value", Editor)).Code, Is.EqualTo("business-error"));
+        }
+
+        [Test]
+        public async Task SingleUseValueTaskSource_IsConsumedOnceAndCancellationWaitsForItsActualEnd()
+        {
+            using var registry = new ConsoleRegistry();
+            using var session = new ConsoleSession(registry);
+            var source = new SingleUseSource();
+            using var lease = registry.Register("method", new[] { Binding("source", nameof(SingleUseSource.Read), source) });
+            var pending = session.ExecuteLineAsync("source", Editor);
+            Assert.That(pending.IsCompleted, Is.False);
+            session.CancelCurrent();
+            Assert.That(session.IsRunning, Is.True);
+            source.Complete();
+            Assert.That((await pending).Status, Is.EqualTo(ConsoleResultStatus.Cancelled));
+            Assert.That(source.Reads, Is.EqualTo(1));
+            Assert.That(source.Calls, Is.EqualTo(1));
+            Assert.That(session.IsRunning, Is.False);
+        }
+
+        [Test]
+        public async Task ExplicitGenericTypes_RegisterClosedAliasesAndRejectConstraintsBeforeExecution()
+        {
+            using var registry = new ConsoleRegistry();
+            using var session = new ConsoleSession(registry);
+            var definition = typeof(ConsoleMethodTests).GetMethod(nameof(Echo), BindingFlags.Static | BindingFlags.NonPublic);
+            Assert.Throws<ArgumentException>(() => ConsoleMethodBinding.CreateGeneric("invalid", "echo<string>", "method", definition, new[] { typeof(string) }));
+            using var lease = registry.Register("method", new[] {
+                ConsoleMethodBinding.CreateGeneric("echo.integer", "echo<int>", "method", definition, new[] { typeof(int) }),
+                ConsoleMethodBinding.CreateGeneric("echo.real", "echo<double>", "method", definition, new[] { typeof(double) }) });
+            Assert.That((await session.ExecuteLineAsync("echo<int> 7", Editor)).Data, Is.EqualTo(7));
+            Assert.That((await session.ExecuteLineAsync("echo<double> 1.5", Editor)).Data, Is.EqualTo(1.5));
+            Assert.That((await session.ExecuteLineAsync("echo<string> text", Editor)).Code, Is.EqualTo("unknown-command"));
+            Assert.That(session.GetHint("echo<int> ", 10, Editor).Parameter.ValueType, Is.EqualTo(typeof(int)));
+            Assert.That((await session.CompleteAsync("echo<", 5, Editor)).Items.Count, Is.EqualTo(2));
+        }
+
         private static ConsoleBinding Binding(string alias, string method, object target = null)
         {
             var type = target?.GetType() ?? typeof(ConsoleMethodTests);
@@ -84,7 +132,24 @@ namespace ZeroEngine.Console.Tests
         private static void Empty() { }
         private static Task Pending() => Task.CompletedTask;
         private static int Fail() => throw new InvalidOperationException("original method error");
-        private static ValueTask<int> CustomAwaitable() => new ValueTask<int>(1);
+        private static UnsupportedAwaitable CustomAwaitable() => default;
+        private readonly struct UnsupportedAwaitable { public System.Runtime.CompilerServices.TaskAwaiter<int> GetAwaiter() => Task.FromResult(1).GetAwaiter(); }
+        private static async ValueTask<int> Value(int value, CancellationToken cancellation) { await Task.Yield(); cancellation.ThrowIfCancellationRequested(); return value; }
+        private static ValueTask EmptyValue() => default;
+        private static ValueTask<ConsoleResult> BusinessValue() => new ValueTask<ConsoleResult>(ConsoleResult.Failure("business-error", "Original business result."));
+        private static T Echo<T>(T value) where T : struct => value;
+        private sealed class SingleUseSource : IValueTaskSource<int>
+        {
+            private ManualResetValueTaskSourceCore<int> source;
+            public int Reads, Calls;
+            public SingleUseSource() { source.RunContinuationsAsynchronously = true; }
+            public ValueTask<int> Read() { Calls++; return new ValueTask<int>(this, source.Version); }
+            public void Complete() => source.SetResult(9);
+            public int GetResult(short token) { if (++Reads != 1) throw new InvalidOperationException("ValueTask consumed twice."); return source.GetResult(token); }
+            public ValueTaskSourceStatus GetStatus(short token) => source.GetStatus(token);
+            public void OnCompleted(Action<object> continuation, object state, short token, ValueTaskSourceOnCompletedFlags flags)
+                => source.OnCompleted(continuation, state, token, flags);
+        }
         private static void Reference(ref int value) { value++; }
         private static async void Unobserved() { await Task.Yield(); }
         private sealed class Target { public int Scale(int value, int multiplier = 2) => value * multiplier; }

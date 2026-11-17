@@ -28,10 +28,18 @@ The pure core accepts an explicit fallback; scoped type converters override it.
 Standard collections use bracket syntax; dictionary entries are `(key, value)`
 pairs. Preserve converter/fallback priority. Arithmetic and per-session `#name`
 macros require explicit opt-in; keep their bounded parsing and live policy checks.
-Macros affect execution, not caret hints/completion. Explicit `ConsoleMethodBinding`
-can bind a selected method with defaults, params and Task results; it does not scan
-assemblies or resolve overloads. Async void/custom awaitables need an outcome
-adapter. Preserve reflected methods and generic collection instantiations for
+Macro hints use expanded parameter positions; completion preserves the original
+draft spans and discards async replies after a macro change. Names remain
+case-sensitive and policy-checked, with at most 256 definitions per session.
+Explicit `ConsoleMethodBinding` supports defaults, params, Task and ValueTask
+results; async void/custom awaitables still need an outcome adapter.
+`CreateGeneric` registers a chosen closed type list, such as an `echo<int>` alias,
+without runtime type discovery. `RegisterOverloads` opts a single module lease
+into shared names (at most 32 variants); ordinary registration stays unique.
+Arity and conversion select one handler, ambiguity requires a stable command ID,
+and custom converters must have no business side effects. Only authorized
+alternatives appear in hints/completion. Preserve reflected methods, closed
+generic methods and collection instantiations for
 stripping/AOT; Editor checks alone do not establish IL2CPP support.
 
 Use completion `Hint` or policy-checked `GetHint` for parameter guidance; never

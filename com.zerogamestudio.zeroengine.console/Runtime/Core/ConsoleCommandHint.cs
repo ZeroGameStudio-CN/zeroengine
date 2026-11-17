@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Text;
 
 namespace ZeroEngine.Console
@@ -6,11 +7,28 @@ namespace ZeroEngine.Console
     public sealed class ConsoleCommandHint
     {
         public ConsoleCommand Command { get; }
-        public string Signature => Command.Signature;
+        private readonly string signature;
+        public string Signature => signature ?? Command.Signature;
+        public IReadOnlyList<ConsoleCommand> Alternatives { get; }
         public int ParameterIndex { get; }
         public ConsoleParameter Parameter => ParameterIndex < 0 ? null : Command.Parameters[ParameterIndex];
         public string Detail => ParameterIndex < 0 ? Command.Description : Command.ParameterHints[ParameterIndex];
-        internal ConsoleCommandHint(ConsoleCommand command, int parameterIndex) { Command = command; ParameterIndex = parameterIndex; }
+        internal ConsoleCommandHint(ConsoleCommand command, int parameterIndex, ConsoleEntry[] variants = null)
+        {
+            Command = command; ParameterIndex = parameterIndex;
+            Alternatives = Array.Empty<ConsoleCommand>();
+            if (variants == null || variants.Length < 2) return;
+            var alternatives = new ConsoleCommand[variants.Length - 1];
+            var text = new StringBuilder(command.Signature);
+            for (int i = 1; i < variants.Length; i++)
+            {
+                alternatives[i - 1] = variants[i].Binding.Command;
+                string next = alternatives[i - 1].Signature;
+                if (text.Length + next.Length < 4090) text.Append(" | ").Append(next);
+            }
+            Alternatives = Array.AsReadOnly(alternatives);
+            signature = text.ToString();
+        }
     }
 
     internal static class ConsoleCommandDisplay
