@@ -97,6 +97,8 @@ def create_project(root, destination, lane, editor_version=EDITOR_VERSION, test_
         dependencies["com.unity.modules.ui"] = "1.0.0"
         sample = root / (PREFIX + ".interaction") / "Samples~/InteractionPlayground"
         shutil.copytree(sample, destination / "Assets/InteractionPlayground")
+        external_module = root / (PREFIX + ".interaction") / "Samples~/ExternalModule"
+        shutil.copytree(external_module, destination / "Assets/ExternalModule")
         if lane == "interaction-network":
             network_sample = root / (PREFIX + ".interaction.multiplayer") / "Samples~/NetworkAuthority"
             shutil.copytree(network_sample, destination / "Assets/NetworkAuthority")

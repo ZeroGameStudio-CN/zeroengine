@@ -24,6 +24,7 @@ namespace ZeroEngine.Interaction.Core
         public bool IsDisposed => disposed;
         public event Action<InteractionRegistration, InteractionRegistration> FocusChanged;
         public event Action<InteractionResult> Completed;
+        internal event Action<InteractionRequest> RequestCreated;
 
         public InteractionAgent(InteractionWorld world, string actorId, object actor, IInteractionClock clock,
             IInteractionRange range, double maxDistance)
@@ -172,6 +173,7 @@ namespace ZeroEngine.Interaction.Core
             pending = request;
             try
             {
+                RequestCreated?.Invoke(request);
                 var check = target.Target.Check(context);
                 if (!check.Allowed) { Settle(request, InteractionStatus.Denied, check.Reason); return false; }
                 if (!IsCurrent(request)) { Settle(request, InteractionStatus.Cancelled, "Target lifetime changed."); return false; }
@@ -228,7 +230,9 @@ namespace ZeroEngine.Interaction.Core
             }
             catch (Exception exception) { status = InteractionStatus.Faulted; reason = exception.Message; }
             finally { committing = false; }
-            Completed?.Invoke(new InteractionResult(request.Context, request.Id, status, reason));
+            var settledResult = new InteractionResult(request.Context, request.Id, status, reason);
+            try { Completed?.Invoke(settledResult); }
+            finally { request.NotifySettled(settledResult); }
             return status == InteractionStatus.Succeeded;
         }
 
@@ -240,7 +244,9 @@ namespace ZeroEngine.Interaction.Core
             finally
             {
                 request.ClearCallbacks();
-                Completed?.Invoke(new InteractionResult(request.Context, request.Id, status, reason));
+                var result = new InteractionResult(request.Context, request.Id, status, reason);
+                try { Completed?.Invoke(result); }
+                finally { request.NotifySettled(result); }
             }
             return true;
         }
@@ -252,7 +258,7 @@ namespace ZeroEngine.Interaction.Core
             world.Removed -= OnRemoved;
             world.Detach(this);
             try { Cancel("Interactor disposed."); }
-            finally { Focus = null; candidates.Clear(); FocusChanged = null; Completed = null; }
+            finally { Focus = null; candidates.Clear(); FocusChanged = null; Completed = null; RequestCreated = null; }
         }
     }
 }

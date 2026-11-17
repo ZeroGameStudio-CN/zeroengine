@@ -38,6 +38,7 @@ namespace ZeroEngine.Interaction.Core.Authority
         private readonly Dictionary<long, ActionRecord> actions = new Dictionary<long, ActionRecord>();
         private readonly Queue<long> actionOrder = new Queue<long>();
         private readonly Queue<InteractionAuthorityOutcome> notifications = new Queue<InteractionAuthorityOutcome>();
+        private readonly Dictionary<long, long> requestActions = new Dictionary<long, long>();
         private long sequence, heldAction, pendingAction, invocationAction, revision;
         private bool disposed, dispatching;
         public string ActorId { get; }
@@ -55,6 +56,7 @@ namespace ZeroEngine.Interaction.Core.Authority
             range = new DirectedRange(spatial);
             agent = new InteractionAgent(world, id, subject, clock, range, maxDistance);
             agent.Completed += Completed;
+            agent.RequestCreated += RequestCreated;
         }
 
         public InteractionCommandReceipt Receive(InteractionCommand command)
@@ -145,9 +147,16 @@ namespace ZeroEngine.Interaction.Core.Authority
                 rejection, action?.Outcome);
         }
 
-        private void Completed(InteractionResult result)
+        private void RequestCreated(InteractionRequest request)
         {
             long actionId = invocationAction != 0 ? invocationAction : heldAction != 0 ? heldAction : pendingAction;
+            if (actionId != 0) requestActions.Add(request.Id, actionId);
+        }
+
+        private void Completed(InteractionResult result)
+        {
+            if (!requestActions.TryGetValue(result.RequestId, out long actionId)) return;
+            requestActions.Remove(result.RequestId);
             if (actionId == 0 || !actions.TryGetValue(actionId, out var action)) return;
             var outcome = new InteractionAuthorityOutcome(Epoch, ActorId, Activation, actionId, checked(++revision),
                 result.RequestId, new InteractionTargetIdentity(result.Context.TargetId, result.Context.Activation),
@@ -190,7 +199,7 @@ namespace ZeroEngine.Interaction.Core.Authority
             while (actions.Count > historyLimit && inspected-- > 0)
             {
                 long id = actionOrder.Dequeue();
-                if (id == heldAction || id == pendingAction) actionOrder.Enqueue(id);
+                if (id == heldAction || id == pendingAction || requestActions.ContainsValue(id)) actionOrder.Enqueue(id);
                 else actions.Remove(id);
             }
         }
@@ -200,7 +209,7 @@ namespace ZeroEngine.Interaction.Core.Authority
             if (disposed) return;
             disposed = true; owner.Remove(this);
             try { agent.Dispose(); }
-            finally { heldAction = pendingAction = invocationAction = 0; range.Selected = null; }
+            finally { heldAction = pendingAction = invocationAction = 0; range.Selected = null; requestActions.Clear(); }
         }
     }
 }

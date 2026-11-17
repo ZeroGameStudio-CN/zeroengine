@@ -1,0 +1,6 @@
+{
+  "name": "ZeroEngine.Interaction.ExternalModule.Sample",
+  "references": ["ZeroEngine.Interaction.Core", "Independent.Content.Sample"],
+  "autoReferenced": true,
+  "noEngineReferences": true
+}
