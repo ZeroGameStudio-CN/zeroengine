@@ -97,8 +97,13 @@ Shader "Hidden/ZeroEngine/SpriteRimLighting"
                 // determines the contour; it must never replace the actor's base color.
                 if (all(light.rgb <= 0)) return original;
                 float3 referenceDodge = baseColor / max(1 - light.rgb, .000001);
+                // Retain the reference's mixed-color saturation response. Its
+                // red field bounds saturated green/blue, keeping dark detail
+                // colored rather than replacing it with a fixed white line.
+                // An isolated channel retains ZE's nonzero-color fallback.
                 referenceDodge = float3(light.r >= 1 ? light.r : referenceDodge.r,
-                    light.g >= 1 ? light.g : referenceDodge.g, light.b >= 1 ? light.b : referenceDodge.b);
+                    light.g >= 1 ? (light.r > 0 ? light.r : light.g) : referenceDodge.g,
+                    light.b >= 1 ? (light.r > 0 ? light.r : light.b) : referenceDodge.b);
                 float3 referenceColor = min(lerp(baseColor, referenceDodge, light.a), meta.y);
                 if (limitAddedHdr) referenceColor = saturate(referenceColor);
                 float3 referenceResponse = gammaBlend ? SRGBToLinear(referenceColor) : referenceColor;
@@ -153,6 +158,13 @@ Shader "Hidden/ZeroEngine/SpriteRimLighting"
         float EnhancedPower(float value, float power)
         {
             return power <= 0 ? 1 : pow(saturate(value), power);
+        }
+        float4 ReferenceFieldContribution(float3 color, float alpha, float visibility)
+        {
+            // Match the reference's RGBA8 UNorm SrcAlpha/One field: source RGB
+            // and alpha are bounded before blending, not after squaring alpha.
+            float4 source = round(saturate(float4(color * alpha, alpha)) * 255) / 255;
+            return round(source * source.a * visibility * 255) / 255;
         }
         float EnhancedFalloff(float3 p, float4 shape, float4 powers)
         {
@@ -228,6 +240,8 @@ Shader "Hidden/ZeroEngine/SpriteRimLighting"
             float2 uv = CoveredArtCell(input, cellOffset);
             float2 texel = max(_RimRefMaskInfo.xy, .000001);
             float3 energy = 0; float blend = 0;
+            float3 referenceField = 0;
+            float4 referenceResponses = 0;
             bool referenceResponse = _RimReferenceEdgeResponse > .5;
             float3 darkEdgeLight = 0;
             float3 contourLight = 0;
@@ -259,10 +273,20 @@ Shader "Hidden/ZeroEngine/SpriteRimLighting"
                         // response while retaining native depth direction and visibility.
                         float inverseRangeSq = max(dot(_RimEnhanceRows0[i].xyz,_RimEnhanceRows0[i].xyz),.00000001);
                         float3 ray = -(_RimEnhanceRows0[i].xyz*q.x + _RimEnhanceRows1[i].xyz*q.y + _RimEnhanceRows2[i].xyz*q.z)/inverseRangeSq;
+                        float3 cameraRay = unity_OrthoParams.w > .5 ? -GetWorldSpaceNormalizeViewDir(input.positionWS) : input.positionWS - _WorldSpaceCameraPos;
+                        if (abs(cameraRay.z) > .00001) ray.xy -= cameraRay.xy * (ray.z / cameraRay.z);
                         float cone = 1;
                         if (_RimEnhanceShapes[i].x > 3.5)
                             cone = saturate((q.z/max(length(q),.00001)-_RimEnhanceShapes[i].y)/max(_RimEnhanceShapes[i].z-_RimEnhanceShapes[i].y,.00001));
                         alpha = saturate(1-length(ray.xy)*sqrt(inverseRangeSq))*cone*_RimEnhanceColors[i].a;
+                        float3 centerQ = float3(dot(float4(_RimRefCenterWS, 1), _RimEnhanceRows0[i]),
+                            dot(float4(_RimRefCenterWS, 1), _RimEnhanceRows1[i]), dot(float4(_RimRefCenterWS, 1), _RimEnhanceRows2[i]));
+                        float3 centerRay = -(_RimEnhanceRows0[i].xyz*centerQ.x + _RimEnhanceRows1[i].xyz*centerQ.y +
+                            _RimEnhanceRows2[i].xyz*centerQ.z) / inverseRangeSq;
+                        // The reference's center response attenuates the mask RGB before
+                        // Color Dodge. Native 3D selection still owns direction and range.
+                        float centerScore = saturate(saturate(1-length(centerRay.xy)*sqrt(inverseRangeSq))*_RimEnhanceColors[i].a);
+                        referenceResponses[i] = pow(centerScore, 1 / max(_RimEnhanceInnerWrap.w, .001));
                     }
                     else alpha = saturate(alpha);
                 }
@@ -329,20 +353,6 @@ Shader "Hidden/ZeroEngine/SpriteRimLighting"
                         _RimEnhanceRows2[i].xyz * cellQ.z) / max(dot(_RimEnhanceRows0[i].xyz, _RimEnhanceRows0[i].xyz), .00000001);
                     float3 view = GetWorldSpaceNormalizeViewDir(cellWS);
                     nativeToLight = toLight;
-                    if (referenceResponse)
-                    {
-                        float inverseRange = sqrt(max(dot(_RimEnhanceRows0[i].xyz,_RimEnhanceRows0[i].xyz),.00000001));
-                        float3 centerRay = toLight + cellWS - _RimRefCenterWS;
-                        float centerCone = 1;
-                        if (_RimEnhanceShapes[i].x > 3.5)
-                        {
-                            float3 centerQ = float3(dot(float4(_RimRefCenterWS,1),_RimEnhanceRows0[i]),
-                                dot(float4(_RimRefCenterWS,1),_RimEnhanceRows1[i]),dot(float4(_RimRefCenterWS,1),_RimEnhanceRows2[i]));
-                            centerCone = saturate((centerQ.z/max(length(centerQ),.00001)-_RimEnhanceShapes[i].y)/max(_RimEnhanceShapes[i].z-_RimEnhanceShapes[i].y,.00001));
-                        }
-                        float centerScore = saturate((1-length(centerRay.xy)*inverseRange)*centerCone*_RimEnhanceColors[i].a);
-                        band.w = pow(centerScore,1/max(_RimEnhanceInnerWrap.w,.001));
-                    }
                     float depth = dot(toLight, view);
                     float lightDistance = max(length(toLight), .00001);
                     backFacing = saturate(-depth / lightDistance);
@@ -428,29 +438,39 @@ Shader "Hidden/ZeroEngine/SpriteRimLighting"
                 // as alpha. Keep that response when mapping native lamps to this style.
                 float3 fieldColor = _RimEnhanceColors[i].rgb;
                 if (_RimReferenceEdgeResponse > .5 && _RimEnhanceShapes[i].x > 2.5) fieldColor *= _RimEnhanceColors[i].a;
+                if (referenceResponse)
+                {
+                    // The reference shares light color before applying its mask.
+                    // Extend that mask to all eligible directions. Do not average
+                    // away their coverage or add several masks into a brighter line.
+                    float4 incident = ReferenceFieldContribution(fieldColor, alpha, visibility);
+                    referenceField += incident.rgb;
+                    float response = _RimEnhanceShapes[i].x > 2.5 ? referenceResponses[i] : band.w;
+                    energy = max(energy, modulation * response);
+                    blend += incident.a;
+                    continue;
+                }
                 float3 rimColor = saturate(fieldColor * amount) * modulation * band.w;
                 // Native Shape.w opts into dark contour fill. Use the smooth field directly
                 // so dark edges remain readable as the actor approaches or leaves the light.
                 float3 darkColor = _RimEnhanceShapes[i].w > 0 ?
                     _RimEnhanceColors[i].rgb * (alpha * visibility * _RimEnhanceShapes[i].w) * saturate(modulation) : 0;
-                // The reference's shared field alpha receives every visible lamp,
-                // even when that lamp's own mask covers this side of the silhouette.
-                if (referenceResponse) blend += amount;
                 if (mixNativeLights)
                 {
                     float rimPeak = AccumulateRimColor(rimMix, rimColor, false);
-                    if (!referenceResponse && rimPeak > 0) blend = max(blend, amount);
+                    if (rimPeak > 0) blend = max(blend, amount);
                     AccumulateRimColor(darkMix, darkColor, false);
                 }
                 else
                 {
-                    // Retain each channel's strongest native contribution. Averaging
-                    // dims opposed edges; summing can turn dark cloth into a neon line.
-                    if (referenceResponse && _RimEnhanceShapes[i].x > 2.5) energy = max(energy, rimColor);
-                    else energy += rimColor;
+                    energy += rimColor;
                     darkEdgeLight += darkColor;
-                    if (!referenceResponse) blend += amount;
+                    blend += amount;
                 }
+            }
+            if (referenceResponse)
+            {
+                energy = saturate(referenceField) * saturate(energy);
             }
             if (mixNativeLights)
             {

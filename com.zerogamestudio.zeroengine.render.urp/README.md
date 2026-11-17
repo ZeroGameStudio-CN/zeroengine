@@ -31,10 +31,18 @@ composite. The old preview tint and reference MRT implementations are removed.
 The default starts from the already rendered scene color. Source textures supply
 alpha coverage only: it never redraws the actor with unlit texture RGB. Each light
 gets its own contour direction, so opposed lamps can illuminate both sides without
-switching to one strongest side. Native lights retain the strongest masked
-contribution per color channel, avoiding both dim averaging and repeated brightening
-of dark art. The narrow inward wrap fades away within two art
+switching to one strongest side. Visible lights first accumulate the reference
+incident field with its RGBA8 UNorm source bounds and blending. The union of
+directional contours modulates that shared field before Color Dodge, retaining
+the painted material response on dark art. Native field lookup follows the camera
+ray to each source's XY plane. The reference's XY center response attenuates
+contour RGB before Color Dodge, preserving weak colored detail below saturation;
+native 3D selection still controls source eligibility and contour direction.
+These masks never replace the shaded body. The narrow inward wrap fades away within two art
 cells. Its strength is 0.08 in the shared default; the deep interior is unchanged.
+The reference's mixed-color saturation branch retains a weaker colored response
+on black art at full saturation. Isolated saturated channels keep ZE's
+nonzero-color fallback.
 Exposure scales only the added edge gain. Existing HDR/emission is preserved and
 added LDR light is capped at one. There is no uniform black-edge floor in this
 response, so dark colored art retains its own color-dependent brightness.

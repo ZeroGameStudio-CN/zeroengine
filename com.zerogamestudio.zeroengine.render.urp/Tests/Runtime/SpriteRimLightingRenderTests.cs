@@ -130,6 +130,7 @@ namespace ZeroEngine.Render.Tests.Runtime
                     Assert.That(inside.g,Is.EqualTo(body.g).Within(.0001f));
                     Assert.That(inside.b,Is.EqualTo(body.b).Within(.0001f),
                         "White source art on a dark material must retain its shaded body, even when a rim is active.");
+                    VerifyReferenceDarkContours(camera,actor,material,lighting,light,profile);
                 }
                 else Assert.That(inside.g,Is.LessThan(baseline.GetPixel(29,28).g),"The legacy local exposure remains compatible for custom profiles.");
                 Assert.That(lit.GetPixel(5,5).r,Is.EqualTo(baseline.GetPixel(5,5).r).Within(.001f),"Background pixels must not be recolored.");
@@ -1028,12 +1029,110 @@ namespace ZeroEngine.Render.Tests.Runtime
             finally{if(baseline)Object.DestroyImmediate(baseline);if(lit)Object.DestroyImmediate(lit);}
         }
 
+        private static void VerifyReferenceDarkContours(Camera camera, Renderer actor, Material material,
+            SpriteRimLighting lighting, SpriteRimLight light, SpriteRimLightingProfile profile)
+        {
+            var color=material.GetVector("_BaseColor");var lightColor=light.LightColor;
+            var position=light.transform.position;var shape=light.Shape;float intensity=light.Intensity;
+            float weak=profile.WeakDistance,strong=profile.StrongDistance,scale=profile.StrongScale;
+            float wrap=profile.InnerWrapStrength,strength=profile.Strength,exposure=profile.MinimumExposure,maximum=profile.MaximumLight;
+            var images=new List<Texture2D>();GameObject secondHost=null;
+            Texture2D Capture(){var image=Render(camera);images.Add(image);return image;}
+            try
+            {
+                profile.WeakDistance=profile.StrongDistance=1;profile.StrongScale=0;
+                profile.InnerWrapStrength=0;profile.Strength=1;profile.MinimumExposure=1;profile.MaximumLight=1;
+                material.SetVector("_BaseColor",new Vector4(0,0,0,1));
+                light.Shape=LightType.Point;light.LightColor=Color.white;light.Intensity=1;
+                light.transform.position=new Vector3(-.5f,0,0);
+                lighting.UpdateLighting();var single=Capture();
+                Assert.That(single.GetPixel(13,28).maxColorComponent,Is.LessThan(.0001f),
+                    "Below reference-field saturation, black art must not acquire an artificial visibility floor.");
+
+                secondHost=new GameObject("Reference-field opposing light");
+                SceneManager.MoveGameObjectToScene(secondHost,actor.gameObject.scene);
+                var second=secondHost.AddComponent<SpriteRimLight>();second.Radius=light.Radius;
+                second.LightColor=Color.white;second.Intensity=1;secondHost.transform.position=new Vector3(.5f,0,0);
+                lighting.Configure(new[]{actor},new[]{light,second},profile);lighting.UpdateLighting();var black=Capture();
+                Assert.That(black.GetPixel(13,28).b,Is.LessThan(.0001f),
+                    "The reference mask response must prevent premature saturation even when two incident fields overlap.");
+                Assert.That(black.GetPixel(42,28).b,Is.LessThan(.0001f));
+                light.LightColor=second.LightColor=new Color(.02f,.3f,1,1);
+                light.Intensity=second.Intensity=2;
+                lighting.UpdateLighting();var mixedBlack=Capture();var mixedEdge=mixedBlack.GetPixel(13,28);
+                Assert.That(mixedEdge.b,Is.GreaterThan(.002f),
+                    "A saturated blue field with a weaker red field must reveal a colored black contour.");
+                Assert.That(mixedEdge.b,Is.LessThan(.08f),
+                    "The recovered mixed-field branch must keep black detail below a white/neon contour.");
+                Assert.That(mixedEdge.r,Is.LessThan(.0001f));
+                light.LightColor=second.LightColor=Color.white;
+                light.Intensity=second.Intensity=1;
+                material.SetVector("_BaseColor",new Vector4(.002f,.004f,.012f,1));
+                profile.Strength=0;lighting.UpdateLighting();var bodyBase=Capture();profile.Strength=1;
+                second.enabled=false;lighting.UpdateLighting();var darkSingle=Capture();
+                second.enabled=true;lighting.UpdateLighting();var combined=Capture();
+                Assert.That(combined.GetPixel(13,28).b,Is.GreaterThan(darkSingle.GetPixel(13,28).b*2+.0005f),
+                    "Additional incident light must restore a visible dark-blue contour, rather than maxing each lamp's dim result.");
+                Assert.That(combined.GetPixel(42,28).b,Is.GreaterThan(.005f),
+                    "The colored dark edge must remain visible on the opposed contour.");
+                var body=combined.GetPixel(29,28);var unlitBody=bodyBase.GetPixel(29,28);
+                Assert.That(body.r,Is.EqualTo(unlitBody.r).Within(.0001f));
+                Assert.That(body.g,Is.EqualTo(unlitBody.g).Within(.0001f));
+                Assert.That(body.b,Is.EqualTo(unlitBody.b).Within(.0001f),
+                    "The dark body between the contours must retain its scene shading.");
+                second.enabled=false;lighting.UpdateLighting();var removed=Capture();
+                AssertSameImage(darkSingle,removed,"Disabling the extra field must immediately restore the single-light image.");
+
+                material.SetVector("_BaseColor",new Vector4(0,0,0,1));
+                second.enabled=true;light.Intensity=second.Intensity=2;
+                lighting.UpdateLighting();var intense=Capture();
+                Assert.That(intense.GetPixel(13,28).b,Is.GreaterThan(.1f));
+                Assert.That(intense.GetPixel(42,28).b,Is.GreaterThan(.1f));
+                body=intense.GetPixel(29,28);
+                Assert.That(Mathf.Max(body.r,Mathf.Max(body.g,body.b)),Is.LessThan(.0001f));
+
+                second.enabled=false;material.SetVector("_BaseColor",new Vector4(.002f,.004f,.012f,1));
+                light.LightColor=Color.blue;light.Intensity=1.2f;
+                lighting.UpdateLighting();var blue=Capture();var blueEdge=blue.GetPixel(13,28);
+                Assert.That(blueEdge.b,Is.GreaterThan(.01f),"Bright blue light must reveal dark blue material detail.");
+                Assert.That(blueEdge.b,Is.GreaterThan(blueEdge.r*20),"The bright-dark response must preserve the incident color.");
+
+                light.Intensity=.65f;material.SetVector("_BaseColor",new Vector4(.002f,.004f,.012f,1));
+                profile.Strength=0;lighting.UpdateLighting();var darkBase=Capture();
+                profile.Strength=1;lighting.UpdateLighting();var dark=Capture();
+                float darkGain=dark.GetPixel(13,28).b-darkBase.GetPixel(13,28).b;
+                Assert.That(darkGain,Is.GreaterThan(darkBase.GetPixel(13,28).b*.03f+.000001f),
+                    "Unsaturated dark blue must still receive a color-dependent edge response.");
+                var originalBody=darkBase.GetPixel(29,28);var litBody=dark.GetPixel(29,28);
+                Assert.That(litBody.r,Is.EqualTo(originalBody.r).Within(.0001f));
+                Assert.That(litBody.g,Is.EqualTo(originalBody.g).Within(.0001f));
+                Assert.That(litBody.b,Is.EqualTo(originalBody.b).Within(.0001f));
+                material.SetVector("_BaseColor",new Vector4(.08f,.1f,.12f,1));
+                profile.Strength=0;lighting.UpdateLighting();var paleBase=Capture();
+                profile.Strength=1;lighting.UpdateLighting();var pale=Capture();
+                Assert.That(pale.GetPixel(13,28).b-paleBase.GetPixel(13,28).b,Is.GreaterThan(darkGain*4),
+                    "Pale and dark artwork must not collapse into a uniform edge brightness.");
+            }
+            finally
+            {
+                if(secondHost)Object.DestroyImmediate(secondHost);
+                foreach(var image in images)Object.DestroyImmediate(image);
+                material.SetVector("_BaseColor",color);light.LightColor=lightColor;light.Intensity=intensity;
+                light.Shape=shape;light.transform.position=position;
+                profile.WeakDistance=weak;profile.StrongDistance=strong;profile.StrongScale=scale;
+                profile.InnerWrapStrength=wrap;profile.Strength=strength;profile.MinimumExposure=exposure;profile.MaximumLight=maximum;
+                lighting.Configure(new[]{actor},new[]{light},profile);lighting.UpdateLighting();
+            }
+        }
+
         private static Color ExpectedReferenceEdge(Color source,int x,int y,SpriteRimLight light,SpriteRimLightingProfile profile)
         {
             var position=new Vector3((x+.5f)/64f-.5f,(y+.5f)/64f-.5f,0);
             var q=light.transform.InverseTransformPoint(position);q.x/=light.Radius.x;q.y/=light.Radius.y;
             float falloff=Mathf.Pow(Mathf.Max(0,1-new Vector2(q.x,q.y).magnitude),light.LightPower);
-            float fieldAlpha=Mathf.Clamp01(Mathf.Pow(falloff*light.LightColor.a*light.Intensity,2));
+            float alpha=falloff*light.LightColor.a*light.Intensity;
+            float Quantize(float value)=>Mathf.Round(Mathf.Clamp01(value)*255)/255;
+            float fieldAlpha=profile.ReferenceEdgeResponse?Quantize(Quantize(alpha)*Quantize(alpha)):Mathf.Clamp01(alpha*alpha);
             Assert.That(light.TryGetInfluence(Vector3.zero,out _,out float intensity),Is.True);
             float response=Mathf.Pow(intensity,profile.ResponsePower);
             float exposure=Mathf.Lerp(1,profile.MinimumExposure*light.MinimumGlobalExposure,intensity);
@@ -1042,8 +1141,11 @@ namespace ZeroEngine.Render.Tests.Runtime
             float[] b={input.r,input.g,input.b},c={light.LightColor.r,light.LightColor.g,light.LightColor.b};
             float[] value=new float[3];
             for(int i=0;i<3;i++){
-                float f=Mathf.Clamp01(c[i]*light.Intensity*fieldAlpha)*response;
-                float dodge=f>=1?f:b[i]/(1-f);
+                float incident=profile.ReferenceEdgeResponse?Quantize(Quantize(c[i]*light.Intensity*alpha)*Quantize(alpha)):Mathf.Clamp01(c[i]*light.Intensity*fieldAlpha);
+                float f=incident*response;
+                float red=Quantize(Quantize(c[0]*light.Intensity*alpha)*Quantize(alpha))*response;
+                float saturated=profile.ReferenceEdgeResponse&&i>0&&red>0?red:f;
+                float dodge=f>=1?saturated:b[i]/(1-f);
                 value[i]=Mathf.Min(Mathf.Lerp(b[i],dodge,blend),profile.MaximumLight)*(profile.ReferenceEdgeResponse?1:exposure);
             }
             var result=new Color(value[0],value[1],value[2],source.a);
