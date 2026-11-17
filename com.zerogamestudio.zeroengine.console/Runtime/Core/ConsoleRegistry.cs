@@ -18,12 +18,21 @@ namespace ZeroEngine.Console
     {
         private readonly Dictionary<string, ConsoleEntry> ids = new Dictionary<string, ConsoleEntry>(StringComparer.OrdinalIgnoreCase);
         private readonly Dictionary<string, ConsoleEntry> names = new Dictionary<string, ConsoleEntry>(StringComparer.OrdinalIgnoreCase);
+        private readonly Dictionary<string, ConsoleEntry[]> overloads = new Dictionary<string, ConsoleEntry[]>(StringComparer.OrdinalIgnoreCase);
+        public const int MaximumOverloads = 32;
         private readonly object sync = new object();
         private ConsoleEntry[] snapshot;
         private bool disposed;
         public long Revision { get; private set; }
+        internal bool HasOverloads { get { lock (sync) return overloads.Count != 0; } }
 
         public IDisposable Register(string module, IEnumerable<ConsoleBinding> bindings)
+            => RegisterCore(module, bindings, false);
+
+        public IDisposable RegisterOverloads(string module, IEnumerable<ConsoleBinding> bindings)
+            => RegisterCore(module, bindings, true);
+
+        private IDisposable RegisterCore(string module, IEnumerable<ConsoleBinding> bindings, bool allowOverloads)
         {
             if (string.IsNullOrWhiteSpace(module)) throw new ArgumentException("A module identity is required.", nameof(module));
             var items = (bindings ?? throw new ArgumentNullException(nameof(bindings))).ToArray();
@@ -35,18 +44,23 @@ namespace ZeroEngine.Console
                 if (binding == null || binding.Command.Module != module) throw new ArgumentException("Every command must belong to its registered module.", nameof(bindings));
                 if (!seenIds.Add(binding.Command.Id)) throw new InvalidOperationException("Duplicate command ID: " + binding.Command.Id);
                 foreach (string name in binding.Command.Aliases.Append(binding.Command.Name))
-                    if (!seenNames.Add(name)) throw new InvalidOperationException("Duplicate command name: " + name);
+                    if (!seenNames.Add(name) && !allowOverloads) throw new InvalidOperationException("Duplicate command name: " + name);
             }
+            var groups = items.SelectMany(binding => binding.Command.Aliases.Prepend(binding.Command.Name)
+                .Select(name => new { name, binding })).GroupBy(item => item.name, StringComparer.OrdinalIgnoreCase).ToArray();
+            foreach (var group in groups)
+                if (group.Count() > MaximumOverloads || group.Select(item => item.binding.Command.Name).Distinct(StringComparer.OrdinalIgnoreCase).Count() != 1)
+                    throw new InvalidOperationException("An overload name must belong to one bounded command family: " + group.Key);
             ConsoleEntry[] entries;
             lock (sync)
             {
                 if (disposed) throw new ObjectDisposedException(nameof(ConsoleRegistry));
                 foreach (string id in seenIds) if (ids.ContainsKey(id)) throw new InvalidOperationException("Duplicate command ID: " + id);
-                foreach (string name in seenNames) if (names.ContainsKey(name)) throw new InvalidOperationException("Duplicate command name: " + name);
+                foreach (string name in seenNames) if (names.ContainsKey(name) || overloads.ContainsKey(name)) throw new InvalidOperationException("Duplicate command name: " + name);
                 foreach (var item in items)
                 {
                     var command = item.Command;
-                    if (names.ContainsKey(command.Id)) throw new InvalidOperationException("Command ID conflicts with an existing name: " + command.Id);
+                    if (names.ContainsKey(command.Id) || overloads.ContainsKey(command.Id)) throw new InvalidOperationException("Command ID conflicts with an existing name: " + command.Id);
                     foreach (string name in command.Aliases.Prepend(command.Name))
                     {
                         if (ids.ContainsKey(name)) throw new InvalidOperationException("Command name conflicts with an existing ID: " + name);
@@ -57,15 +71,26 @@ namespace ZeroEngine.Console
                 }
                 entries = items.Select(binding => new ConsoleEntry(binding)).ToArray();
                 foreach (ConsoleEntry entry in entries)
-                {
                     ids.Add(entry.Binding.Command.Id, entry);
-                    names.Add(entry.Binding.Command.Name, entry);
-                    foreach (string alias in entry.Binding.Command.Aliases) names.Add(alias, entry);
+                foreach (var group in groups)
+                {
+                    var family = group.Select(item => ids[item.binding.Command.Id]).OrderBy(entry => entry.Binding.Command.Id, StringComparer.Ordinal).ToArray();
+                    if (family.Length == 1) names.Add(group.Key, family[0]);
+                    else overloads.Add(group.Key, family);
                 }
                 snapshot = null;
                 Revision++;
             }
             return new ModuleLease(this, entries);
+        }
+
+        internal bool TryResolveOverloads(string value, out ConsoleEntry[] entries)
+        {
+            lock (sync)
+            {
+                entries = null;
+                return !disposed && value != null && overloads.TryGetValue(value, out entries);
+            }
         }
 
         internal bool TryResolve(string value, out ConsoleEntry entry)
@@ -92,7 +117,9 @@ namespace ZeroEngine.Console
                     if (!ids.TryGetValue(command.Id, out var current) || current != entry) continue;
                     ids.Remove(command.Id);
                     names.Remove(command.Name);
+                    overloads.Remove(command.Name);
                     foreach (string alias in command.Aliases) names.Remove(alias);
+                    foreach (string alias in command.Aliases) overloads.Remove(alias);
                 }
                 snapshot = null;
                 Revision++;
@@ -108,7 +135,7 @@ namespace ZeroEngine.Console
                 if (disposed) return;
                 disposed = true;
                 entries = ids.Values.ToArray();
-                ids.Clear(); names.Clear(); snapshot = Array.Empty<ConsoleEntry>(); Revision++;
+                ids.Clear(); names.Clear(); overloads.Clear(); snapshot = Array.Empty<ConsoleEntry>(); Revision++;
             }
             StopEntries(entries);
         }

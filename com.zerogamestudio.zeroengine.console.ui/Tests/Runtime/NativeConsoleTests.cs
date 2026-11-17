@@ -14,6 +14,54 @@ namespace ZeroEngine.Console.UI.Tests
     public sealed class NativeConsoleTests
     {
         [UnityTest]
+        public IEnumerator MacroAndOverloadHints_KeepTheDraftAndSubmitTheSelectedHandlerOnce()
+        {
+            var root = new GameObject("Native macro overload integration");
+            IDisposable module = null;
+            try
+            {
+                var host = root.AddComponent<ConsoleHost>();
+                var view = root.AddComponent<NativeConsole>();
+                int calls = 0;
+                module = host.Registry.RegisterOverloads("sample", new[] {
+                    new ConsoleBinding(new ConsoleCommand("sample.one", "sample-pick", "sample", "Pick a flag.",
+                        new[] { new ConsoleParameter("enabled", typeof(bool)) }),
+                        (context, args, token) => { calls++; return Task.FromResult(ConsoleResult.Success(data: false)); }),
+                    new ConsoleBinding(new ConsoleCommand("sample.two", "sample-pick", "sample", "Pick a numbered flag.",
+                        new[] { new ConsoleParameter("count", typeof(int)), new ConsoleParameter("enabled", typeof(bool)) }),
+                        (context, args, token) => { calls++; return Task.FromResult(ConsoleResult.Success(data: args.Get<int>(0))); }) });
+                host.Session.Macros = new ConsoleMacros();
+                host.Session.Macros.Define("preset", "sample-pick 3");
+                view.Open();
+                yield return null;
+                view.InputField.text = "#preset tr";
+                view.InputField.caretPosition = view.InputField.text.Length;
+                var hint = view.transform.Find("ZE Console/Panel/CommandHint");
+                var detail = hint.Find("Parameter").GetComponent<UnityEngine.UI.Text>();
+                double deadline = Time.realtimeSinceStartupAsDouble + 5;
+                UnityEngine.UI.Button choice = null;
+                while (!choice && Time.realtimeSinceStartupAsDouble < deadline)
+                {
+                    choice = view.GetComponentsInChildren<UnityEngine.UI.Button>().FirstOrDefault(button => button.name == "Completion" &&
+                        button.GetComponentInChildren<UnityEngine.UI.Text>().text == "true");
+                    yield return null;
+                }
+                Assert.That(choice, Is.Not.Null);
+                Assert.That(detail.text, Does.Contain("enabled: bool"));
+                Assert.That(calls, Is.Zero);
+                choice.onClick.Invoke();
+                Assert.That(view.InputField.text, Is.EqualTo("#preset true"));
+                Assert.That(calls, Is.Zero);
+                var result = view.SubmitAsync(view.InputField.text);
+                yield return Wait(result);
+                Assert.That(result.Result.Data, Is.EqualTo(3));
+                Assert.That(calls, Is.EqualTo(1));
+                Assert.That(host.Session.GetHistory().Last(), Is.EqualTo("#preset true"));
+            }
+            finally { module?.Dispose(); Object.DestroyImmediate(root); }
+        }
+
+        [UnityTest]
         public IEnumerator ThirdPartyInputOverlay_ShowsPolicyCheckedHintsWithoutSubmitting()
         {
             var root = new GameObject("Third-party input contract");

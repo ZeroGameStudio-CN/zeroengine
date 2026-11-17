@@ -10,6 +10,18 @@ namespace ZeroEngine.Console
 {
     public static class ConsoleMethodBinding
     {
+        public static ConsoleBinding CreateGeneric(string id, string name, string module, MethodInfo definition,
+            Type[] typeArguments, object target = null, string description = "",
+            ConsoleEnvironment environments = ConsoleEnvironment.Development, IEnumerable<string> capabilities = null)
+        {
+            if (definition == null || !definition.IsGenericMethodDefinition)
+                throw new ArgumentException("An explicit generic method definition is required.", nameof(definition));
+            if (typeArguments == null) throw new ArgumentNullException(nameof(typeArguments));
+            foreach (var type in typeArguments)
+                if (type == null || type.ContainsGenericParameters) throw new ArgumentException("Use closed type arguments.", nameof(typeArguments));
+            return Create(id, name, module, definition.MakeGenericMethod(typeArguments), target, description, environments, capabilities);
+        }
+
         public static ConsoleBinding Create(string id, string name, string module, MethodInfo method,
             object target = null, string description = "", ConsoleEnvironment environments = ConsoleEnvironment.Development,
             IEnumerable<string> capabilities = null)
@@ -18,7 +30,8 @@ namespace ZeroEngine.Console
             if (method.ContainsGenericParameters) throw new ArgumentException("Close generic methods explicitly before binding.", nameof(method));
             if (method.ReturnType == typeof(void) && method.IsDefined(typeof(AsyncStateMachineAttribute), false))
                 throw new ArgumentException("Async void methods require an explicit completion adapter.", nameof(method));
-            if (!typeof(Task).IsAssignableFrom(method.ReturnType) && method.ReturnType.GetMethod("GetAwaiter", Type.EmptyTypes) != null)
+            bool valueTask = method.ReturnType == typeof(ValueTask) || method.ReturnType.IsGenericType && method.ReturnType.GetGenericTypeDefinition() == typeof(ValueTask<>);
+            if (!valueTask && !typeof(Task).IsAssignableFrom(method.ReturnType) && method.ReturnType.GetMethod("GetAwaiter", Type.EmptyTypes) != null)
                 throw new ArgumentException("Custom awaitables require an explicit outcome adapter.", nameof(method));
             if (!method.IsStatic && (target == null || !method.DeclaringType.IsInstanceOfType(target)))
                 throw new ArgumentException("An instance method requires its declared target.", nameof(target));
@@ -36,8 +49,10 @@ namespace ZeroEngine.Console
                 visible.Add(new ConsoleParameter(parameter.Name, parameter.ParameterType, optional: parameter.IsOptional,
                     defaultValue: parameter.IsOptional ? parameter.DefaultValue : null, variadic: variadic));
             }
-            PropertyInfo taskResult = typeof(Task).IsAssignableFrom(method.ReturnType)
-                ? method.ReturnType.GetProperty("Result", BindingFlags.Instance | BindingFlags.Public) : null;
+            MethodInfo asTask = valueTask ? method.ReturnType.GetMethod("AsTask", Type.EmptyTypes) : null;
+            Type taskType = asTask?.ReturnType ?? method.ReturnType;
+            PropertyInfo taskResult = typeof(Task).IsAssignableFrom(taskType)
+                ? taskType.GetProperty("Result", BindingFlags.Instance | BindingFlags.Public) : null;
             var command = new ConsoleCommand(id, name, module, description, visible, environments: environments, capabilities: capabilities);
             return new ConsoleBinding(command, async (context, arguments, cancellation) =>
             {
@@ -50,6 +65,12 @@ namespace ZeroEngine.Console
                 {
                     ExceptionDispatchInfo.Capture(failure.InnerException).Throw();
                     throw;
+                }
+                if (asTask != null)
+                {
+                    try { value = asTask.Invoke(value, null); }
+                    catch (TargetInvocationException failure) when (failure.InnerException != null)
+                    { ExceptionDispatchInfo.Capture(failure.InnerException).Throw(); throw; }
                 }
                 if (value is Task pending)
                 {
