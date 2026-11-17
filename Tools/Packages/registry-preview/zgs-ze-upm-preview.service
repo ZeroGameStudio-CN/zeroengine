@@ -1,0 +1,34 @@
+[Unit]
+Description=ZE single-package UPM HTTPS Preview
+After=network.target
+
+[Service]
+Type=simple
+DynamicUser=yes
+User=zgs-ze-upm-preview
+StateDirectory=zgs-ze-upm-preview
+StateDirectoryMode=0700
+WorkingDirectory=/var/lib/zgs-ze-upm-preview
+ExecStart=/opt/zgs-ze-upm-preview/current/node/bin/node /opt/zgs-ze-upm-preview/current/app/node_modules/verdaccio/bin/verdaccio --config /etc/zgs-ze-upm-preview/config.yaml
+Environment=VERDACCIO_PUBLIC_URL=https://packages-preview.zerogamestudio.com
+Environment=NODE_OPTIONS=--max-old-space-size=128
+Environment=NODE_ENV=production
+UMask=0077
+Restart=on-failure
+RestartSec=5
+MemoryMax=256M
+CPUQuota=50%
+TasksMax=48
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectSystem=strict
+ProtectHome=yes
+ProtectKernelTunables=yes
+ProtectControlGroups=yes
+CapabilityBoundingSet=
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+IPAddressDeny=any
+IPAddressAllow=localhost
+
+[Install]
+WantedBy=multi-user.target
