@@ -1,0 +1,11 @@
+{
+  "dependencies": {
+    "com.zerogamestudio.zeroengine.console": {
+      "version": "0.1.0-ze-pilot.1",
+      "depth": 0,
+      "source": "registry",
+      "dependencies": {},
+      "url": "https://packages-preview.zerogamestudio.com"
+    }
+  }
+}

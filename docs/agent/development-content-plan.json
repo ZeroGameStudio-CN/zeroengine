@@ -559,6 +559,26 @@
           "contentId": "multiplayer.shared-world-presentation"
         }
       ]
+    },
+    {
+      "id": "ze.packages.registry-preview",
+      "title": "ZE 单包国内 HTTPS 分发试点",
+      "stage": "Previewable",
+      "targetReleaseId": "",
+      "availability": "InternalOnly",
+      "responsibleChat": "01a1c66f-d77b-7b00-88d4-37f8f3df3b13",
+      "chatUrl": "codex://threads/01a1c66f-d77b-7b00-88d4-37f8f3df3b13",
+      "nextAction": "仅保留 Console 两个试点版本。国内 HTTPS 冷缓存安装／升级／回滚及只接收项目清单和锁文件自动取包已核对；POB 未修改。后续再决定整组版本发布、Agent Registry 来源校验与消费者迁移，不据单次试点宣称长期稳定。",
+      "entrance": "https://packages-preview.zerogamestudio.com/com.zerogamestudio.zeroengine.console",
+      "resourcePath": "Tools/Packages/registry-preview/README.md",
+      "revision": "Verdaccio 7.1.1、Node 24.11.1 独立运行；公网仅匿名 GET／HEAD，账号和发布写入不开放；无上游拉取，固定版本不可覆盖。有效公信证书、包内容哈希、六次实际 Unity 解析与 API 切换、个人 npm／UPM／Git 配置保持、重启后版本保留均有证据。",
+      "releaseEvidence": "",
+      "candidatePackageVersion": "0.1.0-ze-pilot.2",
+      "verificationEvidence": [
+        "D:/CodexArtifacts/ze-upm-https-20261117/verification.json"
+      ],
+      "relatedContent": [],
+      "verificationScope": "仅单包 Preview 与两份试点版本；Unity 6000.6.9f1，未升级 POB，未验证整个 ZE 批次或完整 Player。"
     }
   ]
 }
