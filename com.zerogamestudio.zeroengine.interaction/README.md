@@ -75,6 +75,45 @@ When `TryCommit` returns false, release any action-owned reservation; the cancel
 event covers automatic cancellation, while a business denial/fault still belongs to its caller.
 Observers should not throw; state is finalized before completion notifications.
 
+## Independent content execution port (0.3)
+
+`InteractionRequest` implements `IInteractionExecution`. An independently authored
+module can keep its own interfaces; a thin project adapter maps them to this port.
+No NPC host, catalog, scoring rule, UI framework, reward service or save format is
+part of the interaction core. The optional aggregation/registry/lifecycle of a
+particular content system stays with that system.
+
+The port retains the existing guarded `TryCommit` / `TryCommitResult`, cancellation
+and denial, and adds `TryFault`, a lazily allocated `LifetimeToken`, `Settled`, and
+the immutable terminal `Outcome`. The captured token is cancelled for **every**
+terminal status, including success, denial and faults. It ends after the business
+callback and the agent's existing completion notification; it does not interrupt
+an admitted transaction. `IsSettled` already prevents reentry before that callback.
+Token cancellation denotes an ended lifetime; read `Outcome`/`Settled` to distinguish
+successful completion from cancellation, denial or a fault.
+Late subscribers read `Outcome`; notifications are not replayed. New token/Settled
+observer failures are retained in `NotificationFailure`, with remaining observers
+still notified and the business outcome unchanged. Existing `Cancelled`/agent
+`Completed` observer behavior is preserved; those legacy observers should not throw.
+
+Capture the exact execution in delayed work, use its token, and marshal completion
+back to the owning gameplay thread. Cancellation tokens do not make the port thread
+safe. Bind external slot/room/host generations and permission checks through the
+project's `IInteractionTarget.Check` or cancel its admitted execution when that
+context ends. An independent host may release its own content first, then perform
+the final context check inside the guarded business callback before writing data.
+Neither a terminal fault nor a rejected business callback rolls back arbitrary
+partial external effects; the provider owns its transaction and recovery.
+
+Authority outcome correlation retains the original request-to-action binding even
+when cancellation cleanup immediately starts another interaction. It does not
+infer the old action from a newer held or pending input.
+
+Import **Independent Module Bridge** for a standard-library-only content assembly
+and its separate thin adapter. See [its instructions](Samples~/ExternalModule/README.md)
+for the standalone console checks. NPC activities and individual gameplay remain
+outside this package; POB adoption still needs its consumer integration regressions.
+
 ## Unity usage
 
 Add an `InteractionWorldBehaviour` scope, `InteractionTargetBehaviour` targets and

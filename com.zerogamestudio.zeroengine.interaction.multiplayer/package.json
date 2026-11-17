@@ -1,11 +1,11 @@
 {
   "name": "com.zerogamestudio.zeroengine.interaction.multiplayer",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "displayName": "ZeroEngine Interaction Multiplayer",
   "description": "Transport-neutral binding of interaction authority to ZE replication identities, with an isolated offline/host/client example.",
   "unity": "6000.6",
   "dependencies": {
-    "com.zerogamestudio.zeroengine.interaction": "0.2.0",
+    "com.zerogamestudio.zeroengine.interaction": "0.3.0",
     "com.zerogamestudio.zeroengine.multiplayer": "0.4.0"
   },
   "author": { "name": "ZeroGameStudio" },

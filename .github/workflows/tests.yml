@@ -174,6 +174,11 @@ jobs:
           python3 -B com.zerogamestudio.zeroengine.interaction.multiplayer/Tools~/AuthorityDemo/verify_peers.py
           --dll "$RUNNER_TEMP/authority-demo/AuthorityDemo.dll"
           --output "$RUNNER_TEMP/authority-peer-results"
+      - name: Build the independent content assembly and its thin adapter
+        run: dotnet build 'com.zerogamestudio.zeroengine.interaction/Tools~/ExternalModuleExample/ExternalModuleExample.csproj' --nologo -o "$RUNNER_TEMP/external-module-example"
+      - name: Verify the external execution port without Unity or gameplay
+        shell: bash
+        run: dotnet "$RUNNER_TEMP/external-module-example/ExternalModuleExample.dll" | tee "$RUNNER_TEMP/authority-peer-results/external-module.jsonl"
       - uses: actions/upload-artifact@v4
         if: always()
         with:

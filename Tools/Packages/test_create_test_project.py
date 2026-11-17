@@ -29,18 +29,22 @@ class TestProjectSelectionTests(unittest.TestCase):
         selected, _ = select_packages(packages, "interaction", "6000.6.4f1")
         self.assertEqual(selected, ["com.zerogamestudio.zeroengine.interaction"])
 
-    def test_interaction_project_imports_its_standalone_sample_without_sibling_packages(self):
+    def test_interaction_project_imports_its_independent_samples_without_sibling_packages(self):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary) / "source"
             package = root / "com.zerogamestudio.zeroengine.interaction"
             sample = package / "Samples~/InteractionPlayground/Runtime"
             sample.mkdir(parents=True)
             (sample / "Consumer.cs").write_text("// standalone consumer", encoding="utf-8")
+            external = package / "Samples~/ExternalModule/Independent"
+            external.mkdir(parents=True)
+            (external / "IndependentModule.cs").write_text("// independent module", encoding="utf-8")
             (package / "package.json").write_text(json.dumps(dict(name=package.name, unity="6000.6")), encoding="utf-8")
             destination = Path(temporary) / "project"
             receipt = create_project(root, destination, "interaction", "6000.6.4f1")
             self.assertEqual(receipt["selected"], [package.name])
             self.assertTrue((destination / "Assets/InteractionPlayground/Runtime/Consumer.cs").is_file())
+            self.assertTrue((destination / "Assets/ExternalModule/Independent/IndependentModule.cs").is_file())
             self.assertEqual(json.loads((destination / "Packages/manifest.json").read_text())["testables"], [package.name])
 
     def test_console_lanes_keep_only_the_requested_frontend_closure(self):

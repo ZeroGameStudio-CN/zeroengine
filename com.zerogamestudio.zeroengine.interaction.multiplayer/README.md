@@ -4,6 +4,11 @@ Optional, SDK-neutral bindings for `ZeroEngine.Interaction.Core.Authority` and t
 existing `ZeroEngine.Multiplayer.Replication` entity/generation identities.
 The interaction package remains usable without this module or a networking SDK.
 
+Version 0.1.1 takes the interaction 0.3 execution port. Trusted server-side content
+can retain `IInteractionExecution`, observe its terminal lifetime and complete via
+the existing guarded request; no new RPC or wire format is added. An execution
+handle is local to its owning authority and must not be serialized to a client.
+
 Create one authority per session epoch. Bind each authenticated connection to its
 server-owned `InteractionReplicationPeer`; never resolve that receiver from an
 actor ID supplied in the command. Register targets using the same canonical ZE
