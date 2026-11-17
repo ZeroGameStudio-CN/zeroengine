@@ -68,10 +68,11 @@ namespace ZeroEngine.GameFeel
             internal TLifetime Lifetime;
             internal double LastTime;
             internal int Used;
+            internal long Generation;
             internal TargetState(int capacity, TLifetime lifetime)
             { Windows = new(capacity); Slots = new Window[capacity]; Lifetime = lifetime; }
             internal void Clear(TLifetime lifetime)
-            { Windows.Clear(); Used = 0; Lifetime = lifetime; }
+            { Windows.Clear(); Used = 0; Lifetime = lifetime; Generation++; }
         }
         private readonly struct Key : IEquatable<Key>
         {
@@ -94,6 +95,7 @@ namespace ZeroEngine.GameFeel
             internal uint Activation;
             internal double Start, Total, Duration, Last, Interval, BeatTime;
             internal long Beat;
+            internal long Revision;
             internal int Count;
             internal bool HasInterval, Dense;
         }
@@ -105,8 +107,33 @@ namespace ZeroEngine.GameFeel
         private readonly int styleCapacity;
         private readonly FeedbackNumberPolicy policy;
         private readonly ConditionalWeakTable<TTarget, TargetState>.CreateValueCallback create;
+        private long revision, epoch;
         public long Requests { get; private set; }
         public long MergedRequests { get; private set; }
+
+        /// <summary>A synchronous output decision. Commit a newly created display only when ShouldCreate is true.
+        /// A default/untracked request still permits individual output. Merged requests need no new display.</summary>
+        public readonly struct Request
+        {
+            internal readonly FeedbackNumberMerger<TTarget, TStyle, TDisplay, TLifetime> Owner;
+            internal readonly TTarget Target;
+            internal readonly object State, Slot;
+            internal readonly long Epoch, Generation, Revision;
+            internal readonly double Value, Time, Duration;
+            public FeedbackNumberMerge<TDisplay> Merge { get; }
+            public bool ShouldCreate => !Merge.Merged;
+            public bool IsTracked => Owner != null;
+            public double EndsAt => Time + Duration;
+            internal Request(FeedbackNumberMerge<TDisplay> merge) : this() { Merge = merge; }
+            internal Request(FeedbackNumberMerger<TTarget, TStyle, TDisplay, TLifetime> owner,
+                TTarget target, object state, object slot, long epoch, long generation, long revision,
+                double value, double time, double duration) : this()
+            {
+                Owner = owner; Target = target; State = state; Slot = slot;
+                Epoch = epoch; Generation = generation; Revision = revision;
+                Value = value; Time = time; Duration = duration;
+            }
+        }
 
         public FeedbackNumberMerger(Func<TTarget, TLifetime> capture,
             Func<TTarget, TLifetime, bool> targetIsCurrent,
@@ -135,8 +162,23 @@ namespace ZeroEngine.GameFeel
         private FeedbackNumberMerge<TDisplay> Add(TTarget target, TStyle style, FeedbackNumberContext context,
             TDisplay display, uint activation, double value, double now, double duration, bool unscaled, bool legacy)
         {
+            if (display == null) { Requests++; return default; }
+            var request = Prepare(target, style, context, value, now, duration, unscaled, legacy);
+            if (request.ShouldCreate) Commit(request, display, activation);
+            return request.Merge;
+        }
+
+        /// <summary>Decide before spawning/formatting a display. The consumer applies Merge.Total to Merge.Display,
+        /// or creates one output and calls Commit. No factory, callback or per-request allocation is required.</summary>
+        public Request Prepare(TTarget target, TStyle style, FeedbackNumberContext context,
+            double value, double now, double duration, bool unscaled) =>
+            Prepare(target, style, context, value, now, duration, unscaled, false);
+
+        private Request Prepare(TTarget target, TStyle style, FeedbackNumberContext context,
+            double value, double now, double duration, bool unscaled, bool legacy)
+        {
             Requests++;
-            if (target == null || display == null || !Finite(value) || !Finite(now) || now < 0d ||
+            if (target == null || !Finite(value) || !Finite(now) || now < 0d ||
                 !Finite(duration) || duration <= 0d || !context.CanMerge) return default;
             if (!legacy) duration = Math.Min(duration, policy.MaximumWindow);
             var state = targets.GetValue(target, create);
@@ -158,13 +200,14 @@ namespace ZeroEngine.GameFeel
                     {
                         double retention = slot.Key.Context.Mode == FeedbackNumberMode.AdaptiveStream
                             ? Math.Max(slot.Duration, policy.IdleSeconds) : slot.Duration;
-                        if (now - slot.Last < retention && displayIsCurrent(slot.Display, slot.Activation)) continue;
+                        if (now - slot.Last < retention && Current(slot)) continue;
                         window = slot; state.Windows.Remove(slot.Key); break;
                     }
                     // Bounded capacity falls back to individual output; no live group is stolen and no damage is lost.
                     if (window == null) return default;
                 }
                 window.Key = key; window.Dense = window.HasInterval = false;
+                window.Display = null; window.Count = 0;
                 state.Windows.Add(key, window);
             }
 
@@ -182,24 +225,44 @@ namespace ZeroEngine.GameFeel
             }
             if (!sameBeat) { window.BeatTime = now; window.Beat = context.BeatId; }
             window.Last = now;
-            bool eligible = context.Mode == FeedbackNumberMode.Action || sameBeat || window.Dense;
+            bool eligible = context.Mode == FeedbackNumberMode.Action || context.Mode == FeedbackNumberMode.Accumulate || sameBeat || window.Dense;
             if (existing && eligible && (!legacy || window.Duration == duration) &&
-                now - window.Start < window.Duration && displayIsCurrent(window.Display, window.Activation))
+                now - window.Start < window.Duration && Current(window))
             {
                 double total = window.Total + value;
                 if (!Finite(total)) return default;
                 window.Total = total; window.Count++; MergedRequests++;
-                return new FeedbackNumberMerge<TDisplay>(window.Display, total, window.Count);
+                window.Revision = ++revision;
+                return new Request(new FeedbackNumberMerge<TDisplay>(window.Display, total, window.Count));
             }
 
-            // Anchor every display to its first hit; later hits and budget changes cannot renew its deadline.
-            window.Display = display; window.Activation = activation;
-            window.Start = now; window.Total = value; window.Duration = duration; window.Count = 1;
-            return default;
+            window.Revision = ++revision;
+            return new Request(this, target, state, window, epoch, state.Generation, window.Revision,
+                value, now, duration);
         }
 
+        /// <summary>Attach successful output once. Failed spawns need no commit. Clear, pooled targets,
+        /// slot reuse, re-entry and newer requests invalidate an older decision without stealing their output.</summary>
+        public bool Commit(Request request, TDisplay display, uint activation)
+        {
+            if (!ReferenceEquals(request.Owner, this) || request.Epoch != epoch || display == null ||
+                !displayIsCurrent(display, activation) || !targets.TryGetValue(request.Target, out var state) ||
+                !ReferenceEquals(request.State, state) || request.Generation != state.Generation ||
+                !targetIsCurrent(request.Target, state.Lifetime)) return false;
+            var window = (Window)request.Slot;
+            if (window.Revision != request.Revision || !state.Windows.TryGetValue(window.Key, out var current) ||
+                !ReferenceEquals(current, window)) return false;
+            window.Revision = ++revision;
+            window.Display = display; window.Activation = activation;
+            // The first request owns the deadline; neither hits nor budget changes extend it.
+            window.Start = request.Time; window.Total = request.Value; window.Duration = request.Duration; window.Count = 1;
+            return true;
+        }
+
+        private bool Current(Window window) => window.Display != null && displayIsCurrent(window.Display, window.Activation);
+
         public void Reset(TTarget target) { if (target != null) targets.Remove(target); }
-        public void Clear() => targets.Clear();
+        public void Clear() { epoch++; targets.Clear(); }
         public void Reset() { Clear(); Requests = MergedRequests = 0; }
         private static bool Finite(double value) => !double.IsNaN(value) && !double.IsInfinity(value);
     }
