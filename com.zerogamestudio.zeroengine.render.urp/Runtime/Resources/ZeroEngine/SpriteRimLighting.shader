@@ -245,22 +245,49 @@ Shader "Hidden/ZeroEngine/SpriteRimLighting"
             return mix.addedColor * (sqrt(sqrt(mix.fourthPowers)) / max(mix.magnitudes, .00000001));
         }
 
-        float3 ReferenceFusionGain(float3 original, float3 localGain, float4 light, float3 hue, float4 meta)
+        void ResolveReferenceContourGains(float3 original, float4 light, float3 hue, float4 meta,
+            inout float3 keyGain, out float3 fillGain)
         {
             bool gammaBlend = fmod(meta.z, 2) > .5;
-            float3 incomingBase = meta.z >= 2 ? min(original, 1) : original;
+            bool limitAddedHdr = meta.z >= 2;
+            float3 incomingBase = limitAddedHdr ? min(original, 1) : original;
             float3 baseColor = gammaBlend ? LinearToSRGB(incomingBase) : incomingBase;
             // A finite independent-channel response supplies the missing hue when
             // the reference's saturated green/blue branch borrows its red channel.
             float3 dodge = baseColor / max(1 - light.rgb, .1);
             float3 color = min(lerp(baseColor, dodge, light.a), meta.y);
-            if (meta.z >= 2) color = saturate(color);
+            if (limitAddedHdr) color = saturate(color);
             float3 response = gammaBlend ? SRGBToLinear(color) : color;
-            float3 gain = max(localGain, max(response - incomingBase, 0) * meta.x) * saturate(hue);
+            float3 paintedGain = max(response - incomingBase, 0) * meta.x;
+            hue = saturate(hue);
+            float3 gain = max(keyGain, paintedGain) * hue;
             float materialPeak = max(incomingBase.r, max(incomingBase.g, incomingBase.b));
-            float budget = max(materialPeak, max(localGain.r, max(localGain.g, localGain.b)));
+            float budget = max(materialPeak, max(keyGain.r, max(keyGain.g, keyGain.b)));
             float peak = max(gain.r, max(gain.g, gain.b));
-            return gain * min(1, budget / max(peak, .00000001));
+            fillGain = gain * min(1, budget / max(peak, .00000001));
+
+            float fieldPeak = max(light.r, max(light.g, light.b));
+            float shadowWeight = 1 - smoothstep(.014, .035, materialPeak);
+            if (shadowWeight <= 0 || fieldPeak <= 0) return;
+
+            // Roll dark paint into a finite response before Color Dodge saturates.
+            // The small reflected color is driven by the visible, masked light.
+            float3 fieldHue = light.rgb / max(fieldPeak, .000001);
+            float3 reflectedHue = fieldHue * lerp(fieldHue, hue, .2);
+            float responseWeight = saturate(light.a) * meta.x;
+            float reflection = .057 * smoothstep(.852, .985, fieldPeak) * responseWeight;
+            float3 shadowGain = paintedGain + reflectedHue * reflection;
+            float profileCeiling = limitAddedHdr ? saturate(meta.y) : meta.y;
+            if (gammaBlend) profileCeiling = SRGBToLinear(profileCeiling.xxx).x;
+            float ceiling = min((.068 + 3 * materialPeak) * responseWeight, max(0, profileCeiling - materialPeak));
+            float shadowPeak = max(shadowGain.r, max(shadowGain.g, shadowGain.b));
+            float knee = ceiling * .7;
+            float over = max(shadowPeak - knee, 0);
+            float headroom = ceiling - knee;
+            float compressed = min(shadowPeak, knee) + headroom * over / max(headroom + over, .000001);
+            shadowGain *= compressed / max(shadowPeak, .000001);
+            keyGain = lerp(keyGain, shadowGain, shadowWeight);
+            fillGain = lerp(fillGain, shadowGain * hue, shadowWeight);
         }
 
         float3 ArtCellWorldPosition(float3 positionWS, float2 cellOffset)
@@ -539,8 +566,9 @@ Shader "Hidden/ZeroEngine/SpriteRimLighting"
                         float4(exposure, _RimRefStyle.y, _RimRefStyle.w, 1));
                     float3 gain = max(localColor - original.rgb, 0);
                     float3 hue = fieldColor / max(max(fieldColor.r, max(fieldColor.g, fieldColor.b)), .00000001);
-                    float3 tinted = ReferenceFusionGain(original.rgb, gain, localLight, hue,
-                        float4(exposure, _RimRefStyle.y, _RimRefStyle.w, 1));
+                    float3 tinted;
+                    ResolveReferenceContourGains(original.rgb, localLight, hue,
+                        float4(exposure, _RimRefStyle.y, _RimRefStyle.w, 1), gain, tinted);
                     float key = lerp(i == fallbackPrimary ? 1 : 0, _RimPrimaryWeights[i], saturate(visiblePrimary));
                     float role = lerp(ReferenceFillStrength, 1, key);
                     // Preserve the key's reference response; the fill retains its

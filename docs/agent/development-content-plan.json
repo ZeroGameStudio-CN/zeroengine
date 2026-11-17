@@ -425,16 +425,16 @@
     },
     {
       "id": "ze.render.pixel-contour-core",
-      "title": "像素边缘受光：主光、补光和方向轮廓",
+      "title": "像素边缘受光：强光下的暗色材质层次",
       "stage": "Previewable",
       "targetReleaseId": "",
       "availability": "DevelopmentOnly",
       "responsibleChat": "01a16e60-157f-7f63-8f5a-7a6bdbe07a81",
       "chatUrl": "",
-      "nextAction": "对照等强双灯、右侧主光和正常镜头经过光源的画面，复看鞋底、暗色小腿和主次交接。消费者接入仍使用同一已验证 Git 提交。",
+      "nextAction": "复看四色重叠和高亮双灯的暗色布料，再看正常镜头进出光场的过渡。消费者接入使用同一已验证 Git 提交。",
       "entrance": "SpriteRimLighting 的共享默认配置；POB 受控 PlayMode 的 RimFireColorTestRoom 与包内 SpriteRimLightingRenderTests。",
       "resourcePath": "com.zerogamestudio.zeroengine.render.urp/Runtime/Resources/ZeroEngine/SpriteRimLighting.shader",
-      "revision": "directional-sole-key-fill-20261117",
+      "revision": "dark-contour-highlight-response-20261118",
       "candidatePackageVersion": "0.4.4",
       "releaseEvidence": "",
       "verificationEvidence": [
@@ -488,9 +488,16 @@
         "C:/Users/2025/.antigravity_cockpit/instances/codex/eae8558ab409f681/visualizations/2026/10/24/01a16e60-157f-7f63-8f5a-7a6bdbe07a81/rim-keyfill-20261117/review-v4/evidence/candidate-gpu.json",
         "C:/Users/2025/.antigravity_cockpit/instances/codex/eae8558ab409f681/visualizations/2026/10/24/01a16e60-157f-7f63-8f5a-7a6bdbe07a81/rim-keyfill-20261117/review-v4/evidence/flow-state.json",
         "C:/Users/2025/.antigravity_cockpit/instances/codex/eae8558ab409f681/visualizations/2026/10/24/01a16e60-157f-7f63-8f5a-7a6bdbe07a81/rim-keyfill-20261117/review-v4/evidence/capture-verification.json",
-        "C:/Users/2025/.antigravity_cockpit/instances/codex/eae8558ab409f681/visualizations/2026/10/24/01a16e60-157f-7f63-8f5a-7a6bdbe07a81/rim-keyfill-20261117/review-v4/comparison.mp4"
+        "C:/Users/2025/.antigravity_cockpit/instances/codex/eae8558ab409f681/visualizations/2026/10/24/01a16e60-157f-7f63-8f5a-7a6bdbe07a81/rim-keyfill-20261117/review-v4/comparison.mp4",
+        "C:/Users/2025/.antigravity_cockpit/instances/codex/eae8558ab409f681/visualizations/2026/10/24/01a16e60-157f-7f63-8f5a-7a6bdbe07a81/rim-dark-tone-20261117/review-v3/composition.json",
+        "C:/Users/2025/.antigravity_cockpit/instances/codex/eae8558ab409f681/visualizations/2026/10/24/01a16e60-157f-7f63-8f5a-7a6bdbe07a81/rim-dark-tone-20261117/review-v3/evidence/test-terminal.json",
+        "C:/Users/2025/.antigravity_cockpit/instances/codex/eae8558ab409f681/visualizations/2026/10/24/01a16e60-157f-7f63-8f5a-7a6bdbe07a81/rim-dark-tone-20261117/review-v3/evidence/candidate-gpu.json",
+        "C:/Users/2025/.antigravity_cockpit/instances/codex/eae8558ab409f681/visualizations/2026/10/24/01a16e60-157f-7f63-8f5a-7a6bdbe07a81/rim-dark-tone-20261117/review-v3/evidence/flow-state.json",
+        "C:/Users/2025/.antigravity_cockpit/instances/codex/eae8558ab409f681/visualizations/2026/10/24/01a16e60-157f-7f63-8f5a-7a6bdbe07a81/rim-dark-tone-20261117/review-v3/evidence/capture-verification.json",
+        "C:/Users/2025/.antigravity_cockpit/instances/codex/eae8558ab409f681/visualizations/2026/10/24/01a16e60-157f-7f63-8f5a-7a6bdbe07a81/rim-dark-tone-20261117/review-v3/evidence/shadow-response-candidate-v3-gpu.json",
+        "C:/Users/2025/.antigravity_cockpit/instances/codex/eae8558ab409f681/visualizations/2026/10/24/01a16e60-157f-7f63-8f5a-7a6bdbe07a81/rim-dark-tone-20261117/review-v3/comparison.mp4"
       ],
-      "verificationScope": "参考式轮廓按光源投影方向取样。接近正后方时逐渐过渡到有主次的横向边缘，水平光不额外勾鞋底，实际下方光可以照到下缘。方向相反的入射光场参与各自轮廓的参考材质响应。相近方向的光在计算材质响应后按权重融合，限制重叠增亮。主侧保留完整贡献，补光使用实际光色并乘以 0.55。主光按饱和前的强度判断，挑战者高出 20% 才开始约 0.15 秒的平滑交接。遮挡按美术像素计算。覆盖身体底色、暗布、双向光、受控叠加、原生灯筛选、透明和遮挡。新增原生 GPU 回归检查水平近背光的下缘、等强灯主次、微小强度互换时的稳定性、右灯接替、移除后恢复单灯，以及真实下方光。POB 流程四组 GPU 检查和一项正常镜头 PlayMode 对照通过。六组同灯同姿势共 18 张，覆盖单暖、等强双色、四色、前后交叉、高亮等强、右灯更强。视频依次显示 856a729d、本轮候选、参考机制兼容移植，接正常镜头往返、攻击、技能和闪避。原生场景和临时状态已恢复。历史未释放请求 19781a1b8b764a489d0d5ac090216e16 的证据独立保留。"
+      "verificationScope": "暗色边缘靠近饱和时，以受光前的场景颜色计算有限 Color Dodge 增量，并按材质明暗压住高亮。窄边缘内随实际灯色、遮挡与强度渐入少量反色，保留冷暖和暗部轮廓。主光、55% 补光、同向增量融合、侧光的鞋底方向判定及浅层过渡沿用。包内四组渲染检查覆盖全黑受光饱和前后的连续性、冷色保留、深浅材质区分、主补光、鞋底、遮挡和身体底色。实际 HLSL 的 D3D11 扫描覆盖 864 组材质、光色和强度组合。POB 正常镜头 PlayMode 1/1，取得六组同灯同姿势共 18 张画面和往返攻击、技能、闪避的实录，状态恢复已确认。对照左为 ac9bf196，中为本轮暗色修正，右为参考机制兼容移植。历史未释放请求 19781a1b8b764a489d0d5ac090216e16 的证据独立保留。"
     }
   ]
 }

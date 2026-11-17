@@ -30,8 +30,8 @@ composite. The old preview tint and reference MRT implementations are removed.
 
 The default starts from the already rendered scene color. Source textures supply
 alpha coverage only: it never redraws the actor with unlit texture RGB. Each light
-gets its own contour direction. A stable key keeps the full reference response;
-other lamps retain 55% added light as colored fills. Key selection uses unclamped
+gets its own contour direction. A stable key keeps the full contour response.
+Other lamps retain 55% added light as colored fills. Key selection uses unclamped
 influence, a 20% challenger margin and a 0.15-second handoff. Equal or nearly equal
 lamps do not keep exchanging sides. Fully occluded keys yield to a visible source
 per art cell. Each lamp resolves the reference response under its own contour
@@ -45,20 +45,18 @@ single-lamp added light before the LDR cap; the body is composed only once.
 Within overlap, a bounded independent-channel response restores the actual lamp
 hues when the reference saturation branch borrows another channel. Its budget
 comes from the material brightness and reference gain. This color correction
-fades in with local overlap. The key retains its reference response; fills also
-use their actual hue on disjoint contours.
+fades in with local overlap. Fills also use their actual hue on disjoint contours.
 Native field lookup follows the camera
 ray to each source's XY plane. The reference's XY center response attenuates
 contour RGB before Color Dodge, preserving weak colored detail below saturation;
 native 3D selection still controls source eligibility and contour direction.
 These masks never replace the shaded body. The narrow inward wrap fades away within two art
 cells. Its strength is 0.08 in the shared default; the deep interior is unchanged.
-The single-lamp reference's mixed-color saturation branch retains a weaker colored response
-on black art at full saturation. Isolated saturated channels keep ZE's
-nonzero-color fallback.
-Exposure scales only the added edge gain. Existing HDR/emission is preserved and
-added LDR light is capped at one. There is no uniform black-edge floor in this
-response, so dark colored art retains its own color-dependent brightness.
+Strong fields on dark paint transition to a finite Color Dodge response with
+a soft ceiling based on the shaded material. A small reflected contribution
+fades in with the masked field, preserving its hue on black art near saturation.
+Exposure scales the added edge gain. Existing HDR/emission is preserved and
+added LDR light is capped at one.
 Marked native lamps use the reference's world-XY field falloff for this response;
 native spot cones, front/back direction, source visibility and shadow attenuation
 remain active. The outer edge uses the reference's definite alpha boundary;

@@ -1125,9 +1125,9 @@ namespace ZeroEngine.Render.Tests.Runtime
                 var second=secondHost.AddComponent<SpriteRimLight>();second.Radius=light.Radius;
                 second.LightColor=Color.white;second.Intensity=1;secondHost.transform.position=new Vector3(.5f,0,0);
                 lighting.Configure(new[]{actor},new[]{light,second},profile);lighting.UpdateLighting();var black=Capture();
-                Assert.That(black.GetPixel(13,28).b,Is.LessThan(.0001f),
-                    "The reference mask response must prevent premature saturation even when two incident fields overlap.");
-                Assert.That(black.GetPixel(42,28).b,Is.LessThan(.0001f));
+                Assert.That(black.GetPixel(13,28).b,Is.LessThan(.004f),
+                    "Moderate overlapping fields must leave genuinely black art dark.");
+                Assert.That(black.GetPixel(42,28).b,Is.LessThan(.004f));
                 light.LightColor=second.LightColor=new Color(.02f,.3f,1,1);
                 light.Intensity=second.Intensity=2;
                 lighting.UpdateLighting();var mixedBlack=Capture();var mixedEdge=mixedBlack.GetPixel(13,28);
@@ -1135,7 +1135,8 @@ namespace ZeroEngine.Render.Tests.Runtime
                     "A saturated blue field with a weaker red field must reveal a colored black contour.");
                 Assert.That(mixedEdge.b,Is.LessThan(.08f),
                     "The recovered mixed-field branch must keep black detail below a white/neon contour.");
-                Assert.That(mixedEdge.r,Is.LessThan(.0001f));
+                Assert.That(mixedEdge.r,Is.LessThan(mixedEdge.b*.08f),
+                    "A trace of red must not turn a cool reflected edge white.");
                 light.LightColor=second.LightColor=Color.white;
                 light.Intensity=second.Intensity=1;
                 material.SetVector("_BaseColor",new Vector4(.002f,.004f,.012f,1));
@@ -1206,10 +1207,23 @@ namespace ZeroEngine.Render.Tests.Runtime
                 material.SetVector("_BaseColor",new Vector4(0,0,0,1));
                 second.enabled=true;light.Intensity=second.Intensity=2;
                 lighting.UpdateLighting();var intense=Capture();
-                Assert.That(intense.GetPixel(13,28).b,Is.GreaterThan(.1f));
-                Assert.That(intense.GetPixel(42,28).b,Is.GreaterThan(.1f));
+                float blackKey=intense.GetPixel(13,28).b;
+                float blackFill=intense.GetPixel(42,28).b;
+                Assert.That(blackKey,Is.InRange(.035f,.075f),
+                    "Strong white light must produce a readable dark contour without flattening it into a white rim.");
+                Assert.That(blackFill,Is.InRange(.015f,blackKey*.7f),"Keep the strong-light fill below the key.");
                 body=intense.GetPixel(29,28);
                 Assert.That(Mathf.Max(body.r,Mathf.Max(body.g,body.b)),Is.LessThan(.0001f));
+
+                second.enabled=false;
+                light.Intensity=1.30f;lighting.UpdateLighting();var nearSaturation=Capture();
+                light.Intensity=1.36f;lighting.UpdateLighting();var saturated=Capture();
+                Assert.That(saturated.GetPixel(13,28).b,Is.EqualTo(nearSaturation.GetPixel(13,28).b).Within(.006f),
+                    "Near-black art must not flash when the quantized field reaches saturation.");
+                material.SetVector("_BaseColor",new Vector4(.15f,.3f,.5f,1));
+                lighting.UpdateLighting();var lightPaint=Capture();
+                Assert.That(lightPaint.GetPixel(13,28).b,Is.GreaterThan(blackKey*3),
+                    "Dark and bright painted edges must remain distinct under the same strong field.");
 
                 second.enabled=false;material.SetVector("_BaseColor",new Vector4(.002f,.004f,.012f,1));
                 light.LightColor=Color.blue;light.Intensity=1.2f;
