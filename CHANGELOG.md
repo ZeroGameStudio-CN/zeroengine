@@ -5,6 +5,9 @@ tracked in each package's `package.json`.
 
 ## Unreleased
 
+- Narrative 3.2.0 adds recoverable per-item quest reward receipts, stable condition identities,
+  explicit UI-independent activation, save snapshots/migration and authoring validation.
+
 - UI 2.3.0 adds the project-neutral `MVVMViewBase<TViewModel>` integration with
   managed UIView lifecycle; product-specific view models and events stay in consumers.
 - EditorTools 1.1.0 adds exact-file byte snapshots with opt-in parent recreation,

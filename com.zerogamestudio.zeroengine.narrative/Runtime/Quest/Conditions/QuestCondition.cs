@@ -10,6 +10,12 @@ namespace ZeroEngine.Quest
     [Serializable]
     public abstract class QuestCondition
     {
+        [Tooltip("Stable progress identity. Assign before release; empty keeps the legacy progress key.")]
+        public string ConditionId;
+
+        public string GetStorageKey() => string.IsNullOrWhiteSpace(ConditionId)
+            ? GetProgressKey() : $"condition:{ConditionId.Trim()}";
+
         [Header("Display")]
         [Tooltip("Fallback objective text for UI display. Projects may override this through localization.")]
         public string Description;

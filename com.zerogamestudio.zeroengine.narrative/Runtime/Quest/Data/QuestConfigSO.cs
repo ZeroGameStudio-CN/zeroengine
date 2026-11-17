@@ -54,6 +54,9 @@ namespace ZeroEngine.Quest
         [Tooltip("If enabled, the quest submits automatically as soon as all Conditions are satisfied.")]
         public bool autoSubmit;
 
+        [Tooltip("Activate through QuestManager.ActivateConfiguredQuests after config and save loading. Does not require quest UI.")]
+        public bool autoActivate;
+
         [Min(0)]
         [Tooltip("How many times this quest may be completed. 0 means unlimited.")]
         public int repetitionLimit;
@@ -77,33 +80,50 @@ namespace ZeroEngine.Quest
 
         public bool UsesNewRewardSystem => Rewards != null && Rewards.Count > 0;
 
+        public bool HasLegacyLogic => (failureConditions?.Count ?? 0) > 0 || (completionConditions?.Count ?? 0) > 0;
+        public bool HasLegacyRewards => expReward != 0 || goldReward != 0 || (itemRewards?.Count ?? 0) > 0;
+
+#if UNITY_EDITOR
+        [ContextMenu("Assign Missing Condition and Reward IDs")]
+        private void AssignMissingEntryIds()
+        {
+            UnityEditor.Undo.RecordObject(this, "Assign quest entry IDs");
+            if (Conditions != null)
+                foreach (var condition in Conditions)
+                    if (condition != null && string.IsNullOrWhiteSpace(condition.ConditionId))
+                        condition.ConditionId = System.Guid.NewGuid().ToString("N");
+            if (Rewards != null)
+                foreach (var reward in Rewards)
+                    if (reward != null && string.IsNullOrWhiteSpace(reward.RewardId))
+                        reward.RewardId = System.Guid.NewGuid().ToString("N");
+            UnityEditor.EditorUtility.SetDirty(this);
+        }
+
+        [ContextMenu("Migrate Legacy Rewards")]
+        private void MigrateLegacyRewards()
+        {
+            if (!HasLegacyRewards) return;
+            UnityEditor.Undo.RecordObject(this, "Migrate legacy quest rewards");
+            Rewards ??= new List<QuestReward>();
+            if (expReward > 0) Rewards.Add(new ExpReward { Amount = expReward, RewardId = System.Guid.NewGuid().ToString("N") });
+            if (goldReward > 0) Rewards.Add(new CurrencyReward { Amount = goldReward, RewardId = System.Guid.NewGuid().ToString("N") });
+            if (itemRewards != null)
+                foreach (var itemId in itemRewards)
+                    if (!string.IsNullOrWhiteSpace(itemId))
+                        Rewards.Add(new ItemReward { ItemId = itemId, RewardId = System.Guid.NewGuid().ToString("N") });
+            expReward = 0;
+            goldReward = 0;
+            itemRewards?.Clear();
+            UnityEditor.EditorUtility.SetDirty(this);
+        }
+#endif
+
         /// <summary>
         /// 获取所有奖励预览文本。
         /// </summary>
         public List<string> GetRewardPreviews()
         {
             var previews = new List<string>();
-
-            if (expReward > 0)
-            {
-                previews.Add($"经验值 +{expReward}");
-            }
-
-            if (goldReward > 0)
-            {
-                previews.Add($"金币 +{goldReward}");
-            }
-
-            if (itemRewards != null)
-            {
-                foreach (var itemId in itemRewards)
-                {
-                    if (!string.IsNullOrEmpty(itemId))
-                    {
-                        previews.Add(itemId);
-                    }
-                }
-            }
 
             if (Rewards == null) return previews;
 

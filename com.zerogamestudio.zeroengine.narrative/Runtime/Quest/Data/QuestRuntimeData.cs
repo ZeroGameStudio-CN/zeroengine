@@ -11,16 +11,20 @@ namespace ZeroEngine.Quest
     {
         public string questId;
         public QuestState state;
+        public string instanceId;
+        public string rewardManifest;
+        public List<string> grantedRewardIds = new List<string>();
 
         /// <summary>
         /// Progress dictionary for condition system.
         /// </summary>
-        public Dictionary<string, int> Progress = new Dictionary<string, int>();
+        [UnityEngine.SerializeField] public Dictionary<string, int> Progress = new Dictionary<string, int>();
 
         public QuestRuntimeData(string id)
         {
             questId = id;
             state = QuestState.Inactive;
+            instanceId = Guid.NewGuid().ToString("N");
         }
 
         /// <summary>
@@ -28,13 +32,19 @@ namespace ZeroEngine.Quest
         /// </summary>
         public void AddProgress(string targetName, int amount, int maxNeeded)
         {
-            if (string.IsNullOrEmpty(targetName)) return;
+            TryAddProgress(targetName, amount, maxNeeded);
+        }
+
+        public bool TryAddProgress(string targetName, int amount, int maxNeeded)
+        {
+            if (string.IsNullOrEmpty(targetName) || amount <= 0 || maxNeeded <= 0) return false;
 
             Progress ??= new Dictionary<string, int>();
             Progress.TryGetValue(targetName, out var current);
 
-            if (current < maxNeeded)
-                Progress[targetName] = Math.Min(current + amount, maxNeeded);
+            if (current >= maxNeeded) return false;
+            Progress[targetName] = (int)Math.Min((long)current + amount, maxNeeded);
+            return true;
         }
 
         /// <summary>
@@ -63,7 +73,12 @@ namespace ZeroEngine.Quest
     [Serializable]
     public class QuestSystemSaveData
     {
+        public const int CurrentSchemaVersion = 1;
+        public int schemaVersion = CurrentSchemaVersion;
         public List<QuestRuntimeData> activeQuests = new List<QuestRuntimeData>();
         public List<QuestHistoryData> history = new List<QuestHistoryData>();
+        // Explicit run boundary; old saves conservatively keep lifetime limits until their first reset.
+        public bool runBaselinesInitialized;
+        [UnityEngine.SerializeField] public Dictionary<string, int> runCompletionBaselines = new Dictionary<string, int>();
     }
 }

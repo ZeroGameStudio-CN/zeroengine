@@ -25,6 +25,12 @@ namespace ZeroEngine.Quest
 
         public override string RewardType => "Item";
 
+        public override string GetGrantFingerprint()
+        {
+            var dataId = ItemData != null ? ItemData.Id : string.Empty;
+            return $"{ItemId?.Length ?? 0}:{ItemId}:{Quantity}:{dataId?.Length ?? 0}:{dataId}";
+        }
+
         public override bool Grant()
         {
             if (string.IsNullOrEmpty(ItemId) || Quantity <= 0) return false;
