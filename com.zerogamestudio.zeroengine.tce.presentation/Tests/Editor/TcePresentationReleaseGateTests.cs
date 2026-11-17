@@ -7,19 +7,20 @@ namespace ZeroEngine.TCE.Presentation.Tests.Editor
     [TestFixture]
     public sealed class TcePresentationReleaseGateTests
     {
-        private const string PackagePath = "Packages/com.zerogamestudio.zeroengine.tce.presentation";
+        private static string PackagePath => UnityEditor.PackageManager.PackageInfo.FindForAssembly(typeof(TceVisualPrefab).Assembly).resolvedPath;
 
         [Test]
-        public void PackageManifest_DeclaresGraduatedVersionAndOnlyTceDependency()
+        public void PackageManifest_DeclaresGraduatedVersionAndVisualTimelineDependency()
         {
             string manifest = File.ReadAllText($"{PackagePath}/package.json");
-            PackageInfo packageInfo = PackageInfo.FindForAssetPath($"{PackagePath}/package.json");
+            PackageInfo packageInfo = PackageInfo.FindForAssembly(typeof(TceVisualPrefab).Assembly);
 
             Assert.IsNotNull(packageInfo);
-            Assert.AreEqual("0.2.0", packageInfo.version);
-            Assert.AreEqual(1, packageInfo.dependencies.Length);
+            Assert.AreEqual("0.5.0", packageInfo.version);
+            Assert.AreEqual(2, packageInfo.dependencies.Length);
             Assert.AreEqual("com.zerogamestudio.zeroengine.tce", packageInfo.dependencies[0].name);
             Assert.AreEqual("0.1.0", packageInfo.dependencies[0].version);
+            Assert.AreEqual("com.unity.timeline", packageInfo.dependencies[1].name);
             StringAssert.DoesNotContain("POB", manifest);
             StringAssert.DoesNotContain("DOTween", manifest);
             StringAssert.DoesNotContain("Sirenix", manifest);
@@ -37,7 +38,7 @@ namespace ZeroEngine.TCE.Presentation.Tests.Editor
             StringAssert.Contains("failed = 0", document);
             StringAssert.Contains("rg -n", document);
             StringAssert.Contains("cm status --short", document);
-            StringAssert.Contains("manage_packages get_package_info com.zerogamestudio.zeroengine.tce.presentation", document);
+            StringAssert.Contains("PackageInfo.FindForAssembly", document);
             StringAssert.Contains("release evidence", document);
         }
 
