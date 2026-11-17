@@ -19,11 +19,11 @@ through their existing SCM. Their personal npm/UPM/Git configuration is not an
 installation prerequisite for this anonymous read-only feed.
 
 Stage the source files, verified Node archive and the two trial tarballs in an
-owned maintenance directory. `operator.py dns` snapshots/creates only this DNS
-record using the existing server-local Cloudflare credential. `operator.py install`
+owned maintenance directory. `preview_registry.py dns` snapshots/creates only this DNS
+record using the existing server-local Cloudflare credential. `preview_registry.py install`
 creates a previously absent runtime/unit; it does not replace an existing service.
 Issue the dedicated DNS-01 certificate with the existing Certbot account, then
-`operator.py edge` validates and activates only the new Nginx vhost. Publish the
+`preview_registry.py edge` validates and activates only the new Nginx vhost. Publish the
 two versions over loopback before user-facing verification. Existing Node,
 website, Analytics and Ops services remain separate.
 
