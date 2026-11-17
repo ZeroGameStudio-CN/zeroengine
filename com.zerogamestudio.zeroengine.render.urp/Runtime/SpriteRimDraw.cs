@@ -40,6 +40,7 @@ namespace ZeroEngine.Render.Urp
         public readonly SpriteRimSilhouette Silhouette;
         public readonly List<Material> Materials = new();
         private readonly Shader shader;
+        private readonly bool supportsPrimary;
         private const int MaximumLights = 4;
         private readonly LightInput[] selected = new LightInput[MaximumLights];
         private readonly Vector4[] rows0 = new Vector4[MaximumLights], rows1 = new Vector4[MaximumLights], rows2 = new Vector4[MaximumLights];
@@ -50,6 +51,11 @@ namespace ZeroEngine.Render.Urp
         private int selectedCount, uploadedCount;
         private bool hasUpload;
         private Vector4 uploadedWrap;
+        private UnityEngine.Object primaryLight, previousPrimaryLight;
+        private double primaryTransitionStart;
+        private Vector2 primaryAway = Vector2.right;
+        private const float PrimarySwitchRatio = 1.2f;
+        private const double PrimaryTransitionSeconds = .15;
         private static readonly int SourceId = Shader.PropertyToID("_RimRefActorTexture");
         private static readonly int SourceStId = Shader.PropertyToID("_RimRefActorST");
         private static readonly int CountId = Shader.PropertyToID("_RimEnhanceLightCount");
@@ -59,11 +65,13 @@ namespace ZeroEngine.Render.Urp
         private static readonly int PowersId = Shader.PropertyToID("_RimEnhancePowers"), BandsId = Shader.PropertyToID("_RimEnhanceBands");
         private static readonly int ShadowsId = Shader.PropertyToID("_RimEnhanceShadows");
         private static readonly int FallbackBoxesId = Shader.PropertyToID("_RimEnhanceFallbackBoxes");
+        private static readonly int PrimaryWeightsId = Shader.PropertyToID("_RimPrimaryWeights");
+        private static readonly int PrimaryDirectionId = Shader.PropertyToID("_RimPrimaryDirection");
 
         private struct LightInput
         {
             internal UnityEngine.Object Identity;
-            internal float Score, MinimumExposure;
+            internal float Score, Priority, MinimumExposure;
             internal Vector2 Away;
             internal Vector4 Row0, Row1, Row2, Color, Shape, Powers, Shadow;
             internal Matrix4x4 FallbackBox;
@@ -73,6 +81,7 @@ namespace ZeroEngine.Render.Urp
         {
             Renderer = renderer; Silhouette = new SpriteRimSilhouette(renderer);
             shader = Resources.Load<Shader>("ZeroEngine/SpriteRimLighting");
+            supportsPrimary = shader && shader.FindPropertyIndex("_RimPrimaryWeights") >= 0;
         }
 
         private void Insert(LightInput value)
@@ -92,15 +101,17 @@ namespace ZeroEngine.Render.Urp
             if (!Renderer || sources == null) return false;
             foreach (var light in sources)
             {
-                if (!light || !light.TryGetInfluence(Renderer.bounds.center, out var away, out float score)) continue;
+                if (!light || !light.TryGetInfluence(Renderer.bounds.center, out var away, out float score, out float priority)) continue;
                 var matrix = light.WorldToLight;
                 var row0 = matrix.GetRow(0); var row1 = matrix.GetRow(1);
                 row0.w += row0.z * light.transform.position.z; row0.z = 0;
                 row1.w += row1.z * light.transform.position.z; row1.z = 0;
                 var color = light.LightColor;
+                priority *= Mathf.Max(color.r, Mathf.Max(color.g, color.b)) * color.a;
                 Insert(new LightInput
                 {
-                    Identity = light, Score = score, Away = away, MinimumExposure = light.MinimumGlobalExposure,
+                    Identity = light, Score = score, Priority = float.IsFinite(priority) ? priority : score,
+                    Away = away, MinimumExposure = light.MinimumGlobalExposure,
                     Row0 = row0, Row1 = row1,
                     Color = new Vector4(color.r, color.g, color.b, color.a) * light.Intensity,
                     Shape = new Vector4(light.Shape == LightType.Point ? 0 : light.Shape == LightType.Directional ? 1 : 2,
@@ -137,14 +148,15 @@ namespace ZeroEngine.Render.Urp
                 }
                 var color = light.color;
                 float peak = Mathf.Max(color.r, Mathf.Max(color.g, color.b));
-                float score = Mathf.Clamp01(attenuation * light.intensity * peak);
+                float priority = attenuation * light.intensity * peak;
+                float score = Mathf.Clamp01(priority);
                 if (!float.IsFinite(score) || score <= 0) continue;
                 var origin = light.transform.position;
                 var matrix = Matrix4x4.Scale(Vector3.one / range) *
                     Matrix4x4.TRS(origin, light.transform.rotation, Vector3.one).inverse;
                 Insert(new LightInput
                 {
-                    Identity = light, Score = score, Away = away, MinimumExposure = 1,
+                    Identity = light, Score = score, Priority = float.IsFinite(priority) ? priority : score, Away = away, MinimumExposure = 1,
                     Row0 = matrix.GetRow(0), Row1 = matrix.GetRow(1), Row2 = matrix.GetRow(2),
                     // Keep hue separate from HDR intensity; native coverage is bounded in the shader.
                     Color = new Vector4(color.r / Mathf.Max(1, peak), color.g / Mathf.Max(1, peak), color.b / Mathf.Max(1, peak), light.intensity),
@@ -159,6 +171,40 @@ namespace ZeroEngine.Render.Urp
             return selectedCount > 0;
         }
 
+        private Vector4 UpdatePrimary()
+        {
+            int best = 0, current = -1, previous = -1;
+            for (int i = 0; i < selectedCount; i++)
+            {
+                if (selected[i].Priority > selected[best].Priority) best = i;
+                if (selected[i].Identity == primaryLight) current = i;
+                if (selected[i].Identity == previousPrimaryLight) previous = i;
+            }
+            double now = Application.isPlaying ? Time.unscaledTimeAsDouble : Time.realtimeSinceStartupAsDouble;
+            // Retain the current light through small fluctuations, including ties
+            // when both lights have already reached the profile's response limit.
+            if (current < 0 || selectedCount == 1)
+            {
+                primaryLight = selected[best].Identity; current = best;
+                previousPrimaryLight = null; previous = -1;
+            }
+            else if (previous < 0 && best != current && selected[best].Priority > selected[current].Priority * PrimarySwitchRatio)
+            {
+                previousPrimaryLight = primaryLight; previous = current;
+                primaryLight = selected[best].Identity; current = best; primaryTransitionStart = now;
+            }
+            float t = previous < 0 ? 1 : Mathf.SmoothStep(0, 1, (float)((now - primaryTransitionStart) / PrimaryTransitionSeconds));
+            var weights = Vector4.zero; weights[current] = t;
+            if (previous >= 0)
+            {
+                weights[previous] = 1 - t;
+                if (t >= 1) previousPrimaryLight = null;
+            }
+            var key = selected[current];
+            if (key.Away.sqrMagnitude > .0001f && (key.Shape.x < 2.5f || key.Powers.y >= .2f)) primaryAway = key.Away;
+            return weights;
+        }
+
         internal bool Update(SpriteRimLightingProfile profile)
         {
             if (!Renderer || selectedCount == 0 || !shader || !shader.isSupported) return false;
@@ -171,6 +217,9 @@ namespace ZeroEngine.Render.Urp
             { int i = Materials.Count - 1; CoreUtils.Destroy(Materials[i]); Materials.RemoveAt(i); }
             var axisX = ((Vector3)Silhouette.WorldToMask.GetRow(0)).normalized;
             var axisY = ((Vector3)Silhouette.WorldToMask.GetRow(1)).normalized;
+            bool usePrimary = profile.ReferenceEdgeResponse && supportsPrimary;
+            var primaryWeights = usePrimary ? UpdatePrimary() : Vector4.zero;
+            var primaryDirection = new Vector4(Vector2.Dot(primaryAway, new Vector2(axisX.x, axisX.y)), 0, 0, 0);
             float total = 0, weightedExposure = 0;
             for (int i = 0; i < selectedCount; i++)
             {
@@ -205,6 +254,11 @@ namespace ZeroEngine.Render.Urp
             float exposure = Mathf.Lerp(1, Mathf.Clamp(profile.MinimumExposure * weightedExposure / Mathf.Max(total, .000001f), .01f, 1), selected[0].Score);
             foreach (var material in Materials)
             {
+                if (usePrimary)
+                {
+                    material.SetVector(PrimaryWeightsId, primaryWeights);
+                    material.SetVector(PrimaryDirectionId, primaryDirection);
+                }
                 material.SetTexture("_RimRefMask", Silhouette.Texture);
                 material.SetVector("_RimRefRow0", Silhouette.WorldToMask.GetRow(0));
                 material.SetVector("_RimRefRow1", Silhouette.WorldToMask.GetRow(1));
@@ -246,6 +300,7 @@ namespace ZeroEngine.Render.Urp
         {
             foreach (var material in Materials) if (material) CoreUtils.Destroy(material);
             Materials.Clear(); Silhouette.Dispose();
+            primaryLight = previousPrimaryLight = null;
         }
     }
 }

@@ -1,5 +1,10 @@
 Shader "Hidden/ZeroEngine/SpriteRimLighting"
 {
+    Properties
+    {
+        [HideInInspector] _RimPrimaryWeights("Primary light weights", Vector) = (1,0,0,0)
+        [HideInInspector] _RimPrimaryDirection("Primary contour direction", Vector) = (1,0,0,0)
+    }
     SubShader
     {
         Tags { "RenderPipeline"="UniversalPipeline" }
@@ -14,6 +19,8 @@ Shader "Hidden/ZeroEngine/SpriteRimLighting"
         TEXTURE2D(_RimRefMask); SAMPLER(sampler_RimRefMask);
         TEXTURE2D_X(_RimEnhanceSceneColor);
         float4 _RimEnhanceSceneScaleBias, _RimEnhanceInnerWrap;
+        float4 _RimPrimaryWeights, _RimPrimaryDirection;
+        static const float ReferenceFillStrength = .55;
         int _RimEnhanceLightCount;
         float4 _RimEnhanceRows0[4], _RimEnhanceRows1[4], _RimEnhanceRows2[4], _RimEnhanceColors[4];
         float4 _RimEnhanceShapes[4], _RimEnhancePowers[4], _RimEnhanceBands[4];
@@ -299,8 +306,11 @@ Shader "Hidden/ZeroEngine/SpriteRimLighting"
             float visibleAlpha = 0;
             float3 cellWS = ArtCellWorldPosition(input.positionWS, cellOffset);
             float4 alphas = 0, visibilities = 0;
+            float4 referenceFields[4];
             float2 weightedDirection = 0;
             float directionalWeight = 0;
+            float visiblePrimary = 0, fallbackWeight = -1;
+            int fallbackPrimary = 0;
             [unroll] for (int i = 0; i < 4; i++)
             {
                 if (i >= _RimEnhanceLightCount) break;
@@ -361,6 +371,16 @@ Shader "Hidden/ZeroEngine/SpriteRimLighting"
                 visibleAlpha = max(visibleAlpha, alpha * visibility);
                 alphas[i] = alpha;
                 visibilities[i] = visibility;
+                if (referenceResponse)
+                {
+                    float3 fieldColor = _RimEnhanceColors[i].rgb;
+                    if (_RimEnhanceShapes[i].x > 2.5) fieldColor *= _RimEnhanceColors[i].a;
+                    float4 field = ReferenceFieldContribution(fieldColor, alpha, visibility);
+                    referenceFields[i] = field;
+                    float available = max(field.r, max(field.g, field.b));
+                    if (available > 0) visiblePrimary += _RimPrimaryWeights[i] * visibility;
+                    if (available > fallbackWeight) { fallbackWeight = available; fallbackPrimary = i; }
+                }
                 if (_RimEnhanceShapes[i].x > 2.5)
                 {
                     // Recover the selection score from its response. Weight by this art cell's
@@ -391,6 +411,7 @@ Shader "Hidden/ZeroEngine/SpriteRimLighting"
                 float3 nativeToLight = 0;
                 float bandWidth = _RimEnhancePowers[i].x;
                 float directionalStyle = 1;
+                float projected = 1;
                 if (_RimEnhanceShapes[i].x > 2.5)
                 {
                     directionalStyle = nativeDirectionalStyle;
@@ -408,9 +429,8 @@ Shader "Hidden/ZeroEngine/SpriteRimLighting"
                     float depth = dot(toLight, view);
                     float lightDistance = max(length(toLight), .00001);
                     backFacing = saturate(-depth / lightDistance);
-                    // Near the projected center the directional band vanishes continuously;
-                    // only a light behind the visible actor grows a symmetric contour.
-                    if (backFacing > 0) band.xy *= saturate(_RimEnhancePowers[i].y);
+                    if (referenceResponse) projected = smoothstep(0, .2, _RimEnhancePowers[i].y);
+                    else if (backFacing > 0) band.xy *= saturate(_RimEnhancePowers[i].y);
                 }
                 float2 scale = (_RimRefFrame.zw + band.z) / max(_RimRefFrame.zw, 1);
                 UNITY_BRANCH
@@ -442,25 +462,29 @@ Shader "Hidden/ZeroEngine/SpriteRimLighting"
                 // Symmetric backlight stays on one art-cell contour, even when the weak
                 // directional profile requests a wider band. Do not spread it over the body.
                 float rearWidth = min(bandWidth, 1) * backFacing;
-                if (backFacing > 0) rearOccupied = BackContourCoverage(uv, texel * rearWidth);
+                if (backFacing > 0 && !referenceResponse) rearOccupied = BackContourCoverage(uv, texel * rearWidth);
                 float occupied = min(directionalOccupied, rearOccupied);
                 float tintOccupied = occupied;
                 if (referenceResponse)
                 {
                     // Retain the reference's definite alpha boundary. Filtering is
                     // reserved for the faint inner shell, not the bright outer edge.
-                    tintOccupied = MaskAlpha(shifted) > 0 ? 1 : 0;
-                    if (backFacing > 0)
+                    float edge = MaskAlpha(shifted) > 0 ? 0 : projected;
+                    if (backFacing > 0 && projected < 1)
                     {
-                        float2 rearStep = texel * rearWidth;
-                        float rearMask = min(min(MaskAlpha(uv + float2(rearStep.x,0)), MaskAlpha(uv - float2(rearStep.x,0))),
-                            min(MaskAlpha(uv + float2(0,rearStep.y)), MaskAlpha(uv - float2(0,rearStep.y))));
-                        tintOccupied = min(tintOccupied, rearMask > 0 ? 1 : 0);
+                        // Fade between definite art cells rather than flipping a
+                        // fractionally shifted binary mask near the center.
+                        float side = _RimPrimaryDirection.x < 0 ? -1 : 1;
+                        float2 sideStep = float2(texel.x * min(bandWidth, 1) * side, 0);
+                        float keyEdge = MaskAlpha(uv - sideStep) > 0 ? 0 : 1;
+                        float fillEdge = MaskAlpha(uv + sideStep) > 0 ? 0 : ReferenceFillStrength;
+                        edge += max(keyEdge, fillEdge) * backFacing * (1 - projected);
                     }
+                    tintOccupied = 1 - saturate(edge);
                 }
                 float4 tint = lerp(_RimRefEdgeTint, _RimRefInnerTint, tintOccupied);
                 float3 modulation = tint.rgb * tint.a;
-                if (_RimEnhanceInnerWrap.y > 0 && occupied > 0 && (!referenceResponse || tintOccupied > 0))
+                if (_RimEnhanceInnerWrap.y > 0 && occupied > 0 && (!referenceResponse || tintOccupied == 1))
                 {
                     float2 inward = band.xy / max(length(band.xy), .00001) * texel;
                     int steps = (int)_RimEnhanceInnerWrap.x;
@@ -473,7 +497,8 @@ Shader "Hidden/ZeroEngine/SpriteRimLighting"
                     }
                     coverage /= max(steps, 1);
                     if (_RimEnhanceShapes[i].x > 2.5) coverage *= lerp(.15, 1, directionalStyle);
-                    if (backFacing > 0)
+                    if (referenceResponse) coverage *= projected;
+                    else if (backFacing > 0)
                     {
                         // Retain the single-side transition; taper its normalized direction
                         // to zero at the projected center instead of flipping a full-strength shell.
@@ -492,19 +517,37 @@ Shader "Hidden/ZeroEngine/SpriteRimLighting"
                 if (_RimReferenceEdgeResponse > .5 && _RimEnhanceShapes[i].x > 2.5) fieldColor *= _RimEnhanceColors[i].a;
                 if (referenceResponse)
                 {
-                    // Resolve each lamp under its own mask before fusion. An
-                    // opposing lamp must not saturate another side's Color Dodge.
-                    float4 incident = ReferenceFieldContribution(fieldColor, alpha, visibility);
+                    // Opposing fields retain the reference's material response under the
+                    // directional mask. Same-side lamps stay in the bounded gain blend.
+                    float4 incident = referenceFields[i];
+                    if (all(incident.rgb <= 0)) continue;
+                    // Fade borrowed light at the local cone and range boundaries.
+                    float support = smoothstep(0, .25, incident.a) * visibility;
+                    float2 direction = band.xy / max(length(band.xy), .00001);
+                    [unroll] for (int j = 0; j < 4; j++)
+                    {
+                        if (j >= _RimEnhanceLightCount) break;
+                        if (j == i) continue;
+                        float2 other = _RimEnhanceBands[j].xy;
+                        float opposition = saturate(-dot(direction, other) / max(length(other), .00001));
+                        incident += referenceFields[j] * (opposition * support);
+                    }
+                    incident = saturate(incident);
                     float response = _RimEnhanceShapes[i].x > 2.5 ? referenceResponses[i] : band.w;
                     float4 localLight = float4(incident.rgb * saturate(modulation * response), incident.a * _RimRefStyle.z);
                     float3 localColor = CompositeColor(original.rgb, localLight, 0, 0,
                         float4(exposure, _RimRefStyle.y, _RimRefStyle.w, 1));
                     float3 gain = max(localColor - original.rgb, 0);
-                    AccumulateRimResponse(referenceMix, gain);
                     float3 hue = fieldColor / max(max(fieldColor.r, max(fieldColor.g, fieldColor.b)), .00000001);
-                    AccumulateRimResponse(referenceTintedMix, ReferenceFusionGain(original.rgb, gain, localLight, hue,
-                        float4(exposure, _RimRefStyle.y, _RimRefStyle.w, 1)));
-                    float weight = max(localLight.r, max(localLight.g, localLight.b)) * localLight.a;
+                    float3 tinted = ReferenceFusionGain(original.rgb, gain, localLight, hue,
+                        float4(exposure, _RimRefStyle.y, _RimRefStyle.w, 1));
+                    float key = lerp(i == fallbackPrimary ? 1 : 0, _RimPrimaryWeights[i], saturate(visiblePrimary));
+                    float role = lerp(ReferenceFillStrength, 1, key);
+                    // Preserve the key's reference response; the fill retains its
+                    // actual hue even when the two directional masks do not overlap.
+                    AccumulateRimResponse(referenceMix, lerp(tinted, gain, key) * role);
+                    AccumulateRimResponse(referenceTintedMix, tinted * role);
+                    float weight = max(localLight.r, max(localLight.g, localLight.b)) * localLight.a * role;
                     fusionWeights += weight;
                     dominantFusionWeight = max(dominantFusionWeight, weight);
                     continue;

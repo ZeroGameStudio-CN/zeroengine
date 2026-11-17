@@ -425,16 +425,16 @@
     },
     {
       "id": "ze.render.pixel-contour-core",
-      "title": "像素边缘受光：材质响应后的多灯融合",
+      "title": "像素边缘受光：主光、补光和方向轮廓",
       "stage": "Previewable",
       "targetReleaseId": "",
       "availability": "DevelopmentOnly",
       "responsibleChat": "01a16e60-157f-7f63-8f5a-7a6bdbe07a81",
       "chatUrl": "",
-      "nextAction": "复看上一版 ZE／本轮融合／参考兼容移植的同灯对照与正常镜头实录，关注多灯白边、强光色偏和暗色腿部；正式消费者接入仍需全部 ZE 包固定到同一已测试提交，本轮不改 POB 固定依赖。",
+      "nextAction": "对照等强双灯、右侧主光和正常镜头经过光源的画面，复看鞋底、暗色小腿和主次交接。消费者接入仍使用同一已验证 Git 提交。",
       "entrance": "SpriteRimLighting 的共享默认配置；POB 受控 PlayMode 的 RimFireColorTestRoom 与包内 SpriteRimLightingRenderTests。",
       "resourcePath": "com.zerogamestudio.zeroengine.render.urp/Runtime/Resources/ZeroEngine/SpriteRimLighting.shader",
-      "revision": "material-response-multilight-fusion-20261117",
+      "revision": "directional-sole-key-fill-20261117",
       "candidatePackageVersion": "0.4.4",
       "releaseEvidence": "",
       "verificationEvidence": [
@@ -482,9 +482,15 @@
         "C:/Users/2025/.antigravity_cockpit/instances/codex/eae8558ab409f681/visualizations/2026/10/24/01a16e60-157f-7f63-8f5a-7a6bdbe07a81/rim-fusion-20261117/v2/evidence/capture-verification.json",
         "C:/Users/2025/.antigravity_cockpit/instances/codex/eae8558ab409f681/visualizations/2026/10/24/01a16e60-157f-7f63-8f5a-7a6bdbe07a81/rim-fusion-20261117/v2/evidence/fusion-gpu-proof.json",
         "C:/Users/2025/.antigravity_cockpit/instances/codex/eae8558ab409f681/visualizations/2026/10/24/01a16e60-157f-7f63-8f5a-7a6bdbe07a81/rim-fusion-20261117/v2/evidence/isolated-package-proof-v2.json",
-        "C:/Users/2025/.antigravity_cockpit/instances/codex/eae8558ab409f681/visualizations/2026/10/24/01a16e60-157f-7f63-8f5a-7a6bdbe07a81/rim-fusion-20261117/v2/comparison.mp4"
+        "C:/Users/2025/.antigravity_cockpit/instances/codex/eae8558ab409f681/visualizations/2026/10/24/01a16e60-157f-7f63-8f5a-7a6bdbe07a81/rim-fusion-20261117/v2/comparison.mp4",
+        "C:/Users/2025/.antigravity_cockpit/instances/codex/eae8558ab409f681/visualizations/2026/10/24/01a16e60-157f-7f63-8f5a-7a6bdbe07a81/rim-keyfill-20261117/review-v4/composition.json",
+        "C:/Users/2025/.antigravity_cockpit/instances/codex/eae8558ab409f681/visualizations/2026/10/24/01a16e60-157f-7f63-8f5a-7a6bdbe07a81/rim-keyfill-20261117/review-v4/evidence/test-terminal.json",
+        "C:/Users/2025/.antigravity_cockpit/instances/codex/eae8558ab409f681/visualizations/2026/10/24/01a16e60-157f-7f63-8f5a-7a6bdbe07a81/rim-keyfill-20261117/review-v4/evidence/candidate-gpu.json",
+        "C:/Users/2025/.antigravity_cockpit/instances/codex/eae8558ab409f681/visualizations/2026/10/24/01a16e60-157f-7f63-8f5a-7a6bdbe07a81/rim-keyfill-20261117/review-v4/evidence/flow-state.json",
+        "C:/Users/2025/.antigravity_cockpit/instances/codex/eae8558ab409f681/visualizations/2026/10/24/01a16e60-157f-7f63-8f5a-7a6bdbe07a81/rim-keyfill-20261117/review-v4/evidence/capture-verification.json",
+        "C:/Users/2025/.antigravity_cockpit/instances/codex/eae8558ab409f681/visualizations/2026/10/24/01a16e60-157f-7f63-8f5a-7a6bdbe07a81/rim-keyfill-20261117/review-v4/comparison.mp4"
       ],
-      "verificationScope": "替换 4b2c9979 的共享光场相加／轮廓并集：每盏灯先在自己的轮廓中求材质参考增量，再在线性空间以四次方幅值包络融合；相反方向灯不再放大对侧已有边缘。两盏／四盏相同白灯重叠的新增量约为单灯 1.19／1.41 倍，身体只合成一次。强光交叉处平滑引入按真实光色调制的独立通道响应，其上限来自原材质亮度和参考增量，避免参考饱和分支借红色造成偏绿；单灯和不相交的轮廓保持原响应。保留原有多方向、每美术像素的遮挡、0.08 浅内透、暗色参考受光和既有 HDR，不增加固定暗边底光；HDR 边带色仍遵守原单灯遮罩上限。4 组同源包 GPU 检查覆盖单灯／身体底色、反向灯互不增亮、白灯二／四灯重叠受控、彩色强光不偏绿且保留冷色、HDR 调制上限、空间／透明材质、原生 Point／Spot 筛选和既有核心轮廓。POB 原生流程 1/1，世界、存档、音频和退出恢复均 true，cleanupVerified=true。同场同灯同姿势五组各三版共 15 张快照，单暖、双色、四色、前后、双灯各 2.0；成片左为上一版 ZE，中为本轮融合，右为参考机制兼容移植，含腿部五倍原像素；随后为正常 MainCamera 往返、太刀攻击、两次技能和闪避，原片 1920x1080，无后期亮度调整。离线实际 HLSL 42 组材质／光场对及受控饱和混色、无重叠与弱第二灯核对仅证明对应函数，不代替场景或用户验收。首轮融合 v1 的偏绿色强光候选已被 v2 替代。此前 94c48655 整身重绘候选仍为已撤回，历史证据保留；原 19781a1b8b764a489d0d5ac090216e16 的恢复缺口不由本轮覆盖。参考仍为兼容移植，不是原作可执行程序；未升级 POB 固定依赖，不代表正式采用或发布。"
+      "verificationScope": "参考式轮廓按光源投影方向取样。接近正后方时逐渐过渡到有主次的横向边缘，水平光不额外勾鞋底，实际下方光可以照到下缘。方向相反的入射光场参与各自轮廓的参考材质响应。相近方向的光在计算材质响应后按权重融合，限制重叠增亮。主侧保留完整贡献，补光使用实际光色并乘以 0.55。主光按饱和前的强度判断，挑战者高出 20% 才开始约 0.15 秒的平滑交接。遮挡按美术像素计算。覆盖身体底色、暗布、双向光、受控叠加、原生灯筛选、透明和遮挡。新增原生 GPU 回归检查水平近背光的下缘、等强灯主次、微小强度互换时的稳定性、右灯接替、移除后恢复单灯，以及真实下方光。POB 流程四组 GPU 检查和一项正常镜头 PlayMode 对照通过。六组同灯同姿势共 18 张，覆盖单暖、等强双色、四色、前后交叉、高亮等强、右灯更强。视频依次显示 856a729d、本轮候选、参考机制兼容移植，接正常镜头往返、攻击、技能和闪避。原生场景和临时状态已恢复。历史未释放请求 19781a1b8b764a489d0d5ac090216e16 的证据独立保留。"
     }
   ]
 }

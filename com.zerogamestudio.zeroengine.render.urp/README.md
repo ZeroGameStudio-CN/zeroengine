@@ -30,19 +30,23 @@ composite. The old preview tint and reference MRT implementations are removed.
 
 The default starts from the already rendered scene color. Source textures supply
 alpha coverage only: it never redraws the actor with unlit texture RGB. Each light
-gets its own contour direction, so opposed lamps can illuminate both sides without
-switching to one strongest side. Each lamp resolves the reference response under
-its own contour mask, with RGBA8 UNorm source bounds and blending. Positive added
-light is then fused in linear color with a fourth-power magnitude envelope.
-This preserves a single lamp and permits gentle growth where lights overlap,
-without feeding their sum into a shared Color Dodge denominator. Every local
-color participates; an opposed lamp cannot brighten an edge outside its mask.
-Two or four identical overlapping white lamps produce about 1.19 or 1.41 times the
+gets its own contour direction. A stable key keeps the full reference response;
+other lamps retain 55% added light as colored fills. Key selection uses unclamped
+influence, a 20% challenger margin and a 0.15-second handoff. Equal or nearly equal
+lamps do not keep exchanging sides. Fully occluded keys yield to a visible source
+per art cell. Each lamp resolves the reference response under its own contour
+mask, with RGBA8 UNorm source bounds and blending. Opposed fields support that
+response so dark contour detail survives on the key side. Lamps from the same
+direction combine after the material response to avoid a saturation jump.
+Positive added light is fused in linear color with a fourth-power magnitude
+envelope. Every contour still uses its own directional mask.
+One key with three identical overlapping white fills stays below 1.1 times the
 single-lamp added light before the LDR cap; the body is composed only once.
 Within overlap, a bounded independent-channel response restores the actual lamp
 hues when the reference saturation branch borrows another channel. Its budget
 comes from the material brightness and reference gain. This color correction
-fades in with local overlap, leaving single-lamp and disjoint contours unchanged.
+fades in with local overlap. The key retains its reference response; fills also
+use their actual hue on disjoint contours.
 Native field lookup follows the camera
 ray to each source's XY plane. The reference's XY center response attenuates
 contour RGB before Color Dodge, preserving weak colored detail below saturation;
@@ -58,7 +62,10 @@ response, so dark colored art retains its own color-dependent brightness.
 Marked native lamps use the reference's world-XY field falloff for this response;
 native spot cones, front/back direction, source visibility and shadow attenuation
 remain active. The outer edge uses the reference's definite alpha boundary;
-filtering is reserved for the faint inward shell.
+filtering is reserved for the faint inward shell. Off-center reference backlights
+keep the original directional mask. A projected-center rear source retains a key
+side and weaker horizontal fill, without extending the contour across the soles.
+Actual light from below can still illuminate downward-facing edges.
 
 The previous optional native core compares complete art cells along the light direction.
 Near a rear light's projected center, it blends into the symmetric one-cell
