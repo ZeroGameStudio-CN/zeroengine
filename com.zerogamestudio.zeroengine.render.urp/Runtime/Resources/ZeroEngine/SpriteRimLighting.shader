@@ -275,11 +275,11 @@ Shader "Hidden/ZeroEngine/SpriteRimLighting"
             float3 fieldHue = light.rgb / max(fieldPeak, .000001);
             float3 reflectedHue = fieldHue * lerp(fieldHue, hue, .2);
             float responseWeight = saturate(light.a) * meta.x;
-            float reflection = .057 * smoothstep(.852, .985, fieldPeak) * responseWeight;
+            float reflection = .11 * smoothstep(.852, .985, fieldPeak) * responseWeight;
             float3 shadowGain = paintedGain + reflectedHue * reflection;
             float profileCeiling = limitAddedHdr ? saturate(meta.y) : meta.y;
             if (gammaBlend) profileCeiling = SRGBToLinear(profileCeiling.xxx).x;
-            float ceiling = min((.068 + 3 * materialPeak) * responseWeight, max(0, profileCeiling - materialPeak));
+            float ceiling = min((.13 + 3 * materialPeak) * responseWeight, max(0, profileCeiling - materialPeak));
             float shadowPeak = max(shadowGain.r, max(shadowGain.g, shadowGain.b));
             float knee = ceiling * .7;
             float over = max(shadowPeak - knee, 0);

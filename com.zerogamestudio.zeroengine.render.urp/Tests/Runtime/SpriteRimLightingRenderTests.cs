@@ -1133,7 +1133,7 @@ namespace ZeroEngine.Render.Tests.Runtime
                 lighting.UpdateLighting();var mixedBlack=Capture();var mixedEdge=mixedBlack.GetPixel(13,28);
                 Assert.That(mixedEdge.b,Is.GreaterThan(.002f),
                     "A saturated blue field with a weaker red field must reveal a colored black contour.");
-                Assert.That(mixedEdge.b,Is.LessThan(.08f),
+                Assert.That(mixedEdge.b,Is.LessThan(.16f),
                     "The recovered mixed-field branch must keep black detail below a white/neon contour.");
                 Assert.That(mixedEdge.r,Is.LessThan(mixedEdge.b*.08f),
                     "A trace of red must not turn a cool reflected edge white.");
@@ -1209,9 +1209,9 @@ namespace ZeroEngine.Render.Tests.Runtime
                 lighting.UpdateLighting();var intense=Capture();
                 float blackKey=intense.GetPixel(13,28).b;
                 float blackFill=intense.GetPixel(42,28).b;
-                Assert.That(blackKey,Is.InRange(.035f,.075f),
+                Assert.That(blackKey,Is.InRange(.07f,.15f),
                     "Strong white light must produce a readable dark contour without flattening it into a white rim.");
-                Assert.That(blackFill,Is.InRange(.015f,blackKey*.7f),"Keep the strong-light fill below the key.");
+                Assert.That(blackFill,Is.InRange(.035f,blackKey*.7f),"Keep the strong-light fill below the key.");
                 body=intense.GetPixel(29,28);
                 Assert.That(Mathf.Max(body.r,Mathf.Max(body.g,body.b)),Is.LessThan(.0001f));
 

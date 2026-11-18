@@ -431,10 +431,10 @@
       "availability": "DevelopmentOnly",
       "responsibleChat": "01a16e60-157f-7f63-8f5a-7a6bdbe07a81",
       "chatUrl": "",
-      "nextAction": "复看四色重叠和高亮双灯的暗色布料，再看正常镜头进出光场的过渡。消费者接入使用同一已验证 Git 提交。",
+      "nextAction": "复看本轮高亮双灯和四色暗边的同灯实录，检查暗色反光可见程度与主补光交接。消费者接入使用同一已验证 Git 提交。",
       "entrance": "SpriteRimLighting 的共享默认配置；POB 受控 PlayMode 的 RimFireColorTestRoom 与包内 SpriteRimLightingRenderTests。",
       "resourcePath": "com.zerogamestudio.zeroengine.render.urp/Runtime/Resources/ZeroEngine/SpriteRimLighting.shader",
-      "revision": "dark-contour-highlight-response-20261118",
+      "revision": "dark-contour-readable-highlights-20261118",
       "candidatePackageVersion": "0.4.4",
       "releaseEvidence": "",
       "verificationEvidence": [
@@ -495,9 +495,17 @@
         "C:/Users/2025/.antigravity_cockpit/instances/codex/eae8558ab409f681/visualizations/2026/10/24/01a16e60-157f-7f63-8f5a-7a6bdbe07a81/rim-dark-tone-20261117/review-v3/evidence/flow-state.json",
         "C:/Users/2025/.antigravity_cockpit/instances/codex/eae8558ab409f681/visualizations/2026/10/24/01a16e60-157f-7f63-8f5a-7a6bdbe07a81/rim-dark-tone-20261117/review-v3/evidence/capture-verification.json",
         "C:/Users/2025/.antigravity_cockpit/instances/codex/eae8558ab409f681/visualizations/2026/10/24/01a16e60-157f-7f63-8f5a-7a6bdbe07a81/rim-dark-tone-20261117/review-v3/evidence/shadow-response-candidate-v3-gpu.json",
-        "C:/Users/2025/.antigravity_cockpit/instances/codex/eae8558ab409f681/visualizations/2026/10/24/01a16e60-157f-7f63-8f5a-7a6bdbe07a81/rim-dark-tone-20261117/review-v3/comparison.mp4"
+        "C:/Users/2025/.antigravity_cockpit/instances/codex/eae8558ab409f681/visualizations/2026/10/24/01a16e60-157f-7f63-8f5a-7a6bdbe07a81/rim-dark-tone-20261117/review-v3/comparison.mp4",
+        "C:/Users/2025/.antigravity_cockpit/instances/codex/eae8558ab409f681/visualizations/2026/10/24/01a16e60-157f-7f63-8f5a-7a6bdbe07a81/rim-dark-tone-20261117/review-final-v5/composition.json",
+        "C:/Users/2025/.antigravity_cockpit/instances/codex/eae8558ab409f681/visualizations/2026/10/24/01a16e60-157f-7f63-8f5a-7a6bdbe07a81/rim-dark-tone-20261117/review-final-v5/evidence/test-terminal.json",
+        "C:/Users/2025/.antigravity_cockpit/instances/codex/eae8558ab409f681/visualizations/2026/10/24/01a16e60-157f-7f63-8f5a-7a6bdbe07a81/rim-dark-tone-20261117/review-final-v5/evidence/candidate-gpu.json",
+        "C:/Users/2025/.antigravity_cockpit/instances/codex/eae8558ab409f681/visualizations/2026/10/24/01a16e60-157f-7f63-8f5a-7a6bdbe07a81/rim-dark-tone-20261117/review-final-v5/evidence/flow-state.json",
+        "C:/Users/2025/.antigravity_cockpit/instances/codex/eae8558ab409f681/visualizations/2026/10/24/01a16e60-157f-7f63-8f5a-7a6bdbe07a81/rim-dark-tone-20261117/review-final-v5/evidence/capture-verification.json",
+        "C:/Users/2025/.antigravity_cockpit/instances/codex/eae8558ab409f681/visualizations/2026/10/24/01a16e60-157f-7f63-8f5a-7a6bdbe07a81/rim-dark-tone-20261117/review-final-v5/evidence/isolated-package-proof-v5.json",
+        "C:/Users/2025/.antigravity_cockpit/instances/codex/eae8558ab409f681/visualizations/2026/10/24/01a16e60-157f-7f63-8f5a-7a6bdbe07a81/rim-dark-tone-20261117/review-final-v5/evidence/shadow-response-candidate-v4-gpu.json",
+        "C:/Users/2025/.antigravity_cockpit/instances/codex/eae8558ab409f681/visualizations/2026/10/24/01a16e60-157f-7f63-8f5a-7a6bdbe07a81/rim-dark-tone-20261117/review-final-v5/comparison.mp4"
       ],
-      "verificationScope": "暗色边缘靠近饱和时，以受光前的场景颜色计算有限 Color Dodge 增量，并按材质明暗压住高亮。窄边缘内随实际灯色、遮挡与强度渐入少量反色，保留冷暖和暗部轮廓。主光、55% 补光、同向增量融合、侧光的鞋底方向判定及浅层过渡沿用。包内四组渲染检查覆盖全黑受光饱和前后的连续性、冷色保留、深浅材质区分、主补光、鞋底、遮挡和身体底色。实际 HLSL 的 D3D11 扫描覆盖 864 组材质、光色和强度组合。POB 正常镜头 PlayMode 1/1，取得六组同灯同姿势共 18 张画面和往返攻击、技能、闪避的实录，状态恢复已确认。对照左为 ac9bf196，中为本轮暗色修正，右为参考机制兼容移植。历史未释放请求 19781a1b8b764a489d0d5ac090216e16 的证据独立保留。"
+      "verificationScope": "在已验证的暗色饱和曲线上校正反色增量和软上限，让黑色布料在强光下留下可读的冷暖反色。使用材质亮度、实际轮廓光色和遮挡计算，主补光与侧光鞋底方向沿用。包内四组 GPU 和主 POB PlayMode 1/1，六组同灯同姿势共 18 张，接正常镜头往返、攻击、两次技能及闪避。864 组实际 HLSL D3D11 扫描确认黑色与暗色样本靠近光场饱和时的连续性，弱光和浅色样本作对照。成片左为 ac9bf196，中为本轮可读暗色候选，右为参考机制兼容移植，使用原始亮度。场景、世界、存档、音频和播放退出均有恢复证明。2789fbce 对照作为偏淡的中间候选保留。历史未释放请求 19781a1b8b764a489d0d5ac090216e16 的证据独立保留。"
     }
   ]
 }
