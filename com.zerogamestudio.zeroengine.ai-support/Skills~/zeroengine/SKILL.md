@@ -17,8 +17,9 @@ Use the project's existing UPM route: Package Manager UI or
 `UnityEditor.PackageManager.Client` through its authorized Editor executor.
 Observe the original asynchronous request; do not launch a competing Editor.
 
-- Install needed modules and required siblings with pinned Git UPM URLs at one
-  tested commit. Never copy package folders into `Assets`.
+- Install needed modules and siblings from the project's verified package
+  cohort. Prefer admitted fixed ZE Registry versions where the project uses that
+  feed. Use pinned Git UPM URLs for modules on the Git route.
 - Upgrade the installed ZE cohort together; version splits remain explicit trials.
 - Before removal, check remaining package and project assembly references.
 - Verify actual PackageInfo, manifest/lock and relevant compilation, then refresh

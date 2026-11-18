@@ -33,7 +33,7 @@ async function bytes(response, maximum) {
   return result;
 }
 
-function validateMetadata(value, name, versions) {
+function validateMetadata(value, name, {versions, tags}) {
   if (value?.name !== name || !value.versions) throw new Error('invalid-metadata');
   for (const [version, expected] of Object.entries(versions)) {
     const actual = value.versions[version];
@@ -52,7 +52,7 @@ function validateMetadata(value, name, versions) {
   }
   // A new version is routable only after its immutable backup has been admitted.
   value.versions = Object.fromEntries(Object.keys(versions).map(version => [version, value.versions[version]]));
-  value['dist-tags'] = Object.fromEntries(Object.entries(value['dist-tags'] ?? {}).filter(([, version]) => Object.hasOwn(versions, version)));
+  value['dist-tags'] = Object.fromEntries(Object.entries(tags ?? value['dist-tags'] ?? {}).filter(([, version]) => Object.hasOwn(versions, version)));
   return value;
 }
 
@@ -81,7 +81,7 @@ async function readPackage(selected, env, fetcher) {
   async function decode(response) {
     if (!response.ok) throw new Error('source-unavailable');
     if (item) return verifyTarball(response, item);
-    return validateMetadata(JSON.parse(new TextDecoder().decode(await bytes(response, MAX_METADATA))), name, catalog.versions);
+    return validateMetadata(JSON.parse(new TextDecoder().decode(await bytes(response, MAX_METADATA))), name, catalog);
   }
   try {
     const operation = await request(fetcher, new URL(path, env.ORIGIN_URL).href,
@@ -93,7 +93,7 @@ async function readPackage(selected, env, fetcher) {
     } finally { operation.done(); }
   } catch {
     try {
-      const operation = await request(fetcher, catalog.githubBase + (item?.asset ?? catalog.metadataAsset),
+      const operation = await request(fetcher, (item?.githubBase ?? catalog.githubBase) + (item?.asset ?? catalog.metadataAsset),
         {'Accept': 'application/octet-stream'}, 8000, 'follow');
       try {
         return {data: await decode(operation.response), source: 'github'};
@@ -102,32 +102,45 @@ async function readPackage(selected, env, fetcher) {
   }
 }
 
-function buildIndex(kind, names, results) {
-  if (kind === 'ping') return {};
-  if (kind === 'all') return {_updated: 0, ...Object.fromEntries(names.map((name, i) => [name, results[i].data]))};
-  const objects = names.map((name, i) => {
-    const version = Object.keys(release.packages[name].versions).at(-1);
-    return {package: {name, version, description: results[i].data.versions[version].description,
-      links: {npm: `${release.publicBase}/${name}`}}};
-  });
-  return {objects, total: objects.length, time: '2026-11-17T00:00:00.000Z'};
+function buildIndex(kind) {
+  // Discovery comes from the deployed admission catalog. A search for the whole
+  // feed must not make one (or two on fallback) upstream calls per package.
+  const entries = Object.entries(release.packages);
+  if (kind === 'all') {
+    return {_updated: 0, ...Object.fromEntries(entries.map(([name, catalog]) => {
+      const versions = Object.fromEntries(Object.entries(catalog.versions).map(([version, item]) => [version, {
+        name, version, ...catalog.summary, dependencies: item.dependencies ?? {},
+        zgsPilot: {sourceCommit: item.sourceCommit, sourceTree: item.sourceTree},
+        dist: {integrity: item.sha512, tarball: `${release.publicBase}/${name}/-/${item.asset}`}
+      }]));
+      return [name, {name, ...catalog.summary, versions, 'dist-tags': catalog.tags ?? {preview: Object.keys(versions).at(-1)}}];
+    }))};
+  }
+  const objects = entries.map(([name, catalog]) => ({package: {
+    name, version: catalog.tags?.latest ?? catalog.tags?.preview ?? Object.keys(catalog.versions).at(-1),
+    description: catalog.summary?.description, links: {npm: `${release.publicBase}/${name}`}
+  }}));
+  return {objects, total: objects.length, time: release.updatedAt ?? '2026-11-17T00:00:00.000Z'};
 }
 
 export async function handle(requestInput, env, fetcher = fetch) {
   if (!['GET', 'HEAD'].includes(requestInput.method)) return new Response('Method not allowed', {status: 405});
   const selected = route(new URL(requestInput.url).pathname);
   if (!selected) return new Response('Not found', {status: 404});
-  const names = selected.name ? [selected.name] : Object.keys(release.packages);
-  if (selected.kind === 'ping') names.splice(1);
-  const results = await Promise.all(names.map(name => readPackage({...selected, name}, env, fetcher)));
-  if (results.some(result => result.status === 403))
+  if (selected.kind === 'all' || selected.kind === 'search') {
+    return reply(requestInput, selected, json(buildIndex(selected.kind)), 'catalog');
+  }
+  const result = await readPackage({...selected, name: selected.name ?? Object.keys(release.packages)[0]}, env, fetcher);
+  if (result.status === 403)
     return new Response('Origin access denied', {status: 403, headers: {'Cache-Control': 'no-store'}});
-  if (results.some(result => result.status))
+  if (result.status)
     return new Response('Verified package source unavailable', {status: 503, headers: {'Cache-Control': 'no-store'}});
-  const first = results[0];
-  const source = results.every(result => result.source === first.source) ? first.source : 'mixed';
-  const data = selected.item ? first.data : json(selected.kind === 'metadata' ? first.data :
-    selected.kind === 'version' ? first.data.versions[selected.version] : buildIndex(selected.kind, names, results));
+  const data = selected.item ? result.data : json(selected.kind === 'metadata' ? result.data :
+    selected.kind === 'version' ? result.data.versions[selected.version] : {});
+  return reply(requestInput, selected, data, result.source);
+}
+
+function reply(requestInput, selected, data, source) {
   const headers = {'Content-Type': selected.kind === 'tarball' ? 'application/octet-stream' : 'application/json',
     'Content-Length': String(data.byteLength), 'X-Content-Type-Options': 'nosniff', 'X-ZE-Package-Source': source,
     'Cache-Control': selected.kind === 'tarball' ? 'public, max-age=31536000, immutable' : 'no-store'};

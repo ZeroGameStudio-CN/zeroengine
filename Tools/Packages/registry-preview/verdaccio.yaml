@@ -8,15 +8,11 @@ uplinks: {}
 server:
   trustProxy: '127.0.0.1'
 packages:
-  'com.zerogamestudio.zeroengine.console':
+  'com.zerogamestudio.zeroengine.*':
     access: $all
     publish: ze-preview-publisher
     unpublish: []
-  'com.zerogamestudio.zeroengine.console.ui':
-    access: $all
-    publish: ze-preview-publisher
-    unpublish: []
-  'com.zerogamestudio.zeroengine.console.quantum':
+  'com.zerogamestudio.analytics':
     access: $all
     publish: ze-preview-publisher
     unpublish: []

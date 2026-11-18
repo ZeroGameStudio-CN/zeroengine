@@ -6,7 +6,40 @@ import tarfile
 import tempfile
 import unittest
 
-from sign_release import verify_archive
+from sign_release import plan_cohort, verify_archive
+
+
+class CohortContract(unittest.TestCase):
+    core = 'com.zerogamestudio.zeroengine.core'
+    application = 'com.zerogamestudio.zeroengine.achievement'
+
+    def load(self, name):
+        if name == self.core:
+            return 'a' * 40, {'name': name, 'version': '2.2.2'}
+        return 'b' * 40, {'name': name, 'version': '1.0.0',
+                          'dependencies': {self.core: '2.0.0', 'com.unity.ugui': '1.0.0'}}
+
+    def test_uses_verified_sibling_versions_without_changing_unity_dependencies(self):
+        resolved, new = plan_cohort(self.load, {self.application: None}, {}, '123')
+        self.assertEqual(list(new), [self.core, self.application])
+        self.assertEqual(resolved[self.core], '2.2.2')
+        self.assertEqual(new[self.application]['dependencies'], {self.core: '2.2.2', 'com.unity.ugui': '1.0.0'})
+
+    def test_reuses_the_existing_parent_and_refuses_mutating_an_admitted_version(self):
+        core = {'sourceTree': 'a' * 40, 'dependencies': {}, 'signingOrganizationId': '123'}
+        existing = {self.core: {'versions': {'2.2.2': core}}}
+        _, new = plan_cohort(self.load, {self.application: '1.0.1'}, existing, '123')
+        self.assertNotIn(self.core, new)
+        core['sourceTree'] = 'c' * 40
+        with self.assertRaisesRegex(ValueError, 'immutable'):
+            plan_cohort(self.load, {self.application: None}, existing, '123')
+
+    def test_rejects_project_private_dependencies(self):
+        def private(name):
+            return 'b' * 40, {'name': name, 'version': '1.0.0',
+                              'dependencies': {'com.zerogamestudio.pob.formula': '0.1.0'}}
+        with self.assertRaisesRegex(ValueError, 'Project-local'):
+            plan_cohort(private, {self.application: None}, {}, '123')
 
 
 class SignedArchiveContract(unittest.TestCase):
@@ -54,6 +87,17 @@ class SignedArchiveContract(unittest.TestCase):
     def test_rejects_escaping_member(self):
         with self.assertRaisesRegex(ValueError, 'archive path'):
             verify_archive(self.archive({**self.files, '.attestation.p7m': b'fixture', '../outside': b'code'}), self.source, '123')
+
+    def test_allows_only_unchanged_manifest_data_and_ignored_git_control_files(self):
+        (self.source / '.gitignore').write_bytes(b'fixture')
+        compact = json.dumps(json.loads(self.files['package.json']), separators=(',', ':')).encode()
+        archive = self.archive({**self.files, 'package.json': compact, '.attestation.p7m': b'fixture'})
+        report = verify_archive(archive, self.source, '123')
+        self.assertTrue(report['runtimeBytesUnchanged'])
+        self.assertTrue(report['packageJsonReformatted'])
+        self.assertEqual(report['omittedGitIgnore'], ['.gitignore'])
+        with self.assertRaisesRegex(ValueError, 'metadata'):
+            verify_archive(self.archive({**self.files, 'package.json': b'{}', '.attestation.p7m': b'fixture'}), self.source, '123')
 
 
 if __name__ == '__main__':

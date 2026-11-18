@@ -76,7 +76,7 @@ test('invalid artifact bytes are never delivered from either source', async () =
   assert.equal(result.status, 503); assert.equal(count, 2);
 });
 
-test('search, version, all and HEAD remain available on backup without body leakage', async () => {
+test('search and all use zero upstream calls, while the version and HEAD still use normal fallback', async () => {
   const fetcher = async url => {
     if (url.startsWith(env.ORIGIN_URL)) return new Response('', {status: 503});
     const name = Object.keys(release.packages).find(name => {
@@ -85,11 +85,13 @@ test('search, version, all and HEAD remain available on backup without body leak
     });
     return response(metadata(name));
   };
-  const search = await handle(req('/-/v1/search?text=anything'), env, fetcher);
+  const noFetch = () => assert.fail('Package discovery used an upstream request');
+  const search = await handle(req('/-/v1/search?text=anything'), env, noFetch);
+  assert.equal(search.headers.get('X-ZE-Package-Source'), 'catalog');
   assert.deepEqual((await search.json()).objects.map(item => item.package.name), Object.keys(release.packages));
   const version = Object.keys(coreCatalog.versions)[0];
   assert.equal((await (await handle(req(`/${core}/${version}`), env, fetcher)).json()).version, version);
-  assert.deepEqual(Object.keys(await (await handle(req('/-/all'), env, fetcher)).json()).slice(1), Object.keys(release.packages));
+  assert.deepEqual(Object.keys(await (await handle(req('/-/all'), env, noFetch)).json()).slice(1), Object.keys(release.packages));
   const head = await handle(req('/-/ping', 'HEAD'), env, fetcher);
   assert.equal(head.status, 200); assert.equal(await head.text(), '');
 });

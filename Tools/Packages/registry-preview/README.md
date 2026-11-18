@@ -1,9 +1,10 @@
 # ZE Registry
 
 ZE Registry is the shared ZeroEngine package feed at
-`https://packages-preview.zerogamestudio.com`. The current rollout covers Console
-Core, UI, and the Quantum bridge. Additional packages can use the same address
-after their package scopes are admitted and their signed releases are verified.
+`https://packages-preview.zerogamestudio.com`. The admission manifest lists the
+43 admitted packages, including the three Console packages and the 40 packages
+prepared from POB's tested `d194ba36` source. Packages use the same address for
+installation, upgrade and rollback.
 
 ## Read path
 
@@ -17,12 +18,13 @@ The public hostname stays the same during fallback and recovery. Metadata keeps
 tarball URLs on that hostname. The edge admits only versions in
 [`release-manifest.mjs`](release-manifest.mjs), verifies source commit, integrity,
 size and SHA-256, and labels package responses `X-ZE-Package-Source: worker01|github`.
-The search index reports `mixed` if its package entries came from both sources.
+Discovery is generated from the admitted catalog without querying every
+package upstream. Discovery responses report `X-ZE-Package-Source: catalog`.
 Network errors, timeouts, unavailable responses and invalid artifacts select the
 backup; origin authorization failures stay closed. Both invalid sources return
 503. New versions become visible only after their backup and manifest are ready.
 
-Anonymous GET/HEAD supports the three listed packages, versioned tarballs, search and
+Anonymous GET/HEAD supports admitted packages, versioned tarballs, search and
 ping. Public writes, account routes and unrelated packages are rejected. The
 origin gate requires a private header supplied by the edge; client credentials
 and cookies are never forwarded. Cloudflare remains a shared entry dependency;
@@ -41,6 +43,13 @@ and passes the parameter-metadata and command-catalog checks. Its installed ZE
 Agent Skill check covers 46 packages with no drift; only the three Console
 inventory entries changed. Player builds remain with the project owner.
 
+The Activity delivery trial installed `1.1.0`, upgraded to
+`1.1.1-ze-pilot.1` and rolled back in a disposable Unity project. The public
+address returned the same signed archives from GitHub during a controlled
+Worker01 origin outage. The other 39 packages passed a combined cold-cache
+Unity installation from the public feed, with all 39 organization signatures
+valid. The POB consumer migration is tracked separately.
+
 ## Package signatures
 
 Versions `0.1.0-ze-pob.d194ba36.3` and `.4` contain Unity organization signatures
@@ -55,17 +64,18 @@ accounts outside the signing organization; the archives still have valid signatu
 
 Package signature handling follows the [Unity signing documentation](https://docs.unity.com/en-us/engine/6000.6/manual/packages-list/upm-signature-lp/upm-sign-methods).
 
-[`sign_release.py`](sign_release.py) prepares the three package directories from
-one tested Git commit, updates only version/provenance and sibling pins, then
-uses the official UPM CLI to sign them. Preparation needs no Unity credentials:
+[`sign_release.py`](sign_release.py) prepares selected public ZE packages and
+their dependency closure from one tested Git commit already reachable on public
+`main`. It keeps the source package version unless the release explicitly
+selects another. Existing versions can be reused when their tree, dependency
+pins and signer match. Source files and GUIDs are preserved.
 
 ```text
-python -B Tools/Packages/registry-preview/sign_release.py --prepare-from-commit <tested-40-character-commit> --version <new-immutable-version> --organization-id <Unity-organization-id> --output <new-prepared-directory>
+python -B Tools/Packages/registry-preview/sign_release.py --prepare-from-commit <tested-40-character-commit> --package <package-name> --against-catalog Tools/Packages/registry-preview/release-manifest.mjs --organization-id <Unity-organization-id> --output <new-prepared-directory>
 ```
 
-Transfer the prepared directory and the two maintained Python files
-(`sign_release.py`, `prepare_pob_core.py`) to the publisher. The Worker01 signing
-operator reads `/etc/zgs-ze-upm-preview/signing.env`, a root-owned `0600` file
+Transfer the prepared directory to the publisher. The Worker01 signing tool
+reads `/etc/zgs-ze-upm-preview/signing.env`, a root-owned `0600` file
 containing `UPM_SERVICE_ACCOUNT_KEY_ID` and `UPM_SERVICE_ACCOUNT_KEY_SECRET`.
 The dedicated `ze-upm-package-signer` account has only the organization-level
 **Package Manager Package Signer** role. Credentials never enter archives,
@@ -82,11 +92,49 @@ sudo python3 -B sign_release.py --input <prepared-directory>/release-input.json 
 python -B sign_release.py --input <prepared-directory>/release-input.json --output <signed-directory> --verify-only
 ```
 
-Keep signing output outside the source directories. Existing output is preserved
-instead of silently repacked. Byte verification checks the exact source and GUID
-files plus the added attestation; Unity's actual `PackageInfo.signature` verdict
-is a separate required check before consumer adoption. Publish the exact signed
-bytes and immutable backup before admitting the new version at the edge.
+Repeat `--package` to select a cohort. Use `--package <name>=<version>` for a
+reviewed version override. Keep signing output outside the source directories.
+The signed report identifies the exact archive hashes. Use Unity in a
+disposable project to confirm `PackageInfo.signature` is `Valid` for each
+archive. Use [`verify_release.py`](verify_release.py) with an approved disposable
+output directory and the installed Unity CLI and Editor. It verifies the actual
+package signature after Unity compiles the selected cohort and writes the
+`unity-trust-receipt.json` needed for promotion. Known UPM rewrites of manifest
+whitespace and omission of Git control files are reported by the archive
+verifier. Runtime files and GUIDs still match the signed source bytes exactly.
+
+```text
+python -B verify_release.py --prepared <prepared-directory> --signed <signed-directory> --output <new-probe-directory> --unity <unity-cli> --editor <editor-executable>
+```
+
+The Worker01 publisher stages those exact archives over loopback and exports
+metadata and hashes. The maintainer side creates the immutable GitHub backup,
+checks each remote asset digest, then writes the candidate admission catalog.
+It can add a new version to a known package without uploading the old
+tarballs again. Older versions retain their original backup locations.
+
+```text
+sudo python3 -B publish_release.py origin --cohort <prepared-directory> <signed-directory> --output <new-export-directory>
+python -B publish_release.py backup --catalog Tools/Packages/registry-preview/release-manifest.mjs --export <worker-export-directory> --unity-trust-receipt <unity-receipt.json> --tag <new-ze-upm-release-tag> --output <new-promotion-directory>
+```
+
+Run the backup step with the existing maintainer GitHub CLI authorization. Use
+[`activate_release.py`](activate_release.py) with the current Worker version ID
+from `wrangler deployments status`. It uploads a version with the existing
+bindings, admits the verified catalog and checks the new archive URLs. Provide
+`--verify-unity` to include a fresh Unity installation and signature check in
+the same rollback guard. It restores the previous Worker version if either
+check fails. A failed signature, conflicting version or backup upload during
+preparation leaves the previous admission active.
+
+```text
+python -B activate_release.py --promotion <promotion-directory> --catalog release-manifest.mjs --node <node-executable> --wrangler <wrangler-cli-script> --expect-version <current-Worker-version-id> --verify-unity <prepared-directory> <signed-directory> <unity-cli> <editor-executable>
+```
+
+Save the newly verified catalog in source control after activation.
+`verify_release.py --public` can also recheck an active cohort independently.
+Migrate a consumer's Plastic manifest and lock together after the required
+install, upgrade and rollback checks.
 
 ## Maintainer deployment
 
