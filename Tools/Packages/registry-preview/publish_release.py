@@ -235,7 +235,8 @@ def prepare_backup(catalog_path, exports, tag, output, trust_path):
     with (output / 'release-manifest.mjs').open('x', encoding='utf-8') as stream:
         stream.write('export default ' + json.dumps(candidate, indent=2) + ';\n')
     report = {'githubRelease': backup, 'verifiedArtifacts': len(entries), 'admissionReady': True,
-              'previousCatalogSha256': hashlib.sha256(catalog_path.read_bytes()).hexdigest()}
+              'previousCatalogSha256': hashlib.sha256(catalog_path.read_bytes()).hexdigest(),
+              'candidateCatalogSha256': hashlib.sha256((output / 'release-manifest.mjs').read_bytes()).hexdigest()}
     dump(output / 'promotion-receipt.json', report)
     return report
 

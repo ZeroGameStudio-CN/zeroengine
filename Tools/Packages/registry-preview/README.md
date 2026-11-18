@@ -1,9 +1,9 @@
 # ZE Registry
 
 ZE Registry is the shared ZeroEngine package feed at
-`https://packages-preview.zerogamestudio.com`. The current rollout covers Console
-Core, UI, and the Quantum bridge. Additional packages can use the same address
-after their package scopes are admitted and their signed releases are verified.
+`https://packages-preview.zerogamestudio.com`. The admission manifest lists the
+available Console and Activity versions. Additional ZE packages can use the same
+address after signature and transport verification.
 
 ## Read path
 
@@ -89,8 +89,16 @@ Repeat `--package` to select a cohort. Use `--package <name>=<version>` for a
 reviewed version override. Keep signing output outside the source directories.
 The signed report identifies the exact archive hashes. Use Unity in a
 disposable project to confirm `PackageInfo.signature` is `Valid` for each
-archive. The publisher requires a JSON receipt containing `packages`, with
-`name`, `version`, `sha256` and `signatureStatus` for each archive.
+archive. Use [`verify_release.py`](verify_release.py) with an approved disposable
+output directory and the installed Unity CLI and Editor. It verifies the actual
+package signature after Unity compiles the selected cohort and writes the
+`unity-trust-receipt.json` needed for promotion. Known UPM rewrites of manifest
+whitespace and omission of Git control files are reported by the archive
+verifier. Runtime files and GUIDs still match the signed source bytes exactly.
+
+```text
+python -B verify_release.py --prepared <prepared-directory> --signed <signed-directory> --output <new-probe-directory> --unity <unity-cli> --editor <editor-executable>
+```
 
 The Worker01 publisher stages those exact archives over loopback and exports
 metadata and hashes. The maintainer side creates the immutable GitHub backup,
@@ -103,12 +111,21 @@ sudo python3 -B publish_release.py origin --cohort <prepared-directory> <signed-
 python -B publish_release.py backup --catalog Tools/Packages/registry-preview/release-manifest.mjs --export <worker-export-directory> --unity-trust-receipt <unity-receipt.json> --tag <new-ze-upm-release-tag> --output <new-promotion-directory>
 ```
 
-Run the backup step with the existing maintainer GitHub CLI authorization.
-Use the generated `release-manifest.mjs` for the scoped edge deployment after
-the backup and verification receipt read back. Keep the prior Worker deployment
-for rollback. A failed signature, conflicting version or backup upload leaves
-the previous admission catalog active. The consumer's Plastic manifest and
-lock are updated only after registry installation and rollback are verified.
+Run the backup step with the existing maintainer GitHub CLI authorization. Use
+[`activate_release.py`](activate_release.py) with the current Worker version ID
+from `wrangler deployments status`. It uploads a version with the existing
+bindings, admits the verified catalog and checks the new archive URLs. It
+restores the previous Worker version if those checks fail. A failed signature,
+conflicting version or backup upload leaves the previous admission active.
+
+```text
+python -B activate_release.py --promotion <promotion-directory> --catalog release-manifest.mjs --node <node-executable> --wrangler <wrangler-cli-script> --expect-version <current-Worker-version-id>
+```
+
+Save the newly verified catalog in source control after activation, and use
+`verify_release.py --public` for a fresh registry installation. Migrate a
+consumer's Plastic manifest and lock together after the required install,
+upgrade and rollback checks.
 
 ## Maintainer deployment
 

@@ -69,17 +69,22 @@ def verify_archive(archive_path, source, organization):
             if relative in actual or member.size > 16 * 1024**2:
                 raise ValueError('Duplicate or oversized archive member')
             actual[relative] = archive.extractfile(member).read()
-    if set(actual) != set(expected) | {ATTESTATION} or not actual[ATTESTATION]:
-        raise ValueError('Require exactly one added organization attestation')
-    if any(actual[path] != data for path, data in expected.items()):
-        raise ValueError('Packing changed the prepared package bytes')
+    omitted = set(expected) - set(actual)
+    if (set(actual) - set(expected) != {ATTESTATION} or not actual[ATTESTATION]
+            or any(PurePosixPath(path).name != '.gitignore' for path in omitted)):
+        raise ValueError('Require the organization attestation and every packaged source file')
+    normalized = actual['package.json'] != expected['package.json']
+    if (json.loads(actual['package.json']) != json.loads(expected['package.json'])
+            or any(actual[path] != expected[path] for path in set(expected) - omitted - {'package.json'})):
+        raise ValueError('Packing changed package metadata or runtime bytes')
     metadata = json.loads(expected['package.json'])
     data = archive_path.read_bytes()
     return {'asset': archive_path.name, 'bytes': len(data), 'sha256': hashlib.sha256(data).hexdigest(),
             'sha512': 'sha512-' + base64.b64encode(hashlib.sha512(data).digest()).decode(),
             'sourceCommit': metadata['zgsPilot']['sourceCommit'],
-            'sourceTree': metadata['zgsPilot']['sourceTree'], 'matchedSourceFiles': len(expected),
-            'sourceBytesUnchanged': True, 'signingOrganizationId': organization,
+            'sourceTree': metadata['zgsPilot']['sourceTree'], 'matchedSourceFiles': len(expected) - len(omitted),
+            'sourceBytesUnchanged': not normalized and not omitted, 'runtimeBytesUnchanged': True,
+            'packageJsonReformatted': normalized, 'omittedGitIgnore': sorted(omitted), 'signingOrganizationId': organization,
             'dependencies': metadata.get('dependencies', {})}
 
 

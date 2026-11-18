@@ -158,6 +158,46 @@ export default {
           }
         }
       }
+    },
+    "com.zerogamestudio.zeroengine.activity": {
+      "versions": {
+        "1.1.0": {
+          "asset": "com.zerogamestudio.zeroengine.activity-1.1.0.tgz",
+          "bytes": 21233,
+          "sha256": "21f2bb958949a92a214133afa731b811a013f52f4afabdc6ae6832e30405138b",
+          "sha512": "sha512-F40UJlsBsTzV//acW7fYLlyOrsnr+RfteE4YRmmKSB6nyGMjMio2qn689C6dKS3Z0KeKFrIe+UfgiWH0R0DBLA==",
+          "sourceCommit": "d194ba36b27eeb49ef3a468e2be93c6a392d32d5",
+          "sourceTree": "03ef573720942239dfdd49df9dfe27bc8238a3c9",
+          "matchedSourceFiles": 31,
+          "sourceBytesUnchanged": true,
+          "signingOrganizationId": "16767998560366",
+          "dependencies": {}
+        },
+        "1.1.1-ze-pilot.1": {
+          "asset": "com.zerogamestudio.zeroengine.activity-1.1.1-ze-pilot.1.tgz",
+          "bytes": 21248,
+          "sha256": "947ce7786699086f5c91258e5e59aab872cf2756ef58c57b43e5d49ee0557f58",
+          "sha512": "sha512-IDUZQPL7vmsrZ5oqWhq1ah2/Da2zRl11DCYryXzVDLLlq9ED8dRSsFjoxEYlLribFNMtnU2v9TZQsYXCbczsMw==",
+          "sourceCommit": "d194ba36b27eeb49ef3a468e2be93c6a392d32d5",
+          "sourceTree": "03ef573720942239dfdd49df9dfe27bc8238a3c9",
+          "matchedSourceFiles": 31,
+          "sourceBytesUnchanged": true,
+          "signingOrganizationId": "16767998560366",
+          "dependencies": {}
+        }
+      },
+      "githubBase": "https://github.com/ZeroGameStudio-CN/zeroengine/releases/download/ze-upm-registry-activity-d194ba36-20261118/",
+      "metadataAsset": "com.zerogamestudio.zeroengine.activity-registry.json",
+      "tags": {
+        "latest": "1.1.0",
+        "preview": "1.1.1-ze-pilot.1"
+      },
+      "summary": {
+        "displayName": "ZeroEngine.Activity",
+        "description": "Game-independent activity levels and budgeted work, with optional Unity world adapters.",
+        "unity": "6000.6"
+      }
     }
-  }
+  },
+  "updatedAt": "2026-11-18T10:46:23Z"
 };

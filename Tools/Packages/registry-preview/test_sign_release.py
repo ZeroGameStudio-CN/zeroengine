@@ -88,6 +88,17 @@ class SignedArchiveContract(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, 'archive path'):
             verify_archive(self.archive({**self.files, '.attestation.p7m': b'fixture', '../outside': b'code'}), self.source, '123')
 
+    def test_allows_only_unchanged_manifest_data_and_ignored_git_control_files(self):
+        (self.source / '.gitignore').write_bytes(b'fixture')
+        compact = json.dumps(json.loads(self.files['package.json']), separators=(',', ':')).encode()
+        archive = self.archive({**self.files, 'package.json': compact, '.attestation.p7m': b'fixture'})
+        report = verify_archive(archive, self.source, '123')
+        self.assertTrue(report['runtimeBytesUnchanged'])
+        self.assertTrue(report['packageJsonReformatted'])
+        self.assertEqual(report['omittedGitIgnore'], ['.gitignore'])
+        with self.assertRaisesRegex(ValueError, 'metadata'):
+            verify_archive(self.archive({**self.files, 'package.json': b'{}', '.attestation.p7m': b'fixture'}), self.source, '123')
+
 
 if __name__ == '__main__':
     unittest.main()

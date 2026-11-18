@@ -2,9 +2,9 @@
 
 ## Project Role
 
-This repository is the ZeroEngine development workspace. Other Unity projects
-consume ZeroEngine through Unity Package Manager Git dependencies that point at
-`https://github.com/ZeroGameStudio-CN/zeroengine.git`.
+This repository is the ZeroEngine development workspace. Unity projects consume
+verified packages from ZE Registry or use pinned Unity Package Manager Git
+dependencies that point at `https://github.com/ZeroGameStudio-CN/zeroengine.git`.
 
 Development-content records and their format follow
 [the project adapter](docs/agent/project-adapter.md).
@@ -21,9 +21,9 @@ Consumer `.agents/skills/zeroengine` files are generated from actual installed
 packages; maintain the source template and module READMEs here.
 
 The isolated package distribution Preview is maintained in
-[the registry tools](Tools/Packages/registry-preview/README.md). It tests a
-Worker01 origin with same-address GitHub fallback for the three Console packages.
-The opt-in trial uses the exact versions recorded in its admission manifest.
+[the registry tools](Tools/Packages/registry-preview/README.md). It supports
+signed releases from committed source, a Worker01 origin and same-address
+GitHub fallback. The admission manifest lists the exact available versions.
 
 When a module's API, dependencies or usage changes, update its README and any
 affected Agent guidance together. After consumer package installation, removal or
@@ -32,15 +32,16 @@ current when repository architecture or source entrances change.
 
 ## Consumer Project Rules
 
-- Use Git UPM URLs in `Packages/manifest.json`:
+- Pin admitted ZE Registry packages to the tested versions in
+  `Packages/manifest.json` and commit the matching UPM lock. For other modules,
+  use Git UPM URLs:
   `https://github.com/ZeroGameStudio-CN/zeroengine.git?path=<package>#<tested-commit>`.
-- Pin production and shared branches to a tested commit, not `#main`.
-- Keep all ZeroEngine packages in the same consumer project on the same commit
-  unless the task is explicitly testing a version split.
+- Pin shared Git dependencies to tested commits. Keep the project on a
+  verified compatible package cohort when moving its pins or switching sources.
 - Use `file:` dependencies only for temporary local debugging. Replace them
   with pinned Git URLs before handoff.
-- If a consumed package depends on another `com.zerogamestudio.*` package, make
-  sure the consumer manifest includes that dependency with the same commit.
+- Include required `com.zerogamestudio.*` sibling dependencies from the same
+  verified cohort.
 
 ## Editing Rules
 
