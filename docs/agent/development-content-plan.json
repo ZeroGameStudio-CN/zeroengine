@@ -568,10 +568,10 @@
       "availability": "InternalOnly",
       "responsibleChat": "01a1c66f-d77b-7b00-88d4-37f8f3df3b13",
       "chatUrl": "codex://threads/01a1c66f-d77b-7b00-88d4-37f8f3df3b13",
-      "nextAction": "签名 .3/.4 已验证安装、升级、回滚及同址故障回退。将 POB 当前三包 .2 升到已验证的 .4，再同步实际 Skill 库存并精确提交；正式 Player 由用户打包。",
+      "nextAction": "POB 已在 Plastic cs19381 接入签名 .4 三包并同步 46 包 Skill 库存，Quantum 默认入口与现有指令保留。用户按原流程打包；其它 ZE Git 依赖尚未迁移到新源。",
       "entrance": "https://packages-preview.zerogamestudio.com/com.zerogamestudio.zeroengine.console",
       "resourcePath": "Tools/Packages/registry-preview/README.md",
-      "revision": "Console 三包保持 d194ba36 的运行时与 GUID，.3/.4 新增 ZeroGameStudio 组织签名。Unity 6000.6.9f1 在冷缓存安装、签名升级、回滚和 GitHub 备份加载中均读取 Valid。修复服务硬依赖造成的连带停机；单独故障仓库或入口后，下游进程保持且同址自动切回 Worker01。POB 原接入记录为 cs19374，签名升级尚未提交。",
+      "revision": "Console 三包保持 d194ba36 的运行时与 GUID，.3/.4 新增 ZeroGameStudio 组织签名。Unity 6000.6.9f1 在冷缓存安装、签名升级、回滚和 GitHub 备份加载中均读取 Valid。单独故障仓库或入口后，下游进程保持且同址自动切回 Worker01。POB cs19381 实际读取三个 Valid 签名，2 项指令兼容检查无失败；Skill 核对 46 包，仅三项版本变化。",
       "releaseEvidence": "",
       "candidatePackageVersion": "0.1.0-ze-pob.d194ba36.4",
       "verificationEvidence": [

@@ -32,10 +32,12 @@ file carries registry provenance. Teammates receive those project files through
 SCM. They need no personal npm/UPM/Git settings or GitHub access for these package
 downloads. The [minimal project](sample/README.md) shows the Core-only trial.
 
-POB adopted version `0.1.0-ze-pob.d194ba36.2` for all three packages in Plastic
-changeset `19374`. The current Editor reports Registry provenance, retains the
-Quantum default input entry, and passes the parameter-metadata and command-catalog
-checks. Its installed ZE Agent Skill check reports no drift.
+POB adopted signed version `0.1.0-ze-pob.d194ba36.4` for all three packages in
+Plastic changeset `19381`. The current Editor reports Registry provenance and
+three valid organization signatures, retains the Quantum default input entry,
+and passes the parameter-metadata and command-catalog checks. Its installed ZE
+Agent Skill check covers 46 packages with no drift; only the three Console
+inventory entries changed. Player builds remain with the project owner.
 
 ## Package signatures
 
@@ -66,6 +68,12 @@ containing `UPM_SERVICE_ACCOUNT_KEY_ID` and `UPM_SERVICE_ACCOUNT_KEY_SECRET`.
 The dedicated `ze-upm-package-signer` account has only the organization-level
 **Package Manager Package Signer** role. Credentials never enter archives,
 command arguments, logs or consumer configuration.
+
+Worker01's installed tool is
+`/opt/zgs-ze-upm-preview/signing/current/sign_release.py`, with the pinned
+official CLI at `/opt/zgs-ze-upm-preview/tools/upm/9.36.0/UnityPackageManager`.
+Ordinary package upgrades reuse that installation; changed operator code is
+deployed from a new committed tool release.
 
 ```text
 sudo python3 -B sign_release.py --input <prepared-directory>/release-input.json --output <new-signed-directory> --upm <official-UPM-executable> --credentials /etc/zgs-ze-upm-preview/signing.env
