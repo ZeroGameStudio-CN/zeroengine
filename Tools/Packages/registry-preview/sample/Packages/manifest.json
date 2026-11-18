@@ -4,7 +4,7 @@
   },
   "scopedRegistries": [
     {
-      "name": "ZE domestic HTTPS Preview",
+      "name": "ZE Registry",
       "url": "https://packages-preview.zerogamestudio.com",
       "scopes": [
         "com.zerogamestudio.zeroengine.console"

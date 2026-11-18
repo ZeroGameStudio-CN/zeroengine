@@ -1,8 +1,9 @@
-# ZE package distribution Preview
+# ZE Registry
 
-The feed serves the Console Core, UI, and Quantum bridge at
-`https://packages-preview.zerogamestudio.com`. The POB transport Preview uses
-the same three package trees as the project's Git dependencies.
+ZE Registry is the shared ZeroEngine package feed at
+`https://packages-preview.zerogamestudio.com`. The current rollout covers Console
+Core, UI, and the Quantum bridge. Additional packages can use the same address
+after their package scopes are admitted and their signed releases are verified.
 
 ## Read path
 
@@ -27,10 +28,11 @@ origin gate requires a private header supplied by the edge; client credentials
 and cookies are never forwarded. Cloudflare remains a shared entry dependency;
 GitHub fallback does not cover a Cloudflare outage or guarantee every network.
 
-The project manifest carries the scoped registry and exact version; its lock
-file carries registry provenance. Teammates receive those project files through
-SCM. They need no personal npm/UPM/Git settings or GitHub access for these package
-downloads. The [minimal project](sample/README.md) shows the Core-only trial.
+The project manifest sets the `ZE Registry` display name, lists the admitted
+package scopes, and pins exact versions. The lock file records where Unity
+resolves the packages. Teammates receive both files through SCM and download the
+packages without personal npm/UPM/Git settings or GitHub access. The
+[minimal project](sample/README.md) shows the Core-only trial.
 
 POB adopted signed version `0.1.0-ze-pob.d194ba36.4` for all three packages in
 Plastic changeset `19381`. The current Editor reports Registry provenance and
