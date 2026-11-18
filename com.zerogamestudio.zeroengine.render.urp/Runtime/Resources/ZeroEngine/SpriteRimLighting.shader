@@ -252,36 +252,41 @@ Shader "Hidden/ZeroEngine/SpriteRimLighting"
             bool limitAddedHdr = meta.z >= 2;
             float3 incomingBase = limitAddedHdr ? min(original, 1) : original;
             float3 baseColor = gammaBlend ? LinearToSRGB(incomingBase) : incomingBase;
+            float materialPeak = max(incomingBase.r, max(incomingBase.g, incomingBase.b));
+            float shadowWeight = 1 - smoothstep(.014, .035, materialPeak);
+            float profileCeiling = limitAddedHdr ? saturate(meta.y) : meta.y;
+            if (gammaBlend) profileCeiling = SRGBToLinear(profileCeiling.xxx).x;
             // A finite independent-channel response supplies the missing hue when
             // the reference's saturated green/blue branch borrows its red channel.
-            float3 dodge = baseColor / max(1 - light.rgb, .1);
-            float3 color = min(lerp(baseColor, dodge, light.a), meta.y);
-            if (limitAddedHdr) color = saturate(color);
-            float3 response = gammaBlend ? SRGBToLinear(color) : color;
-            float3 paintedGain = max(response - incomingBase, 0) * meta.x;
+            float3 dodge = baseColor / max(1 - light.rgb, lerp(.1, .04, shadowWeight));
+            float3 color = lerp(baseColor, dodge, light.a);
+            float3 paint = gammaBlend ? SRGBToLinear(color) : color;
+            float3 paintedGain = max(min(paint, profileCeiling) - incomingBase, 0) * meta.x;
             hue = saturate(hue);
             float3 gain = max(keyGain, paintedGain) * hue;
-            float materialPeak = max(incomingBase.r, max(incomingBase.g, incomingBase.b));
             float budget = max(materialPeak, max(keyGain.r, max(keyGain.g, keyGain.b)));
             float peak = max(gain.r, max(gain.g, gain.b));
             fillGain = gain * min(1, budget / max(peak, .00000001));
 
             float fieldPeak = max(light.r, max(light.g, light.b));
-            float shadowWeight = 1 - smoothstep(.014, .035, materialPeak);
             if (shadowWeight <= 0 || fieldPeak <= 0) return;
 
-            // Roll dark paint into a finite response before Color Dodge saturates.
-            // The small reflected color is driven by the visible, masked light.
+            // Reserve extra headroom for painted details as the masked light approaches saturation.
+            // Compress the RGB gain together to keep the channel ratios of the shaded paint.
+            float detail = smoothstep(.7, .96, fieldPeak);
+            float detailRoom = min(.24, 2.4 * sqrt(materialPeak)) * detail;
+            float responseWeight = saturate(light.a) * meta.x;
+            float ceiling = min((.13 + 3 * materialPeak + detailRoom) * responseWeight,
+                max(0, profileCeiling - materialPeak));
+            float3 detailGain = max(paint - incomingBase, 0) * meta.x;
+            float paintPeak = max(detailGain.r, max(detailGain.g, detailGain.b));
+
+            // Reflection supplies color on black paint and recedes as painted detail becomes visible.
             float3 fieldHue = light.rgb / max(fieldPeak, .000001);
             float3 reflectedHue = fieldHue * lerp(fieldHue, hue, .2);
-            float responseWeight = saturate(light.a) * meta.x;
-            // A quadratic rise gives ordinary light a visible response and keeps
-            // reflections faint as the masked field approaches zero.
             float reflection = .11 * fieldPeak * fieldPeak * responseWeight;
-            float3 shadowGain = paintedGain + reflectedHue * reflection;
-            float profileCeiling = limitAddedHdr ? saturate(meta.y) : meta.y;
-            if (gammaBlend) profileCeiling = SRGBToLinear(profileCeiling.xxx).x;
-            float ceiling = min((.13 + 3 * materialPeak) * responseWeight, max(0, profileCeiling - materialPeak));
+            float reflectionRoom = saturate(1 - detail * paintPeak / max(ceiling, .000001));
+            float3 shadowGain = detailGain + reflectedHue * (reflection * reflectionRoom);
             float shadowPeak = max(shadowGain.r, max(shadowGain.g, shadowGain.b));
             float knee = ceiling * .7;
             float over = max(shadowPeak - knee, 0);
@@ -546,20 +551,32 @@ Shader "Hidden/ZeroEngine/SpriteRimLighting"
                 if (_RimReferenceEdgeResponse > .5 && _RimEnhanceShapes[i].x > 2.5) fieldColor *= _RimEnhanceColors[i].a;
                 if (referenceResponse)
                 {
-                    // Opposing fields retain the reference's material response under the
-                    // directional mask. Same-side lamps stay in the bounded gain blend.
                     float4 incident = referenceFields[i];
                     if (all(incident.rgb <= 0)) continue;
-                    // Fade borrowed light at the local cone and range boundaries.
+                    float key = lerp(i == fallbackPrimary ? 1 : 0, _RimPrimaryWeights[i], saturate(visiblePrimary));
+                    float3 hue = fieldColor / max(max(fieldColor.r, max(fieldColor.g, fieldColor.b)), .00000001);
+                    // A weaker share of the opposite field keeps the fill readable.
+                    // Fade that support at each lamp's cone/range boundary and in shadow.
                     float support = smoothstep(0, .25, incident.a) * visibility;
-                    float2 direction = band.xy / max(length(band.xy), .00001);
-                    [unroll] for (int j = 0; j < 4; j++)
+                    UNITY_BRANCH
+                    if (support > 0)
                     {
-                        if (j >= _RimEnhanceLightCount) break;
-                        if (j == i) continue;
-                        float2 other = _RimEnhanceBands[j].xy;
-                        float opposition = saturate(-dot(direction, other) / max(length(other), .00001));
-                        incident += referenceFields[j] * (opposition * support);
+                        float2 direction = band.xy / max(length(band.xy), .00001);
+                        [unroll] for (int j = 0; j < 4; j++)
+                        {
+                            if (j >= _RimEnhanceLightCount) break;
+                            if (j == i) continue;
+                            float2 other = _RimEnhanceBands[j].xy;
+                            float opposition = saturate(-dot(direction, other) / max(length(other), .00001));
+                            float3 otherColor = _RimEnhanceColors[j].rgb;
+                            float3 otherHue = otherColor / max(max(otherColor.r, max(otherColor.g, otherColor.b)), .00000001);
+                            // Distinct lamp colors can also support the key on the
+                            // same side. Identical aligned lamps add no field here.
+                            float3 difference = abs(hue - otherHue);
+                            float complement = max(difference.r, max(difference.g, difference.b));
+                            float opposed = opposition * lerp(.5, 1, key);
+                            incident += referenceFields[j] * (max(opposed, .65 * complement * key) * support);
+                        }
                     }
                     incident = saturate(incident);
                     float response = _RimEnhanceShapes[i].x > 2.5 ? referenceResponses[i] : band.w;
@@ -567,11 +584,9 @@ Shader "Hidden/ZeroEngine/SpriteRimLighting"
                     float3 localColor = CompositeColor(original.rgb, localLight, 0, 0,
                         float4(exposure, _RimRefStyle.y, _RimRefStyle.w, 1));
                     float3 gain = max(localColor - original.rgb, 0);
-                    float3 hue = fieldColor / max(max(fieldColor.r, max(fieldColor.g, fieldColor.b)), .00000001);
                     float3 tinted;
                     ResolveReferenceContourGains(original.rgb, localLight, hue,
                         float4(exposure, _RimRefStyle.y, _RimRefStyle.w, 1), gain, tinted);
-                    float key = lerp(i == fallbackPrimary ? 1 : 0, _RimPrimaryWeights[i], saturate(visiblePrimary));
                     float role = lerp(ReferenceFillStrength, 1, key);
                     // Preserve the key's reference response; the fill retains its
                     // actual hue even when the two directional masks do not overlap.

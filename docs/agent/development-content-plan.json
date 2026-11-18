@@ -425,16 +425,16 @@
     },
     {
       "id": "ze.render.pixel-contour-core",
-      "title": "像素边缘受光：暗色材质的连续受光",
+      "title": "像素边缘受光：暗色材质细节与主辅光",
       "stage": "Previewable",
       "targetReleaseId": "",
       "availability": "DevelopmentOnly",
       "responsibleChat": "01a16e60-157f-7f63-8f5a-7a6bdbe07a81",
       "chatUrl": "",
-      "nextAction": "复看 1.0 暖灯、蓝灯和双灯下的暗边及正常镜头换光，结合高亮对照检查暗布层次。消费者接入使用同一已验证 Git 提交。",
+      "nextAction": "在已验证 Git 提交上复看正式镜头的深色材质层次，以及主辅光经过灯源中心的交接。",
       "entrance": "SpriteRimLighting 的共享默认配置；POB 受控 PlayMode 的 RimFireColorTestRoom 与包内 SpriteRimLightingRenderTests。",
       "resourcePath": "com.zerogamestudio.zeroengine.render.urp/Runtime/Resources/ZeroEngine/SpriteRimLighting.shader",
-      "revision": "dark-contour-ordinary-light-20261118",
+      "revision": "painted-detail-and-key-fill-20261118",
       "candidatePackageVersion": "0.4.4",
       "releaseEvidence": "",
       "verificationEvidence": [
@@ -512,9 +512,13 @@
         "C:/Users/2025/.antigravity_cockpit/instances/codex/eae8558ab409f681/visualizations/2026/10/24/01a16e60-157f-7f63-8f5a-7a6bdbe07a81/rim-dark-threshold-20261118/review/evidence/flow-state.json",
         "C:/Users/2025/.antigravity_cockpit/instances/codex/eae8558ab409f681/visualizations/2026/10/24/01a16e60-157f-7f63-8f5a-7a6bdbe07a81/rim-dark-threshold-20261118/review/evidence/capture-verification.json",
         "C:/Users/2025/.antigravity_cockpit/instances/codex/eae8558ab409f681/visualizations/2026/10/24/01a16e60-157f-7f63-8f5a-7a6bdbe07a81/rim-dark-threshold-20261118/review/evidence/response-review.json",
-        "C:/Users/2025/.antigravity_cockpit/instances/codex/eae8558ab409f681/visualizations/2026/10/24/01a16e60-157f-7f63-8f5a-7a6bdbe07a81/rim-dark-threshold-20261118/review/evidence/isolated-package-proof.json"
+        "C:/Users/2025/.antigravity_cockpit/instances/codex/eae8558ab409f681/visualizations/2026/10/24/01a16e60-157f-7f63-8f5a-7a6bdbe07a81/rim-dark-threshold-20261118/review/evidence/isolated-package-proof.json",
+        "C:/Users/2025/.antigravity_cockpit/instances/codex/eae8558ab409f681/visualizations/2026/10/24/01a16e60-157f-7f63-8f5a-7a6bdbe07a81/rim-painted-detail-20261118/review/unity-detail-final.png",
+        "C:/Users/2025/.antigravity_cockpit/instances/codex/eae8558ab409f681/visualizations/2026/10/24/01a16e60-157f-7f63-8f5a-7a6bdbe07a81/rim-painted-detail-20261118/review/native-final/verification.json",
+        "C:/Users/2025/.antigravity_cockpit/instances/codex/eae8558ab409f681/visualizations/2026/10/24/01a16e60-157f-7f63-8f5a-7a6bdbe07a81/rim-painted-detail-20261118/review/native-final/package-suite-results.xml",
+        "C:/Users/2025/.antigravity_cockpit/instances/codex/eae8558ab409f681/visualizations/2026/10/24/01a16e60-157f-7f63-8f5a-7a6bdbe07a81/rim-painted-detail-20261118/review/native-final/temporary-host-inputs.json"
       ],
-      "verificationScope": "暗色轮廓的反光按受掩膜约束的光场强度平方增长，普通灯光下即可呈现实际灯色。极弱光下响应衰减到零。有限 Color Dodge 结合材质亮度软上限，保持低亮度黑布与强光反色的层次。实际 HLSL 在 D3D11 对比当前与 69215b0d 及参考机制的合成曲线，覆盖 864 组材质、强度和光色输入。包内四组 GPU 回归覆盖无光、常用单暖及单蓝、由弱转强、双灯上限、主补光、鞋底、深度遮挡和身体底色。POB PlayMode 原生结果 1/1，队列回执记录预算超时。六组同灯同机位同姿势共 18 张，覆盖 0.65 单暖、1.0 单暖、1.0 单蓝、1.0 暖蓝双灯、四色与 2.0 高亮双灯。成片左为 69215b0d，中为本轮修正，右为参考机制兼容移植，随后是常用双灯下正常机位的往返、攻击、技能及闪避。场景、世界、存档、音频和退出均有恢复证明，原请求清理已确认。"
+      "verificationScope": "深色材质在弱光下保留原有响应。强光下先按已着色像素计算有限的 Color Dodge，再按材质亮度统一压缩 RGB 增益。纯黑弱反光保有原有响应。主光在局部轮廓内接收其它可见灯色，辅光对对向光场采用较弱的支撑。同一 Unity 6000.6.9f1 D3D11 隔离环境中，原版基线六项通过，新版六项渲染回归及三路同灯取样均通过。对照使用 POB 原画轮廓与之前的底色取样，五组灯光配置生成 15 张 URP 实渲原帧，包含普通单暖、单蓝、双灯、四色与高亮双灯。本轮原房复录请求在派发前取消，POB 使用方保持候选验证状态。"
     }
   ]
 }

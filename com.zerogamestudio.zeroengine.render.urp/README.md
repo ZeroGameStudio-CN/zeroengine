@@ -35,9 +35,10 @@ Other lamps retain 55% added light as colored fills. Key selection uses unclampe
 influence, a 20% challenger margin and a 0.15-second handoff. Equal or nearly equal
 lamps do not keep exchanging sides. Fully occluded keys yield to a visible source
 per art cell. Each lamp resolves the reference response under its own contour
-mask, with RGBA8 UNorm source bounds and blending. Opposed fields support that
-response so dark contour detail survives on the key side. Lamps from the same
-direction combine after the material response to avoid a saturation jump.
+mask, with RGBA8 UNorm source bounds and blending. The key's contour can borrow
+visible color from opposed lights and from lamps of a different hue on the same
+side. Fills retain their own hue and direction with reduced support from the
+opposing field.
 Positive added light is fused in linear color with a fourth-power magnitude
 envelope. Every contour still uses its own directional mask.
 One key with three identical overlapping white fills stays below 1.1 times the
@@ -53,9 +54,10 @@ native 3D selection still controls source eligibility and contour direction.
 These masks never replace the shaded body. The narrow inward wrap fades away within two art
 cells. Its strength is 0.08 in the shared default; the deep interior is unchanged.
 Dark paint uses a finite Color Dodge response with a soft ceiling based on the
-shaded material. A small reflected contribution rises quadratically with the
-masked field, giving ordinary lamps a colored edge on black art and fading to
-zero as the light recedes.
+shaded material. Strong light gives dark painted accents more headroom and
+compresses their RGB gain together to preserve their hue. A small reflected
+contribution rises quadratically with the masked field and gives way to painted
+detail as its response strengthens.
 Exposure scales the added edge gain. Existing HDR/emission is preserved and
 added LDR light is capped at one.
 Marked native lamps use the reference's world-XY field falloff for this response;

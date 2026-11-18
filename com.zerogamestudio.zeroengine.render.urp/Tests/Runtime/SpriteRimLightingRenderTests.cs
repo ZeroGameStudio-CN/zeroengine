@@ -1159,7 +1159,10 @@ namespace ZeroEngine.Render.Tests.Runtime
                 float ordinaryKey = black.GetPixel(13, 28).b;
                 Assert.That(ordinaryKey, Is.InRange(single.GetPixel(13, 28).b + .005f, .11f),
                     "Opposed ordinary lights must preserve a readable key edge with bounded brightness.");
-                Assert.That(black.GetPixel(42, 28).b, Is.InRange(.008f, ordinaryKey * .7f));
+                float ordinaryFill = black.GetPixel(42, 28).b;
+                Assert.That(ordinaryFill, Is.InRange(.008f, ordinaryKey * .7f));
+                Assert.That(ordinaryFill, Is.LessThan(single.GetPixel(13, 28).b * .85f),
+                    "Limited field sharing must keep the secondary edge below a single key.");
                 light.LightColor=second.LightColor=new Color(.02f,.3f,1,1);
                 light.Intensity=second.Intensity=2;
                 lighting.UpdateLighting();var mixedBlack=Capture();var mixedEdge=mixedBlack.GetPixel(13,28);
@@ -1257,6 +1260,30 @@ namespace ZeroEngine.Render.Tests.Runtime
                 lighting.UpdateLighting();var lightPaint=Capture();
                 Assert.That(lightPaint.GetPixel(13,28).b,Is.GreaterThan(blackKey*3),
                     "Dark and bright painted edges must remain distinct under the same strong field.");
+
+                light.Intensity = 2;
+                material.SetVector("_BaseColor", new Vector4(.012f, .001f, .003f, 1));
+                profile.Strength = 0;
+                lighting.UpdateLighting();
+                var redUnlit = Capture();
+                profile.Strength = 1;
+                lighting.UpdateLighting();
+                var redPaint = Capture();
+                material.SetVector("_BaseColor", new Vector4(.003f, .001f, .012f, 1));
+                profile.Strength = 0;
+                lighting.UpdateLighting();
+                var blueUnlit = Capture();
+                profile.Strength = 1;
+                lighting.UpdateLighting();
+                var bluePaint = Capture();
+                var redDetail = redPaint.GetPixel(13, 28);
+                var blueDetail = bluePaint.GetPixel(13, 28);
+                Assert.That(redDetail.r, Is.GreaterThan(blackKey), "Painted dark accents should read above black cloth.");
+                Assert.That(redDetail.r, Is.GreaterThan(redDetail.b * 1.7f));
+                Assert.That(blueDetail.b, Is.EqualTo(redDetail.r).Within(.001f));
+                Assert.That(blueDetail.b, Is.GreaterThan(blueDetail.r * 1.7f));
+                Assert.That(redPaint.GetPixel(29, 28).r, Is.EqualTo(redUnlit.GetPixel(29, 28).r).Within(.0001f));
+                Assert.That(bluePaint.GetPixel(29, 28).b, Is.EqualTo(blueUnlit.GetPixel(29, 28).b).Within(.0001f));
 
                 second.enabled=false;material.SetVector("_BaseColor",new Vector4(.002f,.004f,.012f,1));
                 light.LightColor=Color.blue;light.Intensity=1.2f;
