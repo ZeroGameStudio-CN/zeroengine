@@ -32,22 +32,59 @@ file carries registry provenance. Teammates receive those project files through
 SCM. They need no personal npm/UPM/Git settings or GitHub access for these package
 downloads. The [minimal project](sample/README.md) shows the Core-only trial.
 
-POB adopted version `0.1.0-ze-pob.d194ba36.2` for all three packages in Plastic
-changeset `19374`. The current Editor reports Registry provenance, retains the
-Quantum default input entry, and passes the parameter-metadata and command-catalog
-checks. Its installed ZE Agent Skill check reports no drift.
+POB adopted signed version `0.1.0-ze-pob.d194ba36.4` for all three packages in
+Plastic changeset `19381`. The current Editor reports Registry provenance and
+three valid organization signatures, retains the Quantum default input entry,
+and passes the parameter-metadata and command-catalog checks. Its installed ZE
+Agent Skill check covers 46 packages with no drift; only the three Console
+inventory entries changed. Player builds remain with the project owner.
 
 ## Package signatures
 
-The current Preview archives are unsigned. Unity 6.6 can show **Missing Signature**
-when it adds a package or changes its installed version. Closing the notification
-handles that occurrence. Later unsigned upgrades can show it again. The publisher
-can address the cause by packing new immutable versions with Unity's organization
-signature, using the existing signing account for the studio. The attempted
-organization signing request was rejected for authentication, and the Editor's
-session refresh did not succeed. No signed replacement version was published.
+Versions `0.1.0-ze-pob.d194ba36.3` and `.4` contain Unity organization signatures
+for ZeroGameStudio. Unity 6000.6.9f1 reports `Valid` for all three packages during
+cold-cache registry installation, signed upgrade and rollback. The archives keep
+the frozen runtime and GUID bytes; each adds one `.attestation.p7m` file.
+
+The earlier `.2` cohort remains unsigned for historical rollback. New upgrades
+must use freshly signed immutable versions. No signature validation or package
+security preference is disabled. Unity may show a publisher-origin indicator to
+accounts outside the signing organization; the archives still have valid signatures.
 
 Package signature handling follows the [Unity signing documentation](https://docs.unity.com/en-us/engine/6000.6/manual/packages-list/upm-signature-lp/upm-sign-methods).
+
+[`sign_release.py`](sign_release.py) prepares the three package directories from
+one tested Git commit, updates only version/provenance and sibling pins, then
+uses the official UPM CLI to sign them. Preparation needs no Unity credentials:
+
+```text
+python -B Tools/Packages/registry-preview/sign_release.py --prepare-from-commit <tested-40-character-commit> --version <new-immutable-version> --organization-id <Unity-organization-id> --output <new-prepared-directory>
+```
+
+Transfer the prepared directory and the two maintained Python files
+(`sign_release.py`, `prepare_pob_core.py`) to the publisher. The Worker01 signing
+operator reads `/etc/zgs-ze-upm-preview/signing.env`, a root-owned `0600` file
+containing `UPM_SERVICE_ACCOUNT_KEY_ID` and `UPM_SERVICE_ACCOUNT_KEY_SECRET`.
+The dedicated `ze-upm-package-signer` account has only the organization-level
+**Package Manager Package Signer** role. Credentials never enter archives,
+command arguments, logs or consumer configuration.
+
+Worker01's installed tool is
+`/opt/zgs-ze-upm-preview/signing/current/sign_release.py`, with the pinned
+official CLI at `/opt/zgs-ze-upm-preview/tools/upm/9.36.0/UnityPackageManager`.
+Ordinary package upgrades reuse that installation; changed operator code is
+deployed from a new committed tool release.
+
+```text
+sudo python3 -B sign_release.py --input <prepared-directory>/release-input.json --output <new-signed-directory> --upm <official-UPM-executable> --credentials /etc/zgs-ze-upm-preview/signing.env
+python -B sign_release.py --input <prepared-directory>/release-input.json --output <signed-directory> --verify-only
+```
+
+Keep signing output outside the source directories. Existing output is preserved
+instead of silently repacked. Byte verification checks the exact source and GUID
+files plus the added attestation; Unity's actual `PackageInfo.signature` verdict
+is a separate required check before consumer adoption. Publish the exact signed
+bytes and immutable backup before admitting the new version at the edge.
 
 ## Maintainer deployment
 
@@ -88,6 +125,9 @@ Before retiring an earlier origin, snapshot its exact DNS/vhost/service state an
 private package data, verify restore inputs, drain DNS caches, and prove the new
 route with the old origin stopped. Rollback restores only owned records and
 units from those snapshots. Preserve unrelated routes, certificates and secrets.
+The three services use startup ordering and `Wants` dependencies. A stopped
+registry or origin gate must leave its downstream gate/Tunnel running so that
+recovery returns traffic to Worker01 without restarting dependent services.
 The earlier Shanghai bootstrap files (`preview_registry.py`, `nginx.conf`, and
 the certificate hook) are retained as historical recovery inputs, not the active
 deployment path.

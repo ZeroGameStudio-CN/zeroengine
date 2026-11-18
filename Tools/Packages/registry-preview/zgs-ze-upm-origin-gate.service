@@ -1,7 +1,7 @@
 [Unit]
 Description=ZE package origin read-only secret gate
 After=network.target zgs-ze-upm-preview.service
-Requires=zgs-ze-upm-preview.service
+Wants=zgs-ze-upm-preview.service
 
 [Service]
 Type=simple
