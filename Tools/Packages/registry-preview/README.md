@@ -17,12 +17,13 @@ The public hostname stays the same during fallback and recovery. Metadata keeps
 tarball URLs on that hostname. The edge admits only versions in
 [`release-manifest.mjs`](release-manifest.mjs), verifies source commit, integrity,
 size and SHA-256, and labels package responses `X-ZE-Package-Source: worker01|github`.
-The search index reports `mixed` if its package entries came from both sources.
+Discovery is generated from the admitted catalog without querying every
+package upstream. Discovery responses report `X-ZE-Package-Source: catalog`.
 Network errors, timeouts, unavailable responses and invalid artifacts select the
 backup; origin authorization failures stay closed. Both invalid sources return
 503. New versions become visible only after their backup and manifest are ready.
 
-Anonymous GET/HEAD supports the three listed packages, versioned tarballs, search and
+Anonymous GET/HEAD supports admitted packages, versioned tarballs, search and
 ping. Public writes, account routes and unrelated packages are rejected. The
 origin gate requires a private header supplied by the edge; client credentials
 and cookies are never forwarded. Cloudflare remains a shared entry dependency;
@@ -55,12 +56,14 @@ accounts outside the signing organization; the archives still have valid signatu
 
 Package signature handling follows the [Unity signing documentation](https://docs.unity.com/en-us/engine/6000.6/manual/packages-list/upm-signature-lp/upm-sign-methods).
 
-[`sign_release.py`](sign_release.py) prepares the three package directories from
-one tested Git commit, updates only version/provenance and sibling pins, then
-uses the official UPM CLI to sign them. Preparation needs no Unity credentials:
+[`sign_release.py`](sign_release.py) prepares selected public ZE packages and
+their dependency closure from one tested Git commit already reachable on public
+`main`. It keeps the source package version unless the release explicitly
+selects another. Existing versions can be reused when their tree, dependency
+pins and signer match. Source files and GUIDs are preserved.
 
 ```text
-python -B Tools/Packages/registry-preview/sign_release.py --prepare-from-commit <tested-40-character-commit> --version <new-immutable-version> --organization-id <Unity-organization-id> --output <new-prepared-directory>
+python -B Tools/Packages/registry-preview/sign_release.py --prepare-from-commit <tested-40-character-commit> --package <package-name> --against-catalog Tools/Packages/registry-preview/release-manifest.mjs --organization-id <Unity-organization-id> --output <new-prepared-directory>
 ```
 
 Transfer the prepared directory and the two maintained Python files
@@ -82,11 +85,30 @@ sudo python3 -B sign_release.py --input <prepared-directory>/release-input.json 
 python -B sign_release.py --input <prepared-directory>/release-input.json --output <signed-directory> --verify-only
 ```
 
-Keep signing output outside the source directories. Existing output is preserved
-instead of silently repacked. Byte verification checks the exact source and GUID
-files plus the added attestation; Unity's actual `PackageInfo.signature` verdict
-is a separate required check before consumer adoption. Publish the exact signed
-bytes and immutable backup before admitting the new version at the edge.
+Repeat `--package` to select a cohort. Use `--package <name>=<version>` for a
+reviewed version override. Keep signing output outside the source directories.
+The signed report identifies the exact archive hashes. Use Unity in a
+disposable project to confirm `PackageInfo.signature` is `Valid` for each
+archive. The publisher requires a JSON receipt containing `packages`, with
+`name`, `version`, `sha256` and `signatureStatus` for each archive.
+
+The Worker01 publisher stages those exact archives over loopback and exports
+metadata and hashes. The maintainer side creates the immutable GitHub backup,
+checks each remote asset digest, then writes the candidate admission catalog.
+It can add a new version to a known package without uploading the old
+tarballs again. Older versions retain their original backup locations.
+
+```text
+sudo python3 -B publish_release.py origin --cohort <prepared-directory> <signed-directory> --output <new-export-directory>
+python -B publish_release.py backup --catalog Tools/Packages/registry-preview/release-manifest.mjs --export <worker-export-directory> --unity-trust-receipt <unity-receipt.json> --tag <new-ze-upm-release-tag> --output <new-promotion-directory>
+```
+
+Run the backup step with the existing maintainer GitHub CLI authorization.
+Use the generated `release-manifest.mjs` for the scoped edge deployment after
+the backup and verification receipt read back. Keep the prior Worker deployment
+for rollback. A failed signature, conflicting version or backup upload leaves
+the previous admission catalog active. The consumer's Plastic manifest and
+lock are updated only after registry installation and rollback are verified.
 
 ## Maintainer deployment
 
