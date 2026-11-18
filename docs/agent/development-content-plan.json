@@ -568,20 +568,21 @@
       "availability": "InternalOnly",
       "responsibleChat": "01a1c66f-d77b-7b00-88d4-37f8f3df3b13",
       "chatUrl": "codex://threads/01a1c66f-d77b-7b00-88d4-37f8f3df3b13",
-      "nextAction": "POB 已在 Plastic cs19374 接入三包固定版本并同步 Skill，用户负责打包。下一步恢复 Unity 组织签名鉴权并发布新的不可变签名版本，处理未签名升级的编辑器提示。",
+      "nextAction": "签名 .3/.4 已验证安装、升级、回滚及同址故障回退。将 POB 当前三包 .2 升到已验证的 .4，再同步实际 Skill 库存并精确提交；正式 Player 由用户打包。",
       "entrance": "https://packages-preview.zerogamestudio.com/com.zerogamestudio.zeroengine.console",
       "resourcePath": "Tools/Packages/registry-preview/README.md",
-      "revision": "以 d194ba36 的同一份 Console Core、UI、Quantum 桥接源码产出固定版本。Worker01 和 GitHub 备份按包校验来源、依赖及哈希。主源和断源时均以冷缓存加载三包，Quantum 2.6.7 在隔离 PlayMode 打开、执行一次命令并关闭。POB cs19374 实际读取 Registry 来源，Quantum 默认入口与指令源码哈希保持，2 项定向检查无失败，Skill check 无漂移。",
+      "revision": "Console 三包保持 d194ba36 的运行时与 GUID，.3/.4 新增 ZeroGameStudio 组织签名。Unity 6000.6.9f1 在冷缓存安装、签名升级、回滚和 GitHub 备份加载中均读取 Valid。修复服务硬依赖造成的连带停机；单独故障仓库或入口后，下游进程保持且同址自动切回 Worker01。POB 原接入记录为 cs19374，签名升级尚未提交。",
       "releaseEvidence": "",
-      "candidatePackageVersion": "0.1.0-ze-pob.d194ba36.2",
+      "candidatePackageVersion": "0.1.0-ze-pob.d194ba36.4",
       "verificationEvidence": [
         "D:/CodexArtifacts/ze-upm-https-20261117/verification.json",
         "D:/CodexArtifacts/ze-upm-worker-20261117/verification.json",
         "D:/CodexArtifacts/ze-core-registry-pob-20261117/verification.json",
-        "D:/CodexArtifacts/pob-ze-console-cutover-20261118/verification.json"
+        "D:/CodexArtifacts/pob-ze-console-cutover-20261118/verification.json",
+        "D:/CodexArtifacts/ze-console-signing-20261118/verification.json"
       ],
       "relatedContent": [],
-      "verificationScope": "Unity 6000.6.9f1。覆盖 Core 安装、升级、回滚，主源与备份冷缓存加载，以及 POB 实际加载、默认 Quantum 入口、参数适配、指令目录和 Skill。正式 Player 由用户打包。当前归档未签名，升级时可能提示 Missing Signature；签名试验的服务鉴权失败已保留。"
+      "verificationScope": "签名与新包源仅覆盖 Console Core、UI、Quantum 桥接三个包。保留 Quantum 默认入口和现有指令；本轮没有 Player 构建，也未把其余 ZE Git 包迁移到新源。未关闭 Unity 签名校验或修改个人网络、包源配置。"
     }
   ]
 }

@@ -1,8 +1,7 @@
 [Unit]
 Description=ZE Worker01 independent package origin tunnel
 After=network-online.target zgs-ze-upm-origin-gate.service
-Wants=network-online.target
-Requires=zgs-ze-upm-origin-gate.service
+Wants=network-online.target zgs-ze-upm-origin-gate.service
 
 [Service]
 Type=simple
