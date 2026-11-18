@@ -32,6 +32,23 @@ file carries registry provenance. Teammates receive those project files through
 SCM. They need no personal npm/UPM/Git settings or GitHub access for these package
 downloads. The [minimal project](sample/README.md) shows the Core-only trial.
 
+POB adopted version `0.1.0-ze-pob.d194ba36.2` for all three packages in Plastic
+changeset `19374`. The current Editor reports Registry provenance, retains the
+Quantum default input entry, and passes the parameter-metadata and command-catalog
+checks. Its installed ZE Agent Skill check reports no drift.
+
+## Package signatures
+
+The current Preview archives are unsigned. Unity 6.6 can show **Missing Signature**
+when it adds a package or changes its installed version. Closing the notification
+handles that occurrence. Later unsigned upgrades can show it again. The publisher
+can address the cause by packing new immutable versions with Unity's organization
+signature, using the existing signing account for the studio. The attempted
+organization signing request was rejected for authentication, and the Editor's
+session refresh did not succeed. No signed replacement version was published.
+
+Package signature handling follows the [Unity signing documentation](https://docs.unity.com/en-us/engine/6000.6/manual/packages-list/upm-signature-lp/upm-sign-methods).
+
 ## Maintainer deployment
 
 Worker01 owns the runtime and state. Shanghai is not in the current read path.
