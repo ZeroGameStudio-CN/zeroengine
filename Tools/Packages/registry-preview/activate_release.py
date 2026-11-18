@@ -44,7 +44,7 @@ def selected_packages(previous, candidate):
     return additions
 
 
-def activate(promotion, catalog_path, node, wrangler, expected, resume=None):
+def activate(promotion, catalog_path, node, wrangler, expected, resume=None, unity_probe=None):
     expected = str(uuid.UUID(expected))
     before_catalog = catalog_json(catalog_path)
     next_path = promotion / 'release-manifest.mjs'
@@ -132,6 +132,11 @@ def activate(promotion, catalog_path, node, wrangler, expected, resume=None):
             version = list(product['versions'])[-1]
             item = json.loads(get(f'{PUBLIC}/{name}/{version}', 512 * 1024))
             check_version(name, version, item, product['versions'][version])
+        if unity_probe:
+            from verify_release import verify
+
+            prepared, signed, unity, editor, seconds = unity_probe
+            verify(prepared, signed, stage / 'unity-proof', unity, editor, True, seconds)
     except Exception:
         if current() != active:
             raise RuntimeError('Another Worker version became active during verification') from None
@@ -142,6 +147,8 @@ def activate(promotion, catalog_path, node, wrangler, expected, resume=None):
         raise
     report = {'worker': WORKER, 'previousVersion': expected, 'activeVersion': active,
               'verifiedNewVersions': len(additions), 'retainedPackagesVerified': len(before_catalog['packages'])}
+    if unity_probe:
+        report['unityTrustReceipt'] = str(stage / 'unity-proof/unity-trust-receipt.json')
     dump(stage / 'activation-receipt.json', report)
     return report
 
@@ -154,9 +161,13 @@ def main():
     parser.add_argument('--wrangler', type=Path, required=True)
     parser.add_argument('--expect-version', required=True)
     parser.add_argument('--resume-rolled-back', type=Path, help='Reuse the identical uploaded version after verified rollback')
+    parser.add_argument('--verify-unity', type=Path, nargs=4, metavar=('PREPARED', 'SIGNED', 'UNITY_CLI', 'EDITOR'),
+                        help='Require a cold Unity registry install before keeping the new deployment')
+    parser.add_argument('--unity-seconds', type=int, default=300)
     args = parser.parse_args()
+    probe = (*[path.resolve() for path in args.verify_unity], args.unity_seconds) if args.verify_unity else None
     result = activate(args.promotion.resolve(), args.catalog.resolve(), args.node.resolve(),
-                      args.wrangler.resolve(), args.expect_version, args.resume_rolled_back)
+                      args.wrangler.resolve(), args.expect_version, args.resume_rolled_back, probe)
     print(json.dumps(result))
 
 

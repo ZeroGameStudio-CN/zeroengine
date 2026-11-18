@@ -2,8 +2,9 @@
 
 ZE Registry is the shared ZeroEngine package feed at
 `https://packages-preview.zerogamestudio.com`. The admission manifest lists the
-available Console and Activity versions. Additional ZE packages can use the same
-address after signature and transport verification.
+43 admitted packages, including the three Console packages and the 40 packages
+prepared from POB's tested `d194ba36` source. Packages use the same address for
+installation, upgrade and rollback.
 
 ## Read path
 
@@ -42,6 +43,13 @@ and passes the parameter-metadata and command-catalog checks. Its installed ZE
 Agent Skill check covers 46 packages with no drift; only the three Console
 inventory entries changed. Player builds remain with the project owner.
 
+The Activity delivery trial installed `1.1.0`, upgraded to
+`1.1.1-ze-pilot.1` and rolled back in a disposable Unity project. The public
+address returned the same signed archives from GitHub during a controlled
+Worker01 origin outage. The other 39 packages passed a combined cold-cache
+Unity installation from the public feed, with all 39 organization signatures
+valid. The POB consumer migration is tracked separately.
+
 ## Package signatures
 
 Versions `0.1.0-ze-pob.d194ba36.3` and `.4` contain Unity organization signatures
@@ -66,9 +74,8 @@ pins and signer match. Source files and GUIDs are preserved.
 python -B Tools/Packages/registry-preview/sign_release.py --prepare-from-commit <tested-40-character-commit> --package <package-name> --against-catalog Tools/Packages/registry-preview/release-manifest.mjs --organization-id <Unity-organization-id> --output <new-prepared-directory>
 ```
 
-Transfer the prepared directory and the two maintained Python files
-(`sign_release.py`, `prepare_pob_core.py`) to the publisher. The Worker01 signing
-operator reads `/etc/zgs-ze-upm-preview/signing.env`, a root-owned `0600` file
+Transfer the prepared directory to the publisher. The Worker01 signing tool
+reads `/etc/zgs-ze-upm-preview/signing.env`, a root-owned `0600` file
 containing `UPM_SERVICE_ACCOUNT_KEY_ID` and `UPM_SERVICE_ACCOUNT_KEY_SECRET`.
 The dedicated `ze-upm-package-signer` account has only the organization-level
 **Package Manager Package Signer** role. Credentials never enter archives,
@@ -114,18 +121,20 @@ python -B publish_release.py backup --catalog Tools/Packages/registry-preview/re
 Run the backup step with the existing maintainer GitHub CLI authorization. Use
 [`activate_release.py`](activate_release.py) with the current Worker version ID
 from `wrangler deployments status`. It uploads a version with the existing
-bindings, admits the verified catalog and checks the new archive URLs. It
-restores the previous Worker version if those checks fail. A failed signature,
-conflicting version or backup upload leaves the previous admission active.
+bindings, admits the verified catalog and checks the new archive URLs. Provide
+`--verify-unity` to include a fresh Unity installation and signature check in
+the same rollback guard. It restores the previous Worker version if either
+check fails. A failed signature, conflicting version or backup upload during
+preparation leaves the previous admission active.
 
 ```text
-python -B activate_release.py --promotion <promotion-directory> --catalog release-manifest.mjs --node <node-executable> --wrangler <wrangler-cli-script> --expect-version <current-Worker-version-id>
+python -B activate_release.py --promotion <promotion-directory> --catalog release-manifest.mjs --node <node-executable> --wrangler <wrangler-cli-script> --expect-version <current-Worker-version-id> --verify-unity <prepared-directory> <signed-directory> <unity-cli> <editor-executable>
 ```
 
-Save the newly verified catalog in source control after activation, and use
-`verify_release.py --public` for a fresh registry installation. Migrate a
-consumer's Plastic manifest and lock together after the required install,
-upgrade and rollback checks.
+Save the newly verified catalog in source control after activation.
+`verify_release.py --public` can also recheck an active cohort independently.
+Migrate a consumer's Plastic manifest and lock together after the required
+install, upgrade and rollback checks.
 
 ## Maintainer deployment
 
