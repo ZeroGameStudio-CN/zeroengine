@@ -275,7 +275,9 @@ Shader "Hidden/ZeroEngine/SpriteRimLighting"
             float3 fieldHue = light.rgb / max(fieldPeak, .000001);
             float3 reflectedHue = fieldHue * lerp(fieldHue, hue, .2);
             float responseWeight = saturate(light.a) * meta.x;
-            float reflection = .11 * smoothstep(.852, .985, fieldPeak) * responseWeight;
+            // A quadratic rise gives ordinary light a visible response and keeps
+            // reflections faint as the masked field approaches zero.
+            float reflection = .11 * fieldPeak * fieldPeak * responseWeight;
             float3 shadowGain = paintedGain + reflectedHue * reflection;
             float profileCeiling = limitAddedHdr ? saturate(meta.y) : meta.y;
             if (gammaBlend) profileCeiling = SRGBToLinear(profileCeiling.xxx).x;

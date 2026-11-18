@@ -52,9 +52,10 @@ contour RGB before Color Dodge, preserving weak colored detail below saturation;
 native 3D selection still controls source eligibility and contour direction.
 These masks never replace the shaded body. The narrow inward wrap fades away within two art
 cells. Its strength is 0.08 in the shared default; the deep interior is unchanged.
-Strong fields on dark paint transition to a finite Color Dodge response with
-a soft ceiling based on the shaded material. A small reflected contribution
-fades in with the masked field, preserving its hue on black art near saturation.
+Dark paint uses a finite Color Dodge response with a soft ceiling based on the
+shaded material. A small reflected contribution rises quadratically with the
+masked field, giving ordinary lamps a colored edge on black art and fading to
+zero as the light recedes.
 Exposure scales the added edge gain. Existing HDR/emission is preserved and
 added LDR light is capped at one.
 Marked native lamps use the reference's world-XY field falloff for this response;

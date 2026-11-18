@@ -1114,20 +1114,52 @@ namespace ZeroEngine.Render.Tests.Runtime
                 profile.WeakDistance=profile.StrongDistance=1;profile.StrongScale=0;
                 profile.InnerWrapStrength=0;profile.Strength=1;profile.MinimumExposure=1;profile.MaximumLight=1;
                 material.SetVector("_BaseColor",new Vector4(0,0,0,1));
-                light.Shape=LightType.Point;light.LightColor=Color.white;light.Intensity=1;
+                light.Shape=LightType.Point;
                 light.transform.position=new Vector3(-.5f,0,0);
-                lighting.UpdateLighting();var single=Capture();
-                Assert.That(single.GetPixel(13,28).maxColorComponent,Is.LessThan(.0001f),
-                    "Below reference-field saturation, black art must not acquire an artificial visibility floor.");
+
+                light.LightColor = new Color(.08f, .66f, 1, 1);
+                light.Intensity = 0;
+                lighting.UpdateLighting();
+                var blackUnlit = Capture();
+                light.Intensity = .6f;
+                lighting.UpdateLighting();
+                var weakBlue = Capture();
+                light.Intensity = .8f;
+                lighting.UpdateLighting();
+                var risingBlue = Capture();
+                light.Intensity = 1;
+                lighting.UpdateLighting();
+                var ordinaryBlue = Capture();
+                var blueContour = ordinaryBlue.GetPixel(13, 28);
+                Assert.That(blackUnlit.GetPixel(13, 28).maxColorComponent, Is.LessThan(.0001f));
+                Assert.That(weakBlue.GetPixel(13, 28).b, Is.LessThan(.002f));
+                Assert.That(risingBlue.GetPixel(13, 28).b, Is.InRange(.002f, blueContour.b * .6f),
+                    "Blue reflection should become visible before ordinary intensity and rise with the light.");
+                Assert.That(blueContour.b, Is.InRange(.015f, .07f),
+                    "Black cloth must show a readable edge under a single ordinary blue lamp.");
+                Assert.That(blueContour.r, Is.LessThan(blueContour.b * .1f));
+                Assert.That(ordinaryBlue.GetPixel(29, 28).maxColorComponent, Is.LessThan(.0001f),
+                    "Light on the silhouette must leave the black body interior dark.");
+
+                light.LightColor = new Color(1, .3f, .1f, 1);
+                lighting.UpdateLighting();
+                var amberContour = Capture().GetPixel(13, 28);
+                Assert.That(amberContour.r, Is.InRange(.015f, .07f),
+                    "A warm lamp at the same ordinary intensity must also light the dark edge.");
+                Assert.That(amberContour.b, Is.LessThan(amberContour.r * .1f));
+                light.LightColor = Color.white;
+                lighting.UpdateLighting();
+                var single = Capture();
 
                 secondHost=new GameObject("Reference-field opposing light");
                 SceneManager.MoveGameObjectToScene(secondHost,actor.gameObject.scene);
                 var second=secondHost.AddComponent<SpriteRimLight>();second.Radius=light.Radius;
                 second.LightColor=Color.white;second.Intensity=1;secondHost.transform.position=new Vector3(.5f,0,0);
                 lighting.Configure(new[]{actor},new[]{light,second},profile);lighting.UpdateLighting();var black=Capture();
-                Assert.That(black.GetPixel(13,28).b,Is.LessThan(.004f),
-                    "Moderate overlapping fields must leave genuinely black art dark.");
-                Assert.That(black.GetPixel(42,28).b,Is.LessThan(.004f));
+                float ordinaryKey = black.GetPixel(13, 28).b;
+                Assert.That(ordinaryKey, Is.InRange(single.GetPixel(13, 28).b + .005f, .11f),
+                    "Opposed ordinary lights must preserve a readable key edge with bounded brightness.");
+                Assert.That(black.GetPixel(42, 28).b, Is.InRange(.008f, ordinaryKey * .7f));
                 light.LightColor=second.LightColor=new Color(.02f,.3f,1,1);
                 light.Intensity=second.Intensity=2;
                 lighting.UpdateLighting();var mixedBlack=Capture();var mixedEdge=mixedBlack.GetPixel(13,28);
@@ -1211,6 +1243,7 @@ namespace ZeroEngine.Render.Tests.Runtime
                 float blackFill=intense.GetPixel(42,28).b;
                 Assert.That(blackKey,Is.InRange(.07f,.15f),
                     "Strong white light must produce a readable dark contour without flattening it into a white rim.");
+                Assert.That(blackKey, Is.GreaterThan(ordinaryKey));
                 Assert.That(blackFill,Is.InRange(.035f,blackKey*.7f),"Keep the strong-light fill below the key.");
                 body=intense.GetPixel(29,28);
                 Assert.That(Mathf.Max(body.r,Mathf.Max(body.g,body.b)),Is.LessThan(.0001f));
@@ -1244,8 +1277,12 @@ namespace ZeroEngine.Render.Tests.Runtime
                 material.SetVector("_BaseColor",new Vector4(.08f,.1f,.12f,1));
                 profile.Strength=0;lighting.UpdateLighting();var paleBase=Capture();
                 profile.Strength=1;lighting.UpdateLighting();var pale=Capture();
-                Assert.That(pale.GetPixel(13,28).b-paleBase.GetPixel(13,28).b,Is.GreaterThan(darkGain*4),
-                    "Pale and dark artwork must not collapse into a uniform edge brightness.");
+                float paleEdge = pale.GetPixel(13, 28).b;
+                float paleGain = paleEdge - paleBase.GetPixel(13, 28).b;
+                Assert.That(paleGain, Is.GreaterThan(darkGain),
+                    "A pale material should retain a stronger rim response under the same weak lamp.");
+                Assert.That(paleEdge, Is.GreaterThan(dark.GetPixel(13, 28).b * 4),
+                    "The shaded edge must retain clear brightness separation between pale and dark artwork.");
             }
             finally
             {
