@@ -15,11 +15,14 @@ SDK; this package contains neither its code nor its assets. A project supplies
 its QC prefab and an explicitly verified compatibility profile. Unknown profiles
 fall back to the independent native frontend.
 
-The bridge uses public response/lifecycle APIs and owns a cloned QC instance.
-Raw input goes to the same ZE session; QC does not parse or execute that input.
-SDK 2.6.7's response route has a native proof, including quoted Chinese input,
-rearming and one native execution per submission. Platform support is bounded
-below; project migration and full experience acceptance remain separate.
+Projects with an established Quantum command entry can keep using the installed
+SDK's command table, parser, suggestions and executor directly. Use this optional
+bridge to display ZE-registered commands in a Quantum view. It owns a cloned QC
+instance through public response and lifecycle APIs and passes raw input to the
+ZE session so both ZE frontends share access policy and history.
+
+SDK 2.6.7's response route has a native proof with quoted Chinese input, rearming
+and one native execution per submission. Platform support is bounded below.
 
 ## Explicit setup
 

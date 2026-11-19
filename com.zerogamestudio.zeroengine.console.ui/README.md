@@ -7,9 +7,10 @@ and an input-isolation lease; the view restores its own cursor/selection state.
 
 New Inspector hosts default to **On Demand** and new NativeConsole components
 default to **Release View On Close**. Opening creates the session and panel.
-Candidate rows are created as needed and reused by completion and numbered choices.
-Command-name prefixes are handled on the next update. Argument completion coalesces
-quick edits before calling providers. Closing returns the Canvas, rendered rows
+Candidate rows, log search and hover hints are created on use. The candidate
+list shows navigation when it has more than one choice. Command-name prefixes
+are handled on the next update. Argument completion coalesces quick edits before
+calling providers. Closing returns the Canvas, rendered rows
 and any console-owned dynamic font to Unity. The session, command leases,
 history, draft, caret, and log filter remain available on reopen. Turn off
 **Release View On Close** when frequent reopening matters more than keeping
