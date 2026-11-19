@@ -2,6 +2,12 @@
 
 ZeroEngine TCE provides a generic Trigger -> Condition -> Effect runtime for gameplay rules. It is intended for abilities, equipment effects, card effects, passives, relics, and other rules that can be expressed as project-owned triggers, conditions, and effects.
 
+## Installation lifetime
+
+Each installation owns its components, trigger subscriptions, and cleanup. A component callback can synchronously uninstall or replace its graph. The retired dispatch stops at that callback boundary, and later triggers belong to their current installation.
+
+The latest installation request takes ownership during initialization or teardown. Cleanup detaches the original triggers and attempts every component in reverse order. If initialization fails, cleanup releases the partially installed graph.
+
 ## Boundary
 
 Runtime code in this package must not reference:
@@ -22,7 +28,7 @@ This package is synchronous. Delayed trigger scheduling belongs in a project sch
 
 Use the package through Unity Package Manager as a package under:
 
-Version 0.2.1 also requires a direct Git pin for `com.zerogamestudio.zeroengine.editor-ui@1.3.0` at the same ZeroEngine commit. It localizes Dashboard labels, tooltips, and the write confirmation to Simplified Chinese without changing menu paths. Unity 2022.3 does not resolve same-repository sibling packages transitively.
+Version 0.2.1 also requires a direct Git pin for `com.zerogamestudio.zeroengine.editor-ui@1.3.0` at the same ZeroEngine commit. It localizes Dashboard labels, tooltips, and the write confirmation to Simplified Chinese without changing menu paths. Git UPM dependencies do not resolve same-repository sibling packages transitively.
 
 ```text
 Packages/com.zerogamestudio.zeroengine.tce
@@ -63,6 +69,17 @@ This verifies the adapter's actor liveness, controllable clock behavior, runtime
 Use `TceGraphValidator.Validate(graph)` before saving or executing authored content. The validator reports structured `TceValidationIssue` values for missing triggers, missing effects, null component data, runtime type mismatches, invalid enum values, and component-specific field errors.
 
 ## Generic Components
+
+### Host-owned execution state (0.3.0)
+
+`ExecutionCountConditionData.StateKey` optionally binds the accepted count to an
+`ITceStateSource` on the install source or actor. Its `ITceStateStore` exposes
+runtime numbers/text only. The host owns stable identities, reset scope, capture,
+restore and storage; TCE never calls a save API or depends on a Buff implementation.
+An empty key keeps the existing installation-local counter. A nonempty key without
+a state source fails explicitly. Accepted executions consume after all conditions
+pass and before effects, including synchronous reentry; reinstalling does not reset
+host-owned state. Future host adapters may back that contract with Buff state.
 
 - `OnInstallTrigger`
 - `NumericSourceCondition`
@@ -116,3 +133,17 @@ validation, or editor tooling.
 ## ZeroEngine Dashboard
 
 The optional Dashboard discovers the graph editor and component-catalog generator through the schema v2 descriptor and invokes this package's typed provider. This package does not depend on Dashboard.
+
+## Explicit execution contexts
+
+`TceInstallationContext`, `TceEventContext` and `TceExecutionContext` separate an installed binding, captured event facts and one execution. Pass execution contexts explicitly across conditions, effects, async continuations and child rules. Each execution owns its transient values and commit notifications; completing or canceling a frame prevents new contributions. Events retain event/root/cause IDs, separate subject/target/instigator/emitter references and captured position/direction.
+
+Admission costs use `TryReserveResource(owner, key, amount, available, consume)`: reservation never spends the resource, and requests for the same captured owner/key share a total. After every condition accepts, call `TryCommit(commitState)`; it rechecks all totals before any payment, applies the adapter's non-rejecting synchronous payments and ordinary state commits, then publishes deferred callbacks. A refused admission completes its context without committing. Availability callbacks must be pure, and payment adapters must defer lifecycle/event callbacks through the supplied sink so one payment cannot invalidate a later payment halfway through the batch. `Commit()` remains the throwing convenience for callers that do not expect resource refusal. Buff definitions, actual layer mutations and save policy remain host responsibilities.
+
+Adapters implement `ITceObjectLifetime`. `TceObjectRef` compares identity, activation and world before resolving a native object. Identity validity and active/living policy are separate: the effect decides whether an inactive or dying object supports its operation. Never reconstruct a retained reference from a pooled object's new activation.
+
+`TceAbilityGrantRegistry` shares an installed child among source owners and releases only the retiring source. It has no duration or charge counter; the host Buff/state system owns those. `TceEffectScope` owns replaceable per-recipient contributions. `TceContributionBatch` selects the strongest contribution in each group and closes before dispatch. `TceAreaGeometry` supplies circle/box segment clipping without a project physics dependency. `ITceVisualTargetReceiver` is an optional explicit target injection point for feedback adapters; it does not spawn or own visuals.
+
+POB consumes these contracts from its existing AbilityHandler and supplies Core/projectile identity, Buff, motion, damage and resource adapters. No POB types or save backend are introduced into this package. The generic graph runtime and its host-owned `ITceStateStore` remain independently usable.
+
+Grant installation reserves its receiver/definition/slot before invoking host code. Reentrant installation of that same key is refused; revocation, receiver recycling or clearing during installation releases the returned child instead of retaining an orphan. Clearing rejects grants from retiring children and attempts every disposal before reporting aggregated errors. Host adapters bind receiver-end events (including object-pool return) and keep the existing ability installer/uninstaller; the registry adds no projectile implementation, MonoBehaviour or duration timer.

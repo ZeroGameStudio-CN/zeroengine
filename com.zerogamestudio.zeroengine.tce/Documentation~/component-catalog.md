@@ -44,6 +44,7 @@
 - Description: Use this condition for generic one-shot or limited-use rules. The count increments only after all conditions have passed.
 - Fields:
   - `MaxAcceptedExecutions` (`System.Int32`, default `1`): Maximum number of accepted executions allowed.
+  - `StateKey` (`System.String`, default `""`): Optional stable runtime-state key. Empty retains an installation-local count; the host owns lifetime and saving.
 
 ### Flag
 

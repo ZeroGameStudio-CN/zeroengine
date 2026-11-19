@@ -6,15 +6,23 @@ namespace ZeroEngine.TCE
     public sealed class ExecutionCountCondition : TceCondition<ExecutionCountConditionData>, ITceExecutionAcceptedObserver
     {
         private int acceptedExecutions;
+        private ITceStateStore state;
+
+        public override void OnBeforeInstall()
+        {
+            if (string.IsNullOrEmpty(Data.StateKey)) return;
+            state = Context.State ?? throw new InvalidOperationException("An execution-count state key requires an ITceStateSource.");
+        }
 
         public override bool Check(ITceActor target, object source)
         {
-            return acceptedExecutions < Data.MaxAcceptedExecutions;
+            return (state == null ? acceptedExecutions : state.ReadNumber(Data.StateKey)) < Data.MaxAcceptedExecutions;
         }
 
         public void OnExecutionAccepted(ITceActor target, object source)
         {
-            acceptedExecutions++;
+            if (state == null) acceptedExecutions++;
+            else state.WriteNumber(Data.StateKey, Math.Min(Data.MaxAcceptedExecutions, state.ReadNumber(Data.StateKey) + 1));
         }
     }
 
@@ -24,6 +32,9 @@ namespace ZeroEngine.TCE
     {
         [TceFieldDoc("Maximum number of accepted executions allowed.")]
         public int MaxAcceptedExecutions = 1;
+
+        [TceFieldDoc("Optional stable runtime-state key. Empty retains an installation-local count; the host owns lifetime and saving.")]
+        public string StateKey = string.Empty;
 
         public void Validate(TceComponentValidationContext context, List<TceValidationIssue> issues)
         {

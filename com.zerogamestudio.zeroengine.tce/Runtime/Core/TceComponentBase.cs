@@ -18,6 +18,7 @@ namespace ZeroEngine.TCE
         public ITceActor Owner { get; }
         public object InstallSource { get; }
         public ITceClock Clock { get; }
+        public ITceStateStore State => (InstallSource as ITceStateSource)?.State ?? (Owner as ITceStateSource)?.State;
     }
 
     public interface ITceComponent
