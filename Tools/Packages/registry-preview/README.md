@@ -39,12 +39,19 @@ packages without personal npm/UPM/Git settings or GitHub access. The
 POB first adopted signed version `0.1.0-ze-pob.d194ba36.4` for the three Console
 packages in Plastic changeset `19381`. It then migrated Activity in `19413`,
 10 independent packages in `19414`, and the 29 linked packages together in
-`19415`. All 43 public ZE packages now resolve from ZE Registry. Each changeset
+`19415`. Those changesets resolved all 43 public ZE packages from ZE Registry. Each changeset
 includes the matching package lock and generated ZE Agent inventory. The final
 inventory covers 46 packages. The warm POB Editor verified the migrated
 versions and signatures, retained the Quantum default entry, and passed both
 command-catalog and parameter-metadata compatibility tests. The project owner
 handles the Player build using the existing route.
+
+POB moved project restore to signed tarballs in Plastic changeset `19417`.
+Projects that use this delivery route track exact archives and relative `file:`
+references. POB records their versions, provenance and SHA-256 under
+`Packages/ZEArchives` and verifies the local files in Unity. The Registry supplies
+signed versions to the maintainer before consumer adoption. Teammates receive
+the POB archives through their ordinary Plastic update.
 
 The Activity delivery trial installed `1.1.0`, upgraded to
 `1.1.1-ze-pilot.1` and rolled back in a disposable Unity project. The public
