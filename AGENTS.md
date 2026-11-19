@@ -3,8 +3,9 @@
 ## Project Role
 
 This repository is the ZeroEngine development workspace. Unity projects consume
-verified packages from ZE Registry or use pinned Unity Package Manager Git
-dependencies that point at `https://github.com/ZeroGameStudio-CN/zeroengine.git`.
+verified packages from ZE Registry, signed release archives tracked in SCM, or
+pinned Unity Package Manager Git dependencies from
+`https://github.com/ZeroGameStudio-CN/zeroengine.git`.
 
 Development-content records and their format follow
 [the project adapter](docs/agent/project-adapter.md).
@@ -38,8 +39,9 @@ current when repository architecture or source entrances change.
   `https://github.com/ZeroGameStudio-CN/zeroengine.git?path=<package>#<tested-commit>`.
 - Pin shared Git dependencies to tested commits. Keep the project on a
   verified compatible package cohort when moving its pins or switching sources.
-- Use `file:` dependencies for temporary local debugging. Restore the
-  consumer's verified Registry or Git pins before handoff.
+- For a project that distributes signed archives, follow its archive inventory
+  and exact relative `file:` pins. Restore the project's verified delivery route
+  after temporary local debugging.
 - Include required `com.zerogamestudio.*` sibling dependencies from the same
   verified cohort.
 
