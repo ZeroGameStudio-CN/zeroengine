@@ -108,17 +108,7 @@ namespace ZeroEngine.Console.UI
             scrollbar.direction = Scrollbar.Direction.BottomToTop; scrollbar.navigation = new Navigation { mode = Navigation.Mode.None };
             scroll.verticalScrollbar = scrollbar; scroll.verticalScrollbarVisibility = ScrollRect.ScrollbarVisibility.AutoHide;
 
-            searchRow = Rect("LogSearchRow", panel);
-            Stretch(searchRow, new Vector2(0, 1), Vector2.one, new Vector2(12, -118), new Vector2(-12, -86));
-            logSearch = MakeInput(searchRow, "LogSearch", "查找日志…", 13, 256);
-            Stretch(logSearch.GetComponent<RectTransform>(), Vector2.zero, Vector2.one, Vector2.zero, new Vector2(-38, 0));
-            logSearch.onValueChanged.AddListener(SetOutputQuery);
-            clearSearchButton = MakeIconButton(searchRow, "清除搜索", ConsoleGlyph.Close, "清除搜索条件", Vector2.one, new Vector2(-32, -32), Vector2.zero,
-                () => { logSearch.text = string.Empty; logSearch.Select(); logSearch.ActivateInputField(); });
-            clearSearchButton.interactable = false;
-            logSearch.SetTextWithoutNotify(outputQuery);
-            SetOutputQuery(outputQuery);
-            ApplyLogSearchVisibility(searchVisible);
+            if (searchVisible) ApplyLogSearchVisibility(true);
 
             var prompt = Chrome("Prompt", panel, ">", 18); prompt.color = AccentColor;
             Stretch(prompt.rectTransform, Vector2.zero, Vector2.zero, new Vector2(12, 36), new Vector2(30, 74));
@@ -150,18 +140,21 @@ namespace ZeroEngine.Console.UI
 
             completions = Rect("Completions", panel); Stretch(completions, Vector2.zero, new Vector2(1, 0), new Vector2(12, 90), new Vector2(-12, 330));
             Surface(completions, new Color(.065f, .078f, .105f, .96f), 6);
-            completionCaption = Chrome("CompletionCaption", completions, "");
-            Stretch(completionCaption.rectTransform, new Vector2(0, 1), Vector2.one, new Vector2(10, -30), new Vector2(-144, -2));
-            MakeIconButton(completions, "上一项", ConsoleGlyph.Up, "上一条补全", Vector2.one, new Vector2(-78, -28), new Vector2(-44, -4), () => NavigateCompletion(-1));
-            MakeIconButton(completions, "下一项", ConsoleGlyph.Down, "下一条补全", Vector2.one, new Vector2(-40, -28), new Vector2(-6, -4), () => NavigateCompletion(1));
-            completionList = Rect("Choices", completions); Stretch(completionList, Vector2.zero, Vector2.one, new Vector2(6, 4), new Vector2(-6, -32));
+            completionList = Rect("Choices", completions); Stretch(completionList, Vector2.zero, Vector2.one, new Vector2(6, 4), new Vector2(-6, -4));
             var completionLayout = completionList.gameObject.AddComponent<VerticalLayoutGroup>(); completionLayout.childControlHeight = completionLayout.childControlWidth = true; completionLayout.childForceExpandHeight = false;
             completions.gameObject.SetActive(false);
-            actionHint = Rect("ActionHint", panel); actionHint.anchorMin = actionHint.anchorMax = actionHint.pivot = Vector2.zero;
-            Surface(actionHint, new Color(.13f, .145f, .18f, .97f), 5).raycastTarget = false;
-            actionHintLabel = Chrome("HintText", actionHint, "", 12);
-            Stretch(actionHintLabel.rectTransform, Vector2.zero, Vector2.one, new Vector2(10, 0), new Vector2(-10, 0));
-            actionHint.gameObject.SetActive(false);
+        }
+
+        private void EnsureCompletionNavigation()
+        {
+            if (completionCaption) return;
+            completionCaption = Chrome("CompletionCaption", completions, "");
+            var header = completionCaption.rectTransform;
+            Stretch(header, new Vector2(0, 1), Vector2.one, new Vector2(10, -30), new Vector2(-6, -2));
+            MakeIconButton(header, "上一项", ConsoleGlyph.Up, "上一条补全", Vector2.one,
+                new Vector2(-72, -26), new Vector2(-38, -2), () => NavigateCompletion(-1));
+            MakeIconButton(header, "下一项", ConsoleGlyph.Down, "下一条补全", Vector2.one,
+                new Vector2(-34, -26), new Vector2(0, -2), () => NavigateCompletion(1));
         }
 
         private void EnsureCompletionRows(int count)
@@ -254,6 +247,14 @@ namespace ZeroEngine.Console.UI
             if (completions) completions.offsetMin = new Vector2(12, 90 + HintHeight);
         }
 
+        private void ShowCommandHint(ConsoleCommandHint hint)
+        {
+            bool wasVisible = commandHint.IsVisible;
+            if (hint == null && !wasVisible) return;
+            commandHint.Show(hint);
+            if (wasVisible != commandHint.IsVisible) UpdateHintLayout();
+        }
+
         private void RefreshPrompt(ConsolePrompt request)
         {
             if (ReferenceEquals(shownPrompt, request)) return;
@@ -339,7 +340,16 @@ namespace ZeroEngine.Console.UI
 
         private void ShowActionHint(RectTransform target, string message)
         {
-            if (!IsOpen || !actionHint || string.IsNullOrEmpty(message)) return;
+            if (!IsOpen || string.IsNullOrEmpty(message)) return;
+            if (!actionHint)
+            {
+                actionHint = Rect("ActionHint", panel);
+                actionHint.gameObject.SetActive(false);
+                actionHint.anchorMin = actionHint.anchorMax = actionHint.pivot = Vector2.zero;
+                Surface(actionHint, new Color(.13f, .145f, .18f, .97f), 5).raycastTarget = false;
+                actionHintLabel = Chrome("HintText", actionHint, "", 12);
+                Stretch(actionHintLabel.rectTransform, Vector2.zero, Vector2.one, new Vector2(10, 0), new Vector2(-10, 0));
+            }
             actionHintTarget = target; actionHintLabel.text = message;
             float width = Mathf.Min(actionHintLabel.preferredWidth + 20, Mathf.Max(1, panel.rect.width - 16));
             actionHint.sizeDelta = new Vector2(width, 30);
@@ -400,7 +410,20 @@ namespace ZeroEngine.Console.UI
         private void ApplyLogSearchVisibility(bool visible)
         {
             searchVisible = visible;
-            searchRow.gameObject.SetActive(visible);
+            if (visible && !searchRow)
+            {
+                searchRow = Rect("LogSearchRow", panel);
+                searchRow.gameObject.SetActive(false);
+                Stretch(searchRow, new Vector2(0, 1), Vector2.one, new Vector2(12, -118), new Vector2(-12, -86));
+                logSearch = MakeInput(searchRow, "LogSearch", "查找日志…", 13, 256);
+                Stretch(logSearch.GetComponent<RectTransform>(), Vector2.zero, Vector2.one, Vector2.zero, new Vector2(-38, 0));
+                logSearch.onValueChanged.AddListener(SetOutputQuery);
+                clearSearchButton = MakeIconButton(searchRow, "清除搜索", ConsoleGlyph.Close, "清除搜索条件", Vector2.one,
+                    new Vector2(-32, -32), Vector2.zero, () => { logSearch.text = string.Empty; logSearch.Select(); logSearch.ActivateInputField(); });
+                logSearch.SetTextWithoutNotify(outputQuery);
+                SetOutputQuery(outputQuery);
+            }
+            if (searchRow) searchRow.gameObject.SetActive(visible);
             searchButton.targetGraphic.color = visible ? SelectedColor : SurfaceColor;
             scroll.GetComponent<RectTransform>().offsetMax = new Vector2(-12, visible ? -126 : -86);
         }

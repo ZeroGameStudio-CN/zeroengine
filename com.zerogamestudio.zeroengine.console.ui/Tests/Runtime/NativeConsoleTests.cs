@@ -315,6 +315,13 @@ namespace ZeroEngine.Console.UI.Tests
                 yield return new WaitForSecondsRealtime(.1f);
                 Assert.That(suggestions.activeSelf, Is.False);
                 Assert.That(rows.childCount, Is.Zero);
+                view.InputField.text = "ze-hel";
+                view.InputField.caretPosition = 6;
+                double singleDeadline = Time.realtimeSinceStartupAsDouble + 1;
+                while (!suggestions.activeSelf && Time.realtimeSinceStartupAsDouble < singleDeadline) yield return null;
+                Assert.That(suggestions.activeSelf, Is.True);
+                Assert.That(rows.childCount, Is.EqualTo(1));
+                Assert.That(suggestions.transform.Find("CompletionCaption"), Is.Null);
                 view.InputField.text = "ze-";
                 view.InputField.caretPosition = 3;
                 double deadline = Time.realtimeSinceStartupAsDouble + 1;
@@ -736,13 +743,13 @@ namespace ZeroEngine.Console.UI.Tests
                 var panel = (RectTransform)view.GetComponentInChildren<Canvas>().transform.Find("Panel");
                 Assert.That(panel.Find("Title").GetComponent<UnityEngine.UI.Text>().text, Is.EqualTo("ZE Console"));
                 Assert.That(panel.Find("Backend"), Is.Null);
-                var hint = (RectTransform)panel.Find("ActionHint");
+                Assert.That(panel.Find("ActionHint"), Is.Null);
                 var pointer = new UnityEngine.EventSystems.PointerEventData(events);
-                Assert.That(hint.gameObject.activeSelf, Is.False);
                 foreach (string name in new[] { "清空", "复制", "字号减小", "字号增大", "跟随", "运行", "取消", "关闭" })
                     Assert.That(Button(view, name).GetComponentsInChildren<UnityEngine.UI.Text>(true), Is.Empty, name);
                 var copy = Button(view, "复制");
                 UnityEngine.EventSystems.ExecuteEvents.Execute(copy.gameObject, pointer, UnityEngine.EventSystems.ExecuteEvents.pointerEnterHandler);
+                var hint = (RectTransform)panel.Find("ActionHint");
                 Assert.That(hint.gameObject.activeSelf, Is.True);
                 Assert.That(hint.GetComponentInChildren<UnityEngine.UI.Text>().text, Is.EqualTo("复制全部日志"));
                 Assert.That(events.currentSelectedGameObject, Is.SameAs(selected));
@@ -788,6 +795,7 @@ namespace ZeroEngine.Console.UI.Tests
                 view.Open();
                 yield return null;
                 yield return null;
+                Assert.That(view.GetComponentsInChildren<UnityEngine.UI.InputField>(true).Any(field => field.name == "LogSearch"), Is.False);
                 view.InputField.text = "search-test";
                 view.InputField.caretPosition = view.InputField.text.Length;
                 Button(view, "搜索日志").onClick.Invoke();

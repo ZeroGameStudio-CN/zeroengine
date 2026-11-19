@@ -459,9 +459,17 @@ namespace ZeroEngine.Console
                 var offered = Registry.HasOverloads ? new HashSet<string>(StringComparer.OrdinalIgnoreCase) : null;
                 foreach (ConsoleEntry commandEntry in Registry.Snapshot())
                 {
-                    if (!commandEntry.IsActive || !policy.Check(commandEntry.Binding.Command, caller).IsSuccess) continue;
+                    bool visible = false;
                     foreach (ConsoleCompletionItem candidate in commandEntry.NameCompletions)
-                        if (candidate.Value.IndexOf(prefix, StringComparison.OrdinalIgnoreCase) >= 0 && (offered == null || offered.Add(candidate.Value))) candidates.Add(candidate);
+                    {
+                        if (candidate.Value.IndexOf(prefix, StringComparison.OrdinalIgnoreCase) < 0) continue;
+                        if (!visible)
+                        {
+                            if (!commandEntry.IsActive || !policy.Check(commandEntry.Binding.Command, caller).IsSuccess) break;
+                            visible = true;
+                        }
+                        if (offered == null || offered.Add(candidate.Value)) candidates.Add(candidate);
+                    }
                 }
             }
             else if (resolved != null)

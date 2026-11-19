@@ -464,3 +464,29 @@ their debounce interval. The native panel builds inactive and creates
 completion rows as needed. The isolated package suite passed 159 EditMode and
 60 PlayMode cases. The test reports and raw measurements are recorded at
 `D:/CodexArtifacts/ze-console-editor-parity-20261119`.
+
+## Warm Editor paths, 2026-11-19
+
+The follow-up repeated the same-scene CLI PlayMode comparison with 161 matching
+command names. Each run alternated 16 samples per panel and timed command
+registration, activation through the first Canvas update, completion acceptance,
+and execution. Quantum initialized its command catalog and prefab before the
+activation timer. ZE used an on-demand host with the default OS font and returned
+the view on close. The borrowed built-in Unity font control isolated the font
+contribution.
+
+| Median | ZE baseline | ZE after tuning, two runs | Quantum, same two runs |
+| --- | ---: | ---: | ---: |
+| First activation | 11.33 ms | 5.03–5.33 ms | 0.78–0.82 ms |
+| Prefix, completion, and one execution | 1.38 ms | 1.12–1.20 ms | 0.58–0.60 ms |
+| Execution once the input is ready | 0.044 ms | 0.043–0.048 ms | 0.049–0.052 ms |
+| Retained panel hierarchy after close | 15.9 KiB | 8.8 KiB | 111.6 KiB |
+
+Ordinary registration uses existing ID and name indexes to validate the batch
+and skips overload grouping. Command-name completion checks policy on matching
+entries. Search, hover hints and multi-candidate navigation are built on use and
+released with the view. The borrowed-font control opened in 3.21–3.24 ms.
+Memory covers the panel's owned Unity objects and excludes shared assets and
+the Editor process heap. The package suite ran 161 EditMode and 60 PlayMode cases
+without failures or skips. Reports are recorded at
+`D:/CodexArtifacts/ze-console-editor-fast-path-20261119`.

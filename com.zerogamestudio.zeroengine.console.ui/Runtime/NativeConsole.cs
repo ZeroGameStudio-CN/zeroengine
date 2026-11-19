@@ -232,11 +232,12 @@ namespace ZeroEngine.Console.UI
             if (!composing && completionDirty && Time.unscaledTime >= completionAt)
             {
                 completionDirty = false;
-                CancelCompletion();
-                completionCancellation = new CancellationTokenSource();
                 completionInput = input.text;
                 completionCaret = input.caretPosition;
-                pendingCompletion = host.Session.CompleteAsync(completionInput, completionCaret, host.CreateCaller(), completionCancellation.Token);
+                if (ConsoleInputBackend.CompletionDelay(completionInput) != 0)
+                    completionCancellation = new CancellationTokenSource();
+                pendingCompletion = host.Session.CompleteAsync(completionInput, completionCaret, host.CreateCaller(),
+                    completionCancellation?.Token ?? default);
             }
             if (pendingCompletion != null && pendingCompletion.IsCompleted)
             {
@@ -315,8 +316,7 @@ namespace ZeroEngine.Console.UI
         private void ShowCompletions(ConsoleCompletions result)
         {
             currentCompletions = result;
-            commandHint.Show(result.Hint);
-            UpdateHintLayout();
+            ShowCommandHint(result.Hint);
             selectedCompletion = 0;
             RefreshCompletions();
         }
@@ -334,6 +334,11 @@ namespace ZeroEngine.Console.UI
             bool choosing = shownPrompt != null && shownPrompt.Options.Count > 0;
             var choices = choosing ? shownPrompt.Options : currentCompletions?.Items;
             if (choices == null) return;
+            if (choices.Count == 0)
+            {
+                completions.gameObject.SetActive(false);
+                return;
+            }
             int rowHeight = fontSize + 10;
             int capacity = Mathf.Clamp(Mathf.FloorToInt((panel.rect.height - 208 - HintHeight) / rowHeight), 1, MaximumCompletionRows);
             completionOffset = selectedCompletion / capacity * capacity;
@@ -350,9 +355,17 @@ namespace ZeroEngine.Console.UI
                 completionRows[i].targetGraphic.color = index == selectedCompletion ? SelectedColor : SurfaceColor;
                 completionRows[i].GetComponent<UnityEngine.UI.LayoutElement>().preferredHeight = rowHeight;
             }
-            completionCaption.text = (selectedCompletion + 1) + " / " + choices.Count +
-                (choosing ? "   ·   输入编号" : usingTouchLayout ? "" : "   ·   Tab");
-            completions.offsetMax = new Vector2(-12, 126 + HintHeight + visibleCount * rowHeight);
+            bool showNavigation = choices.Count > 1;
+            if (showNavigation)
+            {
+                EnsureCompletionNavigation();
+                completionCaption.text = (selectedCompletion + 1) + " / " + choices.Count +
+                    (choosing ? "   ·   输入编号" : usingTouchLayout ? "" : "   ·   Tab");
+            }
+            if (completionCaption && completionCaption.gameObject.activeSelf != showNavigation)
+                completionCaption.gameObject.SetActive(showNavigation);
+            completionList.offsetMax = new Vector2(-6, showNavigation ? -32 : -4);
+            completions.offsetMax = new Vector2(-12, (showNavigation ? 126 : 98) + HintHeight + visibleCount * rowHeight);
             completions.gameObject.SetActive(visibleCount > 0);
         }
 
@@ -371,11 +384,12 @@ namespace ZeroEngine.Console.UI
                 input.caretPosition = caret;
                 observedCaret = caret;
                 input.ActivateInputField();
-                commandHint.Show(host.Session.GetHint(updated, caret, host.CreateCaller()));
-                UpdateHintLayout();
+                ShowCommandHint(host.Session.GetHint(updated, caret, host.CreateCaller()));
             }
             catch (InvalidOperationException) { }
-            CancelCompletion(false);
+            // The value-changed callback already canceled completion when the text changed.
+            if (currentCompletions != null) CancelCompletion(false);
+            else completionDirty = false;
         }
 
         private void CancelCompletion(bool clearHint = true)
@@ -391,7 +405,7 @@ namespace ZeroEngine.Console.UI
                     TaskContinuationOptions.OnlyOnFaulted | TaskContinuationOptions.ExecuteSynchronously, TaskScheduler.Default);
             currentCompletions = null;
             if (completions) completions.gameObject.SetActive(false);
-            if (clearHint && commandHint != null) { commandHint.Show(null); UpdateHintLayout(); }
+            if (clearHint && commandHint != null) ShowCommandHint(null);
         }
 
         private void RenderOutput()
