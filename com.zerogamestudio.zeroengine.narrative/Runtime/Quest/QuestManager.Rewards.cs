@@ -68,6 +68,9 @@ namespace ZeroEngine.Quest
             {
                 foreach (var entry in rewards)
                 {
+                    if (!ReferenceEquals(save, _saveData) || !save.activeQuests.Contains(quest) ||
+                        quest.state != QuestState.Successful)
+                        return new QuestSubmissionResult(QuestSubmissionStatus.StateChanged, id);
                     currentRewardId = entry.id;
                     if (quest.grantedRewardIds.Contains(entry.id)) continue;
                     var context = new QuestRewardGrantContext(id, quest.instanceId, entry.id);

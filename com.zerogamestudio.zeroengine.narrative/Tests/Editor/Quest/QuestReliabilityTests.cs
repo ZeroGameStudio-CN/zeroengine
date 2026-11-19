@@ -622,6 +622,23 @@ namespace ZeroEngine.Quest.Tests.Editor
             Assert.False(manager.CanAcceptQuest(quest.questId, out _));
         }
 
+        [Test]
+        public void SwitchingSlotsInRewardReceiptCallbackStopsRemainingGrants()
+        {
+            var quest = CreateQuest("receipt_slot_switch", "first", "second");
+            Complete(quest);
+            manager.OnRewardGranted += _ => manager.LoadSaveData(new QuestSystemSaveData());
+
+            var result = manager.TrySubmitQuest(quest.questId);
+
+            Assert.AreEqual(QuestSubmissionStatus.StateChanged, result.Status);
+            Assert.AreEqual(1, service.Deliveries("first"));
+            Assert.AreEqual(0, service.Deliveries("second"),
+                "A receipt callback can switch the recipient slot; later rewards must not be dispatched.");
+            Assert.IsEmpty(manager.GetActiveQuests());
+            Assert.AreEqual(0, manager.GetQuestCompletionCount(quest.questId));
+        }
+
         private QuestManager NewManager()
         {
             var go = new GameObject("QuestReliabilityTests");

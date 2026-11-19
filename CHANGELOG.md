@@ -7,6 +7,8 @@ tracked in each package's `package.json`.
 
 - Narrative 3.2.0 adds recoverable per-item quest reward receipts, stable condition identities,
   explicit UI-independent activation, save snapshots/migration and authoring validation.
+  Reward callbacks that switch saves stop remaining grants before dispatch; disk-backed
+  workflows cover unlock persistence, interrupted delivery and per-run reset recovery.
 
 - UI 2.3.0 adds the project-neutral `MVVMViewBase<TViewModel>` integration with
   managed UIView lifecycle; product-specific view models and events stay in consumers.

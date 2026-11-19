@@ -63,6 +63,8 @@ throwing grants leave the quest Successful and claimable. Confirmed reward
 receipts are retained so retrying does not replay earlier successful items.
 Reentrant submission cannot grant twice. A repeatable quest receives a fresh
 instance identity for each acceptance.
+If a reward-receipt callback changes the current save or removes the quest,
+remaining rewards stop before the next adapter invocation.
 
 Existing IQuestRewardService implementations remain supported. For durable
 external grants implement IContextualQuestRewardService; its context includes

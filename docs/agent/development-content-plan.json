@@ -593,14 +593,16 @@
       "nextAction": "代码审查与恢复仓库 Unity CI 的授权配置后再合并；POB 消费接入单独进行。",
       "entrance": "包级 QuestReliabilityTests 与原有 Quest EditMode 回归；消费者在配置和存档就绪后显式 ActivateConfiguredQuests。",
       "resourcePath": "com.zerogamestudio.zeroengine.narrative/Runtime/Quest",
-      "revision": "候选已验证：可靠领奖与稳定回执、独立条件身份、隐藏任务显式激活、已达标进度恢复、保留累计历史的每局限次基线，以及旧数据迁移/作者校验。",
+      "revision": "候选已验证：可靠领奖与稳定回执、独立条件身份、隐藏任务显式激活、已达标进度恢复、保留累计历史的每局限次基线，以及旧数据迁移/作者校验。 2026-11-19: verified disk persistence and durable grant receipts; stop remaining reward dispatch before invoking an adapter after a callback switches saves.",
       "releaseEvidence": "",
       "candidatePackageVersion": "3.2.0",
       "verificationEvidence": [
         "D:/CodexTemp/narrative-quest-reliability-20261117/verification.json",
-        "D:/CodexTemp/narrative-quest-reliability-20261117/release-results/results.xml"
+        "D:/CodexTemp/narrative-quest-reliability-20261117/release-results/results.xml",
+        "D:\\CodexTemp\\narrative-quest-recheck-20261119-results\\verification.json",
+        "D:\\CodexTemp\\narrative-quest-recheck-20261119-results\\after-fix\\results.xml"
       ],
-      "verificationScope": "Unity 6000.6.9f1 独立工程 EditMode：65/65，0失败、0跳过，含37项新增行为回归；全部编译输入与源包逐文件比对。包工具24例、63包静态审计0项问题。未修改 POB manifest/lock，未开放任务玩法。 GitHub Actions 44111353720：包边界与独立进程检查成功；Unity 矩阵在许可激活阶段停止，未运行用例，Dashboard 对照通道同因失败。",
+      "verificationScope": "2026-11-19 Unity 6000.6.9f1 isolated EditMode: 69/69, no failures or skips. Added 3 disk-backed workflows and a regression that first reproduced and then verified the fix for reward-receipt callbacks switching saves. Exact names and all runtime/test source fingerprints match. Prior CI run 44111353720 stopped before Unity tests at license activation; POB integration remains pending.",
       "pullRequest": "https://github.com/ZeroGameStudio-CN/zeroengine/pull/10",
       "ciEvidence": "https://github.com/ZeroGameStudio-CN/zeroengine/actions/runs/44111353720"
     }
