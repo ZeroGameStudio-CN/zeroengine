@@ -2,6 +2,12 @@
 
 ZeroEngine TCE provides a generic Trigger -> Condition -> Effect runtime for gameplay rules. It is intended for abilities, equipment effects, card effects, passives, relics, and other rules that can be expressed as project-owned triggers, conditions, and effects.
 
+## Installation lifetime
+
+Each installation owns its components, trigger subscriptions, and cleanup. A component callback can synchronously uninstall or replace its graph. The retired dispatch stops at that callback boundary, and later triggers belong to their current installation.
+
+The latest installation request takes ownership during initialization or teardown. Cleanup detaches the original triggers and attempts every component in reverse order. If initialization fails, cleanup releases the partially installed graph.
+
 ## Boundary
 
 Runtime code in this package must not reference:
