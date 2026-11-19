@@ -42,6 +42,13 @@ public static class VerifyReleaseSignatures
             rows.Add(new PackageResult { name = package.name, version = package.version, source = source,
                 signatureStatus = status, sha256 = parts[5] });
         }
+        var skillSnapshot = Environment.GetEnvironmentVariable("ZE_RELEASE_SKILL_SNAPSHOT");
+        if (!string.IsNullOrEmpty(skillSnapshot))
+        {
+            var type = Type.GetType("ZeroEngine.AiSupport.Editor.SkillPackageSnapshot, ZeroEngine.AiSupport.Editor", true);
+            var value = type.GetMethod("CreateJson").Invoke(null, null);
+            File.WriteAllText(skillSnapshot, (string)value);
+        }
         File.WriteAllText(proof, JsonUtility.ToJson(new Evidence { packages = rows.ToArray() }, true));
     }
 }

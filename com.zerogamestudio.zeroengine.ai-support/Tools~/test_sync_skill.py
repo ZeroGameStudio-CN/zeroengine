@@ -50,6 +50,9 @@ class SynchronizationTests(unittest.TestCase):
             if package["source"] == "Local":
                 manifest["dependencies"][package["name"]] = "file:../local-trial"
                 lock["dependencies"][package["name"]] = {"source": "local", "version": "file:../local-trial", "depth": 0}
+            if package["source"] == "Registry":
+                manifest["dependencies"][package["name"]] = package["version"]
+                lock["dependencies"][package["name"]] = {"source": "registry", "version": package["version"], "depth": 0}
         (self.project / "Packages/manifest.json").write_bytes(SYNC.encode(manifest))
         (self.project / "Packages/packages-lock.json").write_bytes(SYNC.encode(lock))
         self.snapshot.write_bytes(SYNC.encode({"schemaVersion": 1, "projectPath": str(self.project),
@@ -79,6 +82,25 @@ class SynchronizationTests(unittest.TestCase):
         with self.assertRaisesRegex(SYNC.Conflict, "locally modified"):
             self.prepare()
         self.assertEqual("local edits", (target / "SKILL.md").read_text(encoding="utf-8"))
+
+    def test_registry_upgrade_refreshes_the_owned_020_skill(self):
+        target = self.installed()
+        old_skill = b"Use pinned Git UPM URLs for every ZeroEngine install.\n"
+        (target / "SKILL.md").write_bytes(old_skill)
+        old_receipt = SYNC.load(target / SYNC.RECEIPT)
+        old_receipt["toolVersion"] = "0.2.0"
+        old_receipt["files"]["SKILL.md"] = SYNC.digest(old_skill)
+        (target / SYNC.RECEIPT).write_bytes(SYNC.encode(old_receipt))
+        (target / "personal-notes.md").write_text("keep", encoding="utf-8")
+
+        self.packages[0].update(source="Registry", gitHash="")
+        self.refresh()
+        SYNC.apply(self.prepare())
+        updated = (target / "SKILL.md").read_text(encoding="utf-8")
+        self.assertIn("ZE Registry", updated)
+        self.assertIn("registry-preview/release.py", updated)
+        self.assertEqual("keep", (target / "personal-notes.md").read_text(encoding="utf-8"))
+        self.assertEqual([], self.prepare()["changed"])
 
     def test_remove_preserves_local_additions_and_project_packages(self):
         target = self.installed()

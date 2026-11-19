@@ -53,6 +53,37 @@ Worker01 origin outage. The other 39 packages passed a combined cold-cache
 Unity installation from the public feed, with all 39 organization signatures
 valid.
 
+## Publish a version
+
+Use the ZE main checkout and a tested full source commit. Set `ZE_RELEASE_EDITOR`
+to the validated Unity Editor executable and `ZE_RELEASE_WRANGLER` to the
+installed Wrangler JavaScript entry point. The controller also uses the existing
+`unity`, `node`, `ssh zgs-worker-linux-01`, `gh` and Wrangler operator sessions.
+The signing credentials stay with the installed Worker01 publisher.
+
+```text
+python -B Tools/Packages/registry-preview/release.py --commit <tested-commit> --package <changed-package-id> --output <new-external-directory>
+```
+
+Repeat `--package` for a related cohort. The command reuses admitted dependencies
+when their pins, source tree and signer agree. A changed package needs a new
+version. `NAME=VERSION` selects an explicit version override for a reviewed trial.
+The command signs on Worker01, verifies the exact archives in one disposable
+Unity run, publishes the same bytes to Worker01 and GitHub, and verifies the
+active HTTPS catalog and archives. For an Agent release, the Unity run also
+captures the installed package snapshot for a Skill apply and drift check.
+
+The output includes `timings.jsonl`, the Unity and deployment receipts, and the
+candidate catalog. A verified promotion updates the checked-out admission
+catalog. Commit that catalog on ZE main before the next release. A consumer
+adopts an updated version through its own manifest, lock and Skill submission.
+
+For a known partial release, run the same command with `--resume` and the same
+commit, package arguments and output. This reuses the verified signed bytes and
+receipts. An unresolved Unity attempt or Cloudflare activation needs its original
+readback before another attempt. The single publication lock covers cooperating
+controllers on Worker01.
+
 ## Package signatures
 
 Versions `0.1.0-ze-pob.d194ba36.3` and `.4` contain Unity organization signatures
@@ -66,6 +97,8 @@ security preference is disabled. Unity may show a publisher-origin indicator to
 accounts outside the signing organization; the archives still have valid signatures.
 
 Package signature handling follows the [Unity signing documentation](https://docs.unity.com/en-us/engine/6000.6/manual/packages-list/upm-signature-lp/upm-sign-methods).
+
+## Manual release and recovery steps
 
 [`sign_release.py`](sign_release.py) prepares selected public ZE packages and
 their dependency closure from one tested Git commit already reachable on public

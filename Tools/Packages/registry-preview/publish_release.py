@@ -55,7 +55,7 @@ def check_version(name, version, item, record):
     expected_url = f'{PUBLIC}/{name}/-/{record["asset"]}'
     if (item.get('name') != name or item.get('version') != version
             or item.get('zgsPilot', {}).get('sourceCommit') != record['sourceCommit']
-            or item.get('zgsPilot', {}).get('sourceTree') != record['sourceTree']
+            or ('sourceTree' in record and item.get('zgsPilot', {}).get('sourceTree') != record['sourceTree'])
             or item.get('dist', {}).get('integrity') != record['sha512']
             or item.get('dist', {}).get('tarball') != expected_url
             or ('dependencies' in record and item.get('dependencies', {}) != record['dependencies'])):

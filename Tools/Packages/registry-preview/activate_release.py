@@ -18,6 +18,7 @@ from sign_release import catalog_json
 
 WORKER = 'zgs-ze-upm-preview'
 SOURCE = Path(__file__).resolve().parent
+INDEX_LIMIT = 2 * 1024 * 1024
 
 
 def sha(path):
@@ -44,6 +45,40 @@ def selected_packages(previous, candidate):
     return additions
 
 
+def check_public_index(data, catalog):
+    """Check the complete admitted version and provenance inventory in one request."""
+    index = json.loads(data)
+    packages = catalog['packages']
+    if set(index) - {'_updated'} != packages.keys():
+        raise ValueError('The public registry package inventory differs')
+    for name, package in packages.items():
+        row = index[name]
+        versions = package['versions']
+        tags = package.get('tags', {'preview': list(versions)[-1]})
+        if (row.get('dist-tags') != tags or row.get('name') != name
+                or row.get('versions', {}).keys() != versions.keys()):
+            raise ValueError('The public registry versions or tags differ: ' + name)
+        for version, record in versions.items():
+            check_version(name, version, row['versions'][version], record)
+
+
+def wrangler_call(node, wrangler, directory, args):
+    environment = dict(os.environ, CI='true', WRANGLER_SEND_METRICS='false')
+    flags = ['--config', str(directory / 'wrangler.toml'), '--name', WORKER]
+    return subprocess.run([str(node), str(wrangler), *args, *flags], cwd=directory,
+                          env=environment, capture_output=True, timeout=120)
+
+
+def active_version(node, wrangler, directory):
+    result = wrangler_call(node, wrangler, directory, ['deployments', 'status', '--json'])
+    if result.returncode:
+        raise RuntimeError('The existing ZE Worker deployment cannot be read')
+    versions = json.loads(result.stdout).get('versions', [])
+    if len(versions) != 1 or versions[0]['percentage'] != 100:
+        raise ValueError('The existing Worker has a staged rollout; preserve it')
+    return str(uuid.UUID(versions[0]['version_id']))
+
+
 def activate(promotion, catalog_path, node, wrangler, expected, resume=None, unity_probe=None):
     expected = str(uuid.UUID(expected))
     before_catalog = catalog_json(catalog_path)
@@ -62,22 +97,11 @@ def activate(promotion, catalog_path, node, wrangler, expected, resume=None, uni
     for name in ('edge-router.mjs', 'wrangler.toml'):
         shutil.copyfile(SOURCE / name, stage / name)
     shutil.copyfile(next_path, stage / next_path.name)
-    command = [str(node), str(wrangler)]
-    flags = ['--config', str(stage / 'wrangler.toml'), '--name', WORKER]
-    environment = dict(os.environ, CI='true', WRANGLER_SEND_METRICS='false')
-
     def cli(args):
-        return subprocess.run(command + args + flags, cwd=stage, env=environment, capture_output=True, timeout=120)
+        return wrangler_call(node, wrangler, stage, args)
 
     def current():
-        result = cli(['deployments', 'status', '--json'])
-        if result.returncode:
-            raise RuntimeError('The existing ZE Worker deployment cannot be read')
-        deployment = json.loads(result.stdout)
-        versions = deployment.get('versions', [])
-        if len(versions) != 1 or versions[0]['percentage'] != 100:
-            raise ValueError('The existing Worker has a staged rollout; preserve it')
-        return str(uuid.UUID(versions[0]['version_id']))
+        return active_version(node, wrangler, stage)
 
     if current() != expected:
         raise ValueError('The ZE Worker version changed before deployment')
@@ -109,10 +133,13 @@ def activate(promotion, catalog_path, node, wrangler, expected, resume=None, uni
         raise RuntimeError(f'Wrangler activation returned {result.returncode}; the staged Worker is not active')
     dump(stage / 'active-version.json', {'previousVersion': expected, 'activeVersion': active})
 
-    def read_active(url, limit):
+    def read_active(url, limit, validate=None):
         for attempt in range(6):
             try:
-                return get(url, limit)
+                data = get(url, limit)
+                if validate:
+                    validate(data)
+                return data
             except urllib.error.HTTPError as exc:
                 if exc.code not in (404, 429, 502, 503, 504):
                     raise
@@ -120,18 +147,28 @@ def activate(promotion, catalog_path, node, wrangler, expected, resume=None, uni
                     dump(stage / 'verification-error.json', {'url': url, 'status': exc.code,
                          'ray': exc.headers.get('CF-Ray'), 'cache': exc.headers.get('CF-Cache-Status')})
                     raise
-                # The control plane can report 100% before every POP serves it.
-                time.sleep(min(2 + attempt * 2, 8))
+            except ValueError:
+                if validate is None or attempt == 5:
+                    raise
+            # The control plane can report 100% before every POP serves it.
+            time.sleep(min(2 + attempt * 2, 8))
 
+    old_packages = before_catalog['packages']
+    changed_names = {name for name, _, _ in additions}
+    retained_probes = sorted(old_packages.keys() & changed_names)
+    sentinel = next((name for name in old_packages if name not in changed_names), None)
+    if sentinel:
+        retained_probes.append(sentinel)
     try:
         for name, version, record in additions:
             item = json.loads(read_active(f'{PUBLIC}/{name}/{version}', 512 * 1024))
             check_version(name, version, item, record)
             verify_bytes(read_active(item['dist']['tarball'], record['bytes']), record)
-        for name, product in before_catalog['packages'].items():
-            version = list(product['versions'])[-1]
-            item = json.loads(get(f'{PUBLIC}/{name}/{version}', 512 * 1024))
-            check_version(name, version, item, product['versions'][version])
+        read_active(f'{PUBLIC}/-/all', INDEX_LIMIT, lambda data: check_public_index(data, candidate))
+        for name in retained_probes:
+            item = json.loads(read_active(f'{PUBLIC}/{name}', 512 * 1024))
+            for version, record in old_packages[name]['versions'].items():
+                check_version(name, version, item['versions'][version], record)
         if unity_probe:
             from verify_release import verify
 
@@ -146,7 +183,8 @@ def activate(promotion, catalog_path, node, wrangler, expected, resume=None, uni
         dump(stage / 'rollback-receipt.json', {'restoredVersion': expected, 'rejectedVersion': active})
         raise
     report = {'worker': WORKER, 'previousVersion': expected, 'activeVersion': active,
-              'verifiedNewVersions': len(additions), 'retainedPackagesVerified': len(before_catalog['packages'])}
+              'verifiedNewVersions': len(additions), 'retainedPackagesVerified': len(old_packages),
+              'retainedEndpointsProbed': len(retained_probes)}
     if unity_probe:
         report['unityTrustReceipt'] = str(stage / 'unity-proof/unity-trust-receipt.json')
     dump(stage / 'activation-receipt.json', report)

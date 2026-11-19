@@ -12,8 +12,10 @@ CLI. Module READMEs remain the API source. Generated consumer guidance lives in
 ## Packages and guidance
 
 Package installation, upgrades and removal use the consumer's existing UPM route
-(`UnityEditor.PackageManager.Client` or Package Manager UI). Keep ZE Git packages
-at one tested commit and include required sibling dependencies.
+(`UnityEditor.PackageManager.Client` or Package Manager UI). Pin published ZE
+Registry versions or tested Git commits according to the project's manifest.
+Include the required siblings. Publish new versions through the
+[ZE Registry release entry](https://github.com/ZeroGameStudio-CN/zeroengine/blob/main/Tools/Packages/registry-preview/README.md#publish-a-version).
 
 After a package change, export
 `ZeroEngine.AiSupport.Editor.SkillPackageSnapshot.CreateJson()` through that
