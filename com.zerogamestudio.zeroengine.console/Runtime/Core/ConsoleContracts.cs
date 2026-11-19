@@ -220,6 +220,10 @@ namespace ZeroEngine.Console
 
         /// <summary>Waits for the owning frontend. Decline, close or no frontend returns false.</summary>
         public Task<bool> ConfirmAsync(string message) => session.ConfirmAsync(this, message);
+
+        /// <summary>Waits for a choice ID. Decline, close or no frontend returns null.</summary>
+        public Task<string> ChooseAsync(string message, IReadOnlyList<ConsoleCompletionItem> options) =>
+            session.ChooseAsync(this, message, options);
     }
 
     public delegate Task<ConsoleResult> ConsoleHandler(ConsoleInvocation invocation, ConsoleArguments arguments, CancellationToken cancellation);

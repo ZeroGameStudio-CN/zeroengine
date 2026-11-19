@@ -14,6 +14,45 @@ namespace ZeroEngine.Console.UI.Tests
     public sealed class NativeConsoleTests
     {
         [UnityTest]
+        public IEnumerator NumberedChoicesReuseCandidateRowsWithoutSubmittingCommands()
+        {
+            var root = new GameObject("Native choice interaction");
+            IDisposable commands = null;
+            try
+            {
+                var host = root.AddComponent<ConsoleHost>();
+                var view = root.AddComponent<NativeConsole>();
+                commands = host.Registry.Register("sample", new[]
+                {
+                    new ConsoleBinding(new ConsoleCommand("sample.plan", "sample-plan", "sample", "Pick a plan."),
+                        async (invocation, args, token) =>
+                        {
+                            var choice = await invocation.ChooseAsync("Choose a plan.", new[]
+                            {
+                                new ConsoleCompletionItem("quick", "", "Quick"), new ConsoleCompletionItem("full", "", "Full")
+                            });
+                            return ConsoleResult.Success(data: choice);
+                        })
+                });
+                view.Open();
+                var execution = view.SubmitAsync("sample-plan");
+                yield return null;
+                var choices = root.GetComponentsInChildren<UnityEngine.UI.Button>().Where(button => button.name == "Completion").ToArray();
+                Assert.That(choices.Select(button => button.GetComponentInChildren<UnityEngine.UI.Text>().text),
+                    Does.Contain("2. Full"));
+                view.InputField.onSubmit.Invoke("test-unknown");
+                Assert.That(execution.IsCompleted, Is.False);
+                view.InputField.text = "2";
+                view.InputField.onSubmit.Invoke("2");
+                yield return Wait(execution);
+                Assert.That(execution.Result.Data, Is.EqualTo("full"));
+                Assert.That(view.InputField.text, Is.Empty);
+                Assert.That(host.Session.GetHistory(), Is.EqualTo(new[] { "sample-plan" }));
+            }
+            finally { commands?.Dispose(); Object.DestroyImmediate(root); }
+        }
+
+        [UnityTest]
         public IEnumerator OnDemandSelector_DefersBothFrontendsAndCanReleaseTheView()
         {
             var root = new GameObject("On-demand console");
@@ -272,13 +311,16 @@ namespace ZeroEngine.Console.UI.Tests
                 var view = root.AddComponent<NativeConsole>();
                 view.Open();
                 var suggestions = view.transform.Find("ZE Console/Panel/Completions").gameObject;
+                var rows = suggestions.transform.Find("Choices");
                 yield return new WaitForSecondsRealtime(.1f);
                 Assert.That(suggestions.activeSelf, Is.False);
+                Assert.That(rows.childCount, Is.Zero);
                 view.InputField.text = "ze-";
                 view.InputField.caretPosition = 3;
                 double deadline = Time.realtimeSinceStartupAsDouble + 1;
                 while (!suggestions.activeSelf && Time.realtimeSinceStartupAsDouble < deadline) yield return null;
                 Assert.That(suggestions.activeSelf, Is.True);
+                Assert.That(rows.childCount, Is.GreaterThan(0));
                 view.InputField.text = string.Empty;
                 yield return new WaitForSecondsRealtime(.1f);
                 Assert.That(suggestions.activeSelf, Is.False);

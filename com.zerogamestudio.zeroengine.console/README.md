@@ -110,7 +110,7 @@ Reflection bindings and dynamically constructed generic collections require the
 consumer's normal stripping/AOT preservation; these additions have Editor coverage,
 not a new IL2CPP support claim.
 
-## Named references and confirmation
+## Named references and prompts
 
 Use `ConsoleNamedValues<T>` to expose specific project-owned reference values as
 `@name` arguments. Construct it with `session.Values`, register the values and
@@ -124,15 +124,25 @@ availability predicate such as `value => value != null` to check their Unity
 object types. Register only references that every caller of the binding may see.
 Apply finer business permissions in the handler before changing an object.
 
+Use `RegisterResolver` to resolve an existing project selection at lookup time.
+Its resolver returns the current value or null while there is no target. Keep
+it bounded and free of business side effects, because completion and conversion
+both consult it.
+
 Use `await invocation.ConfirmAsync("Apply the pending changes?")` before an action
 that needs an explicit decision. Branch on the returned bool before performing
 the action. A decline, a closed frontend or an unavailable frontend returns false.
 Caller/module cancellation and deadlines still use the session's existing status
 and cancellation path. The prompt uses the current command and caller policy.
 
+Use `ChooseAsync(question, options)` to present two to eight choices through
+that same channel. Each `ConsoleCompletionItem` supplies a stable ID and a
+visible label. The handler receives the chosen ID, or null on decline. It can
+then ask for confirmation through the same invocation.
+
 The Native frontend acquires the interaction channel while visible. Custom
 frontends can acquire the same exclusive channel through
-`session.TryAcquireInteraction()`, render its `Pending` confirmation and pass
+`session.TryAcquireInteraction()`, render its `PendingPrompt` and pass
 that exact request to `Respond` with a fresh caller. Dispose the channel when
 closing the view. Responses stay outside command history and dispatch.
 

@@ -34,19 +34,33 @@ namespace ZeroEngine.Console.Quantum.Tests
                             if (!await invocation.ConfirmAsync("Apply?")) return ConsoleResult.Failure("declined", "Discarded.");
                             applied++;
                             return ConsoleResult.Success();
-                        })
+                        }),
+                    new ConsoleBinding(new ConsoleCommand("test.pick", "test-pick", "test", "Pick."),
+                        async (invocation, arguments, token) => ConsoleResult.Success(data:
+                            await invocation.ChooseAsync("Pick a plan?", new[]
+                            {
+                                new ConsoleCompletionItem("quick", "", "Quick"),
+                                new ConsoleCompletionItem("full", "", "Full")
+                            })))
                 });
                 var execution = host.ExecuteAsync("test-apply");
                 Assert.That(interaction.Pending, Is.Not.Null);
                 receive.Invoke(frontend, new object[] { "yes" });
                 Assert.That(applied, Is.Zero);
-                type.GetField("shownConfirmation", fields).SetValue(frontend, interaction.Pending);
+                type.GetField("shownPrompt", fields).SetValue(frontend, interaction.Pending);
                 receive.Invoke(frontend, new object[] { "test-apply" });
                 Assert.That(applied, Is.Zero);
                 receive.Invoke(frontend, new object[] { " YES " });
                 Assert.That((await execution).IsSuccess, Is.True);
                 Assert.That(applied, Is.EqualTo(1));
-                Assert.That(host.Session.GetHistory(), Is.EqualTo(new[] { "test-apply" }));
+                var choice = host.ExecuteAsync("test-pick");
+                type.GetField("shownPrompt", fields).SetValue(frontend, interaction.PendingPrompt);
+                receive.Invoke(frontend, new object[] { "not an option" });
+                Assert.That(choice.IsCompleted, Is.False);
+                receive.Invoke(frontend, new object[] { " 2 " });
+                receive.Invoke(frontend, new object[] { " 2 " });
+                Assert.That((await choice).Data, Is.EqualTo("full"));
+                Assert.That(host.Session.GetHistory(), Is.EqualTo(new[] { "test-apply", "test-pick" }));
             }
             finally { UnityEngine.Object.DestroyImmediate(root); }
         }

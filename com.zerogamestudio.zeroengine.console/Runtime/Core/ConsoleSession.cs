@@ -30,7 +30,7 @@ namespace ZeroEngine.Console
         private CancellationTokenSource current;
         private string activeInvocationId;
         private ConsoleInteraction interaction;
-        private ConsoleConfirmation confirmation;
+        private ConsolePrompt prompt;
         private bool disposed;
         private long outputRevision;
         private long clearRevision;
@@ -232,8 +232,8 @@ namespace ZeroEngine.Console
                 {
                     if (execution != null && ReferenceEquals(current, execution))
                     {
-                        confirmation?.Response.TrySetResult(false);
-                        confirmation = null;
+                        prompt?.Response.TrySetResult(null);
+                        prompt = null;
                         activeInvocationId = null;
                         current = null;
                     }
@@ -284,54 +284,58 @@ namespace ZeroEngine.Console
             }
         }
 
-        internal async Task<bool> ConfirmAsync(ConsoleInvocation invocation, string message)
+        internal async Task<bool> ConfirmAsync(ConsoleInvocation invocation, string message) =>
+            await AskAsync(new ConsoleConfirmation(invocation, message)) != null;
+
+        internal Task<string> ChooseAsync(ConsoleInvocation invocation, string message, IReadOnlyList<ConsoleCompletionItem> options) =>
+            AskAsync(ConsolePrompt.Choice(invocation, message, options));
+
+        private async Task<string> AskAsync(ConsolePrompt request)
         {
-            if (string.IsNullOrWhiteSpace(message) || message.Length > 256)
-                throw new ArgumentException("Use a confirmation message of 1 to 256 characters.", nameof(message));
+            var invocation = request.Invocation;
             CancellationToken token;
-            ConsoleConfirmation request;
             lock (sync)
             {
-                if (interaction == null || disposed || activeInvocationId != invocation.Id) return false;
-                if (confirmation != null) throw new InvalidOperationException("A confirmation is already pending.");
+                if (interaction == null || disposed || activeInvocationId != invocation.Id) return null;
+                if (prompt != null) throw new InvalidOperationException("A prompt is already pending.");
                 token = current.Token;
                 token.ThrowIfCancellationRequested();
-                confirmation = request = new ConsoleConfirmation(invocation, message);
+                prompt = request;
             }
             try
             {
-                using (token.Register(state => ((ConsoleConfirmation)state).Response.TrySetCanceled(), request))
+                using (token.Register(state => ((ConsolePrompt)state).Response.TrySetCanceled(), request))
                 {
-                    Write(new ConsoleOutput(invocation.Id, ConsoleOutputLevel.Info, message));
-                    bool accepted = await request.Response.Task;
+                    Write(new ConsoleOutput(invocation.Id, ConsoleOutputLevel.Info, request.Message));
+                    string choice = await request.Response.Task;
                     token.ThrowIfCancellationRequested();
-                    return accepted && policy.Check(invocation.Command, invocation.Caller).IsSuccess;
+                    return choice != null && policy.Check(invocation.Command, invocation.Caller).IsSuccess ? choice : null;
                 }
             }
             finally
             {
                 lock (sync)
-                    if (ReferenceEquals(confirmation, request)) confirmation = null;
+                    if (ReferenceEquals(prompt, request)) prompt = null;
             }
         }
 
-        internal ConsoleConfirmation ReadConfirmation(ConsoleInteraction owner)
+        internal ConsolePrompt ReadPrompt(ConsoleInteraction owner)
         {
             lock (sync)
-                return ReferenceEquals(interaction, owner) && confirmation != null && !confirmation.Response.Task.IsCompleted
-                    ? confirmation : null;
+                return ReferenceEquals(interaction, owner) && prompt != null && !prompt.Response.Task.IsCompleted
+                    ? prompt : null;
         }
 
-        internal bool RespondToConfirmation(ConsoleInteraction owner, ConsoleConfirmation request, ConsoleCaller caller, bool accept)
+        internal bool RespondToPrompt(ConsoleInteraction owner, ConsolePrompt request, ConsoleCaller caller, string choice)
         {
-            if (request == null || caller == null || !ReferenceEquals(ReadConfirmation(owner), request)) return false;
+            if (request == null || caller == null || !ReferenceEquals(ReadPrompt(owner), request) || !request.Allows(choice)) return false;
             var original = request.Invocation.Caller;
             if (caller.Environment != original.Environment || !string.Equals(caller.Identity, original.Identity, StringComparison.Ordinal))
                 return false;
-            if (accept && !policy.Check(request.Invocation.Command, caller).IsSuccess) return false;
+            if (choice != null && !policy.Check(request.Invocation.Command, caller).IsSuccess) return false;
             lock (sync)
-                return ReferenceEquals(interaction, owner) && ReferenceEquals(confirmation, request) &&
-                    current != null && !current.IsCancellationRequested && request.Response.TrySetResult(accept);
+                return ReferenceEquals(interaction, owner) && ReferenceEquals(prompt, request) &&
+                    current != null && !current.IsCancellationRequested && request.Response.TrySetResult(choice);
         }
 
         internal void ReleaseInteraction(ConsoleInteraction owner)
@@ -340,7 +344,7 @@ namespace ZeroEngine.Console
             {
                 if (!ReferenceEquals(interaction, owner)) return;
                 interaction = null;
-                confirmation?.Response.TrySetResult(false);
+                prompt?.Response.TrySetResult(null);
             }
         }
 
