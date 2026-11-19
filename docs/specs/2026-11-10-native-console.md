@@ -94,13 +94,13 @@ entry remain available while native capabilities are developed independently.
 | --- | --- |
 | Command discovery: `QuantumConsoleProcessor`, scan rules, `InjectionLoader` | Explicit, atomic module registration avoids a Player assembly scan. Optional attribute/generated authoring remains future work. |
 | Catalog cache: `GetAllCommands` | Reuse a sorted registry catalog until registration changes; recheck live caller policy for every discovery/completion request. |
-| Parameters: `CommandData`, `QuantumParser`, parsers | Quotes, Unicode, spans, optional/variadic arguments, scalar/nullable values, arrays, standard generic collections/dictionaries and bounded opt-in arithmetic exist. Host defaults add Unity vectors, quaternions and colors. Explicit overload families select by arity/conversion without probing handlers; ambiguous calls require a stable ID. Generic aliases use explicitly closed, constraint-checked types. Arbitrary runtime type discovery, object-reference and tuple parsing remain separate adapters. |
+| Parameters: `CommandData`, `QuantumParser`, parsers | Quotes, Unicode, spans, optional/variadic arguments, scalar/nullable values, arrays, standard generic collections/dictionaries and bounded opt-in arithmetic exist. Host defaults add Unity vectors, quaternions and colors. Explicit overload families select by arity/conversion without probing handlers; ambiguous calls require a stable ID. Generic aliases use explicitly closed, constraint-checked types. Named object references use a scoped converter. Arbitrary runtime type discovery and tuple parsing remain open. |
 | Extensibility: parser/suggestor/serializer injection | Explicit converter/completer leases, conversion fallback and bounded result formatter extension exist. Avoid unbounded caches of user values or reflective object inspection. |
 | Suggestions: `QuantumSuggestor`, suggestion stack/display | Fragments, aliases, prefix priority, resource labels, quoting, insertion caret, clickable candidates and active-parameter/signature guidance exist. Natural ranking remains a separate improvement. |
 | Results: `QuantumSerializer` | Data-only Unity Host results use invariant bounded formatting for scalars, dictionaries, tuples, sequences and Unity values. Explicit messages and structured status/data retain precedence and identity. |
-| Async/actions: `QuantumConsole`, `ActionExecuter` | Task/ValueTask observation, main-thread dispatch, cancellation, deadlines and single-use ValueTask sources are covered. Commands can await a policy-checked confirmation from the Native view. General interactive workflow adapters remain a separate capability. |
+| Async/actions: `QuantumConsole`, `ActionExecuter` | Task/ValueTask observation, main-thread dispatch, cancellation, deadlines and single-use ValueTask sources are covered. Commands can sequence numbered choices and confirmations through the same policy-checked invocation in either frontend. |
 | Macros/scripts: `QuantumMacros`, preprocessors, external command runner | Explicit per-session macros have bounded definitions/expansion, cycles fail before dispatch, and expanded commands retain normal policy. Caret hints follow expanded parameters; completion preserves the raw macro/suffix and rejects replies after definitions change. External scripts and arbitrary code execution are not enabled. |
-| Object targets: `InvocationTargetFactory`, `QuantumRegistry` | Projects bind specific reference values by name and lease. The same registry feeds typed conversion and completion, with optional object validity checks. Projects own target visibility and business permissions. |
+| Object targets: `InvocationTargetFactory`, `QuantumRegistry` | Projects bind values or live project-owned resolvers by name and lease. The same registry feeds typed conversion and completion with optional validity checks. Projects own target visibility and business permissions. |
 | Logs/history: `LogStorage`, `LogQueue`, `QuantumConsole` | Bounded output/history, thread-safe writes, reusable output buffers, search, copy and follow controls exist. History duplicate policy and richer log formatting remain distinct improvements. |
 | UI/input: theme, localization, key config and UI controllers | Lower-left translucent panel, icons/tooltips, configurable area and font size, common keys and restored input exist. Runtime theme/localization profiles and drag/resize are not equivalent yet. |
 | Mobile/IME | Safe area, keyboard-area fitting and composition guards exist; physical phone keyboard/IME behavior still needs its own evidence. Layout previews do not establish device parity. |
@@ -435,3 +435,32 @@ closed views retained 1 and 0 Canvases respectively. Reopen medians were 0.42 ms
 with the cached view and 6.96 ms when rebuilding it. The isolated suite passed
 157 EditMode and 59 PlayMode tests. Evidence is recorded at
 `D:/CodexArtifacts/ze-console-ondemand-20261119`.
+
+## Matched Editor comparison, 2026-11-19
+
+Unity 6000.6.9f1 PlayMode alternated twelve fresh pairs in the same isolated
+scene. ZE created its panel on demand and released the view on close. Quantum
+Console 2.6.7 used the installed SRP prefab with POB's initialization settings.
+Both used 161 matching command names for the timed samples. Each run opened the
+view, entered the same prefix, accepted one suggestion, ran the same command
+once, cleared output, and closed the view.
+
+| Median | ZE before tuning | ZE optimized | Quantum in the optimized run |
+| --- | ---: | ---: | ---: |
+| First activation of a fresh panel | 17.91 ms | 12.46 ms | 0.84 ms |
+| Enter prefix, accept completion, and execute | 42.06 ms | 1.51 ms | 0.60 ms |
+| Retained panel hierarchy after close | 16.0 KiB | 15.9 KiB | 111.6 KiB |
+
+The startup measurement includes the first Canvas update. Quantum's catalogue
+was ready for the twelve-pair comparison. In a separate run from a fresh
+PlayMode domain, the first activation reached an interactable input in 176 ms
+for ZE and 223 ms for Quantum. Each then ran the command once. The cold case
+is one observation per frontend.
+
+Memory covers the owned Unity object hierarchy. The test excludes shared assets
+and the Editor process heap.
+Command-name lookup runs on the next update, while argument providers retain
+their debounce interval. The native panel builds inactive and creates
+completion rows as needed. The isolated package suite passed 159 EditMode and
+60 PlayMode cases. The test reports and raw measurements are recorded at
+`D:/CodexArtifacts/ze-console-editor-parity-20261119`.

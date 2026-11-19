@@ -32,10 +32,13 @@ namespace ZeroEngine.Console.UI
         private Canvas viewCanvas;
         private CanvasScaler viewScaler;
         private ConsoleCommandHintView commandHint;
+        private RectTransform completionList;
+        private const int MaximumCompletionRows = 8;
         private RectTransform confirmationRow;
         private Text confirmationMessage;
+        private Button confirmButton;
         private const float ConfirmationHeight = 46;
-        private float HintHeight => shownConfirmation != null ? ConfirmationHeight + 6
+        private float HintHeight => shownPrompt != null ? ConfirmationHeight + 6
             : commandHint != null && commandHint.IsVisible ? commandHint.Height + 6 : 0;
 
         private void EnsureView()
@@ -44,10 +47,12 @@ namespace ZeroEngine.Console.UI
             if (view) return;
             outputRows = new List<Text>();
             completionRows = new List<Button>();
-            view = new GameObject("ZE Console", typeof(RectTransform), typeof(Canvas), typeof(CanvasScaler), typeof(GraphicRaycaster));
+            view = new GameObject("ZE Console", typeof(RectTransform));
+            view.SetActive(false);
             view.transform.SetParent(transform, false);
-            var canvas = view.GetComponent<Canvas>(); canvas.renderMode = RenderMode.ScreenSpaceOverlay; canvas.sortingOrder = 30000;
-            var scaler = view.GetComponent<CanvasScaler>(); scaler.uiScaleMode = CanvasScaler.ScaleMode.ScaleWithScreenSize;
+            var canvas = view.AddComponent<Canvas>(); canvas.renderMode = RenderMode.ScreenSpaceOverlay; canvas.sortingOrder = 30000;
+            var scaler = view.AddComponent<CanvasScaler>(); scaler.uiScaleMode = CanvasScaler.ScaleMode.ScaleWithScreenSize;
+            view.AddComponent<GraphicRaycaster>();
             viewCanvas = canvas; viewScaler = scaler;
             scaler.referenceResolution = new Vector2(1280, 720); scaler.matchWidthOrHeight = .5f;
 
@@ -149,26 +154,29 @@ namespace ZeroEngine.Console.UI
             Stretch(completionCaption.rectTransform, new Vector2(0, 1), Vector2.one, new Vector2(10, -30), new Vector2(-144, -2));
             MakeIconButton(completions, "上一项", ConsoleGlyph.Up, "上一条补全", Vector2.one, new Vector2(-78, -28), new Vector2(-44, -4), () => NavigateCompletion(-1));
             MakeIconButton(completions, "下一项", ConsoleGlyph.Down, "下一条补全", Vector2.one, new Vector2(-40, -28), new Vector2(-6, -4), () => NavigateCompletion(1));
-            var list = Rect("Choices", completions); Stretch(list, Vector2.zero, Vector2.one, new Vector2(6, 4), new Vector2(-6, -32));
-            var completionLayout = list.gameObject.AddComponent<VerticalLayoutGroup>(); completionLayout.childControlHeight = completionLayout.childControlWidth = true; completionLayout.childForceExpandHeight = false;
-            for (int i = 0; i < 8; i++)
-            {
-                int index = i;
-                var button = MakeButton(list, "Completion", "", Vector2.zero, Vector2.zero, Vector2.zero, () => ApplyCompletion(completionOffset + index), fontSize);
-                var label = button.GetComponentInChildren<Text>(); label.alignment = TextAnchor.MiddleLeft;
-                Stretch(label.rectTransform, Vector2.zero, Vector2.one, new Vector2(10, 2), new Vector2(-10, -2));
-                button.gameObject.AddComponent<LayoutElement>().preferredHeight = fontSize + 10;
-                completionRows.Add(button);
-            }
+            completionList = Rect("Choices", completions); Stretch(completionList, Vector2.zero, Vector2.one, new Vector2(6, 4), new Vector2(-6, -32));
+            var completionLayout = completionList.gameObject.AddComponent<VerticalLayoutGroup>(); completionLayout.childControlHeight = completionLayout.childControlWidth = true; completionLayout.childForceExpandHeight = false;
             completions.gameObject.SetActive(false);
             actionHint = Rect("ActionHint", panel); actionHint.anchorMin = actionHint.anchorMax = actionHint.pivot = Vector2.zero;
             Surface(actionHint, new Color(.13f, .145f, .18f, .97f), 5).raycastTarget = false;
             actionHintLabel = Chrome("HintText", actionHint, "", 12);
             Stretch(actionHintLabel.rectTransform, Vector2.zero, Vector2.one, new Vector2(10, 0), new Vector2(-10, 0));
             actionHint.gameObject.SetActive(false);
-            Canvas.ForceUpdateCanvases();
-            UpdateViewLayout(true);
-            view.SetActive(false);
+        }
+
+        private void EnsureCompletionRows(int count)
+        {
+            while (completionRows.Count < count)
+            {
+                int index = completionRows.Count;
+                var button = MakeButton(completionList, "Completion", "", Vector2.zero, Vector2.zero, Vector2.zero,
+                    () => ApplyCompletion(completionOffset + index), fontSize);
+                var label = button.GetComponentInChildren<Text>(true);
+                label.alignment = TextAnchor.MiddleLeft;
+                Stretch(label.rectTransform, Vector2.zero, Vector2.one, new Vector2(10, 2), new Vector2(-10, -2));
+                button.gameObject.AddComponent<LayoutElement>();
+                completionRows.Add(button);
+            }
         }
 
         private void ReleaseView()
@@ -180,9 +188,9 @@ namespace ZeroEngine.Console.UI
             viewFont = null;
             input = logSearch = null;
             scroll = null;
-            panel = outputContent = completions = searchRow = confirmationRow = actionHint = actionHintTarget = null;
+            panel = outputContent = completions = completionList = searchRow = confirmationRow = actionHint = actionHintTarget = null;
             completionCaption = fontSizeLabel = emptyOutput = keyboardHint = actionHintLabel = confirmationMessage = null;
-            cancelButton = followButton = searchButton = clearSearchButton = null;
+            cancelButton = followButton = searchButton = clearSearchButton = confirmButton = null;
             stateIcon = cancelIcon = followIcon = null;
             stateHint = followHint = copyHint = null;
             viewCanvas = null;
@@ -246,16 +254,19 @@ namespace ZeroEngine.Console.UI
             if (completions) completions.offsetMin = new Vector2(12, 90 + HintHeight);
         }
 
-        private void RefreshConfirmation(ConsoleConfirmation request)
+        private void RefreshPrompt(ConsolePrompt request)
         {
-            if (ReferenceEquals(shownConfirmation, request)) return;
-            shownConfirmation = request;
+            if (ReferenceEquals(shownPrompt, request)) return;
+            shownPrompt = request;
             if (request != null)
             {
                 CancelCompletion();
                 EnsureConfirmationRow();
                 confirmationMessage.text = request.Message;
                 confirmationRow.gameObject.SetActive(true);
+                confirmButton.gameObject.SetActive(request is ConsoleConfirmation);
+                selectedCompletion = 0;
+                RefreshCompletions();
             }
             else if (confirmationRow)
             {
@@ -275,16 +286,22 @@ namespace ZeroEngine.Console.UI
             Stretch(confirmationMessage.rectTransform, Vector2.zero, Vector2.one, new Vector2(10, 4), new Vector2(-145, -4));
             var anchor = new Vector2(1, 0);
             MakeButton(confirmationRow, "Decline", "返回", anchor, new Vector2(-136, 5), new Vector2(-74, 41),
-                () => RespondToConfirmation(false), 14);
-            var accept = MakeButton(confirmationRow, "Confirm", "确认", anchor, new Vector2(-68, 5), new Vector2(-6, 41),
-                () => RespondToConfirmation(true), 14);
-            accept.targetGraphic.color = SelectedColor;
+                () => RespondToPrompt(null, false), 14);
+            confirmButton = MakeButton(confirmationRow, "Confirm", "确认", anchor, new Vector2(-68, 5), new Vector2(-6, 41),
+                () => RespondToPrompt("yes", false), 14);
+            confirmButton.targetGraphic.color = SelectedColor;
         }
 
-        private void RespondToConfirmation(bool accept)
+        private void RespondToPrompt(string choice, bool clearInput)
         {
-            if (IsOpen && host && interaction?.Respond(shownConfirmation, host.CreateCaller(), accept) == true)
-                RefreshConfirmation(interaction.Pending);
+            if (!IsOpen || !host || interaction?.Respond(shownPrompt, host.CreateCaller(), choice) != true) return;
+            if (clearInput)
+            {
+                input.SetTextWithoutNotify(string.Empty);
+                input.caretPosition = 0;
+                observedCaret = 0;
+            }
+            RefreshPrompt(interaction.PendingPrompt);
         }
 
         private void ToggleFollow()

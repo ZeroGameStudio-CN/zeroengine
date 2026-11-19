@@ -42,6 +42,62 @@ namespace ZeroEngine.Console.Tests
         }
 
         [Test]
+        public async Task NamedResolver_TracksTheCurrentTargetAndHidesUnavailableValues()
+        {
+            using var registry = new ConsoleRegistry();
+            using var session = new ConsoleSession(registry);
+            using var names = new ConsoleNamedValues<Target>(session.Values);
+            var current = new Target();
+            using var reference = names.RegisterResolver("selected", () => current, "Selected target");
+            using var handler = registry.Register("sample", new[]
+            {
+                new ConsoleBinding(new ConsoleCommand("sample.target", "inspect", "sample", "Inspect the target.",
+                    new[] { new ConsoleParameter("target", typeof(Target)) }),
+                    (_, args, _) => Task.FromResult(ConsoleResult.Success(data: args.Get<Target>(0))), names.CompleteAsync)
+            });
+            Assert.That((await session.ExecuteLineAsync("inspect @selected", Caller)).Data, Is.SameAs(current));
+            current = new Target();
+            Assert.That((await session.ExecuteLineAsync("inspect @selected", Caller)).Data, Is.SameAs(current));
+            current = null;
+            Assert.That((await session.CompleteAsync("inspect @", 9, Caller)).Items, Is.Empty);
+            Assert.That((await session.ExecuteLineAsync("inspect @selected", Caller)).IsSuccess, Is.False);
+        }
+
+        [Test]
+        public async Task ChoiceAndConfirmation_CanRunInSequence_WithoutAcceptingAStaleResponse()
+        {
+            using var registry = new ConsoleRegistry();
+            using var session = new ConsoleSession(registry);
+            using var interaction = session.TryAcquireInteraction();
+            var ready = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+            var options = new[] { new ConsoleCompletionItem("quick", "", "Quick"), new ConsoleCompletionItem("full", "", "Full") };
+            using var handler = registry.Register("sample", new[]
+            {
+                new ConsoleBinding(new ConsoleCommand("sample.pick", "pick", "sample", "Pick an option."),
+                    async (invocation, _, token) =>
+                    {
+                        var choice = await invocation.ChooseAsync("Choose a plan.", options);
+                        var confirm = invocation.ConfirmAsync("Apply the selected plan?");
+                        ready.TrySetResult(true);
+                        return await confirm ? ConsoleResult.Success(data: choice) : ConsoleResult.Failure("declined", "Discarded.");
+                    })
+            });
+            var execution = session.ExecuteLineAsync("pick", Caller, timeout: TimeSpan.FromSeconds(3));
+            var first = interaction.PendingPrompt;
+            options[1] = new ConsoleCompletionItem("changed", "", "Changed");
+            Assert.That(first.TryGetNumberedChoice("2", out string id), Is.True);
+            Assert.That(id, Is.EqualTo("full"));
+            Assert.That(interaction.Pending, Is.Null);
+            Assert.That(interaction.Respond(first, Caller, "changed"), Is.False);
+            Assert.That(interaction.Respond(first, Caller, id), Is.True);
+            Assert.That(await Task.WhenAny(ready.Task, execution), Is.SameAs(ready.Task));
+            Assert.That(interaction.Respond(first, Caller, id), Is.False);
+            Assert.That(interaction.Respond(interaction.Pending, Caller, true), Is.True);
+            Assert.That((await execution).Data, Is.EqualTo("full"));
+            Assert.That(session.GetHistory(), Is.EqualTo(new[] { "pick" }));
+        }
+
+        [Test]
         public async Task ConfirmationRequiresTheOwningFrontendAndLivePermission_AndRespondsOnce()
         {
             using var registry = new ConsoleRegistry();

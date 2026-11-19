@@ -6,6 +6,10 @@ command's pending confirmation appears in the owned Quantum view. Answer
 history, and closing the view declines the confirmation. The adapter mirrors
 logs through the session's reusable output buffer.
 
+For a choice prompt, the adapter prints the available numbered options.
+Respond with the number or enter `cancel` to decline. The chosen ID goes
+back to the original command through Quantum's public response callback.
+
 G4 compatibility candidate. Quantum Console is a separately installed vendor
 SDK; this package contains neither its code nor its assets. A project supplies
 its QC prefab and an explicitly verified compatibility profile. Unknown profiles

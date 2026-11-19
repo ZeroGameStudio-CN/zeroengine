@@ -7,8 +7,10 @@ and an input-isolation lease; the view restores its own cursor/selection state.
 
 New Inspector hosts default to **On Demand** and new NativeConsole components
 default to **Release View On Close**. Opening creates the session and panel.
-Closing returns the Canvas, rendered
-rows, and any console-owned dynamic font to Unity. The session, command leases,
+Candidate rows are created as needed and reused by completion and numbered choices.
+Command-name prefixes are handled on the next update. Argument completion coalesces
+quick edits before calling providers. Closing returns the Canvas, rendered rows
+and any console-owned dynamic font to Unity. The session, command leases,
 history, draft, caret, and log filter remain available on reopen. Turn off
 **Release View On Close** when frequent reopening matters more than keeping
 the closed view's memory low.
@@ -16,7 +18,7 @@ the closed view's memory low.
 Fonts are resolved lazily when the view opens. Without a project font, one dynamic
 OS font uses an ordered family list for Latin, CJK and other installed scripts,
 falling back to Unity's built-in font. Unity selects an available face per glyph;
-the package includes no font files or baked atlas. Reopening reuses the same font.
+the package includes no font files or baked atlas. A cached view reuses its font.
 
 Assign the Inspector **Font**, or call `ConfigureFont(projectFont)`, to borrow the
 project's existing `UnityEngine.Font` unchanged, including its own fallback rules.
@@ -87,6 +89,10 @@ shows the question with explicit Confirm and Back buttons. It keeps the question
 in the output for longer detail and leaves command history unchanged. Closing
 the view declines the pending confirmation. The normal Enter path never accepts
 a confirmation.
+
+Numbered choices reuse the existing candidate rows. Click a visible choice or
+type its number and press Enter. Use the existing navigation controls for
+choices beyond the visible rows. The result goes to the waiting command.
 
 Common actions use a consistent set of procedural line icons, with Chinese
 descriptions and shortcut hints on hover. The follow control shows its active or

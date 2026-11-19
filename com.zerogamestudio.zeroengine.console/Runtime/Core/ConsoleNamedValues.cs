@@ -27,17 +27,29 @@ namespace ZeroEngine.Console
 
         public IDisposable Register(string name, T value, string label = null)
         {
+            if (value == null) throw new ArgumentNullException(nameof(value));
+            return RegisterCore(name, value, null, label);
+        }
+
+        /// <summary>Resolves a project-owned target when it is needed. Return null while it is unavailable.</summary>
+        public IDisposable RegisterResolver(string name, Func<T> resolve, string label = null)
+        {
+            if (resolve == null) throw new ArgumentNullException(nameof(resolve));
+            return RegisterCore(name, null, resolve, label);
+        }
+
+        private IDisposable RegisterCore(string name, T value, Func<T> resolver, string label)
+        {
             if (string.IsNullOrEmpty(name) || name.Length > 64 ||
                 name.Any(c => !char.IsLetterOrDigit(c) && c != '-' && c != '_' && c != '.'))
                 throw new ArgumentException("Use letters, digits, hyphen, underscore or dot in a name.", nameof(name));
-            if (value == null) throw new ArgumentNullException(nameof(value));
             string reference = "@" + name;
             lock (sync)
             {
                 if (disposed) throw new ObjectDisposedException(nameof(ConsoleNamedValues<T>));
                 if (entries.Count >= MaximumNames || entries.ContainsKey(reference))
                     throw new InvalidOperationException("Duplicate name or reference capacity exceeded: " + reference);
-                var entry = new Entry(this, reference, value, label);
+                var entry = new Entry(this, reference, value, resolver, label);
                 entries.Add(reference, entry);
                 ordered = null;
                 return entry;
@@ -58,7 +70,7 @@ namespace ZeroEngine.Console
                 cancellation.ThrowIfCancellationRequested();
                 var item = entry.Item;
                 if ((item.Value.StartsWith(context.Prefix, StringComparison.OrdinalIgnoreCase) ||
-                     item.Label.StartsWith(context.Prefix, StringComparison.OrdinalIgnoreCase)) && Available(entry))
+                     item.Label.StartsWith(context.Prefix, StringComparison.OrdinalIgnoreCase)) && TryResolve(entry, out _))
                 {
                     matches.Add(item);
                     if (matches.Count == context.Limit) break;
@@ -71,9 +83,9 @@ namespace ZeroEngine.Console
         {
             Entry entry;
             lock (sync) entries.TryGetValue(token.Text ?? string.Empty, out entry);
-            if (entry != null && Available(entry))
+            if (entry != null && TryResolve(entry, out var resolved))
             {
-                value = entry.Value;
+                value = resolved;
                 error = null;
                 return true;
             }
@@ -82,7 +94,11 @@ namespace ZeroEngine.Console
             return false;
         }
 
-        private bool Available(Entry entry) => entry.IsRegistered && (isAvailable == null || isAvailable(entry.Value)) && entry.IsRegistered;
+        private bool TryResolve(Entry entry, out T value)
+        {
+            value = entry.IsRegistered ? entry.Resolve() : null;
+            return value != null && (isAvailable == null || isAvailable(value)) && entry.IsRegistered;
+        }
 
         public void Dispose()
         {
@@ -109,17 +125,20 @@ namespace ZeroEngine.Console
         private sealed class Entry : IDisposable
         {
             private ConsoleNamedValues<T> owner;
-            public readonly T Value;
+            private readonly T value;
+            private readonly Func<T> resolver;
             public readonly ConsoleCompletionItem Item;
             public bool IsRegistered => Volatile.Read(ref owner) != null;
 
-            public Entry(ConsoleNamedValues<T> owner, string reference, T value, string label)
+            public Entry(ConsoleNamedValues<T> owner, string reference, T value, Func<T> resolver, string label)
             {
                 this.owner = owner;
-                Value = value;
+                this.value = value;
+                this.resolver = resolver;
                 Item = new ConsoleCompletionItem(reference, reference, label);
             }
 
+            public T Resolve() => resolver == null ? value : resolver();
             public void Detach() => Interlocked.Exchange(ref owner, null);
             public void Dispose() => Interlocked.Exchange(ref owner, null)?.Remove(this);
         }

@@ -32,7 +32,7 @@ namespace ZeroEngine.Console.Quantum
         private Task<ConsoleResult> pending;
         private ConsoleInputOverlay overlay;
         private ConsoleInteraction interaction;
-        private ConsoleConfirmation shownConfirmation;
+        private ConsolePrompt shownPrompt;
         private ConsoleOutput[] outputBuffer = Array.Empty<ConsoleOutput>();
         private Action<string, LogType> sendLog;
         private Action clearLog;
@@ -123,17 +123,27 @@ namespace ZeroEngine.Console.Quantum
         {
             needsArm = true;
             overlay?.ResetAfterSubmit();
-            var request = interaction?.Pending;
+            var request = interaction?.PendingPrompt;
             if (request != null)
             {
                 string response = raw?.Trim();
-                bool accepted = string.Equals(response, "yes", StringComparison.OrdinalIgnoreCase);
-                bool declined = string.Equals(response, "no", StringComparison.OrdinalIgnoreCase);
-                if (ReferenceEquals(shownConfirmation, request) && (accepted || declined) &&
-                    interaction.Respond(request, host.CreateCaller(), accepted)) return;
-                Send(new ConsoleOutput("", ConsoleOutputLevel.Warning, "等待确认，请输入 yes 或 no。"));
+                string choice;
+                bool valid;
+                if (request is ConsoleConfirmation)
+                {
+                    bool accept = string.Equals(response, "yes", StringComparison.OrdinalIgnoreCase);
+                    choice = accept ? "yes" : null;
+                    valid = accept || string.Equals(response, "no", StringComparison.OrdinalIgnoreCase);
+                }
+                else valid = request.TryGetNumberedChoice(response, out choice) ||
+                    string.Equals(response, "cancel", StringComparison.OrdinalIgnoreCase);
+                if (ReferenceEquals(shownPrompt, request) && valid &&
+                    interaction.Respond(request, host.CreateCaller(), choice)) return;
+                Send(new ConsoleOutput("", ConsoleOutputLevel.Warning, request is ConsoleConfirmation
+                    ? "等待确认，请输入 yes 或 no。" : "请输入显示的编号或 cancel。"));
                 return;
             }
+            if (shownPrompt != null) return;
             host.Session.Write(new ConsoleOutput("", ConsoleOutputLevel.Info, "> " + raw));
             pending = host.ExecuteAsync(raw);
         }
@@ -165,11 +175,18 @@ namespace ZeroEngine.Console.Quantum
                 pending = null;
             }
             if (host.Session.OutputRevision != flushedRevision) FlushOutput();
-            var request = interaction?.Pending;
-            if (!ReferenceEquals(shownConfirmation, request))
+            var request = interaction?.PendingPrompt;
+            if (!ReferenceEquals(shownPrompt, request))
             {
-                shownConfirmation = request;
-                if (request != null) Send(new ConsoleOutput("", ConsoleOutputLevel.Info, "输入 yes 确认，或输入 no 返回。"));
+                shownPrompt = request;
+                if (request is ConsoleConfirmation)
+                    Send(new ConsoleOutput("", ConsoleOutputLevel.Info, "输入 yes 确认，或输入 no 返回。"));
+                else if (request != null)
+                {
+                    for (int i = 0; i < request.Options.Count; i++)
+                        Send(new ConsoleOutput("", ConsoleOutputLevel.Info, (i + 1) + ". " + request.Options[i].Label));
+                    Send(new ConsoleOutput("", ConsoleOutputLevel.Info, "输入编号选择，或输入 cancel 返回。"));
+                }
             }
         }
 
@@ -285,7 +302,7 @@ namespace ZeroEngine.Console.Quantum
             {
                 IsOpen = false; needsArm = false;
                 interaction?.Dispose(); interaction = null;
-                shownConfirmation = null;
+                shownPrompt = null;
                 outputBuffer = Array.Empty<ConsoleOutput>();
                 sendLog = null; clearLog = null;
                 overlay = null;
