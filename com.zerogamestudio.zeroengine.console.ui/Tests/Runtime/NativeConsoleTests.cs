@@ -14,6 +14,58 @@ namespace ZeroEngine.Console.UI.Tests
     public sealed class NativeConsoleTests
     {
         [UnityTest]
+        public IEnumerator Confirmation_UsesItsOwnButtons_AndClosesWithoutExecuting()
+        {
+            var root = new GameObject("Native confirmation integration");
+            IDisposable module = null;
+            try
+            {
+                var host = root.AddComponent<ConsoleHost>();
+                var view = root.AddComponent<NativeConsole>();
+                int applied = 0;
+                module = host.Registry.Register("sample", new[]
+                {
+                    new ConsoleBinding(new ConsoleCommand("sample.apply", "sample-apply", "sample", "Apply."),
+                        async (invocation, args, token) =>
+                        {
+                            if (!await invocation.ConfirmAsync("Apply this preview?"))
+                                return ConsoleResult.Failure("declined", "Discarded.");
+                            applied++;
+                            return ConsoleResult.Success();
+                        })
+                });
+                view.Open();
+                Assert.That(view.transform.Find("ZE Console/Panel/Confirmation"), Is.Null);
+                var confirmed = view.SubmitAsync("sample-apply");
+                yield return null;
+                var row = view.transform.Find("ZE Console/Panel/Confirmation");
+                Assert.That(row, Is.Not.Null);
+                Assert.That(row.Find("Question").GetComponent<UnityEngine.UI.Text>().text, Is.EqualTo("Apply this preview?"));
+                view.InputField.onSubmit.Invoke("sample-apply");
+                Assert.That(applied, Is.Zero);
+                var accept = row.Find("Confirm").GetComponent<UnityEngine.UI.Button>();
+                accept.onClick.Invoke();
+                accept.onClick.Invoke();
+                yield return Wait(confirmed);
+                Assert.That(confirmed.Result.IsSuccess, Is.True);
+                Assert.That(applied, Is.EqualTo(1));
+                Assert.That(host.Session.GetHistory(), Is.EqualTo(new[] { "sample-apply" }));
+
+                var declined = view.SubmitAsync("sample-apply");
+                yield return null;
+                row.Find("Decline").GetComponent<UnityEngine.UI.Button>().onClick.Invoke();
+                yield return Wait(declined);
+                Assert.That(declined.Result.Code, Is.EqualTo("declined"));
+                var closed = view.SubmitAsync("sample-apply");
+                view.Close();
+                yield return Wait(closed);
+                Assert.That(closed.Result.Code, Is.EqualTo("declined"));
+                Assert.That(applied, Is.EqualTo(1));
+            }
+            finally { module?.Dispose(); Object.DestroyImmediate(root); }
+        }
+
+        [UnityTest]
         public IEnumerator MacroAndOverloadHints_KeepTheDraftAndSubmitTheSelectedHandlerOnce()
         {
             var root = new GameObject("Native macro overload integration");

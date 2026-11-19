@@ -104,6 +104,32 @@ Reflection bindings and dynamically constructed generic collections require the
 consumer's normal stripping/AOT preservation; these additions have Editor coverage,
 not a new IL2CPP support claim.
 
+## Named references and confirmation
+
+Use `ConsoleNamedValues<T>` to expose specific project-owned reference values as
+`@name` arguments. Construct it with `session.Values`, register the values and
+pass `names.CompleteAsync` to the command's existing `ConsoleBinding`. For example,
+`names.Register("main-camera", camera, "Main camera")` supplies the typed value
+for `inspect @main-camera` and offers its label in completion.
+
+Retain each registration for the lifetime of the referenced object. Dispose its
+handle when the object leaves the scene or module. Unity projects can pass an
+availability predicate such as `value => value != null` to check their Unity
+object types. Register only references that every caller of the binding may see.
+Apply finer business permissions in the handler before changing an object.
+
+Use `await invocation.ConfirmAsync("Apply the pending changes?")` before an action
+that needs an explicit decision. Branch on the returned bool before performing
+the action. A decline, a closed frontend or an unavailable frontend returns false.
+Caller/module cancellation and deadlines still use the session's existing status
+and cancellation path. The prompt uses the current command and caller policy.
+
+The Native frontend acquires the interaction channel while visible. Custom
+frontends can acquire the same exclusive channel through
+`session.TryAcquireInteraction()`, render its `Pending` confirmation and pass
+that exact request to `Respond` with a fresh caller. Dispose the channel when
+closing the view. Responses stay outside command history and dispatch.
+
 Results are immutable. Empty successes may be shared; use the invocation ID on
 the context/output to identify a call, and read status/code/data from the result.
 Session disposal cancels its active invocation and pending completion separately,
