@@ -27,10 +27,12 @@ For commands intended for both POB entries, use POB's own `[Command]`
 parameter tags and business guards. POB's default Quantum adapter and ZE Native
 both bind the shared catalog to the original method.
 
+The POB Editor synchronizes the catalog as it imports command source edits.
+Adding a command in Unity's normal workflow is one declaration and a compile.
 The agent editing declarations owns catalog synchronization in the same change.
-For the CLI route, run `pwsh -NoProfile -File Tools/Console/Generate-PobConsoleCatalog.ps1`
-once per batch of declaration changes from the POB checkout. Use `-Check` for
-readback. Review and submit the matching declaration and generated catalog
+For edits made offline, use the existing CLI in the POB checkout with
+`pwsh -NoProfile -File Tools/Console/Generate-PobConsoleCatalog.ps1`. Use `-Check`
+for readback. Review and submit the matching declaration and generated catalog
 together. Use CLI or PlayMode to verify discovery, completion, single execution
 and the applicable environment and unlock policy through each intended entry.
 A command registered directly in one registry needs a binding in the
