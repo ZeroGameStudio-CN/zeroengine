@@ -32,9 +32,11 @@ Adding a command in Unity's normal workflow is one declaration and a compile.
 The agent editing declarations owns catalog synchronization in the same change.
 For edits made offline, use the existing CLI in the POB checkout with
 `pwsh -NoProfile -File Tools/Console/Generate-PobConsoleCatalog.ps1`. Use `-Check`
-for readback. Review and submit the matching declaration and generated catalog
-together. Use CLI or PlayMode to verify discovery, completion, single execution
-and the applicable environment and unlock policy through each intended entry.
+for readback. POB Player builds automatically check the generated catalog against
+the source and the loaded Editor assembly. Review and submit the matching
+declaration and generated catalog together. Use CLI or PlayMode to verify
+discovery, completion, single execution and the applicable environment and unlock
+policy through each intended entry.
 A command registered directly in one registry needs a binding in the
 other registry to be available through both independent entries.
 
