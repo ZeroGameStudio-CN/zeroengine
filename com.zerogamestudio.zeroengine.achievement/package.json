@@ -1,7 +1,7 @@
 {
     "name": "com.zerogamestudio.zeroengine.achievement",
     "version": "1.0.0",
-    "displayName": "ZeroEngine.Achievement",
+    "displayName": "ZeroEngine Achievement",
     "description": "Achievement definitions, condition evaluation, progress snapshots and platform provider contracts.",
     "unity": "6000.6",
     "unityRelease": "0f1",
