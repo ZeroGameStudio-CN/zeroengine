@@ -12,8 +12,14 @@ namespace ZeroEngine.Console.UI.Tests
         public bool IsOpen { get; private set; }
         public bool IsComposing => false;
         public int OpenCount { get; private set; }
+        public int InitializeCount { get; private set; }
         public Func<IDisposable> AcquireInputIsolation { get; set; }
-        public bool TryInitialize(ConsoleHost host, out string reason) { reason = string.Empty; return true; }
+        public bool TryInitialize(ConsoleHost host, out string reason)
+        {
+            InitializeCount++;
+            reason = string.Empty;
+            return true;
+        }
         public void Open()
         {
             OpenCount++;

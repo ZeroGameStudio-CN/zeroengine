@@ -1,7 +1,7 @@
 {
   "name": "ZeroEngine.Console.Quantum.Tests.Editor",
   "rootNamespace": "ZeroEngine.Console.Quantum.Tests",
-  "references": ["ZeroEngine.Console.Quantum"],
+  "references": ["ZeroEngine.Console.Quantum", "ZeroEngine.Console.Core", "ZeroEngine.Console.Unity"],
   "includePlatforms": ["Editor"],
   "optionalUnityReferences": ["TestAssemblies"],
   "autoReferenced": false

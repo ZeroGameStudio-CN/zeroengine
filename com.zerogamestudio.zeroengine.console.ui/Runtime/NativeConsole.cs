@@ -14,17 +14,18 @@ namespace ZeroEngine.Console.UI
     {
         [SerializeField] private ConsoleHost host;
         [SerializeField] private Font font;
+        [SerializeField] private bool releaseViewOnClose;
         [SerializeField, Range(12, 28)] private int fontSize = 16;
         [SerializeField, Tooltip("Preferred panel size in Canvas reference units; fitted to the available screen and keyboard area.")]
         private Vector2 preferredSize = new Vector2(880, 480);
         private GameObject view;
-        private readonly ConsoleFontResolver fonts = new ConsoleFontResolver();
+        private ConsoleFontResolver fonts;
         private Font viewFont;
         private UnityEngine.UI.InputField input;
         private UnityEngine.UI.ScrollRect scroll;
-        private readonly List<UnityEngine.UI.Text> outputRows = new List<UnityEngine.UI.Text>();
+        private List<UnityEngine.UI.Text> outputRows;
         private ConsoleOutput[] visibleOutput = Array.Empty<ConsoleOutput>();
-        private readonly List<UnityEngine.UI.Button> completionRows = new List<UnityEngine.UI.Button>();
+        private List<UnityEngine.UI.Button> completionRows;
         private RectTransform outputContent, completions;
         private CancellationTokenSource completionCancellation;
         private Task<ConsoleCompletions> pendingCompletion;
@@ -42,6 +43,10 @@ namespace ZeroEngine.Console.UI
         private ConsoleConfirmation shownConfirmation;
         private int historyIndex = -1;
         private string draftInput = string.Empty;
+        private string retainedInput = string.Empty;
+        private int retainedCaret = -1;
+        private int restoreCaret = -1;
+        private Vector2 retainedOutputPosition;
         private IDisposable inputLease;
         private ConsoleEventSystemLease eventSystemLease;
         private CursorLockMode previousLock;
@@ -56,6 +61,7 @@ namespace ZeroEngine.Console.UI
         public ConsoleHost Host => host;
         public UnityEngine.UI.InputField InputField => input;
         public bool TouchLayoutPreview { get; set; }
+        public bool ReleaseViewOnClose { get => releaseViewOnClose; set => releaseViewOnClose = value; }
         public Vector2 PreferredSize
         {
             get => preferredSize;
@@ -73,7 +79,7 @@ namespace ZeroEngine.Console.UI
 
         private void RefreshFont()
         {
-            var resolved = fonts.Resolve(font, fontSize);
+            var resolved = (fonts ??= new ConsoleFontResolver()).Resolve(font, fontSize);
             if (viewFont == resolved) return;
             viewFont = resolved;
             if (view)
@@ -81,6 +87,7 @@ namespace ZeroEngine.Console.UI
         }
 
         private void OnValidate() => preferredSize = ClampPreferredSize(preferredSize);
+        private void Reset() => releaseViewOnClose = true;
 
         private static Vector2 ClampPreferredSize(Vector2 value) => new Vector2(
             float.IsNaN(value.x) || float.IsInfinity(value.x) ? 880 : Mathf.Max(320, value.x),
@@ -98,12 +105,14 @@ namespace ZeroEngine.Console.UI
         private void OnEnable()
         {
             if (!host) host = GetComponent<ConsoleHost>();
-            host.Initialize();
+            if (host.StartupMode == ConsoleStartupMode.OnEnable) host.Initialize();
         }
 
         public void Open()
         {
-            if (IsOpen || !host || host.Session == null) return;
+            if (IsOpen || !host) return;
+            host.Initialize();
+            if (host.Session == null) return;
             if (FontProvider != null)
             {
                 try { var supplied = FontProvider(); if (supplied) ConfigureFont(supplied); }
@@ -162,8 +171,16 @@ namespace ZeroEngine.Console.UI
                     if (Cursor.lockState == CursorLockMode.None && Cursor.visible)
                     { Cursor.lockState = previousLock; Cursor.visible = previousCursor; }
                     var events = EventSystem.current;
-                    if (events && (!events.currentSelectedGameObject || events.currentSelectedGameObject.transform.IsChildOf(view.transform)))
+                    if (events && (!events.currentSelectedGameObject || view && events.currentSelectedGameObject.transform.IsChildOf(view.transform)))
                         events.SetSelectedGameObject(previousSelection && previousSelection.activeInHierarchy ? previousSelection : null);
+                    previousSelection = null;
+                    if (releaseViewOnClose && view)
+                    {
+                        retainedInput = input.text;
+                        retainedCaret = input.caretPosition;
+                        retainedOutputPosition = outputContent.anchoredPosition;
+                        ReleaseView();
+                    }
                     OpenChanged?.Invoke(false);
                 }
             }
@@ -179,6 +196,13 @@ namespace ZeroEngine.Console.UI
             if (!IsOpen || host.Session == null) return;
             RefreshConfirmation(interaction?.Pending);
             UpdateViewLayout();
+            if (restoreCaret >= 0 && input.isFocused)
+            {
+                input.caretPosition = restoreCaret;
+                observedCaret = restoreCaret;
+                restoreCaret = -1;
+                InputChanged(input.text);
+            }
             if (completionRevision != host.Registry.Revision)
             {
                 completionRevision = host.Registry.Revision;
@@ -253,6 +277,7 @@ namespace ZeroEngine.Console.UI
         }
         private void InputChanged(string value)
         {
+            restoreCaret = -1;
             if (shownConfirmation != null) return;
             bool hasDraft = !string.IsNullOrWhiteSpace(value);
             CancelCompletion(!hasDraft);
@@ -386,8 +411,7 @@ namespace ZeroEngine.Console.UI
         private void OnDestroy()
         {
             Close();
-            if (view) Destroy(view);
-            fonts.Dispose();
+            ReleaseView();
         }
     }
 }

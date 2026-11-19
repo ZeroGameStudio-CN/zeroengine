@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.UI;
 
@@ -18,13 +19,14 @@ namespace ZeroEngine.Console.UI
         private ConsoleActionHint stateHint, followHint;
         private RectTransform actionHint, actionHintTarget;
         private Text actionHintLabel;
-        private readonly Vector3[] hintCorners = new Vector3[4];
+        private Vector3[] hintCorners;
         private bool followOutput = true;
         private RectTransform searchRow;
         private UnityEngine.UI.InputField logSearch;
         private UnityEngine.UI.Button searchButton, clearSearchButton;
         private ConsoleActionHint copyHint;
         private string outputQuery = string.Empty;
+        private bool searchVisible;
         private bool usingTouchLayout;
         private bool usingLandscapeLayout;
         private Canvas viewCanvas;
@@ -40,6 +42,8 @@ namespace ZeroEngine.Console.UI
         {
             RefreshFont();
             if (view) return;
+            outputRows = new List<Text>();
+            completionRows = new List<Button>();
             view = new GameObject("ZE Console", typeof(RectTransform), typeof(Canvas), typeof(CanvasScaler), typeof(GraphicRaycaster));
             view.transform.SetParent(transform, false);
             var canvas = view.GetComponent<Canvas>(); canvas.renderMode = RenderMode.ScreenSpaceOverlay; canvas.sortingOrder = 30000;
@@ -74,9 +78,9 @@ namespace ZeroEngine.Console.UI
             Stretch(fontSizeLabel.rectTransform, new Vector2(0, 1), new Vector2(0, 1), new Vector2(178, -74), new Vector2(210, -46));
             searchButton = MakeIconButton(panel, "搜索日志", ConsoleGlyph.Search, "搜索日志", new Vector2(0, 1), new Vector2(212, -76), new Vector2(244, -44), ToggleLogSearch);
             followButton = MakeIconButton(panel, "跟随", ConsoleGlyph.Follow, "自动跟随新日志：开 · 点击暂停", new Vector2(1, 1), new Vector2(-44, -76), new Vector2(-12, -44), ToggleFollow);
-            followButton.targetGraphic.color = SelectedColor;
             followIcon = followButton.GetComponentInChildren<ConsoleIcon>();
             followHint = followButton.GetComponent<ConsoleActionHint>();
+            RefreshFollowButton();
 
             var scrollRoot = Rect("Output", panel); Stretch(scrollRoot, Vector2.zero, Vector2.one, new Vector2(12, 90), new Vector2(-12, -86));
             scroll = scrollRoot.gameObject.AddComponent<ScrollRect>(); scroll.horizontal = false; scroll.movementType = ScrollRect.MovementType.Clamped;
@@ -107,7 +111,9 @@ namespace ZeroEngine.Console.UI
             clearSearchButton = MakeIconButton(searchRow, "清除搜索", ConsoleGlyph.Close, "清除搜索条件", Vector2.one, new Vector2(-32, -32), Vector2.zero,
                 () => { logSearch.text = string.Empty; logSearch.Select(); logSearch.ActivateInputField(); });
             clearSearchButton.interactable = false;
-            searchRow.gameObject.SetActive(false);
+            logSearch.SetTextWithoutNotify(outputQuery);
+            SetOutputQuery(outputQuery);
+            ApplyLogSearchVisibility(searchVisible);
 
             var prompt = Chrome("Prompt", panel, ">", 18); prompt.color = AccentColor;
             Stretch(prompt.rectTransform, Vector2.zero, Vector2.zero, new Vector2(12, 36), new Vector2(30, 74));
@@ -115,6 +121,14 @@ namespace ZeroEngine.Console.UI
             Stretch(input.GetComponent<RectTransform>(), Vector2.zero, new Vector2(1, 0), new Vector2(34, 36), new Vector2(-104, 74));
             input.onValueChanged.AddListener(InputChanged);
             input.onSubmit.AddListener(SubmitInput);
+            if (retainedCaret >= 0)
+            {
+                input.SetTextWithoutNotify(retainedInput);
+                restoreCaret = Mathf.Min(retainedCaret, retainedInput.Length);
+                retainedInput = string.Empty;
+                retainedCaret = -1;
+                outputContent.anchoredPosition = retainedOutputPosition;
+            }
             var run = MakeIconButton(panel, "运行", ConsoleGlyph.Run, "执行命令 · Enter", new Vector2(1, 0), new Vector2(-94, 36), new Vector2(-56, 74), () => SubmitInput(input.text));
             run.targetGraphic.color = SelectedColor;
             cancelButton = MakeIconButton(panel, "取消", ConsoleGlyph.Stop, "取消当前执行", new Vector2(1, 0), new Vector2(-50, 36), new Vector2(-12, 74), () => host.Session.CancelCurrent());
@@ -153,15 +167,39 @@ namespace ZeroEngine.Console.UI
             Stretch(actionHintLabel.rectTransform, Vector2.zero, Vector2.one, new Vector2(10, 0), new Vector2(-10, 0));
             actionHint.gameObject.SetActive(false);
             Canvas.ForceUpdateCanvases();
-            UpdateViewLayout();
+            UpdateViewLayout(true);
             view.SetActive(false);
         }
 
-        private void UpdateViewLayout()
+        private void ReleaseView()
+        {
+            if (view) Destroy(view);
+            view = null;
+            fonts?.Dispose();
+            fonts = null;
+            viewFont = null;
+            input = logSearch = null;
+            scroll = null;
+            panel = outputContent = completions = searchRow = confirmationRow = actionHint = actionHintTarget = null;
+            completionCaption = fontSizeLabel = emptyOutput = keyboardHint = actionHintLabel = confirmationMessage = null;
+            cancelButton = followButton = searchButton = clearSearchButton = null;
+            stateIcon = cancelIcon = followIcon = null;
+            stateHint = followHint = copyHint = null;
+            viewCanvas = null;
+            viewScaler = null;
+            commandHint = null;
+            inputOverride = null;
+            outputRows = null;
+            completionRows = null;
+            hintCorners = null;
+            visibleOutput = Array.Empty<ConsoleOutput>();
+        }
+
+        private void UpdateViewLayout(bool force = false)
         {
             bool touch = Application.isMobilePlatform || TouchLayoutPreview;
             bool landscape = Screen.width >= Screen.height;
-            if (usingTouchLayout != touch || usingLandscapeLayout != landscape)
+            if (force || usingTouchLayout != touch || usingLandscapeLayout != landscape)
             {
                 usingTouchLayout = touch;
                 usingLandscapeLayout = landscape;
@@ -252,11 +290,16 @@ namespace ZeroEngine.Console.UI
         private void ToggleFollow()
         {
             followOutput = !followOutput;
+            RefreshFollowButton();
+            if (followOutput) { Canvas.ForceUpdateCanvases(); scroll.verticalNormalizedPosition = 0; }
+        }
+
+        private void RefreshFollowButton()
+        {
             followIcon.Glyph = followOutput ? ConsoleGlyph.Follow : ConsoleGlyph.FollowPaused;
             followHint.Message = followOutput ? "自动跟随新日志：开 · 点击暂停" : "自动跟随新日志：关 · 点击恢复";
             followButton.targetGraphic.color = followOutput ? SelectedColor : SurfaceColor;
             if (actionHintTarget == followHint.transform) ShowActionHint((RectTransform)followHint.transform, followHint.Message);
-            if (followOutput) { Canvas.ForceUpdateCanvases(); scroll.verticalNormalizedPosition = 0; }
         }
 
         private void RefreshActivityState()
@@ -283,7 +326,7 @@ namespace ZeroEngine.Console.UI
             actionHintTarget = target; actionHintLabel.text = message;
             float width = Mathf.Min(actionHintLabel.preferredWidth + 20, Mathf.Max(1, panel.rect.width - 16));
             actionHint.sizeDelta = new Vector2(width, 30);
-            target.GetWorldCorners(hintCorners);
+            target.GetWorldCorners(hintCorners ??= new Vector3[4]);
             var above = (Vector2)panel.InverseTransformPoint(hintCorners[1]);
             var below = (Vector2)panel.InverseTransformPoint(hintCorners[0]);
             float y = above.y + 6;
@@ -325,12 +368,9 @@ namespace ZeroEngine.Console.UI
 
         private void ToggleLogSearch()
         {
-            bool show = !searchRow.gameObject.activeSelf;
-            searchRow.gameObject.SetActive(show);
-            searchButton.targetGraphic.color = show ? SelectedColor : SurfaceColor;
-            scroll.GetComponent<RectTransform>().offsetMax = new Vector2(-12, show ? -126 : -86);
+            ApplyLogSearchVisibility(!searchVisible);
             CancelCompletion();
-            if (show) { logSearch.Select(); logSearch.ActivateInputField(); }
+            if (searchVisible) { logSearch.Select(); logSearch.ActivateInputField(); }
             else
             {
                 logSearch.SetTextWithoutNotify(string.Empty);
@@ -338,6 +378,14 @@ namespace ZeroEngine.Console.UI
                 input.Select(); input.ActivateInputField();
             }
             renderedRevision = -1;
+        }
+
+        private void ApplyLogSearchVisibility(bool visible)
+        {
+            searchVisible = visible;
+            searchRow.gameObject.SetActive(visible);
+            searchButton.targetGraphic.color = visible ? SelectedColor : SurfaceColor;
+            scroll.GetComponent<RectTransform>().offsetMax = new Vector2(-12, visible ? -126 : -86);
         }
 
         private void FocusInputAfterAction()
