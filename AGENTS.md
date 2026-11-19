@@ -20,10 +20,10 @@ ZE Agent's maintained source is
 Consumer `.agents/skills/zeroengine` files are generated from actual installed
 packages; maintain the source template and module READMEs here.
 
-The isolated package distribution Preview is maintained in
-[the registry tools](Tools/Packages/registry-preview/README.md). It supports
-signed releases from committed source, a Worker01 origin and same-address
-GitHub fallback. The admission manifest lists the exact available versions.
+Use [the ZE Registry release entry](Tools/Packages/registry-preview/README.md)
+to publish from a tested commit. `Tools/Packages/registry-preview/release.py`
+runs signing, Unity verification, Worker01 publication, GitHub backup and
+activation. The admission manifest lists the available versions.
 
 When a module's API, dependencies or usage changes, update its README and any
 affected Agent guidance together. After consumer package installation, removal or
@@ -38,8 +38,8 @@ current when repository architecture or source entrances change.
   `https://github.com/ZeroGameStudio-CN/zeroengine.git?path=<package>#<tested-commit>`.
 - Pin shared Git dependencies to tested commits. Keep the project on a
   verified compatible package cohort when moving its pins or switching sources.
-- Use `file:` dependencies only for temporary local debugging. Replace them
-  with pinned Git URLs before handoff.
+- Use `file:` dependencies for temporary local debugging. Restore the
+  consumer's verified Registry or Git pins before handoff.
 - Include required `com.zerogamestudio.*` sibling dependencies from the same
   verified cohort.
 
