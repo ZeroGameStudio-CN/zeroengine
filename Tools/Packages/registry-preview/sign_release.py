@@ -124,7 +124,7 @@ def validate_plan(plan):
 
 def plan_cohort(load, selection, existing, organization):
     """Resolve package versions and preserve already admitted byte-identical packages."""
-    resolved, pending, visiting = {}, {}, set()
+    resolved, pending, visiting, display_names = {}, {}, set(), {}
 
     def resolve(name):
         if not PACKAGE.fullmatch(name):
@@ -138,6 +138,15 @@ def plan_cohort(load, selection, existing, organization):
         version = selection.get(name) or manifest['version']
         if manifest['name'] != name or not VERSION.fullmatch(version):
             raise ValueError('Invalid package identity or version: ' + name)
+        author = manifest.get('author')
+        if not isinstance(author, dict) or author.get('name') != 'ZeroGameStudio':
+            raise ValueError(f'{name}: author.name must be ZeroGameStudio')
+        label = manifest.get('displayName')
+        if not isinstance(label, str) or not label.startswith('ZeroEngine ') or ' '.join(label.split()) != label:
+            raise ValueError(f'{name}: displayName must use ZeroEngine <Module>')
+        other = display_names.setdefault(label.casefold(), name)
+        if other != name:
+            raise ValueError(f'{name} and {other} share the displayName {label}')
         dependencies = {dep: resolve(dep) if dep.startswith('com.zerogamestudio.') else pin
                         for dep, pin in manifest.get('dependencies', {}).items()}
         old = existing.get(name, {}).get('versions', {}).get(version)
@@ -156,7 +165,7 @@ def plan_cohort(load, selection, existing, organization):
     return resolved, pending
 
 
-def prepare_selected(repository, commit, selection, organization, output, existing):
+def plan_selected(repository, commit, selection, organization, existing):
     if not GIT_ID.fullmatch(commit):
         raise ValueError('Require a full commit ID')
     git(repository, 'merge-base', '--is-ancestor', commit, 'refs/remotes/origin/main')
@@ -165,7 +174,11 @@ def prepare_selected(repository, commit, selection, organization, output, existi
         tree = git(repository, 'rev-parse', commit + ':' + name).decode().strip()
         return tree, json.loads(git(repository, 'show', commit + ':' + name + '/package.json'))
 
-    resolved, pending = plan_cohort(load, selection, existing, organization)
+    return plan_cohort(load, selection, existing, organization)
+
+
+def prepare_selected(repository, commit, selection, organization, output, existing):
+    resolved, pending = plan_selected(repository, commit, selection, organization, existing)
     if not pending:
         raise ValueError('Every requested package version is already admitted')
     payloads = {}

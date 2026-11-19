@@ -1,4 +1,6 @@
+import base64
 import copy
+import hashlib
 import io
 import json
 from pathlib import Path
@@ -8,11 +10,39 @@ import unittest
 
 from activate_release import check_public_index
 from publish_release import PUBLIC
+from release import signed_receipt
 from worker_release import require_trust, unpack_bundle
 
 
 class ReleaseBoundaries(unittest.TestCase):
     name = 'com.zerogamestudio.zeroengine.activity'
+
+    def test_signed_receipt_checks_archive_directory(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            asset = f'{self.name}-1.1.0.tgz'
+            data = b'signed fixture'
+            prepared = root / 'prepared'
+            signed = root / 'signed'
+            prepared.mkdir()
+            (signed / self.name).mkdir(parents=True)
+            (prepared / 'release-input.json').write_text(json.dumps({
+                'commit': 'a' * 40, 'organizationKey': '123', 'packages': {self.name: {'version': '1.1.0'}}
+            }), encoding='utf-8')
+            record = {'asset': asset, 'bytes': len(data), 'sha256': hashlib.sha256(data).hexdigest(),
+                      'sha512': 'sha512-' + base64.b64encode(hashlib.sha512(data).digest()).decode()}
+            receipt = {'schemaVersion': 2, 'sourceCommit': 'a' * 40, 'organizationKey': '123',
+                       'versions': {self.name: '1.1.0'}, 'packages': {self.name: record}}
+            (signed / 'signed-release.json').write_text(json.dumps(receipt), encoding='utf-8')
+            with self.assertRaisesRegex(ValueError, 'Missing signed archives'):
+                signed_receipt(prepared, signed)
+            (signed / self.name / asset).write_bytes(data)
+            self.assertEqual(signed_receipt(prepared, signed), receipt)
+            orphan = signed / 'unused.tgz'
+            orphan.write_bytes(data)
+            with self.assertRaisesRegex(ValueError, 'Unused signed archives: unused.tgz'):
+                signed_receipt(prepared, signed)
+            self.assertEqual(orphan.read_bytes(), data)
 
     def test_catalog_check_rejects_missing_versions_and_changed_integrity(self):
         asset = self.name + '-1.1.0.tgz'
