@@ -18,6 +18,7 @@
   ],
   "autoReferenced": false,
   "defineConstraints": [
+    "UNITY_STANDALONE",
     "UNITY_INCLUDE_TESTS",
     "ZEROENGINE_MULTIPLAYER_STEAM_TESTS || STEAMWORKS_NET"
   ],
