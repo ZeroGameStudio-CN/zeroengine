@@ -51,6 +51,8 @@ current when repository architecture or source entrances change.
 - Preserve UPM package boundaries: each top-level `com.zerogamestudio.*`
   directory is its own package with its own `package.json`, `.asmdef` files,
   `README.md`, and `.meta` files.
+- Use `ZeroGameStudio` for `author.name` and `ZeroEngine <Module>` for ZE package
+  display names. Display metadata is versioned with the release archive.
 - When changing package dependencies, update the relevant `package.json`,
   README, and consumer setup documentation together.
 - Do not edit generated Unity folders such as `Library`, `Temp`, `Obj`,

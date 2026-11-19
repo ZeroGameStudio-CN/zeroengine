@@ -1,7 +1,7 @@
 {
   "name": "com.zerogamestudio.zeroengine.data-toolkit",
   "version": "2.3.0",
-  "displayName": "ZeroEngine.DataToolkit",
+  "displayName": "ZeroEngine Data Toolkit",
   "description": "Reusable ZeroEngine tooling for marking, discovering, browsing, editing, and validating project data assets.",
   "unity": "6000.6",
   "unityRelease": "0f1",
