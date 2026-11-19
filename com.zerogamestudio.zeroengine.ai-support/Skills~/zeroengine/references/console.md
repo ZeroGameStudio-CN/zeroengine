@@ -24,14 +24,16 @@ session, with shared policy and handlers.
 
 For commands intended for both POB entries, use POB's own `[Command]`
 (`POB.CommandAttribute`) on a single static handler and reuse the project's
-parameter tags and business guards. In the POB checkout, regenerate the shared
-catalog with `pwsh -NoProfile -File Tools/Console/Generate-PobConsoleCatalog.ps1`.
-Use `-Check` to verify the catalog without rewriting it. Submit the declaration
-and generated catalog together. POB's default Quantum adapter and ZE Native
-both bind the catalog to the original method. Check that
-the command is discoverable, completes as expected and executes once from each
-intended entry using CLI or PlayMode. Check the applicable environment and unlock
-policy. A command registered directly in one registry needs a binding in the
+parameter tags and business guards. POB's default Quantum adapter and ZE Native
+both bind the shared catalog to the original method.
+
+The agent editing declarations owns catalog synchronization in the same change.
+For the CLI route, run `pwsh -NoProfile -File Tools/Console/Generate-PobConsoleCatalog.ps1`
+once per batch of declaration changes from the POB checkout. Use `-Check` for
+readback. Review and submit the matching declaration and generated catalog
+together. Use CLI or PlayMode to verify discovery, completion, single execution
+and the applicable environment and unlock policy through each intended entry.
+A command registered directly in one registry needs a binding in the
 other registry to be available through both independent entries.
 
 The default host registers only `ze-help`, `ze-clear` and `ze-session`. Register
