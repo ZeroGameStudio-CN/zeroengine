@@ -12,7 +12,7 @@ import tempfile
 import uuid
 
 PACKAGE = "com.zerogamestudio.zeroengine.ai-support"
-TOOL_VERSION = "0.2.1"
+TOOL_VERSION = "0.2.2"
 SCHEMA = 1
 RECEIPT = ".zeroengine-sync.json"
 MAX_BYTES = 8 * 1024 * 1024
@@ -75,6 +75,62 @@ def version(value: str):
     return tuple(map(int, match.groups()))
 
 
+def check_archive_delivery(project: Path, manifest: dict, lock: dict) -> int:
+    """Verify only the ZE archives distributed with the consumer project."""
+    directory = plain(project / "Packages/ZEArchives")
+    prefix = "file:ZEArchives/"
+
+    def managed(uri):
+        if not isinstance(uri, str) or not uri.startswith("file:"):
+            return False
+        location = uri[5:].replace("\\", "/").removeprefix("./")
+        return location.casefold().startswith("zearchives/")
+
+    direct = {name: uri for name, uri in manifest.get("dependencies", {}).items() if managed(uri)}
+    locked = {name: row for name, row in lock.get("dependencies", {}).items()
+              if isinstance(row, dict) and managed(row.get("version"))}
+    if not directory.exists() and not direct and not locked:
+        return 0
+    if not directory.is_dir():
+        raise Conflict("Require the managed Packages/ZEArchives directory")
+
+    index = load(directory / "archive-lock.json")
+    records = index.get("packages")
+    if index.get("schemaVersion") != 1 or not isinstance(records, dict):
+        raise Conflict("Invalid ZE archive-lock.json inventory")
+    expected = {}
+    for name, record in records.items():
+        asset = record["asset"]
+        if (record["name"] != name or asset != f'{name}-{record["version"]}.tgz'
+                or relative(asset) != asset or "/" in asset or asset in expected):
+            raise Conflict("Invalid ZE archive identity: " + name)
+        node = locked.get(name, {})
+        if (direct.get(name) != prefix + asset or node.get("version") != prefix + asset
+                or node.get("source") != "local-tarball"):
+            raise Conflict("ZE archive pin differs between manifest, UPM lock and archive-lock.json: " + name)
+        expected[asset] = record
+    unlisted = (direct.keys() | locked.keys()) - records.keys()
+    if unlisted:
+        raise Conflict("ZE archive pins missing from archive-lock.json: " + ", ".join(sorted(unlisted)))
+
+    actual = {path.relative_to(directory).as_posix() for path in directory.rglob("*") if path.suffix.casefold() == ".tgz"}
+    if actual - expected.keys():
+        raise Conflict("Unused ZE archives: " + ", ".join(sorted(actual - expected.keys())))
+    if expected.keys() - actual:
+        raise Conflict("Missing ZE archives: " + ", ".join(sorted(expected.keys() - actual)))
+    for asset, record in expected.items():
+        path = plain(directory / asset)
+        if not path.is_file() or path.stat().st_size != record["bytes"]:
+            raise Conflict("ZE archive size differs: " + asset)
+        checksum = hashlib.sha256()
+        with path.open("rb") as stream:
+            for chunk in iter(lambda: stream.read(1024 * 1024), b""):
+                checksum.update(chunk)
+        if checksum.hexdigest() != record["sha256"]:
+            raise Conflict("ZE archive SHA-256 differs: " + asset)
+    return len(expected)
+
+
 def prepare(project: Path, snapshot_path: Path, *, allow_version_split=False,
             include_local_trials=False, accept_current_commit=False):
     project = plain(project.resolve())
@@ -86,6 +142,7 @@ def prepare(project: Path, snapshot_path: Path, *, allow_version_split=False,
     if digest(read(manifest_path)) != snapshot.get("manifestSha256") or digest(read(lock_path)) != snapshot.get("lockSha256"):
         raise Conflict("Package snapshot is stale; export actual PackageInfo again")
     manifest, lock = load(manifest_path), load(lock_path)
+    check_archive_delivery(project, manifest, lock)
     packages = snapshot.get("packages", [])
     if not isinstance(packages, list) or not 1 <= len(packages) <= 256:
         raise Conflict("Invalid registered-package inventory")
@@ -198,7 +255,8 @@ def prepare(project: Path, snapshot_path: Path, *, allow_version_split=False,
     changed = [name for name in touched if before[name] != desired.get(name)]
     return {"target": target, "desired": desired, "before": before, "changed": changed,
             "packages": len(indexed), "versionSplit": version_split,
-            "inputs": {manifest_path: snapshot["manifestSha256"], lock_path: snapshot["lockSha256"]}}
+            "inputs": {manifest_path: snapshot["manifestSha256"], lock_path: snapshot["lockSha256"]},
+            "archiveProject": project}
 
 
 def prepare_remove(project: Path):
@@ -279,6 +337,9 @@ def apply(plan):
         for path, checksum in plan["inputs"].items():
             if digest(read(path)) != checksum:
                 raise Conflict("Package inputs changed after preview")
+        project = plan.get("archiveProject")
+        if project is not None:
+            check_archive_delivery(project, load(project / "Packages/manifest.json"), load(project / "Packages/packages-lock.json"))
         for name in plan["changed"]:
             leaf = target / name
             current = read(leaf) if leaf.is_file() else None

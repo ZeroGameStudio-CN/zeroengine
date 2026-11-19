@@ -211,6 +211,44 @@ class SynchronizationTests(unittest.TestCase):
             SYNC.apply(plan)
         self.assertFalse(plan["target"].exists())
 
+    def test_archive_appearing_after_preview_blocks_skill_apply(self):
+        folder = self.project / "Packages/ZEArchives"
+        folder.mkdir()
+        (folder / "archive-lock.json").write_bytes(SYNC.encode({"schemaVersion": 1, "packages": {}}))
+        plan = self.prepare()
+        orphan = folder / "stale.tgz"
+        orphan.write_bytes(b"keep for review")
+        with self.assertRaisesRegex(SYNC.Conflict, "Unused ZE archives: stale.tgz"):
+            SYNC.apply(plan)
+        self.assertFalse(plan["target"].exists())
+        with self.assertRaisesRegex(SYNC.Conflict, "Unused ZE archives"):
+            self.prepare()
+        self.assertEqual(orphan.read_bytes(), b"keep for review")
+
+    def test_checks_exact_archive_pins_files_and_hash(self):
+        folder = self.project / "Packages/ZEArchives"
+        folder.mkdir()
+        name = self.packages[0]["name"]
+        version = SYNC.TOOL_VERSION
+        asset = f"{name}-{version}.tgz"
+        pin = f"file:ZEArchives/{asset}"
+        data = b"validated archive bytes"
+        (folder / asset).write_bytes(data)
+        record = {"name": name, "version": version, "asset": asset, "bytes": len(data), "sha256": SYNC.digest(data)}
+        (folder / "archive-lock.json").write_bytes(SYNC.encode({"schemaVersion": 1, "packages": {name: record}}))
+        manifest = {"dependencies": {name: pin}}
+        lock = {"dependencies": {name: {"version": pin, "source": "local-tarball"}}}
+        self.assertEqual(SYNC.check_archive_delivery(self.project, manifest, lock), 1)
+        with self.assertRaisesRegex(SYNC.Conflict, "pin differs"):
+            SYNC.check_archive_delivery(self.project, {"dependencies": {name: "0.2.1"}}, lock)
+        path = folder / asset
+        path.write_bytes(data.upper())
+        with self.assertRaisesRegex(SYNC.Conflict, "SHA-256 differs"):
+            SYNC.check_archive_delivery(self.project, manifest, lock)
+        path.unlink()
+        with self.assertRaisesRegex(SYNC.Conflict, "Missing ZE archives"):
+            SYNC.check_archive_delivery(self.project, manifest, lock)
+
     def test_version_split_is_explicit_and_preserves_per_module_pins(self):
         self.packages[1]["gitHash"] = "b" * 40
         self.refresh()

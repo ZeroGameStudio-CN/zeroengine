@@ -75,6 +75,23 @@ python -B Tools/Packages/registry-preview/release.py --commit <tested-commit> --
 Repeat `--package` for a related cohort. The command reuses admitted dependencies
 when their pins, source tree and signer agree. A changed package needs a new
 version. `NAME=VERSION` selects an explicit version override for a reviewed trial.
+
+Release preparation requires `author.name` to be `ZeroGameStudio` and display
+names to use `ZeroEngine <Module>` without duplicates in the cohort. After
+signing, the controller compares the archive directory with the exact release
+receipt before Unity verification. Pass `--project <consumer-project>` to also
+check that project's `Packages/ZEArchives` inventory, pins, files and SHA-256 values.
+
+```text
+python -B Tools/Packages/registry-preview/release.py --check --commit <tested-commit> --package <changed-package-id>
+python -B Tools/Packages/registry-preview/release.py --check --project <consumer-project>
+```
+
+The read-only check can combine both inputs and uses the local admission catalog.
+For signed archive consumers, the installed Agent also runs the archive check
+during Skill synchronization. Remove superseded files from `ZEArchives` as part
+of the consumer changeset. Published Registry versions stay available for rollback.
+
 The command signs on Worker01, verifies the exact archives in one disposable
 Unity run, publishes the same bytes to Worker01 and GitHub, and verifies the
 active HTTPS catalog and archives. For an Agent release, the Unity run also
@@ -91,7 +108,7 @@ Signing took 2.5 seconds, Worker01 and GitHub synchronization took 8.4 seconds,
 and activation with public readback took 19.3 seconds. The catalog read checks
 all 43 package names. The affected Agent package and one retained package also
 receive live metadata probes. Agent `0.2.0` and `0.2.1` both served their verified
-archives after activation. POB's project lock still uses `0.2.0`.
+archives after activation.
 
 For a known partial release, run the same command with `--resume` and the same
 commit, package arguments and output. This reuses the verified signed bytes and

@@ -15,8 +15,10 @@ class CohortContract(unittest.TestCase):
 
     def load(self, name):
         if name == self.core:
-            return 'a' * 40, {'name': name, 'version': '2.2.2'}
+            return 'a' * 40, {'name': name, 'version': '2.2.2',
+                              'author': {'name': 'ZeroGameStudio'}, 'displayName': 'ZeroEngine Core'}
         return 'b' * 40, {'name': name, 'version': '1.0.0',
+                          'author': {'name': 'ZeroGameStudio'}, 'displayName': 'ZeroEngine Achievement',
                           'dependencies': {self.core: '2.0.0', 'com.unity.ugui': '1.0.0'}}
 
     def test_uses_verified_sibling_versions_without_changing_unity_dependencies(self):
@@ -36,10 +38,24 @@ class CohortContract(unittest.TestCase):
 
     def test_rejects_project_private_dependencies(self):
         def private(name):
-            return 'b' * 40, {'name': name, 'version': '1.0.0',
-                              'dependencies': {'com.zerogamestudio.pob.formula': '0.1.0'}}
+            tree, manifest = self.load(name)
+            return tree, dict(manifest, dependencies={'com.zerogamestudio.pob.formula': '0.1.0'})
         with self.assertRaisesRegex(ValueError, 'Project-local'):
             plan_cohort(private, {self.application: None}, {}, '123')
+
+    def test_checks_dependency_author_and_display_name(self):
+        for patch, error in [
+            ({'author': {'name': 'Zero Game Studio'}}, 'author.name'),
+            ({'displayName': 'ZeroEngine.Core'}, 'displayName must use'),
+            ({'displayName': 'ZeroEngine  Core'}, 'displayName must use'),
+            ({'displayName': 'ZeroEngine Achievement'}, 'share the displayName'),
+        ]:
+            def load(name):
+                tree, manifest = self.load(name)
+                return tree, dict(manifest, **patch) if name == self.core else manifest
+
+            with self.subTest(patch=patch), self.assertRaisesRegex(ValueError, error):
+                plan_cohort(load, {self.application: None}, {}, '123')
 
 
 class SignedArchiveContract(unittest.TestCase):
