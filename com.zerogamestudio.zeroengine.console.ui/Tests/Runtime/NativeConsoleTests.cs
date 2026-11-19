@@ -14,6 +14,62 @@ namespace ZeroEngine.Console.UI.Tests
     public sealed class NativeConsoleTests
     {
         [UnityTest]
+        public IEnumerator OnDemandSelector_DefersBothFrontendsAndCanReleaseTheView()
+        {
+            var root = new GameObject("On-demand console");
+            try
+            {
+                root.SetActive(false);
+                var host = root.AddComponent<ConsoleHost>();
+                host.StartupMode = ConsoleStartupMode.OnDemand;
+                var view = root.AddComponent<NativeConsole>();
+                view.ReleaseViewOnClose = true;
+                var projectFont = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
+                view.ConfigureFont(projectFont);
+                var selector = root.AddComponent<ConsoleFrontendSelector>();
+                var provider = root.AddComponent<OpeningFailureFrontend>();
+                selector.ConfigureQuantum(provider);
+                root.SetActive(true);
+                yield return null;
+
+                Assert.That(host.Session, Is.Null);
+                Assert.That(selector.Current, Is.Null);
+                Assert.That(provider.InitializeCount, Is.Zero);
+                Assert.That(root.GetComponentsInChildren<Canvas>(true), Is.Empty);
+                selector.Open();
+                Assert.That(provider.InitializeCount, Is.EqualTo(1));
+                Assert.That(view.IsOpen, Is.True);
+                var session = host.Session;
+                yield return Wait(view.SubmitAsync("ze-session"));
+                session.Write(new ConsoleOutput("sample", ConsoleOutputLevel.Info, "needle kept"));
+                session.Write(new ConsoleOutput("sample", ConsoleOutputLevel.Info, "other line"));
+
+                var buttons = root.GetComponentsInChildren<UnityEngine.UI.Button>();
+                buttons.Single(button => button.name == "搜索日志").onClick.Invoke();
+                var search = root.GetComponentsInChildren<UnityEngine.UI.InputField>().Single(field => field.name == "LogSearch");
+                search.text = "needle";
+                view.InputField.text = "ze-help";
+                view.InputField.caretPosition = 3;
+                selector.Close();
+                yield return null;
+
+                Assert.That(root.GetComponentsInChildren<Canvas>(true), Is.Empty);
+                Assert.That(view.InputField, Is.Null);
+                Assert.That(host.Session, Is.SameAs(session));
+                Assert.That(projectFont, Is.Not.Null);
+                selector.Open();
+                double until = Time.realtimeSinceStartupAsDouble + 4;
+                while (view.InputField.caretPosition != 3 && Time.realtimeSinceStartupAsDouble < until) yield return null;
+                Assert.That(view.InputField.text, Is.EqualTo("ze-help"));
+                Assert.That(view.InputField.caretPosition, Is.EqualTo(3));
+                Assert.That(view.InputField.textComponent.font, Is.SameAs(projectFont));
+                Assert.That(view.GetFilteredOutputText(), Is.EqualTo("needle kept"));
+                Assert.That(host.Session.GetHistory(), Is.EqualTo(new[] { "ze-session" }));
+            }
+            finally { Object.DestroyImmediate(root); }
+        }
+
+        [UnityTest]
         public IEnumerator Confirmation_UsesItsOwnButtons_AndClosesWithoutExecuting()
         {
             var root = new GameObject("Native confirmation integration");

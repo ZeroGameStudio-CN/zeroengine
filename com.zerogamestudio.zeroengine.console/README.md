@@ -29,6 +29,12 @@ Dispose registrations when a module unloads, then dispose the session and regist
 when their owner ends. A Unity owner can use `ConsoleHost`; its dispatcher keeps
 handlers on the main thread, including calls submitted from a worker.
 
+New Inspector hosts default to **On Demand**. The first open or a main-thread
+`ExecuteAsync` creates the registry and session. Register project modules from
+`Started` to catch that activation, or call `Initialize()` on the main thread
+before worker submissions. Existing serialized hosts keep **On Enable** mode.
+Explicit Unity log capture initializes the host as soon as access permits it.
+
 The registry reuses its sorted catalog until a module registers or unloads.
 Discovery and completion still check the current caller and policy on every
 request; returned command arrays remain caller-owned snapshots. Execution links

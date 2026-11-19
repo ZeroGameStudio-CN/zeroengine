@@ -5,6 +5,14 @@ GameObject. The view builds its own bounded hierarchy, uses the host's native
 pipeline and can operate without Quantum Console. A project can supply a font
 and an input-isolation lease; the view restores its own cursor/selection state.
 
+New Inspector hosts default to **On Demand** and new NativeConsole components
+default to **Release View On Close**. Opening creates the session and panel.
+Closing returns the Canvas, rendered
+rows, and any console-owned dynamic font to Unity. The session, command leases,
+history, draft, caret, and log filter remain available on reopen. Turn off
+**Release View On Close** when frequent reopening matters more than keeping
+the closed view's memory low.
+
 Fonts are resolved lazily when the view opens. Without a project font, one dynamic
 OS font uses an ordered family list for Latin, CJK and other installed scripts,
 falling back to Unity's built-in font. Unity selects an available face per glyph;
@@ -35,7 +43,8 @@ still require their matching native checks; Editor coverage does not certify the
 Use `ConsoleFrontendSelector` on the same owner for `Auto / Native / Quantum`
 selection. Supply an optional frontend component using `ConfigureQuantum` and
 open through the selector. With no compatible provider, Auto uses Native and
-records one reason. `AcquireInputIsolation` supplies the project's disposable
+records one reason. An on-demand selector resolves the provider on its first
+open. `AcquireInputIsolation` supplies the project's disposable
 gameplay/navigation lease and is restored when the selector is disabled.
 Set `Preference` before enabling an inactive owner to choose Native without an
 unnecessary missing-Quantum warning. Set `KeyboardShortcutEnabled = false` on
@@ -101,8 +110,8 @@ project's existing hidden path calls `TryUnlock` / `Unlock`. Configure the text
 sequence and tap count once; zero taps disables the gesture. There is no shared
 default password or always-visible release button.
 
-`Lock` revokes access for this session. Unlocking initializes the host; `Toggle`
-opens the view. Command environments and capabilities still
+`Lock` revokes access for this session. The startup mode determines whether
+unlocking also initializes the host. `Toggle` opens the view. Command environments and capabilities still
 apply. Existing project unlock paths can call this component instead of
 reimplementing its gate. Supply the existing input-isolation lease where needed.
 Touch/soft-keyboard behavior requires device acceptance; an Editor preview alone

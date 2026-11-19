@@ -77,7 +77,10 @@ namespace ZeroEngine.Console
         public ConsoleOutput[] GetOutput() { lock (sync) return output.ToArray(); }
         public ConsoleOutputSnapshot GetOutputSnapshot() { lock (sync) return new ConsoleOutputSnapshot(outputRevision, clearRevision, output.ToArray()); }
         /// <summary>Copies retained output and its revision into a caller-owned reusable buffer.</summary>
-        public int CopyOutputTo(ref ConsoleOutput[] buffer, out long revision)
+        public int CopyOutputTo(ref ConsoleOutput[] buffer, out long revision) =>
+            CopyOutputTo(ref buffer, out revision, out _);
+
+        public int CopyOutputTo(ref ConsoleOutput[] buffer, out long revision, out long lastClear)
         {
             lock (sync)
             {
@@ -91,6 +94,7 @@ namespace ZeroEngine.Console
                 output.CopyTo(buffer, 0);
                 if (count < buffer.Length) Array.Clear(buffer, count, buffer.Length - count);
                 revision = outputRevision;
+                lastClear = clearRevision;
                 return count;
             }
         }

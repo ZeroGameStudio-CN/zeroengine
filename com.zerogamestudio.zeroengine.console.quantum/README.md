@@ -1,5 +1,11 @@
 # Optional Quantum frontend
 
+The optional adapter reuses Quantum's public response and log APIs. A ZE
+command's pending confirmation appears in the owned Quantum view. Answer
+`yes` or `no` after the question appears. These responses bypass command
+history, and closing the view declines the confirmation. The adapter mirrors
+logs through the session's reusable output buffer.
+
 G4 compatibility candidate. Quantum Console is a separately installed vendor
 SDK; this package contains neither its code nor its assets. A project supplies
 its QC prefab and an explicitly verified compatibility profile. Unknown profiles

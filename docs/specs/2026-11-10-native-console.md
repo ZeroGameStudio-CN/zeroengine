@@ -419,3 +419,19 @@ for the Motion/TCE Presentation owner's tested commit and handoff.
 Evidence: D:/CodexArtifacts/pob-ze-cohort-fonts-20261116/verification.json and
 comparison.md. The earlier supported API/core benchmark evidence remains in
 D:/CodexArtifacts/ze-console-polish-20261116; no new Player result is inferred.
+
+## On-demand host and closed view, 2026-11-19
+
+On-demand hosts defer the command session and frontend selection until use.
+Native's release-on-close mode returns its Canvas, rows and owned font while
+retaining the session, draft, caret and search state. The optional Quantum
+frontend routes confirmation through the public response API and mirrors output
+with the shared reusable buffer and bound SDK log delegates.
+
+In Unity 6000.6.9f1 on Windows, 16 fresh hosts per mode used the same native view
+and borrowed font inside a warm Editor. Median host activation was 0.167 ms
+with eager initialization and 0.008 ms with on-demand initialization. The
+closed views retained 1 and 0 Canvases respectively. Reopen medians were 0.42 ms
+with the cached view and 6.96 ms when rebuilding it. The isolated suite passed
+157 EditMode and 59 PlayMode tests. Evidence is recorded at
+`D:/CodexArtifacts/ze-console-ondemand-20261119`.

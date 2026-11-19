@@ -83,7 +83,6 @@ namespace ZeroEngine.Console.UI
         public void Toggle()
         {
             if (!CanOpen) return;
-            host.Initialize();
             view.Toggle();
         }
 

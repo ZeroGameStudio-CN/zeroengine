@@ -5,9 +5,12 @@ using UnityEngine;
 
 namespace ZeroEngine.Console.Unity
 {
+    public enum ConsoleStartupMode { OnEnable, OnDemand }
+
     [DisallowMultipleComponent]
     public sealed class ConsoleHost : MonoBehaviour
     {
+        [SerializeField] private ConsoleStartupMode startupMode;
         [SerializeField] private bool allowInRelease;
         [SerializeField] private bool captureUnityLogs;
         [SerializeField] private string[] capabilities = Array.Empty<string>();
@@ -15,18 +18,42 @@ namespace ZeroEngine.Console.Unity
         private IDisposable common;
         private bool capturingUnityLogs;
         private bool sessionReleaseAccess;
+        private int enabledThread;
         public ConsoleRegistry Registry { get; private set; }
         public ConsoleSession Session { get; private set; }
+        public ConsoleStartupMode StartupMode { get => startupMode; set => startupMode = value; }
         public Func<ConsoleCaller> CallerFactory { get; set; }
         public event Action<ConsoleHost> Started;
         public event Action<ConsoleHost> Stopping;
         public bool CaptureUnityLogs
         {
             get => captureUnityLogs;
-            set { captureUnityLogs = value; UpdateLogCapture(); }
+            set
+            {
+                captureUnityLogs = value;
+                if (value) InitializeOnOwnerThread();
+                UpdateLogCapture();
+            }
         }
 
-        private void OnEnable() => Initialize();
+        // Keep zero as the serialized legacy mode. New Inspector components start on demand.
+        private void Reset() => startupMode = ConsoleStartupMode.OnDemand;
+
+        private void OnEnable()
+        {
+            enabledThread = Thread.CurrentThread.ManagedThreadId;
+            InitializeIfEager();
+        }
+
+        private void InitializeIfEager()
+        {
+            if (startupMode == ConsoleStartupMode.OnEnable || captureUnityLogs) Initialize();
+        }
+
+        private void InitializeOnOwnerThread()
+        {
+            if (Session == null && Thread.CurrentThread.ManagedThreadId == enabledThread) Initialize();
+        }
 
         public void Initialize()
         {
@@ -44,7 +71,7 @@ namespace ZeroEngine.Console.Unity
         public void SetReleaseAccessForSession(bool allowed)
         {
             sessionReleaseAccess = allowed;
-            if (allowed) Initialize();
+            if (allowed) InitializeIfEager();
             else if (!Application.isEditor && !Debug.isDebugBuild && !allowInRelease) Shutdown();
         }
 
@@ -57,19 +84,25 @@ namespace ZeroEngine.Console.Unity
 
         public Task<ConsoleResult> ExecuteAsync(string line, CancellationToken cancellation = default, TimeSpan? timeout = null)
         {
+            if (!cancellation.IsCancellationRequested) InitializeOnOwnerThread();
             var session = Session;
             var target = dispatcher;
-            return session == null || target == null ? Task.FromResult(ConsoleResult.Failure("host-disabled", "Unity Console host is disabled."))
+            return session == null || target == null ? Unavailable(cancellation)
                 : DispatchExecutionAsync(target, () => session.ExecuteLineAsync(line, CreateCaller(), cancellation, timeout), cancellation);
         }
 
         public Task<ConsoleResult> ExecuteAsync(string idOrName, object[] arguments, CancellationToken cancellation = default, TimeSpan? timeout = null)
         {
+            if (!cancellation.IsCancellationRequested) InitializeOnOwnerThread();
             var session = Session;
             var target = dispatcher;
-            return session == null || target == null ? Task.FromResult(ConsoleResult.Failure("host-disabled", "Unity Console host is disabled."))
+            return session == null || target == null ? Unavailable(cancellation)
                 : DispatchExecutionAsync(target, () => session.ExecuteAsync(idOrName, arguments, CreateCaller(), cancellation, timeout), cancellation);
         }
+
+        private Task<ConsoleResult> Unavailable(CancellationToken cancellation) =>
+            Task.FromResult(startupMode == ConsoleStartupMode.OnDemand && cancellation.IsCancellationRequested
+                ? ConsoleResult.Cancelled() : ConsoleResult.Failure("host-disabled", "Unity Console host is disabled."));
 
         private static async Task<ConsoleResult> DispatchExecutionAsync(UnityConsoleDispatcher target,
             Func<Task<ConsoleResult>> execution, CancellationToken cancellation)
