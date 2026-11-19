@@ -490,3 +490,28 @@ Memory covers the panel's owned Unity objects and excludes shared assets and
 the Editor process heap. The package suite ran 161 EditMode and 60 PlayMode cases
 without failures or skips. Reports are recorded at
 `D:/CodexArtifacts/ze-console-editor-fast-path-20261119`.
+
+## Editor panel drawing, 2026-11-19
+
+The icon meshes share vertices across triangles. Rounded surfaces reuse the
+same angular step, and an empty output view skips the redundant global Canvas
+refresh. A PlayMode comparison checked triangle order, color and position at
+two sizes for all 16 shapes. The meshes used 2,942 indexed vertices instead of
+7,628, with a maximum position difference below 0.0001 UI units.
+
+Each of two CLI PlayMode runs alternated 32 samples per frontend in the same
+Editor process and scene. The previous and revised ZE views used the same
+Console Core and 161 command names. Both ZE views rebuilt on first open and
+released the panel on close. Quantum initialized its prefab and command table
+before activation.
+
+| Metric | First run, previous ZE / revised ZE / Quantum | Second run, previous ZE / revised ZE / Quantum |
+| --- | --- | --- |
+| Median first open | 6.44 / 5.79 / 0.92 ms | 5.54 / 4.62 / 0.79 ms |
+| Median prefix, completion, and execution | 1.42 / 1.40 / 0.72 ms | 1.14 / 1.13 / 0.54 ms |
+| Owned panel hierarchy after close | 8.8 / 8.8 / 111.6 KiB | 8.8 / 8.8 / 111.6 KiB |
+
+The main change was in the first Canvas update. The input workflow changed by
+less than 0.02 ms in each run. Unity CLI ran 161 EditMode, 60 PlayMode and one
+geometry comparison case with zero failures or skips. Results are recorded at
+`D:/CodexArtifacts/ze-console-editor-render-cost-20261119`.
