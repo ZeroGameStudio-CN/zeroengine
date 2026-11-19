@@ -36,19 +36,22 @@ resolves the packages. Teammates receive both files through SCM and download the
 packages without personal npm/UPM/Git settings or GitHub access. The
 [minimal project](sample/README.md) shows the Core-only trial.
 
-POB adopted signed version `0.1.0-ze-pob.d194ba36.4` for all three packages in
-Plastic changeset `19381`. The current Editor reports Registry provenance and
-three valid organization signatures, retains the Quantum default input entry,
-and passes the parameter-metadata and command-catalog checks. Its installed ZE
-Agent Skill check covers 46 packages with no drift; only the three Console
-inventory entries changed. Player builds remain with the project owner.
+POB first adopted signed version `0.1.0-ze-pob.d194ba36.4` for the three Console
+packages in Plastic changeset `19381`. It then migrated Activity in `19413`,
+10 independent packages in `19414`, and the 29 linked packages together in
+`19415`. All 43 public ZE packages now resolve from ZE Registry. Each changeset
+includes the matching package lock and generated ZE Agent inventory. The final
+inventory covers 46 packages. The warm POB Editor verified the migrated
+versions and signatures, retained the Quantum default entry, and passed both
+command-catalog and parameter-metadata compatibility tests. The project owner
+handles the Player build using the existing route.
 
 The Activity delivery trial installed `1.1.0`, upgraded to
 `1.1.1-ze-pilot.1` and rolled back in a disposable Unity project. The public
 address returned the same signed archives from GitHub during a controlled
 Worker01 origin outage. The other 39 packages passed a combined cold-cache
 Unity installation from the public feed, with all 39 organization signatures
-valid. The POB consumer migration is tracked separately.
+valid.
 
 ## Package signatures
 
