@@ -78,6 +78,14 @@ candidate catalog. A verified promotion updates the checked-out admission
 catalog. Commit that catalog on ZE main before the next release. A consumer
 adopts an updated version through its own manifest, lock and Skill submission.
 
+The cold Agent `0.2.1` reference run reached verified public delivery in
+71.9 seconds. Unity verification and Skill generation took 35.7 seconds.
+Signing took 2.5 seconds, Worker01 and GitHub synchronization took 8.4 seconds,
+and activation with public readback took 19.3 seconds. The catalog read checks
+all 43 package names. The affected Agent package and one retained package also
+receive live metadata probes. Agent `0.2.0` and `0.2.1` both served their verified
+archives after activation. POB's project lock still uses `0.2.0`.
+
 For a known partial release, run the same command with `--resume` and the same
 commit, package arguments and output. This reuses the verified signed bytes and
 receipts. An unresolved Unity attempt or Cloudflare activation needs its original

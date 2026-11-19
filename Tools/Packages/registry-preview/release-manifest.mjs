@@ -215,13 +215,31 @@ export default {
           "signingOrganizationId": "16767998560366",
           "dependencies": {
             "com.unity.modules.jsonserialize": "1.0.0"
+          },
+          "githubBase": "https://github.com/ZeroGameStudio-CN/zeroengine/releases/download/ze-upm-registry-independent-d194ba36-20261118/"
+        },
+        "0.2.1": {
+          "asset": "com.zerogamestudio.zeroengine.ai-support-0.2.1.tgz",
+          "bytes": 24186,
+          "sha256": "5382cbc432ae2612d9c375589c31c5b2308015b930401c74057efa7bf9b4f9fa",
+          "sha512": "sha512-NkCRGsaI0R0ObuUy6TCUAV2/gdc3W6qhLfaGz/xTI7gYEcelL6e11Cx3/Zk2gpj1k+w7lzFTmj2YaM3xkc0b9A==",
+          "sourceCommit": "ba395dfdc4c0b05d0ac6f95dfe9fa330da462556",
+          "sourceTree": "61fe6c2784d3b2ce85d1d0176e5b28fc406ff4ef",
+          "matchedSourceFiles": 14,
+          "sourceBytesUnchanged": true,
+          "runtimeBytesUnchanged": true,
+          "packageJsonReformatted": false,
+          "omittedGitIgnore": [],
+          "signingOrganizationId": "16767998560366",
+          "dependencies": {
+            "com.unity.modules.jsonserialize": "1.0.0"
           }
         }
       },
-      "githubBase": "https://github.com/ZeroGameStudio-CN/zeroengine/releases/download/ze-upm-registry-independent-d194ba36-20261118/",
+      "githubBase": "https://github.com/ZeroGameStudio-CN/zeroengine/releases/download/ze-upm-ba395dfd-d76ec8880e2c/",
       "metadataAsset": "com.zerogamestudio.zeroengine.ai-support-registry.json",
       "tags": {
-        "latest": "0.2.0"
+        "latest": "0.2.1"
       },
       "summary": {
         "displayName": "ZeroEngine Agent",
@@ -1474,5 +1492,5 @@ export default {
       }
     }
   },
-  "updatedAt": "2026-11-18T11:21:00Z"
+  "updatedAt": "2026-11-19T02:56:14Z"
 };
