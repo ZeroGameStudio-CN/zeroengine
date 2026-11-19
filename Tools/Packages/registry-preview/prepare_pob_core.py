@@ -62,7 +62,7 @@ def committed_files(repository, commit, package):
     return result
 
 
-def pack(output, files, version, commit, tree, name=NAME, sibling_version=None):
+def prepared_files(files, version, commit, tree, name=NAME, sibling_version=None):
     original = json.loads(files['package.json'])
     if original['name'] != name:
         raise ValueError('Package identity differs from the selected Git tree')
@@ -81,6 +81,11 @@ def pack(output, files, version, commit, tree, name=NAME, sibling_version=None):
         metadata['dependencies'] = {key: sibling_version if key in siblings else value
                                     for key, value in dependencies.items()}
     payload = dict(files, **{'package.json': (json.dumps(metadata, indent=2) + '\n').encode()})
+    return payload, metadata
+
+
+def pack(output, files, version, commit, tree, name=NAME, sibling_version=None):
+    payload, metadata = prepared_files(files, version, commit, tree, name, sibling_version)
     raw = io.BytesIO()
     with tarfile.open(fileobj=raw, mode='w', format=tarfile.USTAR_FORMAT) as archive:
         for path, data in sorted(payload.items()):

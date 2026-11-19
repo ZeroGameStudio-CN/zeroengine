@@ -12,7 +12,7 @@ import tempfile
 import uuid
 
 PACKAGE = "com.zerogamestudio.zeroengine.ai-support"
-TOOL_VERSION = "0.2.0"
+TOOL_VERSION = "0.2.1"
 SCHEMA = 1
 RECEIPT = ".zeroengine-sync.json"
 MAX_BYTES = 8 * 1024 * 1024

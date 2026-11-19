@@ -17,12 +17,21 @@ Use the project's existing UPM route: Package Manager UI or
 `UnityEditor.PackageManager.Client` through its authorized Editor executor.
 Observe the original asynchronous request; do not launch a competing Editor.
 
-- Install needed modules and required siblings with pinned Git UPM URLs at one
-  tested commit. Never copy package folders into `Assets`.
-- Upgrade the installed ZE cohort together; version splits remain explicit trials.
+- Follow the project manifest's package source. Pin admitted ZE Registry
+  packages to verified versions. For Git UPM packages, pin the tested commit.
+- Upgrade the affected modules and required siblings as one compatible cohort.
+- For a Registry project, submit the matching manifest, lock and refreshed Skill
+  together after verification.
 - Before removal, check remaining package and project assembly references.
 - Verify actual PackageInfo, manifest/lock and relevant compilation, then refresh
   guidance. Installed source alone does not prove Player support or release.
+
+## Publish a ZE version
+
+From the ZE repository, use `Tools/Packages/registry-preview/release.py`
+with the tested commit and changed package IDs. The command signs, verifies
+and publishes the artifacts and writes the verified admission catalog.
+Use the [Registry release guide](https://github.com/ZeroGameStudio-CN/zeroengine/blob/main/Tools/Packages/registry-preview/README.md#publish-a-version) for the command and recovery receipts.
 
 ## Skill lifecycle
 
