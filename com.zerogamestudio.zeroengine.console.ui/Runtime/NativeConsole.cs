@@ -212,7 +212,7 @@ namespace ZeroEngine.Console.UI
             if (input.isFocused && input.caretPosition != observedCaret)
             {
                 observedCaret = input.caretPosition;
-                InputChanged(input.text);
+                if (!completionDirty) InputChanged(input.text);
             }
             if (!composing && ConsoleKeyboard.Pressed(KeyCode.Escape)) { Close(); return; }
             if (!composing && input.isFocused)
@@ -428,6 +428,11 @@ namespace ZeroEngine.Console.UI
             {
                 emptyOutput.text = string.IsNullOrEmpty(outputQuery) ? "ze-help" : "没有匹配日志";
                 emptyOutput.gameObject.SetActive(count == 0);
+            }
+            if (count == 0 && outputRows.Count == 0 && outputContent.anchoredPosition == Vector2.zero)
+            {
+                renderedRevision = revision;
+                return;
             }
             while (outputRows.Count < count) outputRows.Add(Text("Line", outputContent, ""));
             Vector2 readingPosition = outputContent.anchoredPosition;
