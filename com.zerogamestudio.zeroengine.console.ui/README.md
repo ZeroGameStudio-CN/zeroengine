@@ -73,6 +73,12 @@ completion retains the remaining text and puts the caret after the inserted valu
 Data-only command returns use the shared Host formatter; existing result messages
 remain authoritative and business status is preserved.
 
+Commands can request confirmation through the existing session. The Native view
+shows the question with explicit Confirm and Back buttons. It keeps the question
+in the output for longer detail and leaves command history unchanged. Closing
+the view declines the pending confirmation. The normal Enter path never accepts
+a confirmation.
+
 Common actions use a consistent set of procedural line icons, with Chinese
 descriptions and shortcut hints on hover. The follow control shows its active or
 paused state; ready/running and cancellation retain distinct visual states.

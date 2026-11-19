@@ -38,6 +38,8 @@ namespace ZeroEngine.Console.UI
         private long renderedRevision = -1;
         private long completionRevision = -1;
         private bool wasRunning;
+        private ConsoleInteraction interaction;
+        private ConsoleConfirmation shownConfirmation;
         private int historyIndex = -1;
         private string draftInput = string.Empty;
         private IDisposable inputLease;
@@ -113,6 +115,7 @@ namespace ZeroEngine.Console.UI
             previousSelection = EventSystem.current ? EventSystem.current.currentSelectedGameObject : null;
             inputLease = AcquireInputIsolation?.Invoke();
             eventSystemLease = ConsoleEventSystemLease.Acquire(transform);
+            interaction = host.Session.TryAcquireInteraction();
             IsOpen = true;
             view.SetActive(true);
             if (ConsoleInputBackend.NeedsInputOverride)
@@ -138,6 +141,9 @@ namespace ZeroEngine.Console.UI
         {
             if (!IsOpen) return;
             IsOpen = false;
+            interaction?.Dispose();
+            interaction = null;
+            RefreshConfirmation(null);
             CancelCompletion();
             try
             {
@@ -171,6 +177,7 @@ namespace ZeroEngine.Console.UI
             bool composing = IsComposing;
             if (KeyboardShortcutEnabled && !composing && ConsoleKeyboard.Pressed(KeyCode.BackQuote)) Toggle();
             if (!IsOpen || host.Session == null) return;
+            RefreshConfirmation(interaction?.Pending);
             UpdateViewLayout();
             if (completionRevision != host.Registry.Revision)
             {
@@ -183,7 +190,7 @@ namespace ZeroEngine.Console.UI
                 InputChanged(input.text);
             }
             if (!composing && ConsoleKeyboard.Pressed(KeyCode.Escape)) { Close(); return; }
-            if (!composing && input.isFocused)
+            if (!composing && input.isFocused && shownConfirmation == null)
             {
                 if (ConsoleKeyboard.Pressed(KeyCode.Tab) && currentCompletions != null && currentCompletions.Items.Count > 0) ApplyCompletion(selectedCompletion);
                 else if (ConsoleKeyboard.Pressed(KeyCode.UpArrow)) NavigateHistory(-1);
@@ -240,9 +247,13 @@ namespace ZeroEngine.Console.UI
         }
 
         public bool IsComposing => ConsoleKeyboard.IsComposing;
-        private void SubmitInput(string line) { if (!IsComposing) _ = SubmitAsync(line); }
+        private void SubmitInput(string line)
+        {
+            if (!IsComposing && interaction?.Pending == null) _ = SubmitAsync(line);
+        }
         private void InputChanged(string value)
         {
+            if (shownConfirmation != null) return;
             bool hasDraft = !string.IsNullOrWhiteSpace(value);
             CancelCompletion(!hasDraft);
             completionDirty = hasDraft;

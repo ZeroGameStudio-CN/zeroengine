@@ -30,7 +30,11 @@ namespace ZeroEngine.Console.UI
         private Canvas viewCanvas;
         private CanvasScaler viewScaler;
         private ConsoleCommandHintView commandHint;
-        private float HintHeight => commandHint != null && commandHint.IsVisible ? commandHint.Height + 6 : 0;
+        private RectTransform confirmationRow;
+        private Text confirmationMessage;
+        private const float ConfirmationHeight = 46;
+        private float HintHeight => shownConfirmation != null ? ConfirmationHeight + 6
+            : commandHint != null && commandHint.IsVisible ? commandHint.Height + 6 : 0;
 
         private void EnsureView()
         {
@@ -202,6 +206,47 @@ namespace ZeroEngine.Console.UI
             commandHint.Root.offsetMax = new Vector2(-12, 84 + commandHint.Height);
             if (scroll) scroll.GetComponent<RectTransform>().offsetMin = new Vector2(12, 90 + HintHeight);
             if (completions) completions.offsetMin = new Vector2(12, 90 + HintHeight);
+        }
+
+        private void RefreshConfirmation(ConsoleConfirmation request)
+        {
+            if (ReferenceEquals(shownConfirmation, request)) return;
+            shownConfirmation = request;
+            if (request != null)
+            {
+                CancelCompletion();
+                EnsureConfirmationRow();
+                confirmationMessage.text = request.Message;
+                confirmationRow.gameObject.SetActive(true);
+            }
+            else if (confirmationRow)
+            {
+                confirmationRow.gameObject.SetActive(false);
+                if (IsOpen) InputChanged(input.text);
+            }
+            UpdateHintLayout();
+        }
+
+        private void EnsureConfirmationRow()
+        {
+            if (confirmationRow) return;
+            confirmationRow = Rect("Confirmation", panel);
+            Stretch(confirmationRow, Vector2.zero, new Vector2(1, 0), new Vector2(12, 84), new Vector2(-12, 84 + ConfirmationHeight));
+            Surface(confirmationRow, SurfaceColor, 5).raycastTarget = false;
+            confirmationMessage = Chrome("Question", confirmationRow, string.Empty, 14);
+            Stretch(confirmationMessage.rectTransform, Vector2.zero, Vector2.one, new Vector2(10, 4), new Vector2(-145, -4));
+            var anchor = new Vector2(1, 0);
+            MakeButton(confirmationRow, "Decline", "返回", anchor, new Vector2(-136, 5), new Vector2(-74, 41),
+                () => RespondToConfirmation(false), 14);
+            var accept = MakeButton(confirmationRow, "Confirm", "确认", anchor, new Vector2(-68, 5), new Vector2(-6, 41),
+                () => RespondToConfirmation(true), 14);
+            accept.targetGraphic.color = SelectedColor;
+        }
+
+        private void RespondToConfirmation(bool accept)
+        {
+            if (IsOpen && host && interaction?.Respond(shownConfirmation, host.CreateCaller(), accept) == true)
+                RefreshConfirmation(interaction.Pending);
         }
 
         private void ToggleFollow()
