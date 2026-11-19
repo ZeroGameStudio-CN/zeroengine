@@ -8,8 +8,9 @@ description: Use installed ZeroEngine modules and manage their UPM installation,
 Start with [the installed inventory](references/installed-packages.md), then read
 the relevant module README and source path from
 `references/installed-packages.json`. Uninstalled modules are not available APIs.
-For commands or a debug console, read [the Console contract](references/console.md).
-Keep gameplay independent of a Console adapter.
+Default to ZE Console for new Unity projects. POB keeps its Quantum default
+entry and existing commands. Use [the Console contract](references/console.md)
+to choose a frontend and add commands that work through the project entry.
 
 ## Packages
 
