@@ -7,7 +7,9 @@ stay compatible. No Player assembly or background service is added.
 
 `Skills~` maintains the project Skill template; `Tools~` provides its lifecycle
 CLI. Module READMEs remain the API source. Generated consumer guidance lives in
-`.agents/skills/zeroengine`, with an inventory and copied module READMEs.
+`.agents/skills/zeroengine`, with a portable inventory and copied module READMEs.
+The inventory records Unity asset paths by package ID. Reading the checked-in
+guidance after a checkout requires only the project files.
 
 ## Packages and guidance
 
@@ -17,7 +19,7 @@ Registry versions or tested Git commits according to the project's manifest.
 Include the required siblings. Publish new versions through the
 [ZE Registry release entry](https://github.com/ZeroGameStudio-CN/zeroengine/blob/main/Tools/Packages/registry-preview/README.md#publish-a-version).
 
-After a package change, export
+For package maintainers, after a package change, export
 `ZeroEngine.AiSupport.Editor.SkillPackageSnapshot.CreateJson()` through that
 project's Editor executor to an external file. Then use Python 3.10+:
 

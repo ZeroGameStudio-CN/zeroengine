@@ -11,9 +11,9 @@ module and gameplay handlers.
 - New Unity projects install ZE Console and Console UI through their verified UPM
   source and set up `ConsoleHost` and `NativeConsole` by default. Add Quantum
   integration when a project needs an existing Quantum workflow.
-- POB keeps its current Quantum default entry, existing command aliases and
-  unlock flow. Use Native for explicit trials. A switch or SDK removal needs
-  its own consumer verification of commands, release unlock and packaging.
+- In existing projects, follow the documented default entry, command aliases
+  and unlock flow. Verify commands, release unlock and packaging before
+  switching frontends or removing an SDK.
 
 ## Command registration
 
@@ -22,21 +22,12 @@ projects, register `ConsoleBinding` values through the project's ConsoleHost.
 Native and the optional verified Quantum frontend can present that same ZE
 session, with shared policy and handlers.
 
-For commands intended for both POB entries, use POB's own `[Command]`
-(`POB.CommandAttribute`) on a single static handler and reuse the project's
-parameter tags and business guards. POB's default Quantum adapter and ZE Native
-both bind the shared catalog to the original method.
-
-The POB Editor synchronizes the catalog as it imports command source edits.
-Adding a command in Unity's normal workflow is one declaration and a compile.
-The agent editing declarations owns catalog synchronization in the same change.
-For edits made offline, use the existing CLI in the POB checkout with
-`pwsh -NoProfile -File Tools/Console/Generate-PobConsoleCatalog.ps1`. Use `-Check`
-for readback. POB Player builds automatically check the generated catalog against
-the source and the loaded Editor assembly. Review and submit the matching
-declaration and generated catalog together. Use CLI or PlayMode to verify
-discovery, completion, single execution and the applicable environment and unlock
-policy through each intended entry.
+When a project provides a shared command attribute or catalog, declare the
+handler once and reuse its parameter metadata and business guards. If the
+catalog is generated, use the project's existing generation and freshness
+checks and submit the declaration with its derived catalog. Verify discovery,
+completion, single execution, and applicable environment and unlock policy
+through each intended entry.
 A command registered directly in one registry needs a binding in the
 other registry to be available through both independent entries.
 

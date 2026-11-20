@@ -76,6 +76,21 @@ class SynchronizationTests(unittest.TestCase):
         self.assertEqual([], self.prepare()["changed"])
         self.assertEqual(manifest, (self.project / "Packages/manifest.json").read_bytes())
 
+    def test_generated_guidance_survives_checkout_and_cache_relocation(self):
+        target = self.installed()
+        inventory = SYNC.load(target / "references/installed-packages.json")["packages"]
+        for name, package in inventory.items():
+            self.assertEqual(f"Packages/{name}", package["assetPath"])
+            self.assertNotIn("resolvedPath", package)
+
+        self.project = self.project.rename(self.root / "Second checkout")
+        cache = (self.root / "cache").rename(self.root / "Another package cache")
+        for package in self.packages:
+            package["resolvedPath"] = str(cache / package["name"])
+        self.refresh()
+
+        self.assertEqual([], self.prepare()["changed"])
+
     def test_modified_managed_file_is_preserved(self):
         target = self.installed()
         (target / "SKILL.md").write_text("local edits", encoding="utf-8")
@@ -90,6 +105,10 @@ class SynchronizationTests(unittest.TestCase):
         old_receipt = SYNC.load(target / SYNC.RECEIPT)
         old_receipt["toolVersion"] = "0.2.0"
         old_receipt["files"]["SKILL.md"] = SYNC.digest(old_skill)
+        legacy_tool = target / "scripts/sync_skill.py"
+        legacy_tool.parent.mkdir()
+        legacy_tool.write_bytes(b"Old generated synchronizer")
+        old_receipt["files"]["scripts/sync_skill.py"] = SYNC.digest(legacy_tool.read_bytes())
         (target / SYNC.RECEIPT).write_bytes(SYNC.encode(old_receipt))
         (target / "personal-notes.md").write_text("keep", encoding="utf-8")
 
@@ -98,7 +117,8 @@ class SynchronizationTests(unittest.TestCase):
         SYNC.apply(self.prepare())
         updated = (target / "SKILL.md").read_text(encoding="utf-8")
         self.assertIn("ZE Registry", updated)
-        self.assertIn("registry-preview/release.py", updated)
+        self.assertIn("registry-preview/README.md#publish-a-version", updated)
+        self.assertFalse(legacy_tool.exists())
         self.assertEqual("keep", (target / "personal-notes.md").read_text(encoding="utf-8"))
         self.assertEqual([], self.prepare()["changed"])
 
@@ -137,7 +157,13 @@ class SynchronizationTests(unittest.TestCase):
 
     def test_remove_cli_refuses_deleting_its_running_copy(self):
         target = self.installed()
-        result = subprocess.run([sys.executable, "-B", "-X", "utf8", str(target / "scripts/sync_skill.py"),
+        copied_tool = target / "scripts/sync_skill.py"
+        copied_tool.parent.mkdir()
+        shutil.copyfile(SCRIPT, copied_tool)
+        receipt = SYNC.load(target / SYNC.RECEIPT)
+        receipt["files"]["scripts/sync_skill.py"] = SYNC.digest(copied_tool.read_bytes())
+        (target / SYNC.RECEIPT).write_bytes(SYNC.encode(receipt))
+        result = subprocess.run([sys.executable, "-B", "-X", "utf8", str(copied_tool),
             "--project", str(self.project), "--remove", "--apply"], capture_output=True, text=True, encoding="utf-8", timeout=15)
         self.assertEqual(result.returncode, 2, result.stdout + result.stderr)
         self.assertIn("running copy", result.stdout)
