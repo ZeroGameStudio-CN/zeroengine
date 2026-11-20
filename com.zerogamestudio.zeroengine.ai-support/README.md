@@ -34,11 +34,12 @@ a conflict. Apply changes generated guidance only; it never repins packages or
 changes global Skills, assets or project settings. Removed module references are
 cleaned when unchanged. Local additions remain; stale snapshots, modified managed
 files, unknown/newer receipts and failed restoration stop with recovery evidence.
+The synchronization receipt treats LF and CRLF checkouts as the same text.
 
 For signed ZE archive projects, synchronization checks that
-`Packages/ZEArchives/archive-lock.json`, both UPM files and the actual archives
-agree. Replace obsolete archives before refreshing the Skill. A failed check
-reports the affected file and preserves it for review.
+`Packages/ZEArchives/archive-lock.json`, both UPM files, the actual archives and
+Unity's registered versions agree. Resolve package changes in Unity before
+exporting the snapshot. A failed check identifies the affected package or file.
 
 Explicit trials use `--include-local-trials` / `--allow-version-split` and keep
 their provenance. A same-tool-version commit change requires reviewed installed
