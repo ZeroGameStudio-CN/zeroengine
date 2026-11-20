@@ -602,6 +602,30 @@
       ],
       "relatedContent": [],
       "verificationScope": "发布目录覆盖 Console 三包和 40 个由 d194ba36 准备的 ZE 包。验证包含真实 HTTPS 安装、Unity 签名、依赖解析、Activity 同地址故障切换、POB 实际接入与 Plastic 服务端回读。Player 包由项目负责人按现有流程构建和验收。"
+    },
+    {
+      "id": "ze.narrative.quest-reliability",
+      "title": "任务核心可靠发奖、独立条件身份与隐藏解锁配置",
+      "stage": "Previewable",
+      "targetReleaseId": "",
+      "availability": "TestOnly",
+      "responsibleChat": "01a1e909-18dd-7cd0-aa92-551bd8f57bf3",
+      "chatUrl": "",
+      "nextAction": "代码审查与恢复仓库 Unity CI 的授权配置后再合并；POB 消费接入单独进行。",
+      "entrance": "包级 QuestReliabilityTests 与原有 Quest EditMode 回归；消费者在配置和存档就绪后显式 ActivateConfiguredQuests。",
+      "resourcePath": "com.zerogamestudio.zeroengine.narrative/Runtime/Quest",
+      "revision": "候选已验证：可靠领奖与稳定回执、独立条件身份、隐藏任务显式激活、已达标进度恢复、保留累计历史的每局限次基线，以及旧数据迁移/作者校验。 2026-11-19: verified disk persistence and durable grant receipts; stop remaining reward dispatch before invoking an adapter after a callback switches saves.",
+      "releaseEvidence": "",
+      "candidatePackageVersion": "3.2.0",
+      "verificationEvidence": [
+        "D:/CodexTemp/narrative-quest-reliability-20261117/verification.json",
+        "D:/CodexTemp/narrative-quest-reliability-20261117/release-results/results.xml",
+        "D:\\CodexTemp\\narrative-quest-recheck-20261119-results\\verification.json",
+        "D:\\CodexTemp\\narrative-quest-recheck-20261119-results\\after-fix\\results.xml"
+      ],
+      "verificationScope": "2026-11-19 Unity 6000.6.9f1 isolated EditMode: 69/69, no failures or skips. Added 3 disk-backed workflows and a regression that first reproduced and then verified the fix for reward-receipt callbacks switching saves. Exact names and all runtime/test source fingerprints match. Prior CI run 44111353720 stopped before Unity tests at license activation; POB integration remains pending.",
+      "pullRequest": "https://github.com/ZeroGameStudio-CN/zeroengine/pull/10",
+      "ciEvidence": "https://github.com/ZeroGameStudio-CN/zeroengine/actions/runs/44111353720"
     }
   ]
 }

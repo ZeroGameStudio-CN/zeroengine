@@ -20,9 +20,11 @@ namespace ZeroEngine.Quest
 
         public bool HasQuestForPlayer()
         {
+            if (quests == null) return false;
             // Check if player can accept any quest
             foreach (var q in quests)
             {
+                if (!q) continue;
                 if (CanAccept(q)) return true;
                 if (CanSubmit(q)) return true;
             }
@@ -31,16 +33,7 @@ namespace ZeroEngine.Quest
 
         private bool CanAccept(QuestConfigSO quest)
         {
-            var state = QuestManager.Instance.GetQuestState(quest.questId);
-            if (state == QuestState.Inactive)
-            {
-                // Check repetition logic handled in Manager, but we can pre-check here if needed
-                if(quest.repetitionLimit > 0 && QuestManager.Instance.GetQuestCompletionCount(quest.questId) >= quest.repetitionLimit)
-                    return false;
-                    
-                return true;
-            }
-            return false;
+            return QuestManager.Instance != null && QuestManager.Instance.CanAcceptQuest(quest.questId, out _);
         }
 
         private bool CanSubmit(QuestConfigSO quest)

@@ -1,0 +1,7 @@
+{
+  "name": "ZeroEngine.Narrative.Editor",
+  "rootNamespace": "ZeroEngine.Quest.Editor",
+  "references": ["ZeroEngine.Narrative", "ZeroEngine.Core"],
+  "includePlatforms": ["Editor"],
+  "autoReferenced": true
+}

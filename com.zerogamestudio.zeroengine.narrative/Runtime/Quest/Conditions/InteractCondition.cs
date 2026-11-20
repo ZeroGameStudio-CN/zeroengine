@@ -31,7 +31,7 @@ namespace ZeroEngine.Quest
 
         public override int GetCurrentProgress(QuestRuntimeData runtime)
         {
-            return runtime.GetProgress(GetProgressKey());
+            return runtime.GetProgress(GetStorageKey());
         }
 
         public override int GetTargetProgress() => RequiredCount;
@@ -44,14 +44,12 @@ namespace ZeroEngine.Quest
 
             if (eventData is ConditionEventData data && data.TargetId == TargetId)
             {
-                runtime.AddProgress(GetProgressKey(), data.Amount, RequiredCount);
-                return true;
+                return runtime.TryAddProgress(GetStorageKey(), data.Amount, RequiredCount);
             }
 
             if (eventData is string targetId && targetId == TargetId)
             {
-                runtime.AddProgress(GetProgressKey(), 1, RequiredCount);
-                return true;
+                return runtime.TryAddProgress(GetStorageKey(), 1, RequiredCount);
             }
 
             return false;

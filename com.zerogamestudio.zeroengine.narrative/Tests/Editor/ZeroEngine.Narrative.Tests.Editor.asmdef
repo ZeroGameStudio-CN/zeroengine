@@ -4,7 +4,9 @@
   "references": [
     "ZeroEngine.Core",
     "ZeroEngine.Achievement",
+    "ZeroEngine.Economy",
     "ZeroEngine.Narrative",
+    "ZeroEngine.Narrative.Editor",
     "UnityEditor.TestRunner",
     "UnityEngine.TestRunner"
   ],

@@ -10,6 +10,9 @@ namespace ZeroEngine.Quest
     [Serializable]
     public abstract class QuestReward
     {
+        [Tooltip("Stable receipt identity within this quest. Assign before release; empty uses the legacy list position.")]
+        public string RewardId;
+
         [Header("Display")]
         [Tooltip("Fallback reward description for UI preview. Projects may override this through localization.")]
         public string Description;
@@ -27,6 +30,12 @@ namespace ZeroEngine.Quest
         /// </summary>
         /// <returns>是否成功发放</returns>
         public abstract bool Grant();
+
+        /// <summary>
+        /// Stable authored grant payload. Rewards with Unity object references must override this
+        /// using catalog identities rather than session-specific object instance IDs.
+        /// </summary>
+        public virtual string GetGrantFingerprint() => JsonUtility.ToJson(this);
 
         /// <summary>
         /// 获取奖励预览文本

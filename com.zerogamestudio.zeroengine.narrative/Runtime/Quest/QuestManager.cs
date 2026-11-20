@@ -20,7 +20,7 @@ namespace ZeroEngine.Quest
         public string QuestId { get; }
     }
 
-    public class QuestManager : Singleton<QuestManager>, ISaveable
+    public partial class QuestManager : Singleton<QuestManager>, ISaveable
     {
         private QuestSystemSaveData _saveData = new QuestSystemSaveData();
         private Dictionary<string, QuestConfigSO> _questConfigs = new Dictionary<string, QuestConfigSO>();
@@ -77,17 +77,20 @@ namespace ZeroEngine.Quest
 
         public object ExportSaveData()
         {
-            return _saveData;
+            return GetSaveData();
         }
 
         public void ImportSaveData(object data)
         {
-            _saveData = data as QuestSystemSaveData ?? new QuestSystemSaveData();
+            if (data != null && !(data is QuestSystemSaveData))
+                throw new ArgumentException("Unsupported quest save payload.", nameof(data));
+            LoadSaveData(data as QuestSystemSaveData);
         }
 
         public void ResetToDefault()
         {
             _saveData = new QuestSystemSaveData();
+            _automaticActivationEnabled = false;
         }
 
         #endregion
@@ -105,7 +108,12 @@ namespace ZeroEngine.Quest
             if (config == null || string.IsNullOrWhiteSpace(config.questId))
                 return;
 
-            _questConfigs[config.questId.Trim()] = config;
+            var id = config.questId.Trim();
+            if (_questConfigs.TryGetValue(id, out var existing) && existing != config)
+                throw new InvalidOperationException($"Duplicate quest config: {id}");
+            MigrateConditionProgressForConfig(config);
+            _questConfigs[id] = config;
+            if (_automaticActivationEnabled) ActivateConfiguredQuests();
         }
 
         /// <summary>
@@ -202,6 +210,7 @@ namespace ZeroEngine.Quest
         /// </summary>
         public void ProcessConditionEvent(string eventType, ConditionEventData data)
         {
+            var save = _saveData;
             var activeQuestSnapshot = new List<QuestRuntimeData>(_saveData.activeQuests);
             for (int i = 0; i < activeQuestSnapshot.Count; i++)
             {
@@ -210,6 +219,7 @@ namespace ZeroEngine.Quest
 
                 var config = GetConfig(quest.questId);
                 if (config == null || config.Conditions == null || config.Conditions.Count == 0) continue;
+                if (!ValidateDefinition(config, out _)) continue;
 
                 bool questChanged = false;
 
@@ -224,12 +234,17 @@ namespace ZeroEngine.Quest
 
                     questChanged = true;
                     OnConditionProgress?.Invoke(quest.questId, condition);
+                    if (!ReferenceEquals(save, _saveData) || !_saveData.activeQuests.Contains(quest) ||
+                        quest.state != QuestState.Active) break;
 
                     if (!wasCompleted && condition.IsSatisfied(quest))
                         OnConditionCompleted?.Invoke(quest.questId, condition);
+
+                    if (!ReferenceEquals(save, _saveData) || !_saveData.activeQuests.Contains(quest))
+                        break;
                 }
 
-                if (questChanged)
+                if (questChanged && ReferenceEquals(save, _saveData) && _saveData.activeQuests.Contains(quest))
                     CheckCompletion(quest, config);
             }
         }
@@ -251,7 +266,7 @@ namespace ZeroEngine.Quest
 
         private void CheckCompletion(QuestRuntimeData quest, QuestConfigSO config)
         {
-            if (config.Conditions == null || config.Conditions.Count == 0) return;
+            if (config == null || config.Conditions == null || config.Conditions.Count == 0) return;
 
             bool isComplete = true;
             foreach (var condition in config.Conditions)
@@ -272,14 +287,16 @@ namespace ZeroEngine.Quest
             if (quest == null || quest.state != QuestState.Active) return;
 
             quest.state = QuestState.Successful;
+            var save = _saveData;
             var transition = new QuestCompletionTransition(
                 ++_completionTransitionSequence,
                 quest.questId);
             ZeroLog.Info(ZeroLog.Modules.Quest, $"Quest '{quest.questId}' Conditions Met!");
             OnQuestCompletionTransition?.Invoke(transition);
+            if (!ReferenceEquals(save, _saveData) || !save.activeQuests.Contains(quest)) return;
             EventManager.Trigger(GameEvents.QuestCompleted, quest.questId);
 
-            if (config.autoSubmit)
+            if (config.autoSubmit && ReferenceEquals(save, _saveData) && save.activeQuests.Contains(quest))
                 SubmitQuest(quest.questId);
         }
 
@@ -300,6 +317,8 @@ namespace ZeroEngine.Quest
 
             ZeroLog.Info(ZeroLog.Modules.Quest, $"Accepted: {normalizedQuestId}");
             EventManager.Trigger(GameEvents.QuestAccepted, normalizedQuestId);
+            if (_saveData.activeQuests.Contains(newQuest))
+                CheckCompletion(newQuest, GetConfig(normalizedQuestId));
             return true;
         }
 
@@ -326,9 +345,16 @@ namespace ZeroEngine.Quest
                 return false;
             }
 
+            if (!ValidateDefinition(config, out reason)) return false;
+
             if (config.repetitionLimit > 0)
             {
                 int doneCount = GetQuestCompletionCount(normalizedQuestId);
+                if (config.lifecycle == QuestLifecycle.PerRun && _saveData.runBaselinesInitialized)
+                {
+                    _saveData.runCompletionBaselines.TryGetValue(normalizedQuestId, out var baseline);
+                    doneCount -= baseline;
+                }
                 if (doneCount >= config.repetitionLimit)
                 {
                     reason = $"Repetition limit reached for: {normalizedQuestId}";
@@ -354,44 +380,9 @@ namespace ZeroEngine.Quest
 
         public void SubmitQuest(string questId)
         {
-            var quest = FindActiveQuest(questId);
-            if (quest == null || quest.state != QuestState.Successful)
-            {
-                ZeroLog.Warning(ZeroLog.Modules.Quest, $"Cannot submit {questId}. Not active or not completed.");
-                return;
-            }
-
-            var config = GetConfig(questId);
-            if (config != null)
-                GrantRewards(config);
-
-            quest.state = QuestState.TheEnd;
-            _saveData.activeQuests.Remove(quest);
-
-            var history = FindHistory(questId);
-            if (history == null)
-            {
-                history = new QuestHistoryData { questId = questId, completionCount = 0 };
-                _saveData.history.Add(history);
-            }
-            history.completionCount++;
-
-            ZeroLog.Info(ZeroLog.Modules.Quest, $"Submitted: {questId}");
-            EventManager.Trigger(QuestEvents.QuestSubmitted, questId);
-        }
-
-        /// <summary>
-        /// 发放奖励。
-        /// </summary>
-        private void GrantRewards(QuestConfigSO config)
-        {
-            if (config?.Rewards == null) return;
-
-            foreach (var reward in config.Rewards)
-            {
-                if (reward == null) continue;
-                QuestServiceRegistry.RewardService.Grant(reward, config);
-            }
+            var result = TrySubmitQuest(questId);
+            if (!result.Succeeded)
+                ZeroLog.Warning(ZeroLog.Modules.Quest, $"Cannot submit {questId}: {result.Status}. {result.Reason}");
         }
 
         /// <summary>
@@ -487,7 +478,7 @@ namespace ZeroEngine.Quest
 
         public QuestConfigSO GetConfig(string id)
         {
-            if (_questConfigs.TryGetValue(id, out var config)) return config;
+            if (!string.IsNullOrWhiteSpace(id) && _questConfigs.TryGetValue(id.Trim(), out var config)) return config;
             ZeroLog.Error(ZeroLog.Modules.Quest, $"Config not found: {id}");
             return null;
         }
@@ -575,24 +566,39 @@ namespace ZeroEngine.Quest
         /// </summary>
         public void ClearPerRunQuests()
         {
-            for (int i = _saveData.activeQuests.Count - 1; i >= 0; i--)
+            var save = _saveData;
+            var removed = new List<string>();
+            for (int i = save.activeQuests.Count - 1; i >= 0; i--)
             {
-                var quest = _saveData.activeQuests[i];
+                var quest = save.activeQuests[i];
                 var config = GetConfig(quest.questId);
                 if (config != null && config.lifecycle == QuestLifecycle.PerRun)
                 {
-                    _saveData.activeQuests.RemoveAt(i);
-                    ZeroLog.Info(ZeroLog.Modules.Quest, $"Cleared PerRun quest: {quest.questId}");
-                    EventManager.Trigger(QuestEvents.QuestAbandoned, quest.questId);
+                    save.activeQuests.RemoveAt(i);
+                    removed.Add(quest.questId);
                 }
+            }
+            save.runCompletionBaselines = new Dictionary<string, int>(StringComparer.Ordinal);
+            foreach (var history in save.history)
+                save.runCompletionBaselines.Add(history.questId, history.completionCount);
+            save.runBaselinesInitialized = true;
+            foreach (var id in removed)
+            {
+                if (!ReferenceEquals(save, _saveData)) break;
+                EventManager.Trigger(QuestEvents.QuestAbandoned, id);
             }
         }
 
-        public QuestSystemSaveData GetSaveData() => _saveData;
+        public QuestSystemSaveData GetSaveData() => CloneSaveData(_saveData);
 
         public void LoadSaveData(QuestSystemSaveData data)
         {
-            _saveData = data ?? new QuestSystemSaveData();
+            var candidate = CloneSaveData(data);
+            foreach (var quest in candidate.activeQuests)
+                if (_questConfigs.TryGetValue(quest.questId, out var config))
+                    MigrateConditionProgress(quest, config);
+            _saveData = candidate;
+            _automaticActivationEnabled = false;
         }
 
         private QuestStateSnapshot BuildSnapshot(QuestRuntimeData quest)
@@ -606,7 +612,7 @@ namespace ZeroEngine.Quest
                 foreach (var condition in config.Conditions)
                 {
                     if (condition == null) continue;
-                    var key = condition.GetProgressKey();
+                    var key = condition.GetStorageKey();
                     objectives.Add(new QuestObjectiveSnapshot(
                         key,
                         key,

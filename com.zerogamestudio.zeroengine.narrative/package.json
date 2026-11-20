@@ -1,6 +1,6 @@
 {
     "name": "com.zerogamestudio.zeroengine.narrative",
-    "version": "3.1.0",
+    "version": "3.2.0",
     "displayName": "ZeroEngine Narrative",
     "description": "Dialogue, quest and legacy achievement adapters; retains P5 generic dialog commands and quest snapshots.",
     "unity": "6000.6",
@@ -11,7 +11,8 @@
         "com.zerogamestudio.zeroengine.achievement": "1.0.0",
         "com.zerogamestudio.zeroengine.data": "2.0.0",
         "com.zerogamestudio.zeroengine.economy": "2.0.0",
-        "com.zerogamestudio.zeroengine.gameplay": "2.0.0"
+        "com.zerogamestudio.zeroengine.gameplay": "2.0.0",
+        "com.unity.modules.jsonserialize": "1.0.0"
     },
     "keywords": [
         "zeroengine",

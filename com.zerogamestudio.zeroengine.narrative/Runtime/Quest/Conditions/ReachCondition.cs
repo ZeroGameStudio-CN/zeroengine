@@ -31,7 +31,7 @@ namespace ZeroEngine.Quest
 
         public override int GetCurrentProgress(QuestRuntimeData runtime)
         {
-            return runtime.GetProgress(GetProgressKey());
+            return runtime.GetProgress(GetStorageKey());
         }
 
         public override int GetTargetProgress() => 1;
@@ -51,8 +51,7 @@ namespace ZeroEngine.Quest
             {
                 if (data.TargetId == LocationId)
                 {
-                    runtime.AddProgress(GetProgressKey(), 1, 1);
-                    return true;
+                    return runtime.TryAddProgress(GetStorageKey(), 1, 1);
                 }
 
                 // 距离检测
@@ -61,16 +60,14 @@ namespace ZeroEngine.Quest
                     float distance = Vector3.Distance(data.Position, TargetPosition);
                     if (distance <= TriggerRadius)
                     {
-                        runtime.AddProgress(GetProgressKey(), 1, 1);
-                        return true;
+                        return runtime.TryAddProgress(GetStorageKey(), 1, 1);
                     }
                 }
             }
 
             if (eventData is string locationId && locationId == LocationId)
             {
-                runtime.AddProgress(GetProgressKey(), 1, 1);
-                return true;
+                return runtime.TryAddProgress(GetStorageKey(), 1, 1);
             }
 
             return false;
