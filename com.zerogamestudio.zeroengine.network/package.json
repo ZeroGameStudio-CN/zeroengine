@@ -1,7 +1,7 @@
 {
   "name": "com.zerogamestudio.zeroengine.network",
   "version": "2.0.1",
-  "displayName": "ZeroEngine.Network",
+  "displayName": "ZeroEngine Network",
   "description": "Network synchronization for ZeroEngine. Wraps Netcode for GameObjects with reconnection handling.",
   "unity": "6000.6",
   "unityRelease": "0f1",

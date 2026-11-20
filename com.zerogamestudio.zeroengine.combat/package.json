@@ -1,7 +1,7 @@
 {
   "name": "com.zerogamestudio.zeroengine.combat",
   "version": "2.1.0",
-  "displayName": "ZeroEngine.Combat",
+  "displayName": "ZeroEngine Combat",
   "description": "Combat framework for ZeroEngine. Includes Combat Core (CombatManager, team relations), Damage System (types, calculators), Targeting (selectors, filters, range), Health System, AbilitySystem (TCE pattern), Projectile, and Spawner.",
   "unity": "6000.6",
   "unityRelease": "0f1",

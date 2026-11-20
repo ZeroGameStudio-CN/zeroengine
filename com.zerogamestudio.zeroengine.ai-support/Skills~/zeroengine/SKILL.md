@@ -5,11 +5,12 @@ description: Use installed ZeroEngine modules and manage their UPM installation,
 
 # ZE Agent
 
-Start with [the installed inventory](references/installed-packages.md), then read
-the relevant module README and source path from
-`references/installed-packages.json`. Uninstalled modules are not available APIs.
-For commands or a debug console, read [the Console contract](references/console.md).
-Keep gameplay independent of a Console adapter.
+Start with the project's guidance and [the installed inventory](references/installed-packages.md).
+Read the module README for the API. Look up package source by ID in Unity's
+Packages view, or in `Packages/` and `Library/PackageCache/` after package
+resolution. The checked-in guidance is readable on a fresh checkout.
+Default to ZE Console for new Unity projects. For existing projects, follow
+their documented entry and commands. See [the Console contract](references/console.md).
 
 ## Packages
 
@@ -20,33 +21,25 @@ Observe the original asynchronous request; do not launch a competing Editor.
 - Follow the project manifest's package source. Pin admitted ZE Registry
   packages to verified versions. For Git UPM packages, pin the tested commit.
 - Upgrade the affected modules and required siblings as one compatible cohort.
-- For a Registry project, submit the matching manifest, lock and refreshed Skill
-  together after verification.
+- Submit the matching manifest, lock and refreshed Skill together. For signed
+  archive delivery, include `Packages/ZEArchives/archive-lock.json` and the
+  active archives. Remove replaced versions from that directory before syncing.
 - Before removal, check remaining package and project assembly references.
 - Verify actual PackageInfo, manifest/lock and relevant compilation, then refresh
   guidance. Installed source alone does not prove Player support or release.
 
 ## Publish a ZE version
 
-From the ZE repository, use `Tools/Packages/registry-preview/release.py`
-with the tested commit and changed package IDs. The command signs, verifies
-and publishes the artifacts and writes the verified admission catalog.
-Use the [Registry release guide](https://github.com/ZeroGameStudio-CN/zeroengine/blob/main/Tools/Packages/registry-preview/README.md#publish-a-version) for the command and recovery receipts.
+The ZE repository owns signing, verification and publication from tested
+commits. Use its [Registry release guide](https://github.com/ZeroGameStudio-CN/zeroengine/blob/main/Tools/Packages/registry-preview/README.md#publish-a-version)
+for the release entry, metadata checks and recovery receipts.
 
 ## Skill lifecycle
 
-Export `ZeroEngine.AiSupport.Editor.SkillPackageSnapshot.CreateJson()` through the
-existing Editor route to an external JSON file. Run the installed Agent package's
-`Tools~/sync_skill.py --project <project> --snapshot <snapshot>` to preview;
-add `--apply` to synchronize or `--check` to detect drift.
-
-Local/embedded sources and split trials use the README's explicit flags. Preserve
-custom files, modified managed files, unknown receipts and newer tool versions.
-An older copied script points to the installed tool instead of updating itself.
-
-Before uninstalling Agent, run its installed tool with `--project <project>
---remove`, then `--apply`. This removes unchanged generated guidance only; custom
-files remain. Do not run removal from the copy being removed. UPM removes packages.
+For package maintenance, use the [Agent README](references/packages/com.zerogamestudio.zeroengine.ai-support.md)
+to export the current Unity package inventory and preview, refresh, check or
+remove generated guidance. The installed Agent package owns those operations.
+Preserve local additions, modified managed files and unknown receipts.
 
 Maintain templates/tools in ZE's Agent package and module APIs in their READMEs;
 consumer Skill files are generated. Follow project authority for builds, publishing

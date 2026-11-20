@@ -37,6 +37,15 @@ namespace ZeroEngine.Console.UI
         }
         internal static BaseInput CreateInputSource(GameObject owner) => createInput?.Invoke(owner);
 
+        internal static float CompletionDelay(string text)
+        {
+            // Command names can be looked up locally. Coalesce edits that may reach an argument provider.
+            foreach (char character in text)
+                if (!char.IsLetterOrDigit(character) && character != '-' && character != '_' && character != '.')
+                    return .04f;
+            return text.Length == 0 ? .04f : 0f;
+        }
+
         public static void ConfigureActivationInput(Func<string> readText, Func<Vector2?> readPointerDown)
         { activationText = readText; activationPointer = readPointerDown; }
 

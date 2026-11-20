@@ -1,7 +1,7 @@
 {
     "name": "com.zerogamestudio.zeroengine.narrative",
     "version": "3.2.0",
-    "displayName": "ZeroEngine.Narrative",
+    "displayName": "ZeroEngine Narrative",
     "description": "Dialogue, quest and legacy achievement adapters; retains P5 generic dialog commands and quest snapshots.",
     "unity": "6000.6",
     "unityRelease": "0f1",

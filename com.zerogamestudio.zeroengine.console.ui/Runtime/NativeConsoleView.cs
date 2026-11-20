@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.UI;
 
@@ -18,28 +19,40 @@ namespace ZeroEngine.Console.UI
         private ConsoleActionHint stateHint, followHint;
         private RectTransform actionHint, actionHintTarget;
         private Text actionHintLabel;
-        private readonly Vector3[] hintCorners = new Vector3[4];
+        private Vector3[] hintCorners;
         private bool followOutput = true;
         private RectTransform searchRow;
         private UnityEngine.UI.InputField logSearch;
         private UnityEngine.UI.Button searchButton, clearSearchButton;
         private ConsoleActionHint copyHint;
         private string outputQuery = string.Empty;
+        private bool searchVisible;
         private bool usingTouchLayout;
         private bool usingLandscapeLayout;
         private Canvas viewCanvas;
         private CanvasScaler viewScaler;
         private ConsoleCommandHintView commandHint;
-        private float HintHeight => commandHint != null && commandHint.IsVisible ? commandHint.Height + 6 : 0;
+        private RectTransform completionList;
+        private const int MaximumCompletionRows = 8;
+        private RectTransform confirmationRow;
+        private Text confirmationMessage;
+        private Button confirmButton;
+        private const float ConfirmationHeight = 46;
+        private float HintHeight => shownPrompt != null ? ConfirmationHeight + 6
+            : commandHint != null && commandHint.IsVisible ? commandHint.Height + 6 : 0;
 
         private void EnsureView()
         {
             RefreshFont();
             if (view) return;
-            view = new GameObject("ZE Console", typeof(RectTransform), typeof(Canvas), typeof(CanvasScaler), typeof(GraphicRaycaster));
+            outputRows = new List<Text>();
+            completionRows = new List<Button>();
+            view = new GameObject("ZE Console", typeof(RectTransform));
+            view.SetActive(false);
             view.transform.SetParent(transform, false);
-            var canvas = view.GetComponent<Canvas>(); canvas.renderMode = RenderMode.ScreenSpaceOverlay; canvas.sortingOrder = 30000;
-            var scaler = view.GetComponent<CanvasScaler>(); scaler.uiScaleMode = CanvasScaler.ScaleMode.ScaleWithScreenSize;
+            var canvas = view.AddComponent<Canvas>(); canvas.renderMode = RenderMode.ScreenSpaceOverlay; canvas.sortingOrder = 30000;
+            var scaler = view.AddComponent<CanvasScaler>(); scaler.uiScaleMode = CanvasScaler.ScaleMode.ScaleWithScreenSize;
+            view.AddComponent<GraphicRaycaster>();
             viewCanvas = canvas; viewScaler = scaler;
             scaler.referenceResolution = new Vector2(1280, 720); scaler.matchWidthOrHeight = .5f;
 
@@ -70,9 +83,9 @@ namespace ZeroEngine.Console.UI
             Stretch(fontSizeLabel.rectTransform, new Vector2(0, 1), new Vector2(0, 1), new Vector2(178, -74), new Vector2(210, -46));
             searchButton = MakeIconButton(panel, "搜索日志", ConsoleGlyph.Search, "搜索日志", new Vector2(0, 1), new Vector2(212, -76), new Vector2(244, -44), ToggleLogSearch);
             followButton = MakeIconButton(panel, "跟随", ConsoleGlyph.Follow, "自动跟随新日志：开 · 点击暂停", new Vector2(1, 1), new Vector2(-44, -76), new Vector2(-12, -44), ToggleFollow);
-            followButton.targetGraphic.color = SelectedColor;
             followIcon = followButton.GetComponentInChildren<ConsoleIcon>();
             followHint = followButton.GetComponent<ConsoleActionHint>();
+            RefreshFollowButton();
 
             var scrollRoot = Rect("Output", panel); Stretch(scrollRoot, Vector2.zero, Vector2.one, new Vector2(12, 90), new Vector2(-12, -86));
             scroll = scrollRoot.gameObject.AddComponent<ScrollRect>(); scroll.horizontal = false; scroll.movementType = ScrollRect.MovementType.Clamped;
@@ -95,15 +108,7 @@ namespace ZeroEngine.Console.UI
             scrollbar.direction = Scrollbar.Direction.BottomToTop; scrollbar.navigation = new Navigation { mode = Navigation.Mode.None };
             scroll.verticalScrollbar = scrollbar; scroll.verticalScrollbarVisibility = ScrollRect.ScrollbarVisibility.AutoHide;
 
-            searchRow = Rect("LogSearchRow", panel);
-            Stretch(searchRow, new Vector2(0, 1), Vector2.one, new Vector2(12, -118), new Vector2(-12, -86));
-            logSearch = MakeInput(searchRow, "LogSearch", "查找日志…", 13, 256);
-            Stretch(logSearch.GetComponent<RectTransform>(), Vector2.zero, Vector2.one, Vector2.zero, new Vector2(-38, 0));
-            logSearch.onValueChanged.AddListener(SetOutputQuery);
-            clearSearchButton = MakeIconButton(searchRow, "清除搜索", ConsoleGlyph.Close, "清除搜索条件", Vector2.one, new Vector2(-32, -32), Vector2.zero,
-                () => { logSearch.text = string.Empty; logSearch.Select(); logSearch.ActivateInputField(); });
-            clearSearchButton.interactable = false;
-            searchRow.gameObject.SetActive(false);
+            if (searchVisible) ApplyLogSearchVisibility(true);
 
             var prompt = Chrome("Prompt", panel, ">", 18); prompt.color = AccentColor;
             Stretch(prompt.rectTransform, Vector2.zero, Vector2.zero, new Vector2(12, 36), new Vector2(30, 74));
@@ -111,6 +116,14 @@ namespace ZeroEngine.Console.UI
             Stretch(input.GetComponent<RectTransform>(), Vector2.zero, new Vector2(1, 0), new Vector2(34, 36), new Vector2(-104, 74));
             input.onValueChanged.AddListener(InputChanged);
             input.onSubmit.AddListener(SubmitInput);
+            if (retainedCaret >= 0)
+            {
+                input.SetTextWithoutNotify(retainedInput);
+                restoreCaret = Mathf.Min(retainedCaret, retainedInput.Length);
+                retainedInput = string.Empty;
+                retainedCaret = -1;
+                outputContent.anchoredPosition = retainedOutputPosition;
+            }
             var run = MakeIconButton(panel, "运行", ConsoleGlyph.Run, "执行命令 · Enter", new Vector2(1, 0), new Vector2(-94, 36), new Vector2(-56, 74), () => SubmitInput(input.text));
             run.targetGraphic.color = SelectedColor;
             cancelButton = MakeIconButton(panel, "取消", ConsoleGlyph.Stop, "取消当前执行", new Vector2(1, 0), new Vector2(-50, 36), new Vector2(-12, 74), () => host.Session.CancelCurrent());
@@ -127,37 +140,67 @@ namespace ZeroEngine.Console.UI
 
             completions = Rect("Completions", panel); Stretch(completions, Vector2.zero, new Vector2(1, 0), new Vector2(12, 90), new Vector2(-12, 330));
             Surface(completions, new Color(.065f, .078f, .105f, .96f), 6);
-            completionCaption = Chrome("CompletionCaption", completions, "");
-            Stretch(completionCaption.rectTransform, new Vector2(0, 1), Vector2.one, new Vector2(10, -30), new Vector2(-144, -2));
-            MakeIconButton(completions, "上一项", ConsoleGlyph.Up, "上一条补全", Vector2.one, new Vector2(-78, -28), new Vector2(-44, -4), () => NavigateCompletion(-1));
-            MakeIconButton(completions, "下一项", ConsoleGlyph.Down, "下一条补全", Vector2.one, new Vector2(-40, -28), new Vector2(-6, -4), () => NavigateCompletion(1));
-            var list = Rect("Choices", completions); Stretch(list, Vector2.zero, Vector2.one, new Vector2(6, 4), new Vector2(-6, -32));
-            var completionLayout = list.gameObject.AddComponent<VerticalLayoutGroup>(); completionLayout.childControlHeight = completionLayout.childControlWidth = true; completionLayout.childForceExpandHeight = false;
-            for (int i = 0; i < 8; i++)
-            {
-                int index = i;
-                var button = MakeButton(list, "Completion", "", Vector2.zero, Vector2.zero, Vector2.zero, () => ApplyCompletion(completionOffset + index), fontSize);
-                var label = button.GetComponentInChildren<Text>(); label.alignment = TextAnchor.MiddleLeft;
-                Stretch(label.rectTransform, Vector2.zero, Vector2.one, new Vector2(10, 2), new Vector2(-10, -2));
-                button.gameObject.AddComponent<LayoutElement>().preferredHeight = fontSize + 10;
-                completionRows.Add(button);
-            }
+            completionList = Rect("Choices", completions); Stretch(completionList, Vector2.zero, Vector2.one, new Vector2(6, 4), new Vector2(-6, -4));
+            var completionLayout = completionList.gameObject.AddComponent<VerticalLayoutGroup>(); completionLayout.childControlHeight = completionLayout.childControlWidth = true; completionLayout.childForceExpandHeight = false;
             completions.gameObject.SetActive(false);
-            actionHint = Rect("ActionHint", panel); actionHint.anchorMin = actionHint.anchorMax = actionHint.pivot = Vector2.zero;
-            Surface(actionHint, new Color(.13f, .145f, .18f, .97f), 5).raycastTarget = false;
-            actionHintLabel = Chrome("HintText", actionHint, "", 12);
-            Stretch(actionHintLabel.rectTransform, Vector2.zero, Vector2.one, new Vector2(10, 0), new Vector2(-10, 0));
-            actionHint.gameObject.SetActive(false);
-            Canvas.ForceUpdateCanvases();
-            UpdateViewLayout();
-            view.SetActive(false);
         }
 
-        private void UpdateViewLayout()
+        private void EnsureCompletionNavigation()
+        {
+            if (completionCaption) return;
+            completionCaption = Chrome("CompletionCaption", completions, "");
+            var header = completionCaption.rectTransform;
+            Stretch(header, new Vector2(0, 1), Vector2.one, new Vector2(10, -30), new Vector2(-6, -2));
+            MakeIconButton(header, "上一项", ConsoleGlyph.Up, "上一条补全", Vector2.one,
+                new Vector2(-72, -26), new Vector2(-38, -2), () => NavigateCompletion(-1));
+            MakeIconButton(header, "下一项", ConsoleGlyph.Down, "下一条补全", Vector2.one,
+                new Vector2(-34, -26), new Vector2(0, -2), () => NavigateCompletion(1));
+        }
+
+        private void EnsureCompletionRows(int count)
+        {
+            while (completionRows.Count < count)
+            {
+                int index = completionRows.Count;
+                var button = MakeButton(completionList, "Completion", "", Vector2.zero, Vector2.zero, Vector2.zero,
+                    () => ApplyCompletion(completionOffset + index), fontSize);
+                var label = button.GetComponentInChildren<Text>(true);
+                label.alignment = TextAnchor.MiddleLeft;
+                Stretch(label.rectTransform, Vector2.zero, Vector2.one, new Vector2(10, 2), new Vector2(-10, -2));
+                button.gameObject.AddComponent<LayoutElement>();
+                completionRows.Add(button);
+            }
+        }
+
+        private void ReleaseView()
+        {
+            if (view) Destroy(view);
+            view = null;
+            fonts?.Dispose();
+            fonts = null;
+            viewFont = null;
+            input = logSearch = null;
+            scroll = null;
+            panel = outputContent = completions = completionList = searchRow = confirmationRow = actionHint = actionHintTarget = null;
+            completionCaption = fontSizeLabel = emptyOutput = keyboardHint = actionHintLabel = confirmationMessage = null;
+            cancelButton = followButton = searchButton = clearSearchButton = confirmButton = null;
+            stateIcon = cancelIcon = followIcon = null;
+            stateHint = followHint = copyHint = null;
+            viewCanvas = null;
+            viewScaler = null;
+            commandHint = null;
+            inputOverride = null;
+            outputRows = null;
+            completionRows = null;
+            hintCorners = null;
+            visibleOutput = Array.Empty<ConsoleOutput>();
+        }
+
+        private void UpdateViewLayout(bool force = false)
         {
             bool touch = Application.isMobilePlatform || TouchLayoutPreview;
             bool landscape = Screen.width >= Screen.height;
-            if (usingTouchLayout != touch || usingLandscapeLayout != landscape)
+            if (force || usingTouchLayout != touch || usingLandscapeLayout != landscape)
             {
                 usingTouchLayout = touch;
                 usingLandscapeLayout = landscape;
@@ -204,14 +247,77 @@ namespace ZeroEngine.Console.UI
             if (completions) completions.offsetMin = new Vector2(12, 90 + HintHeight);
         }
 
+        private void ShowCommandHint(ConsoleCommandHint hint)
+        {
+            bool wasVisible = commandHint.IsVisible;
+            if (hint == null && !wasVisible) return;
+            commandHint.Show(hint);
+            if (wasVisible != commandHint.IsVisible) UpdateHintLayout();
+        }
+
+        private void RefreshPrompt(ConsolePrompt request)
+        {
+            if (ReferenceEquals(shownPrompt, request)) return;
+            shownPrompt = request;
+            if (request != null)
+            {
+                CancelCompletion();
+                EnsureConfirmationRow();
+                confirmationMessage.text = request.Message;
+                confirmationRow.gameObject.SetActive(true);
+                confirmButton.gameObject.SetActive(request is ConsoleConfirmation);
+                selectedCompletion = 0;
+                RefreshCompletions();
+            }
+            else if (confirmationRow)
+            {
+                confirmationRow.gameObject.SetActive(false);
+                if (IsOpen) InputChanged(input.text);
+            }
+            UpdateHintLayout();
+        }
+
+        private void EnsureConfirmationRow()
+        {
+            if (confirmationRow) return;
+            confirmationRow = Rect("Confirmation", panel);
+            Stretch(confirmationRow, Vector2.zero, new Vector2(1, 0), new Vector2(12, 84), new Vector2(-12, 84 + ConfirmationHeight));
+            Surface(confirmationRow, SurfaceColor, 5).raycastTarget = false;
+            confirmationMessage = Chrome("Question", confirmationRow, string.Empty, 14);
+            Stretch(confirmationMessage.rectTransform, Vector2.zero, Vector2.one, new Vector2(10, 4), new Vector2(-145, -4));
+            var anchor = new Vector2(1, 0);
+            MakeButton(confirmationRow, "Decline", "返回", anchor, new Vector2(-136, 5), new Vector2(-74, 41),
+                () => RespondToPrompt(null, false), 14);
+            confirmButton = MakeButton(confirmationRow, "Confirm", "确认", anchor, new Vector2(-68, 5), new Vector2(-6, 41),
+                () => RespondToPrompt("yes", false), 14);
+            confirmButton.targetGraphic.color = SelectedColor;
+        }
+
+        private void RespondToPrompt(string choice, bool clearInput)
+        {
+            if (!IsOpen || !host || interaction?.Respond(shownPrompt, host.CreateCaller(), choice) != true) return;
+            if (clearInput)
+            {
+                input.SetTextWithoutNotify(string.Empty);
+                input.caretPosition = 0;
+                observedCaret = 0;
+            }
+            RefreshPrompt(interaction.PendingPrompt);
+        }
+
         private void ToggleFollow()
         {
             followOutput = !followOutput;
+            RefreshFollowButton();
+            if (followOutput) { Canvas.ForceUpdateCanvases(); scroll.verticalNormalizedPosition = 0; }
+        }
+
+        private void RefreshFollowButton()
+        {
             followIcon.Glyph = followOutput ? ConsoleGlyph.Follow : ConsoleGlyph.FollowPaused;
             followHint.Message = followOutput ? "自动跟随新日志：开 · 点击暂停" : "自动跟随新日志：关 · 点击恢复";
             followButton.targetGraphic.color = followOutput ? SelectedColor : SurfaceColor;
             if (actionHintTarget == followHint.transform) ShowActionHint((RectTransform)followHint.transform, followHint.Message);
-            if (followOutput) { Canvas.ForceUpdateCanvases(); scroll.verticalNormalizedPosition = 0; }
         }
 
         private void RefreshActivityState()
@@ -234,11 +340,20 @@ namespace ZeroEngine.Console.UI
 
         private void ShowActionHint(RectTransform target, string message)
         {
-            if (!IsOpen || !actionHint || string.IsNullOrEmpty(message)) return;
+            if (!IsOpen || string.IsNullOrEmpty(message)) return;
+            if (!actionHint)
+            {
+                actionHint = Rect("ActionHint", panel);
+                actionHint.gameObject.SetActive(false);
+                actionHint.anchorMin = actionHint.anchorMax = actionHint.pivot = Vector2.zero;
+                Surface(actionHint, new Color(.13f, .145f, .18f, .97f), 5).raycastTarget = false;
+                actionHintLabel = Chrome("HintText", actionHint, "", 12);
+                Stretch(actionHintLabel.rectTransform, Vector2.zero, Vector2.one, new Vector2(10, 0), new Vector2(-10, 0));
+            }
             actionHintTarget = target; actionHintLabel.text = message;
             float width = Mathf.Min(actionHintLabel.preferredWidth + 20, Mathf.Max(1, panel.rect.width - 16));
             actionHint.sizeDelta = new Vector2(width, 30);
-            target.GetWorldCorners(hintCorners);
+            target.GetWorldCorners(hintCorners ??= new Vector3[4]);
             var above = (Vector2)panel.InverseTransformPoint(hintCorners[1]);
             var below = (Vector2)panel.InverseTransformPoint(hintCorners[0]);
             float y = above.y + 6;
@@ -280,12 +395,9 @@ namespace ZeroEngine.Console.UI
 
         private void ToggleLogSearch()
         {
-            bool show = !searchRow.gameObject.activeSelf;
-            searchRow.gameObject.SetActive(show);
-            searchButton.targetGraphic.color = show ? SelectedColor : SurfaceColor;
-            scroll.GetComponent<RectTransform>().offsetMax = new Vector2(-12, show ? -126 : -86);
+            ApplyLogSearchVisibility(!searchVisible);
             CancelCompletion();
-            if (show) { logSearch.Select(); logSearch.ActivateInputField(); }
+            if (searchVisible) { logSearch.Select(); logSearch.ActivateInputField(); }
             else
             {
                 logSearch.SetTextWithoutNotify(string.Empty);
@@ -293,6 +405,27 @@ namespace ZeroEngine.Console.UI
                 input.Select(); input.ActivateInputField();
             }
             renderedRevision = -1;
+        }
+
+        private void ApplyLogSearchVisibility(bool visible)
+        {
+            searchVisible = visible;
+            if (visible && !searchRow)
+            {
+                searchRow = Rect("LogSearchRow", panel);
+                searchRow.gameObject.SetActive(false);
+                Stretch(searchRow, new Vector2(0, 1), Vector2.one, new Vector2(12, -118), new Vector2(-12, -86));
+                logSearch = MakeInput(searchRow, "LogSearch", "查找日志…", 13, 256);
+                Stretch(logSearch.GetComponent<RectTransform>(), Vector2.zero, Vector2.one, Vector2.zero, new Vector2(-38, 0));
+                logSearch.onValueChanged.AddListener(SetOutputQuery);
+                clearSearchButton = MakeIconButton(searchRow, "清除搜索", ConsoleGlyph.Close, "清除搜索条件", Vector2.one,
+                    new Vector2(-32, -32), Vector2.zero, () => { logSearch.text = string.Empty; logSearch.Select(); logSearch.ActivateInputField(); });
+                logSearch.SetTextWithoutNotify(outputQuery);
+                SetOutputQuery(outputQuery);
+            }
+            if (searchRow) searchRow.gameObject.SetActive(visible);
+            searchButton.targetGraphic.color = visible ? SelectedColor : SurfaceColor;
+            scroll.GetComponent<RectTransform>().offsetMax = new Vector2(-12, visible ? -126 : -86);
         }
 
         private void FocusInputAfterAction()

@@ -95,6 +95,24 @@ namespace ZeroEngine.Console.Tests
             Assert.Throws<InvalidOperationException>(() => registry.Register("test", new[] { new ConsoleBinding(caseOnly, Ok) }));
         }
 
+        [TestCase(false)]
+        [TestCase(true)]
+        public void Registry_RejectsSameBatchAliasMatchingAnotherId(bool overloads)
+        {
+            using var registry = new ConsoleRegistry();
+            using var session = new ConsoleSession(registry);
+            var conflicting = new ConsoleCommand("ze.test.other", "other", "test", "Conflicting alias",
+                aliases: new[] { "ZE.TEST.ZE-ECHO" });
+            var batch = new[] { new ConsoleBinding(Command(), Ok), new ConsoleBinding(conflicting, Ok) };
+            Assert.Throws<InvalidOperationException>(() =>
+            {
+                if (overloads) registry.RegisterOverloads("test", batch);
+                else registry.Register("test", batch);
+            });
+            Assert.That(registry.Revision, Is.Zero);
+            Assert.That(session.GetCommands(Editor), Is.Empty);
+        }
+
         [Test]
         public async Task Discovery_TracksModuleChangesWithoutSharingMutableResults()
         {

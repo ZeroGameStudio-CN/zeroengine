@@ -39,12 +39,19 @@ packages without personal npm/UPM/Git settings or GitHub access. The
 POB first adopted signed version `0.1.0-ze-pob.d194ba36.4` for the three Console
 packages in Plastic changeset `19381`. It then migrated Activity in `19413`,
 10 independent packages in `19414`, and the 29 linked packages together in
-`19415`. All 43 public ZE packages now resolve from ZE Registry. Each changeset
+`19415`. Those changesets resolved all 43 public ZE packages from ZE Registry. Each changeset
 includes the matching package lock and generated ZE Agent inventory. The final
 inventory covers 46 packages. The warm POB Editor verified the migrated
 versions and signatures, retained the Quantum default entry, and passed both
 command-catalog and parameter-metadata compatibility tests. The project owner
 handles the Player build using the existing route.
+
+POB moved project restore to signed tarballs in Plastic changeset `19417`.
+Projects that use this delivery route track exact archives and relative `file:`
+references. POB records their versions, provenance and SHA-256 under
+`Packages/ZEArchives` and verifies the local files in Unity. The Registry supplies
+signed versions to the maintainer before consumer adoption. Teammates receive
+the POB archives through their ordinary Plastic update.
 
 The Activity delivery trial installed `1.1.0`, upgraded to
 `1.1.1-ze-pilot.1` and rolled back in a disposable Unity project. The public
@@ -68,6 +75,23 @@ python -B Tools/Packages/registry-preview/release.py --commit <tested-commit> --
 Repeat `--package` for a related cohort. The command reuses admitted dependencies
 when their pins, source tree and signer agree. A changed package needs a new
 version. `NAME=VERSION` selects an explicit version override for a reviewed trial.
+
+Release preparation requires `author.name` to be `ZeroGameStudio` and display
+names to use `ZeroEngine <Module>` without duplicates in the cohort. After
+signing, the controller compares the archive directory with the exact release
+receipt before Unity verification. Pass `--project <consumer-project>` to also
+check that project's `Packages/ZEArchives` inventory, pins, files and SHA-256 values.
+
+```text
+python -B Tools/Packages/registry-preview/release.py --check --commit <tested-commit> --package <changed-package-id>
+python -B Tools/Packages/registry-preview/release.py --check --project <consumer-project>
+```
+
+The read-only check can combine both inputs and uses the local admission catalog.
+For signed archive consumers, the installed Agent also runs the archive check
+during Skill synchronization. Remove superseded files from `ZEArchives` as part
+of the consumer changeset. Published Registry versions stay available for rollback.
+
 The command signs on Worker01, verifies the exact archives in one disposable
 Unity run, publishes the same bytes to Worker01 and GitHub, and verifies the
 active HTTPS catalog and archives. For an Agent release, the Unity run also
@@ -84,7 +108,7 @@ Signing took 2.5 seconds, Worker01 and GitHub synchronization took 8.4 seconds,
 and activation with public readback took 19.3 seconds. The catalog read checks
 all 43 package names. The affected Agent package and one retained package also
 receive live metadata probes. Agent `0.2.0` and `0.2.1` both served their verified
-archives after activation. POB's project lock still uses `0.2.0`.
+archives after activation.
 
 For a known partial release, run the same command with `--resume` and the same
 commit, package arguments and output. This reuses the verified signed bytes and

@@ -8,8 +8,9 @@ namespace ZeroEngine.Console.UI
     internal sealed class ConsoleIcon : UnityEngine.UI.MaskableGraphic
     {
         private ConsoleGlyph glyph;
-        private Rect bounds;
+        private Vector2 origin;
         private float scale;
+        private Color32 vertexColor;
         internal ConsoleGlyph Glyph
         {
             get => glyph;
@@ -18,8 +19,12 @@ namespace ZeroEngine.Console.UI
 
         protected override void OnPopulateMesh(UnityEngine.UI.VertexHelper mesh)
         {
-            mesh.Clear(); bounds = GetPixelAdjustedRect(); scale = Mathf.Min(bounds.width, bounds.height) / 24;
+            mesh.Clear();
+            var bounds = GetPixelAdjustedRect();
+            scale = Mathf.Min(bounds.width, bounds.height) / 24;
             if (scale <= 0) return;
+            origin = bounds.center - new Vector2(12, 12) * scale;
+            vertexColor = color;
             switch (glyph)
             {
                 case ConsoleGlyph.Terminal:
@@ -59,38 +64,58 @@ namespace ZeroEngine.Console.UI
             }
         }
 
-        private Vector2 Point(Vector2 p) => bounds.center + (p - new Vector2(12, 12)) * scale;
+        private void AddPoint(UnityEngine.UI.VertexHelper mesh, Vector2 point) =>
+            mesh.AddVert(origin + point * scale, vertexColor, Vector2.zero);
+
         private void Triangle(UnityEngine.UI.VertexHelper mesh, Vector2 a, Vector2 b, Vector2 c)
         {
             int first = mesh.currentVertCount;
-            mesh.AddVert(Point(a), color, Vector2.zero); mesh.AddVert(Point(b), color, Vector2.zero); mesh.AddVert(Point(c), color, Vector2.zero);
+            AddPoint(mesh, a); AddPoint(mesh, b); AddPoint(mesh, c);
             mesh.AddTriangle(first, first + 1, first + 2);
         }
         private void Line(UnityEngine.UI.VertexHelper mesh, float x1, float y1, float x2, float y2)
         {
             var a = new Vector2(x1, y1); var b = new Vector2(x2, y2);
             var offset = new Vector2(-(b - a).y, (b - a).x).normalized * .85f;
-            Triangle(mesh, a + offset, b + offset, b - offset); Triangle(mesh, a + offset, b - offset, a - offset);
+            int first = mesh.currentVertCount;
+            AddPoint(mesh, a + offset); AddPoint(mesh, b + offset); AddPoint(mesh, b - offset); AddPoint(mesh, a - offset);
+            mesh.AddTriangle(first, first + 1, first + 2);
+            mesh.AddTriangle(first, first + 2, first + 3);
             Disc(mesh, a, .85f); Disc(mesh, b, .85f);
         }
         private void Disc(UnityEngine.UI.VertexHelper mesh, Vector2 center, float radius)
         {
             const int segments = 12;
+            int first = mesh.currentVertCount;
+            AddPoint(mesh, center);
+            var direction = Vector2.right;
             for (int i = 0; i < segments; i++)
-                Triangle(mesh, center, center + Direction(i, segments) * radius, center + Direction(i + 1, segments) * radius);
+            {
+                AddPoint(mesh, center + direction * radius);
+                direction = ConsoleSurface.Rotate(direction, .8660254f, .5f);
+            }
+            for (int i = 0; i < segments; i++)
+                mesh.AddTriangle(first, first + 1 + i, first + 1 + (i + 1) % segments);
         }
         private void Ring(UnityEngine.UI.VertexHelper mesh, Vector2 center, float radius)
         {
             const int segments = 20;
+            int first = mesh.currentVertCount;
+            var direction = Vector2.right;
             for (int i = 0; i < segments; i++)
             {
-                Vector2 a = Direction(i, segments), b = Direction(i + 1, segments);
-                Triangle(mesh, center + a * (radius - .85f), center + a * (radius + .85f), center + b * (radius + .85f));
-                Triangle(mesh, center + a * (radius - .85f), center + b * (radius + .85f), center + b * (radius - .85f));
+                AddPoint(mesh, center + direction * (radius - .85f));
+                AddPoint(mesh, center + direction * (radius + .85f));
+                direction = ConsoleSurface.Rotate(direction, .9510565f, .309017f);
+            }
+            for (int i = 0; i < segments; i++)
+            {
+                int current = first + 2 * i;
+                int next = first + 2 * ((i + 1) % segments);
+                mesh.AddTriangle(current, current + 1, next + 1);
+                mesh.AddTriangle(current, next + 1, next);
             }
         }
-        private static Vector2 Direction(int step, int segments)
-        { float angle = step * Mathf.PI * 2 / segments; return new Vector2(Mathf.Cos(angle), Mathf.Sin(angle)); }
         private void Box(UnityEngine.UI.VertexHelper mesh, float left, float bottom, float right, float top)
         { Line(mesh, left, bottom, right, bottom); Line(mesh, right, bottom, right, top); Line(mesh, right, top, left, top); Line(mesh, left, top, left, bottom); }
     }

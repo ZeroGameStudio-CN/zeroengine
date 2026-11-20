@@ -265,6 +265,47 @@ namespace ZeroEngine.Console.Tests.Runtime
             }
         }
 
+        [UnityTest]
+        public IEnumerator OnDemand_StaysDormantUntilUse_AndStartsAgainOnlyOnUse()
+        {
+            var root = new GameObject("Dormant Console host");
+            try
+            {
+                root.SetActive(false);
+                var host = root.AddComponent<ConsoleHost>();
+                host.StartupMode = ConsoleStartupMode.OnDemand;
+                int starts = 0;
+                host.Started += _ => starts++;
+                root.SetActive(true);
+                host.SetReleaseAccessForSession(true);
+                yield return null;
+
+                Assert.That(host.Session, Is.Null);
+                Assert.That(host.Registry, Is.Null);
+                Assert.That(starts, Is.Zero);
+                using var cancelled = new CancellationTokenSource();
+                cancelled.Cancel();
+                Assert.That(host.ExecuteAsync("ze-session", cancelled.Token).Result.Status, Is.EqualTo(ConsoleResultStatus.Cancelled));
+                Assert.That(host.Session, Is.Null);
+
+                var worker = Task.Run(() => host.ExecuteAsync("ze-session"));
+                yield return Wait(worker);
+                Assert.That(worker.Result.Code, Is.EqualTo("host-disabled"));
+                Assert.That(starts, Is.Zero);
+                var first = host.ExecuteAsync("ze-session");
+                yield return Wait(first);
+                Assert.That(first.Result.IsSuccess, Is.True);
+                Assert.That(starts, Is.EqualTo(1));
+                root.SetActive(false);
+                root.SetActive(true);
+                Assert.That(host.Session, Is.Null);
+                host.CaptureUnityLogs = true;
+                Assert.That(host.Session, Is.Not.Null);
+                Assert.That(starts, Is.EqualTo(2));
+            }
+            finally { Object.DestroyImmediate(root); }
+        }
+
         private static IEnumerator Wait(Task task)
         {
             double end = Time.realtimeSinceStartupAsDouble + 10;

@@ -49,9 +49,19 @@ namespace ZeroEngine.Console.UI
             bool reopen = current?.IsOpen ?? false;
             current?.Close();
             if (current != null) current.AcquireInputIsolation = previousCurrentInputIsolation;
+            current = null;
+            SelectionReason = string.Empty;
+            if (!reopen && host.StartupMode == ConsoleStartupMode.OnDemand) return;
+            ResolveFrontend();
+            if (reopen) Open();
+        }
+
+        private void ResolveFrontend()
+        {
+            host.Initialize();
             IConsoleFrontend next = null;
             string reason = string.Empty;
-            if (value != ConsoleFrontendPreference.Native)
+            if (preference != ConsoleFrontendPreference.Native)
             {
                 var quantum = quantumFrontend as IConsoleFrontend;
                 if (quantum != null && quantum.TryInitialize(host, out reason)) next = quantum;
@@ -61,7 +71,7 @@ namespace ZeroEngine.Console.UI
             {
                 native.TryInitialize(host, out string nativeReason);
                 next = native;
-                if (value == ConsoleFrontendPreference.Native) reason = nativeReason;
+                if (preference == ConsoleFrontendPreference.Native) reason = nativeReason;
                 if (!string.IsNullOrEmpty(reason) && !notifiedUnavailable)
                 {
                     host.Session?.Write(new ConsoleOutput("frontend", ConsoleOutputLevel.Warning, reason + " Using Native."));
@@ -72,7 +82,6 @@ namespace ZeroEngine.Console.UI
             current = next;
             previousCurrentInputIsolation = current.AcquireInputIsolation;
             current.AcquireInputIsolation = () => (AcquireInputIsolation ?? previousNativeInputIsolation)?.Invoke();
-            if (reopen) Open();
         }
 
         private void Update()
@@ -83,6 +92,7 @@ namespace ZeroEngine.Console.UI
 
         public void Open()
         {
+            if (current == null && host && native) ResolveFrontend();
             try { current?.Open(); }
             catch (Exception exception) when (current != null && !ReferenceEquals(current, native))
             {

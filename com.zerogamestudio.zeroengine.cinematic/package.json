@@ -1,7 +1,7 @@
 {
   "name": "com.zerogamestudio.zeroengine.cinematic",
   "version": "2.1.0",
-  "displayName": "ZeroEngine.Cinematic",
+  "displayName": "ZeroEngine Cinematic",
   "description": "Reusable Timeline-backed cinematic runtime contracts, playback policies, binding resolution, and authoring validation for ZeroEngine projects.",
   "unity": "6000.6",
   "unityRelease": "0f1",

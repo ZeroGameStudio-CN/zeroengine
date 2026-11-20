@@ -1,6 +1,6 @@
 {
   "name": "com.zerogamestudio.zeroengine.asset-catalog",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "displayName": "ZeroEngine Asset Catalog",
   "description": "Editor-only contracts, shared Catalog API client, offline snapshots, credential storage, classification exchange, and personal AI recommendations for reviewable Unity asset catalogs.",
   "unity": "6000.6",

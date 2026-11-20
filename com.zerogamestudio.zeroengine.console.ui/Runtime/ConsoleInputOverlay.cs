@@ -75,7 +75,7 @@ namespace ZeroEngine.Console.UI
                 CancelPending();
                 completions = null;
                 panel.SetActive(false);
-                observedText = text; observedCaret = caret; due = Time.unscaledTime + .04f; dirty = true;
+                observedText = text; observedCaret = caret; due = Time.unscaledTime + ConsoleInputBackend.CompletionDelay(text); dirty = true;
             }
             if (input.IsComposing()) { panel.SetActive(false); return; }
             if (input.IsFocused())

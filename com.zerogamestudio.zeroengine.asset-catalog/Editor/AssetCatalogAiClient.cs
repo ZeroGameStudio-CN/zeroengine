@@ -3,8 +3,6 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Net.Http;
-using System.Net.Http.Headers;
-using System.Text;
 using System.Threading.Tasks;
 using UnityEngine;
 
@@ -59,7 +57,7 @@ namespace ZeroEngine.AssetCatalog
             "primary", "secondary", "trail", "impact", "warning", "ambient", "transition", "audio", "material", "ui"
         };
 
-        private readonly HttpClient _client;
+        private readonly CatalogChatClient _client;
         private readonly AssetCatalogPersonalAiSettings _settings;
         private readonly Uri _chatEndpoint;
 
@@ -69,8 +67,7 @@ namespace ZeroEngine.AssetCatalog
             if (!AssetCatalogContracts.IsEndpointAllowed(_settings.endpoint)) throw new ArgumentException("AI endpoint must use HTTPS unless it is loopback HTTP.", nameof(settings));
             if (string.IsNullOrWhiteSpace(_settings.model)) throw new ArgumentException("AI model is required.", nameof(settings));
             _chatEndpoint = new Uri(_settings.endpoint.TrimEnd('/') + "/chat/completions", UriKind.Absolute);
-            _client = handler == null ? new HttpClient() : new HttpClient(handler, false);
-            _client.Timeout = TimeSpan.FromSeconds(90);
+            _client = new CatalogChatClient(handler, "Personal AI");
         }
 
         public static AssetCatalogAiCandidate[] BuildCandidates(IEnumerable<AssetCatalogSnapshotRecord> records)
@@ -106,37 +103,10 @@ namespace ZeroEngine.AssetCatalog
             if (string.IsNullOrWhiteSpace(question)) throw new ArgumentException("Question is required.", nameof(question));
             AssetCatalogAiCandidate[] safeCandidates = (candidates ?? Array.Empty<AssetCatalogAiCandidate>()).Take(AssetCatalogContracts.MaxAiCandidates).ToArray();
             foreach (AssetCatalogAiCandidate candidate in safeCandidates) ValidateCandidate(candidate);
-            using (HttpRequestMessage request = new HttpRequestMessage(HttpMethod.Post, _chatEndpoint))
-            {
-                request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", apiKey);
-                request.Content = new StringContent(BuildRequestJson(question, safeCandidates), Encoding.UTF8, "application/json");
-                using (HttpResponseMessage response = await _client.SendAsync(request))
-                {
-                    if (!response.IsSuccessStatusCode) throw new InvalidOperationException("Personal AI request failed.");
-                    ChatEnvelope envelope;
-                    try
-                    {
-                        envelope = JsonUtility.FromJson<ChatEnvelope>(await response.Content.ReadAsStringAsync());
-                    }
-                    catch (ArgumentException)
-                    {
-                        throw new InvalidOperationException("Personal AI response could not be parsed.");
-                    }
-                    string content = envelope?.choices != null && envelope.choices.Length > 0 ? envelope.choices[0]?.message?.content : null;
-                    if (string.IsNullOrWhiteSpace(content)) throw new InvalidOperationException("Personal AI response did not contain an answer.");
-                    AssetCatalogAiAnswer answer;
-                    try
-                    {
-                        answer = JsonUtility.FromJson<AssetCatalogAiAnswer>(StripCodeFence(content));
-                    }
-                    catch (ArgumentException)
-                    {
-                        throw new InvalidOperationException("Personal AI answer JSON could not be parsed.");
-                    }
-                    ValidateAnswer(answer, safeCandidates);
-                    return answer;
-                }
-            }
+            AssetCatalogAiAnswer answer = await _client.AskAsync<AssetCatalogAiAnswer>(
+                _chatEndpoint, apiKey, BuildRequestJson(question, safeCandidates));
+            ValidateAnswer(answer, safeCandidates);
+            return answer;
         }
 
         public string BuildRequestJson(string question, AssetCatalogAiCandidate[] candidates)
@@ -211,20 +181,9 @@ namespace ZeroEngine.AssetCatalog
                 throw new ArgumentException("AI candidates must use Unity-relative paths.", nameof(candidate));
         }
 
-        private static string StripCodeFence(string value)
-        {
-            string result = (value ?? string.Empty).Trim();
-            if (!result.StartsWith("```", StringComparison.Ordinal)) return result;
-            int firstLine = result.IndexOf('\n');
-            int lastFence = result.LastIndexOf("```", StringComparison.Ordinal);
-            return firstLine >= 0 && lastFence > firstLine ? result.Substring(firstLine + 1, lastFence - firstLine - 1).Trim() : result;
-        }
-
         [Serializable] private sealed class CandidateEnvelope { public AssetCatalogAiCandidate[] candidates; }
         [Serializable] private sealed class ChatRequest { public string model; public ChatMessage[] messages; public ResponseFormat response_format; public int max_tokens; public bool stream; }
         [Serializable] private sealed class ChatMessage { public string role; public string content; }
         [Serializable] private sealed class ResponseFormat { public string type; }
-        [Serializable] private sealed class ChatEnvelope { public ChatChoice[] choices = Array.Empty<ChatChoice>(); }
-        [Serializable] private sealed class ChatChoice { public ChatMessage message = new ChatMessage(); }
     }
 }

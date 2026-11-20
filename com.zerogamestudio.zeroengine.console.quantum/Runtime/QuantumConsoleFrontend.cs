@@ -31,6 +31,11 @@ namespace ZeroEngine.Console.Quantum
         private Action<string> responseCallback;
         private Task<ConsoleResult> pending;
         private ConsoleInputOverlay overlay;
+        private ConsoleInteraction interaction;
+        private ConsolePrompt shownPrompt;
+        private ConsoleOutput[] outputBuffer = Array.Empty<ConsoleOutput>();
+        private Action<string, LogType> sendLog;
+        private Action clearLog;
         private ConsoleEventSystemLease eventSystemLease;
         private CursorLockMode previousLock;
         private bool previousCursor;
@@ -55,6 +60,7 @@ namespace ZeroEngine.Console.Quantum
         public bool TryInitialize(ConsoleHost owner, out string reason)
         {
             host = owner ? owner : GetComponent<ConsoleHost>();
+            if (host) host.Initialize();
             if (!host || host.Session == null) { reason = "Native Console session is unavailable."; return false; }
             if (!quantumPrefab || !compatibility) { reason = "Quantum prefab or verified compatibility profile is missing."; return false; }
             var source = quantumPrefab.GetComponentsInChildren<Component>(true).FirstOrDefault(component => component && component.GetType().FullName == "QFSW.QC.QuantumConsole");
@@ -89,6 +95,8 @@ namespace ZeroEngine.Console.Quantum
                 eventSystemLease = ConsoleEventSystemLease.Acquire(transform);
                 owned = Instantiate(quantumPrefab, transform);
                 console = owned.GetComponentsInChildren<Component>(true).First(component => component && component.GetType() == consoleType);
+                sendLog = (Action<string, LogType>)log.CreateDelegate(typeof(Action<string, LogType>), console);
+                clearLog = (Action)clear.CreateDelegate(typeof(Action), console);
                 DisableOwnedShortcutAndHistoryKeys();
                 ConfigureOwnedButtons();
                 consoleType.GetProperty("MaxStoredLogs")?.SetValue(console, 256);
@@ -97,16 +105,15 @@ namespace ZeroEngine.Console.Quantum
                 responseCallback = Receive;
                 stateChanged.AddEventHandler(console, stateCallback);
                 deactivated.AddEventHandler(console, closeCallback);
+                interaction = host.Session.TryAcquireInteraction();
                 IsOpen = true;
                 activate.Invoke(console, new object[] { false });
                 ApplyConfiguredFont();
                 Cursor.lockState = CursorLockMode.None; Cursor.visible = true;
                 CreateNativeInputOverlay();
-                clear.Invoke(console, null);
-                var snapshot = host.Session.GetOutputSnapshot();
-                flushedRevision = snapshot.Revision;
-                flushedClearRevision = snapshot.ClearRevision;
-                foreach (var entry in snapshot.Entries) Send(entry);
+                clearLog();
+                int count = host.Session.CopyOutputTo(ref outputBuffer, out flushedRevision, out flushedClearRevision);
+                for (int i = 0; i < count; i++) Send(outputBuffer[i]);
                 Arm();
             }
             catch { Close(); throw; }
@@ -116,6 +123,27 @@ namespace ZeroEngine.Console.Quantum
         {
             needsArm = true;
             overlay?.ResetAfterSubmit();
+            var request = interaction?.PendingPrompt;
+            if (request != null)
+            {
+                string response = raw?.Trim();
+                string choice;
+                bool valid;
+                if (request is ConsoleConfirmation)
+                {
+                    bool accept = string.Equals(response, "yes", StringComparison.OrdinalIgnoreCase);
+                    choice = accept ? "yes" : null;
+                    valid = accept || string.Equals(response, "no", StringComparison.OrdinalIgnoreCase);
+                }
+                else valid = request.TryGetNumberedChoice(response, out choice) ||
+                    string.Equals(response, "cancel", StringComparison.OrdinalIgnoreCase);
+                if (ReferenceEquals(shownPrompt, request) && valid &&
+                    interaction.Respond(request, host.CreateCaller(), choice)) return;
+                Send(new ConsoleOutput("", ConsoleOutputLevel.Warning, request is ConsoleConfirmation
+                    ? "等待确认，请输入 yes 或 no。" : "请输入显示的编号或 cancel。"));
+                return;
+            }
+            if (shownPrompt != null) return;
             host.Session.Write(new ConsoleOutput("", ConsoleOutputLevel.Info, "> " + raw));
             pending = host.ExecuteAsync(raw);
         }
@@ -146,25 +174,40 @@ namespace ZeroEngine.Console.Quantum
                 catch (Exception exception) { host.Session.Write(new ConsoleOutput("", ConsoleOutputLevel.Error, exception.Message)); }
                 pending = null;
             }
-            long revision = host.Session.OutputRevision;
-            if (revision == flushedRevision) return;
-            var snapshot = host.Session.GetOutputSnapshot();
-            var entries = snapshot.Entries;
-            if (snapshot.ClearRevision != flushedClearRevision)
+            if (host.Session.OutputRevision != flushedRevision) FlushOutput();
+            var request = interaction?.PendingPrompt;
+            if (!ReferenceEquals(shownPrompt, request))
             {
-                clear.Invoke(console, null);
-                flushedClearRevision = snapshot.ClearRevision;
-                flushedRevision = snapshot.ClearRevision;
+                shownPrompt = request;
+                if (request is ConsoleConfirmation)
+                    Send(new ConsoleOutput("", ConsoleOutputLevel.Info, "输入 yes 确认，或输入 no 返回。"));
+                else if (request != null)
+                {
+                    for (int i = 0; i < request.Options.Count; i++)
+                        Send(new ConsoleOutput("", ConsoleOutputLevel.Info, (i + 1) + ". " + request.Options[i].Label));
+                    Send(new ConsoleOutput("", ConsoleOutputLevel.Info, "输入编号选择，或输入 cancel 返回。"));
+                }
             }
-            int added = (int)Math.Min(entries.Count, snapshot.Revision - flushedRevision);
-            for (int i = entries.Count - added; i < entries.Count; i++) Send(entries[i]);
-            flushedRevision = snapshot.Revision;
+        }
+
+        private void FlushOutput()
+        {
+            int count = host.Session.CopyOutputTo(ref outputBuffer, out long revision, out long lastClear);
+            if (lastClear != flushedClearRevision)
+            {
+                clearLog();
+                flushedClearRevision = lastClear;
+                flushedRevision = lastClear;
+            }
+            int added = (int)Math.Min(count, revision - flushedRevision);
+            for (int i = count - added; i < count; i++) Send(outputBuffer[i]);
+            flushedRevision = revision;
         }
 
         private void Send(ConsoleOutput entry)
         {
             var level = entry.Level == ConsoleOutputLevel.Error ? LogType.Error : entry.Level == ConsoleOutputLevel.Warning ? LogType.Warning : LogType.Log;
-            log.Invoke(console, new object[] { entry.Message, level });
+            sendLog(entry.Message, level);
         }
 
         private void CreateNativeInputOverlay()
@@ -258,6 +301,10 @@ namespace ZeroEngine.Console.Quantum
             finally
             {
                 IsOpen = false; needsArm = false;
+                interaction?.Dispose(); interaction = null;
+                shownPrompt = null;
+                outputBuffer = Array.Empty<ConsoleOutput>();
+                sendLog = null; clearLog = null;
                 overlay = null;
                 var events = EventSystem.current;
                 if (events && (!events.currentSelectedGameObject || owned && events.currentSelectedGameObject.transform.IsChildOf(owned.transform)))

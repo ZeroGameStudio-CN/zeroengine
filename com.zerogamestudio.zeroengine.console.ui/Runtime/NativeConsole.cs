@@ -14,17 +14,18 @@ namespace ZeroEngine.Console.UI
     {
         [SerializeField] private ConsoleHost host;
         [SerializeField] private Font font;
+        [SerializeField] private bool releaseViewOnClose;
         [SerializeField, Range(12, 28)] private int fontSize = 16;
         [SerializeField, Tooltip("Preferred panel size in Canvas reference units; fitted to the available screen and keyboard area.")]
         private Vector2 preferredSize = new Vector2(880, 480);
         private GameObject view;
-        private readonly ConsoleFontResolver fonts = new ConsoleFontResolver();
+        private ConsoleFontResolver fonts;
         private Font viewFont;
         private UnityEngine.UI.InputField input;
         private UnityEngine.UI.ScrollRect scroll;
-        private readonly List<UnityEngine.UI.Text> outputRows = new List<UnityEngine.UI.Text>();
+        private List<UnityEngine.UI.Text> outputRows;
         private ConsoleOutput[] visibleOutput = Array.Empty<ConsoleOutput>();
-        private readonly List<UnityEngine.UI.Button> completionRows = new List<UnityEngine.UI.Button>();
+        private List<UnityEngine.UI.Button> completionRows;
         private RectTransform outputContent, completions;
         private CancellationTokenSource completionCancellation;
         private Task<ConsoleCompletions> pendingCompletion;
@@ -38,8 +39,14 @@ namespace ZeroEngine.Console.UI
         private long renderedRevision = -1;
         private long completionRevision = -1;
         private bool wasRunning;
+        private ConsoleInteraction interaction;
+        private ConsolePrompt shownPrompt;
         private int historyIndex = -1;
         private string draftInput = string.Empty;
+        private string retainedInput = string.Empty;
+        private int retainedCaret = -1;
+        private int restoreCaret = -1;
+        private Vector2 retainedOutputPosition;
         private IDisposable inputLease;
         private ConsoleEventSystemLease eventSystemLease;
         private CursorLockMode previousLock;
@@ -54,6 +61,7 @@ namespace ZeroEngine.Console.UI
         public ConsoleHost Host => host;
         public UnityEngine.UI.InputField InputField => input;
         public bool TouchLayoutPreview { get; set; }
+        public bool ReleaseViewOnClose { get => releaseViewOnClose; set => releaseViewOnClose = value; }
         public Vector2 PreferredSize
         {
             get => preferredSize;
@@ -71,7 +79,7 @@ namespace ZeroEngine.Console.UI
 
         private void RefreshFont()
         {
-            var resolved = fonts.Resolve(font, fontSize);
+            var resolved = (fonts ??= new ConsoleFontResolver()).Resolve(font, fontSize);
             if (viewFont == resolved) return;
             viewFont = resolved;
             if (view)
@@ -79,6 +87,7 @@ namespace ZeroEngine.Console.UI
         }
 
         private void OnValidate() => preferredSize = ClampPreferredSize(preferredSize);
+        private void Reset() => releaseViewOnClose = true;
 
         private static Vector2 ClampPreferredSize(Vector2 value) => new Vector2(
             float.IsNaN(value.x) || float.IsInfinity(value.x) ? 880 : Mathf.Max(320, value.x),
@@ -96,12 +105,14 @@ namespace ZeroEngine.Console.UI
         private void OnEnable()
         {
             if (!host) host = GetComponent<ConsoleHost>();
-            host.Initialize();
+            if (host.StartupMode == ConsoleStartupMode.OnEnable) host.Initialize();
         }
 
         public void Open()
         {
-            if (IsOpen || !host || host.Session == null) return;
+            if (IsOpen || !host) return;
+            host.Initialize();
+            if (host.Session == null) return;
             if (FontProvider != null)
             {
                 try { var supplied = FontProvider(); if (supplied) ConfigureFont(supplied); }
@@ -113,8 +124,10 @@ namespace ZeroEngine.Console.UI
             previousSelection = EventSystem.current ? EventSystem.current.currentSelectedGameObject : null;
             inputLease = AcquireInputIsolation?.Invoke();
             eventSystemLease = ConsoleEventSystemLease.Acquire(transform);
+            interaction = host.Session.TryAcquireInteraction();
             IsOpen = true;
             view.SetActive(true);
+            UpdateViewLayout(true);
             if (ConsoleInputBackend.NeedsInputOverride)
             {
                 borrowedInputModule = EventSystem.current ? EventSystem.current.currentInputModule : null;
@@ -138,6 +151,9 @@ namespace ZeroEngine.Console.UI
         {
             if (!IsOpen) return;
             IsOpen = false;
+            interaction?.Dispose();
+            interaction = null;
+            RefreshPrompt(null);
             CancelCompletion();
             try
             {
@@ -156,8 +172,16 @@ namespace ZeroEngine.Console.UI
                     if (Cursor.lockState == CursorLockMode.None && Cursor.visible)
                     { Cursor.lockState = previousLock; Cursor.visible = previousCursor; }
                     var events = EventSystem.current;
-                    if (events && (!events.currentSelectedGameObject || events.currentSelectedGameObject.transform.IsChildOf(view.transform)))
+                    if (events && (!events.currentSelectedGameObject || view && events.currentSelectedGameObject.transform.IsChildOf(view.transform)))
                         events.SetSelectedGameObject(previousSelection && previousSelection.activeInHierarchy ? previousSelection : null);
+                    previousSelection = null;
+                    if (releaseViewOnClose && view)
+                    {
+                        retainedInput = input.text;
+                        retainedCaret = input.caretPosition;
+                        retainedOutputPosition = outputContent.anchoredPosition;
+                        ReleaseView();
+                    }
                     OpenChanged?.Invoke(false);
                 }
             }
@@ -171,7 +195,15 @@ namespace ZeroEngine.Console.UI
             bool composing = IsComposing;
             if (KeyboardShortcutEnabled && !composing && ConsoleKeyboard.Pressed(KeyCode.BackQuote)) Toggle();
             if (!IsOpen || host.Session == null) return;
+            RefreshPrompt(interaction?.PendingPrompt);
             UpdateViewLayout();
+            if (restoreCaret >= 0 && input.isFocused)
+            {
+                input.caretPosition = restoreCaret;
+                observedCaret = restoreCaret;
+                restoreCaret = -1;
+                InputChanged(input.text);
+            }
             if (completionRevision != host.Registry.Revision)
             {
                 completionRevision = host.Registry.Revision;
@@ -180,23 +212,32 @@ namespace ZeroEngine.Console.UI
             if (input.isFocused && input.caretPosition != observedCaret)
             {
                 observedCaret = input.caretPosition;
-                InputChanged(input.text);
+                if (!completionDirty) InputChanged(input.text);
             }
             if (!composing && ConsoleKeyboard.Pressed(KeyCode.Escape)) { Close(); return; }
             if (!composing && input.isFocused)
             {
-                if (ConsoleKeyboard.Pressed(KeyCode.Tab) && currentCompletions != null && currentCompletions.Items.Count > 0) ApplyCompletion(selectedCompletion);
-                else if (ConsoleKeyboard.Pressed(KeyCode.UpArrow)) NavigateHistory(-1);
-                else if (ConsoleKeyboard.Pressed(KeyCode.DownArrow)) NavigateHistory(1);
+                if (shownPrompt != null)
+                {
+                    if (ConsoleKeyboard.Pressed(KeyCode.UpArrow)) NavigateCompletion(-1);
+                    else if (ConsoleKeyboard.Pressed(KeyCode.DownArrow)) NavigateCompletion(1);
+                }
+                else
+                {
+                    if (ConsoleKeyboard.Pressed(KeyCode.Tab) && currentCompletions != null && currentCompletions.Items.Count > 0) ApplyCompletion(selectedCompletion);
+                    else if (ConsoleKeyboard.Pressed(KeyCode.UpArrow)) NavigateHistory(-1);
+                    else if (ConsoleKeyboard.Pressed(KeyCode.DownArrow)) NavigateHistory(1);
+                }
             }
-            if (completionDirty && Time.unscaledTime >= completionAt)
+            if (!composing && completionDirty && Time.unscaledTime >= completionAt)
             {
                 completionDirty = false;
-                CancelCompletion();
-                completionCancellation = new CancellationTokenSource();
                 completionInput = input.text;
                 completionCaret = input.caretPosition;
-                pendingCompletion = host.Session.CompleteAsync(completionInput, completionCaret, host.CreateCaller(), completionCancellation.Token);
+                if (ConsoleInputBackend.CompletionDelay(completionInput) != 0)
+                    completionCancellation = new CancellationTokenSource();
+                pendingCompletion = host.Session.CompleteAsync(completionInput, completionCaret, host.CreateCaller(),
+                    completionCancellation?.Token ?? default);
             }
             if (pendingCompletion != null && pendingCompletion.IsCompleted)
             {
@@ -240,13 +281,26 @@ namespace ZeroEngine.Console.UI
         }
 
         public bool IsComposing => ConsoleKeyboard.IsComposing;
-        private void SubmitInput(string line) { if (!IsComposing) _ = SubmitAsync(line); }
+        private void SubmitInput(string line)
+        {
+            if (IsComposing) return;
+            var request = interaction?.PendingPrompt;
+            if (request == null)
+            {
+                if (shownPrompt == null) _ = SubmitAsync(line);
+                return;
+            }
+            if (ReferenceEquals(request, shownPrompt) && request.TryGetNumberedChoice(line, out string choice))
+                RespondToPrompt(choice, true);
+        }
         private void InputChanged(string value)
         {
+            restoreCaret = -1;
+            if (shownPrompt != null) return;
             bool hasDraft = !string.IsNullOrWhiteSpace(value);
             CancelCompletion(!hasDraft);
             completionDirty = hasDraft;
-            completionAt = Time.unscaledTime + .04f;
+            completionAt = Time.unscaledTime + ConsoleInputBackend.CompletionDelay(value);
         }
 
         private void NavigateHistory(int direction)
@@ -262,43 +316,66 @@ namespace ZeroEngine.Console.UI
         private void ShowCompletions(ConsoleCompletions result)
         {
             currentCompletions = result;
-            commandHint.Show(result.Hint);
-            UpdateHintLayout();
+            ShowCommandHint(result.Hint);
             selectedCompletion = 0;
             RefreshCompletions();
         }
 
         private void NavigateCompletion(int direction)
         {
-            if (currentCompletions == null || currentCompletions.Items.Count == 0 || IsComposing) return;
-            selectedCompletion = (selectedCompletion + direction + currentCompletions.Items.Count) % currentCompletions.Items.Count;
+            int count = shownPrompt?.Options.Count ?? currentCompletions?.Items.Count ?? 0;
+            if (count == 0 || IsComposing) return;
+            selectedCompletion = (selectedCompletion + direction + count) % count;
             RefreshCompletions();
         }
 
         private void RefreshCompletions()
         {
-            if (currentCompletions == null) return;
+            bool choosing = shownPrompt != null && shownPrompt.Options.Count > 0;
+            var choices = choosing ? shownPrompt.Options : currentCompletions?.Items;
+            if (choices == null) return;
+            if (choices.Count == 0)
+            {
+                completions.gameObject.SetActive(false);
+                return;
+            }
             int rowHeight = fontSize + 10;
-            int capacity = Mathf.Clamp(Mathf.FloorToInt((panel.rect.height - 208 - HintHeight) / rowHeight), 1, completionRows.Count);
+            int capacity = Mathf.Clamp(Mathf.FloorToInt((panel.rect.height - 208 - HintHeight) / rowHeight), 1, MaximumCompletionRows);
             completionOffset = selectedCompletion / capacity * capacity;
-            int visibleCount = Mathf.Min(capacity, currentCompletions.Items.Count - completionOffset);
+            int visibleCount = Mathf.Min(capacity, choices.Count - completionOffset);
+            EnsureCompletionRows(visibleCount);
             for (int i = 0; i < completionRows.Count; i++)
             {
                 bool visible = i < visibleCount;
                 completionRows[i].gameObject.SetActive(visible);
                 if (!visible) continue;
                 int index = completionOffset + i;
-                completionRows[i].GetComponentInChildren<UnityEngine.UI.Text>(true).text = currentCompletions.Items[index].Label;
+                completionRows[i].GetComponentInChildren<UnityEngine.UI.Text>(true).text =
+                    choosing ? (index + 1) + ". " + choices[index].Label : choices[index].Label;
                 completionRows[i].targetGraphic.color = index == selectedCompletion ? SelectedColor : SurfaceColor;
                 completionRows[i].GetComponent<UnityEngine.UI.LayoutElement>().preferredHeight = rowHeight;
             }
-            completionCaption.text = (selectedCompletion + 1) + " / " + currentCompletions.Items.Count + (usingTouchLayout ? "" : "   ·   Tab");
-            completions.offsetMax = new Vector2(-12, 126 + HintHeight + visibleCount * rowHeight);
+            bool showNavigation = choices.Count > 1;
+            if (showNavigation)
+            {
+                EnsureCompletionNavigation();
+                completionCaption.text = (selectedCompletion + 1) + " / " + choices.Count +
+                    (choosing ? "   ·   输入编号" : usingTouchLayout ? "" : "   ·   Tab");
+            }
+            if (completionCaption && completionCaption.gameObject.activeSelf != showNavigation)
+                completionCaption.gameObject.SetActive(showNavigation);
+            completionList.offsetMax = new Vector2(-6, showNavigation ? -32 : -4);
+            completions.offsetMax = new Vector2(-12, (showNavigation ? 126 : 98) + HintHeight + visibleCount * rowHeight);
             completions.gameObject.SetActive(visibleCount > 0);
         }
 
         private void ApplyCompletion(int index)
         {
+            if (shownPrompt != null && index >= 0 && index < shownPrompt.Options.Count)
+            {
+                RespondToPrompt(shownPrompt.Options[index].Id, false);
+                return;
+            }
             if (currentCompletions == null || index >= currentCompletions.Items.Count) return;
             try
             {
@@ -307,11 +384,12 @@ namespace ZeroEngine.Console.UI
                 input.caretPosition = caret;
                 observedCaret = caret;
                 input.ActivateInputField();
-                commandHint.Show(host.Session.GetHint(updated, caret, host.CreateCaller()));
-                UpdateHintLayout();
+                ShowCommandHint(host.Session.GetHint(updated, caret, host.CreateCaller()));
             }
             catch (InvalidOperationException) { }
-            CancelCompletion(false);
+            // The value-changed callback already canceled completion when the text changed.
+            if (currentCompletions != null) CancelCompletion(false);
+            else completionDirty = false;
         }
 
         private void CancelCompletion(bool clearHint = true)
@@ -327,7 +405,7 @@ namespace ZeroEngine.Console.UI
                     TaskContinuationOptions.OnlyOnFaulted | TaskContinuationOptions.ExecuteSynchronously, TaskScheduler.Default);
             currentCompletions = null;
             if (completions) completions.gameObject.SetActive(false);
-            if (clearHint && commandHint != null) { commandHint.Show(null); UpdateHintLayout(); }
+            if (clearHint && commandHint != null) ShowCommandHint(null);
         }
 
         private void RenderOutput()
@@ -350,6 +428,11 @@ namespace ZeroEngine.Console.UI
             {
                 emptyOutput.text = string.IsNullOrEmpty(outputQuery) ? "ze-help" : "没有匹配日志";
                 emptyOutput.gameObject.SetActive(count == 0);
+            }
+            if (count == 0 && outputRows.Count == 0 && outputContent.anchoredPosition == Vector2.zero)
+            {
+                renderedRevision = revision;
+                return;
             }
             while (outputRows.Count < count) outputRows.Add(Text("Line", outputContent, ""));
             Vector2 readingPosition = outputContent.anchoredPosition;
@@ -375,8 +458,7 @@ namespace ZeroEngine.Console.UI
         private void OnDestroy()
         {
             Close();
-            if (view) Destroy(view);
-            fonts.Dispose();
+            ReleaseView();
         }
     }
 }

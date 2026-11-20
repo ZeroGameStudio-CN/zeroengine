@@ -1,7 +1,7 @@
 {
   "name": "com.zerogamestudio.zeroengine.console.quantum",
   "version": "0.1.0",
-  "displayName": "ZeroEngine.Console Quantum Frontend",
+  "displayName": "ZeroEngine Console Quantum Bridge",
   "description": "Optional public-API Quantum Console presentation bridge for native ZE command sessions.",
   "unity": "6000.6",
   "dependencies": {

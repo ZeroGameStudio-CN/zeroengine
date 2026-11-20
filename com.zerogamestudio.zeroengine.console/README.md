@@ -29,6 +29,12 @@ Dispose registrations when a module unloads, then dispose the session and regist
 when their owner ends. A Unity owner can use `ConsoleHost`; its dispatcher keeps
 handlers on the main thread, including calls submitted from a worker.
 
+New Inspector hosts default to **On Demand**. The first open or a main-thread
+`ExecuteAsync` creates the registry and session. Register project modules from
+`Started` to catch that activation, or call `Initialize()` on the main thread
+before worker submissions. Existing serialized hosts keep **On Enable** mode.
+Explicit Unity log capture initializes the host as soon as access permits it.
+
 The registry reuses its sorted catalog until a module registers or unloads.
 Discovery and completion still check the current caller and policy on every
 request; returned command arrays remain caller-owned snapshots. Execution links
@@ -103,6 +109,42 @@ There is no automatic assembly or scene-object scan.
 Reflection bindings and dynamically constructed generic collections require the
 consumer's normal stripping/AOT preservation; these additions have Editor coverage,
 not a new IL2CPP support claim.
+
+## Named references and prompts
+
+Use `ConsoleNamedValues<T>` to expose specific project-owned reference values as
+`@name` arguments. Construct it with `session.Values`, register the values and
+pass `names.CompleteAsync` to the command's existing `ConsoleBinding`. For example,
+`names.Register("main-camera", camera, "Main camera")` supplies the typed value
+for `inspect @main-camera` and offers its label in completion.
+
+Retain each registration for the lifetime of the referenced object. Dispose its
+handle when the object leaves the scene or module. Unity projects can pass an
+availability predicate such as `value => value != null` to check their Unity
+object types. Register only references that every caller of the binding may see.
+Apply finer business permissions in the handler before changing an object.
+
+Use `RegisterResolver` to resolve an existing project selection at lookup time.
+Its resolver returns the current value or null while there is no target. Keep
+it bounded and free of business side effects, because completion and conversion
+both consult it.
+
+Use `await invocation.ConfirmAsync("Apply the pending changes?")` before an action
+that needs an explicit decision. Branch on the returned bool before performing
+the action. A decline, a closed frontend or an unavailable frontend returns false.
+Caller/module cancellation and deadlines still use the session's existing status
+and cancellation path. The prompt uses the current command and caller policy.
+
+Use `ChooseAsync(question, options)` to present two to eight choices through
+that same channel. Each `ConsoleCompletionItem` supplies a stable ID and a
+visible label. The handler receives the chosen ID, or null on decline. It can
+then ask for confirmation through the same invocation.
+
+The Native frontend acquires the interaction channel while visible. Custom
+frontends can acquire the same exclusive channel through
+`session.TryAcquireInteraction()`, render its `PendingPrompt` and pass
+that exact request to `Respond` with a fresh caller. Dispose the channel when
+closing the view. Responses stay outside command history and dispatch.
 
 Results are immutable. Empty successes may be shared; use the invocation ID on
 the context/output to identify a call, and read status/code/data from the result.

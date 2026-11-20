@@ -14,6 +14,153 @@ namespace ZeroEngine.Console.UI.Tests
     public sealed class NativeConsoleTests
     {
         [UnityTest]
+        public IEnumerator NumberedChoicesReuseCandidateRowsWithoutSubmittingCommands()
+        {
+            var root = new GameObject("Native choice interaction");
+            IDisposable commands = null;
+            try
+            {
+                var host = root.AddComponent<ConsoleHost>();
+                var view = root.AddComponent<NativeConsole>();
+                commands = host.Registry.Register("sample", new[]
+                {
+                    new ConsoleBinding(new ConsoleCommand("sample.plan", "sample-plan", "sample", "Pick a plan."),
+                        async (invocation, args, token) =>
+                        {
+                            var choice = await invocation.ChooseAsync("Choose a plan.", new[]
+                            {
+                                new ConsoleCompletionItem("quick", "", "Quick"), new ConsoleCompletionItem("full", "", "Full")
+                            });
+                            return ConsoleResult.Success(data: choice);
+                        })
+                });
+                view.Open();
+                var execution = view.SubmitAsync("sample-plan");
+                yield return null;
+                var choices = root.GetComponentsInChildren<UnityEngine.UI.Button>().Where(button => button.name == "Completion").ToArray();
+                Assert.That(choices.Select(button => button.GetComponentInChildren<UnityEngine.UI.Text>().text),
+                    Does.Contain("2. Full"));
+                view.InputField.onSubmit.Invoke("test-unknown");
+                Assert.That(execution.IsCompleted, Is.False);
+                view.InputField.text = "2";
+                view.InputField.onSubmit.Invoke("2");
+                yield return Wait(execution);
+                Assert.That(execution.Result.Data, Is.EqualTo("full"));
+                Assert.That(view.InputField.text, Is.Empty);
+                Assert.That(host.Session.GetHistory(), Is.EqualTo(new[] { "sample-plan" }));
+            }
+            finally { commands?.Dispose(); Object.DestroyImmediate(root); }
+        }
+
+        [UnityTest]
+        public IEnumerator OnDemandSelector_DefersBothFrontendsAndCanReleaseTheView()
+        {
+            var root = new GameObject("On-demand console");
+            try
+            {
+                root.SetActive(false);
+                var host = root.AddComponent<ConsoleHost>();
+                host.StartupMode = ConsoleStartupMode.OnDemand;
+                var view = root.AddComponent<NativeConsole>();
+                view.ReleaseViewOnClose = true;
+                var projectFont = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
+                view.ConfigureFont(projectFont);
+                var selector = root.AddComponent<ConsoleFrontendSelector>();
+                var provider = root.AddComponent<OpeningFailureFrontend>();
+                selector.ConfigureQuantum(provider);
+                root.SetActive(true);
+                yield return null;
+
+                Assert.That(host.Session, Is.Null);
+                Assert.That(selector.Current, Is.Null);
+                Assert.That(provider.InitializeCount, Is.Zero);
+                Assert.That(root.GetComponentsInChildren<Canvas>(true), Is.Empty);
+                selector.Open();
+                Assert.That(provider.InitializeCount, Is.EqualTo(1));
+                Assert.That(view.IsOpen, Is.True);
+                var session = host.Session;
+                yield return Wait(view.SubmitAsync("ze-session"));
+                session.Write(new ConsoleOutput("sample", ConsoleOutputLevel.Info, "needle kept"));
+                session.Write(new ConsoleOutput("sample", ConsoleOutputLevel.Info, "other line"));
+
+                var buttons = root.GetComponentsInChildren<UnityEngine.UI.Button>();
+                buttons.Single(button => button.name == "搜索日志").onClick.Invoke();
+                var search = root.GetComponentsInChildren<UnityEngine.UI.InputField>().Single(field => field.name == "LogSearch");
+                search.text = "needle";
+                view.InputField.text = "ze-help";
+                view.InputField.caretPosition = 3;
+                selector.Close();
+                yield return null;
+
+                Assert.That(root.GetComponentsInChildren<Canvas>(true), Is.Empty);
+                Assert.That(view.InputField, Is.Null);
+                Assert.That(host.Session, Is.SameAs(session));
+                Assert.That(projectFont, Is.Not.Null);
+                selector.Open();
+                double until = Time.realtimeSinceStartupAsDouble + 4;
+                while (view.InputField.caretPosition != 3 && Time.realtimeSinceStartupAsDouble < until) yield return null;
+                Assert.That(view.InputField.text, Is.EqualTo("ze-help"));
+                Assert.That(view.InputField.caretPosition, Is.EqualTo(3));
+                Assert.That(view.InputField.textComponent.font, Is.SameAs(projectFont));
+                Assert.That(view.GetFilteredOutputText(), Is.EqualTo("needle kept"));
+                Assert.That(host.Session.GetHistory(), Is.EqualTo(new[] { "ze-session" }));
+            }
+            finally { Object.DestroyImmediate(root); }
+        }
+
+        [UnityTest]
+        public IEnumerator Confirmation_UsesItsOwnButtons_AndClosesWithoutExecuting()
+        {
+            var root = new GameObject("Native confirmation integration");
+            IDisposable module = null;
+            try
+            {
+                var host = root.AddComponent<ConsoleHost>();
+                var view = root.AddComponent<NativeConsole>();
+                int applied = 0;
+                module = host.Registry.Register("sample", new[]
+                {
+                    new ConsoleBinding(new ConsoleCommand("sample.apply", "sample-apply", "sample", "Apply."),
+                        async (invocation, args, token) =>
+                        {
+                            if (!await invocation.ConfirmAsync("Apply this preview?"))
+                                return ConsoleResult.Failure("declined", "Discarded.");
+                            applied++;
+                            return ConsoleResult.Success();
+                        })
+                });
+                view.Open();
+                Assert.That(view.transform.Find("ZE Console/Panel/Confirmation"), Is.Null);
+                var confirmed = view.SubmitAsync("sample-apply");
+                yield return null;
+                var row = view.transform.Find("ZE Console/Panel/Confirmation");
+                Assert.That(row, Is.Not.Null);
+                Assert.That(row.Find("Question").GetComponent<UnityEngine.UI.Text>().text, Is.EqualTo("Apply this preview?"));
+                view.InputField.onSubmit.Invoke("sample-apply");
+                Assert.That(applied, Is.Zero);
+                var accept = row.Find("Confirm").GetComponent<UnityEngine.UI.Button>();
+                accept.onClick.Invoke();
+                accept.onClick.Invoke();
+                yield return Wait(confirmed);
+                Assert.That(confirmed.Result.IsSuccess, Is.True);
+                Assert.That(applied, Is.EqualTo(1));
+                Assert.That(host.Session.GetHistory(), Is.EqualTo(new[] { "sample-apply" }));
+
+                var declined = view.SubmitAsync("sample-apply");
+                yield return null;
+                row.Find("Decline").GetComponent<UnityEngine.UI.Button>().onClick.Invoke();
+                yield return Wait(declined);
+                Assert.That(declined.Result.Code, Is.EqualTo("declined"));
+                var closed = view.SubmitAsync("sample-apply");
+                view.Close();
+                yield return Wait(closed);
+                Assert.That(closed.Result.Code, Is.EqualTo("declined"));
+                Assert.That(applied, Is.EqualTo(1));
+            }
+            finally { module?.Dispose(); Object.DestroyImmediate(root); }
+        }
+
+        [UnityTest]
         public IEnumerator MacroAndOverloadHints_KeepTheDraftAndSubmitTheSelectedHandlerOnce()
         {
             var root = new GameObject("Native macro overload integration");
@@ -164,13 +311,23 @@ namespace ZeroEngine.Console.UI.Tests
                 var view = root.AddComponent<NativeConsole>();
                 view.Open();
                 var suggestions = view.transform.Find("ZE Console/Panel/Completions").gameObject;
+                var rows = suggestions.transform.Find("Choices");
                 yield return new WaitForSecondsRealtime(.1f);
                 Assert.That(suggestions.activeSelf, Is.False);
+                Assert.That(rows.childCount, Is.Zero);
+                view.InputField.text = "ze-hel";
+                view.InputField.caretPosition = 6;
+                double singleDeadline = Time.realtimeSinceStartupAsDouble + 1;
+                while (!suggestions.activeSelf && Time.realtimeSinceStartupAsDouble < singleDeadline) yield return null;
+                Assert.That(suggestions.activeSelf, Is.True);
+                Assert.That(rows.childCount, Is.EqualTo(1));
+                Assert.That(suggestions.transform.Find("CompletionCaption"), Is.Null);
                 view.InputField.text = "ze-";
                 view.InputField.caretPosition = 3;
                 double deadline = Time.realtimeSinceStartupAsDouble + 1;
                 while (!suggestions.activeSelf && Time.realtimeSinceStartupAsDouble < deadline) yield return null;
                 Assert.That(suggestions.activeSelf, Is.True);
+                Assert.That(rows.childCount, Is.GreaterThan(0));
                 view.InputField.text = string.Empty;
                 yield return new WaitForSecondsRealtime(.1f);
                 Assert.That(suggestions.activeSelf, Is.False);
@@ -586,13 +743,13 @@ namespace ZeroEngine.Console.UI.Tests
                 var panel = (RectTransform)view.GetComponentInChildren<Canvas>().transform.Find("Panel");
                 Assert.That(panel.Find("Title").GetComponent<UnityEngine.UI.Text>().text, Is.EqualTo("ZE Console"));
                 Assert.That(panel.Find("Backend"), Is.Null);
-                var hint = (RectTransform)panel.Find("ActionHint");
+                Assert.That(panel.Find("ActionHint"), Is.Null);
                 var pointer = new UnityEngine.EventSystems.PointerEventData(events);
-                Assert.That(hint.gameObject.activeSelf, Is.False);
                 foreach (string name in new[] { "清空", "复制", "字号减小", "字号增大", "跟随", "运行", "取消", "关闭" })
                     Assert.That(Button(view, name).GetComponentsInChildren<UnityEngine.UI.Text>(true), Is.Empty, name);
                 var copy = Button(view, "复制");
                 UnityEngine.EventSystems.ExecuteEvents.Execute(copy.gameObject, pointer, UnityEngine.EventSystems.ExecuteEvents.pointerEnterHandler);
+                var hint = (RectTransform)panel.Find("ActionHint");
                 Assert.That(hint.gameObject.activeSelf, Is.True);
                 Assert.That(hint.GetComponentInChildren<UnityEngine.UI.Text>().text, Is.EqualTo("复制全部日志"));
                 Assert.That(events.currentSelectedGameObject, Is.SameAs(selected));
@@ -638,6 +795,7 @@ namespace ZeroEngine.Console.UI.Tests
                 view.Open();
                 yield return null;
                 yield return null;
+                Assert.That(view.GetComponentsInChildren<UnityEngine.UI.InputField>(true).Any(field => field.name == "LogSearch"), Is.False);
                 view.InputField.text = "search-test";
                 view.InputField.caretPosition = view.InputField.text.Length;
                 Button(view, "搜索日志").onClick.Invoke();

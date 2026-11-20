@@ -1,7 +1,7 @@
 {
   "name": "com.zerogamestudio.zeroengine.pvp",
   "version": "1.0.1",
-  "displayName": "ZeroEngine.PvP",
+  "displayName": "ZeroEngine PvP",
   "description": "Asynchronous PvP framework with team snapshots, matchmaking, and ranking systems.",
   "unity": "6000.6",
   "unityRelease": "0f1",

@@ -4,7 +4,32 @@ Read the installed Console README before choosing assemblies. The pure
 `ZeroEngine.Console.Core` owns descriptors, parsing, policy and sessions.
 `ZeroEngine.Console.Unity` supplies main-thread hosting; native uGUI and the
 optional Quantum adapter are separate packages. A project owns its command
-module and gameplay handlers. The vendor SDK is not a business-command registry.
+module and gameplay handlers.
+
+## Frontend choice
+
+- New Unity projects install ZE Console and Console UI through their verified UPM
+  source and set up `ConsoleHost` and `NativeConsole` by default. Add Quantum
+  integration when a project needs an existing Quantum workflow.
+- In existing projects, follow the documented default entry, command aliases
+  and unlock flow. Verify commands, release unlock and packaging before
+  switching frontends or removing an SDK.
+
+## Command registration
+
+Keep gameplay handlers independent of the console frontend. For ZE-based
+projects, register `ConsoleBinding` values through the project's ConsoleHost.
+Native and the optional verified Quantum frontend can present that same ZE
+session, with shared policy and handlers.
+
+When a project provides a shared command attribute or catalog, declare the
+handler once and reuse its parameter metadata and business guards. If the
+catalog is generated, use the project's existing generation and freshness
+checks and submit the declaration with its derived catalog. Verify discovery,
+completion, single execution, and applicable environment and unlock policy
+through each intended entry.
+A command registered directly in one registry needs a binding in the
+other registry to be available through both independent entries.
 
 The default host registers only `ze-help`, `ze-clear` and `ze-session`. Register
 feature and project commands explicitly; keep game-specific operations in the
@@ -62,8 +87,8 @@ of concatenating a display string. Use bounded, cancellable providers and lazy
 indexes; an unclaimed parameter may return `null` for built-in enum/bool/nullable
 completion, while an empty list deliberately supplies nothing.
 
-Keep one active frontend and one input owner. Native and verified Quantum use
-the same session and handlers. Unknown SDK identity or unusable presentation
+Keep one active frontend and one input owner. For the optional ZE Quantum
+frontend, unknown SDK identity or unusable presentation
 selects Native with a reason; a fallback does not establish QC support. Use
 project-owned presentation roots and source-verified compatibility profiles.
 Verify actual rendered text, submission, pause/cancel and input restoration
@@ -74,12 +99,9 @@ system IME behavior.
 Native presentation opens at the lower left and supplies clear/copy, bounded
 scrollback, font size and follow-output controls. Up/Down recalls history, Tab
 inserts a completion, Enter executes and Escape closes. Choose other completions
-with their rows or arrow buttons; touch layouts hide keyboard hints. Completion
-selection does not execute a handler. Keep the current
-Quantum entry and command inventory usable while adopting Native explicitly;
-frontend layout changes are not permission to remove project commands or switch
-production defaults.
-Empty drafts keep logs visible; completion is requested only after input begins.
+with their rows or arrow buttons; touch layouts hide keyboard hints. Selecting a
+completion inserts the command or argument. Empty drafts keep logs visible;
+completion is requested only after input begins.
 
 Native fonts default to a reused dynamic OS family chain with no bundled font
 files. Preserve a project's font via the Inspector or `ConfigureFont(Font)`;

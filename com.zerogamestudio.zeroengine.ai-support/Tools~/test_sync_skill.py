@@ -55,6 +55,9 @@ class SynchronizationTests(unittest.TestCase):
                 lock["dependencies"][package["name"]] = {"source": "registry", "version": package["version"], "depth": 0}
         (self.project / "Packages/manifest.json").write_bytes(SYNC.encode(manifest))
         (self.project / "Packages/packages-lock.json").write_bytes(SYNC.encode(lock))
+        self.write_snapshot()
+
+    def write_snapshot(self):
         self.snapshot.write_bytes(SYNC.encode({"schemaVersion": 1, "projectPath": str(self.project),
             "manifestSha256": SYNC.digest((self.project / "Packages/manifest.json").read_bytes()),
             "lockSha256": SYNC.digest((self.project / "Packages/packages-lock.json").read_bytes()), "packages": self.packages}))
@@ -76,6 +79,46 @@ class SynchronizationTests(unittest.TestCase):
         self.assertEqual([], self.prepare()["changed"])
         self.assertEqual(manifest, (self.project / "Packages/manifest.json").read_bytes())
 
+    def test_generated_guidance_survives_checkout_and_cache_relocation(self):
+        target = self.installed()
+        inventory = SYNC.load(target / "references/installed-packages.json")["packages"]
+        for name, package in inventory.items():
+            self.assertEqual(f"Packages/{name}", package["assetPath"])
+            self.assertNotIn("resolvedPath", package)
+
+        self.project = self.project.rename(self.root / "Second checkout")
+        cache = (self.root / "cache").rename(self.root / "Another package cache")
+        for package in self.packages:
+            package["resolvedPath"] = str(cache / package["name"])
+        self.refresh()
+
+        self.assertEqual([], self.prepare()["changed"])
+
+    def test_checkout_line_endings_are_not_drift_or_local_edits(self):
+        target = self.installed()
+        for name in ("SKILL.md", "references/installed-packages.json", SYNC.RECEIPT):
+            leaf = target / name
+            leaf.write_bytes(leaf.read_bytes().replace(b"\n", b"\r\n"))
+        for name in ("manifest.json", "packages-lock.json"):
+            leaf = self.project / "Packages" / name
+            leaf.write_bytes(leaf.read_bytes().replace(b"\n", b"\r\n"))
+        self.write_snapshot()
+        self.assertEqual([], self.prepare()["changed"])
+        self.assertIn("SKILL.md", SYNC.prepare_remove(self.project)["changed"])
+
+    def test_older_crlf_receipt_migrates_after_lf_checkout(self):
+        target = self.installed()
+        old_receipt = SYNC.load(target / SYNC.RECEIPT)
+        old_receipt["toolVersion"] = "0.2.3"
+        crlf = (target / "SKILL.md").read_bytes().replace(b"\n", b"\r\n")
+        old_receipt["files"]["SKILL.md"] = SYNC.digest(crlf)
+        (target / SYNC.RECEIPT).write_bytes(SYNC.encode(old_receipt))
+
+        plan = self.prepare()
+        self.assertEqual([SYNC.RECEIPT], plan["changed"])
+        SYNC.apply(plan)
+        self.assertEqual([], self.prepare()["changed"])
+
     def test_modified_managed_file_is_preserved(self):
         target = self.installed()
         (target / "SKILL.md").write_text("local edits", encoding="utf-8")
@@ -90,6 +133,10 @@ class SynchronizationTests(unittest.TestCase):
         old_receipt = SYNC.load(target / SYNC.RECEIPT)
         old_receipt["toolVersion"] = "0.2.0"
         old_receipt["files"]["SKILL.md"] = SYNC.digest(old_skill)
+        legacy_tool = target / "scripts/sync_skill.py"
+        legacy_tool.parent.mkdir()
+        legacy_tool.write_bytes(b"Old generated synchronizer")
+        old_receipt["files"]["scripts/sync_skill.py"] = SYNC.digest(legacy_tool.read_bytes())
         (target / SYNC.RECEIPT).write_bytes(SYNC.encode(old_receipt))
         (target / "personal-notes.md").write_text("keep", encoding="utf-8")
 
@@ -98,7 +145,8 @@ class SynchronizationTests(unittest.TestCase):
         SYNC.apply(self.prepare())
         updated = (target / "SKILL.md").read_text(encoding="utf-8")
         self.assertIn("ZE Registry", updated)
-        self.assertIn("registry-preview/release.py", updated)
+        self.assertIn("registry-preview/README.md#publish-a-version", updated)
+        self.assertFalse(legacy_tool.exists())
         self.assertEqual("keep", (target / "personal-notes.md").read_text(encoding="utf-8"))
         self.assertEqual([], self.prepare()["changed"])
 
@@ -137,7 +185,13 @@ class SynchronizationTests(unittest.TestCase):
 
     def test_remove_cli_refuses_deleting_its_running_copy(self):
         target = self.installed()
-        result = subprocess.run([sys.executable, "-B", "-X", "utf8", str(target / "scripts/sync_skill.py"),
+        copied_tool = target / "scripts/sync_skill.py"
+        copied_tool.parent.mkdir()
+        shutil.copyfile(SCRIPT, copied_tool)
+        receipt = SYNC.load(target / SYNC.RECEIPT)
+        receipt["files"]["scripts/sync_skill.py"] = SYNC.digest(copied_tool.read_bytes())
+        (target / SYNC.RECEIPT).write_bytes(SYNC.encode(receipt))
+        result = subprocess.run([sys.executable, "-B", "-X", "utf8", str(copied_tool),
             "--project", str(self.project), "--remove", "--apply"], capture_output=True, text=True, encoding="utf-8", timeout=15)
         self.assertEqual(result.returncode, 2, result.stdout + result.stderr)
         self.assertIn("running copy", result.stdout)
@@ -210,6 +264,74 @@ class SynchronizationTests(unittest.TestCase):
         with self.assertRaisesRegex(SYNC.Conflict, "changed after preview"):
             SYNC.apply(plan)
         self.assertFalse(plan["target"].exists())
+
+    def test_archive_appearing_after_preview_blocks_skill_apply(self):
+        folder = self.project / "Packages/ZEArchives"
+        folder.mkdir()
+        (folder / "archive-lock.json").write_bytes(SYNC.encode({"schemaVersion": 1, "packages": {}}))
+        plan = self.prepare()
+        orphan = folder / "stale.tgz"
+        orphan.write_bytes(b"keep for review")
+        with self.assertRaisesRegex(SYNC.Conflict, "Unused ZE archives: stale.tgz"):
+            SYNC.apply(plan)
+        self.assertFalse(plan["target"].exists())
+        with self.assertRaisesRegex(SYNC.Conflict, "Unused ZE archives"):
+            self.prepare()
+        self.assertEqual(orphan.read_bytes(), b"keep for review")
+
+    def test_checks_exact_archive_pins_files_and_hash(self):
+        folder = self.project / "Packages/ZEArchives"
+        folder.mkdir()
+        name = self.packages[0]["name"]
+        version = SYNC.TOOL_VERSION
+        asset = f"{name}-{version}.tgz"
+        pin = f"file:ZEArchives/{asset}"
+        data = b"validated archive bytes"
+        (folder / asset).write_bytes(data)
+        record = {"name": name, "version": version, "asset": asset, "bytes": len(data), "sha256": SYNC.digest(data)}
+        (folder / "archive-lock.json").write_bytes(SYNC.encode({"schemaVersion": 1, "packages": {name: record}}))
+        manifest = {"dependencies": {name: pin}}
+        lock = {"dependencies": {name: {"version": pin, "source": "local-tarball"}}}
+        self.assertEqual(SYNC.check_archive_delivery(self.project, manifest, lock), 1)
+        with self.assertRaisesRegex(SYNC.Conflict, "pin differs"):
+            SYNC.check_archive_delivery(self.project, {"dependencies": {name: "0.2.1"}}, lock)
+        path = folder / asset
+        path.write_bytes(data.upper())
+        with self.assertRaisesRegex(SYNC.Conflict, "SHA-256 differs"):
+            SYNC.check_archive_delivery(self.project, manifest, lock)
+        path.unlink()
+        with self.assertRaisesRegex(SYNC.Conflict, "Missing ZE archives"):
+            SYNC.check_archive_delivery(self.project, manifest, lock)
+
+    def test_signed_archive_requires_the_pinned_version_to_be_registered(self):
+        row = self.packages[1]
+        name, version = row["name"], "0.1.1"
+        asset = f"{name}-{version}.tgz"
+        pin = f"file:ZEArchives/{asset}"
+        data = b"next reviewed archive"
+        folder = self.project / "Packages/ZEArchives"
+        folder.mkdir()
+        (folder / asset).write_bytes(data)
+        record = {"name": name, "version": version, "asset": asset, "bytes": len(data), "sha256": SYNC.digest(data)}
+        (folder / "archive-lock.json").write_bytes(SYNC.encode({"schemaVersion": 1, "packages": {name: record}}))
+        for path, entry in (("manifest.json", pin), ("packages-lock.json", {"version": pin, "source": "local-tarball"})):
+            leaf = self.project / "Packages" / path
+            content = SYNC.load(leaf)
+            content["dependencies"][name] = entry
+            leaf.write_bytes(SYNC.encode(content))
+        row.update(source="LocalTarball", gitHash="")
+        self.write_snapshot()
+
+        with self.assertRaisesRegex(SYNC.Conflict, "Unity has not registered the pinned ZE archive"):
+            self.prepare(include_local_trials=True)
+        self.assertFalse((self.project / ".agents").exists())
+
+        row["version"] = version
+        (Path(row["resolvedPath"]) / "package.json").write_bytes(SYNC.encode({"name": name, "version": version}))
+        self.write_snapshot()
+        plan = self.prepare(include_local_trials=True)
+        inventory = json.loads(plan["desired"]["references/installed-packages.json"])["packages"]
+        self.assertEqual(version, inventory[name]["version"])
 
     def test_version_split_is_explicit_and_preserves_per_module_pins(self):
         self.packages[1]["gitHash"] = "b" * 40

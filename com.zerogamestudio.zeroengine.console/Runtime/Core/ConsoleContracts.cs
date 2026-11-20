@@ -213,10 +213,17 @@ namespace ZeroEngine.Console
         public string Id { get; }
         public ConsoleCaller Caller { get; }
         public ConsoleCommand Command { get; }
-        private readonly IConsoleOutput output;
-        internal ConsoleInvocation(string id, ConsoleCaller caller, ConsoleCommand command, IConsoleOutput output)
-        { Id = id; Caller = caller; Command = command; this.output = output; }
-        public void Write(string message, ConsoleOutputLevel level = ConsoleOutputLevel.Info) => output?.Write(new ConsoleOutput(Id, level, message));
+        private readonly ConsoleSession session;
+        internal ConsoleInvocation(string id, ConsoleCaller caller, ConsoleCommand command, ConsoleSession session)
+        { Id = id; Caller = caller; Command = command; this.session = session; }
+        public void Write(string message, ConsoleOutputLevel level = ConsoleOutputLevel.Info) => session.Write(new ConsoleOutput(Id, level, message));
+
+        /// <summary>Waits for the owning frontend. Decline, close or no frontend returns false.</summary>
+        public Task<bool> ConfirmAsync(string message) => session.ConfirmAsync(this, message);
+
+        /// <summary>Waits for a choice ID. Decline, close or no frontend returns null.</summary>
+        public Task<string> ChooseAsync(string message, IReadOnlyList<ConsoleCompletionItem> options) =>
+            session.ChooseAsync(this, message, options);
     }
 
     public delegate Task<ConsoleResult> ConsoleHandler(ConsoleInvocation invocation, ConsoleArguments arguments, CancellationToken cancellation);

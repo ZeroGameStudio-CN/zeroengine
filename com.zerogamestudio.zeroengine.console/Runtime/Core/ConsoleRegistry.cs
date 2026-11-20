@@ -46,11 +46,14 @@ namespace ZeroEngine.Console
                 foreach (string name in binding.Command.Aliases.Append(binding.Command.Name))
                     if (!seenNames.Add(name) && !allowOverloads) throw new InvalidOperationException("Duplicate command name: " + name);
             }
-            var groups = items.SelectMany(binding => binding.Command.Aliases.Prepend(binding.Command.Name)
-                .Select(name => new { name, binding })).GroupBy(item => item.name, StringComparer.OrdinalIgnoreCase).ToArray();
-            foreach (var group in groups)
-                if (group.Count() > MaximumOverloads || group.Select(item => item.binding.Command.Name).Distinct(StringComparer.OrdinalIgnoreCase).Count() != 1)
-                    throw new InvalidOperationException("An overload name must belong to one bounded command family: " + group.Key);
+            var groups = allowOverloads
+                ? items.SelectMany(binding => binding.Command.Aliases.Prepend(binding.Command.Name)
+                    .Select(name => new { name, binding })).GroupBy(item => item.name, StringComparer.OrdinalIgnoreCase).ToArray()
+                : null;
+            if (groups != null)
+                foreach (var group in groups)
+                    if (group.Count() > MaximumOverloads || group.Select(item => item.binding.Command.Name).Distinct(StringComparer.OrdinalIgnoreCase).Count() != 1)
+                        throw new InvalidOperationException("An overload name must belong to one bounded command family: " + group.Key);
             ConsoleEntry[] entries;
             lock (sync)
             {
@@ -66,18 +69,23 @@ namespace ZeroEngine.Console
                         if (ids.ContainsKey(name)) throw new InvalidOperationException("Command name conflicts with an existing ID: " + name);
                         if (seenIds.Contains(name) && name != command.Id) throw new InvalidOperationException("Command name conflicts with another ID: " + name);
                     }
-                    if (items.Any(other => other != item && other.Command.Aliases.Prepend(other.Command.Name).Contains(command.Id, StringComparer.OrdinalIgnoreCase)))
-                        throw new InvalidOperationException("Command ID conflicts with another name: " + command.Id);
                 }
                 entries = items.Select(binding => new ConsoleEntry(binding)).ToArray();
                 foreach (ConsoleEntry entry in entries)
-                    ids.Add(entry.Binding.Command.Id, entry);
-                foreach (var group in groups)
                 {
-                    var family = group.Select(item => ids[item.binding.Command.Id]).OrderBy(entry => entry.Binding.Command.Id, StringComparer.Ordinal).ToArray();
-                    if (family.Length == 1) names.Add(group.Key, family[0]);
-                    else overloads.Add(group.Key, family);
+                    var command = entry.Binding.Command;
+                    ids.Add(command.Id, entry);
+                    if (groups != null) continue;
+                    names.Add(command.Name, entry);
+                    foreach (string alias in command.Aliases) names.Add(alias, entry);
                 }
+                if (groups != null)
+                    foreach (var group in groups)
+                    {
+                        var family = group.Select(item => ids[item.binding.Command.Id]).OrderBy(entry => entry.Binding.Command.Id, StringComparer.Ordinal).ToArray();
+                        if (family.Length == 1) names.Add(group.Key, family[0]);
+                        else overloads.Add(group.Key, family);
+                    }
                 snapshot = null;
                 Revision++;
             }

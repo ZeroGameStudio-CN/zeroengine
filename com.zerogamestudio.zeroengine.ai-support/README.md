@@ -7,7 +7,9 @@ stay compatible. No Player assembly or background service is added.
 
 `Skills~` maintains the project Skill template; `Tools~` provides its lifecycle
 CLI. Module READMEs remain the API source. Generated consumer guidance lives in
-`.agents/skills/zeroengine`, with an inventory and copied module READMEs.
+`.agents/skills/zeroengine`, with a portable inventory and copied module READMEs.
+The inventory records Unity asset paths by package ID. Reading the checked-in
+guidance after a checkout requires only the project files.
 
 ## Packages and guidance
 
@@ -17,7 +19,7 @@ Registry versions or tested Git commits according to the project's manifest.
 Include the required siblings. Publish new versions through the
 [ZE Registry release entry](https://github.com/ZeroGameStudio-CN/zeroengine/blob/main/Tools/Packages/registry-preview/README.md#publish-a-version).
 
-After a package change, export
+For package maintainers, after a package change, export
 `ZeroEngine.AiSupport.Editor.SkillPackageSnapshot.CreateJson()` through that
 project's Editor executor to an external file. Then use Python 3.10+:
 
@@ -32,6 +34,12 @@ a conflict. Apply changes generated guidance only; it never repins packages or
 changes global Skills, assets or project settings. Removed module references are
 cleaned when unchanged. Local additions remain; stale snapshots, modified managed
 files, unknown/newer receipts and failed restoration stop with recovery evidence.
+The synchronization receipt treats LF and CRLF checkouts as the same text.
+
+For signed ZE archive projects, synchronization checks that
+`Packages/ZEArchives/archive-lock.json`, both UPM files, the actual archives and
+Unity's registered versions agree. Resolve package changes in Unity before
+exporting the snapshot. A failed check identifies the affected package or file.
 
 Explicit trials use `--include-local-trials` / `--allow-version-split` and keep
 their provenance. A same-tool-version commit change requires reviewed installed

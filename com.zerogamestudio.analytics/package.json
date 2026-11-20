@@ -1,7 +1,7 @@
 {
   "name": "com.zerogamestudio.analytics",
   "version": "2.3.2",
-  "displayName": "ZGS Analytics",
+  "displayName": "ZeroEngine Analytics",
   "description": "ZeroGameStudio 游戏分析 SDK，支持自建 ClickHouse 数据平台",
   "unity": "6000.6",
   "dependencies": {

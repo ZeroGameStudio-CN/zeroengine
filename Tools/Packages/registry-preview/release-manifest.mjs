@@ -1176,16 +1176,37 @@ export default {
           "signingOrganizationId": "16767998560366",
           "dependencies": {
             "com.zerogamestudio.zeroengine.editor-ui": "1.5.0"
+          },
+          "githubBase": "https://github.com/ZeroGameStudio-CN/zeroengine/releases/download/ze-upm-registry-linked-d194ba36-20261118/"
+        },
+        "0.5.1-ze-pob.android.1": {
+          "asset": "com.zerogamestudio.zeroengine.multiplayer-0.5.1-ze-pob.android.1.tgz",
+          "bytes": 89056,
+          "sha256": "014f3da27f8d6039aaa779b341f387926b80fbf9ef0817b646deb5b4b8f9a9e1",
+          "sha512": "sha512-W0IbQSzwE0fnrj3fpoksK7+64d1OUA9uv5e+asAiwNCvsnEqN6wO8mgfli9DJRTCXiIdsXofjF4H5DvlX0zb3A==",
+          "sourceCommit": "b35cb974e4271094a89ea3e6880c2aa7e5bf3fde",
+          "sourceTree": "046d5af69c146bf090af063f3d2011965227c436",
+          "matchedSourceFiles": 147,
+          "sourceBytesUnchanged": false,
+          "runtimeBytesUnchanged": true,
+          "packageJsonReformatted": false,
+          "omittedGitIgnore": [
+            "Tools~/Motion.Tests/.gitignore"
+          ],
+          "signingOrganizationId": "16767998560366",
+          "dependencies": {
+            "com.zerogamestudio.zeroengine.editor-ui": "1.5.0"
           }
         }
       },
-      "githubBase": "https://github.com/ZeroGameStudio-CN/zeroengine/releases/download/ze-upm-registry-linked-d194ba36-20261118/",
+      "githubBase": "https://github.com/ZeroGameStudio-CN/zeroengine/releases/download/ze-upm-b35cb974-8328d2e81d39/",
       "metadataAsset": "com.zerogamestudio.zeroengine.multiplayer-registry.json",
       "tags": {
-        "latest": "0.5.0"
+        "latest": "0.5.0",
+        "preview": "0.5.1-ze-pob.android.1"
       },
       "summary": {
-        "displayName": "ZeroEngine.Multiplayer",
+        "displayName": "ZeroEngine Multiplayer",
         "description": "SDK-neutral multiplayer session orchestration with optional FishNet, Steam, and LocalDirect adapters for ZeroEngine projects.",
         "unity": "6000.6",
         "unityRelease": "0f1"
@@ -1492,5 +1513,5 @@ export default {
       }
     }
   },
-  "updatedAt": "2026-11-19T02:56:14Z"
+  "updatedAt": "2026-11-19T13:01:13Z"
 };

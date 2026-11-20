@@ -1,6 +1,6 @@
 {
   "name": "com.zerogamestudio.zeroengine.ai-support",
-  "version": "0.2.1",
+  "version": "0.2.4",
   "displayName": "ZeroEngine Agent",
   "description": "Project guidance and explicit Skill lifecycle tools for installed ZeroEngine modules.",
   "unity": "6000.6",

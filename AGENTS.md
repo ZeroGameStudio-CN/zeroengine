@@ -3,8 +3,9 @@
 ## Project Role
 
 This repository is the ZeroEngine development workspace. Unity projects consume
-verified packages from ZE Registry or use pinned Unity Package Manager Git
-dependencies that point at `https://github.com/ZeroGameStudio-CN/zeroengine.git`.
+verified packages from ZE Registry, signed release archives tracked in SCM, or
+pinned Unity Package Manager Git dependencies from
+`https://github.com/ZeroGameStudio-CN/zeroengine.git`.
 
 Development-content records and their format follow
 [the project adapter](docs/agent/project-adapter.md).
@@ -14,21 +15,13 @@ depend on this local checkout as their normal setup.
 
 ## Agent Guidance
 
-ZE Agent's maintained source is
-[the Agent package](com.zerogamestudio.zeroengine.ai-support/README.md):
-`Skills~` owns the project Skill template and `Tools~` its explicit lifecycle CLI.
-Consumer `.agents/skills/zeroengine` files are generated from actual installed
-packages; maintain the source template and module READMEs here.
+The [ZE Agent package](com.zerogamestudio.zeroengine.ai-support/README.md)
+owns the Skill template. Consumer `.agents/skills/zeroengine` files describe
+the packages actually installed by that project.
 
-Use [the ZE Registry release entry](Tools/Packages/registry-preview/README.md)
-to publish from a tested commit. `Tools/Packages/registry-preview/release.py`
-runs signing, Unity verification, Worker01 publication, GitHub backup and
-activation. The admission manifest lists the available versions.
-
-When a module's API, dependencies or usage changes, update its README and any
-affected Agent guidance together. After consumer package installation, removal or
-upgrade, refresh the inventory and run the Skill check. Keep this `AGENTS.md`
-current when repository architecture or source entrances change.
+Each module's README describes its API, dependencies and usage. Update the
+README and affected guidance with the module. The [ZE Registry contract](Tools/Packages/registry-preview/README.md)
+owns admitted versions and the release workflow.
 
 ## Consumer Project Rules
 
@@ -38,8 +31,9 @@ current when repository architecture or source entrances change.
   `https://github.com/ZeroGameStudio-CN/zeroengine.git?path=<package>#<tested-commit>`.
 - Pin shared Git dependencies to tested commits. Keep the project on a
   verified compatible package cohort when moving its pins or switching sources.
-- Use `file:` dependencies for temporary local debugging. Restore the
-  consumer's verified Registry or Git pins before handoff.
+- For a project that distributes signed archives, follow its archive inventory
+  and exact relative `file:` pins. Restore the project's verified delivery route
+  after temporary local debugging.
 - Include required `com.zerogamestudio.*` sibling dependencies from the same
   verified cohort.
 
@@ -49,6 +43,8 @@ current when repository architecture or source entrances change.
 - Preserve UPM package boundaries: each top-level `com.zerogamestudio.*`
   directory is its own package with its own `package.json`, `.asmdef` files,
   `README.md`, and `.meta` files.
+- Use `ZeroGameStudio` for `author.name` and `ZeroEngine <Module>` for ZE package
+  display names. Display metadata is versioned with the release archive.
 - When changing package dependencies, update the relevant `package.json`,
   README, and consumer setup documentation together.
 - Do not edit generated Unity folders such as `Library`, `Temp`, `Obj`,

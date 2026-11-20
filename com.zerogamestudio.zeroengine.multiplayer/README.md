@@ -31,7 +31,7 @@ This package is the preferred foundation for new ZeroEngine multiplayer work. Th
 | `ZeroEngine.Multiplayer.Local` | LocalDirect development room service and launch descriptor | Core only |
 | `ZeroEngine.Multiplayer.Presentation` | Read-only UI state projection | Core only |
 | `ZeroEngine.Multiplayer.FishNet` | FishNet connection and identity bridge | Enabled only when the supported FishNet package is present |
-| `ZeroEngine.Multiplayer.Steam` | Steam runtime ownership, lobby, and invitation adapter | Enabled only when the supported Steamworks.NET package is present |
+| `ZeroEngine.Multiplayer.Steam` | Steam runtime ownership, lobby, and invitation adapter | Enabled for desktop standalone targets when the supported Steamworks.NET SDK is present |
 
 Game-specific authority, entity replication, save/checkpoint state, content manifests, and UI remain in each consumer's `IMultiplayerGameAdapter`. The package does not claim to synchronize arbitrary gameplay automatically.
 

@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import argparse
 from contextlib import contextmanager
+import importlib.util
 import json
 import os
 from pathlib import Path
@@ -16,7 +17,7 @@ import uuid
 from activate_release import INDEX_LIMIT, active_version, activate, check_public_index, sha
 from prepare_pob_core import git
 from publish_release import PUBLIC, dump, get, prepare_backup, verify_bytes
-from sign_release import GIT_ID, PACKAGE, VERSION, catalog_json, prepare_selected
+from sign_release import GIT_ID, PACKAGE, VERSION, catalog_json, plan_selected, prepare_selected
 from verify_release import verify
 from worker_release import TOOLS, require_trust, tool_digest, unpack_bundle, write_bundle
 
@@ -34,6 +35,16 @@ SSH = ['ssh', '-o', 'BatchMode=yes', '-o', 'ConnectTimeout=10',
 
 def read(path):
     return json.loads(path.read_bytes())
+
+
+def check_consumer(project):
+    tools = REPOSITORY / 'com.zerogamestudio.zeroengine.ai-support/Tools~/sync_skill.py'
+    spec = importlib.util.spec_from_file_location('ze_archive_check', tools)
+    skill = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(skill)
+    project = project.resolve()
+    return skill.check_archive_delivery(project, skill.load(project / 'Packages/manifest.json'),
+                                        skill.load(project / 'Packages/packages-lock.json'))
 
 
 @contextmanager
@@ -90,6 +101,12 @@ def signed_receipt(prepared, signed):
             or metadata['sourceCommit'] != plan['commit'] or metadata['versions'] != versions
             or metadata['packages'].keys() != versions.keys()):
         raise ValueError('The received signed bytes differ from the Worker01 receipt')
+    expected = {f'{name}/{name}-{version}.tgz' for name, version in versions.items()}
+    on_disk = {path.relative_to(signed).as_posix() for path in signed.rglob('*') if path.suffix.lower() == '.tgz'}
+    if on_disk - expected:
+        raise ValueError('Unused signed archives: ' + ', '.join(sorted(on_disk - expected)))
+    if expected - on_disk:
+        raise ValueError('Missing signed archives: ' + ', '.join(sorted(expected - on_disk)))
     for name, record in metadata['packages'].items():
         asset = f'{name}-{versions[name]}.tgz'
         if record['asset'] != asset:
@@ -177,10 +194,10 @@ def release(args, selection, output):
                 shutil.copyfile(CATALOG, before)
                 control.mkdir()
                 shutil.copyfile(SOURCE / 'wrangler.toml', control / 'wrangler.toml')
-                version = active_version(args.node, args.wrangler, control)
                 catalog = catalog_json(before)
-                check_public_index(get(PUBLIC + '/-/all', INDEX_LIMIT), catalog)
                 prepare_selected(REPOSITORY, args.commit, selection, ORGANIZATION, prepared, catalog['packages'])
+                version = active_version(args.node, args.wrangler, control)
+                check_public_index(get(PUBLIC + '/-/all', INDEX_LIMIT), catalog)
                 plan_sha = sha(prepared / 'release-input.json')
                 details = {'source': source_identity, 'run': uuid.uuid4().hex, 'baselineSha256': sha(before),
                            'controlSources': control_sources, 'workerTools': worker_tools,
@@ -259,24 +276,46 @@ def executable(parser, value, label):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('--commit', required=True, help='Tested full commit reachable on public main')
-    parser.add_argument('--package', required=True, action='append', metavar='NAME[=VERSION]')
-    parser.add_argument('--output', required=True, type=Path, help='External release evidence directory')
+    parser.add_argument('--commit', help='Tested full commit reachable on public main')
+    parser.add_argument('--package', action='append', default=[], metavar='NAME[=VERSION]')
+    parser.add_argument('--output', type=Path, help='External release evidence directory')
+    parser.add_argument('--project', type=Path, help='Check a consumer project using signed ZE archives')
     parser.add_argument('--editor', default=os.environ.get('ZE_RELEASE_EDITOR'))
     parser.add_argument('--wrangler', default=os.environ.get('ZE_RELEASE_WRANGLER'))
     parser.add_argument('--unity', default='unity')
     parser.add_argument('--node', default='node')
     parser.add_argument('--unity-seconds', type=int, default=300)
-    parser.add_argument('--resume', action='store_true', help='Resume the original known release inputs and receipts')
+    mode = parser.add_mutually_exclusive_group()
+    mode.add_argument('--check', action='store_true', help='Check local inputs without signing or publishing')
+    mode.add_argument('--resume', action='store_true', help='Resume the original known release inputs and receipts')
     args = parser.parse_args()
-    if not GIT_ID.fullmatch(args.commit) or not args.editor or not args.wrangler:
-        parser.error('Provide a full Git commit, Unity Editor and Wrangler JavaScript entry point')
     selection = {}
     for value in args.package:
         name, separator, version = value.partition('=')
         if not PACKAGE.fullmatch(name) or name in selection or (separator and not VERSION.fullmatch(version)):
             parser.error('Choose each public package once, with a complete optional version')
         selection[name] = version or None
+    if args.commit or selection or not args.check:
+        if not GIT_ID.fullmatch(args.commit or '') or not selection:
+            parser.error('Provide both a full Git commit and at least one package')
+    elif args.project is None:
+        parser.error('Provide a package selection or a consumer project to check')
+    if args.check and args.output:
+        parser.error('--check reports to stdout')
+
+    try:
+        report = {'archives': check_consumer(args.project)} if args.project else {}
+        if args.check:
+            if selection:
+                resolved, pending = plan_selected(REPOSITORY, args.commit, selection, ORGANIZATION, catalog_json(CATALOG)['packages'])
+                report.update(commit=args.commit, packages=resolved, newVersions=len(pending))
+            print(json.dumps(report, ensure_ascii=False), flush=True)
+            return
+    except (OSError, ValueError, KeyError, TypeError, subprocess.CalledProcessError) as error:
+        parser.error(str(error))
+
+    if not args.output or not args.editor or not args.wrangler:
+        parser.error('Provide an evidence directory, Unity Editor and Wrangler JavaScript entry point')
     for name in ('unity', 'editor', 'node', 'wrangler'):
         setattr(args, name, executable(parser, getattr(args, name), name))
     output = args.output.resolve()

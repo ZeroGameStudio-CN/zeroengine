@@ -28,6 +28,9 @@ namespace ZeroEngine.Console
         private readonly CancellationToken lifetimeToken;
         private readonly int outputCapacity, historyCapacity, messageLimit;
         private CancellationTokenSource current;
+        private string activeInvocationId;
+        private ConsoleInteraction interaction;
+        private ConsolePrompt prompt;
         private bool disposed;
         private long outputRevision;
         private long clearRevision;
@@ -74,7 +77,10 @@ namespace ZeroEngine.Console
         public ConsoleOutput[] GetOutput() { lock (sync) return output.ToArray(); }
         public ConsoleOutputSnapshot GetOutputSnapshot() { lock (sync) return new ConsoleOutputSnapshot(outputRevision, clearRevision, output.ToArray()); }
         /// <summary>Copies retained output and its revision into a caller-owned reusable buffer.</summary>
-        public int CopyOutputTo(ref ConsoleOutput[] buffer, out long revision)
+        public int CopyOutputTo(ref ConsoleOutput[] buffer, out long revision) =>
+            CopyOutputTo(ref buffer, out revision, out _);
+
+        public int CopyOutputTo(ref ConsoleOutput[] buffer, out long revision, out long lastClear)
         {
             lock (sync)
             {
@@ -88,6 +94,7 @@ namespace ZeroEngine.Console
                 output.CopyTo(buffer, 0);
                 if (count < buffer.Length) Array.Clear(buffer, count, buffer.Length - count);
                 revision = outputRevision;
+                lastClear = clearRevision;
                 return count;
             }
         }
@@ -191,6 +198,7 @@ namespace ZeroEngine.Console
                         ? CancellationTokenSource.CreateLinkedTokenSource(cancellation, ownerToken)
                         : CancellationTokenSource.CreateLinkedTokenSource(ownerToken, CancellationToken.None);
                     current = execution;
+                    activeInvocationId = invocationId;
                 }
                 execution.Token.ThrowIfCancellationRequested();
                 ConsoleArguments arguments;
@@ -222,7 +230,13 @@ namespace ZeroEngine.Console
             {
                 lock (sync)
                 {
-                    if (ReferenceEquals(current, execution)) current = null;
+                    if (execution != null && ReferenceEquals(current, execution))
+                    {
+                        prompt?.Response.TrySetResult(null);
+                        prompt = null;
+                        activeInvocationId = null;
+                        current = null;
+                    }
                     execution?.Dispose();
                     deadline?.Dispose();
                 }
@@ -259,6 +273,79 @@ namespace ZeroEngine.Console
         public void CancelCurrent()
         {
             lock (sync) current?.Cancel();
+        }
+
+        public ConsoleInteraction TryAcquireInteraction()
+        {
+            lock (sync)
+            {
+                if (disposed || interaction != null) return null;
+                return interaction = new ConsoleInteraction(this);
+            }
+        }
+
+        internal async Task<bool> ConfirmAsync(ConsoleInvocation invocation, string message) =>
+            await AskAsync(new ConsoleConfirmation(invocation, message)) != null;
+
+        internal Task<string> ChooseAsync(ConsoleInvocation invocation, string message, IReadOnlyList<ConsoleCompletionItem> options) =>
+            AskAsync(ConsolePrompt.Choice(invocation, message, options));
+
+        private async Task<string> AskAsync(ConsolePrompt request)
+        {
+            var invocation = request.Invocation;
+            CancellationToken token;
+            lock (sync)
+            {
+                if (interaction == null || disposed || activeInvocationId != invocation.Id) return null;
+                if (prompt != null) throw new InvalidOperationException("A prompt is already pending.");
+                token = current.Token;
+                token.ThrowIfCancellationRequested();
+                prompt = request;
+            }
+            try
+            {
+                using (token.Register(state => ((ConsolePrompt)state).Response.TrySetCanceled(), request))
+                {
+                    Write(new ConsoleOutput(invocation.Id, ConsoleOutputLevel.Info, request.Message));
+                    string choice = await request.Response.Task;
+                    token.ThrowIfCancellationRequested();
+                    return choice != null && policy.Check(invocation.Command, invocation.Caller).IsSuccess ? choice : null;
+                }
+            }
+            finally
+            {
+                lock (sync)
+                    if (ReferenceEquals(prompt, request)) prompt = null;
+            }
+        }
+
+        internal ConsolePrompt ReadPrompt(ConsoleInteraction owner)
+        {
+            lock (sync)
+                return ReferenceEquals(interaction, owner) && prompt != null && !prompt.Response.Task.IsCompleted
+                    ? prompt : null;
+        }
+
+        internal bool RespondToPrompt(ConsoleInteraction owner, ConsolePrompt request, ConsoleCaller caller, string choice)
+        {
+            if (request == null || caller == null || !ReferenceEquals(ReadPrompt(owner), request) || !request.Allows(choice)) return false;
+            var original = request.Invocation.Caller;
+            if (caller.Environment != original.Environment || !string.Equals(caller.Identity, original.Identity, StringComparison.Ordinal))
+                return false;
+            if (choice != null && !policy.Check(request.Invocation.Command, caller).IsSuccess) return false;
+            lock (sync)
+                return ReferenceEquals(interaction, owner) && ReferenceEquals(prompt, request) &&
+                    current != null && !current.IsCancellationRequested && request.Response.TrySetResult(choice);
+        }
+
+        internal void ReleaseInteraction(ConsoleInteraction owner)
+        {
+            lock (sync)
+            {
+                if (!ReferenceEquals(interaction, owner)) return;
+                interaction = null;
+                prompt?.Response.TrySetResult(null);
+            }
         }
 
         public ConsoleCommandHint GetHint(string line, int caret, ConsoleCaller caller)
@@ -372,9 +459,17 @@ namespace ZeroEngine.Console
                 var offered = Registry.HasOverloads ? new HashSet<string>(StringComparer.OrdinalIgnoreCase) : null;
                 foreach (ConsoleEntry commandEntry in Registry.Snapshot())
                 {
-                    if (!commandEntry.IsActive || !policy.Check(commandEntry.Binding.Command, caller).IsSuccess) continue;
+                    bool visible = false;
                     foreach (ConsoleCompletionItem candidate in commandEntry.NameCompletions)
-                        if (candidate.Value.IndexOf(prefix, StringComparison.OrdinalIgnoreCase) >= 0 && (offered == null || offered.Add(candidate.Value))) candidates.Add(candidate);
+                    {
+                        if (candidate.Value.IndexOf(prefix, StringComparison.OrdinalIgnoreCase) < 0) continue;
+                        if (!visible)
+                        {
+                            if (!commandEntry.IsActive || !policy.Check(commandEntry.Binding.Command, caller).IsSuccess) break;
+                            visible = true;
+                        }
+                        if (offered == null || offered.Add(candidate.Value)) candidates.Add(candidate);
+                    }
                 }
             }
             else if (resolved != null)
@@ -455,6 +550,7 @@ namespace ZeroEngine.Console
             {
                 if (disposed) return;
                 disposed = true;
+                interaction = null;
                 try { current?.Cancel(); }
                 finally
                 {

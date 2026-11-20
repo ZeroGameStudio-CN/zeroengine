@@ -1,7 +1,7 @@
 {
   "name": "com.zerogamestudio.zeroengine.modsystem",
   "version": "0.4.0",
-  "displayName": "ZeroEngine ModSystem",
+  "displayName": "ZeroEngine Mod System",
   "description": "Project-neutral mod discovery, management, source, Steam Workshop, and import orchestration foundation for ZeroEngine projects.",
   "unity": "6000.6",
   "dependencies": {
