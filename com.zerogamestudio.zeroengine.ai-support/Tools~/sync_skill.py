@@ -12,7 +12,7 @@ import tempfile
 import uuid
 
 PACKAGE = "com.zerogamestudio.zeroengine.ai-support"
-TOOL_VERSION = "0.2.2"
+TOOL_VERSION = "0.2.3"
 SCHEMA = 1
 RECEIPT = ".zeroengine-sync.json"
 MAX_BYTES = 8 * 1024 * 1024
@@ -180,7 +180,7 @@ def prepare(project: Path, snapshot_path: Path, *, allow_version_split=False,
         elif not include_local_trials:
             raise Conflict("Existing local trial requires --include-local-trials: " + name)
         indexed[name] = {"name": name, "version": package["version"], "source": package["source"],
-                         "gitHash": commit.lower(), "resolvedPath": str(root),
+                         "gitHash": commit.lower(), "assetPath": f"Packages/{name}",
                          "repository": repository,
                          "verification": "local-trial-unverified" if source not in ("git", "registry") else "installed-source-only"}
         roots[name] = root
@@ -207,7 +207,6 @@ def prepare(project: Path, snapshot_path: Path, *, allow_version_split=False,
             desired[relative(path.relative_to(template).as_posix())] = read(path)
     if "SKILL.md" not in desired:
         raise Conflict("Installed Skill template is missing")
-    desired["scripts/sync_skill.py"] = Path(__file__).read_bytes()
     lines = ["# Installed package sources", "", "Generated from registered PackageInfo and the matching manifest/lock.",
              "These versions identify installed source; they do not establish compatibility, release or acceptance.", "",
              "| Package | Version | Commit / source | Module README |", "| --- | --- | --- | --- |"]

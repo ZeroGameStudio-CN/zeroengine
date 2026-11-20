@@ -15,21 +15,13 @@ depend on this local checkout as their normal setup.
 
 ## Agent Guidance
 
-ZE Agent's maintained source is
-[the Agent package](com.zerogamestudio.zeroengine.ai-support/README.md):
-`Skills~` owns the project Skill template and `Tools~` its explicit lifecycle CLI.
-Consumer `.agents/skills/zeroengine` files are generated from actual installed
-packages; maintain the source template and module READMEs here.
+The [ZE Agent package](com.zerogamestudio.zeroengine.ai-support/README.md)
+owns the Skill template. Consumer `.agents/skills/zeroengine` files describe
+the packages actually installed by that project.
 
-Use [the ZE Registry release entry](Tools/Packages/registry-preview/README.md)
-to publish from a tested commit. `Tools/Packages/registry-preview/release.py`
-runs signing, Unity verification, Worker01 publication, GitHub backup and
-activation. The admission manifest lists the available versions.
-
-When a module's API, dependencies or usage changes, update its README and any
-affected Agent guidance together. After consumer package installation, removal or
-upgrade, refresh the inventory and run the Skill check. Keep this `AGENTS.md`
-current when repository architecture or source entrances change.
+Each module's README describes its API, dependencies and usage. Update the
+README and affected guidance with the module. The [ZE Registry contract](Tools/Packages/registry-preview/README.md)
+owns admitted versions and the release workflow.
 
 ## Consumer Project Rules
 
