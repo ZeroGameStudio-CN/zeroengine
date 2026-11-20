@@ -1,7 +1,7 @@
 {
     "name": "com.zerogamestudio.zeroengine.dlc",
     "version": "2.0.0",
-    "displayName": "ZeroEngine.Dlc",
+    "displayName": "ZeroEngine DLC",
     "description": "Platform-neutral DLC and content-pack entitlement foundation for ZeroEngine projects.",
     "unity": "6000.6",
     "unityRelease": "0f1",

@@ -2,6 +2,10 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Net;
+using System.Net.Http;
+using System.Threading;
+using System.Threading.Tasks;
 using NUnit.Framework;
 using UnityEngine;
 
@@ -156,6 +160,28 @@ namespace ZeroEngine.AssetCatalog.Tests
                 }
             };
             Assert.Throws<InvalidOperationException>(() => AssetCatalogAiClient.ValidateAnswer(answer, new[] { candidate }));
+        }
+
+        [Test]
+        public void PersonalAiClient_ParsesFencedAnswerFromChatTransport()
+        {
+            using (var handler = new FencedAnswerHandler())
+            using (var client = new AssetCatalogAiClient(new AssetCatalogPersonalAiSettings(), handler))
+            {
+                AssetCatalogAiAnswer answer = client.AskAsync("test-key", "test question", Array.Empty<AssetCatalogAiCandidate>())
+                    .GetAwaiter().GetResult();
+                Assert.That(answer.answer, Is.EqualTo("fixture answer"));
+                Assert.That(answer.recommendations, Is.Empty);
+            }
+        }
+
+        private sealed class FencedAnswerHandler : HttpMessageHandler
+        {
+            protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
+            {
+                const string json = "{\"choices\":[{\"message\":{\"content\":\"```json\\n{\\\"answer\\\":\\\"fixture answer\\\"}\\n```\"}}]}";
+                return Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent(json) });
+            }
         }
 
         [Test]

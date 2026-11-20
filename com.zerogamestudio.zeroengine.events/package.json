@@ -1,7 +1,7 @@
 {
     "name": "com.zerogamestudio.zeroengine.events",
     "version": "2.0.0",
-    "displayName": "ZeroEngine.Events",
+    "displayName": "ZeroEngine Events",
     "description": "Typed scoped event bus and Unity event channels for ZeroEngine projects.",
     "unity": "6000.6",
     "unityRelease": "0f1",

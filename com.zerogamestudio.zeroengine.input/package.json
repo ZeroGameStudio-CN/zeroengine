@@ -1,7 +1,7 @@
 {
   "name": "com.zerogamestudio.zeroengine.input",
   "version": "2.1.1",
-  "displayName": "ZeroEngine.Input",
+  "displayName": "ZeroEngine Input",
   "description": "Input management for ZeroEngine. Wraps Unity Input System with device detection, rebinding, and context-aware input handling.",
   "unity": "6000.6",
   "unityRelease": "0f1",

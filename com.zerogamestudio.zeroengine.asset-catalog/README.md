@@ -18,10 +18,6 @@ Personal AI calls are explicit user actions. The client sends at most 40
 already-retrieved candidates, rejects absolute paths and unlisted identities,
 and never writes an answer back to the shared catalog.
 
-
-## Consolidation dependency correction
-
-The 0.1.1 consolidation candidate explicitly declares Unity's built-in
-JSON Serialize module (`com.unity.modules.jsonserialize`) for this package's
-direct `JsonUtility` calls. Consumers no longer need an unrelated installed
-package to supply that module. This candidate is not a published release.
+Asset Catalog 0.1.2 supplies the Editor implementation of Windows credential
+storage and the OpenAI-compatible chat transport for Particle Catalog.
+Asset Catalog uses its existing credential targets and UTF-8 credential bytes.

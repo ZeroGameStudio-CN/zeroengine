@@ -43,6 +43,9 @@ geometry run through real Unity lifecycle callbacks, independently of EditMode.
 The test-runner CLI is pinned to the observed `v0.1.72` release; resolving a
 floating latest release is unnecessary and can fail before Unity starts.
 
+For Git UPM, pin Particle Catalog 0.1.2 and its Asset Catalog 0.1.2 dependency to
+the same tested ZE commit. World Shift 0.1.2 resolves URP 17.6.0 on Unity 6000.6.
+
 `console-core` and `console-native` are clean Console installations: the kernel
 alone, and the kernel plus native UI. CI runs their EditMode and PlayMode cases
 without other ZE gameplay packages, QC or Input System as incidental dependencies.

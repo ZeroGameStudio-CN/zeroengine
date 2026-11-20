@@ -1,6 +1,5 @@
 using System;
 using System.Collections.Generic;
-using System.ComponentModel;
 using System.Runtime.InteropServices;
 using System.Security.Cryptography;
 using System.Text;
@@ -18,9 +17,7 @@ namespace ZeroEngine.AssetCatalog
 
     public static class AssetCatalogCredentialStore
     {
-        private const int CredentialTypeGeneric = 1;
-        private const int CredentialPersistLocalMachine = 2;
-        private const int ErrorNotFound = 1168;
+        private const string CredentialDescription = "personal catalog credential";
         private const int SecItemNotFound = -25300;
         private const int SecDuplicateItem = -25299;
         private static readonly Dictionary<string, string> SessionFallback = new Dictionary<string, string>(StringComparer.Ordinal);
@@ -52,7 +49,7 @@ namespace ZeroEngine.AssetCatalog
             if (string.IsNullOrWhiteSpace(secret)) throw new ArgumentException("secret is required.", nameof(secret));
             if (Application.platform == RuntimePlatform.WindowsEditor)
             {
-                SetWindowsSecret(targetName, secret);
+                CatalogWindowsCredentials.Write(targetName, secret, Encoding.UTF8, CredentialDescription);
                 return;
             }
             if (Application.platform == RuntimePlatform.OSXEditor)
@@ -66,7 +63,8 @@ namespace ZeroEngine.AssetCatalog
         public static bool TryGetSecret(string targetName, out string secret)
         {
             if (string.IsNullOrWhiteSpace(targetName)) throw new ArgumentException("targetName is required.", nameof(targetName));
-            if (Application.platform == RuntimePlatform.WindowsEditor) return TryGetWindowsSecret(targetName, out secret);
+            if (Application.platform == RuntimePlatform.WindowsEditor)
+                return CatalogWindowsCredentials.TryRead(targetName, Encoding.UTF8, CredentialDescription, out secret);
             if (Application.platform == RuntimePlatform.OSXEditor) return TryGetMacSecret(targetName, out secret);
             return SessionFallback.TryGetValue(targetName, out secret) && !string.IsNullOrWhiteSpace(secret);
         }
@@ -77,11 +75,7 @@ namespace ZeroEngine.AssetCatalog
             SessionFallback.Remove(targetName);
             if (Application.platform == RuntimePlatform.WindowsEditor)
             {
-                if (!CredDelete(targetName, CredentialTypeGeneric, 0))
-                {
-                    int error = Marshal.GetLastWin32Error();
-                    if (error != ErrorNotFound) throw new Win32Exception(error, "Could not delete the personal catalog credential.");
-                }
+                CatalogWindowsCredentials.Delete(targetName, CredentialDescription);
             }
             else if (Application.platform == RuntimePlatform.OSXEditor)
             {
@@ -106,55 +100,6 @@ namespace ZeroEngine.AssetCatalog
             StringBuilder builder = new StringBuilder();
             foreach (char character in value.Trim().ToLowerInvariant()) builder.Append(char.IsLetterOrDigit(character) ? character : '-');
             return builder.ToString().Trim('-');
-        }
-
-        private static void SetWindowsSecret(string targetName, string secret)
-        {
-            byte[] bytes = Encoding.UTF8.GetBytes(secret);
-            IntPtr blob = Marshal.AllocCoTaskMem(bytes.Length);
-            try
-            {
-                Marshal.Copy(bytes, 0, blob, bytes.Length);
-                NativeCredential credential = new NativeCredential
-                {
-                    Type = CredentialTypeGeneric,
-                    TargetName = targetName,
-                    CredentialBlobSize = (uint)bytes.Length,
-                    CredentialBlob = blob,
-                    Persist = CredentialPersistLocalMachine,
-                    UserName = Environment.UserName
-                };
-                if (!CredWrite(ref credential, 0)) throw new Win32Exception(Marshal.GetLastWin32Error(), "Could not save the personal catalog credential.");
-            }
-            finally
-            {
-                ZeroAndFree(blob, bytes.Length);
-                Array.Clear(bytes, 0, bytes.Length);
-            }
-        }
-
-        private static bool TryGetWindowsSecret(string targetName, out string secret)
-        {
-            secret = null;
-            if (!CredRead(targetName, CredentialTypeGeneric, 0, out IntPtr pointer))
-            {
-                int error = Marshal.GetLastWin32Error();
-                if (error == ErrorNotFound) return false;
-                throw new Win32Exception(error, "Could not read the personal catalog credential.");
-            }
-            try
-            {
-                NativeCredential credential = Marshal.PtrToStructure<NativeCredential>(pointer);
-                byte[] bytes = new byte[credential.CredentialBlobSize];
-                if (bytes.Length > 0) Marshal.Copy(credential.CredentialBlob, bytes, 0, bytes.Length);
-                secret = Encoding.UTF8.GetString(bytes);
-                Array.Clear(bytes, 0, bytes.Length);
-                return !string.IsNullOrWhiteSpace(secret);
-            }
-            finally
-            {
-                CredFree(pointer);
-            }
         }
 
         private static void SetMacSecret(string targetName, string secret)
@@ -233,39 +178,6 @@ namespace ZeroEngine.AssetCatalog
                 Array.Clear(account, 0, account.Length);
             }
         }
-
-        private static void ZeroAndFree(IntPtr pointer, int length)
-        {
-            if (pointer == IntPtr.Zero) return;
-            for (int index = 0; index < length; index++) Marshal.WriteByte(pointer, index, 0);
-            Marshal.FreeCoTaskMem(pointer);
-        }
-
-        [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
-        private struct NativeCredential
-        {
-            public uint Flags;
-            public uint Type;
-            [MarshalAs(UnmanagedType.LPWStr)] public string TargetName;
-            [MarshalAs(UnmanagedType.LPWStr)] public string Comment;
-            public System.Runtime.InteropServices.ComTypes.FILETIME LastWritten;
-            public uint CredentialBlobSize;
-            public IntPtr CredentialBlob;
-            public uint Persist;
-            public uint AttributeCount;
-            public IntPtr Attributes;
-            [MarshalAs(UnmanagedType.LPWStr)] public string TargetAlias;
-            [MarshalAs(UnmanagedType.LPWStr)] public string UserName;
-        }
-
-        [DllImport("advapi32.dll", EntryPoint = "CredWriteW", CharSet = CharSet.Unicode, SetLastError = true)]
-        private static extern bool CredWrite([In] ref NativeCredential credential, uint flags);
-        [DllImport("advapi32.dll", EntryPoint = "CredReadW", CharSet = CharSet.Unicode, SetLastError = true)]
-        private static extern bool CredRead(string target, uint type, uint flags, out IntPtr credential);
-        [DllImport("advapi32.dll", EntryPoint = "CredDeleteW", CharSet = CharSet.Unicode, SetLastError = true)]
-        private static extern bool CredDelete(string target, uint type, uint flags);
-        [DllImport("advapi32.dll", SetLastError = true)]
-        private static extern void CredFree(IntPtr credential);
 
         [DllImport("/System/Library/Frameworks/Security.framework/Security")]
         private static extern int SecKeychainAddGenericPassword(IntPtr keychain, uint serviceNameLength, byte[] serviceName, uint accountNameLength, byte[] accountName, uint passwordLength, byte[] passwordData, out IntPtr itemRef);

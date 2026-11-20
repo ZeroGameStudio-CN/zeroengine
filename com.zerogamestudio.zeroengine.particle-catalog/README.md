@@ -3,19 +3,15 @@
 Editor-only reusable core for particle asset catalogs.
 
 It provides schema v2, bilingual taxonomy search, validated JSON persistence,
-local Ollama visual classification, Windows credential storage, and a fixed
-DeepSeek recommendation client. It does not scan project assets, depend on
-Asset Inventory, or register project UI. Consumer projects provide those
-adapters and own the shared catalog location.
+local Ollama visual classification, and a fixed DeepSeek recommendation client.
+Consumer projects provide asset scanning, UI adapters and the catalog location.
+
+Particle Catalog 0.1.2 uses Asset Catalog 0.1.2 for its Editor chat transport
+and Windows credential store. For Git UPM, pin both packages to the same tested
+ZE commit. The particle API key still uses
+`ZeroEngine.ParticleCatalog.DeepSeekApiKey` with UTF-16 bytes on Windows and
+session storage on other platforms.
 
 The DeepSeek client uses `https://api.deepseek.com/chat/completions`, model
 `deepseek-v4-flash`, non-thinking JSON output, at most 40 candidates, and at
 most 1200 output tokens. API keys are never stored in project files.
-
-
-## Consolidation dependency correction
-
-The 0.1.1 consolidation candidate explicitly declares Unity's built-in
-JSON Serialize module (`com.unity.modules.jsonserialize`) for this package's
-direct `JsonUtility` calls. Consumers no longer need an unrelated installed
-package to supply that module. This candidate is not a published release.
