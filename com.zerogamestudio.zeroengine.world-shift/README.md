@@ -6,15 +6,12 @@ backend. Projects own world identity, gameplay state, scene loading, collision,
 save data and the decision to start a transition.
 
 `WorldShiftTransitionController` supports material reveal and the URP stencil
-renderer feature. The URP assembly is separate from the controller assembly;
-this package currently declares URP as a required installation dependency. It
-does not promise a Built-in or HDRP renderer. Unity 6 uses the Render Graph path;
-older conditional code is retained but has not been verified in this audit.
+renderer feature. World Shift 0.1.2 requires Unity 6000.6 and URP 17.6.0.
+The separate URP assembly uses Unity 6 Render Graph for its stencil pass.
 
-The 0.1.1 consolidation candidate preserves the embedded POB package's public
-types, serialized fields and asset GUIDs. Project-specific participants and
-orchestration remain in `com.zerogamestudio.pob.world-shift`. Copying this source
-into the ZE repository does not publish it or change POB's installed package.
+The package preserves the original public types, serialized fields and asset
+GUIDs. POB's project-specific participants and orchestration live in
+`com.zerogamestudio.pob.world-shift`.
 
 After verification and publication, install through
 `https://github.com/ZeroGameStudio-CN/zeroengine.git?path=com.zerogamestudio.zeroengine.world-shift#<tested-commit>`.

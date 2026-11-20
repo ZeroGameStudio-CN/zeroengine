@@ -1,7 +1,9 @@
 {
   "name": "ZeroEngine.ParticleCatalog.Editor",
   "rootNamespace": "ZeroEngine.ParticleCatalog",
-  "references": [],
+  "references": [
+    "ZeroEngine.AssetCatalog.Editor"
+  ],
   "includePlatforms": [
     "Editor"
   ],

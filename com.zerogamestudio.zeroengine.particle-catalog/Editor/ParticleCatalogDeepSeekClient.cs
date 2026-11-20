@@ -2,10 +2,9 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Net.Http;
-using System.Net.Http.Headers;
-using System.Text;
 using System.Threading.Tasks;
 using UnityEngine;
+using ZeroEngine.AssetCatalog;
 
 namespace ZeroEngine.ParticleCatalog
 {
@@ -21,12 +20,11 @@ namespace ZeroEngine.ParticleCatalog
             "primary", "secondary", "trail", "impact", "warning", "ambient", "transition"
         };
 
-        private readonly HttpClient _client;
+        private readonly CatalogChatClient _client;
 
         public ParticleCatalogDeepSeekClient(HttpMessageHandler handler = null)
         {
-            _client = handler == null ? new HttpClient() : new HttpClient(handler, false);
-            _client.Timeout = TimeSpan.FromSeconds(90);
+            _client = new CatalogChatClient(handler, "DeepSeek", includeHttpStatus: true);
         }
 
         public async Task<ParticleCatalogAiAnswer> AskAsync(string apiKey, string question, IReadOnlyList<ParticleCatalogEntry> entries)
@@ -35,37 +33,10 @@ namespace ZeroEngine.ParticleCatalog
             if (string.IsNullOrWhiteSpace(question)) throw new ArgumentException("Question is required.", nameof(question));
             ParticleCatalogCandidate[] candidates = BuildCandidates(entries);
 
-            using (HttpRequestMessage request = new HttpRequestMessage(HttpMethod.Post, Endpoint))
-            {
-                request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", apiKey);
-                request.Content = new StringContent(BuildRequestJson(question, candidates), Encoding.UTF8, "application/json");
-                using (HttpResponseMessage response = await _client.SendAsync(request))
-                {
-                    if (!response.IsSuccessStatusCode) throw new InvalidOperationException($"DeepSeek request failed: HTTP {(int)response.StatusCode}.");
-                    DeepSeekResponse envelope;
-                    try
-                    {
-                        envelope = JsonUtility.FromJson<DeepSeekResponse>(await response.Content.ReadAsStringAsync());
-                    }
-                    catch (ArgumentException)
-                    {
-                        throw new InvalidOperationException("DeepSeek response could not be parsed.");
-                    }
-                    string content = envelope?.choices != null && envelope.choices.Length > 0 ? envelope.choices[0]?.message?.content : null;
-                    if (string.IsNullOrWhiteSpace(content)) throw new InvalidOperationException("DeepSeek response did not contain an answer.");
-                    ParticleCatalogAiAnswer answer;
-                    try
-                    {
-                        answer = JsonUtility.FromJson<ParticleCatalogAiAnswer>(StripCodeFence(content));
-                    }
-                    catch (ArgumentException)
-                    {
-                        throw new InvalidOperationException("DeepSeek answer JSON could not be parsed.");
-                    }
-                    ValidateAnswer(answer, candidates);
-                    return answer;
-                }
-            }
+            ParticleCatalogAiAnswer answer = await _client.AskAsync<ParticleCatalogAiAnswer>(
+                Endpoint, apiKey, BuildRequestJson(question, candidates));
+            ValidateAnswer(answer, candidates);
+            return answer;
         }
 
         public static ParticleCatalogCandidate[] BuildCandidates(IReadOnlyList<ParticleCatalogEntry> entries)
@@ -148,21 +119,10 @@ namespace ZeroEngine.ParticleCatalog
 
         public void Dispose() => _client.Dispose();
 
-        private static string StripCodeFence(string value)
-        {
-            string result = (value ?? string.Empty).Trim();
-            if (!result.StartsWith("```", StringComparison.Ordinal)) return result;
-            int firstLine = result.IndexOf('\n');
-            int lastFence = result.LastIndexOf("```", StringComparison.Ordinal);
-            return firstLine >= 0 && lastFence > firstLine ? result.Substring(firstLine + 1, lastFence - firstLine - 1).Trim() : result;
-        }
-
         [Serializable] private sealed class CandidateEnvelope { public ParticleCatalogCandidate[] candidates; }
         [Serializable] private sealed class DeepSeekRequest { public string model; public Message[] messages; public ResponseFormat response_format; public Thinking thinking; public int max_tokens; public bool stream; }
         [Serializable] private sealed class Message { public string role; public string content; }
         [Serializable] private sealed class ResponseFormat { public string type; }
         [Serializable] private sealed class Thinking { public string type; }
-        [Serializable] private sealed class DeepSeekResponse { public Choice[] choices; }
-        [Serializable] private sealed class Choice { public Message message; }
     }
 }

@@ -1,7 +1,7 @@
 {
   "name": "com.zerogamestudio.zeroengine.localization",
   "version": "2.1.0",
-  "displayName": "ZeroEngine.Localization",
+  "displayName": "ZeroEngine Localization",
   "description": "Provider-agnostic async localization, deterministic locale fallback, structured formatting diagnostics, and generic font routing for ZeroEngine.",
   "unity": "6000.6",
   "unityRelease": "0f1",

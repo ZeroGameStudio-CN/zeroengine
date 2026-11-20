@@ -1,7 +1,7 @@
 {
   "name": "com.zerogamestudio.zeroengine.audio",
   "version": "2.2.1",
-  "displayName": "ZeroEngine.Audio",
+  "displayName": "ZeroEngine Audio",
   "description": "Audio management for ZeroEngine. Includes addressable-friendly audio banks, stable event ids, configurable pooled and spatial SFX, crossfaded music, and AudioMixer volume control.",
   "unity": "6000.6",
   "unityRelease": "0f1",

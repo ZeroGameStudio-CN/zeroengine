@@ -1,7 +1,7 @@
 {
   "name": "com.zerogamestudio.zeroengine.autobattle",
   "version": "2.0.0",
-  "displayName": "ZeroEngine.AutoBattle",
+  "displayName": "ZeroEngine Auto Battle",
   "description": "Headless deterministic tactical grid and auto-battle decision kernel.",
   "unity": "6000.6",
   "unityRelease": "0f1",
