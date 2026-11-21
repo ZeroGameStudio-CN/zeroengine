@@ -82,7 +82,7 @@ def verify_bundle(path):
     actual, manifest = {}, None
     # gzip.GzipFile bounds decompression reads. tarfile's own r|gz decoder can
     # inflate a highly compressible database into a very large intermediate buffer.
-    with gzip.open(path, "rb") as stream, tarfile.open(fileobj=stream, mode="r|") as archive:
+    with gzip.open(path, "rb") as compressed, tarfile.open(fileobj=compressed, mode="r|") as archive:
         for member in archive:
             parts = PurePosixPath(member.name).parts
             if not member.isfile() or not parts or ".." in parts or member.name.startswith("/") or member.name in actual:
@@ -97,12 +97,16 @@ def verify_bundle(path):
                     while reader.read():
                         pass
                     actual[member.name] = {"bytes": reader.size, "sha256": reader.digest.hexdigest()}
+        # Tar stops at its end marker. Read through the gzip checksum and trailer.
+        while compressed.read(CHUNK):
+            pass
     if not manifest or actual != manifest.get("files"):
         raise ValueError("Recovery archive incomplete or changed")
     return manifest
 
 
-def backup(layout, root, stamp, *, manifest_schema="zeroengine-leaderboard-recovery-v1"):
+def backup(layout, root, stamp, *, manifest_schema="zeroengine-leaderboard-recovery-v1",
+           keep_sqlite_snapshot=True):
     if not re.fullmatch(r"\d{8}T\d{6}Z", stamp):
         raise ValueError("Invalid snapshot timestamp")
     root = Path(root)
@@ -152,19 +156,28 @@ def backup(layout, root, stamp, *, manifest_schema="zeroengine-leaderboard-recov
         if any(_signature(files[name]) != signature for name, signature in signatures.items()):
             raise ValueError("Recovery input changed during snapshot")
         verify_bundle(archive)
-        for path in (temporary, archive):
+        for path in ((temporary, archive) if keep_sqlite_snapshot else (archive,)):
             with path.open("rb+") as stream:
                 os.fsync(stream.fileno())
-        os.replace(temporary, database)
+        if keep_sqlite_snapshot:
+            os.replace(temporary, database)
         os.replace(archive, bundle)
+        if not keep_sqlite_snapshot and os.name == "posix":
+            # The new archive must survive a crash before retiring the raw copy.
+            directory = os.open(root, os.O_RDONLY | os.O_DIRECTORY)
+            try:
+                os.fsync(directory)
+            finally:
+                os.close(directory)
         # Existing local retention only; never touch operations/offsite holds.
-        for pattern, keep in (("runs-*.sqlite3", 1), ("recovery-*.tar.gz", 3)):
-            candidates = [path for path in sorted(root.glob(pattern)) if re.fullmatch(
+        for pattern, keep in (("runs-*.sqlite3", int(keep_sqlite_snapshot)), ("recovery-*.tar.gz", 3)):
+            candidates = [path for path in sorted(root.glob(pattern), reverse=True) if re.fullmatch(
                 r"(?:runs-\d{8}T\d{6}Z\.sqlite3|recovery-\d{8}T\d{6}Z\.tar\.gz)", path.name)]
-            for path in candidates[:-keep]:
+            for path in candidates[keep:]:
                 if path.is_file() and not path.is_symlink():
                     path.unlink()
-        return {"database": database.name, "bundle": bundle.name, "bytes": bundle.stat().st_size,
+        return {"database": database.name if keep_sqlite_snapshot else None,
+                "bundle": bundle.name, "bytes": bundle.stat().st_size,
                 "sha256": _hash_file(bundle)}
     finally:
         for path in (temporary, archive):
