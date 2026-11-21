@@ -77,12 +77,15 @@ the transaction or reissuing an external score write.
 
 `recovery.backup(layout, output, timestamp)` makes an online SQLite snapshot,
 includes the pinned runtime package and source manifest, streams both archive
-creation and verification, and rotates the existing one-database/three-bundle
-local retention only after validation. Keep outputs private: bundles contain
-keys. Game adapters own layout paths, CLI defaults and systemd units. A restore
-drill must import the restored runtime in isolation; never test a restored
-publisher against a production leaderboard. Offsite replication and mobile
-ranking storage remain separate planned work.
+creation and verification, and rotates one database and three bundles by default.
+An adapter that has verified a restore from the archive can pass
+`keep_sqlite_snapshot=False` to retain only the three bundles. The temporary
+SQLite snapshot is still used to create and verify each bundle. Previous raw
+snapshots are retired only after the verified archive is sealed. Keep bundles
+private because they contain keys. Game adapters own layout paths, CLI defaults
+and systemd units. For recovery drills, import the restored runtime in isolation
+from the production publisher. Offsite replication and mobile ranking storage
+remain separate planned work.
 
 ## Verification
 

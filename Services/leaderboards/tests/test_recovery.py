@@ -126,6 +126,27 @@ class RecoveryTests(unittest.TestCase):
                 backup(self.layout, self.output, "20261112T000004Z")
         self.assertEqual(sealed, sorted(p.name for p in self.output.iterdir()))
 
+    def test_archive_only_retires_the_raw_snapshot_after_a_verified_replacement(self):
+        backup(self.layout, self.output, "20261112T000000Z")
+        before = sorted(p.name for p in self.output.iterdir())
+        with patch("ze_leaderboards.recovery.verify_bundle", side_effect=ValueError("fixture verification failed")):
+            with self.assertRaisesRegex(ValueError, "verification failed"):
+                backup(self.layout, self.output, "20261112T000001Z", keep_sqlite_snapshot=False)
+        self.assertEqual(before, sorted(p.name for p in self.output.iterdir()))
+
+        result = backup(self.layout, self.output, "20261112T000001Z", keep_sqlite_snapshot=False)
+        self.assertIsNone(result["database"])
+        self.assertIn("state/runs.sqlite3", verify_bundle(self.output/result["bundle"])["files"])
+        self.assertEqual(["recovery-20261112T000000Z.tar.gz", "recovery-20261112T000001Z.tar.gz"],
+                         sorted(p.name for p in self.output.iterdir()))
+
+    def test_bundle_verification_reads_the_gzip_trailer(self):
+        result = backup(self.layout, self.output, "20261112T000000Z")
+        bundle = self.output/result["bundle"]
+        bundle.write_bytes(bundle.read_bytes()[:-8])
+        with self.assertRaises(EOFError):
+            verify_bundle(bundle)
+
 
 if __name__ == "__main__":
     unittest.main()
