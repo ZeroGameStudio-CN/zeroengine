@@ -869,16 +869,34 @@ export default {
           "signingOrganizationId": "16767998560366",
           "dependencies": {
             "com.zerogamestudio.zeroengine.editor-ui": "1.5.0"
+          },
+          "githubBase": "https://github.com/ZeroGameStudio-CN/zeroengine/releases/download/ze-upm-registry-linked-d194ba36-20261118/"
+        },
+        "2.3.1": {
+          "asset": "com.zerogamestudio.zeroengine.data-toolkit-2.3.1.tgz",
+          "bytes": 56411,
+          "sha256": "b6d2eaf0fefc1bc04bd1a7539c44e1da44c533295d62dc3ff61211ff58e30cfb",
+          "sha512": "sha512-G2iscHf4dh3bespSP9ef+JZQZAb29errCCT85VP/p6qphW32CjjCiasZsltScWsYutK+pX8wtxtpBnbsbR889g==",
+          "sourceCommit": "eae8369c42b5012ad3e7335087f1522cf058da01",
+          "sourceTree": "512cab389366070693defe1f07a633340fee1ecf",
+          "matchedSourceFiles": 111,
+          "sourceBytesUnchanged": true,
+          "runtimeBytesUnchanged": true,
+          "packageJsonReformatted": false,
+          "omittedGitIgnore": [],
+          "signingOrganizationId": "16767998560366",
+          "dependencies": {
+            "com.zerogamestudio.zeroengine.editor-ui": "1.5.0"
           }
         }
       },
-      "githubBase": "https://github.com/ZeroGameStudio-CN/zeroengine/releases/download/ze-upm-registry-linked-d194ba36-20261118/",
+      "githubBase": "https://github.com/ZeroGameStudio-CN/zeroengine/releases/download/ze-upm-eae8369c-f428101fafba/",
       "metadataAsset": "com.zerogamestudio.zeroengine.data-toolkit-registry.json",
       "tags": {
-        "latest": "2.3.0"
+        "latest": "2.3.1"
       },
       "summary": {
-        "displayName": "ZeroEngine.DataToolkit",
+        "displayName": "ZeroEngine Data Toolkit",
         "description": "Reusable ZeroEngine tooling for marking, discovering, browsing, editing, and validating project data assets.",
         "unity": "6000.6",
         "unityRelease": "0f1"
@@ -1368,13 +1386,34 @@ export default {
           "dependencies": {
             "com.zerogamestudio.zeroengine.editor-ui": "1.5.0",
             "com.unity.nuget.newtonsoft-json": "3.2.1"
+          },
+          "githubBase": "https://github.com/ZeroGameStudio-CN/zeroengine/releases/download/ze-upm-registry-linked-d194ba36-20261118/"
+        },
+        "1.2.2": {
+          "asset": "com.zerogamestudio.zeroengine.project-atlas-1.2.2.tgz",
+          "bytes": 56649,
+          "sha256": "c7495fba44fbf29da566437638bee68eedb6d4e8c894933b21267d7989e4cfd1",
+          "sha512": "sha512-iTRC+B+PtpBRwbdJUZFF5O9DwDLdhTTtfAxa4ef8xCqVZpsa/8oWpWisOZ9D+AQvc92GSmwme3e+0e//2idCxg==",
+          "sourceCommit": "eae8369c42b5012ad3e7335087f1522cf058da01",
+          "sourceTree": "a33a1af5f1fc292fe99aeb55b22930227d91f874",
+          "matchedSourceFiles": 34,
+          "sourceBytesUnchanged": false,
+          "runtimeBytesUnchanged": true,
+          "packageJsonReformatted": true,
+          "omittedGitIgnore": [
+            "Tools~/.gitignore"
+          ],
+          "signingOrganizationId": "16767998560366",
+          "dependencies": {
+            "com.zerogamestudio.zeroengine.editor-ui": "1.5.0",
+            "com.unity.nuget.newtonsoft-json": "3.2.1"
           }
         }
       },
-      "githubBase": "https://github.com/ZeroGameStudio-CN/zeroengine/releases/download/ze-upm-registry-linked-d194ba36-20261118/",
+      "githubBase": "https://github.com/ZeroGameStudio-CN/zeroengine/releases/download/ze-upm-eae8369c-f428101fafba/",
       "metadataAsset": "com.zerogamestudio.zeroengine.project-atlas-registry.json",
       "tags": {
-        "latest": "1.2.1"
+        "latest": "1.2.2"
       },
       "summary": {
         "displayName": "ZeroEngine Project Atlas",
@@ -1513,5 +1552,5 @@ export default {
       }
     }
   },
-  "updatedAt": "2026-11-19T13:01:13Z"
+  "updatedAt": "2026-11-22T04:56:04Z"
 };
