@@ -70,6 +70,10 @@ commit. Legacy ZeroEngine 2.1.1 consumers declare editor-ui 1.3.0 directly;
 Dashboard remains optional. Never mix these package versions across different
 Git revisions.
 
+Project Atlas 1.2.2 and Data Toolkit 2.3.1 both require Editor UI 1.5.0.
+Pin Editor UI directly at the same tested commit when using these packages via
+Git UPM.
+
 For the consolidation candidate, use the versions declared by the selected
 commit's manifests and include the full sibling closure. The legacy 3.0 bundle
 now requires the neutral ModSystem package; it retains the parser/hot-reload/Lua
