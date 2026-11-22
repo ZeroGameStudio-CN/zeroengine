@@ -1,0 +1,198 @@
+# ZeroEngine Game Feel
+
+An optional, pure-System feedback coordinator with reusable channel policies.
+The same attack can produce one global camera/stop contribution, separate local
+reactions on each target, and a richer audio batch for multiple distinct contacts.
+Duplicate collision callbacks do not become additional hits.
+
+The runtime has no Unity or package dependencies (`noEngineReferences: true`).
+It does not change damage, gameplay events, time scale, assets or devices. This is
+unrelated to `ZeroEngine.Feedback`, the player issue-reporting package.
+
+## Installation
+
+Use the official UPM repository and a commit validated with the consumer:
+
+```json
+"com.zerogamestudio.zeroengine.gamefeel": "https://github.com/ZeroGameStudio-CN/zeroengine.git?path=/com.zerogamestudio.zeroengine.gamefeel#<tested-commit>"
+```
+
+Reference `ZeroEngine.GameFeel` from the consumer assembly. A local `file:` pin is
+only a temporary integration tool; restore a tested Git pin before handoff. Add
+the package to a Unity project's `testables` to discover its NUnit contracts.
+
+## Choose identity and scope once
+
+```csharp
+var global = new FeedbackKey(attackId, pulseId);
+var contact = new FeedbackKey(attackId, pulseId, targetLifetimeId);
+```
+
+- An attack/pulse identifies the actual event, not a physics callback. Distinct
+  attacks and successful continuous-damage pulses get distinct IDs.
+- A coordinator instance owns a channel and scope (view, target, audio batch or
+  device). Channels never spend each other's admission or share an ambient cooldown.
+- Use the two-argument key for an attack's global output. Use a nonzero `ScopeId`
+  when one shared batch must distinguish target contacts. All three fields retain
+  their full width; scope is not squeezed into a hash of the other fields.
+- `FeedbackScopeIds<T>` is an optional weak object/lifecycle adapter. Call
+  `Release(target)` on pool disable and `Reset()` on world/session exit. Subsequent
+  lifetimes get new IDs, including across registry instances and target types.
+
+The project still maps gameplay semantics and authored resources. Existing event
+duration, amplitude, pitch, clips and time domains remain meaningful. The package
+provides default coordination policies, not automatic artistic authoring.
+
+## Reusable sensory policies
+
+| Policy | Behavior | Output adapter's responsibility |
+| --- | --- | --- |
+| `FeedbackDeadlineCoordinator` | Preserve an isolated authored hold; anchor same-group upgrades to the first event; combine dense stronger requests within a bounded burst; recover according to actual occupancy | Apply the returned absolute deadline through an owned stop/time source |
+| `FeedbackSignalCoordinator<TSignal>` + `FeedbackMixing` | Suppress repeated signals; preserve an upgraded group's phase; promote explicit output over fallback; apply additive/replace/strongest rules and amplitude budget | Signal identity/liveness, waveform, direction, output and cancellation |
+| `FeedbackPeakCoordinator` | Bound local active groups and pending contributions; pair each hit's base with its own final multiplier; keep the peak without replaying the animation | Animation seed, pose, clock and exact group completion |
+| `FeedbackBatchCounter` + `FeedbackAudioLayers` | Count distinct contacts inside an existing batch; distinguish single versus clustered output; calculate bounded pulses, cluster/weight layers, volume and pitch | Clip selection, spatialization, pooled voices and the original batch's flush point |
+| `FeedbackGroupGate` | Same-group duplicate/stronger admission with commit after successful output | Existing haptic/device priority, energy budget, pause/focus/disconnect safety |
+| `FeedbackReservationCoordinator<TVariant>` + `FeedbackScaleState` | Reserve before nested output; bound per-frame counts; retain per-target/prefab identity; compose profile and coordinated scale once | Spawn/pool, variant meaning, critical exemptions and restoring the actual transform |
+
+`FeedbackDefaults` supplies stop recovery/burst/retention and model capacities.
+Override a channel's constructor policy when necessary, rather than putting a
+cooldown on every weapon or event. Recovery and capacity budgets remain explicit;
+removing a blind cooldown does not remove safety or resource limits.
+
+### Global stop and independent local contacts
+
+```csharp
+if (effectiveStopSeconds > 0 &&
+    stop.TryRequest(global, effectiveStopSeconds, important, extraRest, now, out var deadline))
+    ownedTimeSource.RequestUntil(deadline);
+
+// One counter per existing clip batch, with its original flush deadline.
+bool newContact = batch.Observe(contact, resolvedVolume, now, flushAt);
+if (newContact) distinctContacts++;
+var layers = FeedbackAudioLayers.Evaluate(distinctContacts, peakVolume, basePitch,
+    flushAt - startedAt, audioSettings, clusterClipAvailable, weightClipAvailable);
+```
+
+The output methods are project/sink APIs. Do not introduce a new audio window,
+serialize unrelated effects into a queue, or use contact deduplication to suppress
+damage. A zero configured stop creates no request and receives no hidden minimum.
+Two-argument `FeedbackKey` construction and the existing ledger/reservation APIs
+remain available.
+
+### Signal and model adapters
+
+Implement the small `IFeedbackSignal` interface and equality using exact owned
+output identity. `IsPlaying` must reject missing, completed, cancelled or pooled
+outputs; `Cancel()` must check that ownership before touching the output. Attempt
+actual output, then call `Commit`; a failed sink must not spend the identity.
+For upgrades, retain the prior signal's phase/envelope and replace its contribution,
+rather than replaying the full amplitude additively.
+
+For a local model, call `FeedbackPeakCoordinator.TryBegin` with a unique nonzero
+hit ID, then resolve that hit with its own final multiplier. Render `Strength(group)`;
+call `FinalizeUnresolved` before rendering and `End` on natural completion. A
+failed newly created output uses `CancelGroup`, not `End`. Reset on target disable
+or a new lifecycle. Tokens from old lifetimes cannot retune or cancel fresh groups.
+
+The policies intentionally accept external clocks and do not depend on a specific
+Cinemachine, tween, audio or haptics package. This keeps the same coordination code
+usable with different Unity versions and output backends. A concrete consumer
+only binds its identities, clock, resources, playback and lifecycle hooks.
+
+## Storage, timing and failure contracts
+
+- The low-level ledger uses preallocated indexed lookup, a bounded expiry heap
+  and reusable slots. Duplicate lookups are expected O(1); expiry/retention changes
+  cost O(log capacity). No valid ledger operation allocates per request. Indexed
+  storage uses more constructor memory than the old linear array; small-capacity
+  high-churn traffic can be slower. Measure the relevant workload.
+- Reservation variant storage is created on first use and retained for reuse
+  across expiry/reset; pending slots are reused. First use of a new target or
+  variant may allocate. Warming, retained capacity and per-request GC are separate.
+- Retention is a bounded deduplication deadline, not effect duration. Equal/weaker
+  copies do not renew it. After expiry a key may play again; producers must not
+  reuse permanent IDs indefinitely and expect permanent deduplication.
+- Ledger `Evaluate` is a single-use synchronous proposal. Attempt output and
+  `Commit` without reentry or clock advance. Reservation APIs support the documented
+  nested-output path; complete the exact reservation after the output attempt.
+- Full ledger capacity rejects new keys rather than evicting a live identity.
+  Reservation capacity fallback, important-request budget exemptions and output
+  limits are explicit per-channel rules, not a universal strength score.
+- Invalid input and backwards clocks follow each API's contract. `Reset` begins
+  a new lifecycle and invalidates old proposals/handles. Actual playback, foreign
+  pause tokens and device safety remain with their original owners.
+
+## Verification
+
+Package NUnit tests use synthetic data for single/multiple contacts, anchored
+deadlines, output upgrades, nested peak resolution, expiry/cancellation, retained
+storage and warmed allocation contracts. The same contracts can run against the
+pure-System runtime outside Unity; Unity consumers also need their focused adapter
+checks and comparable recordings. Microbenchmarks do not establish Player FPS,
+GPU cost or physical haptic feel.
+
+The consolidated baseline retains the POB-consumed adaptive feedback, channel coordination, visual-effect leases/budgets and coalescing APIs from `7ba1d752`. Their original `ZeroEngine.GameFeel` contracts and regression tests are preserved.
+
+## Damage number intent and adaptive streams
+
+For new renderers, decide before creating a number:
+
+```csharp
+var request = numbers.Prepare(target, style, context, value, now, windowSeconds, unscaled);
+if (request.Merge.Merged)
+    sink.SetTotal(request.Merge.Display, request.Merge.Total);
+else
+{
+    var display = sink.TrySpawn(value);
+    if (display != null) numbers.Commit(request, display, display.Activation);
+}
+```
+
+`sink` is the consumer's formatting/pool/rendering adapter. A merged request creates
+no emitter or text mesh. Failed output needs no commit; stale, repeated or reentrant
+commits cannot replace newer output. Default/untracked requests still require an
+individual output. `EndsAt` is the tracked first-request deadline, so a consumer may
+throttle intermediate refreshes while flushing the final total by that deadline.
+Existing `Add` overloads retain their post-spawn compatibility behavior.
+
+`FeedbackNumberMode.Accumulate` is explicit short-window accumulation for a
+producer-declared group. It needs no cadence inference: the consumer chooses which
+events belong to that group, ends it on release, and starts a fresh ID on restart.
+It shares the existing source/owner/target/style and lifetime protections, preserves
+important output, and never extends a window after its first event. The package
+does not identify weapons, author gameplay events, own pools or delay damage.
+
+Pass a captured FeedbackNumberContext to FeedbackNumberMerger.Add. Individual
+and Important requests always retain their own output. Action requests aggregate
+only within the same owner, source, action/beat, target lifetime and style. Use a
+new group ID for each authored beat or shotgun volley. AdaptiveStream requests
+share a captured firing/buff session: sparse hits stay individual, dense hits
+accumulate with separate entry/exit thresholds. A projectile inherits its source
+session at launch; do not use each projectile as a new stream or query the current
+weapon at impact. New sessions never absorb old in-flight projectiles.
+
+The first hit is immediate. Windows anchor to that hit, retain their duration
+when density changes, and are capped by FeedbackNumberPolicy.MaximumWindow.
+Style remains consumer-owned (for example damage type and critical state).
+HitCount and Total cover exactly the merged contributions; important individual
+hits do not also enter an ordinary accumulator. Unknown intent falls back to
+individual output. Existing callers without context retain the legacy API.
+
+Per-target storage is bounded and recycles expired or invalid display groups.
+Full live capacity falls back to individual output instead of stealing a group
+or dropping damage. Clocks, pooled target/display lifetimes, formatting, rendering
+and per-hit gameplay callbacks remain consumer-owned. Rendering random draws must
+not silently change the gameplay random sequence during consumer optimization.
+
+Set BeatId for a semantic shot or tick. Fragments of that beat can share its
+number while stream cadence samples only distinct beats, so a slow shotgun is
+not mistaken for a rapid-fire weapon. A successful continuous pulse supplies a
+new beat; group/session ownership remains unchanged.
+
+## Unity impact playback
+
+Reference `ZeroEngine.GameFeel.Unity` to play the same response through Unity renderers and cameras. `ImpactEnvelopes` exposes normalized direction, color and screen-shake curves from `ZeroEngine.GameFeel`; these accept the caller's measured impact progress and do not fix the game's clock, damage rules or palette.
+
+Use `ImpactTransformOffset` for temporary motion of an actor's visual child. Evaluate `DirectionalRecoil`, scale the observed impact direction, and release the offset when the visual binding ends. It leaves the pose of a rebound or reparented view with its new owner. `RendererFlashPulse` takes the color property IDs a material supports. Call `Begin`, include the active renderers, track the returned generation through `Sample` and release with `Clear`. The pulse restores the prior colors of its channels and leaves unrelated properties in the current property block.
+
+Add `CameraImpactShake` to an output camera and call `Play` with the camera-plane direction, world amplitude and duration. It temporarily offsets the rendered camera pose and restores it after rendering, compatible with a camera driven by Cinemachine or another rig. The game applies accessibility settings and chooses which resolved impact warrants a camera pulse.

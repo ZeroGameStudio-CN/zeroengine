@@ -124,3 +124,24 @@ Zero feather retains an explicit hard edge. The field owns no weather clock or s
 ### Presentation-owner material changes
 
 After replacing a renderer material recipe, call `SurfaceWeatherMaterialSources.NotifyRendererMaterialsChanged(renderer)`. Active adapters can immediately rebind renderers they already track. This notification does not discover new objects or mutate materials by itself. Resolve borrowed weather materials before retaining an authored source; never retain a temporary weather instance as another owner's restoration source.
+
+## Caller-clocked surface attachments
+
+ZeroEngine.Render.Attachments provides the shared XY-plane attachment algorithms:
+
+- SurfaceAttachmentPose keeps a supplied local tip pinned to a moving or mirrored reference and evaluates the elastic landing from caller time. Apply returns true once settled; the host owns stopping, reset and lifetime.
+- SurfaceAttachmentPose.SampleCounterRecoil returns a normalized first swing and a shorter, smaller opposite swing. Pass elapsed phase after seating, with 1 at the first return through the incoming angle, then scale the result by the peak angle. The host chooses the phase rate, peak angle and when to use the response.
+- SurfaceAttachmentPlacement.Resolve finds a bounded geometric contact inside the authoritative hit region. TryFindVisibleContact separately follows the current opaque renderer surface, adapting probes to local scale/rotation while leaving the hit unchanged. Reach and minimum exposed span come from the moving visual, rather than a monster profile.
+- EmbeddedSpriteAttachment borrows a sprite and target renderer, crops the configured hidden tip span, aligns the visible endpoint across camera depth and restores sprite, local position and prior rendering visibility on release. Call UpdateDepth before applying the attachment pose, then SetContactVisibility after the target's current animation/mesh update. Restore ends the visual lease.
+
+The host supplies hiddenTipLength in sprite-local units, a finite depth offset, the local tip, contact, target region and clock. POB keeps its existing art values and serialized component types; its TCE recall Effect continues through the native projectile owner. Runtime types have no TCE, Core, damage, recall, pooling, save, Spine SDK, or project-asset dependency. Other TCE effects or state machines call these primitives through their own lifetime adapter; extraction needs no duplicate graph Effect.
+
+Supported coverage sources are Simple SpriteRenderers and readable triangle MeshRenderers with one atlas (_MainTex or _BaseMap). UV coverage is cached within 16 MiB total and 4 MiB per atlas, using readable pixels or one asynchronous GPU readback. Unknown/unavailable coverage reports no proven visual contact. Mesh limits are 8192 vertices / 24576 indices. Cropping supports unpacked sprites; packed assets retain the borrowed sprite. Materials and source textures remain borrowed. Generated crop sprites are session caches reset on subsystem registration.
+
+The APIs run synchronously on the Unity main thread and are not thread-safe. They preserve the current XY contract rather than promising arbitrary 3D skin attachment. Target lifetime, extraction damage, restore-before-pool behavior and gameplay registration remain host responsibilities.
+
+Focused verification: ZeroEngine.Render.Tests.SurfaceAttachmentTests, then consumer projectile recall/embedding checks and real gameplay capture. Package-only tests do not establish player release or human visual acceptance.
+
+For projectile flight-to-contact transitions, `SurfaceImpactMotion` takes the incoming direction, speed, spin and a stable visual sequence. It carries entry motion while applying angular recoil with the tip fixed, and supports different clearance and rebound weights for geometry and moving bodies. Keep contact detection, surface selection and gameplay stop decisions in the host.
+
+For a resolved hit that already has an authored contact anchor, add `RetainedProjectileSprite` to the presentation sprite. Call `Begin` with the contact, incoming orientation and a target-lifetime predicate. It follows the anchored point in 2D or 3D and applies the shared counter-recoil before fading. Pass a pool-return callback; each visual expires independently. Call `End` on invalidation or teardown. The package owns visual playback and lease cleanup. The game passes the contact only after its resolved projectile comes to a stop and chooses which hits should keep a mark.
