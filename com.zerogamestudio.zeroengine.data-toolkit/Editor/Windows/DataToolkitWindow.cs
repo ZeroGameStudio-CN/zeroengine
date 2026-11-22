@@ -972,6 +972,23 @@ namespace ZGS.DataToolkit.Editor
             SavePersistentState();
         }
 
+        internal bool TrySelectWorkspaceType(string typeId)
+        {
+            var type = typesToDisplay.FirstOrDefault(item =>
+                string.Equals(item.AssemblyQualifiedName, typeId, StringComparison.Ordinal));
+            if (type == null)
+                return false;
+
+            if (!IsTypeVisible(type))
+                typeSearch = string.Empty;
+            if (selectedType != type)
+                SelectType(type);
+            else
+                SavePersistentState();
+            repaintRequested?.Invoke();
+            return true;
+        }
+
         private void SelectAssetByPath(string assetPath)
         {
             if (string.IsNullOrEmpty(assetPath))
@@ -1402,7 +1419,8 @@ namespace ZGS.DataToolkit.Editor
 
     }
 
-    public sealed class DataToolkitWorkspacePanel : IEditorWorkspacePanel, IEditorWorkspaceFullWidthPanel
+    public sealed class DataToolkitWorkspacePanel :
+        IEditorWorkspacePanel, IEditorWorkspaceFullWidthPanel, IEditorWorkspaceRouteReceiver
     {
         private readonly Func<DataToolkitProjectProfile> profileFactory;
         private DataToolkitWindow embeddedView;
@@ -1431,6 +1449,11 @@ namespace ZGS.DataToolkit.Editor
 
         public void Tick(EditorWorkspacePanelContext context, double timeSinceStartup)
         {
+        }
+
+        public bool TryApplyWorkspaceRoute(string subrouteId)
+        {
+            return embeddedView != null && embeddedView.TrySelectWorkspaceType(subrouteId);
         }
 
         public void OnGUI(EditorWorkspacePanelContext context)

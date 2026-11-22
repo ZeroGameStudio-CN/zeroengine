@@ -69,18 +69,24 @@ namespace ZeroEngine.ProjectAtlas
         private Vector2 _bodyHorizontalScroll;
         private float _domainColumnWidth = DefaultDomainColumnWidth;
         private float _featureColumnWidth = DefaultFeatureColumnWidth;
+        private float _measuredBodyWidth = -1f;
+        private float _layoutBodyWidth = -1f;
         private string _activeResizeKey;
+        private Action _pendingLayoutChange;
 
         public float RefreshInterval => 0f;
 
         public void Activate(EditorWorkspacePanelContext context)
         {
+            _measuredBodyWidth = -1f;
+            _layoutBodyWidth = -1f;
             RestoreState();
             Reload();
         }
 
         public void Deactivate()
         {
+            _pendingLayoutChange = null;
             SaveState();
         }
 
@@ -95,9 +101,14 @@ namespace ZeroEngine.ProjectAtlas
             if (_catalog == null)
                 Reload();
 
+            if (Event.current.type == EventType.Layout && _pendingLayoutChange != null)
+            {
+                Action change = _pendingLayoutChange;
+                _pendingLayoutChange = null;
+                change();
+            }
+
             DrawPanelIntro(context);
-            if (!string.IsNullOrEmpty(_operationMessage))
-                EditorGUILayout.HelpBox(_operationMessage, _operationMessageType);
             if (_catalog == null || _catalog.Domains.Count == 0)
             {
                 DrawUnconfiguredState();
@@ -105,7 +116,7 @@ namespace ZeroEngine.ProjectAtlas
                 return;
             }
 
-            DrawSearchAndAudience();
+            DrawSearchAndAudience(context);
             ProjectFeatureDomain[] domains = VisibleDomains().ToArray();
             EnsureSelection(domains);
             if (domains.Length == 0)
@@ -123,12 +134,17 @@ namespace ZeroEngine.ProjectAtlas
             ProjectFeature feature = _catalog?.FindFeature(subrouteId);
             if (feature == null)
                 return false;
-            _selectedDomainId = feature.DomainId;
-            _selectedFeatureId = feature.Id;
-            _search = string.Empty;
-            _audience = "全部";
-            _featureScroll = Vector2.zero;
-            _detailScroll = Vector2.zero;
+            ProjectFeatureDomain domain = _catalog.Domains.FirstOrDefault(item => item.Id == feature.DomainId);
+            if (domain == null)
+                return false;
+            if (!VisibleFeatures(domain).Any(item => item.Id == feature.Id))
+            {
+                _search = string.Empty;
+                _audience = "全部";
+            }
+
+            SelectDomain(feature.DomainId);
+            SelectFeature(feature.Id);
             SaveState();
             return true;
         }
@@ -148,11 +164,7 @@ namespace ZeroEngine.ProjectAtlas
                 GUILayout.FlexibleSpace();
                 context.DrawAction(new EditorWorkspaceAction(
                     new GUIContent("刷新", "重新读取项目功能目录；不会修改项目内容。"),
-                    () =>
-                    {
-                        Reload();
-                        context.RequestRepaint();
-                    },
+                    () => ChangeOnNextLayout(context, Reload),
                     EditorWorkspaceActionSafety.ReadOnly),
                     GUILayout.Width(52f),
                     GUILayout.Height(22f));
@@ -160,7 +172,13 @@ namespace ZeroEngine.ProjectAtlas
             EditorGUILayout.Space(4f);
         }
 
-        private void DrawSearchAndAudience()
+        private void ChangeOnNextLayout(EditorWorkspacePanelContext context, Action change)
+        {
+            _pendingLayoutChange += change;
+            context.RequestRepaint();
+        }
+
+        private void DrawSearchAndAudience(EditorWorkspacePanelContext context)
         {
             string[] audiences = new[] { "全部" }
                 .Concat(_catalog.Features.SelectMany(feature => feature.AudienceTags))
@@ -174,20 +192,18 @@ namespace ZeroEngine.ProjectAtlas
                 string nextSearch = GUILayout.TextField(_search ?? string.Empty, EditorStyles.toolbarSearchField);
                 if (!string.Equals(nextSearch, _search, StringComparison.Ordinal))
                 {
-                    _search = nextSearch;
-                    _selectedFeatureId = string.Empty;
+                    ChangeOnNextLayout(context, () => _search = nextSearch);
                 }
                 GUILayout.Space(8f);
                 GUILayout.Label("我的岗位", GUILayout.Width(56f));
                 int nextAudience = EditorGUILayout.Popup(audienceIndex, audiences, EditorStyles.toolbarPopup, GUILayout.Width(96f));
                 if (nextAudience != audienceIndex)
                 {
-                    _audience = audiences[nextAudience];
-                    _selectedFeatureId = string.Empty;
+                    ChangeOnNextLayout(context, () => _audience = audiences[nextAudience]);
                 }
                 if (!string.IsNullOrEmpty(_search) && GUILayout.Button("清除", EditorStyles.toolbarButton, GUILayout.Width(44f)))
                 {
-                    _search = string.Empty;
+                    ChangeOnNextLayout(context, () => _search = string.Empty);
                     GUI.FocusControl(null);
                 }
             }
@@ -202,6 +218,23 @@ namespace ZeroEngine.ProjectAtlas
                 height,
                 GUILayout.ExpandWidth(true),
                 GUILayout.Height(height));
+            if (Event.current.type == EventType.Layout)
+            {
+                // GetRect is a placeholder during Layout. Keep the same scroll and
+                // column structure through the subsequent input and Repaint events.
+                _layoutBodyWidth = _measuredBodyWidth >= 0f
+                    ? _measuredBodyWidth
+                    : Mathf.Max(0f, context.AvailableWidth);
+                bodyRect.height = height;
+            }
+            else if (Event.current.type == EventType.Repaint && !Mathf.Approximately(_measuredBodyWidth, bodyRect.width))
+            {
+                _measuredBodyWidth = bodyRect.width;
+                context.RequestRepaint();
+            }
+            if (_layoutBodyWidth >= 0f)
+                bodyRect.width = _layoutBodyWidth;
+
             GUI.BeginGroup(bodyRect);
             try
             {
@@ -245,7 +278,7 @@ namespace ZeroEngine.ProjectAtlas
             ProjectFeatureDomain[] domains)
         {
             BodyLayoutRects layoutRects = CalculateBodyLayoutRects(bodyRect);
-            DrawDomainColumn(layoutRects.DomainColumn, domains);
+            DrawDomainColumn(context, layoutRects.DomainColumn, domains);
             DrawColumnResizeHandle(
                 context,
                 layoutRects.DomainSplitter,
@@ -256,7 +289,7 @@ namespace ZeroEngine.ProjectAtlas
 
             ProjectFeatureDomain selectedDomain = domains.First(domain => domain.Id == _selectedDomainId);
             ProjectFeature[] features = VisibleFeatures(selectedDomain).ToArray();
-            DrawFeatureColumn(layoutRects.FeatureColumn, selectedDomain, features);
+            DrawFeatureColumn(context, layoutRects.FeatureColumn, selectedDomain, features);
             DrawColumnResizeHandle(
                 context,
                 layoutRects.FeatureSplitter,
@@ -307,7 +340,7 @@ namespace ZeroEngine.ProjectAtlas
             return new BodyLayoutRects(domainColumn, domainSplitter, featureColumn, featureSplitter, detailColumn);
         }
 
-        private void DrawDomainColumn(Rect rect, ProjectFeatureDomain[] domains)
+        private void DrawDomainColumn(EditorWorkspacePanelContext context, Rect rect, ProjectFeatureDomain[] domains)
         {
             GUILayout.BeginArea(rect);
             using (new EditorGUILayout.VerticalScope(EditorStyles.helpBox, GUILayout.ExpandWidth(true), GUILayout.ExpandHeight(true)))
@@ -329,7 +362,7 @@ namespace ZeroEngine.ProjectAtlas
                             GUILayout.ExpandWidth(true),
                             GUILayout.Height(34f)))
                     {
-                        SelectDomain(domain.Id);
+                        ChangeOnNextLayout(context, () => SelectDomain(domain.Id));
                     }
                 }
                 EditorGUILayout.EndScrollView();
@@ -337,7 +370,8 @@ namespace ZeroEngine.ProjectAtlas
             GUILayout.EndArea();
         }
 
-        private void DrawFeatureColumn(Rect rect, ProjectFeatureDomain selectedDomain, ProjectFeature[] features)
+        private void DrawFeatureColumn(
+            EditorWorkspacePanelContext context, Rect rect, ProjectFeatureDomain selectedDomain, ProjectFeature[] features)
         {
             GUILayout.BeginArea(rect);
             using (new EditorGUILayout.VerticalScope(EditorStyles.helpBox, GUILayout.ExpandWidth(true), GUILayout.ExpandHeight(true)))
@@ -346,7 +380,7 @@ namespace ZeroEngine.ProjectAtlas
                 DrawElidedLabel(selectedDomain.Summary, EditorStyles.miniLabel);
                 EditorGUILayout.Space(4f);
                 _featureScroll = EditorGUILayout.BeginScrollView(_featureScroll);
-                DrawFeatureButtons(features, rect.width - ButtonHorizontalChromeWidth);
+                DrawFeatureButtons(context, features, rect.width - ButtonHorizontalChromeWidth);
                 EditorGUILayout.EndScrollView();
             }
             GUILayout.EndArea();
@@ -401,14 +435,13 @@ namespace ZeroEngine.ProjectAtlas
             }
         }
 
-        private void DrawFeatureButtons(ProjectFeature[] features, float textWidth)
+        private void DrawFeatureButtons(EditorWorkspacePanelContext context, ProjectFeature[] features, float textWidth)
         {
             if (features.Length == 0)
             {
                 EditorUiGUILayout.EmptyState("这个领域没有符合筛选的功能。");
                 return;
             }
-            EnsureFeatureSelection(features);
             foreach (ProjectFeature feature in features)
             {
                 bool selected = feature.Id == _selectedFeatureId;
@@ -422,7 +455,7 @@ namespace ZeroEngine.ProjectAtlas
                         GUILayout.ExpandWidth(true),
                         GUILayout.Height(FeatureRowHeight)))
                 {
-                    SelectFeature(feature.Id);
+                    ChangeOnNextLayout(context, () => SelectFeature(feature.Id));
                 }
             }
         }
@@ -482,7 +515,16 @@ namespace ZeroEngine.ProjectAtlas
                 return;
             }
 
-            EditorUiGUILayout.Header(feature.DisplayName, feature.Summary, null);
+            EditorUiGUILayout.Header(feature.DisplayName, null, null);
+            var actions = feature.Actions.OrderByDescending(item => item.Primary)
+                .ThenBy(item => item.Id, StringComparer.Ordinal).ToArray();
+            foreach (ProjectFeatureAction action in actions.Where(item => item.Intent == ProjectFeatureActionIntent.Configure))
+                DrawFeatureAction(context, feature, action);
+            if (!string.IsNullOrEmpty(_operationMessage))
+                EditorGUILayout.HelpBox(_operationMessage, _operationMessageType);
+
+            if (!string.IsNullOrWhiteSpace(feature.Summary))
+                EditorGUILayout.LabelField(feature.Summary, EditorStyles.wordWrappedLabel);
             EditorUiGUILayout.Chip(ConfigurationStatus(feature));
             if (feature.AudienceTags.Count > 0)
                 EditorGUILayout.LabelField(
@@ -496,19 +538,17 @@ namespace ZeroEngine.ProjectAtlas
                     EditorGUILayout.LabelField("• " + capability, EditorStyles.wordWrappedLabel);
             }
 
-            using (EditorUiGUILayout.Section("直接入口"))
+            var otherActions = actions.Where(item => item.Intent != ProjectFeatureActionIntent.Configure).ToArray();
+            if (otherActions.Length > 0 || actions.Length == 0 || feature.ConfigurationMode == ProjectFeatureConfigurationMode.None)
             {
-                if (feature.ConfigurationMode == ProjectFeatureConfigurationMode.None)
-                    EditorGUILayout.HelpBox(feature.ConfigurationReason, MessageType.Info);
-                if (feature.Actions.Count == 0)
+                using (EditorUiGUILayout.Section("直接入口"))
                 {
-                    EditorUiGUILayout.EmptyState("当前功能没有日常入口。");
-                    return;
-                }
-                foreach (ProjectFeatureAction featureAction in feature.Actions
-                             .OrderByDescending(item => item.Primary).ThenBy(item => item.Id, StringComparer.Ordinal))
-                {
-                    DrawFeatureAction(context, feature, featureAction);
+                    if (feature.ConfigurationMode == ProjectFeatureConfigurationMode.None)
+                        EditorGUILayout.HelpBox(feature.ConfigurationReason, MessageType.Info);
+                    if (actions.Length == 0)
+                        EditorUiGUILayout.EmptyState("当前功能没有日常入口。");
+                    foreach (ProjectFeatureAction action in otherActions)
+                        DrawFeatureAction(context, feature, action);
                 }
             }
         }
@@ -530,11 +570,13 @@ namespace ZeroEngine.ProjectAtlas
                 {
                     EditorToolActionResult result = route.Action.Execute(
                         new EditorToolActionContext(context.Owner, context.ModuleId, feature.Id));
-                    _operationMessage = result.Message;
-                    _operationMessageType = result.Status == EditorToolActionStatus.Failed
-                        ? MessageType.Warning
-                        : MessageType.Info;
-                    context.RequestRepaint();
+                    ChangeOnNextLayout(context, () =>
+                    {
+                        _operationMessage = result.Message;
+                        _operationMessageType = result.Status == EditorToolActionStatus.Failed
+                            ? MessageType.Warning
+                            : MessageType.Info;
+                    });
                 },
                 EditorWorkspaceActionSafety.Navigation,
                 featureAction.Primary ? EditorWorkspaceActionStyle.Primary : EditorWorkspaceActionStyle.Secondary,
@@ -583,21 +625,25 @@ namespace ZeroEngine.ProjectAtlas
         private void EnsureFeatureSelection(ProjectFeature[] features)
         {
             if (features.Length > 0 && features.All(feature => feature.Id != _selectedFeatureId))
-                _selectedFeatureId = features[0].Id;
+                SelectFeature(features[0].Id);
         }
 
         private void SelectDomain(string domainId)
         {
+            if (_selectedDomainId == domainId)
+                return;
             _selectedDomainId = domainId;
-            _selectedFeatureId = string.Empty;
+            SelectFeature(string.Empty);
             _featureScroll = Vector2.zero;
-            _detailScroll = Vector2.zero;
         }
 
         private void SelectFeature(string featureId)
         {
+            if (_selectedFeatureId == featureId)
+                return;
             _selectedFeatureId = featureId;
             _detailScroll = Vector2.zero;
+            _operationMessage = string.Empty;
         }
 
         private static string ConfigurationStatus(ProjectFeature feature)

@@ -7,6 +7,7 @@ using NUnit.Framework;
 using UnityEditor;
 using UnityEngine;
 using UnityEngine.TestTools;
+using ZeroEngine.EditorUI;
 
 namespace ZGS.DataToolkit.Editor.Tests
 {
@@ -133,6 +134,32 @@ namespace ZGS.DataToolkit.Editor.Tests
             Assert.AreEqual(64f, typeColumn.width);
             Assert.AreEqual(64f, assetColumn.width);
             Assert.AreEqual(240f, inspectorColumn.width);
+        }
+
+        [Test]
+        public void EmbeddedWorkspaceRoute_SelectsDiscoveredTypeEvenWhenFiltered()
+        {
+            CreateTestAsset(OriginalAssetPath);
+            var profile = CreateProfile();
+            var host = ScriptableObject.CreateInstance<DataToolkitEmbeddedLayoutTestWindow>();
+            try
+            {
+                using var panel = new DataToolkitWorkspacePanel(() => profile);
+                EditorPrefs.SetString(profile.Settings.PrefKey("TypeSearch"), "different type");
+                panel.Activate(new EditorWorkspacePanelContext(host, "test", "data-manager", (_, _) => false));
+
+                var typeId = typeof(SelectedToolkitTestData).AssemblyQualifiedName;
+                Assert.That(panel.TryApplyWorkspaceRoute(typeId), Is.True);
+                Assert.That(EditorPrefs.GetString(profile.Settings.PrefKey("SelectedType")), Is.EqualTo(typeId));
+                Assert.That(EditorPrefs.GetString(profile.Settings.PrefKey("TypeSearch")), Is.Empty);
+
+                Assert.That(panel.TryApplyWorkspaceRoute("unknown type"), Is.False);
+                Assert.That(EditorPrefs.GetString(profile.Settings.PrefKey("SelectedType")), Is.EqualTo(typeId));
+            }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(host);
+            }
         }
 
         [Test]

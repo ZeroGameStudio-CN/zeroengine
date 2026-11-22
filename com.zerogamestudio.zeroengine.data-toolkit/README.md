@@ -27,6 +27,8 @@ return new DataToolkitWorkspacePanel(ExampleDataToolkitRegistration.CreateProfil
 
 The embedded panel fills the workspace canvas and shares the standalone window's inspectors and `EditorPrefs` state, including selected type/asset, searches, column widths, and scroll positions.
 
+To open a specific data category, pass the managed type's `AssemblyQualifiedName` as the subroute ID in an `EditorWorkspaceRoute`. The panel resolves it against the current project's discovered data types.
+
 ## Project Profile
 
 Projects register a profile at editor load time:
