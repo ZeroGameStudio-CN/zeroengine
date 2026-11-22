@@ -1,0 +1,15 @@
+{
+  "name": "ZeroEngine.Haptics.Unity",
+  "rootNamespace": "ZeroEngine.Haptics.Unity",
+  "references": ["ZeroEngine.Haptics", "Unity.InputSystem"],
+  "autoReferenced": true,
+  "defineConstraints": ["ZE_INPUT_SYSTEM"],
+  "versionDefines": [
+    {
+      "name": "com.unity.inputsystem",
+      "expression": "1.7.0",
+      "define": "ZE_INPUT_SYSTEM"
+    }
+  ],
+  "noEngineReferences": false
+}

@@ -5,6 +5,33 @@
   "releases": [],
   "records": [
     {
+      "id": "ze.feedback.unity-impact-presentation",
+      "title": "可复用受击反馈与弹丸滞留",
+      "stage": "InProgress",
+      "targetReleaseId": "",
+      "availability": "TestOnly",
+      "responsibleChat": "01a1e339-e542-70f3-b865-a7255f221a91",
+      "nextAction": "验证 P5 冻结 Git 版本、命中流程及弹丸视觉。POB 采用时沿签名包路线升级。",
+      "entrance": "GameFeel、Haptics 与 Render 的 Unity 播放入口；P5 普通攻击及战斗演出接入。",
+      "resourcePath": "com.zerogamestudio.zeroengine.gamefeel/Runtime/Unity",
+      "revision": "方向回摆、闪白、镜头冲击、Input System 手柄和随目标移动的弹丸滞留",
+      "releaseEvidence": "",
+      "candidatePackageVersions": {
+        "gamefeel": "0.10.0",
+        "haptics": "1.1.0",
+        "render": "0.6.0"
+      },
+      "verificationEvidence": [
+        "D:\\Temp\\ZgsTaskOutput\\p5-ze-impact-feedback-8874df88aef6\\compiled-draft.json"
+      ],
+      "relatedContent": [
+        {
+          "projectId": "p5",
+          "contentId": "p5.battle.ze-impact-feedback"
+        }
+      ]
+    },
+    {
       "id": "ze.character.actor-martial-state",
       "title": "按角色独立持有的武学状态与装配",
       "stage": "Previewable",

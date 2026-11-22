@@ -144,3 +144,7 @@ Supported coverage sources are Simple SpriteRenderers and readable triangle Mesh
 The APIs run synchronously on the Unity main thread and are not thread-safe. They preserve the current XY contract rather than promising arbitrary 3D skin attachment. Target lifetime, extraction damage, restore-before-pool behavior and gameplay registration remain host responsibilities.
 
 Focused verification: ZeroEngine.Render.Tests.SurfaceAttachmentTests, then consumer projectile recall/embedding checks and real gameplay capture. Package-only tests do not establish player release or human visual acceptance.
+
+For projectile flight-to-contact transitions, `SurfaceImpactMotion` takes the incoming direction, speed, spin and a stable visual sequence. It carries entry motion while applying angular recoil with the tip fixed, and supports different clearance and rebound weights for geometry and moving bodies. Keep contact detection, surface selection and gameplay stop decisions in the host.
+
+For a resolved hit that already has an authored contact anchor, add `RetainedProjectileSprite` to the presentation sprite. Call `Begin` with the contact, incoming orientation and a target-lifetime predicate. It follows the anchored point in 2D or 3D and applies the shared counter-recoil before fading. Pass a pool-return callback; each visual expires independently. Call `End` on invalidation or teardown. The package owns visual playback and lease cleanup. The game passes the contact only after its resolved projectile comes to a stop and chooses which hits should keep a mark.
