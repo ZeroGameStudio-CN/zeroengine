@@ -4,6 +4,8 @@
   "references": [
     "ZeroEngine.UI",
     "ZeroEngine.Core",
+    "UnityEngine.UI",
+    "Unity.TextMeshPro",
     "UnityEditor.TestRunner",
     "UnityEngine.TestRunner"
   ],

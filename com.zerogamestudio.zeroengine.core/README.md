@@ -28,6 +28,7 @@ ZeroEngine 框架的核心基础设施包。
 - `ZeroLogChannel` - 可注入 sink、等级过滤和结构化 entry 的实例日志通道
 - `DebugUtils` - 条件编译调试工具
 - `DateUtils` - 时间戳/格式化工具
+- `CompactNumberFormatter` - 计数、伤害等大型数值的紧凑显示
 - `ZeroEase` - 缓动枚举 (DOTween 解耦)
 - `DOTweenAdapter` - DOTween 反射适配器
 - `UIUtils` - UI 工具 (淡入淡出等)
@@ -42,6 +43,22 @@ ZeroEngine 框架的核心基础设施包。
 - `FormattedValueCache` - 格式化值缓存
 
 ## 快速使用
+
+### 紧凑数字显示
+
+窄版 HUD 和战报可以用 `CompactNumberFormatter.Format` 显示数值。千以上使用 `K`、`M`、`B`、`T`，更大的值使用科学计数法。最多保留两位小数，小数分隔符和负号遵循调用者指定的区域格式。
+
+```csharp
+using System.Globalization;
+using System.Numerics;
+using ZeroEngine;
+
+string damage = CompactNumberFormatter.Format(273_654L, CultureInfo.InvariantCulture); // 273.65K
+string localized = CompactNumberFormatter.Format(1_240L, CultureInfo.GetCultureInfo("de-DE")); // 1,24K
+string counter = CompactNumberFormatter.Format(BigInteger.Pow(10, 400), CultureInfo.InvariantCulture); // 1E+400
+```
+
+紧凑字符串供界面显示。玩法计算、存档和完整数值提示使用调用者持有的原始数值。
 
 ### Singleton
 ```csharp
