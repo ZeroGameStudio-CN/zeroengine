@@ -11,7 +11,7 @@
       "targetReleaseId": "",
       "availability": "Released",
       "responsibleChat": "01a1e339-e542-70f3-b865-a7255f221a91",
-      "nextAction": "在 POB 的签名归档路线采用三包并验证真实战斗。",
+      "nextAction": "POB 已采用三个签名归档并提交 cs:19644。打包由 POB 维护者执行。",
       "entrance": "GameFeel、Haptics 与 Render 的 Unity 播放入口；P5 普通攻击及战斗演出接入。",
       "resourcePath": "com.zerogamestudio.zeroengine.gamefeel/Runtime/Unity",
       "revision": "方向回摆、闪白、镜头冲击、Input System 手柄和随目标移动的弹丸滞留",
@@ -32,7 +32,7 @@
           "contentId": "p5.battle.ze-impact-feedback"
         }
       ],
-      "verificationScope": "实际安装的 P5 Unity 6000.6.9f1 有八项组件和 Atlas 检查、经典弓装备与战棋攻击两项 PlayMode 结果。GitHub Unity 工作流停在许可证激活。包 0.10.0、1.1.0、0.6.0 的 Registry 只读预检通过。 三个签名归档通过隔离 Unity 信任校验，并完成线上目录与归档读回。"
+      "verificationScope": "实际安装的 P5 Unity 6000.6.9f1 有八项组件和 Atlas 检查、经典弓装备与战棋攻击两项 PlayMode 结果。GitHub Unity 工作流停在许可证激活。包 0.10.0、1.1.0、0.6.0 的 Registry 只读预检通过。 三个签名归档通过隔离 Unity 信任校验，并完成线上目录与归档读回。 POB cs:19644 逐项回读，6 项原生回归和 7 段原机位木桩及地墙实机通过。"
     },
     {
       "id": "ze.character.actor-martial-state",
