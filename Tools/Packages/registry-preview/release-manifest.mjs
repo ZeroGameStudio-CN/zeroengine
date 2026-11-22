@@ -602,16 +602,36 @@ export default {
           "dependencies": {
             "com.unity.ugui": "1.0.0",
             "com.unity.modules.ui": "1.0.0"
+          },
+          "githubBase": "https://github.com/ZeroGameStudio-CN/zeroengine/releases/download/ze-upm-registry-linked-d194ba36-20261118/"
+        },
+        "2.2.4-ze-pob.history-pad.1": {
+          "asset": "com.zerogamestudio.zeroengine.core-2.2.4-ze-pob.history-pad.1.tgz",
+          "bytes": 50910,
+          "sha256": "c21955df9ab9d27eedb57e6b87d1ceacc38d9a10c15ca02302bd996c8bdf077a",
+          "sha512": "sha512-fKPJZnhQKRbLO9bL2KEAa3XPskRK+g9GuFkFPm5DBwz4OhM5XNYPouPgy0I5nlzDWjXxR28O6lJxFhMwbbOfww==",
+          "sourceCommit": "779587e25be676796b637174dfbed9b64650d8e6",
+          "sourceTree": "994c04918bb948ba4637887d165035262cc82af9",
+          "matchedSourceFiles": 106,
+          "sourceBytesUnchanged": true,
+          "runtimeBytesUnchanged": true,
+          "packageJsonReformatted": false,
+          "omittedGitIgnore": [],
+          "signingOrganizationId": "16767998560366",
+          "dependencies": {
+            "com.unity.ugui": "1.0.0",
+            "com.unity.modules.ui": "1.0.0"
           }
         }
       },
-      "githubBase": "https://github.com/ZeroGameStudio-CN/zeroengine/releases/download/ze-upm-registry-linked-d194ba36-20261118/",
+      "githubBase": "https://github.com/ZeroGameStudio-CN/zeroengine/releases/download/ze-upm-779587e2-5a352758013c/",
       "metadataAsset": "com.zerogamestudio.zeroengine.core-registry.json",
       "tags": {
-        "latest": "2.2.2"
+        "latest": "2.2.2",
+        "preview": "2.2.4-ze-pob.history-pad.1"
       },
       "summary": {
-        "displayName": "ZeroEngine.Core",
+        "displayName": "ZeroEngine Core",
         "description": "Core infrastructure for ZeroEngine framework. Includes Singleton patterns (Singleton, MonoSingleton, PersistentSingleton), EventManager, Object Pooling (PoolManager, IPoolable), Performance utilities (ZeroGC, ListPool, FormattedValueCache), and common utilities (ZeroLog, DateUtils).",
         "unity": "6000.6",
         "unityRelease": "0f1"
@@ -1018,16 +1038,37 @@ export default {
             "com.zerogamestudio.zeroengine.core": "2.2.2",
             "com.zerogamestudio.zeroengine.editor-ui": "1.5.0",
             "com.unity.textmeshpro": "3.0.6"
+          },
+          "githubBase": "https://github.com/ZeroGameStudio-CN/zeroengine/releases/download/ze-upm-registry-linked-d194ba36-20261118/"
+        },
+        "2.3.2-ze-pob.history-pad.1": {
+          "asset": "com.zerogamestudio.zeroengine.ui-2.3.2-ze-pob.history-pad.1.tgz",
+          "bytes": 101974,
+          "sha256": "a1f3a7ffa23e43d4da036909d0b5d4c0ed93349c418931b715975fe1c3d66cc2",
+          "sha512": "sha512-KhYYg5exq5/VImEdjFOlmS0jlSDdhWWIcGZXKKxhnANRdkB+GcHzRbFzgLoQBADk9+wlRXKxM+utuqVg1PqNXQ==",
+          "sourceCommit": "779587e25be676796b637174dfbed9b64650d8e6",
+          "sourceTree": "04726671c92308219c6d81a78aaa365d228a703d",
+          "matchedSourceFiles": 211,
+          "sourceBytesUnchanged": true,
+          "runtimeBytesUnchanged": true,
+          "packageJsonReformatted": false,
+          "omittedGitIgnore": [],
+          "signingOrganizationId": "16767998560366",
+          "dependencies": {
+            "com.zerogamestudio.zeroengine.core": "2.2.4-ze-pob.history-pad.1",
+            "com.zerogamestudio.zeroengine.editor-ui": "1.5.0",
+            "com.unity.textmeshpro": "3.0.6"
           }
         }
       },
-      "githubBase": "https://github.com/ZeroGameStudio-CN/zeroengine/releases/download/ze-upm-registry-linked-d194ba36-20261118/",
+      "githubBase": "https://github.com/ZeroGameStudio-CN/zeroengine/releases/download/ze-upm-779587e2-5a352758013c/",
       "metadataAsset": "com.zerogamestudio.zeroengine.ui-registry.json",
       "tags": {
-        "latest": "2.3.0"
+        "latest": "2.3.0",
+        "preview": "2.3.2-ze-pob.history-pad.1"
       },
       "summary": {
-        "displayName": "ZeroEngine.UI",
+        "displayName": "ZeroEngine UI",
         "description": "Industrial-grade UI framework for ZeroEngine. Includes UIManager (layers, stacks, masks), UIViewBase (lifecycle, animations, focus), and optional MVVM framework.",
         "unity": "6000.6",
         "unityRelease": "0f1"
@@ -1552,5 +1593,5 @@ export default {
       }
     }
   },
-  "updatedAt": "2026-11-22T04:56:04Z"
+  "updatedAt": "2026-11-22T10:48:14Z"
 };
