@@ -254,6 +254,17 @@ namespace ZeroEngine.Render.Tests
         }
 
         [Test]
+        public void CounterRecoil_ReturnsOnceWithSmallerAmplitude()
+        {
+            Assert.That(SurfaceAttachmentPose.SampleCounterRecoil(0f), Is.Zero);
+            Assert.That(SurfaceAttachmentPose.SampleCounterRecoil(.36f), Is.EqualTo(1f).Within(.02f));
+            Assert.That(SurfaceAttachmentPose.SampleCounterRecoil(1f), Is.EqualTo(0f).Within(.00001f));
+            Assert.That(SurfaceAttachmentPose.SampleCounterRecoil(1.31f), Is.InRange(-.25f, -.2f));
+            Assert.That(SurfaceAttachmentPose.SampleCounterRecoil(1.8f), Is.Zero);
+            Assert.That(SurfaceAttachmentPose.SampleCounterRecoil(3f), Is.Zero);
+        }
+
+        [Test]
         public void Spring_GrazingContactsNeverSwingOutOfTheirSurface()
         {
             var moving = Own(new GameObject("Surface attachment")).transform;

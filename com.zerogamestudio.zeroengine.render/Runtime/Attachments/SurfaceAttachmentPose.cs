@@ -16,6 +16,24 @@ namespace ZeroEngine.Render.Attachments
         public bool Active { get; private set; }
         public Vector3 LastContact { get; private set; }
 
+        /// <summary>
+        /// Evaluates a normalized first swing and a quicker, smaller opposite swing.
+        /// The caller supplies phase in units of the first half-cycle and scales the result by its peak angle.
+        /// </summary>
+        public static float SampleCounterRecoil(float phase)
+        {
+            if (!(phase > 0f)) return 0f;
+
+            // Increase the phase speed smoothly after crossing the resting direction.
+            float afterCenter = Mathf.Max(0f, phase - 1f);
+            phase += .44f * afterCenter * afterCenter;
+            if (phase >= 2f) return 0f;
+
+            float taper = Mathf.SmoothStep(1f, 0f, Mathf.InverseLerp(1.72f, 2f, phase));
+            float wave = Mathf.Sin(Mathf.PI * phase) * Mathf.Exp(-1.45f * phase) / .537f;
+            return wave * taper;
+        }
+
         private void LimitSurfaceRebound(Vector2 right, Vector2 normal)
         {
             if (turn == 0f || normal.sqrMagnitude < 0.0001f) return;

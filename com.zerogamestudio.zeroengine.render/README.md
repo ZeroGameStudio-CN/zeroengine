@@ -133,6 +133,7 @@ Audio, Particle System, Physics and Physics 2D are declared built-in dependencie
 ZeroEngine.Render.Attachments provides the shared XY-plane attachment algorithms:
 
 - SurfaceAttachmentPose keeps a supplied local tip pinned to a moving or mirrored reference and evaluates the elastic landing from caller time. Apply returns true once settled; the host owns stopping, reset and lifetime.
+- SurfaceAttachmentPose.SampleCounterRecoil returns a normalized first swing and a shorter, smaller opposite swing. Pass elapsed phase after seating, with 1 at the first return through the incoming angle, then scale the result by the peak angle. The host chooses the phase rate, peak angle and when to use the response.
 - SurfaceAttachmentPlacement.Resolve finds a bounded geometric contact inside the authoritative hit region. TryFindVisibleContact separately follows the current opaque renderer surface, adapting probes to local scale/rotation while leaving the hit unchanged. Reach and minimum exposed span come from the moving visual, rather than a monster profile.
 - EmbeddedSpriteAttachment borrows a sprite and target renderer, crops the configured hidden tip span, aligns the visible endpoint across camera depth and restores sprite, local position and prior rendering visibility on release. Call UpdateDepth before applying the attachment pose, then SetContactVisibility after the target's current animation/mesh update. Restore ends the visual lease.
 
