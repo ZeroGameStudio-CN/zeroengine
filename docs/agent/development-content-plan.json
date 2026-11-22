@@ -7,15 +7,15 @@
     {
       "id": "ze.feedback.unity-impact-presentation",
       "title": "可复用受击反馈与弹丸滞留",
-      "stage": "Previewable",
+      "stage": "Ready",
       "targetReleaseId": "",
-      "availability": "TestOnly",
+      "availability": "Released",
       "responsibleChat": "01a1e339-e542-70f3-b865-a7255f221a91",
-      "nextAction": "P5 已验证 Git 固定版本。正式分发和 POB 采用沿签名包发布流程办理。",
+      "nextAction": "在 POB 的签名归档路线采用三包并验证真实战斗。",
       "entrance": "GameFeel、Haptics 与 Render 的 Unity 播放入口；P5 普通攻击及战斗演出接入。",
       "resourcePath": "com.zerogamestudio.zeroengine.gamefeel/Runtime/Unity",
       "revision": "方向回摆、闪白、镜头冲击、Input System 手柄和随目标移动的弹丸滞留",
-      "releaseEvidence": "",
+      "releaseEvidence": "https://github.com/ZeroGameStudio-CN/zeroengine/releases/tag/ze-upm-15c04bdc-6700c8c627e6",
       "candidatePackageVersions": {
         "gamefeel": "0.10.0",
         "haptics": "1.1.0",
@@ -32,7 +32,7 @@
           "contentId": "p5.battle.ze-impact-feedback"
         }
       ],
-      "verificationScope": "实际安装的 P5 Unity 6000.6.9f1 有八项组件和 Atlas 检查、经典弓装备与战棋攻击两项 PlayMode 结果。GitHub Unity 工作流停在许可证激活。包 0.10.0、1.1.0、0.6.0 的 Registry 只读预检通过。"
+      "verificationScope": "实际安装的 P5 Unity 6000.6.9f1 有八项组件和 Atlas 检查、经典弓装备与战棋攻击两项 PlayMode 结果。GitHub Unity 工作流停在许可证激活。包 0.10.0、1.1.0、0.6.0 的 Registry 只读预检通过。 三个签名归档通过隔离 Unity 信任校验，并完成线上目录与归档读回。"
     },
     {
       "id": "ze.character.actor-martial-state",
