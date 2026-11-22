@@ -70,6 +70,27 @@ The toast system is project-neutral. Games should create a local adapter for loc
 - `ScreenTransitionHooks` - 输入 lease、结构化日志和 telemetry 注入边界
 - `ScreenTransitionStyle` - `Fade=0`、`CircleWipe=1`、`DiamondWipe=2`、`Dissolve=3`
 
+### PAD 组件
+
+`PadPrefabSet` 统一同一套 PAD 的面板、导航行、主按钮和统计预制体。把预制体填入同一个资产，使用它的页面即可从同一套模板生成控件。
+
+- `PadPanelView` 暴露内容、导航、操作栏和关闭按钮。模板可以引用项目的磨砂玻璃或其他背景 `Graphic`。
+- `PadMetricView` 从模板读取图标、标签和数值的样式。代码绑定图标和已格式化的字符串，短标签会直接显示，数值保持单行。
+- `PadPrefabSet` 为每个页面创建独立的控件实例。页面通过原本的按钮和业务回调处理选择、确认和关闭。
+
+```csharp
+using ZeroEngine.UI.Pad;
+
+// templates 是这些页面引用的同一个 PadPrefabSet 资产。
+var pad = templates.CreatePanel(parent);
+pad.SetTitle("历史记录");
+pad.CloseButton.onClick.AddListener(CloseHistory);
+var kills = templates.CreateMetric(pad.Content);
+kills.SetContent(killsIcon, "击杀数", "2.15B");
+```
+
+将短标签放在图标右侧，将数值放在下一行。需要其他布局的项目通过共享预制体布置这两个文本槽位。
+
 ## 快速使用
 
 ```csharp
