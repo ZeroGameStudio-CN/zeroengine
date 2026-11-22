@@ -325,13 +325,29 @@ export default {
           "packageJsonReformatted": false,
           "omittedGitIgnore": [],
           "signingOrganizationId": "16767998560366",
+          "dependencies": {},
+          "githubBase": "https://github.com/ZeroGameStudio-CN/zeroengine/releases/download/ze-upm-registry-independent-d194ba36-20261118/"
+        },
+        "0.10.0": {
+          "asset": "com.zerogamestudio.zeroengine.gamefeel-0.10.0.tgz",
+          "bytes": 59618,
+          "sha256": "73ee27749f2ac382be5a147cbf9126493ded2d47766600bd2d6c36d3703816f8",
+          "sha512": "sha512-NhU3xubLkuVVoOboI+JHzC0VlLqZtqZDczYuYkJq2Gj5fiLu3SzUL2rrk9585R+lul9uMRRcZuamNBqHrpt7LQ==",
+          "sourceCommit": "15c04bdc20f1db1a92d2e2c95cf22b66aea8ebd2",
+          "sourceTree": "aea7e7ebce4438fee47e83bac9602d1cedec8001",
+          "matchedSourceFiles": 76,
+          "sourceBytesUnchanged": true,
+          "runtimeBytesUnchanged": true,
+          "packageJsonReformatted": false,
+          "omittedGitIgnore": [],
+          "signingOrganizationId": "16767998560366",
           "dependencies": {}
         }
       },
-      "githubBase": "https://github.com/ZeroGameStudio-CN/zeroengine/releases/download/ze-upm-registry-independent-d194ba36-20261118/",
+      "githubBase": "https://github.com/ZeroGameStudio-CN/zeroengine/releases/download/ze-upm-15c04bdc-6700c8c627e6/",
       "metadataAsset": "com.zerogamestudio.zeroengine.gamefeel-registry.json",
       "tags": {
-        "latest": "0.9.1"
+        "latest": "0.10.0"
       },
       "summary": {
         "displayName": "ZeroEngine Game Feel",
@@ -354,13 +370,29 @@ export default {
           "packageJsonReformatted": false,
           "omittedGitIgnore": [],
           "signingOrganizationId": "16767998560366",
+          "dependencies": {},
+          "githubBase": "https://github.com/ZeroGameStudio-CN/zeroengine/releases/download/ze-upm-registry-independent-d194ba36-20261118/"
+        },
+        "1.1.0": {
+          "asset": "com.zerogamestudio.zeroengine.haptics-1.1.0.tgz",
+          "bytes": 17948,
+          "sha256": "cfd39c73ff61019e6aeb440aac604240b8f84119e3d53ed8e84665190c6a88c2",
+          "sha512": "sha512-SiyCieAMyXluuITlGMzQErv+LirC2mH/UtwHCO1CwrgZ/4jakD3GoUVOICmAu9eRrgX6ft9GAvYBL8hlV9EqKw==",
+          "sourceCommit": "15c04bdc20f1db1a92d2e2c95cf22b66aea8ebd2",
+          "sourceTree": "3a6f5b2bb2ddb78efd3c45a14d0660b9b980acfc",
+          "matchedSourceFiles": 30,
+          "sourceBytesUnchanged": true,
+          "runtimeBytesUnchanged": true,
+          "packageJsonReformatted": false,
+          "omittedGitIgnore": [],
+          "signingOrganizationId": "16767998560366",
           "dependencies": {}
         }
       },
-      "githubBase": "https://github.com/ZeroGameStudio-CN/zeroengine/releases/download/ze-upm-registry-independent-d194ba36-20261118/",
+      "githubBase": "https://github.com/ZeroGameStudio-CN/zeroengine/releases/download/ze-upm-15c04bdc-6700c8c627e6/",
       "metadataAsset": "com.zerogamestudio.zeroengine.haptics-registry.json",
       "tags": {
-        "latest": "1.0.0"
+        "latest": "1.1.0"
       },
       "summary": {
         "displayName": "ZeroEngine Haptics",
@@ -1482,13 +1514,34 @@ export default {
             "com.unity.modules.particlesystem": "1.0.0",
             "com.unity.modules.physics": "1.0.0",
             "com.unity.modules.physics2d": "1.0.0"
+          },
+          "githubBase": "https://github.com/ZeroGameStudio-CN/zeroengine/releases/download/ze-upm-registry-linked-d194ba36-20261118/"
+        },
+        "0.6.0": {
+          "asset": "com.zerogamestudio.zeroengine.render-0.6.0.tgz",
+          "bytes": 108613,
+          "sha256": "e98cca77b03602ca350de1acccc633e4e95782be4cf9022cb703af20b68a4d6b",
+          "sha512": "sha512-EIQq5xwmrO3iJu8zEgA5IW6ifs+n1FOUUbnRFxaVta1nN9vL093wR6g+OBCyym0CvqlDuh/V91ZHdXegg2dgWg==",
+          "sourceCommit": "15c04bdc20f1db1a92d2e2c95cf22b66aea8ebd2",
+          "sourceTree": "08e41b0fac07349812ab2248aacd6f5f8da7181d",
+          "matchedSourceFiles": 129,
+          "sourceBytesUnchanged": true,
+          "runtimeBytesUnchanged": true,
+          "packageJsonReformatted": false,
+          "omittedGitIgnore": [],
+          "signingOrganizationId": "16767998560366",
+          "dependencies": {
+            "com.unity.modules.audio": "1.0.0",
+            "com.unity.modules.particlesystem": "1.0.0",
+            "com.unity.modules.physics": "1.0.0",
+            "com.unity.modules.physics2d": "1.0.0"
           }
         }
       },
-      "githubBase": "https://github.com/ZeroGameStudio-CN/zeroengine/releases/download/ze-upm-registry-linked-d194ba36-20261118/",
+      "githubBase": "https://github.com/ZeroGameStudio-CN/zeroengine/releases/download/ze-upm-15c04bdc-6700c8c627e6/",
       "metadataAsset": "com.zerogamestudio.zeroengine.render-registry.json",
       "tags": {
-        "latest": "0.5.0"
+        "latest": "0.6.0"
       },
       "summary": {
         "displayName": "ZeroEngine Render",
@@ -1593,5 +1646,5 @@ export default {
       }
     }
   },
-  "updatedAt": "2026-11-22T10:48:14Z"
+  "updatedAt": "2026-11-22T15:50:34Z"
 };
