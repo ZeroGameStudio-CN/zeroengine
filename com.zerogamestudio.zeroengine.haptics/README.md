@@ -32,3 +32,7 @@ if (HapticResponseResolver.TryResolve(request, out var resolved)
 ```
 
 Call `HapticArbiter.Reset()` whenever the owning gameplay lifecycle restarts or haptics are disabled. Device output and stop scheduling belong to the consuming project.
+
+## Unity Input System output
+
+When Input System 1.7 or newer is present, reference `ZeroEngine.Haptics.Unity`. Add `GamepadImpactFeedback` to the object that owns the feedback lifetime, then call `Play(gamepad, request)` at the confirmed input or impact event. The component resolves and bounds the pulse, plays the two motors, and stops its device when paused, unfocused or disabled. Use `Stop()` when the owning session or input route ends. Advanced consumers with their own scheduler can drive `GamepadHapticOutput` with monotonic timestamps, including its bounded stop retries.

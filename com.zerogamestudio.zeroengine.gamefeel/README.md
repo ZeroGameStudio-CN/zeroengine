@@ -188,3 +188,11 @@ Set BeatId for a semantic shot or tick. Fragments of that beat can share its
 number while stream cadence samples only distinct beats, so a slow shotgun is
 not mistaken for a rapid-fire weapon. A successful continuous pulse supplies a
 new beat; group/session ownership remains unchanged.
+
+## Unity impact playback
+
+Reference `ZeroEngine.GameFeel.Unity` to play the same response through Unity renderers and cameras. `ImpactEnvelopes` exposes normalized direction, color and screen-shake curves from `ZeroEngine.GameFeel`; these accept the caller's measured impact progress and do not fix the game's clock, damage rules or palette.
+
+Use `ImpactTransformOffset` for temporary motion of an actor's visual child. Evaluate `DirectionalRecoil`, scale the observed impact direction, and release the offset when the visual binding ends. It leaves the pose of a rebound or reparented view with its new owner. `RendererFlashPulse` takes the color property IDs a material supports. Call `Begin`, include the active renderers, track the returned generation through `Sample` and release with `Clear`. The pulse restores the prior colors of its channels and leaves unrelated properties in the current property block.
+
+Add `CameraImpactShake` to an output camera and call `Play` with the camera-plane direction, world amplitude and duration. It temporarily offsets the rendered camera pose and restores it after rendering, compatible with a camera driven by Cinemachine or another rig. The game applies accessibility settings and chooses which resolved impact warrants a camera pulse.

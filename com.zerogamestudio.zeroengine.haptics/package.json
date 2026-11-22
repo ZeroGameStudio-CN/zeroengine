@@ -1,6 +1,6 @@
 {
   "name": "com.zerogamestudio.zeroengine.haptics",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "displayName": "ZeroEngine Haptics",
   "description": "Platform-agnostic haptic response resolution and bounded pulse arbitration.",
   "unity": "6000.6",

@@ -1,0 +1,7 @@
+{
+  "name": "ZeroEngine.GameFeel.Unity",
+  "rootNamespace": "ZeroEngine.GameFeel.Unity",
+  "references": ["ZeroEngine.GameFeel"],
+  "autoReferenced": true,
+  "noEngineReferences": false
+}
