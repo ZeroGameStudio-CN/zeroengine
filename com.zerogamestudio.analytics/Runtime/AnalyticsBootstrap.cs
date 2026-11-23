@@ -60,10 +60,17 @@ namespace ZGS.Analytics
             CrashReporter.Initialize();
 
             // 配置附件上传
-            if (AnalyticsConfig.IsUploadConfigured)
+            var uploadConfigured = AnalyticsConfig.IsUploadConfigured;
+            if (uploadConfigured)
             {
                 CrashReporter.RegisterAttachmentUploader(new ZipAttachmentUploader());
+            }
 
+            // 加载反馈队列会发出过期记录的状态事件，先初始化 Provider 和会话身份。
+            AnalyticsService.Initialize();
+
+            if (uploadConfigured)
+            {
                 // 初始化反馈上传队列并处理待上传文件
                 FeedbackUploadQueue.Initialize();
                 if (FeedbackUploadQueue.PendingCount > 0)
@@ -73,8 +80,6 @@ namespace ZGS.Analytics
                 FeedbackUploadQueue.StartBackgroundProcessing();
             }
 
-            // 初始化所有 Provider (会触发 SessionInfo.Initialize)
-            AnalyticsService.Initialize();
             AnalyticsService.Flush();
 
             // 监听退出事件以释放资源
