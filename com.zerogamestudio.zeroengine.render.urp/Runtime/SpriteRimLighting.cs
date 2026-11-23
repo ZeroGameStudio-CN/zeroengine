@@ -1,6 +1,5 @@
 using System;
 using System.Collections.Generic;
-using Unity.Collections;
 using UnityEngine;
 using UnityEngine.Rendering;
 using UnityEngine.Scripting.APIUpdating;
@@ -65,9 +64,10 @@ namespace ZeroEngine.Render.Urp
                 if (draw.SelectLights(lights) && draw.Update(style)) ActiveTargetCount++;
         }
 
-        internal void Collect(Camera camera, Plane[] planes, NativeArray<VisibleLight> sceneLights, List<SpriteRimDraw> output)
+        internal void Collect(Camera camera, Plane[] planes, List<SpriteRimNativeSource> sceneLights, List<SpriteRimDraw> output)
         {
             ActiveTargetCount = 0;
+            if (useSceneLights && sceneLights.Count == 0) return;
             BindTargets();
             var style = profile ? profile : DefaultProfile;
             if (!style || style.Strength <= 0) return;
@@ -102,7 +102,7 @@ namespace ZeroEngine.Render.Urp
         private static readonly HashSet<SpriteRimLighting> Members = new();
         internal static void Register(SpriteRimLighting value) => Members.Add(value);
         internal static void Unregister(SpriteRimLighting value) => Members.Remove(value);
-        internal static void Collect(Camera camera, Plane[] planes, NativeArray<VisibleLight> lights, List<SpriteRimDraw> draws)
+        internal static void Collect(Camera camera, Plane[] planes, List<SpriteRimNativeSource> lights, List<SpriteRimDraw> draws)
         {
             draws.Clear();
             foreach (var member in Members)

@@ -1,11 +1,38 @@
 using System;
 using System.Collections.Generic;
-using Unity.Collections;
 using UnityEngine;
 using UnityEngine.Rendering;
 
 namespace ZeroEngine.Render.Urp
 {
+    internal readonly struct SpriteRimNativeSource
+    {
+        internal readonly Light Light;
+        internal readonly float DarkEdgeFill;
+        internal readonly Vector4 Shadow;
+        internal readonly Matrix4x4 FallbackBox;
+
+        internal SpriteRimNativeSource(Light light, SpriteRimLightSource source, int shadowIndex)
+        {
+            Light = light;
+            DarkEdgeFill = source.DarkEdgeFill;
+            Shadow = default;
+            FallbackBox = default;
+            var origin = light.transform.position;
+            if (shadowIndex >= 0)
+            {
+                Shadow = new Vector4(origin.x, origin.y, origin.z, shadowIndex + 1);
+            }
+            else if (light.shadows != LightShadows.None && light.shadowStrength > 0 &&
+                     source.TryGetFallbackBox(out var worldToBox))
+            {
+                FallbackBox = worldToBox;
+                var localOrigin = worldToBox.MultiplyPoint3x4(origin);
+                Shadow = new Vector4(localOrigin.x, localOrigin.y, localOrigin.z, -light.shadowStrength);
+            }
+        }
+    }
+
     /// <summary>Owns only mask/override draws. Never replaces source materials or writes their property blocks.</summary>
     internal sealed class SpriteRimDraw : IDisposable
     {
@@ -18,6 +45,8 @@ namespace ZeroEngine.Render.Urp
         private readonly Vector4[] rows0 = new Vector4[MaximumLights], rows1 = new Vector4[MaximumLights], rows2 = new Vector4[MaximumLights];
         private readonly Vector4[] colors = new Vector4[MaximumLights], shapes = new Vector4[MaximumLights];
         private readonly Vector4[] powers = new Vector4[MaximumLights], bands = new Vector4[MaximumLights];
+        private readonly Vector4[] shadows = new Vector4[MaximumLights];
+        private Matrix4x4[] fallbackBoxes;
         private int selectedCount, uploadedCount;
         private bool hasUpload;
         private Vector4 uploadedWrap;
@@ -28,13 +57,16 @@ namespace ZeroEngine.Render.Urp
         private static readonly int Rows0Id = Shader.PropertyToID("_RimEnhanceRows0"), Rows1Id = Shader.PropertyToID("_RimEnhanceRows1"), Rows2Id = Shader.PropertyToID("_RimEnhanceRows2");
         private static readonly int ColorsId = Shader.PropertyToID("_RimEnhanceColors"), ShapesId = Shader.PropertyToID("_RimEnhanceShapes");
         private static readonly int PowersId = Shader.PropertyToID("_RimEnhancePowers"), BandsId = Shader.PropertyToID("_RimEnhanceBands");
+        private static readonly int ShadowsId = Shader.PropertyToID("_RimEnhanceShadows");
+        private static readonly int FallbackBoxesId = Shader.PropertyToID("_RimEnhanceFallbackBoxes");
 
         private struct LightInput
         {
             internal UnityEngine.Object Identity;
             internal float Score, MinimumExposure;
             internal Vector2 Away;
-            internal Vector4 Row0, Row1, Row2, Color, Shape, Powers;
+            internal Vector4 Row0, Row1, Row2, Color, Shape, Powers, Shadow;
+            internal Matrix4x4 FallbackBox;
         }
 
         internal SpriteRimDraw(Renderer renderer)
@@ -80,23 +112,20 @@ namespace ZeroEngine.Render.Urp
             return selectedCount > 0;
         }
 
-        internal bool SelectLights(NativeArray<VisibleLight> sources)
+        internal bool SelectLights(List<SpriteRimNativeSource> sources)
         {
             selectedCount = 0;
             if (!Renderer) return false;
             var position = Renderer.bounds.center;
-            for (int i = 0; i < sources.Length; i++)
+            int layerMask = 1 << Renderer.gameObject.layer;
+            foreach (var source in sources)
             {
-                var light = sources[i].light;
-                if (!light || !light.isActiveAndEnabled || !float.IsFinite(light.intensity) || light.intensity <= 0 ||
-                    (light.cullingMask & (1 << Renderer.gameObject.layer)) == 0 ||
-                    (light.type != LightType.Point && light.type != LightType.Spot)) continue;
-                if (!light.TryGetComponent<SpriteRimLightSource>(out var source) || !source.isActiveAndEnabled) continue;
-                // Ordinary scene illumination and global daylight do not implicitly create actor rims.
+                var light = source.Light;
+                if ((light.cullingMask & layerMask) == 0) continue;
                 var toward = light.transform.position - position;
-                if (toward.sqrMagnitude < .0000001f) continue;
                 var away = new Vector2(-toward.x, -toward.y).normalized;
-                if (away.sqrMagnitude < .0000001f) continue;
+                // A native light directly behind the actor has no XY direction.
+                // Keep it selected: the shader resolves its back-facing contour per art cell.
                 float range = Mathf.Max(.001f, light.range);
                 float attenuation = Mathf.Pow(Mathf.Clamp01(1 - toward.sqrMagnitude / (range * range)), 2);
                 float outer = 0, inner = 1;
@@ -110,31 +139,33 @@ namespace ZeroEngine.Render.Urp
                 float peak = Mathf.Max(color.r, Mathf.Max(color.g, color.b));
                 float score = Mathf.Clamp01(attenuation * light.intensity * peak);
                 if (!float.IsFinite(score) || score <= 0) continue;
+                var origin = light.transform.position;
                 var matrix = Matrix4x4.Scale(Vector3.one / range) *
-                    Matrix4x4.TRS(light.transform.position, light.transform.rotation, Vector3.one).inverse;
+                    Matrix4x4.TRS(origin, light.transform.rotation, Vector3.one).inverse;
                 Insert(new LightInput
                 {
                     Identity = light, Score = score, Away = away, MinimumExposure = 1,
                     Row0 = matrix.GetRow(0), Row1 = matrix.GetRow(1), Row2 = matrix.GetRow(2),
                     // Keep hue separate from HDR intensity; native coverage is bounded in the shader.
                     Color = new Vector4(color.r / Mathf.Max(1, peak), color.g / Mathf.Max(1, peak), color.b / Mathf.Max(1, peak), light.intensity),
-                    Shape = new Vector4(light.type == LightType.Point ? 3 : 4, outer, inner, 0),
-                    Powers = Vector4.one
+                    Shape = new Vector4(light.type == LightType.Point ? 3 : 4, outer, inner, source.DarkEdgeFill),
+                    Shadow = source.Shadow,
+                    FallbackBox = source.FallbackBox,
+                    // Preserve the center's projected magnitude as well as its direction.
+                    // Normalizing XY alone makes a tiny center offset become a full inner-wrap direction.
+                    Powers = new Vector4(1, new Vector2(toward.x, toward.y).magnitude / Mathf.Max(toward.magnitude, .00001f), 0, 0)
                 });
             }
             return selectedCount > 0;
         }
 
-        internal bool Update(SpriteRimLightingProfile profile)
+        internal bool Update(SpriteRimLightingProfile profile, MaterialPropertyBlock projected = null)
         {
-            if (!Renderer || selectedCount == 0 || !shader || !shader.isSupported) return false;
+            if (!Renderer || selectedCount == 0 || (projected == null && (!shader || !shader.isSupported))) return false;
             int padding = Mathf.CeilToInt(Mathf.Max(profile.WeakDistance, profile.StrongDistance) + Mathf.Abs(profile.StrongScale));
-            if (!Silhouette.Update(Mathf.Max(1, padding)) || !Silhouette.SupportsDepthComposite) return false;
+            if (!Silhouette.Update(Mathf.Max(1, padding), requireSourceDepth: projected == null)) return false;
             int count = Silhouette.SourceMaterialCount;
             int changes = !hasUpload || Materials.Count != count ? -1 : 0;
-            while (Materials.Count < count) Materials.Add(new Material(shader) { hideFlags = HideFlags.HideAndDontSave });
-            while (Materials.Count > count)
-            { int i = Materials.Count - 1; CoreUtils.Destroy(Materials[i]); Materials.RemoveAt(i); }
             var axisX = ((Vector3)Silhouette.WorldToMask.GetRow(0)).normalized;
             var axisY = ((Vector3)Silhouette.WorldToMask.GetRow(1)).normalized;
             float total = 0, weightedExposure = 0;
@@ -146,25 +177,71 @@ namespace ZeroEngine.Render.Urp
                 var away = new Vector3(input.Away.x, input.Away.y, 0);
                 UpdateData(rows0, i, input.Row0, 1, ref changes); UpdateData(rows1, i, input.Row1, 2, ref changes);
                 UpdateData(rows2, i, input.Row2, 4, ref changes); UpdateData(colors, i, input.Color, 8, ref changes);
-                UpdateData(shapes, i, input.Shape, 16, ref changes); UpdateData(powers, i, input.Powers, 32, ref changes);
+                UpdateData(shapes, i, input.Shape, 16, ref changes);
+                // Native falloff is geometric. Carry the band's width, center projection and
+                // world-XY direction so the shader can exclude shadowed light from its style mix.
+                UpdateData(powers, i, input.Shape.x > 2.5f ? new Vector4(distance, input.Powers.y, input.Away.x, input.Away.y) : input.Powers, 32, ref changes);
+                UpdateData(shadows, i, input.Shadow, 256, ref changes);
+                if (input.Shadow.w < 0)
+                {
+                    fallbackBoxes ??= new Matrix4x4[MaximumLights];
+                    if (!fallbackBoxes[i].Equals(input.FallbackBox))
+                    {
+                        fallbackBoxes[i] = input.FallbackBox;
+                        changes |= 512;
+                    }
+                }
                 UpdateData(bands, i, new Vector4(Vector3.Dot(away, axisX) * distance, Vector3.Dot(away, axisY) * distance,
                     Mathf.Lerp(0, profile.StrongScale, response), response), 64, ref changes);
                 total += input.Score; weightedExposure += input.MinimumExposure * input.Score;
             }
-            var wrap = new Vector4(Mathf.Clamp(profile.InnerWrapWidth, 1, 4), Mathf.Clamp(profile.InnerWrapStrength, 0, .35f), 0, 0);
+            var wrap = new Vector4(Mathf.Clamp(profile.InnerWrapWidth, 1, 4), Mathf.Clamp(profile.InnerWrapStrength, 0, .35f),
+                float.IsFinite(profile.DarkEdgeBrightness) ? Mathf.Clamp(profile.DarkEdgeBrightness, .01f, 1f) : 1f,
+                1f / Mathf.Max(.001f, profile.ResponsePower));
             if (!uploadedWrap.Equals(wrap)) { uploadedWrap = wrap; changes |= 128; }
             float exposure = Mathf.Lerp(1, Mathf.Clamp(profile.MinimumExposure * weightedExposure / Mathf.Max(total, .000001f), .01f, 1), selected[0].Score);
+            var style = new Vector4(exposure, Mathf.Max(.01f, profile.MaximumLight), Mathf.Clamp01(profile.Strength),
+                (profile.GammaBlend && QualitySettings.activeColorSpace == ColorSpace.Linear ? 1 : 0) + (profile.LimitAddedHdr ? 2 : 0));
+            var edge = (Vector4)profile.EdgeTint;
+            var inner = (Vector4)profile.InnerTint;
+
+            if (projected != null)
+            {
+                projected.SetTexture("_RimRefMask", Silhouette.Texture);
+                projected.SetVector("_RimRefRow0", Silhouette.WorldToMask.GetRow(0));
+                projected.SetVector("_RimRefRow1", Silhouette.WorldToMask.GetRow(1));
+                projected.SetVector("_RimRefMaskInfo", Silhouette.Info);
+                projected.SetVector("_RimRefFrame", Silhouette.ReferenceFrame);
+                projected.SetVector("_RimRefStyle", style);
+                projected.SetVector("_RimRefEdgeTint", edge);
+                projected.SetVector("_RimRefInnerTint", inner);
+                projected.SetInt(CountId, selectedCount);
+                projected.SetVector(WrapId, uploadedWrap);
+                projected.SetVectorArray(Rows0Id, rows0);
+                projected.SetVectorArray(Rows1Id, rows1);
+                projected.SetVectorArray(Rows2Id, rows2);
+                projected.SetVectorArray(ColorsId, colors);
+                projected.SetVectorArray(ShapesId, shapes);
+                projected.SetVectorArray(PowersId, powers);
+                projected.SetVectorArray(BandsId, bands);
+                projected.SetVectorArray(ShadowsId, shadows);
+                if (fallbackBoxes != null) projected.SetMatrixArray(FallbackBoxesId, fallbackBoxes);
+                return true;
+            }
+
+            while (Materials.Count < count) Materials.Add(new Material(shader) { hideFlags = HideFlags.HideAndDontSave });
+            while (Materials.Count > count)
+            { int i = Materials.Count - 1; CoreUtils.Destroy(Materials[i]); Materials.RemoveAt(i); }
             foreach (var material in Materials)
             {
                 material.SetTexture("_RimRefMask", Silhouette.Texture);
                 material.SetVector("_RimRefRow0", Silhouette.WorldToMask.GetRow(0));
                 material.SetVector("_RimRefRow1", Silhouette.WorldToMask.GetRow(1));
-                material.SetVector("_RimRefMaskInfo", Silhouette.Info); material.SetVector("_RimRefFrame", Silhouette.ReferenceFrame);
-                material.SetVector("_RimRefStyle", new Vector4(exposure, Mathf.Max(.01f, profile.MaximumLight), Mathf.Clamp01(profile.Strength),
-                    (profile.GammaBlend && QualitySettings.activeColorSpace == ColorSpace.Linear ? 1 : 0) + (profile.LimitAddedHdr ? 2 : 0)));
-                var edge = profile.EdgeTint; var inner = profile.InnerTint;
-                material.SetVector("_RimRefEdgeTint", new Vector4(edge.r, edge.g, edge.b, edge.a));
-                material.SetVector("_RimRefInnerTint", new Vector4(inner.r, inner.g, inner.b, inner.a));
+                material.SetVector("_RimRefMaskInfo", Silhouette.Info);
+                material.SetVector("_RimRefFrame", Silhouette.ReferenceFrame);
+                material.SetVector("_RimRefStyle", style);
+                material.SetVector("_RimRefEdgeTint", edge);
+                material.SetVector("_RimRefInnerTint", inner);
                 if (changes == -1 || uploadedCount != selectedCount) material.SetInt(CountId, selectedCount);
                 if ((changes & 1) != 0) material.SetVectorArray(Rows0Id, rows0);
                 if ((changes & 2) != 0) material.SetVectorArray(Rows1Id, rows1);
@@ -174,6 +251,8 @@ namespace ZeroEngine.Render.Urp
                 if ((changes & 32) != 0) material.SetVectorArray(PowersId, powers);
                 if ((changes & 64) != 0) material.SetVectorArray(BandsId, bands);
                 if ((changes & 128) != 0) material.SetVector(WrapId, uploadedWrap);
+                if ((changes & 256) != 0) material.SetVectorArray(ShadowsId, shadows);
+                if ((changes & 512) != 0 && fallbackBoxes != null) material.SetMatrixArray(FallbackBoxesId, fallbackBoxes);
             }
             hasUpload = count > 0; uploadedCount = selectedCount;
             for (int i = 0; i < count; i++)

@@ -169,3 +169,14 @@ session/streaming adapters before adopting the candidate.
 ### Material recipe changes
 
 Registered MeshRenderers react to `SurfaceWeatherMaterialSources.NotifyRendererMaterialsChanged(renderer)` synchronously. Only that tracked renderer is rebound through the existing material cache and released recipe; new objects keep the bounded discovery path. Registration budgets and authored shadow-proxy materials remain unchanged. Dispose removes the notification subscription.
+
+### Projected-color consumers
+
+A renderer which already shades its own projected Sprite can use \`SpriteRimLightFrame\` once per
+camera and one \`SpriteRimProjectedReceiver\` per active source SpriteRenderer. Prepare on the
+original source and pass its returned mask handle as a Render Graph read. Keep the additional-light
+shadow atlas alive when available. \`SpriteRimComposition.hlsl\` provides
+\`ZeroApplyProjectedSpriteRim\` for linear shaded color, before fog and grading. Supply the source
+Sprite plane location and its world-space axes, even when the consumer uses a different final
+projection. The consumer owns coverage and scene depth. Dispose the receiver with the source.
+The ordinary Sprite renderer feature uses the same composition and light selection.

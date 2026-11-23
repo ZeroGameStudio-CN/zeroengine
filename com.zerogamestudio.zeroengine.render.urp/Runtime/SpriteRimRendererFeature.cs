@@ -1,5 +1,4 @@
 using System.Collections.Generic;
-using Unity.Collections;
 using UnityEngine;
 using UnityEngine.Rendering;
 using UnityEngine.Rendering.RenderGraphModule;
@@ -18,16 +17,18 @@ namespace ZeroEngine.Render.Urp
             if (!Application.isPlaying || renderingData.cameraData.cameraType != CameraType.Game ||
                 renderingData.cameraData.renderType != CameraRenderType.Base) return;
             pass ??= new RimPass();
-            if (pass.Prepare(renderingData.cameraData.camera, renderingData.lightData.visibleLights)) renderer.EnqueuePass(pass);
+            if (pass.Prepare(renderer, renderingData.cameraData.camera, renderingData.lightData)) renderer.EnqueuePass(pass);
         }
         protected override void Dispose(bool disposing) { pass?.Dispose(); pass = null; }
 
         private sealed class RimPass : ScriptableRenderPass
         {
             private readonly List<SpriteRimDraw> draws = new();
+            private readonly SpriteRimLightFrame nativeSources = new();
             private readonly Plane[] planes = new Plane[6];
             private static readonly int SceneColorId = Shader.PropertyToID("_RimEnhanceSceneColor");
             private static readonly int SceneScaleId = Shader.PropertyToID("_RimEnhanceSceneScaleBias");
+            private static readonly int ShadowDistanceSqId = Shader.PropertyToID("_RimEnhanceAdditionalShadowDistanceSq");
 
             internal RimPass()
             {
@@ -35,17 +36,20 @@ namespace ZeroEngine.Render.Urp
                 ConfigureInput(ScriptableRenderPassInput.Depth);
                 requiresIntermediateTexture = true;
             }
-            internal bool Prepare(Camera camera, NativeArray<VisibleLight> lights)
+            internal bool Prepare(ScriptableRenderer renderer, Camera camera, LightData lightData)
             {
+                nativeSources.Prepare(renderer, lightData);
                 GeometryUtility.CalculateFrustumPlanes(camera, planes);
-                SpriteRimRegistry.Collect(camera, planes, lights, draws);
+                SpriteRimRegistry.Collect(camera, planes, nativeSources.Sources, draws);
                 return draws.Count > 0;
             }
+
             private sealed class PassData
             {
                 internal TextureHandle Source, Destination;
                 internal List<SpriteRimDraw> Draws;
                 internal Rect FullViewport, ActorViewport;
+                internal float AdditionalShadowDistanceSq;
             }
             public override void RecordRenderGraph(RenderGraph renderGraph, ContextContainer frameData)
             {
@@ -64,6 +68,12 @@ namespace ZeroEngine.Render.Urp
                     data.ActorViewport = new Rect(rect.x * size.x, rect.y * size.y, rect.width * size.x, rect.height * size.y);
                     builder.UseTexture(source, AccessFlags.Read);
                     builder.UseTexture(resources.cameraDepthTexture, AccessFlags.Read);
+                    var shadowAtlas = resources.additionalShadowsTexture;
+                    if (shadowAtlas.IsValid())
+                    {
+                        data.AdditionalShadowDistanceSq = camera.maxShadowDistance * camera.maxShadowDistance;
+                        builder.UseTexture(shadowAtlas, AccessFlags.Read);
+                    }
                     foreach (var draw in data.Draws) builder.UseTexture(renderGraph.ImportTexture(draw.Silhouette.ReferenceHandle), AccessFlags.Read);
                     builder.SetRenderAttachment(destination, 0, AccessFlags.Write);
                     builder.AllowGlobalStateModification(true);
@@ -76,6 +86,7 @@ namespace ZeroEngine.Render.Urp
                         context.cmd.SetViewport(data.FullViewport);
                         Blitter.BlitTexture(context.cmd, handle, bias, 0f, false);
                         context.cmd.SetGlobalTexture(SceneColorId, data.Source); context.cmd.SetGlobalVector(SceneScaleId, bias);
+                        context.cmd.SetGlobalFloat(ShadowDistanceSqId, data.AdditionalShadowDistanceSq);
                         context.cmd.SetViewport(data.ActorViewport);
                         foreach (var draw in data.Draws)
                             if (draw.Renderer && draw.Renderer.enabled)

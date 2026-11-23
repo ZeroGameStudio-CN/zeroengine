@@ -76,13 +76,13 @@ namespace ZeroEngine.Render.Urp
             return texture;
         }
 
-        public bool Update(int width)
+        public bool Update(int width, bool requireSourceDepth = true)
         {
             if (!renderer || !renderer.enabled || !renderer.gameObject.activeInHierarchy || !material || commands == null) return false;
             sourceMaterials.Clear(); renderer.GetSharedMaterials(sourceMaterials);
             var materials = sourceMaterials;
             SourceMaterialCount = materials.Count;
-            if (!SupportsDepthComposite) return false;
+            if (requireSourceDepth && !SupportsDepthComposite) return false;
             if (materials.Count == 0) return false;
             var firstTexture = GetSource(materials[0], 0, out var firstSt);
             var metadata = renderer.GetComponent<SpriteRimPixelGrid>();
