@@ -675,9 +675,10 @@
       "title": "可复用二维瞬移落点与遮挡判定",
       "stage": "Ready",
       "targetReleaseId": "",
-      "availability": "DevelopmentOnly",
+      "availability": "Released",
+      "releaseEvidence": "https://github.com/ZeroGameStudio-CN/zeroengine/releases/tag/ze-upm-3d0e556b-77489de79d93",
       "responsibleChat": "01a20b3c-6d9f-7ff3-b547-743d427ff5d8",
-      "nextAction": "发布 1.8.0 签名包后，在 POB 中核对包源、遮挡和跨层策略。",
+      "nextAction": "POB 正在接入已发布的 1.8.0 签名归档。",
       "candidatePackageVersions": {
         "pathfinding2d": "1.8.0"
       },

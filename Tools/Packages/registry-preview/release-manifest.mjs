@@ -1359,16 +1359,36 @@ export default {
             "com.zerogamestudio.zeroengine.core": "2.2.2",
             "com.unity.modules.physics2d": "1.0.0",
             "com.unity.modules.tilemap": "1.0.0"
+          },
+          "githubBase": "https://github.com/ZeroGameStudio-CN/zeroengine/releases/download/ze-upm-registry-linked-d194ba36-20261118/"
+        },
+        "1.8.0": {
+          "asset": "com.zerogamestudio.zeroengine.pathfinding2d-1.8.0.tgz",
+          "bytes": 147240,
+          "sha256": "e1727efe3d71eb6d539ee3b31be7a82383d7f05bf5c6d1ec73a045b48458d2ad",
+          "sha512": "sha512-7nXv+1pEXiP04MIsrDtAAcJSPphKOzEpxDso1YqBoOg4mjosp7IpgK3Q97k56q0xPh0RHwP8nQc/CXZBPT99+Q==",
+          "sourceCommit": "3d0e556b5f92f5915481cf48a242935bfde5668f",
+          "sourceTree": "5b64dca87198e1da553fc834a009566c68464522",
+          "matchedSourceFiles": 97,
+          "sourceBytesUnchanged": true,
+          "runtimeBytesUnchanged": true,
+          "packageJsonReformatted": false,
+          "omittedGitIgnore": [],
+          "signingOrganizationId": "16767998560366",
+          "dependencies": {
+            "com.zerogamestudio.zeroengine.core": "2.2.4-ze-pob.history-pad.1",
+            "com.unity.modules.physics2d": "1.0.0",
+            "com.unity.modules.tilemap": "1.0.0"
           }
         }
       },
-      "githubBase": "https://github.com/ZeroGameStudio-CN/zeroengine/releases/download/ze-upm-registry-linked-d194ba36-20261118/",
+      "githubBase": "https://github.com/ZeroGameStudio-CN/zeroengine/releases/download/ze-upm-3d0e556b-77489de79d93/",
       "metadataAsset": "com.zerogamestudio.zeroengine.pathfinding2d-registry.json",
       "tags": {
-        "latest": "1.7.3"
+        "latest": "1.8.0"
       },
       "summary": {
-        "displayName": "ZeroEngine.Pathfinding2D",
+        "displayName": "ZeroEngine Pathfinding 2D",
         "description": "2D Platform pathfinding system for ZeroEngine. Provides platform graph generation, jump link calculation, and built-in A* pathfinding for platformer games.",
         "unity": "6000.6",
         "unityRelease": "0f1"
@@ -1646,5 +1666,5 @@ export default {
       }
     }
   },
-  "updatedAt": "2026-11-22T15:50:34Z"
+  "updatedAt": "2026-11-24T07:16:22Z"
 };
