@@ -2,6 +2,13 @@
 
 All notable changes to this package will be documented in this file.
 
+## [1.8.0] - 2026-11-24
+
+### Added
+- Added a bounded 2D teleport landing query that checks the live collider, optional room bounds, and the body's physics scene.
+- Added configurable obstruction and downward floor policies for intentional cross-floor travel.
+- Added a safe commit check that preserves the original pose when the destination becomes blocked.
+
 ## Unreleased — 1.7.3 consolidation candidate
 
 - Preserve the consumer-adopted 1.7.2 graph, path-search and jump-link fixes.
