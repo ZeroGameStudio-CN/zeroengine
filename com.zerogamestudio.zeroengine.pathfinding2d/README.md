@@ -4,7 +4,7 @@
 
 ## 版本
 
-- **候选版本**: 1.7.3（尚未发布）
+- **版本**: 1.8.0
 - **依赖**: ZeroEngine.Core >= 1.0.0，以及 Unity Physics 2D、Tilemap 内置模块；图生成器直接支持 `TilemapCollider2D`，无需消费者补齐隐藏依赖。
 
 ## 概述
@@ -30,6 +30,28 @@
 - **高度转换索引** (v1.7.0+)：按实际 X 区间查找高度转换，不在图生成阶段用固定 8m 高差截断，最终跳跃/下落限制仍由 JumpLinkConfig 执行
 
 ## 核心组件
+
+### TeleportLanding2D
+
+以角色真实的 Collider2D 形状寻找安全的二维瞬移落点。可独立使用，搜索在角色所在的物理场景内进行。调用方传入阻挡层、搜索距离和可选房间边界。
+
+- TerrainMask 保证附近的落点修正留在请求位置所在的一侧。RequiresLineOfSight 为 true 时，出发点和落点之间还必须无遮挡。
+- 允许跨层时设置 RequiresLineOfSight 为 false，搜索仍检查落点和身体是否重叠。
+- 如需单独保护向下的武器瞬移，可设置 DownwardFloorMask。可用半平面约束保留面向或目标侧。
+- TryFind 返回附近可用位置并恢复角色的原姿态。TrySet 用当前物理状态复核、写入 XY 并保留 Z。移动失败会恢复原姿态。
+
+~~~csharp
+var options = new TeleportLandingOptions2D(solidLayers, boundary: roomBoundary);
+var policy = new TeleportLandingSearchPolicy(
+    maximumDistance: 2f, terrainMask: solidLayers, requiresLineOfSight: requireClearPath);
+
+if (TeleportLanding2D.TryFind(root, body, requested, options, policy, out var landing, out _))
+    TeleportLanding2D.TrySet(root, body, landing, options, out _);
+~~~
+
+两项操作都在 Unity 主线程执行。对于延时传送，在真正移动前以最新地形和身体状态重新检查遮挡与落点。
+
+
 
 ### PlatformGraphGenerator
 

@@ -669,6 +669,26 @@
         "Unity Editor 的隔离预览场景完成三个模板用例，核对 POB 三个按钮使用同一主题，并确认场景恢复。"
       ],
       "releaseEvidence": ""
+    },
+    {
+      "id": "ze.pathfinding2d.teleport-landing",
+      "title": "可复用二维瞬移落点与遮挡判定",
+      "stage": "Ready",
+      "targetReleaseId": "",
+      "availability": "DevelopmentOnly",
+      "responsibleChat": "01a20b3c-6d9f-7ff3-b547-743d427ff5d8",
+      "nextAction": "发布 1.8.0 签名包后，在 POB 中核对包源、遮挡和跨层策略。",
+      "candidatePackageVersions": {
+        "pathfinding2d": "1.8.0"
+      },
+      "entrance": "ZeroEngine.Pathfinding2D.TeleportLanding2D.TryFind / TrySet",
+      "resourcePath": "com.zerogamestudio.zeroengine.pathfinding2d/Runtime/TeleportLanding2D.cs",
+      "revision": "基于 POB cs:19687 抽取碰撞体落点搜索、可选遮挡、落点复核与恢复。",
+      "verificationEvidence": [
+        "D:/Temp/ZgsTaskOutput/ze-teleport-landing-tests-01a20b3c/teleport-editmode-r2.xml",
+        "D:/Temp/ZgsTaskOutput/ze-teleport-pob-adoption-01a20b3c/teleport-adoption.editmode.xml"
+      ],
+      "verificationScope": "用 POB 实装寻路包构建的隔离 Unity 工程通过 6 项 ZE 包测试和 25 项 POB 适配回归，验证遮挡选项、向下保护、边界、场景隔离与失败恢复。"
     }
   ]
 }
