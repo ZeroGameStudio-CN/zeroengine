@@ -46,6 +46,7 @@ namespace ZeroEngine.Achievement
         private readonly Queue<(string eventId, object data)> _eventBuffer =
             new Queue<(string, object)>(16);
         private bool _processingEvents;
+        private Func<AchievementSO, bool> _isPrerequisiteCompleted;
 
         // 临时列表（零分配）
         private readonly List<AchievementSO> _tempAchievementList = new List<AchievementSO>(32);
@@ -254,7 +255,7 @@ namespace ZeroEngine.Achievement
                     if (progress.State == AchievementState.Locked)
                     {
                         // 检查是否满足前置条件
-                        if (!achievement.CheckPrerequisites(IsCompleted, GetCharacterLevel()))
+                        if (!MeetsPrerequisites(achievement))
                         {
                             continue;
                         }
@@ -599,7 +600,7 @@ namespace ZeroEngine.Achievement
                 };
 
                 // 检查前置条件，决定初始状态
-                if (achievement.CheckPrerequisites(IsCompleted, GetCharacterLevel()))
+                if (MeetsPrerequisites(achievement))
                 {
                     progress.State = AchievementState.InProgress;
                 }
@@ -627,6 +628,9 @@ namespace ZeroEngine.Achievement
 
             Log($"成就完成: {achievement.DisplayName} (+{achievement.Points}点)");
         }
+
+        private bool MeetsPrerequisites(AchievementSO achievement) =>
+            achievement.CheckPrerequisites(_isPrerequisiteCompleted ??= IsCompleted, GetCharacterLevel());
 
         private int GetCharacterLevel()
         {
