@@ -539,13 +539,32 @@ export default {
           "signingOrganizationId": "16767998560366",
           "dependencies": {
             "com.unity.render-pipelines.universal": "12.1.7"
+          },
+          "githubBase": "https://github.com/ZeroGameStudio-CN/zeroengine/releases/download/ze-upm-registry-independent-d194ba36-20261118/"
+        },
+        "0.1.3-ze-pob.create-menus.1": {
+          "asset": "com.zerogamestudio.zeroengine.world-shift-0.1.3-ze-pob.create-menus.1.tgz",
+          "bytes": 34911,
+          "sha256": "d80e21f4e9c4bb89075ab6ef680cfc7021e89e7ed65a8fa11b162b1ab7c1ae0e",
+          "sha512": "sha512-RDzp5RVz/rau4JQ0KgxnNJGm565RHJZ/UjWIE5TAuF/jpHR1s02vs4TWcfy9fJBRQbiNBY+wNgOWlXGwZ4jWMA==",
+          "sourceCommit": "d21aa0f5413f453580660737461149168bd32987",
+          "sourceTree": "b07405d4d797483f43c6894524af206f4f536a59",
+          "matchedSourceFiles": 63,
+          "sourceBytesUnchanged": true,
+          "runtimeBytesUnchanged": true,
+          "packageJsonReformatted": false,
+          "omittedGitIgnore": [],
+          "signingOrganizationId": "16767998560366",
+          "dependencies": {
+            "com.unity.render-pipelines.universal": "12.1.7"
           }
         }
       },
-      "githubBase": "https://github.com/ZeroGameStudio-CN/zeroengine/releases/download/ze-upm-registry-independent-d194ba36-20261118/",
+      "githubBase": "https://github.com/ZeroGameStudio-CN/zeroengine/releases/download/ze-upm-d21aa0f5-22e7e545abb4/",
       "metadataAsset": "com.zerogamestudio.zeroengine.world-shift-registry.json",
       "tags": {
-        "latest": "0.1.1"
+        "latest": "0.1.1",
+        "preview": "0.1.3-ze-pob.create-menus.1"
       },
       "summary": {
         "displayName": "ZeroEngine World Shift",
@@ -602,16 +621,38 @@ export default {
             "com.unity.modules.imageconversion": "1.0.0",
             "com.unity.modules.unitywebrequest": "1.0.0",
             "com.unity.modules.jsonserialize": "1.0.0"
+          },
+          "githubBase": "https://github.com/ZeroGameStudio-CN/zeroengine/releases/download/ze-upm-registry-linked-d194ba36-20261118/"
+        },
+        "2.3.4-ze-pob.create-menus.1": {
+          "asset": "com.zerogamestudio.analytics-2.3.4-ze-pob.create-menus.1.tgz",
+          "bytes": 93155,
+          "sha256": "01ff7a1de7b47293e8a61918ff2f85e3169a04c96066c16595fce882c8af800a",
+          "sha512": "sha512-xpCr3I+PGufr8ZgrUjlElTzKlH6eD7Atl3VuhV0/9Z1h83kvbenVG4Ys6G9lN/zuF/ddKk/PF51bPs4rsOJBSg==",
+          "sourceCommit": "d21aa0f5413f453580660737461149168bd32987",
+          "sourceTree": "546fc217d47056c06e40ac9a799fe0b55d7ba52a",
+          "matchedSourceFiles": 96,
+          "sourceBytesUnchanged": false,
+          "runtimeBytesUnchanged": true,
+          "packageJsonReformatted": true,
+          "omittedGitIgnore": [],
+          "signingOrganizationId": "16767998560366",
+          "dependencies": {
+            "com.zerogamestudio.zeroengine.editor-ui": "1.5.0",
+            "com.unity.modules.imageconversion": "1.0.0",
+            "com.unity.modules.unitywebrequest": "1.0.0",
+            "com.unity.modules.jsonserialize": "1.0.0"
           }
         }
       },
-      "githubBase": "https://github.com/ZeroGameStudio-CN/zeroengine/releases/download/ze-upm-registry-linked-d194ba36-20261118/",
+      "githubBase": "https://github.com/ZeroGameStudio-CN/zeroengine/releases/download/ze-upm-d21aa0f5-22e7e545abb4/",
       "metadataAsset": "com.zerogamestudio.analytics-registry.json",
       "tags": {
-        "latest": "2.3.2"
+        "latest": "2.3.2",
+        "preview": "2.3.4-ze-pob.create-menus.1"
       },
       "summary": {
-        "displayName": "ZGS Analytics",
+        "displayName": "ZeroEngine Analytics",
         "description": "ZeroGameStudio \u6e38\u620f\u5206\u6790 SDK\uff0c\u652f\u6301\u81ea\u5efa ClickHouse \u6570\u636e\u5e73\u53f0",
         "unity": "6000.6"
       }
@@ -686,16 +727,35 @@ export default {
           "signingOrganizationId": "16767998560366",
           "dependencies": {
             "com.zerogamestudio.zeroengine.core": "2.2.2"
+          },
+          "githubBase": "https://github.com/ZeroGameStudio-CN/zeroengine/releases/download/ze-upm-registry-linked-d194ba36-20261118/"
+        },
+        "1.0.2-ze-pob.create-menus.1": {
+          "asset": "com.zerogamestudio.zeroengine.achievement-1.0.2-ze-pob.create-menus.1.tgz",
+          "bytes": 24957,
+          "sha256": "d7a95267d5581ed0e193e9f03f8937a15dd1518bf0d1c6ba9d8fdbeaee01e5ac",
+          "sha512": "sha512-o/KrxZxsJSDWAvMbWAdLiRtX1z/kbZRSJo1mWCgntUdTV2eQqmlPwBif5DJu3z5CDgl/GbDWmFWgJsXAl6ojhw==",
+          "sourceCommit": "d21aa0f5413f453580660737461149168bd32987",
+          "sourceTree": "fd4d910c866a881c8b9d45de5593628b266c30d9",
+          "matchedSourceFiles": 35,
+          "sourceBytesUnchanged": true,
+          "runtimeBytesUnchanged": true,
+          "packageJsonReformatted": false,
+          "omittedGitIgnore": [],
+          "signingOrganizationId": "16767998560366",
+          "dependencies": {
+            "com.zerogamestudio.zeroengine.core": "2.2.4-ze-pob.history-pad.1"
           }
         }
       },
-      "githubBase": "https://github.com/ZeroGameStudio-CN/zeroengine/releases/download/ze-upm-registry-linked-d194ba36-20261118/",
+      "githubBase": "https://github.com/ZeroGameStudio-CN/zeroengine/releases/download/ze-upm-d21aa0f5-22e7e545abb4/",
       "metadataAsset": "com.zerogamestudio.zeroengine.achievement-registry.json",
       "tags": {
-        "latest": "1.0.0"
+        "latest": "1.0.0",
+        "preview": "1.0.2-ze-pob.create-menus.1"
       },
       "summary": {
-        "displayName": "ZeroEngine.Achievement",
+        "displayName": "ZeroEngine Achievement",
         "description": "Achievement definitions, condition evaluation, progress snapshots and platform provider contracts.",
         "unity": "6000.6",
         "unityRelease": "0f1"
@@ -742,13 +802,35 @@ export default {
             "com.unity.modules.physics": "1.0.0",
             "com.unity.modules.ai": "1.0.0",
             "com.unity.modules.animation": "1.0.0"
+          },
+          "githubBase": "https://github.com/ZeroGameStudio-CN/zeroengine/releases/download/ze-upm-2943f68c-bbb8071b9725/"
+        },
+        "2.2.1-ze-pob.create-menus.1": {
+          "asset": "com.zerogamestudio.zeroengine.ai-2.2.1-ze-pob.create-menus.1.tgz",
+          "bytes": 78392,
+          "sha256": "4f4edf41fe204f3ab3ccc579c36f6898bd25004e850b58496690c6c7d78a555a",
+          "sha512": "sha512-FfKd2NkeyB2ReJL8eTG5esXRkszxDBv/ABFUDXZC4dhIE/CWH84Jw2ZtVSi+3AnJi4MzGOKpa2YT2EwVLLB3HQ==",
+          "sourceCommit": "d21aa0f5413f453580660737461149168bd32987",
+          "sourceTree": "eff6082258b4ffed2fc40cd2ae568d08c2de24c4",
+          "matchedSourceFiles": 153,
+          "sourceBytesUnchanged": true,
+          "runtimeBytesUnchanged": true,
+          "packageJsonReformatted": false,
+          "omittedGitIgnore": [],
+          "signingOrganizationId": "16767998560366",
+          "dependencies": {
+            "com.zerogamestudio.zeroengine.core": "2.2.4-ze-pob.history-pad.1",
+            "com.unity.modules.physics": "1.0.0",
+            "com.unity.modules.ai": "1.0.0",
+            "com.unity.modules.animation": "1.0.0"
           }
         }
       },
-      "githubBase": "https://github.com/ZeroGameStudio-CN/zeroengine/releases/download/ze-upm-2943f68c-bbb8071b9725/",
+      "githubBase": "https://github.com/ZeroGameStudio-CN/zeroengine/releases/download/ze-upm-d21aa0f5-22e7e545abb4/",
       "metadataAsset": "com.zerogamestudio.zeroengine.ai-registry.json",
       "tags": {
-        "latest": "2.2.0"
+        "latest": "2.2.0",
+        "preview": "2.2.1-ze-pob.create-menus.1"
       },
       "summary": {
         "displayName": "ZeroEngine AI",
@@ -840,13 +922,33 @@ export default {
           "dependencies": {
             "com.zerogamestudio.zeroengine.editor-ui": "1.5.0",
             "com.unity.modules.jsonserialize": "1.0.0"
+          },
+          "githubBase": "https://github.com/ZeroGameStudio-CN/zeroengine/releases/download/ze-upm-registry-linked-d194ba36-20261118/"
+        },
+        "0.6.2-ze-pob.create-menus.1": {
+          "asset": "com.zerogamestudio.zeroengine.formula-0.6.2-ze-pob.create-menus.1.tgz",
+          "bytes": 79270,
+          "sha256": "a28186631aa9b238ce42da282b936559a45b7ad9691382d0a07df3557145c5bf",
+          "sha512": "sha512-J7LEGv8n/zHA8EzsUBwmmE2eQJEwsXRuez91bsxMaUi2FYtVLSDCjPe88aHaRDy8BNXBjig+AAEuRJui5iv59w==",
+          "sourceCommit": "d21aa0f5413f453580660737461149168bd32987",
+          "sourceTree": "80764bc87bf470aebb875045ed35f0d8942479ff",
+          "matchedSourceFiles": 146,
+          "sourceBytesUnchanged": true,
+          "runtimeBytesUnchanged": true,
+          "packageJsonReformatted": false,
+          "omittedGitIgnore": [],
+          "signingOrganizationId": "16767998560366",
+          "dependencies": {
+            "com.zerogamestudio.zeroengine.editor-ui": "1.5.0",
+            "com.unity.modules.jsonserialize": "1.0.0"
           }
         }
       },
-      "githubBase": "https://github.com/ZeroGameStudio-CN/zeroengine/releases/download/ze-upm-registry-linked-d194ba36-20261118/",
+      "githubBase": "https://github.com/ZeroGameStudio-CN/zeroengine/releases/download/ze-upm-d21aa0f5-22e7e545abb4/",
       "metadataAsset": "com.zerogamestudio.zeroengine.formula-registry.json",
       "tags": {
-        "latest": "0.6.1"
+        "latest": "0.6.1",
+        "preview": "0.6.2-ze-pob.create-menus.1"
       },
       "summary": {
         "displayName": "ZeroEngine Formula",
@@ -876,16 +978,39 @@ export default {
             "com.unity.modules.screencapture": "1.0.0",
             "com.unity.modules.audio": "1.0.0",
             "com.unity.modules.jsonserialize": "1.0.0"
+          },
+          "githubBase": "https://github.com/ZeroGameStudio-CN/zeroengine/releases/download/ze-upm-registry-linked-d194ba36-20261118/"
+        },
+        "2.1.4-ze-pob.create-menus.1": {
+          "asset": "com.zerogamestudio.zeroengine.persistence-2.1.4-ze-pob.create-menus.1.tgz",
+          "bytes": 46594,
+          "sha256": "ec51e1dd4c5fa87cc6e6c29411cb8d67484b8afaf870b41b263192395468d043",
+          "sha512": "sha512-zoT3mUpFVCIPXvXiUQ1D6rgypSJHTBkagVDX7ueqsI4993xtvXy+pGtKmPEhfiT60tuQ8rA1f4jBubkg5BhYCA==",
+          "sourceCommit": "d21aa0f5413f453580660737461149168bd32987",
+          "sourceTree": "f5f5fbe170c6a8c780419fd457d9db7fef22779b",
+          "matchedSourceFiles": 44,
+          "sourceBytesUnchanged": true,
+          "runtimeBytesUnchanged": true,
+          "packageJsonReformatted": false,
+          "omittedGitIgnore": [],
+          "signingOrganizationId": "16767998560366",
+          "dependencies": {
+            "com.zerogamestudio.zeroengine.core": "2.2.4-ze-pob.history-pad.1",
+            "com.unity.modules.imageconversion": "1.0.0",
+            "com.unity.modules.screencapture": "1.0.0",
+            "com.unity.modules.audio": "1.0.0",
+            "com.unity.modules.jsonserialize": "1.0.0"
           }
         }
       },
-      "githubBase": "https://github.com/ZeroGameStudio-CN/zeroengine/releases/download/ze-upm-registry-linked-d194ba36-20261118/",
+      "githubBase": "https://github.com/ZeroGameStudio-CN/zeroengine/releases/download/ze-upm-d21aa0f5-22e7e545abb4/",
       "metadataAsset": "com.zerogamestudio.zeroengine.persistence-registry.json",
       "tags": {
-        "latest": "2.1.2"
+        "latest": "2.1.2",
+        "preview": "2.1.4-ze-pob.create-menus.1"
       },
       "summary": {
-        "displayName": "ZeroEngine.Persistence",
+        "displayName": "ZeroEngine Persistence",
         "description": "Backend-independent save-slot orchestration, stable participant adapters, atomic multi-file promotion and safe screenshot policy for ZeroEngine. Legacy Save and Settings APIs remain available for compatibility.",
         "unity": "6000.6",
         "unityRelease": "0f1"
@@ -910,16 +1035,37 @@ export default {
             "com.zerogamestudio.zeroengine.core": "2.2.2",
             "com.zerogamestudio.zeroengine.formula": "0.6.1",
             "com.zerogamestudio.zeroengine.persistence": "2.1.2"
+          },
+          "githubBase": "https://github.com/ZeroGameStudio-CN/zeroengine/releases/download/ze-upm-registry-linked-d194ba36-20261118/"
+        },
+        "2.3.2-ze-pob.create-menus.1": {
+          "asset": "com.zerogamestudio.zeroengine.data-2.3.2-ze-pob.create-menus.1.tgz",
+          "bytes": 50834,
+          "sha256": "06c5296777ea638bd2f83c41d522e5c8882643b300cacbbc7893b2f009241d8a",
+          "sha512": "sha512-yQBj0ysFGrJnTPQRpdwbeUA4/QG6p9N4+K1F1z9xpR3U4jGUO473uc4weojxY2Xm2wfxGWHsFfK57N/i3bD0xQ==",
+          "sourceCommit": "d21aa0f5413f453580660737461149168bd32987",
+          "sourceTree": "f7945db56f2af61323673c3e212dfaa3bfd7bfb5",
+          "matchedSourceFiles": 81,
+          "sourceBytesUnchanged": true,
+          "runtimeBytesUnchanged": true,
+          "packageJsonReformatted": false,
+          "omittedGitIgnore": [],
+          "signingOrganizationId": "16767998560366",
+          "dependencies": {
+            "com.zerogamestudio.zeroengine.core": "2.2.4-ze-pob.history-pad.1",
+            "com.zerogamestudio.zeroengine.formula": "0.6.2-ze-pob.create-menus.1",
+            "com.zerogamestudio.zeroengine.persistence": "2.1.4-ze-pob.create-menus.1"
           }
         }
       },
-      "githubBase": "https://github.com/ZeroGameStudio-CN/zeroengine/releases/download/ze-upm-registry-linked-d194ba36-20261118/",
+      "githubBase": "https://github.com/ZeroGameStudio-CN/zeroengine/releases/download/ze-upm-d21aa0f5-22e7e545abb4/",
       "metadataAsset": "com.zerogamestudio.zeroengine.data-registry.json",
       "tags": {
-        "latest": "2.3.0"
+        "latest": "2.3.0",
+        "preview": "2.3.2-ze-pob.create-menus.1"
       },
       "summary": {
-        "displayName": "ZeroEngine.Data",
+        "displayName": "ZeroEngine Data",
         "description": "Data systems for ZeroEngine. Includes StatSystem (attributes, modifiers, constraints) and BuffSystem (buff management, stacking, duration, stat integration).",
         "unity": "6000.6",
         "unityRelease": "0f1"
@@ -1025,16 +1171,36 @@ export default {
           "dependencies": {
             "com.zerogamestudio.zeroengine.core": "2.2.2",
             "com.zerogamestudio.zeroengine.persistence": "2.1.2"
+          },
+          "githubBase": "https://github.com/ZeroGameStudio-CN/zeroengine/releases/download/ze-upm-registry-linked-d194ba36-20261118/"
+        },
+        "2.2.2-ze-pob.create-menus.1": {
+          "asset": "com.zerogamestudio.zeroengine.economy-2.2.2-ze-pob.create-menus.1.tgz",
+          "bytes": 64936,
+          "sha256": "d1b16bcfa40ed144a5e95ad15be9ab50f46a9ab5ec84a95dcba91f15a38ba72c",
+          "sha512": "sha512-zAgcNRxTYo+SyeB0qIhpi4KYswf/GFpnRanXOZ72ORS2/9r9LUH4PZwuAKYZDtzCiTJcvM/8NOF95VXHZU4VTg==",
+          "sourceCommit": "d21aa0f5413f453580660737461149168bd32987",
+          "sourceTree": "f3a9fb31a09808fa6667ac7f73da5153924eecab",
+          "matchedSourceFiles": 82,
+          "sourceBytesUnchanged": true,
+          "runtimeBytesUnchanged": true,
+          "packageJsonReformatted": false,
+          "omittedGitIgnore": [],
+          "signingOrganizationId": "16767998560366",
+          "dependencies": {
+            "com.zerogamestudio.zeroengine.core": "2.2.4-ze-pob.history-pad.1",
+            "com.zerogamestudio.zeroengine.persistence": "2.1.4-ze-pob.create-menus.1"
           }
         }
       },
-      "githubBase": "https://github.com/ZeroGameStudio-CN/zeroengine/releases/download/ze-upm-registry-linked-d194ba36-20261118/",
+      "githubBase": "https://github.com/ZeroGameStudio-CN/zeroengine/releases/download/ze-upm-d21aa0f5-22e7e545abb4/",
       "metadataAsset": "com.zerogamestudio.zeroengine.economy-registry.json",
       "tags": {
-        "latest": "2.2.0"
+        "latest": "2.2.0",
+        "preview": "2.2.2-ze-pob.create-menus.1"
       },
       "summary": {
-        "displayName": "ZeroEngine.Economy",
+        "displayName": "ZeroEngine Economy",
         "description": "Economy and item systems for ZeroEngine. Includes Inventory (multi-container, stacking, filters), Loot Tables (weighted, pity, layered), Shop System, and Crafting System (recipes, skills).",
         "unity": "6000.6",
         "unityRelease": "0f1"
@@ -1111,14 +1277,34 @@ export default {
             "com.zerogamestudio.zeroengine.core": "2.2.4-ze-pob.history-pad.1",
             "com.zerogamestudio.zeroengine.editor-ui": "1.5.0",
             "com.unity.textmeshpro": "3.0.6"
+          },
+          "githubBase": "https://github.com/ZeroGameStudio-CN/zeroengine/releases/download/ze-upm-779587e2-5a352758013c/"
+        },
+        "2.3.3-ze-pob.create-menus.1": {
+          "asset": "com.zerogamestudio.zeroengine.ui-2.3.3-ze-pob.create-menus.1.tgz",
+          "bytes": 102041,
+          "sha256": "fdcf174758b4af71980e1320262489e367ca47001afebca409001481bbc71894",
+          "sha512": "sha512-Aqq9nl8/mIh3TC9VdcBW54/r5EJzC28GjTVJ23/28sZY0ZZUubzZ8Avp0SB7bRt55jq1W1Fg9BfyWKiJI9pHdg==",
+          "sourceCommit": "d21aa0f5413f453580660737461149168bd32987",
+          "sourceTree": "871f114a1070e045dbc7de5a6fee278dbcee4d94",
+          "matchedSourceFiles": 211,
+          "sourceBytesUnchanged": true,
+          "runtimeBytesUnchanged": true,
+          "packageJsonReformatted": false,
+          "omittedGitIgnore": [],
+          "signingOrganizationId": "16767998560366",
+          "dependencies": {
+            "com.zerogamestudio.zeroengine.core": "2.2.4-ze-pob.history-pad.1",
+            "com.zerogamestudio.zeroengine.editor-ui": "1.5.0",
+            "com.unity.textmeshpro": "3.0.6"
           }
         }
       },
-      "githubBase": "https://github.com/ZeroGameStudio-CN/zeroengine/releases/download/ze-upm-779587e2-5a352758013c/",
+      "githubBase": "https://github.com/ZeroGameStudio-CN/zeroengine/releases/download/ze-upm-d21aa0f5-22e7e545abb4/",
       "metadataAsset": "com.zerogamestudio.zeroengine.ui-registry.json",
       "tags": {
         "latest": "2.3.0",
-        "preview": "2.3.2-ze-pob.history-pad.1"
+        "preview": "2.3.3-ze-pob.create-menus.1"
       },
       "summary": {
         "displayName": "ZeroEngine UI",
@@ -1147,13 +1333,35 @@ export default {
             "com.zerogamestudio.zeroengine.editor-ui": "1.5.0",
             "com.zerogamestudio.zeroengine.ui": "2.3.0",
             "com.unity.textmeshpro": "3.0.6"
+          },
+          "githubBase": "https://github.com/ZeroGameStudio-CN/zeroengine/releases/download/ze-upm-registry-linked-d194ba36-20261118/"
+        },
+        "1.2.4-ze-pob.create-menus.1": {
+          "asset": "com.zerogamestudio.zeroengine.feedback-1.2.4-ze-pob.create-menus.1.tgz",
+          "bytes": 48305,
+          "sha256": "6581ccf9892c2c1a1432b01e48c870adc8c5468deb36d2bd35b968307a23b071",
+          "sha512": "sha512-dc2Mej5N0aWUZpTKtI6al2Bf1VHGqBVfigUiAL96DeoFQcZMx8DVw0mV+olVBnWySJZMVdlKBVg7VAnAAXi5MA==",
+          "sourceCommit": "d21aa0f5413f453580660737461149168bd32987",
+          "sourceTree": "2612e01053f5bd2298869f737f5310983df74fa1",
+          "matchedSourceFiles": 50,
+          "sourceBytesUnchanged": true,
+          "runtimeBytesUnchanged": true,
+          "packageJsonReformatted": false,
+          "omittedGitIgnore": [],
+          "signingOrganizationId": "16767998560366",
+          "dependencies": {
+            "com.zerogamestudio.analytics": "2.3.4-ze-pob.create-menus.1",
+            "com.zerogamestudio.zeroengine.editor-ui": "1.5.0",
+            "com.zerogamestudio.zeroengine.ui": "2.3.3-ze-pob.create-menus.1",
+            "com.unity.textmeshpro": "3.0.6"
           }
         }
       },
-      "githubBase": "https://github.com/ZeroGameStudio-CN/zeroengine/releases/download/ze-upm-registry-linked-d194ba36-20261118/",
+      "githubBase": "https://github.com/ZeroGameStudio-CN/zeroengine/releases/download/ze-upm-d21aa0f5-22e7e545abb4/",
       "metadataAsset": "com.zerogamestudio.zeroengine.feedback-registry.json",
       "tags": {
-        "latest": "1.2.2"
+        "latest": "1.2.2",
+        "preview": "1.2.4-ze-pob.create-menus.1"
       },
       "summary": {
         "displayName": "ZeroEngine Feedback",
@@ -1254,16 +1462,46 @@ export default {
             "com.unity.modules.physics": "1.0.0",
             "com.unity.modules.physics2d": "1.0.0",
             "com.unity.modules.animation": "1.0.0"
+          },
+          "githubBase": "https://github.com/ZeroGameStudio-CN/zeroengine/releases/download/ze-upm-registry-linked-d194ba36-20261118/"
+        },
+        "2.1.2-ze-pob.create-menus.1": {
+          "asset": "com.zerogamestudio.zeroengine.gameplay-2.1.2-ze-pob.create-menus.1.tgz",
+          "bytes": 119938,
+          "sha256": "c68031ab43503653175eabc6bfbc8b742ffd227f6ec083c5479516c63e1d6f04",
+          "sha512": "sha512-IFXO4nleNbKN0nuM18wp/iwuJlh0OkyyJ913UZsHtFsuhJxrbBKpSvjGJd64TNXTaKFkWdcpORnBXnxONPgTfQ==",
+          "sourceCommit": "d21aa0f5413f453580660737461149168bd32987",
+          "sourceTree": "35f9e7c154e8d2a17e500c772cc338a02393c498",
+          "matchedSourceFiles": 210,
+          "sourceBytesUnchanged": true,
+          "runtimeBytesUnchanged": true,
+          "packageJsonReformatted": false,
+          "omittedGitIgnore": [],
+          "signingOrganizationId": "16767998560366",
+          "dependencies": {
+            "com.zerogamestudio.zeroengine.core": "2.2.4-ze-pob.history-pad.1",
+            "com.zerogamestudio.zeroengine.persistence": "2.1.4-ze-pob.create-menus.1",
+            "com.unity.ugui": "1.0.0",
+            "com.unity.inputsystem": "1.7.0",
+            "com.unity.textmeshpro": "3.0.6",
+            "com.unity.modules.video": "1.0.0",
+            "com.unity.modules.director": "1.0.0",
+            "com.unity.modules.screencapture": "1.0.0",
+            "com.unity.modules.audio": "1.0.0",
+            "com.unity.modules.physics": "1.0.0",
+            "com.unity.modules.physics2d": "1.0.0",
+            "com.unity.modules.animation": "1.0.0"
           }
         }
       },
-      "githubBase": "https://github.com/ZeroGameStudio-CN/zeroengine/releases/download/ze-upm-registry-linked-d194ba36-20261118/",
+      "githubBase": "https://github.com/ZeroGameStudio-CN/zeroengine/releases/download/ze-upm-d21aa0f5-22e7e545abb4/",
       "metadataAsset": "com.zerogamestudio.zeroengine.gameplay-registry.json",
       "tags": {
-        "latest": "2.1.0"
+        "latest": "2.1.0",
+        "preview": "2.1.2-ze-pob.create-menus.1"
       },
       "summary": {
-        "displayName": "ZeroEngine.Gameplay",
+        "displayName": "ZeroEngine Gameplay",
         "description": "Gameplay mechanics for ZeroEngine. Includes Interaction System, Tutorial System (sequences, steps), and Command Pattern (undo/redo).",
         "unity": "6000.6",
         "unityRelease": "0f1"
@@ -1308,14 +1546,34 @@ export default {
           "signingOrganizationId": "16767998560366",
           "dependencies": {
             "com.zerogamestudio.zeroengine.editor-ui": "1.5.0"
+          },
+          "githubBase": "https://github.com/ZeroGameStudio-CN/zeroengine/releases/download/ze-upm-b35cb974-8328d2e81d39/"
+        },
+        "0.5.2-ze-pob.create-menus.1": {
+          "asset": "com.zerogamestudio.zeroengine.multiplayer-0.5.2-ze-pob.create-menus.1.tgz",
+          "bytes": 89077,
+          "sha256": "4bb9176c439614a9d08de329cfaa7792b4530c3a4199208b4e82e284bf0023b0",
+          "sha512": "sha512-pvwCOxhF/e28/jObPX0lIjB73VPfWURoyjz15Sj/9jL/eq8cS2snFnCAOjggp2dqthAsOTz6O4LaLLGEn8d8Fg==",
+          "sourceCommit": "d21aa0f5413f453580660737461149168bd32987",
+          "sourceTree": "ec8967f984fa1cea46a26846c3108c47ad81d425",
+          "matchedSourceFiles": 147,
+          "sourceBytesUnchanged": false,
+          "runtimeBytesUnchanged": true,
+          "packageJsonReformatted": false,
+          "omittedGitIgnore": [
+            "Tools~/Motion.Tests/.gitignore"
+          ],
+          "signingOrganizationId": "16767998560366",
+          "dependencies": {
+            "com.zerogamestudio.zeroengine.editor-ui": "1.5.0"
           }
         }
       },
-      "githubBase": "https://github.com/ZeroGameStudio-CN/zeroengine/releases/download/ze-upm-b35cb974-8328d2e81d39/",
+      "githubBase": "https://github.com/ZeroGameStudio-CN/zeroengine/releases/download/ze-upm-d21aa0f5-22e7e545abb4/",
       "metadataAsset": "com.zerogamestudio.zeroengine.multiplayer-registry.json",
       "tags": {
         "latest": "0.5.0",
-        "preview": "0.5.1-ze-pob.android.1"
+        "preview": "0.5.2-ze-pob.create-menus.1"
       },
       "summary": {
         "displayName": "ZeroEngine Multiplayer",
@@ -1346,16 +1604,40 @@ export default {
             "com.zerogamestudio.zeroengine.data": "2.3.0",
             "com.zerogamestudio.zeroengine.economy": "2.2.0",
             "com.zerogamestudio.zeroengine.gameplay": "2.1.0"
+          },
+          "githubBase": "https://github.com/ZeroGameStudio-CN/zeroengine/releases/download/ze-upm-registry-linked-d194ba36-20261118/"
+        },
+        "3.1.2-ze-pob.create-menus.1": {
+          "asset": "com.zerogamestudio.zeroengine.narrative-3.1.2-ze-pob.create-menus.1.tgz",
+          "bytes": 73205,
+          "sha256": "e470ab69349dacd322b45a266fb7f55615432196c6b931fa7115205a6b72ed84",
+          "sha512": "sha512-R5UzRIoUJQL+jEdp9LGNiBhLFfQP9Ei1haFvX6GAjvyLIlGjYRu1jskUo1vAHtBIqZ6qaJvP46lokkleAgtV7g==",
+          "sourceCommit": "d21aa0f5413f453580660737461149168bd32987",
+          "sourceTree": "6a1113b7ed282bb40388635040eb3aa1343b0cf0",
+          "matchedSourceFiles": 183,
+          "sourceBytesUnchanged": true,
+          "runtimeBytesUnchanged": true,
+          "packageJsonReformatted": false,
+          "omittedGitIgnore": [],
+          "signingOrganizationId": "16767998560366",
+          "dependencies": {
+            "com.zerogamestudio.zeroengine.core": "2.2.4-ze-pob.history-pad.1",
+            "com.zerogamestudio.zeroengine.persistence": "2.1.4-ze-pob.create-menus.1",
+            "com.zerogamestudio.zeroengine.achievement": "1.0.2-ze-pob.create-menus.1",
+            "com.zerogamestudio.zeroengine.data": "2.3.2-ze-pob.create-menus.1",
+            "com.zerogamestudio.zeroengine.economy": "2.2.2-ze-pob.create-menus.1",
+            "com.zerogamestudio.zeroengine.gameplay": "2.1.2-ze-pob.create-menus.1"
           }
         }
       },
-      "githubBase": "https://github.com/ZeroGameStudio-CN/zeroengine/releases/download/ze-upm-registry-linked-d194ba36-20261118/",
+      "githubBase": "https://github.com/ZeroGameStudio-CN/zeroengine/releases/download/ze-upm-d21aa0f5-22e7e545abb4/",
       "metadataAsset": "com.zerogamestudio.zeroengine.narrative-registry.json",
       "tags": {
-        "latest": "3.1.0"
+        "latest": "3.1.0",
+        "preview": "3.1.2-ze-pob.create-menus.1"
       },
       "summary": {
-        "displayName": "ZeroEngine.Narrative",
+        "displayName": "ZeroEngine Narrative",
         "description": "Dialogue, quest and legacy achievement adapters; retains P5 generic dialog commands and quest snapshots.",
         "unity": "6000.6",
         "unityRelease": "0f1"
@@ -1435,13 +1717,35 @@ export default {
             "com.unity.modules.imageconversion": "1.0.0",
             "com.unity.modules.jsonserialize": "1.0.0",
             "com.zerogamestudio.zeroengine.editor-ui": "1.5.0"
+          },
+          "githubBase": "https://github.com/ZeroGameStudio-CN/zeroengine/releases/download/ze-upm-registry-linked-d194ba36-20261118/"
+        },
+        "0.1.4-ze-pob.create-menus.1": {
+          "asset": "com.zerogamestudio.zeroengine.portrait-speech-0.1.4-ze-pob.create-menus.1.tgz",
+          "bytes": 78130,
+          "sha256": "b11740f778b2d5f2a4b86872539eead4c012b65af79467172eab2a5e9756db36",
+          "sha512": "sha512-3wDWlwGfOk/rW3RCpGb3BoNscich+zL95e0koeVMzjVQgJ3uXyg3owHFABVtEMGRJJFs6IQBYFu+BVIBhB/cFw==",
+          "sourceCommit": "d21aa0f5413f453580660737461149168bd32987",
+          "sourceTree": "ba767caa440dcd2d03965508b3ae5991c29ba113",
+          "matchedSourceFiles": 57,
+          "sourceBytesUnchanged": true,
+          "runtimeBytesUnchanged": true,
+          "packageJsonReformatted": false,
+          "omittedGitIgnore": [],
+          "signingOrganizationId": "16767998560366",
+          "dependencies": {
+            "com.unity.ugui": "1.0.0",
+            "com.unity.modules.imageconversion": "1.0.0",
+            "com.unity.modules.jsonserialize": "1.0.0",
+            "com.zerogamestudio.zeroengine.editor-ui": "1.5.0"
           }
         }
       },
-      "githubBase": "https://github.com/ZeroGameStudio-CN/zeroengine/releases/download/ze-upm-registry-linked-d194ba36-20261118/",
+      "githubBase": "https://github.com/ZeroGameStudio-CN/zeroengine/releases/download/ze-upm-d21aa0f5-22e7e545abb4/",
       "metadataAsset": "com.zerogamestudio.zeroengine.portrait-speech-registry.json",
       "tags": {
-        "latest": "0.1.2"
+        "latest": "0.1.2",
+        "preview": "0.1.4-ze-pob.create-menus.1"
       },
       "summary": {
         "displayName": "ZeroEngine Portrait Speech",
@@ -1609,13 +1913,34 @@ export default {
             "com.unity.render-pipelines.universal": "17.6.0",
             "com.zerogamestudio.zeroengine.render": "0.5.0",
             "com.unity.modules.terrain": "1.0.0"
+          },
+          "githubBase": "https://github.com/ZeroGameStudio-CN/zeroengine/releases/download/ze-upm-registry-linked-d194ba36-20261118/"
+        },
+        "0.4.5-ze-pob.create-menus.1": {
+          "asset": "com.zerogamestudio.zeroengine.render.urp-0.4.5-ze-pob.create-menus.1.tgz",
+          "bytes": 107144,
+          "sha256": "c2eee9d1042f77bbee7375e462606b11909f115a236ae0870bda3e51723eb161",
+          "sha512": "sha512-PvxcJ+YkzcBTDcwBqQUmtkshEdmNG0fUd3JMdXRviXk/fAE8kXe3ZedWZ+9o7ygMZcnZ/HftD6KaOpKaJLo8vg==",
+          "sourceCommit": "d21aa0f5413f453580660737461149168bd32987",
+          "sourceTree": "4fe4241dc14233b23139806e950bdd9b70f39138",
+          "matchedSourceFiles": 114,
+          "sourceBytesUnchanged": true,
+          "runtimeBytesUnchanged": true,
+          "packageJsonReformatted": false,
+          "omittedGitIgnore": [],
+          "signingOrganizationId": "16767998560366",
+          "dependencies": {
+            "com.unity.render-pipelines.universal": "17.6.0",
+            "com.zerogamestudio.zeroengine.render": "0.6.0",
+            "com.unity.modules.terrain": "1.0.0"
           }
         }
       },
-      "githubBase": "https://github.com/ZeroGameStudio-CN/zeroengine/releases/download/ze-upm-registry-linked-d194ba36-20261118/",
+      "githubBase": "https://github.com/ZeroGameStudio-CN/zeroengine/releases/download/ze-upm-d21aa0f5-22e7e545abb4/",
       "metadataAsset": "com.zerogamestudio.zeroengine.render.urp-registry.json",
       "tags": {
-        "latest": "0.4.4"
+        "latest": "0.4.4",
+        "preview": "0.4.5-ze-pob.create-menus.1"
       },
       "summary": {
         "displayName": "ZeroEngine Render URP",
@@ -1640,13 +1965,32 @@ export default {
           "signingOrganizationId": "16767998560366",
           "dependencies": {
             "com.zerogamestudio.zeroengine.editor-ui": "1.5.0"
+          },
+          "githubBase": "https://github.com/ZeroGameStudio-CN/zeroengine/releases/download/ze-upm-registry-linked-d194ba36-20261118/"
+        },
+        "0.3.1-ze-pob.create-menus.1": {
+          "asset": "com.zerogamestudio.zeroengine.tce-0.3.1-ze-pob.create-menus.1.tgz",
+          "bytes": 69108,
+          "sha256": "0cb59334929de8c2157242f060fdfdc0352df314ede6a88f6a1d8358f898119f",
+          "sha512": "sha512-iWQ/L1h7bBKCBb2eAFceAVWERGbCCK48v0VjY5Sxq57Lzt2GaD2iYUh6Kb0WhAiyg8Gj2p+flBFV8Goqi4jTSA==",
+          "sourceCommit": "d21aa0f5413f453580660737461149168bd32987",
+          "sourceTree": "76eb989da80778ab7d735c258edd870eb214c0a5",
+          "matchedSourceFiles": 203,
+          "sourceBytesUnchanged": true,
+          "runtimeBytesUnchanged": true,
+          "packageJsonReformatted": false,
+          "omittedGitIgnore": [],
+          "signingOrganizationId": "16767998560366",
+          "dependencies": {
+            "com.zerogamestudio.zeroengine.editor-ui": "1.5.0"
           }
         }
       },
-      "githubBase": "https://github.com/ZeroGameStudio-CN/zeroengine/releases/download/ze-upm-registry-linked-d194ba36-20261118/",
+      "githubBase": "https://github.com/ZeroGameStudio-CN/zeroengine/releases/download/ze-upm-d21aa0f5-22e7e545abb4/",
       "metadataAsset": "com.zerogamestudio.zeroengine.tce-registry.json",
       "tags": {
-        "latest": "0.3.0"
+        "latest": "0.3.0",
+        "preview": "0.3.1-ze-pob.create-menus.1"
       },
       "summary": {
         "displayName": "ZeroEngine TCE",
@@ -1687,5 +2031,5 @@ export default {
       }
     }
   },
-  "updatedAt": "2026-11-26T06:30:52Z"
+  "updatedAt": "2026-11-26T12:19:32Z"
 };
