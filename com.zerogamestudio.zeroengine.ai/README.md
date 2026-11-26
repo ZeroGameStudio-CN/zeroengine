@@ -3,8 +3,8 @@
 AI 决策系统包，包含 FSM、行为树、效用 AI、GOAP 和 NPC 日程系统。
 
 ## 版本
-- **候选版本**: 2.1.0（尚未发布）
-- **依赖**: ZeroEngine.Core
+- **候选版本**: 2.2.0（尚未发布）
+- **依赖**: ZeroEngine.Core 2.2.2 及以上
 - **可选依赖**: crashkonijn/GOAP
 
 ## 包含模块
@@ -116,3 +116,23 @@ The base assembly references Core only. Optional crashkonijn GOAP implementation
 `ZeroEngine.AI.GOAP`, enabled only when its package is installed. `GOAPBridge.IsGOAPInstalled`
 remains available in the base assembly. Existing project domain defines retain their adapters.
 This candidate requires consumer compilation and behavior verification; it is not a release claim.
+
+## Run decisions
+
+A host can use `ZeroEngine.AI.RunDecisions.IRunDecisionStrategy` for decisions such as
+choosing a route, selecting a reward, or spending resources. The default
+`WeightedRunDecisionStrategy` reads the current ordered candidates and their weights.
+Give each run or player its own seeded `System.Random`. A list choice and a binary
+choice each consume one draw per attempt.
+
+```csharp
+IRunDecisionStrategy strategy = new WeightedRunDecisionStrategy(new System.Random(seed));
+if (strategy.TryChoose(availableDoors, door => ScoreDoor(door, inventory), out var chosenDoor))
+    TryInteract(chosenDoor);
+```
+
+Build candidates from current game state and keep the weight callback free of side
+effects. The host validates the choice again before interaction or payment and
+passes current state to the next decision. Combat continues through `CombatTacticsModel`.
+Use `preserveFirstOnZero` for a host whose list decisions historically chose the
+first candidate at zero total weight or a zero draw.

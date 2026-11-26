@@ -711,6 +711,32 @@
         "D:/Temp/ZgsTaskOutput/ze-teleport-pob-adoption-01a20b3c/teleport-adoption.editmode.xml"
       ],
       "verificationScope": "用 POB 实装寻路包构建的隔离 Unity 工程通过 6 项 ZE 包测试和 25 项 POB 适配回归，验证遮挡选项、向下保护、边界、场景隔离与失败恢复。"
+    },
+    {
+      "id": "ze.ai.run-decisions",
+      "title": "自动战整局决策策略",
+      "stage": "Previewable",
+      "targetReleaseId": "",
+      "availability": "TestOnly",
+      "responsibleChat": "01a208ed-2a86-79f1-bfb2-6071665e2e67",
+      "chatUrl": "thread://01a208ed-2a86-79f1-bfb2-6071665e2e67?hostId=local",
+      "nextAction": "签名发布后用实际 POB 装包与实机流程核对消费和结算。",
+      "entrance": "ZeroEngine.AI.RunDecisions.IRunDecisionStrategy 和 WeightedRunDecisionStrategy",
+      "resourcePath": "com.zerogamestudio.zeroengine.ai/Runtime/AI/RunDecisions/WeightedRunDecisionStrategy.cs",
+      "revision": "2.2.0 候选，消费项目传入实时可选项、权重和局内随机种子，游戏执行动作。",
+      "releaseEvidence": "",
+      "candidatePackageVersion": "2.2.0",
+      "verificationEvidence": [
+        "D:/unity/artifacts/pob-ze-run-decisions-20261126-01a208ed/decision-parity.json",
+        "D:/unity/artifacts/pob-ze-run-decisions-20261126-01a208ed/package-audit.json"
+      ],
+      "verificationScope": "包测试 5 项，使用候选归档编译 POB 并对照 20,480 次决策及随机序列。",
+      "relatedContent": [
+        {
+          "projectId": "pob",
+          "contentId": "tool.blueprint-player-simulation"
+        }
+      ]
     }
   ]
 }
