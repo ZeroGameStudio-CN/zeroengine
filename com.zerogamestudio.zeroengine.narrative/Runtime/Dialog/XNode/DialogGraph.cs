@@ -5,7 +5,7 @@ using System.Linq;
 
 namespace ZeroEngine.Dialog.XNodeIntegration
 {
-    [CreateAssetMenu(fileName = "New Dialog Graph", menuName = "ZeroEngine/Dialog/XNode Graph")]
+    [CreateAssetMenu(fileName = "New Dialog Graph", menuName = "ZeroEngine/Narrative/Dialogue/XNode Graph")]
     public class DialogGraph : NodeGraph
     {
         public BaseDialogNode GetStartNode()

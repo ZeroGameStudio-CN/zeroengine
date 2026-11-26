@@ -5,7 +5,7 @@ provider contracts. Install it with ZeroEngine.Core from a matching tested Git
 revision. The package has no direct dependency on Narrative, Persistence, Economy,
 or Steamworks.NET.
 
-Create a definition using **Create → ZeroEngine → Achievement → Achievement**.
+Create a definition using **Create → ZeroEngine → Gameplay → Achievements → Achievement**.
 Give it a stable ID and add conditions. Assign it to an AchievementManager or call
 RegisterAchievement. Trigger an event by its ID and listen for OnAchievementUnlocked.
 

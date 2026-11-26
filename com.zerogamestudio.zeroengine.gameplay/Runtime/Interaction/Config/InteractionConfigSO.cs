@@ -7,7 +7,7 @@ namespace ZeroEngine.Interaction
     /// <summary>
     /// 交互系统全局配置 (v1.14.0+)
     /// </summary>
-    [CreateAssetMenu(fileName = "InteractionConfig", menuName = "ZeroEngine/Interaction/Interaction Config")]
+    [CreateAssetMenu(fileName = "InteractionConfig", menuName = "ZeroEngine/Gameplay/Interaction/Interaction Config")]
     public class InteractionConfigSO : ScriptableObject
     {
         #region Detection Settings

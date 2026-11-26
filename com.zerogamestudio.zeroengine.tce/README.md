@@ -109,7 +109,7 @@ Import `Samples~/AuthoringMvp` for the package-manager guide that walks through 
 
 ## Graph Assets
 
-Create `TceGraphAsset` from `Assets > Create > ZeroEngine > TCE > Graph Asset`.
+Create `TceGraphAsset` from `Assets > Create > ZeroEngine > Data and Graphs > TCE > Graph Asset`.
 Graph assets store a runtime `TceGraph` and can be executed by `TceRuntime`.
 
 ## Graph Editor

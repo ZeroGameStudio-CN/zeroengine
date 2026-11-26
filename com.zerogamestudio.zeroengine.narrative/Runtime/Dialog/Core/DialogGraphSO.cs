@@ -8,7 +8,7 @@ namespace ZeroEngine.Dialog
     /// ScriptableObject container for a dialog graph.
     /// Stores nodes and their connections.
     /// </summary>
-    [CreateAssetMenu(fileName = "NewDialogGraph", menuName = "ZeroEngine/Dialog/Dialog Graph")]
+    [CreateAssetMenu(fileName = "NewDialogGraph", menuName = "ZeroEngine/Narrative/Dialogue/Dialog Graph")]
     public class DialogGraphSO : ScriptableObject
     {
         [Tooltip("Graph display name")]

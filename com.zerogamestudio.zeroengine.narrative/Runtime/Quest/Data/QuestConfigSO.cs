@@ -3,7 +3,7 @@ using UnityEngine;
 
 namespace ZeroEngine.Quest
 {
-    [CreateAssetMenu(fileName = "NewQuestConfig", menuName = "ZeroEngine/Quest/Quest Config")]
+    [CreateAssetMenu(fileName = "NewQuestConfig", menuName = "ZeroEngine/Narrative/Quests/Quest Config")]
     public class QuestConfigSO : ScriptableObject
     {
         [Header("Basic Info")]

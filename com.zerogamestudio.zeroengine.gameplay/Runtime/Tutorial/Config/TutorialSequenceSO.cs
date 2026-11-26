@@ -7,7 +7,7 @@ namespace ZeroEngine.Tutorial
     /// <summary>
     /// 教程序列 ScriptableObject (v1.14.0+)
     /// </summary>
-    [CreateAssetMenu(fileName = "NewTutorial", menuName = "ZeroEngine/Tutorial/Tutorial Sequence")]
+    [CreateAssetMenu(fileName = "NewTutorial", menuName = "ZeroEngine/Narrative/Tutorials/Tutorial Sequence")]
     public class TutorialSequenceSO : ScriptableObject
     {
         #region Serialized Fields

@@ -1,5 +1,21 @@
 # Package maintenance
 
+## Editor asset creation
+
+Use the Create > ZeroEngine root for shared package assets, including Analytics.
+Put each asset under its authoring group and module. When moving a menu entry,
+preserve the asset type, default filename, and sort priority.
+
+| Group | Assets |
+| --- | --- |
+| AI and Behavior | NPC schedules and behavior trees |
+| Gameplay | Achievements, buffs, interaction, and world transitions |
+| Narrative | Dialogue, quests, and tutorials |
+| Items and Economy | Crafting, inventory, loot, and shops |
+| UI and Presentation | Views, HUD widgets, input hints, feedback, portraits, and rendering |
+| Data and Graphs | Formulas and TCE graphs |
+| Services | Analytics, multiplayer, and settings |
+
 Run the static package audit and its small synthetic regression suite:
 
 ```text

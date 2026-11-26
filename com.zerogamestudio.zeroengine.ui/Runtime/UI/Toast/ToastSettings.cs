@@ -3,7 +3,7 @@ using UnityEngine;
 
 namespace ZeroEngine.UI.Toast
 {
-    [CreateAssetMenu(fileName = "ToastSettings", menuName = "ZeroEngine/UI/Toast Settings")]
+    [CreateAssetMenu(fileName = "ToastSettings", menuName = "ZeroEngine/UI and Presentation/Notifications/Toast Settings")]
     public sealed class ToastSettings : ScriptableObject
     {
         [SerializeField] private int maxVisible = 5;

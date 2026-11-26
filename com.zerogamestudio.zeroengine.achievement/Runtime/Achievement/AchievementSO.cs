@@ -9,7 +9,7 @@ namespace ZeroEngine.Achievement
     /// <summary>
     /// 成就数据定义 ScriptableObject
     /// </summary>
-    [CreateAssetMenu(fileName = "New Achievement", menuName = "ZeroEngine/Achievement/Achievement")]
+    [CreateAssetMenu(fileName = "New Achievement", menuName = "ZeroEngine/Gameplay/Achievements/Achievement")]
     [MovedFrom(true, "ZeroEngine.Achievement", "ZeroEngine.Narrative", "AchievementSO")]
     public class AchievementSO : ScriptableObject
     {
@@ -204,7 +204,7 @@ namespace ZeroEngine.Achievement
     /// <summary>
     /// 成就组（用于分类或成就链）
     /// </summary>
-    [CreateAssetMenu(fileName = "New Achievement Group", menuName = "ZeroEngine/Achievement/Achievement Group")]
+    [CreateAssetMenu(fileName = "New Achievement Group", menuName = "ZeroEngine/Gameplay/Achievements/Achievement Group")]
     [MovedFrom(true, "ZeroEngine.Achievement", "ZeroEngine.Narrative", "AchievementGroupSO")]
     public class AchievementGroupSO : ScriptableObject
     {

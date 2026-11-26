@@ -116,7 +116,7 @@ FormulaValueSource.Provider("player.level")
 Create designer-authored assets through:
 
 ```text
-Assets/Create/ZeroEngine/Formula/Formula Asset
+Assets/Create/ZeroEngine/Data and Graphs/Formula/Formula Asset
 ```
 
 Then evaluate the asset with `FormulaEvaluator.TryEvaluate`.

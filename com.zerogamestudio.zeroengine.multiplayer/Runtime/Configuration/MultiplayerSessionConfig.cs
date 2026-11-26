@@ -5,7 +5,7 @@ using UnityEngine.Scripting.APIUpdating;
 
 namespace ZeroEngine.Multiplayer
 {
-    [CreateAssetMenu(fileName = "MultiplayerSessionConfig", menuName = "ZeroEngine/Multiplayer/Session Config")]
+    [CreateAssetMenu(fileName = "MultiplayerSessionConfig", menuName = "ZeroEngine/Services/Multiplayer/Session Config")]
     [MovedFrom(true, "ZeroEngine.Multiplayer", "ZeroEngine.Multiplayer.Core", "MultiplayerSessionConfig")]
     public sealed class MultiplayerSessionConfig : ScriptableObject,
         IMultiplayerSessionSettings,

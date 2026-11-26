@@ -16,7 +16,7 @@ namespace ZeroEngine.UI
     /// UI View 配置数据库
     /// 集中管理所有 UI Prefabs 的配置
     /// </summary>
-    [CreateAssetMenu(fileName = "UIViewDatabase", menuName = "ZeroEngine/UI/View Database")]
+    [CreateAssetMenu(fileName = "UIViewDatabase", menuName = "ZeroEngine/UI and Presentation/Views/View Database")]
     public class UIViewDatabase : ScriptableObject
     {
 #if ODIN_INSPECTOR

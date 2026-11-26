@@ -4,7 +4,7 @@ using UnityEngine.Scripting.APIUpdating;
 namespace ZeroEngine.Render.Urp
 {
     [MovedFrom(true, "POB", "POB.Rendering", "SpriteRimLightingProfile")]
-    [CreateAssetMenu(menuName = "ZeroEngine/Rendering/Pixel Rim Lighting", fileName = "PixelRimLighting")]
+    [CreateAssetMenu(menuName = "ZeroEngine/UI and Presentation/Rendering/Pixel Rim Lighting", fileName = "PixelRimLighting")]
     public sealed class SpriteRimLightingProfile : ScriptableObject
     {
         [Tooltip("Reference color-dodge on the shaded scene. Marked native lights on one side share a contour; opposing lights use directional contours and a faint inner wrap. Enabled by the shared default.")]

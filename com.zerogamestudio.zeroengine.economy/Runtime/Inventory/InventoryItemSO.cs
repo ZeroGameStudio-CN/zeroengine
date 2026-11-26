@@ -3,7 +3,7 @@ using UnityEngine;
 
 namespace ZeroEngine.Inventory
 {
-    [CreateAssetMenu(fileName = "NewItem", menuName = "ZeroEngine/Inventory/Item Data")]
+    [CreateAssetMenu(fileName = "NewItem", menuName = "ZeroEngine/Items and Economy/Inventory/Item Data")]
     public class InventoryItemSO : ScriptableObject
     {
         [Header("Basic Info")]

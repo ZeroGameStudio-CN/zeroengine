@@ -65,7 +65,7 @@ Windows 的 `os_version` 是系统 API 报告的数字版本，可能受兼容�
 
 ## 配置
 
-1. 菜单 `Create > ZGS > Analytics Config`
+1. 菜单 `Create > ZeroEngine > Services > Analytics > Analytics Config`
 2. 放到 `Assets/Resources/ZGSAnalyticsConfig.asset`
 3. 填写配置：
    - `App ID` - 游戏标识 (如 POB, LLS)

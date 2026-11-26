@@ -3,7 +3,7 @@ using UnityEngine;
 
 namespace ZeroEngine.Quest
 {
-    [CreateAssetMenu(fileName = "NewDialogue", menuName = "ZeroEngine/Quest/Dialogue")]
+    [CreateAssetMenu(fileName = "NewDialogue", menuName = "ZeroEngine/Narrative/Quests/Dialogue")]
     public class DialogueConfigSO : ScriptableObject
     {
         public string npcName;

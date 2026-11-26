@@ -8,7 +8,7 @@ namespace ZeroEngine.AI.NPCSchedule
     /// NPC 日程 ScriptableObject
     /// 定义 NPC 的完整时间表
     /// </summary>
-    [CreateAssetMenu(fileName = "NPCSchedule", menuName = "ZeroEngine/AI/NPC Schedule")]
+    [CreateAssetMenu(fileName = "NPCSchedule", menuName = "ZeroEngine/AI and Behavior/Schedules/NPC Schedule")]
     public class NPCScheduleSO : ScriptableObject
     {
         #region Serialized Fields
@@ -228,7 +228,7 @@ namespace ZeroEngine.AI.NPCSchedule
     /// 日程预设 ScriptableObject
     /// 可重用的日程模板
     /// </summary>
-    [CreateAssetMenu(fileName = "SchedulePreset", menuName = "ZeroEngine/AI/Schedule Preset")]
+    [CreateAssetMenu(fileName = "SchedulePreset", menuName = "ZeroEngine/AI and Behavior/Schedules/Schedule Preset")]
     public class SchedulePresetSO : ScriptableObject
     {
         #region Serialized Fields

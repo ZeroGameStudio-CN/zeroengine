@@ -6,7 +6,7 @@ namespace ZeroEngine.Formula.Editor
 {
     [CreateAssetMenu(
         fileName = "Formula Preview Case",
-        menuName = "ZeroEngine/Formula/Preview Case")]
+        menuName = "ZeroEngine/Data and Graphs/Formula/Preview Case")]
     public sealed class FormulaPreviewCaseAsset : ScriptableObject
     {
         [SerializeField] private string caseId;

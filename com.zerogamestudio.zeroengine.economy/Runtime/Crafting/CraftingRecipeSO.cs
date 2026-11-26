@@ -7,7 +7,7 @@ namespace ZeroEngine.Crafting
     /// <summary>
     /// 合成配方 ScriptableObject
     /// </summary>
-    [CreateAssetMenu(fileName = "New Recipe", menuName = "ZeroEngine/Crafting/Recipe")]
+    [CreateAssetMenu(fileName = "New Recipe", menuName = "ZeroEngine/Items and Economy/Crafting/Recipe")]
     public class CraftingRecipeSO : ScriptableObject
     {
         [Header("基本信息")]
@@ -216,7 +216,7 @@ namespace ZeroEngine.Crafting
     /// <summary>
     /// 配方书（配方集合）
     /// </summary>
-    [CreateAssetMenu(fileName = "New Recipe Book", menuName = "ZeroEngine/Crafting/Recipe Book")]
+    [CreateAssetMenu(fileName = "New Recipe Book", menuName = "ZeroEngine/Items and Economy/Crafting/Recipe Book")]
     public class RecipeBookSO : ScriptableObject
     {
         [Tooltip("配方书ID")]

@@ -56,7 +56,7 @@ namespace ZeroEngine.PortraitSpeech
         }
     }
 
-    [CreateAssetMenu(menuName="ZeroEngine/UI/Portrait Speech Library")]
+    [CreateAssetMenu(menuName="ZeroEngine/UI and Presentation/Portraits/Portrait Speech Library")]
     public class PortraitSpeechLibrary : ScriptableObject
     {
         public float portraitSpeechFramesPerSecond=9,portraitSpeechHold=.12f;

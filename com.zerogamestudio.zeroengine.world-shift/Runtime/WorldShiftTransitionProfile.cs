@@ -2,7 +2,7 @@ using UnityEngine;
 
 namespace ZeroEngine.WorldShift
 {
-    [CreateAssetMenu(menuName = "ZeroEngine/World Shift/Transition Profile")]
+    [CreateAssetMenu(menuName = "ZeroEngine/Gameplay/World Shift/Transition Profile")]
     public sealed class WorldShiftTransitionProfile : ScriptableObject
     {
         [SerializeField, Min(0.05f)] private float duration = 1.35f;
