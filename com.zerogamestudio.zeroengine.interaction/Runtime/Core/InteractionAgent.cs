@@ -9,9 +9,10 @@ namespace ZeroEngine.Interaction.Core
         private readonly InteractionWorld world;
         private readonly IInteractionClock clock;
         private readonly IInteractionRange range;
+        private readonly Func<InteractionRegistration> directedTarget;
         private readonly object actor;
         private readonly double maxDistanceSquared;
-        private readonly List<InteractionRegistration> candidates = new List<InteractionRegistration>();
+        private readonly List<InteractionRegistration> candidates;
         private InteractionRequest pending;
         private bool disposed, pressed, trackingHold, holdFired, committing;
         private InteractionPolicy policy;
@@ -28,6 +29,10 @@ namespace ZeroEngine.Interaction.Core
 
         public InteractionAgent(InteractionWorld world, string actorId, object actor, IInteractionClock clock,
             IInteractionRange range, double maxDistance)
+            : this(world, actorId, actor, clock, range, maxDistance, null) { }
+
+        internal InteractionAgent(InteractionWorld world, string actorId, object actor, IInteractionClock clock,
+            IInteractionRange range, double maxDistance, Func<InteractionRegistration> directedTarget)
         {
             this.world = world ?? throw new ArgumentNullException(nameof(world));
             this.clock = clock ?? throw new ArgumentNullException(nameof(clock));
@@ -36,6 +41,8 @@ namespace ZeroEngine.Interaction.Core
             if (!Numbers.Finite(maxDistance) || maxDistance < 0 || !Numbers.Finite(maxDistance * maxDistance))
                 throw new ArgumentOutOfRangeException(nameof(maxDistance));
             if (!Numbers.Finite(clock.Now)) throw new ArgumentException("Clock must return finite values.", nameof(clock));
+            this.directedTarget = directedTarget;
+            if (directedTarget == null) candidates = new List<InteractionRegistration>();
             ActorId = actorId; this.actor = actor; maxDistanceSquared = maxDistance * maxDistance; lastTime = clock.Now;
             world.Attach(this);
             world.Removed += OnRemoved;
@@ -44,6 +51,12 @@ namespace ZeroEngine.Interaction.Core
         public void RefreshFocus()
         {
             if (disposed || world.IsDisposed) return;
+            if (directedTarget != null)
+            {
+                var target = directedTarget();
+                SetFocus(Admitted(target, out _) ? target : null);
+                return;
+            }
             world.CopyTargets(candidates);
             InteractionRegistration best = null;
             double bestDistance = double.MaxValue;
@@ -140,7 +153,8 @@ namespace ZeroEngine.Interaction.Core
         private bool Admitted(InteractionRegistration registration, out double distance)
         {
             distance = 0;
-            return registration != null && registration.IsRegistered && registration.Target.IsAvailable &&
+            return registration != null && registration.IsRegistered &&
+                (directedTarget == null || ReferenceEquals(directedTarget(), registration)) && registration.Target.IsAvailable &&
                 range.TryGetSquaredDistance(registration.Target, out distance) && Numbers.Finite(distance) &&
                 distance >= 0 && distance <= maxDistanceSquared;
         }
@@ -230,9 +244,7 @@ namespace ZeroEngine.Interaction.Core
             }
             catch (Exception exception) { status = InteractionStatus.Faulted; reason = exception.Message; }
             finally { committing = false; }
-            var settledResult = new InteractionResult(request.Context, request.Id, status, reason);
-            try { Completed?.Invoke(settledResult); }
-            finally { request.NotifySettled(settledResult); }
+            request.PublishResult(new InteractionResult(request.Context, request.Id, status, reason), Completed);
             return status == InteractionStatus.Succeeded;
         }
 
@@ -244,9 +256,7 @@ namespace ZeroEngine.Interaction.Core
             finally
             {
                 request.ClearCallbacks();
-                var result = new InteractionResult(request.Context, request.Id, status, reason);
-                try { Completed?.Invoke(result); }
-                finally { request.NotifySettled(result); }
+                request.PublishResult(new InteractionResult(request.Context, request.Id, status, reason), Completed);
             }
             return true;
         }
@@ -258,7 +268,7 @@ namespace ZeroEngine.Interaction.Core
             world.Removed -= OnRemoved;
             world.Detach(this);
             try { Cancel("Interactor disposed."); }
-            finally { Focus = null; candidates.Clear(); FocusChanged = null; Completed = null; RequestCreated = null; }
+            finally { Focus = null; candidates?.Clear(); FocusChanged = null; Completed = null; RequestCreated = null; }
         }
     }
 }

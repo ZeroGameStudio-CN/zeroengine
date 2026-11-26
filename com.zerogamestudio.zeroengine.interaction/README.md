@@ -140,14 +140,16 @@ ID. The transport routes to its authenticated binding. `Press`, `Release`,
 `Cancel` and optional `Confirm` commands carry positive, strictly increasing
 64-bit sequences. A press's action ID is its first sequence. Sequences never
 wrap or reset inside a binding; reconnect creates a new binding activation.
-The authority evaluates hold/repeat on its supplied game clock and checks the
-explicit requested target, rather than redirecting the request to another
-nearby object. Caller focus changes send Cancel; server range, availability and
-conditions remain authoritative.
+The authority evaluates hold/repeat on its supplied game clock and checks only
+the requested target and activation. The direct local agent retains its
+priority and distance selection. Caller focus changes send Cancel. Server range,
+availability and conditions remain authoritative.
 
-Matching retries return a cached admission receipt with the latest retained
-outcome. Reusing a sequence for a different command is rejected. Evicted old
-commands remain stale and can never execute again. Receipt `Handled` and
+Matching retries of handled commands return a cached admission receipt with the
+latest retained outcome. Reusing a sequence for a different command is rejected.
+Evicted old commands remain stale. A protocol rejection reports its original
+command scope and reason. The client's outcome mirror ignores that diagnostic
+when updating the current action and receipt sequence. Receipt `Handled` and
 `InputAdmitted` are not business success: observe the settled outcome and the
 authority's domain state. Bounded outcome notifications are transient; older
 state is recovered from domain snapshots, not by replaying gameplay.
@@ -164,7 +166,9 @@ transactions remain provider responsibilities.
 These are live-session at-most-once guards, not durable distributed transactions.
 Session restore, connection authentication, ordered/reliable delivery and POB's
 FishNet/protocol mapping retain their existing owners. Scope or actor disposal
-cancels pending work; rebinding and pooled targets cannot inherit old requests.
+cancels pending work. A callback already committing still records its terminal
+result on the original binding, even if it closes that binding during the
+callback. Rebinding and pooled targets have their own request lifetimes.
 All authority and business calls stay on the owning gameplay thread.
 Commands received reentrantly during an input dispatch or authority Tick return
 Busy without consuming their sequence. Queue those inputs until the current call returns.

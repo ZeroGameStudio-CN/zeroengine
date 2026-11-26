@@ -6,18 +6,6 @@ namespace ZeroEngine.Interaction.Core.Authority
     /// <summary>Server/local owner binds this receiver to an actor. Never select it from an untrusted payload's actor ID.</summary>
     public sealed class InteractionAuthorityActor : IDisposable
     {
-        private sealed class DirectedRange : IInteractionRange
-        {
-            private readonly IInteractionRange spatial;
-            internal InteractionAuthorityTarget Selected;
-            internal DirectedRange(IInteractionRange spatial) { this.spatial = spatial ?? throw new ArgumentNullException(nameof(spatial)); }
-            public bool TryGetSquaredDistance(IInteractionTarget target, out double distance)
-            {
-                distance = 0;
-                return Selected != null && Selected.IsCurrent && ReferenceEquals(Selected.Registration.Target, target)
-                    && spatial.TryGetSquaredDistance(target, out distance);
-            }
-        }
         private sealed class ActionRecord
         {
             internal InteractionTargetIdentity Target;
@@ -31,7 +19,6 @@ namespace ZeroEngine.Interaction.Core.Authority
         }
         private readonly InteractionAuthority owner;
         private readonly InteractionAgent agent;
-        private readonly DirectedRange range;
         private readonly int historyLimit;
         private readonly Dictionary<long, CachedCommand> commands = new Dictionary<long, CachedCommand>();
         private readonly Queue<long> commandOrder = new Queue<long>();
@@ -39,6 +26,7 @@ namespace ZeroEngine.Interaction.Core.Authority
         private readonly Queue<long> actionOrder = new Queue<long>();
         private readonly Queue<InteractionAuthorityOutcome> notifications = new Queue<InteractionAuthorityOutcome>();
         private readonly Dictionary<long, long> requestActions = new Dictionary<long, long>();
+        private InteractionAuthorityTarget selectedTarget;
         private long sequence, heldAction, pendingAction, invocationAction, revision;
         private bool disposed, dispatching;
         public string ActorId { get; }
@@ -53,11 +41,12 @@ namespace ZeroEngine.Interaction.Core.Authority
             object subject, IInteractionClock clock, IInteractionRange spatial, double maxDistance, int historyLimit)
         {
             this.owner = owner; ActorId = id; Activation = activation; this.historyLimit = historyLimit;
-            range = new DirectedRange(spatial);
-            agent = new InteractionAgent(world, id, subject, clock, range, maxDistance);
-            agent.Completed += Completed;
+            agent = new InteractionAgent(world, id, subject, clock, spatial, maxDistance, ResolveSelectedTarget);
             agent.RequestCreated += RequestCreated;
         }
+
+        private InteractionRegistration ResolveSelectedTarget() =>
+            selectedTarget != null && selectedTarget.IsCurrent ? selectedTarget.Registration : null;
 
         public InteractionCommandReceipt Receive(InteractionCommand command)
         {
@@ -77,15 +66,26 @@ namespace ZeroEngine.Interaction.Core.Authority
             if (command.Sequence <= sequence) return Receipt(command, false, false, InteractionCommandRejection.StaleSequence);
             sequence = command.Sequence;
             dispatching = true;
+            long revisionBeforeDispatch = revision;
             InteractionCommandReceipt receipt;
             try { receipt = Dispatch(command); }
             catch (Exception error)
             {
                 var pending = agent.Pending;
-                if (pending != null && !pending.IsSettled) agent.Settle(pending, InteractionStatus.Faulted, error.Message);
-                receipt = Receipt(command, false, false, InteractionCommandRejection.HandlerFault);
+                if (pending != null && requestActions.TryGetValue(pending.Id, out var actionId) && actionId == command.ActionId)
+                    agent.Settle(pending, InteractionStatus.Faulted, error.Message);
+                // A handler can fail after settling. Return the result of this dispatch if one was recorded.
+                bool settledHere = actions.TryGetValue(command.ActionId, out var action) && action.Target.Equals(command.Target)
+                    && action.Outcome.HasValue && action.Outcome.Value.Revision > revisionBeforeDispatch;
+                receipt = settledHere ? Receipt(command, true, false, InteractionCommandRejection.None)
+                    : Receipt(command, false, false, InteractionCommandRejection.HandlerFault);
             }
-            finally { invocationAction = 0; dispatching = false; }
+            finally
+            {
+                invocationAction = 0;
+                dispatching = false;
+                if (agent.Pending == null) pendingAction = 0;
+            }
             commands.Add(command.Sequence, new CachedCommand(command, receipt)); commandOrder.Enqueue(command.Sequence);
             while (commandOrder.Count > historyLimit) commands.Remove(commandOrder.Dequeue());
             TrimActions();
@@ -99,7 +99,7 @@ namespace ZeroEngine.Interaction.Core.Authority
                 if (heldAction != 0 || agent.Pending != null) return Receipt(command, false, false, InteractionCommandRejection.Busy);
                 if (!owner.TryGetTarget(command.Target, out var target)) return Receipt(command, false, false, InteractionCommandRejection.TargetEnded);
                 actions.Add(command.ActionId, new ActionRecord { Target = command.Target }); actionOrder.Enqueue(command.ActionId);
-                range.Selected = target; heldAction = invocationAction = command.ActionId;
+                selectedTarget = target; heldAction = invocationAction = command.ActionId;
                 bool admitted = agent.Press();
                 pendingAction = agent.Pending == null ? 0 : command.ActionId;
                 return Receipt(command, true, admitted, InteractionCommandRejection.None);
@@ -111,12 +111,17 @@ namespace ZeroEngine.Interaction.Core.Authority
             {
                 case InteractionCommandKind.Release:
                     if (heldAction != command.ActionId) return Receipt(command, false, false, InteractionCommandRejection.UnknownAction);
-                    agent.Release(); heldAction = 0;
+                    heldAction = 0;
+                    agent.Release();
                     pendingAction = agent.Pending == null ? 0 : command.ActionId;
                     return Receipt(command, true, true, InteractionCommandRejection.None);
                 case InteractionCommandKind.Cancel:
                     if (heldAction == command.ActionId || pendingAction == command.ActionId)
-                    { agent.Cancel(); heldAction = pendingAction = 0; range.Selected = null; }
+                    {
+                        heldAction = pendingAction = 0;
+                        selectedTarget = null;
+                        agent.Cancel();
+                    }
                     // A settled success is never reversed by a late cancellation.
                     return Receipt(command, true, true, InteractionCommandRejection.None);
                 case InteractionCommandKind.Confirm:
@@ -125,13 +130,7 @@ namespace ZeroEngine.Interaction.Core.Authority
                             ? InteractionCommandRejection.None : InteractionCommandRejection.UnknownAction);
                     if (!owner.TryGetTarget(command.Target, out var target) || target.Confirm == null)
                         return Receipt(command, false, false, InteractionCommandRejection.UnsupportedConfirmation);
-                    var request = agent.Pending;
-                    try { target.Confirm(request); }
-                    catch (Exception error)
-                    {
-                        if (!request.IsSettled) agent.Settle(request, InteractionStatus.Faulted, error.Message);
-                        return Receipt(command, false, false, InteractionCommandRejection.HandlerFault);
-                    }
+                    target.Confirm(agent.Pending);
                     pendingAction = agent.Pending == null ? 0 : command.ActionId;
                     return Receipt(command, true, true, InteractionCommandRejection.None);
                 default: return Receipt(command, false, false, InteractionCommandRejection.InvalidCommand);
@@ -141,6 +140,10 @@ namespace ZeroEngine.Interaction.Core.Authority
         private InteractionCommandReceipt Receipt(InteractionCommand command, bool handled, bool admitted,
             InteractionCommandRejection rejection, bool replay = false)
         {
+            if (rejection != InteractionCommandRejection.None)
+                return new InteractionCommandReceipt(command.Epoch, ActorId, command.ActorActivation, command.Sequence, command.ActionId,
+                    false, false, replay, false, false, rejection, null);
+
             actions.TryGetValue(command.ActionId, out var action);
             return new InteractionCommandReceipt(Epoch, ActorId, Activation, command.Sequence, command.ActionId,
                 handled, admitted, replay, heldAction == command.ActionId, pendingAction == command.ActionId && agent.Pending != null,
@@ -150,7 +153,9 @@ namespace ZeroEngine.Interaction.Core.Authority
         private void RequestCreated(InteractionRequest request)
         {
             long actionId = invocationAction != 0 ? invocationAction : heldAction != 0 ? heldAction : pendingAction;
-            if (actionId != 0) requestActions.Add(request.Id, actionId);
+            if (actionId == 0) return;
+            requestActions.Add(request.Id, actionId);
+            request.RecordResult = Completed;
         }
 
         private void Completed(InteractionResult result)
@@ -209,7 +214,7 @@ namespace ZeroEngine.Interaction.Core.Authority
             if (disposed) return;
             disposed = true; owner.Remove(this);
             try { agent.Dispose(); }
-            finally { heldAction = pendingAction = invocationAction = 0; range.Selected = null; requestActions.Clear(); }
+            finally { heldAction = pendingAction = invocationAction = 0; selectedTarget = null; }
         }
     }
 }
