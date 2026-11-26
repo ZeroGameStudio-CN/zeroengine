@@ -1,6 +1,7 @@
 #if UNITY_EDITOR
 using System;
 using System.Collections;
+using System.Collections.Generic;
 using System.Reflection;
 using NUnit.Framework;
 using ZeroEngine.Render.Urp;
@@ -29,7 +30,13 @@ namespace ZeroEngine.Render.Tests.Runtime
         [UnityTest]
         public IEnumerator SceneLights_IgnoreSkyDirectional_KeepLocalPointSpotAndCullingMasks() => VerifyComposite(false, false, true);
 
-        private IEnumerator VerifyComposite(bool verifyWrap = false, bool verifySpatial = false, bool verifyNative = false)
+        [UnityTest]
+        public IEnumerator NativeContourCore_LightsInnerGapsAndIslandsWithoutBodyFillOrExtraHdr() => VerifyComposite(false, false, true, true);
+
+        [UnityTest]
+        public IEnumerator ReferenceEdges_PreserveSceneBody_KeepOpposedSides_AndFadeOnlyNearTheContour() => VerifyComposite(true, true, false, false, true);
+
+        private IEnumerator VerifyComposite(bool verifyWrap = false, bool verifySpatial = false, bool verifyNative = false, bool verifyContour = false, bool verifyReference = false)
         {
             Assert.That(Application.isPlaying, Is.True);
             RenderPipelineAsset previous = QualitySettings.renderPipeline;
@@ -103,6 +110,7 @@ namespace ZeroEngine.Render.Tests.Runtime
                 profile.WeakDistance=4;profile.StrongDistance=1.5f;profile.ResponsePower=.5f;
                 profile.StrongScale=-.05f;profile.MinimumExposure=.9f;profile.MaximumLight=3;
                 profile.GammaBlend=true;profile.LimitAddedHdr=true;
+                profile.ReferenceEdgeResponse=verifyReference;
                 var lighting=actorHost.AddComponent<SpriteRimLighting>();lighting.enabled=false;
                 lighting.Configure(new Renderer[]{actor},new[]{light},profile);
                 yield return null;
@@ -115,7 +123,16 @@ namespace ZeroEngine.Render.Tests.Runtime
                 Assert.That(edge.r,Is.EqualTo(expectedEdge.r).Within(.004f));
                 Assert.That(edge.g,Is.EqualTo(expectedEdge.g).Within(.004f),"The rendered contour must match the recovered light-field and Gamma blend formula.");
                 Assert.That(edge.g,Is.GreaterThan(edge.r+.02f),"The chosen green light must visibly tint the contour.");
-                Assert.That(inside.g,Is.LessThan(baseline.GetPixel(29,28).g),"The reference local exposure must operate on the covered interior.");
+                if(verifyReference)
+                {
+                    var body=baseline.GetPixel(29,28);
+                    Assert.That(inside.r,Is.EqualTo(body.r).Within(.0001f));
+                    Assert.That(inside.g,Is.EqualTo(body.g).Within(.0001f));
+                    Assert.That(inside.b,Is.EqualTo(body.b).Within(.0001f),
+                        "White source art on a dark material must retain its shaded body, even when a rim is active.");
+                    VerifyReferenceDarkContours(camera,actor,material,lighting,light,profile);
+                }
+                else Assert.That(inside.g,Is.LessThan(baseline.GetPixel(29,28).g),"The legacy local exposure remains compatible for custom profiles.");
                 Assert.That(lit.GetPixel(5,5).r,Is.EqualTo(baseline.GetPixel(5,5).r).Within(.001f),"Background pixels must not be recolored.");
                 Assert.That(lit.GetPixel(13,16).g,Is.EqualTo(baseline.GetPixel(13,16).g).Within(.001f),"A foreground occluder must not receive the hidden actor's rim.");
                 lampHost.transform.position=new Vector3(0,.5f,0);lighting.UpdateLighting();upper=Render(camera);
@@ -227,10 +244,12 @@ namespace ZeroEngine.Render.Tests.Runtime
                         Assert.That(nativeImage.GetPixel(13,28).g,Is.GreaterThan(nativeImage.GetPixel(13,28).r+.01f),"A native point light must tint the near contour.");
                         VerifyDarkEdgeFill(camera, material, native, participation, profile);
                         VerifyNativeOverlap(camera, material, native, participation, profile);
+                        yield return VerifyReferenceKeyFill(camera, actor, material, native, participation, profile);
                         VerifyNativeBacklight(camera, actor, native, participation, profile);
                         VerifyRearContourWrap(camera, actor, material, native, participation, profile, pipeline);
                         VerifyLocalShadows(camera, material, native, participation, profile, pipeline);
                         VerifyDarkContourStyle(camera, material, native, participation, profile);
+                        if (verifyContour) VerifyContourCore(camera, actor, texture, material, native, participation, profile, pipeline);
                         participation.enabled=false;unselectedImage=Render(camera);
                         Assert.That(lighting.ActiveTargetCount,Is.Zero,"The source component checkbox must remove participation immediately.");
                         AssertSameImage(baseline,unselectedImage,"Disabling rim participation must leave native source lighting alone.");
@@ -455,6 +474,216 @@ namespace ZeroEngine.Render.Tests.Runtime
             }
         }
 
+        private static void VerifyContourCore(Camera camera, Renderer actor, Texture2D texture, Material material,
+            Light light, SpriteRimLightSource source, SpriteRimLightingProfile profile, UniversalRenderPipelineAsset pipeline)
+        {
+            var pixels = texture.GetPixels(); var oldColor = material.GetVector("_BaseColor");
+            var position = light.transform.position; var color = light.color;
+            float intensity = light.intensity, fill = source.DarkEdgeFill;
+            float coreStrength = profile.ContourStrength, wrap = profile.InnerWrapStrength;
+            float weak = profile.WeakDistance, strong = profile.StrongDistance, scale = profile.StrongScale;
+            bool hdr = pipeline.supportsHDR;
+            Texture2D soft = null, crisp = null, restored = null, hdrBase = null, hdrLit = null;
+            try
+            {
+                pipeline.supportsHDR = true;
+                material.SetVector("_BaseColor", new Vector4(.1f, .1f, .1f, 1));
+                light.transform.position = actor.bounds.center + new Vector3(-.4f, 0, .3f);
+                light.color = Color.green; light.intensity = 1.3f; source.DarkEdgeFill = 0;
+                profile.WeakDistance = profile.StrongDistance = 1; profile.StrongScale = 0;
+                profile.InnerWrapStrength = 0; profile.ContourStrength = 0;
+                var detail = (Color[])pixels.Clone();
+                for (int y = 2; y <= 6; y++) detail[y * 16 + 7] = Color.clear;
+                detail[9 * 16 + 13] = Color.white;
+                texture.SetPixels(detail); texture.Apply();
+                soft = Render(camera);
+                profile.ContourStrength = .85f; crisp = Render(camera);
+                Assert.That(crisp.GetPixel(34, 18).g, Is.GreaterThan(soft.GetPixel(34, 18).g + .05f),
+                    "The inner edge of a separated leg must receive a clear art-cell contour.");
+                Assert.That(crisp.GetPixel(54, 38).g, Is.GreaterThan(soft.GetPixel(54, 38).g + .05f),
+                    "An isolated art cell must not disappear into the filtered weak-light response.");
+                Assert.That(crisp.GetPixel(26, 34).g, Is.EqualTo(soft.GetPixel(26, 34).g).Within(.003f),
+                    "The clear contour must not spread into the opaque body interior.");
+                Assert.That(crisp.GetPixel(30, 18).g, Is.EqualTo(soft.GetPixel(30, 18).g).Within(.003f),
+                    "The transparent gap itself must retain the background.");
+                foreach (var pixel in crisp.GetPixels())
+                    Assert.That(Mathf.Max(pixel.r, Mathf.Max(pixel.g, pixel.b)), Is.LessThanOrEqualTo(1.001f),
+                        "A clear contour adds no new HDR energy to LDR art.");
+                profile.ContourStrength = 0; restored = Render(camera);
+                AssertSameImage(soft, restored, "Zero contour strength must restore the previous soft response.");
+
+                profile.ContourStrength = .85f;
+                VerifyContourMaterialValues(camera, material, light);
+                VerifyNativeContourEnergy(camera, material, light, source);
+                VerifyNativeContourColorHandoff(camera, material, light, source);
+                material.SetVector("_BaseColor", new Vector4(2.4f, .6f, .1f, 1));
+                source.enabled = false; hdrBase = Render(camera); source.enabled = true; hdrLit = Render(camera);
+                Assert.That(hdrBase.GetPixel(34, 18).r, Is.GreaterThan(1.5f), "The test must contain actual incoming HDR.");
+                Assert.That(hdrLit.GetPixel(34, 18).r, Is.EqualTo(hdrBase.GetPixel(34, 18).r).Within(.015f),
+                    "The contour must preserve the existing HDR source instead of adding emission to it.");
+
+                texture.SetPixels(pixels); texture.Apply();
+                material.SetVector("_BaseColor", new Vector4(.04f, .04f, .04f, 1));
+                VerifyNativeBacklight(camera, actor, light, source, profile);
+                VerifyLocalShadows(camera, material, light, source, profile, pipeline);
+            }
+            finally
+            {
+                texture.SetPixels(pixels); texture.Apply(); material.SetVector("_BaseColor", oldColor);
+                light.transform.position = position; light.color = color; light.intensity = intensity;
+                source.enabled = true; source.DarkEdgeFill = fill;
+                profile.ContourStrength = coreStrength; profile.InnerWrapStrength = wrap;
+                profile.WeakDistance = weak; profile.StrongDistance = strong; profile.StrongScale = scale;
+                pipeline.supportsHDR = hdr;
+                foreach (var image in new[] { soft, crisp, restored, hdrBase, hdrLit }) if (image) Object.DestroyImmediate(image);
+            }
+        }
+
+        private static void VerifyNativeContourEnergy(Camera camera, Material material, Light light, SpriteRimLightSource source)
+        {
+            var savedColor = material.GetVector("_BaseColor"); var savedLight = light.color;
+            float savedIntensity = light.intensity;
+            Texture2D baseline = null, weak = null, duplicate = null, opposed = null;
+            GameObject duplicateHost = null;
+            try
+            {
+                // The shader Color property is converted from sRGB: .35 reads back
+                // near .1 linear. Verify that this is a midtone, not the dark-art case.
+                material.SetVector("_BaseColor", new Vector4(.35f, .35f, .35f, 1));
+                light.color = Color.green; light.intensity = .35f;
+                source.enabled = false; baseline = Render(camera); source.enabled = true; weak = Render(camera);
+                Assert.That(baseline.GetPixel(34, 18).g, Is.InRange(.08f, .15f), "Calibrate the weak-core fixture to a linear midtone.");
+                Assert.That(weak.GetPixel(34, 18).g, Is.GreaterThan(baseline.GetPixel(34, 18).g + .025f),
+                    "Weak native light must retain a readable core without repeated energy attenuation.");
+                Assert.That(weak.GetPixel(26, 34).g, Is.EqualTo(baseline.GetPixel(26, 34).g).Within(.003f),
+                    "Core brightness must not raise the opaque body interior.");
+
+                duplicateHost = new GameObject("Duplicate native contour light");
+                SceneManager.MoveGameObjectToScene(duplicateHost, light.gameObject.scene);
+                var second = duplicateHost.AddComponent<Light>(); second.type = light.type;
+                second.transform.SetPositionAndRotation(light.transform.position, light.transform.rotation);
+                second.range = light.range; second.color = light.color; second.intensity = light.intensity;
+                second.cullingMask = light.cullingMask; second.shadows = LightShadows.None;
+                duplicateHost.AddComponent<SpriteRimLightSource>(); duplicate = Render(camera);
+                AssertSameImage(weak, duplicate, "Duplicating a native light must not double the core or wash its color out.");
+
+                light.intensity = second.intensity = 1.3f; second.color = Color.blue;
+                second.transform.position += Vector3.right * .8f; opposed = Render(camera);
+                int colored = 0;
+                for (int y = 0; y < opposed.height; y++) for (int x = 0; x < opposed.width; x++)
+                {
+                    var value = opposed.GetPixel(x, y); var original = baseline.GetPixel(x, y);
+                    Assert.That(Mathf.Max(value.r, Mathf.Max(value.g, value.b)), Is.LessThanOrEqualTo(1.001f),
+                        "Opposing colored cores must remain bounded for LDR art.");
+                    Assert.That(value.r, Is.LessThanOrEqualTo(original.r + .006f),
+                        "Green and blue lights must not introduce a white red-channel contribution.");
+                    if (value.g + value.b > original.g + original.b + .05f) colored++;
+                }
+                Assert.That(colored, Is.GreaterThan(3), "The opposing-light check must contain actual illuminated contour pixels.");
+            }
+            finally
+            {
+                if (duplicateHost) Object.DestroyImmediate(duplicateHost);
+                material.SetVector("_BaseColor", savedColor); light.color = savedLight; light.intensity = savedIntensity;
+                source.enabled = true;
+                foreach (var image in new[] { baseline, weak, duplicate, opposed }) if (image) Object.DestroyImmediate(image);
+            }
+        }
+
+        private static void VerifyNativeContourColorHandoff(Camera camera, Material material, Light light,
+            SpriteRimLightSource source)
+        {
+            var savedColor = material.GetVector("_BaseColor"); var savedLight = light.color;
+            float savedIntensity = light.intensity, savedFill = source.DarkEdgeFill;
+            var hosts = new List<GameObject>(); var extraLights = new List<Light>();
+            var extraSources = new List<SpriteRimLightSource>(); var images = new List<Texture2D>();
+            Texture2D Capture() { var image = Render(camera); images.Add(image); return image; }
+            try
+            {
+                material.SetVector("_BaseColor", new Vector4(.35f, .35f, .35f, 1));
+                light.color = Color.green; light.intensity = 1.3f; source.DarkEdgeFill = 0;
+                for (int i = 0; i < 3; i++)
+                {
+                    var host = new GameObject("Native color handoff " + i); hosts.Add(host);
+                    SceneManager.MoveGameObjectToScene(host, light.gameObject.scene);
+                    var extra = host.AddComponent<Light>(); extra.type = light.type;
+                    extra.transform.SetPositionAndRotation(light.transform.position, light.transform.rotation);
+                    extra.range = light.range; extra.cullingMask = light.cullingMask; extra.shadows = LightShadows.None;
+                    var participation = host.AddComponent<SpriteRimLightSource>(); participation.enabled = false;
+                    extraLights.Add(extra); extraSources.Add(participation);
+                }
+                var green = Capture();
+                extraLights[0].color = Color.blue; extraSources[0].enabled = true;
+                float previousBlue = green.GetPixel(34, 18).b;
+                for (int i = 0; i <= 5; i++)
+                {
+                    extraLights[0].intensity = .065f * i;
+                    var mixed = Capture(); var cell = mixed.GetPixel(34, 18);
+                    Assert.That(cell.b, Is.GreaterThanOrEqualTo(previousBlue - .001f),
+                        "A weaker colored lamp must enter continuously without a reverse color step.");
+                    Assert.That(cell.b - previousBlue, Is.LessThan(.02f),
+                        "Adjacent light strengths must not cause an abrupt color handoff.");
+                    Assert.That(cell.g, Is.GreaterThanOrEqualTo(green.GetPixel(34, 18).g - .003f),
+                        "A weaker blue lamp must not dim the dominant green core.");
+                    previousBlue = cell.b;
+                }
+                Assert.That(previousBlue, Is.GreaterThan(green.GetPixel(34, 18).b + .018f),
+                    "A quarter-strength secondary color must remain visible on the same contour cell.");
+
+                extraLights[1].color = Color.red; extraLights[1].intensity = .39f;
+                extraLights[2].color = new Color(.25f, .05f, 1f); extraLights[2].intensity = .2f;
+                extraSources[1].enabled = extraSources[2].enabled = true;
+                var four = Capture();
+                var firstColor = light.color; float firstIntensity = light.intensity;
+                light.color = extraLights[2].color; light.intensity = extraLights[2].intensity;
+                extraLights[2].color = firstColor; extraLights[2].intensity = firstIntensity;
+                var secondColor = extraLights[0].color; float secondIntensity = extraLights[0].intensity;
+                extraLights[0].color = extraLights[1].color; extraLights[0].intensity = extraLights[1].intensity;
+                extraLights[1].color = secondColor; extraLights[1].intensity = secondIntensity;
+                var reordered = Capture();
+                AssertSameImage(four, reordered, "The same four colored lamps must keep their result when light order changes.");
+                Assert.That(four.GetPixel(26, 34).b, Is.EqualTo(green.GetPixel(26, 34).b).Within(.003f),
+                    "The multi-light color handoff must leave the deeper body interior unchanged.");
+                foreach (var pixel in four.GetPixels())
+                    Assert.That(Mathf.Max(pixel.r, Mathf.Max(pixel.g, pixel.b)), Is.LessThanOrEqualTo(1.001f),
+                        "Four colored cores must not add HDR emission to LDR art.");
+            }
+            finally
+            {
+                foreach (var host in hosts) if (host) Object.DestroyImmediate(host);
+                foreach (var image in images) if (image) Object.DestroyImmediate(image);
+                material.SetVector("_BaseColor", savedColor); light.color = savedLight;
+                light.intensity = savedIntensity; source.DarkEdgeFill = savedFill;
+            }
+        }
+
+        private static void VerifyContourMaterialValues(Camera camera, Material material, Light light)
+        {
+            var savedColor = material.GetVector("_BaseColor"); var savedLight = light.color;
+            float savedIntensity = light.intensity;
+            Texture2D black = null, dark = null, pale = null, painted = null;
+            try
+            {
+                light.color = Color.white;
+                material.SetVector("_BaseColor", new Vector4(0, 0, 0, 1)); black = Render(camera);
+                material.SetVector("_BaseColor", new Vector4(.003f, .003f, .003f, 1)); dark = Render(camera);
+                material.SetVector("_BaseColor", new Vector4(.12f, .12f, .12f, 1)); pale = Render(camera);
+                light.intensity = .65f;
+                material.SetVector("_BaseColor", new Vector4(.2f, .03f, .003f, 1)); painted = Render(camera);
+                var zero = black.GetPixel(34, 18); var low = dark.GetPixel(34, 18);
+                var high = pale.GetPixel(34, 18); var hue = painted.GetPixel(34, 18);
+                Assert.That(zero.g, Is.InRange(.02f, .035f), "Black art needs a readable bounded floor, distinct from pale material.");
+                Assert.That(low.g, Is.LessThan(high.g * .35f), "Dark and pale cloth must retain visibly different contour values under identical light.");
+                Assert.That(hue.r, Is.GreaterThan(hue.g * 1.5f), "Neutral light must retain the painted red channel.");
+                Assert.That(hue.g, Is.GreaterThan(hue.b * 1.5f), "A dark blue channel must not become a uniform bright white contour.");
+            }
+            finally
+            {
+                material.SetVector("_BaseColor", savedColor); light.color = savedLight; light.intensity = savedIntensity;
+                foreach (var image in new[] { black, dark, pale, painted }) if (image) Object.DestroyImmediate(image);
+            }
+        }
+
         private static float MeanColorChange(Texture2D before, Texture2D after)
         {
             var source = before.GetPixels();
@@ -464,6 +693,334 @@ namespace ZeroEngine.Render.Tests.Runtime
                 sum += Mathf.Abs(result[i].r - source[i].r) + Mathf.Abs(result[i].g - source[i].g) +
                     Mathf.Abs(result[i].b - source[i].b);
             return sum / source.Length;
+        }
+
+        private static IEnumerator VerifyReferenceKeyFill(Camera camera, Renderer actor, Material material,
+            Light light, SpriteRimLightSource source, SpriteRimLightingProfile profile)
+        {
+            var position=light.transform.position;var color=light.color;var baseColor=material.GetVector("_BaseColor");
+            float intensity=light.intensity,range=light.range,fill=source.DarkEdgeFill;
+            var shadows=light.shadows;bool reference=profile.ReferenceEdgeResponse;
+            float weak=profile.WeakDistance,strong=profile.StrongDistance,scale=profile.StrongScale;
+            float wrap=profile.InnerWrapStrength,strength=profile.Strength,maximum=profile.MaximumLight,exposure=profile.MinimumExposure;
+            GameObject otherHost=null;var images=new List<Texture2D>();
+            Texture2D Capture(){var image=Render(camera);images.Add(image);return image;}
+            try
+            {
+                profile.ReferenceEdgeResponse=true;profile.WeakDistance=profile.StrongDistance=1;
+                profile.StrongScale=0;profile.InnerWrapStrength=0;profile.Strength=1;profile.MaximumLight=profile.MinimumExposure=1;
+                light.color=Color.white;light.intensity=.9f;light.range=4;light.shadows=LightShadows.None;source.DarkEdgeFill=0;
+                light.transform.position=actor.bounds.center+new Vector3(-.5f,0,2);
+                material.SetVector("_BaseColor",new Vector4(.2f,.2f,.2f,1));
+                source.enabled=false;var baseline=Capture();source.enabled=true;var single=Capture();
+                Assert.That(single.GetPixel(29,9).r,Is.EqualTo(baseline.GetPixel(29,9).r).Within(.0001f),
+                    "A horizontal rear light must not paint the underside of an opaque foot.");
+                otherHost=new GameObject("Equal reference fill light");SceneManager.MoveGameObjectToScene(otherHost,light.gameObject.scene);
+                var other=otherHost.AddComponent<Light>();other.type=LightType.Point;other.color=Color.white;
+                other.intensity=light.intensity;other.range=light.range;other.cullingMask=light.cullingMask;other.renderMode=LightRenderMode.ForcePixel;
+                otherHost.transform.position=actor.bounds.center+new Vector3(.5f,0,2);otherHost.AddComponent<SpriteRimLightSource>();
+                var pair=Capture();
+                float left=pair.GetPixel(13,28).r-baseline.GetPixel(13,28).r;
+                float right=pair.GetPixel(42,28).r-baseline.GetPixel(42,28).r;
+                Assert.That(left,Is.GreaterThan(right*1.5f),"Equal opposed lamps must retain a visibly stronger key side.");
+                Assert.That(right,Is.GreaterThan(left*.2f),"The opposite contour remains a readable fill.");
+                Assert.That(pair.GetPixel(29,9).r,Is.EqualTo(baseline.GetPixel(29,9).r).Within(.0001f));
+                foreach(float multiplier in new[]{1.04f,.96f,1.03f})
+                {
+                    other.intensity=light.intensity*multiplier;yield return null;var stable=Capture();
+                    float l=stable.GetPixel(13,28).r-baseline.GetPixel(13,28).r;
+                    float r=stable.GetPixel(42,28).r-baseline.GetPixel(42,28).r;
+                    Assert.That(l,Is.GreaterThan(r*1.3f),"Small intensity crossings must not exchange the key and fill sides.");
+                }
+                other.intensity=light.intensity*1.5f;Capture();yield return new WaitForSecondsRealtime(.2f);var promoted=Capture();
+                Assert.That(promoted.GetPixel(42,28).r-baseline.GetPixel(42,28).r,
+                    Is.GreaterThan((promoted.GetPixel(13,28).r-baseline.GetPixel(13,28).r)*1.5f),
+                    "A clearly stronger source must take over after the short key-light handoff.");
+                other.enabled=false;var restored=Capture();
+                AssertSameImage(single,restored,"Removing the key immediately restores the remaining single-lamp response.");
+                light.transform.position=actor.bounds.center+Vector3.forward*2;var centered=Capture();
+                left=centered.GetPixel(13,28).r-baseline.GetPixel(13,28).r;
+                right=centered.GetPixel(42,28).r-baseline.GetPixel(42,28).r;
+                Assert.That(left,Is.GreaterThan(right*1.5f));Assert.That(right,Is.GreaterThan(.0001f));
+                Assert.That(centered.GetPixel(29,9).r,Is.EqualTo(baseline.GetPixel(29,9).r).Within(.0001f));
+                foreach(float x in new[]{-.005f,.005f})
+                {
+                    light.transform.position=actor.bounds.center+new Vector3(x,0,2);var nearby=Capture();
+                    Assert.That(nearby.GetPixel(13,28).r,Is.EqualTo(centered.GetPixel(13,28).r).Within(.015f));
+                    Assert.That(nearby.GetPixel(42,28).r,Is.EqualTo(centered.GetPixel(42,28).r).Within(.015f));
+                }
+                light.transform.position=actor.bounds.center+new Vector3(0,-.5f,2);var below=Capture();
+                Assert.That(below.GetPixel(29,9).r,Is.GreaterThan(baseline.GetPixel(29,9).r+.001f),
+                    "A source genuinely below the actor may illuminate the underside; this must not be a height-based foot exclusion.");
+                VerifyFourLightSideBalance(camera, actor, material, light, baseline);
+                VerifyReferenceContourOverlap(actor, material, light, source, other, profile, Capture);
+            }
+            finally
+            {
+                if(otherHost)Object.DestroyImmediate(otherHost);foreach(var image in images)if(image)Object.DestroyImmediate(image);
+                light.transform.position=position;light.color=color;light.intensity=intensity;light.range=range;light.shadows=shadows;
+                source.enabled=true;source.DarkEdgeFill=fill;material.SetVector("_BaseColor",baseColor);
+                profile.ReferenceEdgeResponse=reference;profile.WeakDistance=weak;profile.StrongDistance=strong;profile.StrongScale=scale;
+                profile.InnerWrapStrength=wrap;profile.Strength=strength;profile.MaximumLight=maximum;profile.MinimumExposure=exposure;
+            }
+        }
+
+        private static void VerifyReferenceContourOverlap(Renderer actor, Material material, Light key,
+            SpriteRimLightSource keySource, Light fill, SpriteRimLightingProfile profile, Func<Texture2D> capture)
+        {
+            var texture = (Texture2D)material.mainTexture;
+            var original = texture.GetPixels();
+            var detail = (Color[])original.Clone();
+            for (int y = 5; y <= 9; y++)
+            {
+                detail[y * 16 + 6] = Color.clear;
+                detail[y * 16 + 8] = Color.clear;
+            }
+
+            try
+            {
+                // One isolated art-cell strip is exposed to both directions.
+                texture.SetPixels(detail);
+                texture.Apply();
+                material.SetVector("_BaseColor", new Vector4(.08f, .064f, .077f, 1));
+                profile.InnerWrapStrength = 0;
+                var center = actor.bounds.center;
+                key.transform.position = center + new Vector3(-.5f, 0, 2);
+                fill.transform.position = center + new Vector3(.5f, 0, 2);
+                key.color = new Color(1, .18f, .075f);
+                fill.color = new Color(.09f, .4f, 1);
+                key.intensity = .86f;
+                fill.intensity = .78f;
+                keySource.enabled = false;
+                fill.enabled = false;
+                var off = capture();
+                keySource.enabled = true;
+                var withoutWrap = capture();
+                profile.InnerWrapStrength = .08f;
+                var single = capture();
+                fill.enabled = true;
+                var dual = capture();
+                Color unlit = off.GetPixel(30, 30);
+                Color keyColor = single.GetPixel(30, 30);
+                Assert.That(keyColor.r, Is.GreaterThan(unlit.r + .002f), "The test strand must receive the red key.");
+                int wrapPixels = 0;
+                // The synthetic camera is centered at x = 32. The far half has its own support check below.
+                for (int x = 13; x < 32; ++x)
+                {
+                    Color primary = single.GetPixel(x, 30);
+                    bool wrapped = primary.r > withoutWrap.GetPixel(x, 30).r + .00005f;
+                    if (wrapped) wrapPixels++;
+                    if (!wrapped && x != 13 && x != 30) continue;
+                    Color both = dual.GetPixel(x, 30);
+                    Assert.That(both.r, Is.EqualTo(primary.r).Within(.0001f), "The primary red level is preserved.");
+                    Assert.That(both.g, Is.EqualTo(primary.g).Within(.0001f), "The primary green level is preserved.");
+                    Assert.That(both.b, Is.EqualTo(primary.b).Within(.0001f), "The primary blue level is preserved.");
+                }
+                Assert.That(wrapPixels, Is.GreaterThan(0), "The test must sample the faint wrap behind the primary contour.");
+                const int backX = 38, backY = 42;
+                Color unwrappedBack = withoutWrap.GetPixel(backX, backY);
+                Color reflectedBack = single.GetPixel(backX, backY);
+                Color combinedBack = dual.GetPixel(backX, backY);
+                Assert.That(reflectedBack.r, Is.GreaterThan(unwrappedBack.r + .002f),
+                    "A single red rear key must reach the inner edge on the far side.");
+                Assert.That(reflectedBack.r - unwrappedBack.r, Is.GreaterThan(reflectedBack.b - unwrappedBack.b + .001f),
+                    "The far edge must retain the red source hue.");
+                Color support = combinedBack - reflectedBack;
+                Assert.That(support.r, Is.GreaterThan(.001f), "The opposing field should strengthen the far inner contour.");
+                Assert.That(support.r, Is.GreaterThan(Mathf.Max(support.g, support.b) + .001f),
+                    "The extra light carries the key hue.");
+                const int fillX = 42, fillY = 42; // This row retains the sprite's full width.
+                Assert.That(single.GetPixel(fillX, fillY).r, Is.EqualTo(off.GetPixel(fillX, fillY).r).Within(.0001f),
+                    "The fill probe must lie outside the key's contour and inner wrap.");
+                Assert.That(dual.GetPixel(fillX, fillY).b, Is.GreaterThan(single.GetPixel(fillX, fillY).b + .008f),
+                    "The uncovered side still receives blue fill.");
+            }
+            finally
+            {
+                texture.SetPixels(original);
+                texture.Apply();
+            }
+        }
+
+        private static void VerifyFourLightSideBalance(Camera camera, Renderer actor, Material material, Light main, Texture2D baseline)
+        {
+            var center = actor.bounds.center;
+            var previousPosition = main.transform.position;
+            var previousColor = main.color;
+            var previousPaint = material.GetVector("_BaseColor");
+            float previousIntensity = main.intensity;
+            var hosts = new List<GameObject>();
+            var lamps = new Light[3];
+            Texture2D darkBaseline = null;
+
+            void CheckEdges(int brightX, int dimX, float maximumRatio, bool hasOpposingLight)
+            {
+                var frame = Render(camera);
+                try
+                {
+                    float bright = frame.GetPixel(brightX, 28).r - baseline.GetPixel(brightX, 28).r;
+                    float dim = frame.GetPixel(dimX, 28).r - baseline.GetPixel(dimX, 28).r;
+                    Assert.That(bright, Is.GreaterThan(.03f), "The side facing the group must receive light.");
+                    Assert.That(dim, Is.LessThan(bright * maximumRatio), "The far edge must read below the illuminated edge.");
+                    if (hasOpposingLight) Assert.That(dim, Is.GreaterThan(.0001f), "A real opposing lamp must retain a faint fill.");
+                    Assert.That(frame.GetPixel(29, 28).r, Is.EqualTo(baseline.GetPixel(29, 28).r).Within(.0001f));
+                    Assert.That(frame.GetPixel(29, 9).r, Is.EqualTo(baseline.GetPixel(29, 9).r).Within(.0001f));
+                }
+                finally { Object.DestroyImmediate(frame); }
+            }
+
+            try
+            {
+                main.intensity = 1.2f;
+                for (int i = 0; i < lamps.Length; i++)
+                {
+                    var host = new GameObject("Lateral group light");
+                    hosts.Add(host);
+                    SceneManager.MoveGameObjectToScene(host, main.gameObject.scene);
+                    var lamp = host.AddComponent<Light>();
+                    lamp.type = LightType.Point;
+                    lamp.range = main.range;
+                    lamp.color = Color.white;
+                    lamp.intensity = .8f;
+                    lamp.cullingMask = main.cullingMask;
+                    lamp.renderMode = LightRenderMode.ForcePixel;
+                    host.AddComponent<SpriteRimLightSource>();
+                    lamps[i] = lamp;
+                }
+
+                foreach (int side in new[] { 1, -1 })
+                {
+                    int brightX = side > 0 ? 13 : 42;
+                    int dimX = side > 0 ? 42 : 13;
+                    foreach (var lamp in lamps) lamp.enabled = false;
+                    main.transform.position = center + new Vector3(.6f * side, 0, 2);
+                    Object.DestroyImmediate(Render(camera)); // Approach the brightest lamp from its other side.
+                    for (int i = 0; i < lamps.Length; i++)
+                    {
+                        lamps[i].transform.position = center + new Vector3(-side * (.65f + .2f * i), 0, 2);
+                        lamps[i].enabled = true;
+                    }
+                    CheckEdges(brightX, dimX, .43f, true);
+                    main.transform.position = center + new Vector3(-.015f * side, 0, 2);
+                    CheckEdges(brightX, dimX, .15f, false);
+                }
+
+                material.SetVector("_BaseColor", new Vector4(.012f, .009f, .02f, 1));
+                foreach (var lamp in lamps) lamp.enabled = false;
+                main.enabled = false;
+                darkBaseline = Render(camera);
+                main.enabled = true;
+                VerifyStrongNativeColors(camera, darkBaseline, center, main, lamps);
+                main.color = new Color(.08f, .66f, 1);
+                main.intensity = .92f;
+                foreach (var lamp in lamps) lamp.intensity = .8f;
+                lamps[0].color = new Color(.9f, .25f, .05f);
+                lamps[1].color = new Color(.1f, .9f, 1);
+                lamps[2].color = new Color(.55f, .18f, .8f);
+                foreach (int side in new[] { 1, -1 })
+                {
+                    int nearX = side > 0 ? 13 : 42;
+                    foreach (var lamp in lamps) lamp.enabled = false;
+                    main.transform.position = center + new Vector3(-side * .65f, 0, 2);
+                    AssertNativeCompatibilityEdge(camera, darkBaseline, center, nearX, 28, main);
+                    for (int i = 0; i < lamps.Length; i++)
+                    {
+                        lamps[i].transform.position = center + new Vector3(-side * (1f + .25f * i), 0, 1);
+                        lamps[i].enabled = true;
+                    }
+                    AssertNativeCompatibilityEdge(camera, darkBaseline, center, nearX, 28, main, lamps[0], lamps[1], lamps[2]);
+                }
+            }
+            finally
+            {
+                main.transform.position = previousPosition;
+                main.color = previousColor;
+                main.intensity = previousIntensity;
+                main.enabled = true;
+                material.SetVector("_BaseColor", previousPaint);
+                if (darkBaseline) Object.DestroyImmediate(darkBaseline);
+                foreach (var host in hosts) Object.DestroyImmediate(host);
+            }
+        }
+
+        private static void VerifyStrongNativeColors(Camera camera, Texture2D baseline, Vector3 center, Light main, Light[] lamps)
+        {
+            // Use the authored BaseShip pillar colors and intensity.
+            var warm = new Color(1, .18f, .075f);
+            var cool = new Color(.09f, .4f, 1);
+            var cases = new[] { (color: warm, direction: -1, edge: 13, channel: 0),
+                (color: cool, direction: 1, edge: 42, channel: 2) };
+            foreach (var test in cases)
+            {
+                foreach (var lamp in lamps) lamp.enabled = false;
+                main.color = test.color;
+                main.intensity = 2.6f;
+                main.transform.position = center + new Vector3(test.direction * 1.05f, 0, 2);
+                AssertNativeHue(camera, baseline, test.edge, test.channel);
+                for (int i = 0; i < lamps.Length; i++)
+                {
+                    lamps[i].color = test.color;
+                    lamps[i].intensity = 2.6f;
+                    lamps[i].transform.position = center + new Vector3(test.direction * (1.25f + .25f * i), 0, 1);
+                    lamps[i].enabled = true;
+                }
+                AssertNativeHue(camera, baseline, test.edge, test.channel);
+            }
+        }
+
+        private static void AssertNativeHue(Camera camera, Texture2D baseline, int x, int channel)
+        {
+            var rendered = Render(camera);
+            try
+            {
+                Color gain = rendered.GetPixel(x, 28) - baseline.GetPixel(x, 28);
+                Assert.That(gain[channel], Is.GreaterThan(.02f), "The saturated pillar must visibly light the near edge.");
+                Assert.That(gain[channel], Is.GreaterThan(1.5f * Mathf.Max(gain[1], gain[2 - channel])),
+                    "The authored red or blue channel must dominate the added rim under strong light.");
+            }
+            finally { Object.DestroyImmediate(rendered); }
+        }
+
+        private static void AssertNativeCompatibilityEdge(Camera camera, Texture2D baseline, Vector3 center, int x, int y, params Light[] lamps)
+        {
+            // Evaluate the native field for this orthographic fixture, then apply the compatibility mask once.
+            float Unorm(float value) => Mathf.Round(Mathf.Clamp01(value) * 255) / 255;
+            float Half(float value) => Mathf.HalfToFloat(Mathf.FloatToHalf(value));
+            Vector3 BoundRgb(Vector3 value) => value / Mathf.Max(1, Mathf.Max(value.x, Mathf.Max(value.y, value.z)));
+            var position = new Vector2((x + .5f) / 64 - .5f, (y + .5f) / 64 - .5f);
+            var field = Vector4.zero;
+            float key = 0;
+            foreach (var lamp in lamps)
+            {
+                float falloff = Mathf.Clamp01(1 - Vector2.Distance(position, lamp.transform.position) / lamp.range);
+                float alpha = falloff * lamp.intensity;
+                var lampColor = lamp.color;
+                var tint = BoundRgb(new Vector3(lampColor.r, lampColor.g, lampColor.b) * (lamp.intensity * alpha));
+                float sourceAlpha = Unorm(alpha);
+                field += new Vector4(Unorm(Unorm(tint.x) * sourceAlpha), Unorm(Unorm(tint.y) * sourceAlpha),
+                    Unorm(Unorm(tint.z) * sourceAlpha), Unorm(sourceAlpha * sourceAlpha));
+                key = Mathf.Max(key, Mathf.Clamp01((1 - Vector2.Distance(center, lamp.transform.position) / lamp.range) * lamp.intensity));
+            }
+            var bounded = BoundRgb(new Vector3(field.x, field.y, field.z)) * Mathf.Sqrt(key);
+            var response = new Vector3(Half(bounded.x), Half(bounded.y), Half(bounded.z));
+            var source = baseline.GetPixel(x, y);
+            bool gammaBlend = QualitySettings.activeColorSpace == ColorSpace.Linear;
+            if (gammaBlend) source = source.gamma;
+            var dodge = new Vector3(response.x >= 1 ? response.x : source.r / (1 - response.x),
+                response.y >= 1 ? response.y : source.g / (1 - response.y),
+                response.z >= 1 ? response.z : source.b / (1 - response.z));
+            var color = Vector3.Lerp(new Vector3(source.r, source.g, source.b), dodge, Half(Mathf.Clamp01(field.w)));
+            var expected = new Color(Mathf.Clamp01(color.x), Mathf.Clamp01(color.y), Mathf.Clamp01(color.z));
+            if (gammaBlend) expected = expected.linear;
+            var image = Render(camera);
+            try
+            {
+                var actual = image.GetPixel(x, y);
+                Assert.That(actual.r, Is.EqualTo(expected.r).Within(.004f), "The single-side field must preserve the compatibility red response.");
+                Assert.That(actual.g, Is.EqualTo(expected.g).Within(.004f), "The single-side field must preserve the compatibility green response.");
+                Assert.That(actual.b, Is.EqualTo(expected.b).Within(.004f), "The single-side field must preserve the compatibility blue response.");
+            }
+            finally { Object.DestroyImmediate(image); }
         }
 
         private static void VerifyNativeBacklight(Camera camera, Renderer actor, Light light, SpriteRimLightSource source, SpriteRimLightingProfile profile)
@@ -801,12 +1358,253 @@ namespace ZeroEngine.Render.Tests.Runtime
             finally{if(baseline)Object.DestroyImmediate(baseline);if(lit)Object.DestroyImmediate(lit);}
         }
 
+        private static void VerifyReferenceDarkContours(Camera camera, Renderer actor, Material material,
+            SpriteRimLighting lighting, SpriteRimLight light, SpriteRimLightingProfile profile)
+        {
+            var color=material.GetVector("_BaseColor");var lightColor=light.LightColor;
+            var position=light.transform.position;var shape=light.Shape;float intensity=light.Intensity;
+            float weak=profile.WeakDistance,strong=profile.StrongDistance,scale=profile.StrongScale;
+            float wrap=profile.InnerWrapStrength,strength=profile.Strength,exposure=profile.MinimumExposure,maximum=profile.MaximumLight;
+            var edgeTint=profile.EdgeTint;
+            var images=new List<Texture2D>();GameObject secondHost=null;
+            var extraHosts=new List<GameObject>();
+            Texture2D Capture(){var image=Render(camera);images.Add(image);return image;}
+            try
+            {
+                profile.WeakDistance=profile.StrongDistance=1;profile.StrongScale=0;
+                profile.InnerWrapStrength=0;profile.Strength=1;profile.MinimumExposure=1;profile.MaximumLight=1;
+                material.SetVector("_BaseColor",new Vector4(0,0,0,1));
+                light.Shape=LightType.Point;
+                light.transform.position=new Vector3(-.5f,0,0);
+
+                light.LightColor = new Color(.08f, .66f, 1, 1);
+                light.Intensity = 0;
+                lighting.UpdateLighting();
+                var blackUnlit = Capture();
+                light.Intensity = .6f;
+                lighting.UpdateLighting();
+                var weakBlue = Capture();
+                light.Intensity = .8f;
+                lighting.UpdateLighting();
+                var risingBlue = Capture();
+                light.Intensity = 1;
+                lighting.UpdateLighting();
+                var ordinaryBlue = Capture();
+                var blueContour = ordinaryBlue.GetPixel(13, 28);
+                Assert.That(blackUnlit.GetPixel(13, 28).maxColorComponent, Is.LessThan(.0001f));
+                Assert.That(weakBlue.GetPixel(13, 28).b, Is.LessThan(.002f));
+                Assert.That(risingBlue.GetPixel(13, 28).b, Is.InRange(.002f, blueContour.b * .6f),
+                    "Blue reflection should become visible before ordinary intensity and rise with the light.");
+                Assert.That(blueContour.b, Is.InRange(.015f, .07f),
+                    "Black cloth must show a readable edge under a single ordinary blue lamp.");
+                Assert.That(blueContour.r, Is.LessThan(blueContour.b * .1f));
+                Assert.That(ordinaryBlue.GetPixel(29, 28).maxColorComponent, Is.LessThan(.0001f),
+                    "Light on the silhouette must leave the black body interior dark.");
+
+                light.LightColor = new Color(1, .3f, .1f, 1);
+                lighting.UpdateLighting();
+                var amberContour = Capture().GetPixel(13, 28);
+                Assert.That(amberContour.r, Is.InRange(.015f, .07f),
+                    "A warm lamp at the same ordinary intensity must also light the dark edge.");
+                Assert.That(amberContour.b, Is.LessThan(amberContour.r * .1f));
+                light.LightColor = Color.white;
+                lighting.UpdateLighting();
+                var single = Capture();
+
+                secondHost=new GameObject("Reference-field opposing light");
+                SceneManager.MoveGameObjectToScene(secondHost,actor.gameObject.scene);
+                var second=secondHost.AddComponent<SpriteRimLight>();second.Radius=light.Radius;
+                second.LightColor=Color.white;second.Intensity=1;secondHost.transform.position=new Vector3(.5f,0,0);
+                lighting.Configure(new[]{actor},new[]{light,second},profile);lighting.UpdateLighting();var black=Capture();
+                float ordinaryKey = black.GetPixel(13, 28).b;
+                Assert.That(ordinaryKey, Is.InRange(single.GetPixel(13, 28).b + .005f, .11f),
+                    "Opposed ordinary lights must preserve a readable key edge with bounded brightness.");
+                float ordinaryFill = black.GetPixel(42, 28).b;
+                Assert.That(ordinaryFill, Is.InRange(.008f, ordinaryKey * .7f));
+                Assert.That(ordinaryFill, Is.LessThan(single.GetPixel(13, 28).b * .85f),
+                    "Limited field sharing must keep the secondary edge below a single key.");
+                light.LightColor=second.LightColor=new Color(.02f,.3f,1,1);
+                light.Intensity=second.Intensity=2;
+                lighting.UpdateLighting();var mixedBlack=Capture();var mixedEdge=mixedBlack.GetPixel(13,28);
+                Assert.That(mixedEdge.b,Is.GreaterThan(.002f),
+                    "A saturated blue field with a weaker red field must reveal a colored black contour.");
+                Assert.That(mixedEdge.b,Is.LessThan(.16f),
+                    "The recovered mixed-field branch must keep black detail below a white/neon contour.");
+                Assert.That(mixedEdge.r,Is.LessThan(mixedEdge.b*.08f),
+                    "A trace of red must not turn a cool reflected edge white.");
+                light.LightColor=second.LightColor=Color.white;
+                light.Intensity=second.Intensity=1;
+                material.SetVector("_BaseColor",new Vector4(.002f,.004f,.012f,1));
+                profile.Strength=0;lighting.UpdateLighting();var bodyBase=Capture();profile.Strength=1;
+                second.enabled=false;lighting.UpdateLighting();var darkSingle=Capture();
+                second.enabled=true;lighting.UpdateLighting();var combined=Capture();
+                float keyGain=combined.GetPixel(13,28).b-bodyBase.GetPixel(13,28).b;
+                float fillGain=combined.GetPixel(42,28).b-bodyBase.GetPixel(42,28).b;
+                Assert.That(keyGain,Is.GreaterThan(darkSingle.GetPixel(13,28).b-bodyBase.GetPixel(13,28).b+.0005f),
+                    "Opposed light fields retain the reference's readable response on dark key-side material.");
+                Assert.That(fillGain,Is.InRange(.00005f,keyGain*.7f),
+                    "The colored dark edge must remain visible on the opposed contour.");
+                var body=combined.GetPixel(29,28);var unlitBody=bodyBase.GetPixel(29,28);
+                Assert.That(body.r,Is.EqualTo(unlitBody.r).Within(.0001f));
+                Assert.That(body.g,Is.EqualTo(unlitBody.g).Within(.0001f));
+                Assert.That(body.b,Is.EqualTo(unlitBody.b).Within(.0001f),
+                    "The dark body between the contours must retain its scene shading.");
+                second.enabled=false;lighting.UpdateLighting();var removed=Capture();
+                AssertSameImage(darkSingle,removed,"Disabling the extra field must immediately restore the single-light image.");
+
+                second.enabled=true;secondHost.transform.position=light.transform.position;
+                lighting.UpdateLighting();var overlap=Capture();
+                float singleGain=darkSingle.GetPixel(13,28).b-bodyBase.GetPixel(13,28).b;
+                float overlapGain=overlap.GetPixel(13,28).b-bodyBase.GetPixel(13,28).b;
+                Assert.That(singleGain,Is.GreaterThan(.00005f));
+                Assert.That(overlapGain,Is.InRange(singleGain,singleGain*1.08f),
+                    "A duplicate lamp may gently increase the edge response without triggering a shared Color Dodge singularity.");
+                var overlappingLights=new List<SpriteRimLight>{light,second};
+                for(int i=0;i<2;i++)
+                {
+                    var host=new GameObject("Additional overlapping reference light");extraHosts.Add(host);
+                    SceneManager.MoveGameObjectToScene(host,actor.gameObject.scene);host.transform.position=light.transform.position;
+                    var extra=host.AddComponent<SpriteRimLight>();extra.Radius=light.Radius;
+                    extra.LightColor=Color.white;extra.Intensity=light.Intensity;overlappingLights.Add(extra);
+                }
+                lighting.Configure(new[]{actor},overlappingLights.ToArray(),profile);lighting.UpdateLighting();var four=Capture();
+                float fourGain=four.GetPixel(13,28).b-bodyBase.GetPixel(13,28).b;
+                Assert.That(fourGain,Is.InRange(overlapGain,singleGain*1.1f),
+                    "One key and three fills must remain below 1.1 times the single-lamp added response.");
+                Assert.That(four.GetPixel(29,28).b,Is.EqualTo(unlitBody.b).Within(.0001f));
+                foreach(var host in extraHosts)Object.DestroyImmediate(host);extraHosts.Clear();
+                secondHost.transform.position=new Vector3(.5f,0,0);
+                lighting.Configure(new[]{actor},new[]{light,second},profile);
+
+                second.enabled=false;profile.EdgeTint=new Color(2,2,2,1);
+                lighting.UpdateLighting();var tinted=Capture();
+                Assert.That(tinted.GetPixel(13,28).b,Is.InRange(darkSingle.GetPixel(13,28).b,.1f),
+                    "HDR tint must retain the single-light mask bound instead of saturating a dark material to white.");
+                profile.EdgeTint=edgeTint;
+
+                second.enabled=true;secondHost.transform.position=light.transform.position;
+                light.Intensity=second.Intensity=2;
+                light.LightColor=new Color(1,.3f,.1f,1);second.LightColor=new Color(.08f,.66f,1,1);
+                material.SetVector("_BaseColor",new Vector4(.12f,.2f,.3f,1));
+                profile.Strength=0;lighting.UpdateLighting();var colorBase=Capture();
+                profile.Strength=1;lighting.UpdateLighting();var colorMix=Capture();
+                var colorEdge=colorMix.GetPixel(13,28);var baseEdge=colorBase.GetPixel(13,28);
+                Assert.That(colorEdge.r-baseEdge.r,Is.GreaterThan(colorEdge.g-baseEdge.g),
+                    "Strong warm/cool overlap must retain the dominant warm hue instead of the reference saturation branch's green cast.");
+                Assert.That(colorEdge.b,Is.GreaterThan(baseEdge.b+.005f),
+                    "The cool lamp must still contribute blue when its reference saturated branch would borrow a darker red channel.");
+                var colorBody=colorMix.GetPixel(29,28);var baseBody=colorBase.GetPixel(29,28);
+                Assert.That(colorBody.r,Is.EqualTo(baseBody.r).Within(.0001f));
+                Assert.That(colorBody.g,Is.EqualTo(baseBody.g).Within(.0001f));
+                Assert.That(colorBody.b,Is.EqualTo(baseBody.b).Within(.0001f));
+                light.LightColor=second.LightColor=Color.white;secondHost.transform.position=new Vector3(.5f,0,0);
+
+                material.SetVector("_BaseColor",new Vector4(0,0,0,1));
+                second.enabled=true;light.Intensity=second.Intensity=2;
+                lighting.UpdateLighting();var intense=Capture();
+                float blackKey=intense.GetPixel(13,28).b;
+                float blackFill=intense.GetPixel(42,28).b;
+                Assert.That(blackKey,Is.InRange(.07f,.15f),
+                    "Strong white light must produce a readable dark contour without flattening it into a white rim.");
+                Assert.That(blackKey, Is.GreaterThan(ordinaryKey));
+                Assert.That(blackFill,Is.InRange(.035f,blackKey*.7f),"Keep the strong-light fill below the key.");
+                body=intense.GetPixel(29,28);
+                Assert.That(Mathf.Max(body.r,Mathf.Max(body.g,body.b)),Is.LessThan(.0001f));
+
+                second.enabled=false;
+                light.Intensity=1.30f;lighting.UpdateLighting();var nearSaturation=Capture();
+                light.Intensity=1.36f;lighting.UpdateLighting();var saturated=Capture();
+                Assert.That(saturated.GetPixel(13,28).b,Is.EqualTo(nearSaturation.GetPixel(13,28).b).Within(.006f),
+                    "Near-black art must not flash when the quantized field reaches saturation.");
+                material.SetVector("_BaseColor",new Vector4(.15f,.3f,.5f,1));
+                lighting.UpdateLighting();var lightPaint=Capture();
+                Assert.That(lightPaint.GetPixel(13,28).b,Is.GreaterThan(blackKey*3),
+                    "Dark and bright painted edges must remain distinct under the same strong field.");
+
+                light.Intensity = 2;
+                material.SetVector("_BaseColor", new Vector4(.012f, .001f, .003f, 1));
+                profile.Strength = 0;
+                lighting.UpdateLighting();
+                var redUnlit = Capture();
+                profile.Strength = 1;
+                lighting.UpdateLighting();
+                var redPaint = Capture();
+                material.SetVector("_BaseColor", new Vector4(.003f, .001f, .012f, 1));
+                profile.Strength = 0;
+                lighting.UpdateLighting();
+                var blueUnlit = Capture();
+                profile.Strength = 1;
+                lighting.UpdateLighting();
+                var bluePaint = Capture();
+                var redDetail = redPaint.GetPixel(13, 28);
+                var blueDetail = bluePaint.GetPixel(13, 28);
+                Assert.That(redDetail.r, Is.GreaterThan(blackKey), "Painted dark accents should read above black cloth.");
+                Assert.That(redDetail.r, Is.GreaterThan(redDetail.b * 1.7f));
+                Assert.That(blueDetail.b, Is.EqualTo(redDetail.r).Within(.001f));
+                Assert.That(blueDetail.b, Is.GreaterThan(blueDetail.r * 1.7f));
+                Assert.That(redPaint.GetPixel(29, 28).r, Is.EqualTo(redUnlit.GetPixel(29, 28).r).Within(.0001f));
+                Assert.That(bluePaint.GetPixel(29, 28).b, Is.EqualTo(blueUnlit.GetPixel(29, 28).b).Within(.0001f));
+
+                second.enabled=false;material.SetVector("_BaseColor",new Vector4(.002f,.004f,.012f,1));
+                light.LightColor=Color.blue;light.Intensity=1.2f;
+                lighting.UpdateLighting();var blue=Capture();var blueEdge=blue.GetPixel(13,28);
+                Assert.That(blueEdge.b,Is.GreaterThan(.01f),"Bright blue light must reveal dark blue material detail.");
+                Assert.That(blueEdge.b,Is.GreaterThan(blueEdge.r*20),"The bright-dark response must preserve the incident color.");
+
+                light.Intensity=.65f;material.SetVector("_BaseColor",new Vector4(.002f,.004f,.012f,1));
+                profile.Strength=0;lighting.UpdateLighting();var darkBase=Capture();
+                profile.Strength=1;lighting.UpdateLighting();var dark=Capture();
+                float darkGain=dark.GetPixel(13,28).b-darkBase.GetPixel(13,28).b;
+                Assert.That(darkGain,Is.GreaterThan(darkBase.GetPixel(13,28).b*.03f+.000001f),
+                    "Unsaturated dark blue must still receive a color-dependent edge response.");
+                var originalBody=darkBase.GetPixel(29,28);var litBody=dark.GetPixel(29,28);
+                Assert.That(litBody.r,Is.EqualTo(originalBody.r).Within(.0001f));
+                Assert.That(litBody.g,Is.EqualTo(originalBody.g).Within(.0001f));
+                Assert.That(litBody.b,Is.EqualTo(originalBody.b).Within(.0001f));
+                material.SetVector("_BaseColor",new Vector4(.08f,.1f,.12f,1));
+                profile.Strength=0;lighting.UpdateLighting();var paleBase=Capture();
+                profile.Strength=1;lighting.UpdateLighting();var pale=Capture();
+                float paleEdge = pale.GetPixel(13, 28).b;
+                float paleGain = paleEdge - paleBase.GetPixel(13, 28).b;
+                Assert.That(paleGain, Is.GreaterThan(darkGain),
+                    "A pale material should retain a stronger rim response under the same weak lamp.");
+                Assert.That(paleEdge, Is.GreaterThan(dark.GetPixel(13, 28).b * 4),
+                    "The shaded edge must retain clear brightness separation between pale and dark artwork.");
+
+                material.SetVector("_BaseColor", new Vector4(.012f, .001f, .003f, 1));
+                light.LightColor = new Color(1, .3f, .1f, 1);
+                light.Intensity = 1.3f;
+                lighting.UpdateLighting();
+                var paintedKey = Capture().GetPixel(13, 28);
+                var referenceKey = ExpectedReferenceEdge(redUnlit.GetPixel(13, 28), 13, 28, light, profile);
+                Assert.That(referenceKey.r, Is.GreaterThan(blackKey * 2));
+                Assert.That(paintedKey.r, Is.EqualTo(referenceKey.r).Within(.006f),
+                    "The key must retain the compatibility response on strongly lit dark paint.");
+                Assert.That(paintedKey.g, Is.EqualTo(referenceKey.g).Within(.006f));
+                Assert.That(paintedKey.b, Is.EqualTo(referenceKey.b).Within(.006f));
+            }
+            finally
+            {
+                if(secondHost)Object.DestroyImmediate(secondHost);
+                foreach(var host in extraHosts)if(host)Object.DestroyImmediate(host);
+                foreach(var image in images)Object.DestroyImmediate(image);
+                material.SetVector("_BaseColor",color);light.LightColor=lightColor;light.Intensity=intensity;
+                light.Shape=shape;light.transform.position=position;
+                profile.WeakDistance=weak;profile.StrongDistance=strong;profile.StrongScale=scale;
+                profile.InnerWrapStrength=wrap;profile.Strength=strength;profile.MinimumExposure=exposure;profile.MaximumLight=maximum;
+                profile.EdgeTint=edgeTint;
+                lighting.Configure(new[]{actor},new[]{light},profile);lighting.UpdateLighting();
+            }
+        }
+
         private static Color ExpectedReferenceEdge(Color source,int x,int y,SpriteRimLight light,SpriteRimLightingProfile profile)
         {
             var position=new Vector3((x+.5f)/64f-.5f,(y+.5f)/64f-.5f,0);
             var q=light.transform.InverseTransformPoint(position);q.x/=light.Radius.x;q.y/=light.Radius.y;
             float falloff=Mathf.Pow(Mathf.Max(0,1-new Vector2(q.x,q.y).magnitude),light.LightPower);
-            float fieldAlpha=Mathf.Clamp01(Mathf.Pow(falloff*light.LightColor.a*light.Intensity,2));
+            float alpha=falloff*light.LightColor.a*light.Intensity;
+            float Quantize(float value)=>Mathf.Round(Mathf.Clamp01(value)*255)/255;
+            float fieldAlpha=profile.ReferenceEdgeResponse?Quantize(Quantize(alpha)*Quantize(alpha)):Mathf.Clamp01(alpha*alpha);
             Assert.That(light.TryGetInfluence(Vector3.zero,out _,out float intensity),Is.True);
             float response=Mathf.Pow(intensity,profile.ResponsePower);
             float exposure=Mathf.Lerp(1,profile.MinimumExposure*light.MinimumGlobalExposure,intensity);
@@ -815,12 +1613,19 @@ namespace ZeroEngine.Render.Tests.Runtime
             float[] b={input.r,input.g,input.b},c={light.LightColor.r,light.LightColor.g,light.LightColor.b};
             float[] value=new float[3];
             for(int i=0;i<3;i++){
-                float f=Mathf.Clamp01(c[i]*light.Intensity*fieldAlpha)*response;
-                float dodge=f>=1?f:b[i]/(1-f);
-                value[i]=Mathf.Min(Mathf.Lerp(b[i],dodge,blend),profile.MaximumLight)*exposure;
+                float incident=profile.ReferenceEdgeResponse?Quantize(Quantize(c[i]*light.Intensity*alpha)*Quantize(alpha)):Mathf.Clamp01(c[i]*light.Intensity*fieldAlpha);
+                float f=incident*response;
+                float red=Quantize(Quantize(c[0]*light.Intensity*alpha)*Quantize(alpha))*response;
+                float saturated=profile.ReferenceEdgeResponse&&i>0&&red>0?red:f;
+                float dodge=f>=1?saturated:b[i]/(1-f);
+                value[i]=Mathf.Min(Mathf.Lerp(b[i],dodge,blend),profile.MaximumLight)*(profile.ReferenceEdgeResponse?1:exposure);
             }
             var result=new Color(value[0],value[1],value[2],source.a);
-            return profile.GammaBlend && QualitySettings.activeColorSpace==ColorSpace.Linear?result.linear:result;
+            if(profile.ReferenceEdgeResponse&&profile.LimitAddedHdr)result=new Color(Mathf.Clamp01(result.r),Mathf.Clamp01(result.g),Mathf.Clamp01(result.b),source.a);
+            if(profile.GammaBlend && QualitySettings.activeColorSpace==ColorSpace.Linear)result=result.linear;
+            if(!profile.ReferenceEdgeResponse)return result;
+            return new Color(source.r+Mathf.Max(0,result.r-source.r)*exposure,
+                source.g+Mathf.Max(0,result.g-source.g)*exposure,source.b+Mathf.Max(0,result.b-source.b)*exposure,source.a);
         }
         private static void AssertSameImage(Texture2D expected,Texture2D actual,string reason) => AssertImageDelta(expected,actual,.004f,reason);
         private static void AssertImageDelta(Texture2D expected,Texture2D actual,float tolerance,string reason)
