@@ -41,15 +41,17 @@ namespace ZeroEngine.Render.Urp
         public readonly List<Material> Materials = new();
         private readonly Shader shader;
         private readonly bool supportsPrimary;
+        private readonly LocalKeyword nativeReferenceKeyword;
         private const int MaximumLights = 4;
         private readonly LightInput[] selected = new LightInput[MaximumLights];
         private readonly Vector4[] rows0 = new Vector4[MaximumLights], rows1 = new Vector4[MaximumLights], rows2 = new Vector4[MaximumLights];
         private readonly Vector4[] colors = new Vector4[MaximumLights], shapes = new Vector4[MaximumLights];
         private readonly Vector4[] powers = new Vector4[MaximumLights], bands = new Vector4[MaximumLights];
         private readonly Vector4[] shadows = new Vector4[MaximumLights];
+        private readonly Vector4[] nativeGeometry = new Vector4[MaximumLights];
         private Matrix4x4[] fallbackBoxes;
         private int selectedCount, uploadedCount;
-        private bool hasUpload;
+        private bool hasUpload, uploadedNativeReference;
         private Vector4 uploadedWrap;
         private UnityEngine.Object primaryLight, previousPrimaryLight;
         private double primaryTransitionStart;
@@ -65,15 +67,18 @@ namespace ZeroEngine.Render.Urp
         private static readonly int PowersId = Shader.PropertyToID("_RimEnhancePowers"), BandsId = Shader.PropertyToID("_RimEnhanceBands");
         private static readonly int ShadowsId = Shader.PropertyToID("_RimEnhanceShadows");
         private static readonly int FallbackBoxesId = Shader.PropertyToID("_RimEnhanceFallbackBoxes");
+        private static readonly int NativeGeometryId = Shader.PropertyToID("_RimNativeGeometry");
         private static readonly int PrimaryWeightsId = Shader.PropertyToID("_RimPrimaryWeights");
         private static readonly int PrimaryDirectionId = Shader.PropertyToID("_RimPrimaryDirection");
+        private static readonly int LightPrioritiesId = Shader.PropertyToID("_RimLightPriorities");
+        private static readonly int ReferenceBandLimitsId = Shader.PropertyToID("_RimReferenceBandLimits");
 
         private struct LightInput
         {
             internal UnityEngine.Object Identity;
             internal float Score, Priority, MinimumExposure;
             internal Vector2 Away;
-            internal Vector4 Row0, Row1, Row2, Color, Shape, Powers, Shadow;
+            internal Vector4 Row0, Row1, Row2, Color, Shape, Powers, Shadow, NativeGeometry;
             internal Matrix4x4 FallbackBox;
         }
 
@@ -82,6 +87,7 @@ namespace ZeroEngine.Render.Urp
             Renderer = renderer; Silhouette = new SpriteRimSilhouette(renderer);
             shader = Resources.Load<Shader>("ZeroEngine/SpriteRimLighting");
             supportsPrimary = shader && shader.FindPropertyIndex("_RimPrimaryWeights") >= 0;
+            if (shader) nativeReferenceKeyword = shader.keywordSpace.FindKeyword("ZE_RIM_NATIVE_REFERENCE");
         }
 
         private void Insert(LightInput value)
@@ -99,9 +105,10 @@ namespace ZeroEngine.Render.Urp
         {
             selectedCount = 0;
             if (!Renderer || sources == null) return false;
+            var center = Renderer.bounds.center;
             foreach (var light in sources)
             {
-                if (!light || !light.TryGetInfluence(Renderer.bounds.center, out var away, out float score, out float priority)) continue;
+                if (!light || !light.TryGetInfluence(center, out var away, out float score, out float priority)) continue;
                 var matrix = light.WorldToLight;
                 var row0 = matrix.GetRow(0); var row1 = matrix.GetRow(1);
                 row0.w += row0.z * light.transform.position.z; row0.z = 0;
@@ -133,12 +140,15 @@ namespace ZeroEngine.Render.Urp
             {
                 var light = source.Light;
                 if ((light.cullingMask & layerMask) == 0) continue;
-                var toward = light.transform.position - position;
+                var origin = light.transform.position;
+                var toward = origin - position;
                 var away = new Vector2(-toward.x, -toward.y).normalized;
                 // A native light directly behind the actor has no XY direction.
                 // Keep it selected: the shader resolves its back-facing contour per art cell.
                 float range = Mathf.Max(.001f, light.range);
-                float attenuation = Mathf.Pow(Mathf.Clamp01(1 - toward.sqrMagnitude / (range * range)), 2);
+                float inverseRange = 1 / range;
+                float attenuation = Mathf.Clamp01(1 - toward.sqrMagnitude * (inverseRange * inverseRange));
+                attenuation *= attenuation;
                 float outer = 0, inner = 1;
                 if (light.type == LightType.Spot)
                 {
@@ -151,8 +161,7 @@ namespace ZeroEngine.Render.Urp
                 float priority = attenuation * light.intensity * peak;
                 float score = Mathf.Clamp01(priority);
                 if (!float.IsFinite(score) || score <= 0) continue;
-                var origin = light.transform.position;
-                var matrix = Matrix4x4.Scale(Vector3.one / range) *
+                var matrix = Matrix4x4.Scale(Vector3.one * inverseRange) *
                     Matrix4x4.TRS(origin, light.transform.rotation, Vector3.one).inverse;
                 Insert(new LightInput
                 {
@@ -162,6 +171,7 @@ namespace ZeroEngine.Render.Urp
                     Color = new Vector4(color.r / Mathf.Max(1, peak), color.g / Mathf.Max(1, peak), color.b / Mathf.Max(1, peak), light.intensity),
                     Shape = new Vector4(light.type == LightType.Point ? 3 : 4, outer, inner, source.DarkEdgeFill),
                     Shadow = source.Shadow,
+                    NativeGeometry = new Vector4(origin.x, origin.y, origin.z, inverseRange),
                     FallbackBox = source.FallbackBox,
                     // Preserve the center's projected magnitude as well as its direction.
                     // Normalizing XY alone makes a tiny center offset become a full inner-wrap direction.
@@ -218,12 +228,18 @@ namespace ZeroEngine.Render.Urp
             var axisX = ((Vector3)Silhouette.WorldToMask.GetRow(0)).normalized;
             var axisY = ((Vector3)Silhouette.WorldToMask.GetRow(1)).normalized;
             bool usePrimary = profile.ReferenceEdgeResponse && supportsPrimary;
+            bool useNativeReference = usePrimary && nativeReferenceKeyword.isValid && selected[0].Shape.x > 2.5f;
             var primaryWeights = usePrimary ? UpdatePrimary() : Vector4.zero;
-            var primaryDirection = new Vector4(Vector2.Dot(primaryAway, new Vector2(axisX.x, axisX.y)), 0, 0, 0);
+            var primaryDirection = new Vector4(Vector2.Dot(primaryAway, new Vector2(axisX.x, axisX.y)),
+                primaryAway.x, axisX.x, axisY.x);
+            var referenceBandLimits = new Vector4(profile.WeakDistance, profile.StrongDistance,
+                profile.StrongScale, Mathf.Clamp(profile.MinimumExposure, .01f, 1));
+            var lightPriorities = Vector4.zero;
             float total = 0, weightedExposure = 0;
             for (int i = 0; i < selectedCount; i++)
             {
                 var input = selected[i];
+                lightPriorities[i] = input.Priority;
                 float response = Mathf.Pow(input.Score, Mathf.Max(.001f, profile.ResponsePower));
                 float distance = Mathf.Lerp(profile.WeakDistance, profile.StrongDistance, response);
                 var away = new Vector3(input.Away.x, input.Away.y, 0);
@@ -234,6 +250,7 @@ namespace ZeroEngine.Render.Urp
                 // world-XY direction so the shader can exclude shadowed light from its style mix.
                 UpdateData(powers, i, input.Shape.x > 2.5f ? new Vector4(distance, input.Powers.y, input.Away.x, input.Away.y) : input.Powers, 32, ref changes);
                 UpdateData(shadows, i, input.Shadow, 256, ref changes);
+                UpdateData(nativeGeometry, i, input.NativeGeometry, 1024, ref changes);
                 if (input.Shadow.w < 0)
                 {
                     fallbackBoxes ??= new Matrix4x4[MaximumLights];
@@ -252,18 +269,23 @@ namespace ZeroEngine.Render.Urp
                 1f / Mathf.Max(.001f, profile.ResponsePower));
             if (!uploadedWrap.Equals(wrap)) { uploadedWrap = wrap; changes |= 128; }
             float exposure = Mathf.Lerp(1, Mathf.Clamp(profile.MinimumExposure * weightedExposure / Mathf.Max(total, .000001f), .01f, 1), selected[0].Score);
+            var center = Renderer.bounds.center;
             foreach (var material in Materials)
             {
+                if ((changes == -1 || uploadedNativeReference != useNativeReference) &&
+                    nativeReferenceKeyword.isValid && material.shader == shader)
+                    material.SetKeyword(in nativeReferenceKeyword, useNativeReference);
                 if (usePrimary)
                 {
                     material.SetVector(PrimaryWeightsId, primaryWeights);
                     material.SetVector(PrimaryDirectionId, primaryDirection);
+                    material.SetVector(LightPrioritiesId, lightPriorities);
+                    material.SetVector(ReferenceBandLimitsId, referenceBandLimits);
                 }
                 material.SetTexture("_RimRefMask", Silhouette.Texture);
                 material.SetVector("_RimRefRow0", Silhouette.WorldToMask.GetRow(0));
                 material.SetVector("_RimRefRow1", Silhouette.WorldToMask.GetRow(1));
                 material.SetVector("_RimRefMaskInfo", Silhouette.Info); material.SetVector("_RimRefFrame", Silhouette.ReferenceFrame);
-                var center = Renderer.bounds.center;
                 material.SetVector("_RimRefCenterWS", new Vector4(center.x, center.y, center.z, 0));
                 material.SetVector("_RimRefStyle", new Vector4(exposure, Mathf.Max(.01f, profile.MaximumLight), Mathf.Clamp01(profile.Strength),
                     (profile.GammaBlend && QualitySettings.activeColorSpace == ColorSpace.Linear ? 1 : 0) + (profile.LimitAddedHdr ? 2 : 0)));
@@ -283,8 +305,9 @@ namespace ZeroEngine.Render.Urp
                 if ((changes & 128) != 0) material.SetVector(WrapId, uploadedWrap);
                 if ((changes & 256) != 0) material.SetVectorArray(ShadowsId, shadows);
                 if ((changes & 512) != 0 && fallbackBoxes != null) material.SetMatrixArray(FallbackBoxesId, fallbackBoxes);
+                if ((changes & 1024) != 0) material.SetVectorArray(NativeGeometryId, nativeGeometry);
             }
-            hasUpload = count > 0; uploadedCount = selectedCount;
+            hasUpload = count > 0; uploadedCount = selectedCount; uploadedNativeReference = useNativeReference;
             for (int i = 0; i < count; i++)
             { var texture = Silhouette.GetSourceTexture(i, out var st); Materials[i].SetTexture(SourceId, texture); Materials[i].SetVector(SourceStId, st); }
             return count > 0;

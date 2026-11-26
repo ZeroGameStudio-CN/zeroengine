@@ -7,7 +7,7 @@ namespace ZeroEngine.Render.Urp
     [CreateAssetMenu(menuName = "ZeroEngine/Rendering/Pixel Rim Lighting", fileName = "PixelRimLighting")]
     public sealed class SpriteRimLightingProfile : ScriptableObject
     {
-        [Tooltip("Reference color-dodge on the shaded scene, with per-light contours and a faint inner wrap. Keeps the body and existing HDR unchanged. Enabled by the shared default; existing custom profiles retain their earlier response.")]
+        [Tooltip("Reference color-dodge on the shaded scene. Marked native lights on one side share a contour; opposing lights use directional contours and a faint inner wrap. Enabled by the shared default.")]
         [InspectorName("参考式边缘（保留场景明暗）")] public bool ReferenceEdgeResponse;
 
         [Range(0f, 1f), InspectorName("受光强度")] public float Strength = .85f;

@@ -10,8 +10,7 @@ pooling and project assets stay in the consumer. The existing UnityEngine-only
 1. Add `SpriteRimRendererFeature` to each URP Renderer used by the game cameras.
 2. Add `SpriteRimLighting` to an actor and call `Configure(renderers, profile)`.
    A null profile uses the reference-style color-dodge response on a one-art-cell
-   contour, with a faint inward transition over two art cells. The body keeps its
-   existing scene shading. `ReferenceEdgeResponse` is enabled in the shared default;
+   contour with a faint inward transition. `ReferenceEdgeResponse` is enabled in the shared default;
    existing custom profiles retain their previous response until explicitly enabled.
 3. Create a dedicated light with `GameObject > Light > 角色边缘点光` or
    `角色边缘聚光`; the Editor-only authoring assembly adds the native light and
@@ -28,45 +27,40 @@ For authored 2D fields, create `SpriteRimLight` components and pass their explic
 array to `Configure(renderers, lights, profile)`. Both inputs use the same enhanced
 composite. The old preview tint and reference MRT implementations are removed.
 
-The default starts from the already rendered scene color. Source textures supply
-alpha coverage only: it never redraws the actor with unlit texture RGB. Each light
-gets its own contour direction. A stable key keeps the full contour response.
-Other lamps retain 55% added light as colored fills. Key selection uses unclamped
-influence, a 20% challenger margin and a 0.15-second handoff. Equal or nearly equal
-lamps do not keep exchanging sides. Fully occluded keys yield to a visible source
-per art cell. Each lamp resolves the reference response under its own contour
-mask, with RGBA8 UNorm source bounds and blending. The key's contour can borrow
-visible color from opposed lights and from lamps of a different hue on the same
-side. Fills retain their own hue and direction with reduced support from the
-opposing field.
-Positive added light is fused in linear color with a fourth-power magnitude
-envelope. Every contour still uses its own directional mask.
-One key with three identical overlapping white fills stays below 1.1 times the
-single-lamp added light before the LDR cap; the body is composed only once.
-Within overlap, a bounded independent-channel response restores the actual lamp
-hues when the reference saturation branch borrows another channel. Its budget
-comes from the material brightness and reference gain. This color correction
-fades in with local overlap. Fills also use their actual hue on disjoint contours.
-Native field lookup follows the camera
-ray to each source's XY plane. The reference's XY center response attenuates
-contour RGB before Color Dodge, preserving weak colored detail below saturation;
-native 3D selection still controls source eligibility and contour direction.
-These masks never replace the shaded body. The narrow inward wrap fades away within two art
-cells. Its strength is 0.08 in the shared default; the deep interior is unchanged.
-Dark paint uses a finite Color Dodge response with a soft ceiling based on the
-shaded material. Strong light gives dark painted accents more headroom and
-compresses their RGB gain together to preserve their hue. A small reflected
-contribution rises quadratically with the masked field and gives way to painted
-detail as its response strengthens.
-Exposure scales the added edge gain. Existing HDR/emission is preserved and
-added LDR light is capped at one.
-Marked native lamps use the reference's world-XY field falloff for this response;
-native spot cones, front/back direction, source visibility and shadow attenuation
-remain active. The outer edge uses the reference's definite alpha boundary;
-filtering is reserved for the faint inward shell. Off-center reference backlights
-keep the original directional mask. A projected-center rear source retains a key
-side and weaker horizontal fill, without extending the contour across the soles.
-Actual light from below can still illuminate downward-facing edges.
+The default uses the already shaded scene color. Source textures supply alpha
+coverage. Same-side marked native lights form one bounded field. The strongest
+visible 2D center response selects the shifted art-cell mask, and Color Dodge
+resolves the field once. Bright and dark art retain different responses. RGB
+is bounded together so strong colored lamps keep their hue.
+
+With opposing lights, the key keeps its directional contour and inner wrap.
+The opposite field can strengthen recessed details on the far side in the
+key's hue. A thin strand can also carry the key hue on its opposite-facing
+contour when both fields overlap behind it. This contribution fades with the
+visible fields and the rear angle measured along the camera axis. The fill
+uses its own hue on uncovered broad edges and fades as key coverage grows
+during a handoff. The strand contribution is softer on pale art.
+Dark diagonal joints check the neighboring art cells at the edge and inside
+the silhouette to retain a continuous contour.
+Key selection uses unclamped
+influence, a 20% challenger margin and a 0.15-second handoff. A dominant group
+can steer the key, and occluded lamps drop out per art cell.
+
+The native field follows the camera ray to each source's XY plane. Native
+range, spot cone, front/back direction and shadow visibility still control
+the contribution. A rear source near the projected center retains a key
+side and weaker horizontal fill. Sources below the actor can illuminate
+downward-facing edges.
+
+An angled rear key carries its own hue into recessed details and one art
+cell inside the far silhouette. This shares the inner-wrap strength and
+the visible key field. The outer edge remains available for opposing fill.
+
+The outer edge uses a definite alpha boundary. The shared default uses a
+strength of 0.08 for the narrow inward wrap. The opposing fill gives dark
+cloth a small colored reflection that fades with the source's falloff. HDR
+limiting preserves existing emission and bounds added light by the available
+RGB headroom.
 
 The previous optional native core compares complete art cells along the light direction.
 Near a rear light's projected center, it blends into the symmetric one-cell
