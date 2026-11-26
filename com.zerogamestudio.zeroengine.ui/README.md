@@ -70,6 +70,18 @@ The toast system is project-neutral. Games should create a local adapter for loc
 - `ScreenTransitionHooks` - 输入 lease、结构化日志和 telemetry 注入边界
 - `ScreenTransitionStyle` - `Fade=0`、`CircleWipe=1`、`DiamondWipe=2`、`Dissolve=3`
 
+### UI.Combat 层数标记
+
+`ZeroEngine.UI.Combat.StackMarkerView` 在 Canvas 上显示角色头顶的层数。宿主用
+`Create(canvas)` 创建视图，通过 `SetRows` 传入带稳定键的层数快照，并在渲染前调用
+`Place(camera, worldAnchor, verticalOffset)` 跟随角色。
+
+- `Automatic` 按配置容量选样式，容量不超过 5 时逐枚显示，容量大于 5 时显示图标和 `×N`。
+- `PerStack` 显示每一层并自动分行。`Wrapped` 按设置的每行数量换行。`IconWithCount` 始终显示图标和数字。
+- 标记可用 Sprite、UI Prefab 或世界 Prefab。宿主可以监听 `FeedbackRequested`，分别用加层和扣层的配置播放反馈。
+
+宿主负责同步 Buff 状态和播放反馈。切换角色或离开场景时调用 `ClearRows()`，释放该视图持有的标记。
+
 ### PAD 组件
 
 `PadPrefabSet` 统一同一套 PAD 的面板、导航行、主按钮和统计预制体。把预制体填入同一个资产，使用它的页面即可从同一套模板生成控件。
