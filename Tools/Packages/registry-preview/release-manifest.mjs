@@ -721,16 +721,37 @@ export default {
             "com.unity.modules.physics": "1.0.0",
             "com.unity.modules.ai": "1.0.0",
             "com.unity.modules.animation": "1.0.0"
+          },
+          "githubBase": "https://github.com/ZeroGameStudio-CN/zeroengine/releases/download/ze-upm-registry-linked-d194ba36-20261118/"
+        },
+        "2.2.0": {
+          "asset": "com.zerogamestudio.zeroengine.ai-2.2.0.tgz",
+          "bytes": 78328,
+          "sha256": "9f1eca731e605ab3d1409fb6e80a5e50b55f89cf2d63d037a21f047b4bf4788d",
+          "sha512": "sha512-JpdhdqRsgD7hFnwGaGkR8iC9Bxo0oWwn/DIcQq4YLen7JqamDuVIKR1ZqNygpJ/2ix+gD0+cRrH3yNQCVaeLYQ==",
+          "sourceCommit": "2943f68c2b3e1d2b7bd5eab2604a002dd557c927",
+          "sourceTree": "7e67536c4c7626697569519af42b05f4b29d0bcc",
+          "matchedSourceFiles": 153,
+          "sourceBytesUnchanged": true,
+          "runtimeBytesUnchanged": true,
+          "packageJsonReformatted": false,
+          "omittedGitIgnore": [],
+          "signingOrganizationId": "16767998560366",
+          "dependencies": {
+            "com.zerogamestudio.zeroengine.core": "2.2.4-ze-pob.history-pad.1",
+            "com.unity.modules.physics": "1.0.0",
+            "com.unity.modules.ai": "1.0.0",
+            "com.unity.modules.animation": "1.0.0"
           }
         }
       },
-      "githubBase": "https://github.com/ZeroGameStudio-CN/zeroengine/releases/download/ze-upm-registry-linked-d194ba36-20261118/",
+      "githubBase": "https://github.com/ZeroGameStudio-CN/zeroengine/releases/download/ze-upm-2943f68c-bbb8071b9725/",
       "metadataAsset": "com.zerogamestudio.zeroengine.ai-registry.json",
       "tags": {
-        "latest": "2.1.0"
+        "latest": "2.2.0"
       },
       "summary": {
-        "displayName": "ZeroEngine.AI",
+        "displayName": "ZeroEngine AI",
         "description": "AI decision systems for ZeroEngine. Includes FSM (Finite State Machine), Behavior Tree, UtilityAI (self-developed), GOAP bridge (crashkonijn/GOAP adapter), and NPC Schedule system.",
         "unity": "6000.6",
         "unityRelease": "0f1"
@@ -1666,5 +1687,5 @@ export default {
       }
     }
   },
-  "updatedAt": "2026-11-24T07:16:22Z"
+  "updatedAt": "2026-11-26T06:30:52Z"
 };

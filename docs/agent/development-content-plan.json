@@ -715,22 +715,24 @@
     {
       "id": "ze.ai.run-decisions",
       "title": "自动战整局决策策略",
-      "stage": "Previewable",
+      "stage": "Ready",
       "targetReleaseId": "",
-      "availability": "TestOnly",
+      "availability": "Released",
       "responsibleChat": "01a208ed-2a86-79f1-bfb2-6071665e2e67",
       "chatUrl": "thread://01a208ed-2a86-79f1-bfb2-6071665e2e67?hostId=local",
-      "nextAction": "签名发布后用实际 POB 装包与实机流程核对消费和结算。",
+      "nextAction": "POB 的装包和实机验收由关联条目记录。",
       "entrance": "ZeroEngine.AI.RunDecisions.IRunDecisionStrategy 和 WeightedRunDecisionStrategy",
       "resourcePath": "com.zerogamestudio.zeroengine.ai/Runtime/AI/RunDecisions/WeightedRunDecisionStrategy.cs",
       "revision": "2.2.0 候选，消费项目传入实时可选项、权重和局内随机种子，游戏执行动作。",
-      "releaseEvidence": "",
+      "releaseEvidence": "https://github.com/ZeroGameStudio-CN/zeroengine/releases/tag/ze-upm-2943f68c-bbb8071b9725",
       "candidatePackageVersion": "2.2.0",
       "verificationEvidence": [
         "D:/unity/artifacts/pob-ze-run-decisions-20261126-01a208ed/decision-parity.json",
-        "D:/unity/artifacts/pob-ze-run-decisions-20261126-01a208ed/package-audit.json"
+        "D:/unity/artifacts/pob-ze-run-decisions-20261126-01a208ed/package-audit.json",
+        "D:/unity/artifacts/pob-ze-ai-2.2.0-release-20261126-01a208ed/release/release-receipt.json",
+        "https://github.com/ZeroGameStudio-CN/zeroengine/releases/tag/ze-upm-2943f68c-bbb8071b9725"
       ],
-      "verificationScope": "包测试 5 项，使用候选归档编译 POB 并对照 20,480 次决策及随机序列。",
+      "verificationScope": "包测试 5 项，使用候选归档编译 POB 并对照 20,480 次决策及随机序列。 2.2.0 通过 Unity 组织签名验证并从公开 Registry 读回。",
       "relatedContent": [
         {
           "projectId": "pob",
