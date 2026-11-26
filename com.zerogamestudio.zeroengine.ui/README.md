@@ -78,6 +78,7 @@ The toast system is project-neutral. Games should create a local adapter for loc
 
 - `Automatic` 按配置容量选样式，容量不超过 5 时逐枚显示，容量大于 5 时显示图标和 `×N`。
 - `PerStack` 显示每一层并自动分行。`Wrapped` 按设置的每行数量换行。`IconWithCount` 始终显示图标和数字。
+- 宿主可通过 `Create` 的 `formatCount` 参数统一头顶计数与自身 HUD 的数字格式。
 - 标记可用 Sprite、UI Prefab 或世界 Prefab。宿主可以监听 `FeedbackRequested`，分别用加层和扣层的配置播放反馈。
 
 宿主负责同步 Buff 状态和播放反馈。切换角色或离开场景时调用 `ClearRows()`，释放该视图持有的标记。
