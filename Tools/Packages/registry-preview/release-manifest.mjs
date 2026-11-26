@@ -1297,14 +1297,34 @@ export default {
             "com.zerogamestudio.zeroengine.core": "2.2.4-ze-pob.history-pad.1",
             "com.zerogamestudio.zeroengine.editor-ui": "1.5.0",
             "com.unity.textmeshpro": "3.0.6"
+          },
+          "githubBase": "https://github.com/ZeroGameStudio-CN/zeroengine/releases/download/ze-upm-d21aa0f5-22e7e545abb4/"
+        },
+        "2.3.4-ze-pob.stack-markers.1": {
+          "asset": "com.zerogamestudio.zeroengine.ui-2.3.4-ze-pob.stack-markers.1.tgz",
+          "bytes": 108156,
+          "sha256": "efff108e8aad8983cbbbff707735e86adb227418eee2ce77ddfeadfdd59c1f34",
+          "sha512": "sha512-QMYy5nD/p2UZpxPuPHee/c0EkmXmrQbhNpC0F9aYU4k3vnUW4qxND1AeT8SysfqppiXraZID8sBETxz/OvidoA==",
+          "sourceCommit": "18ff687a74c2ac42cdd0bcc35e4716f782e4ee70",
+          "sourceTree": "e926af621bd25f18e5ff7aacd831b603fd4e33a6",
+          "matchedSourceFiles": 213,
+          "sourceBytesUnchanged": true,
+          "runtimeBytesUnchanged": true,
+          "packageJsonReformatted": false,
+          "omittedGitIgnore": [],
+          "signingOrganizationId": "16767998560366",
+          "dependencies": {
+            "com.zerogamestudio.zeroengine.core": "2.2.4-ze-pob.history-pad.1",
+            "com.zerogamestudio.zeroengine.editor-ui": "1.5.0",
+            "com.unity.textmeshpro": "3.0.6"
           }
         }
       },
-      "githubBase": "https://github.com/ZeroGameStudio-CN/zeroengine/releases/download/ze-upm-d21aa0f5-22e7e545abb4/",
+      "githubBase": "https://github.com/ZeroGameStudio-CN/zeroengine/releases/download/ze-upm-18ff687a-a011bf74a8b4/",
       "metadataAsset": "com.zerogamestudio.zeroengine.ui-registry.json",
       "tags": {
         "latest": "2.3.0",
-        "preview": "2.3.3-ze-pob.create-menus.1"
+        "preview": "2.3.4-ze-pob.stack-markers.1"
       },
       "summary": {
         "displayName": "ZeroEngine UI",
@@ -2031,5 +2051,5 @@ export default {
       }
     }
   },
-  "updatedAt": "2026-11-26T12:19:32Z"
+  "updatedAt": "2026-11-26T14:49:19Z"
 };
