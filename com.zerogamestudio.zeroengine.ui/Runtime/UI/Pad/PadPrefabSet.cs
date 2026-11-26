@@ -5,7 +5,7 @@ using UnityEngine.UI;
 namespace ZeroEngine.UI.Pad
 {
     /// <summary>One set of authored templates for all PAD pages that use the same design.</summary>
-    [CreateAssetMenu(menuName = "ZeroEngine/UI/PAD Prefab Set", fileName = "PadPrefabSet")]
+    [CreateAssetMenu(menuName = "ZeroEngine/UI and Presentation/Views/PAD Prefab Set", fileName = "PadPrefabSet")]
     public sealed class PadPrefabSet : ScriptableObject
     {
         [SerializeField] private PadPanelView _panel;

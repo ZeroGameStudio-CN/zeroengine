@@ -8,7 +8,7 @@ namespace ZeroEngine.Shop
     /// <summary>
     /// 商品定义
     /// </summary>
-    [CreateAssetMenu(fileName = "New Shop Item", menuName = "ZeroEngine/Shop/Shop Item")]
+    [CreateAssetMenu(fileName = "New Shop Item", menuName = "ZeroEngine/Items and Economy/Shops/Shop Item")]
     public class ShopItemSO : ScriptableObject
     {
         [Header("基础信息")]
@@ -137,7 +137,7 @@ namespace ZeroEngine.Shop
     /// <summary>
     /// 商店定义
     /// </summary>
-    [CreateAssetMenu(fileName = "New Shop", menuName = "ZeroEngine/Shop/Shop")]
+    [CreateAssetMenu(fileName = "New Shop", menuName = "ZeroEngine/Items and Economy/Shops/Shop")]
     public class ShopSO : ScriptableObject
     {
         [Header("基础信息")]

@@ -1,6 +1,6 @@
 {
   "name": "com.zerogamestudio.zeroengine.multiplayer",
-  "version": "0.5.0",
+  "version": "0.5.1-ze-pob.android.1",
   "displayName": "ZeroEngine Multiplayer",
   "description": "SDK-neutral multiplayer session orchestration with optional FishNet, Steam, and LocalDirect adapters for ZeroEngine projects.",
   "unity": "6000.6",

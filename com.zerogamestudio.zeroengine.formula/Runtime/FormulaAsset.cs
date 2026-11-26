@@ -3,7 +3,7 @@ using UnityEngine;
 
 namespace ZeroEngine.Formula
 {
-    [CreateAssetMenu(menuName = "ZeroEngine/Formula/Formula Asset")]
+    [CreateAssetMenu(menuName = "ZeroEngine/Data and Graphs/Formula/Formula Asset")]
     public sealed class FormulaAsset : ScriptableObject, IFormulaDefinition
     {
         [SerializeField] private float initialValue;

@@ -8,7 +8,7 @@ namespace ZeroEngine.BuffSystem
     /// Buff 配置数据。
     /// 定义 Buff 的基本属性、行为和属性修饰效果。
     /// </summary>
-    [CreateAssetMenu(fileName = "NewBuff", menuName = "ZeroEngine/Buff System/Buff Data")]
+    [CreateAssetMenu(fileName = "NewBuff", menuName = "ZeroEngine/Gameplay/Buffs/Buff Data")]
     public class BuffData : ScriptableObject
     {
         /// <summary>

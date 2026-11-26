@@ -4,12 +4,9 @@ using UnityEngine.Scripting.APIUpdating;
 namespace ZeroEngine.Render.Urp
 {
     [MovedFrom(true, "POB", "POB.Rendering", "SpriteRimLightingProfile")]
-    [CreateAssetMenu(menuName = "ZeroEngine/Rendering/Pixel Rim Lighting", fileName = "PixelRimLighting")]
+    [CreateAssetMenu(menuName = "ZeroEngine/UI and Presentation/Rendering/Pixel Rim Lighting", fileName = "PixelRimLighting")]
     public sealed class SpriteRimLightingProfile : ScriptableObject
     {
-        [Tooltip("Reference color-dodge on the shaded scene. Marked native lights on one side share a contour; opposing lights use directional contours and a faint inner wrap. Enabled by the shared default.")]
-        [InspectorName("参考式边缘（保留场景明暗）")] public bool ReferenceEdgeResponse;
-
         [Range(0f, 1f), InspectorName("受光强度")] public float Strength = .85f;
         [Min(0f), InspectorName("弱光边带（美术像素）")] public float WeakDistance = 2f;
         [Min(0f), InspectorName("强光边带（美术像素）")] public float StrongDistance = 1f;
@@ -26,11 +23,8 @@ namespace ZeroEngine.Render.Urp
         [Tooltip("Filters only silhouette coverage. Source artwork remains point sampled."), Range(0f, .35f)]
         [InspectorName("内侧绕光强度")] public float InnerWrapStrength = .05f;
 
-        [Tooltip("Optional stronger ZE core. Zero uses the reference edge response with a faint inward transition and preserves the shaded body."), Range(0f, 1f)]
-        [InspectorName("清晰亮边强度")] public float ContourStrength;
-
         [Range(.01f, 1f), InspectorName("暗部受光亮度上限")]
-        [Tooltip("Linear-color cap for soft color-dodge and dark fill. The clear contour core has a separate bounded LDR response.")]
+        [Tooltip("Linear-color cap for added light on dark art. Existing bright pixels retain their own highlight limit.")]
         public float DarkEdgeBrightness = 1f;
     }
 }

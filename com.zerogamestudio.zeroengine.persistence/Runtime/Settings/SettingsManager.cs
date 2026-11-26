@@ -451,7 +451,7 @@ namespace ZeroEngine.Settings
 
     #region ScriptableObjects
 
-    [CreateAssetMenu(fileName = "Settings Definition", menuName = "ZeroEngine/Settings/Settings Definition")]
+    [CreateAssetMenu(fileName = "Settings Definition", menuName = "ZeroEngine/Services/Settings/Settings Definition")]
     [Obsolete("ZeroEngine.Settings is retained for compatibility. Use ZeroEngine.PlayerSettings settings catalog.", false)]
     public class SettingsDefinitionSO : ScriptableObject
     {

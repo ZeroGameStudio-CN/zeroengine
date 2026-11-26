@@ -79,7 +79,7 @@ namespace ZeroEngine.Render.Urp
             private sealed class PassData
             {
                 internal TextureHandle Source, Destination;
-                internal readonly List<SpriteRimDraw> Draws = new();
+                internal List<SpriteRimDraw> Draws;
                 internal Rect FullViewport, ActorViewport;
                 internal float AdditionalShadowDistanceSq;
             }
@@ -95,9 +95,7 @@ namespace ZeroEngine.Render.Urp
                 var size = desc.CalculateFinalDimensions(); var rect = camera.camera.rect;
                 using (var builder = renderGraph.AddRasterRenderPass<PassData>("Pixel rim: multi-light composite", out var data))
                 {
-                    data.Source = source; data.Destination = destination;
-                    data.Draws.Clear();
-                    data.Draws.AddRange(draws);
+                    data.Source = source; data.Destination = destination; data.Draws = new List<SpriteRimDraw>(draws);
                     data.FullViewport = new Rect(0, 0, size.x, size.y);
                     data.ActorViewport = new Rect(rect.x * size.x, rect.y * size.y, rect.width * size.x, rect.height * size.y);
                     builder.UseTexture(source, AccessFlags.Read);
@@ -125,7 +123,6 @@ namespace ZeroEngine.Render.Urp
                         foreach (var draw in data.Draws)
                             if (draw.Renderer && draw.Renderer.enabled)
                                 for (int i = 0; i < draw.Materials.Count; i++) context.cmd.DrawRenderer(draw.Renderer, draw.Materials[i], i, 0);
-                        data.Draws.Clear();
                     });
                 }
                 resources.cameraColor = destination;

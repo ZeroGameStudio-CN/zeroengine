@@ -124,7 +124,7 @@ namespace ZeroEngine.Loot
     /// <summary>
     /// 掉落表 ScriptableObject
     /// </summary>
-    [CreateAssetMenu(fileName = "New LootTable", menuName = "ZeroEngine/Loot/Loot Table")]
+    [CreateAssetMenu(fileName = "New LootTable", menuName = "ZeroEngine/Items and Economy/Loot/Loot Table")]
     public class LootTableSO : ScriptableObject
     {
         [Header("基本信息")]

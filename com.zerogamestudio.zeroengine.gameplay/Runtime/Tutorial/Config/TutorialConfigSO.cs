@@ -9,7 +9,7 @@ namespace ZeroEngine.Tutorial
     /// <summary>
     /// 教程系统全局配置 (v1.14.0+)
     /// </summary>
-    [CreateAssetMenu(fileName = "TutorialConfig", menuName = "ZeroEngine/Tutorial/Tutorial Config")]
+    [CreateAssetMenu(fileName = "TutorialConfig", menuName = "ZeroEngine/Narrative/Tutorials/Tutorial Config")]
     public class TutorialConfigSO : ScriptableObject
     {
         #region General Settings

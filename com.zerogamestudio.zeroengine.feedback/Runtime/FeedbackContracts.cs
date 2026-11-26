@@ -65,7 +65,7 @@ namespace ZeroEngine.Feedback
         internal int AttachmentLimit => Mathf.Clamp(MaxAttachments, 1, 3);
     }
 
-    [CreateAssetMenu(fileName = "FeedbackUiTheme", menuName = "ZeroEngine/Feedback UI Theme")]
+    [CreateAssetMenu(fileName = "FeedbackUiTheme", menuName = "ZeroEngine/UI and Presentation/Feedback/Feedback UI Theme")]
     public sealed class FeedbackUiTheme : ScriptableObject
     {
         public TMP_FontAsset Font;

@@ -1,12 +1,12 @@
 {
   "name": "com.zerogamestudio.zeroengine.persistence",
-  "version": "2.1.2",
+  "version": "2.1.3-ze-pob.labels.1",
   "displayName": "ZeroEngine Persistence",
   "description": "Backend-independent save-slot orchestration, stable participant adapters, atomic multi-file promotion and safe screenshot policy for ZeroEngine. Legacy Save and Settings APIs remain available for compatibility.",
   "unity": "6000.6",
   "unityRelease": "0f1",
   "dependencies": {
-    "com.zerogamestudio.zeroengine.core": "2.0.0",
+    "com.zerogamestudio.zeroengine.core": "2.2.3-ze-pob.labels.1",
     "com.unity.modules.imageconversion": "1.0.0",
     "com.unity.modules.screencapture": "1.0.0",
     "com.unity.modules.audio": "1.0.0",

@@ -3,7 +3,7 @@
 This sample demonstrates the generic graph asset and editor route.
 
 1. Import the sample from Package Manager.
-2. Create a `TceGraphAsset` from `Assets > Create > ZeroEngine > TCE > Graph Asset`.
+2. Create a `TceGraphAsset` from `Assets > Create > ZeroEngine > Data and Graphs > TCE > Graph Asset`.
 3. Select the new graph asset.
 4. Open `ZGS > 工作台 > 内容创作 > TCE 图编辑器`.
 5. Add install trigger, numeric condition, cooldown, and debug log effect.

@@ -48,7 +48,7 @@ namespace ZeroEngine.PortraitSpeech
         public Vector2Int bottomLeft;
     }
 
-    [CreateAssetMenu(menuName="ZeroEngine/UI/Portrait Expression Set")]
+    [CreateAssetMenu(menuName="ZeroEngine/UI and Presentation/Portraits/Portrait Expression Set")]
     public sealed class PortraitExpressionSet : ScriptableObject
     {
         public int actorId;

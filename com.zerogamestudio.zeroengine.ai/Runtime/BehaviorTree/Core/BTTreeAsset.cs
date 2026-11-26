@@ -98,7 +98,7 @@ namespace ZeroEngine.BehaviorTree
     /// <summary>
     /// ScriptableObject for serializable behavior tree asset.
     /// </summary>
-    [CreateAssetMenu(fileName = "NewBTTree", menuName = "ZeroEngine/BehaviorTree/Behavior Tree Asset")]
+    [CreateAssetMenu(fileName = "NewBTTree", menuName = "ZeroEngine/AI and Behavior/Behavior Trees/Behavior Tree Asset")]
     public class BTTreeAsset : ScriptableObject
     {
         [Tooltip("Tree display name")]

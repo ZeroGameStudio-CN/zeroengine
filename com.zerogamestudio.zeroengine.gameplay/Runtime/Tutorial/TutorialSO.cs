@@ -7,7 +7,7 @@ namespace ZeroEngine.Tutorial
     /// <summary>
     /// 教程步骤定义
     /// </summary>
-    [CreateAssetMenu(fileName = "New Tutorial Step", menuName = "ZeroEngine/Tutorial/Tutorial Step")]
+    [CreateAssetMenu(fileName = "New Tutorial Step", menuName = "ZeroEngine/Narrative/Tutorials/Tutorial Step")]
     public class TutorialStepSO : ScriptableObject
     {
         [Header("基础信息")]
@@ -119,7 +119,7 @@ namespace ZeroEngine.Tutorial
     /// <summary>
     /// 教程定义
     /// </summary>
-    [CreateAssetMenu(fileName = "New Tutorial", menuName = "ZeroEngine/Tutorial/Tutorial")]
+    [CreateAssetMenu(fileName = "New Tutorial", menuName = "ZeroEngine/Narrative/Tutorials/Tutorial")]
     public class TutorialSO : ScriptableObject
     {
         [Header("基础信息")]
@@ -221,7 +221,7 @@ namespace ZeroEngine.Tutorial
     /// <summary>
     /// 教程组 (用于分类)
     /// </summary>
-    [CreateAssetMenu(fileName = "New Tutorial Group", menuName = "ZeroEngine/Tutorial/Tutorial Group")]
+    [CreateAssetMenu(fileName = "New Tutorial Group", menuName = "ZeroEngine/Narrative/Tutorials/Tutorial Group")]
     public class TutorialGroupSO : ScriptableObject
     {
         [Tooltip("组ID")]

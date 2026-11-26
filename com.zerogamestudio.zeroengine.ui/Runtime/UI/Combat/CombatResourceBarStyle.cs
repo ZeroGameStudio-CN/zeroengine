@@ -10,7 +10,7 @@ namespace ZeroEngine.UI.Combat
         Manual
     }
 
-    [CreateAssetMenu(menuName = "ZeroEngine/UI/Combat Resource Bar Style", fileName = "CombatResourceBarStyle")]
+    [CreateAssetMenu(menuName = "ZeroEngine/UI and Presentation/HUD/Combat Resource Bar Style", fileName = "CombatResourceBarStyle")]
     public sealed class CombatResourceBarStyle : ScriptableObject
     {
         [SerializeField] private Color _frontColor = new Color(0.25f, 0.95f, 0.45f, 1f);

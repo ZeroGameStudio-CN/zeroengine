@@ -1,13 +1,13 @@
 {
   "name": "com.zerogamestudio.zeroengine.ui",
-  "version": "2.3.0",
+  "version": "2.3.2-ze-pob.history-pad.1",
   "displayName": "ZeroEngine UI",
   "description": "Industrial-grade UI framework for ZeroEngine. Includes UIManager (layers, stacks, masks), UIViewBase (lifecycle, animations, focus), and optional MVVM framework.",
   "unity": "6000.6",
   "unityRelease": "0f1",
   "dependencies": {
-    "com.zerogamestudio.zeroengine.core": "2.0.0",
-    "com.zerogamestudio.zeroengine.editor-ui": "1.3.0",
+    "com.zerogamestudio.zeroengine.core": "2.2.4-ze-pob.history-pad.1",
+    "com.zerogamestudio.zeroengine.editor-ui": "1.5.0",
     "com.unity.textmeshpro": "3.0.6"
   },
   "keywords": [

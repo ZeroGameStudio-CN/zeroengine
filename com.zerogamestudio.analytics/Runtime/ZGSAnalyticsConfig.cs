@@ -2,7 +2,7 @@ using UnityEngine;
 
 namespace ZGS.Analytics
 {
-    [CreateAssetMenu(fileName = "ZGSAnalyticsConfig", menuName = "ZGS/Analytics Config")]
+    [CreateAssetMenu(fileName = "ZGSAnalyticsConfig", menuName = "ZeroEngine/Services/Analytics/Analytics Config")]
     public class ZGSAnalyticsConfig : ScriptableObject
     {
         [Header("General Settings")]

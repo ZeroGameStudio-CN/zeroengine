@@ -59,7 +59,7 @@ namespace ZeroEngine.Dialog
     /// <summary>
     /// ScriptableObject-based dialogue definition for simple conversations.
     /// </summary>
-    [CreateAssetMenu(fileName = "NewDialogue", menuName = "ZeroEngine/Dialog/Dialogue")]
+    [CreateAssetMenu(fileName = "NewDialogue", menuName = "ZeroEngine/Narrative/Dialogue/Dialogue")]
     public class DialogueSO : ScriptableObject
     {
         [Tooltip("Start from this entry index")]

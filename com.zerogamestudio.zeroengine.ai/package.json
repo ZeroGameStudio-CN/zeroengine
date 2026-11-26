@@ -6,7 +6,7 @@
   "unity": "6000.6",
   "unityRelease": "0f1",
   "dependencies": {
-    "com.zerogamestudio.zeroengine.core": "2.2.2",
+    "com.zerogamestudio.zeroengine.core": "2.2.4-ze-pob.history-pad.1",
     "com.unity.modules.physics": "1.0.0",
     "com.unity.modules.ai": "1.0.0",
     "com.unity.modules.animation": "1.0.0"

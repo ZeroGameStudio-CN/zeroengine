@@ -1,11 +1,11 @@
 {
   "name": "com.zerogamestudio.zeroengine.world-shift",
-  "version": "0.1.2",
+  "version": "0.1.2-ze-pob.labels.1",
   "displayName": "ZeroEngine World Shift",
   "description": "World-space visual transition helpers for swapping overworld and underworld visual layers.",
   "unity": "6000.6",
   "dependencies": {
-    "com.unity.render-pipelines.universal": "17.6.0"
+    "com.unity.render-pipelines.universal": "12.1.7"
   },
   "keywords": [
     "zeroengine",

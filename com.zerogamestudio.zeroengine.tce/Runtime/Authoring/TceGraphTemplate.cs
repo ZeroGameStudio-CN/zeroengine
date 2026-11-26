@@ -2,7 +2,7 @@ using UnityEngine;
 
 namespace ZeroEngine.TCE
 {
-    [CreateAssetMenu(menuName = "ZeroEngine/TCE/Graph Template", fileName = "TceGraphTemplate")]
+    [CreateAssetMenu(menuName = "ZeroEngine/Data and Graphs/TCE/Graph Template", fileName = "TceGraphTemplate")]
     public sealed class TceGraphTemplate : ScriptableObject
     {
         [SerializeField] private string displayName = string.Empty;

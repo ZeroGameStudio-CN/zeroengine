@@ -254,7 +254,7 @@ public List<QuestCondition> Conditions = new()
 使用 `InteractionConfigSO` 配置全局参数：
 
 ```csharp
-// 创建: Assets > Create > ZeroEngine > Interaction > Interaction Config
+// 创建: Assets > Create > ZeroEngine > Gameplay > Interaction > Interaction Config
 
 InteractionConfigSO:
   Default Detection Radius: 5

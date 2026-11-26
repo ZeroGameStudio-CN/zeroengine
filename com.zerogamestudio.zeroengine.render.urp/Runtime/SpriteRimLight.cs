@@ -38,11 +38,8 @@ namespace ZeroEngine.Render.Urp
         }
 
         public bool TryGetInfluence(Vector3 position, out Vector2 awayDirection, out float intensity)
-            => TryGetInfluence(position, out awayDirection, out intensity, out _);
-
-        internal bool TryGetInfluence(Vector3 position, out Vector2 awayDirection, out float intensity, out float priority)
         {
-            intensity = priority = 0;
+            intensity = 0;
             awayDirection = new Vector2(position.x - transform.position.x, position.y - transform.position.y);
             if (!isActiveAndEnabled || !AffectsRim || !float.IsFinite(Intensity) || Intensity <= 0) return false;
             var local = WorldToLight.MultiplyVector(new Vector3(awayDirection.x, awayDirection.y, 0));
@@ -69,8 +66,7 @@ namespace ZeroEngine.Render.Urp
                 intensity = Mathf.Pow(1 - angle / limit, Mathf.Max(0, RangePower)) * Mathf.Pow(1 - distance, Mathf.Max(0, LightPower));
             }
             else return false;
-            priority = intensity * Intensity;
-            intensity = Mathf.Clamp01(priority);
+            intensity = Mathf.Clamp01(intensity * Intensity);
             return float.IsFinite(intensity) && intensity > 0;
         }
     }
