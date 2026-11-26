@@ -68,7 +68,7 @@ namespace ZeroEngine.Interaction.Multiplayer
             return Receiver.Receive(value.Command);
         }
         private InteractionCommandReceipt Reject(InteractionCommand command, InteractionCommandRejection reason) =>
-            new InteractionCommandReceipt(Receiver.Epoch, Receiver.ActorId, Receiver.Activation, command.Sequence,
+            new InteractionCommandReceipt(command.Epoch, Receiver.ActorId, command.ActorActivation, command.Sequence,
                 command.ActionId, false, false, false, false, false, reason, null);
         public void Dispose() { owner.Unbind(this); Receiver.Dispose(); }
     }

@@ -18,7 +18,13 @@ namespace ZeroEngine.Interaction.Tests
         {
             public string Id { get; set; } = "target";
             public int Priority => 0;
-            public bool IsAvailable { get; set; } = true;
+            private bool available = true;
+            public int AvailabilityChecks { get; private set; }
+            public bool IsAvailable
+            {
+                get { AvailabilityChecks++; return available; }
+                set { available = value; }
+            }
             private InteractionPolicy policy = InteractionPolicy.Press;
             public InteractionPolicy Policy { get { if (ThrowPolicy) throw new InvalidOperationException("provider fault"); return policy; } set { policy = value; } }
             public InteractionCheck Admission = InteractionCheck.Permit;
@@ -83,7 +89,10 @@ namespace ZeroEngine.Interaction.Tests
             using var f = new Fixture(); var press = f.Press(); f.Actor.Receive(press);
             var tampered = new InteractionCommand(press.Epoch, press.ActorActivation, press.Sequence, press.ActionId,
                 new InteractionTargetIdentity("different", 9), press.Kind);
-            Assert.That(f.Actor.Receive(tampered).Rejection, Is.EqualTo(InteractionCommandRejection.ConflictingReplay));
+            var rejected = f.Actor.Receive(tampered);
+            Assert.That(rejected.Rejection, Is.EqualTo(InteractionCommandRejection.ConflictingReplay));
+            Assert.That(rejected.Outcome, Is.Null);
+            Assert.That(rejected.IsHeld, Is.False);
             Assert.That(f.Target.Mutations, Is.EqualTo(1));
         }
 
@@ -99,11 +108,36 @@ namespace ZeroEngine.Interaction.Tests
         [Test] public void InvalidEpochOrActorActivationCannotPoisonTheSequenceGate()
         {
             using var f = new Fixture(); var press = f.Press();
-            var oldEpoch = new InteractionCommand(16, press.ActorActivation, 100, 100, press.Target, press.Kind);
-            var oldActor = new InteractionCommand(17, press.ActorActivation + 1, 100, 100, press.Target, press.Kind);
-            Assert.That(f.Actor.Receive(oldEpoch).Rejection, Is.EqualTo(InteractionCommandRejection.WrongEpoch));
-            Assert.That(f.Actor.Receive(oldActor).Rejection, Is.EqualTo(InteractionCommandRejection.WrongActorActivation));
-            Assert.That(f.Actor.LastSequence, Is.Zero); Assert.That(f.Actor.Receive(press).InputAdmitted, Is.True);
+            var mirror = new InteractionOutcomeMirror(17, f.Actor.ActorId, f.Actor.Activation);
+            Assert.That(mirror.TryApply(f.Actor.Receive(press)), Is.True);
+            var oldEpoch = f.Actor.Receive(new InteractionCommand(16, press.ActorActivation, 100, press.ActionId, press.Target, InteractionCommandKind.Cancel));
+            var oldActor = f.Actor.Receive(new InteractionCommand(17, press.ActorActivation + 1, 101, press.ActionId, press.Target, InteractionCommandKind.Cancel));
+            Assert.That(oldEpoch.Rejection, Is.EqualTo(InteractionCommandRejection.WrongEpoch));
+            Assert.That(oldEpoch.Epoch, Is.EqualTo(16));
+            Assert.That(oldActor.Rejection, Is.EqualTo(InteractionCommandRejection.WrongActorActivation));
+            Assert.That(oldActor.ActorActivation, Is.EqualTo(press.ActorActivation + 1));
+            Assert.That(oldEpoch.Outcome, Is.Null);
+            Assert.That(oldActor.Outcome, Is.Null);
+            Assert.That(mirror.TryApply(oldEpoch), Is.False);
+            Assert.That(mirror.TryApply(oldActor), Is.False);
+            Assert.That(f.Actor.LastSequence, Is.EqualTo(press.Sequence));
+            var release = f.Actor.Receive(f.Next(press.ActionId, InteractionCommandKind.Release));
+            Assert.That(mirror.TryApply(release), Is.True);
+            Assert.That(mirror.LastReceiptSequence, Is.EqualTo(release.Sequence));
+        }
+
+        [Test] public void LegacyRejectWithCurrentHeadersCannotAdvanceTheMirror()
+        {
+            using var f = new Fixture();
+            var press = f.Press();
+            var result = f.Actor.Receive(press);
+            var mirror = new InteractionOutcomeMirror(17, f.Actor.ActorId, f.Actor.Activation);
+            var rejected = new InteractionCommandReceipt(17, f.Actor.ActorId, f.Actor.Activation, 100, press.ActionId,
+                false, false, false, true, false, InteractionCommandRejection.WrongEpoch, result.Outcome);
+            Assert.That(mirror.TryApply(rejected), Is.False);
+            Assert.That(mirror.LastReceiptSequence, Is.Zero);
+            Assert.That(mirror.LatestOutcome, Is.Null);
+            Assert.That(mirror.TryApply(result), Is.True);
         }
 
         [Test] public void OldTargetActivationCannotResolveToTheReusedTarget()
@@ -126,8 +160,14 @@ namespace ZeroEngine.Interaction.Tests
         {
             using var f = new Fixture(); var neighbor = new Target { Id = "neighbor" };
             using var lease = f.Authority.RegisterTarget(neighbor);
-            f.Actor.Receive(f.Press());
+            f.Target.Policy = new InteractionPolicy(InteractionMode.TapOrHold);
+            f.Authority.Tick();
+            var press = f.Press();
+            f.Actor.Receive(press);
+            f.Authority.Tick();
+            f.Actor.Receive(f.Next(press.ActionId, InteractionCommandKind.Release));
             Assert.That(f.Target.Mutations, Is.EqualTo(1)); Assert.That(neighbor.Mutations, Is.Zero);
+            Assert.That(neighbor.AvailabilityChecks, Is.Zero);
         }
 
         [Test] public void ServerClockClassifiesAnEarlyReleaseAsATap()
@@ -282,6 +322,10 @@ namespace ZeroEngine.Interaction.Tests
             var invalid = new InteractionAuthorityOutcome(original.Epoch, original.ActorId, original.ActorActivation,
                 original.ActionId, original.Revision + 1, 0, original.Target, original.Gesture, original.Status, null);
             var mirror = new InteractionOutcomeMirror(17, "actor", f.Actor.Activation);
+            var badReceipt = new InteractionCommandReceipt(original.Epoch, original.ActorId, original.ActorActivation,
+                100, original.ActionId, true, true, false, false, false, InteractionCommandRejection.None, invalid);
+            Assert.That(mirror.TryApply(badReceipt), Is.False);
+            Assert.That(mirror.LastReceiptSequence, Is.Zero);
             Assert.That(mirror.TryApply(invalid), Is.False); Assert.That(mirror.TryApply(original), Is.True);
         }
 

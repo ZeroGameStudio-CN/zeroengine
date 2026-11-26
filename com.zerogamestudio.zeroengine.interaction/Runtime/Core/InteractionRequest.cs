@@ -12,6 +12,7 @@ namespace ZeroEngine.Interaction.Core
     {
         private readonly InteractionAgent owner;
         private CancellationTokenSource lifetime;
+        internal Action<InteractionResult> RecordResult { private get; set; }
         internal InteractionRegistration Registration { get; }
         public InteractionContext Context { get; }
         public long Id { get; }
@@ -57,7 +58,20 @@ namespace ZeroEngine.Interaction.Core
             return owner.Settle(this, InteractionStatus.Faulted, error.Message);
         }
 
-        internal void NotifySettled(InteractionResult result)
+        internal void PublishResult(InteractionResult result, Action<InteractionResult> completed)
+        {
+            // The agent can be disposed during a business callback. The request still owns its result.
+            var record = RecordResult;
+            RecordResult = null;
+            try
+            {
+                record?.Invoke(result);
+                completed?.Invoke(result);
+            }
+            finally { NotifySettled(result); }
+        }
+
+        private void NotifySettled(InteractionResult result)
         {
             if (Outcome.HasValue) return;
             Outcome = result;

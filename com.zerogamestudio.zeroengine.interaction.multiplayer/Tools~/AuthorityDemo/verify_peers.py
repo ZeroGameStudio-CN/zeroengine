@@ -242,7 +242,10 @@ def verify(dll, output):
         approach(guest, 'door'); guest.send('press', Target='door')
         guest.wait(lambda r: r['View']['Commits'] == 1, 'first command')
         guest.send('spoof'); guest.wait(lambda r: r['Rejection'] == 'UnauthorizedActor', 'payload cannot select host actor')
-        guest.send('wrongEpoch'); guest.wait(lambda r: r['Rejection'] == 'WrongEpoch', 'stale epoch rejected')
+        guest.send('wrongEpoch')
+        rejected = guest.wait(lambda r: r['Rejection'] == 'WrongEpoch', 'stale epoch rejected')
+        assert rejected['Receipt']['Epoch'] != rejected['View']['Epoch']
+        assert rejected['Receipt']['Outcome'] is None and not rejected['Receipt']['Held']
         guest.send('release'); tap(guest, 'door')
         value = host.wait(lambda r: r['View']['Commits'] == 2, 'valid sequence survives rejected headers')
         assert not value['View']['DoorOpen']
