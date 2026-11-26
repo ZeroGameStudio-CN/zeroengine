@@ -98,6 +98,7 @@ namespace ZeroEngine.UI.Combat
         private readonly HashSet<string> seenKeys = new(StringComparer.Ordinal);
         private readonly Queue<Cue> cues = new();
         private Func<GameObject, IEnumerable<IDisposable>> acquirePrefabLifetimes;
+        private Func<int, string> formatCount;
         private Canvas canvas;
         private Transform worldRoot;
         private Transform stagingRoot;
@@ -105,7 +106,7 @@ namespace ZeroEngine.UI.Combat
         private int visibleRows;
 
         public static StackMarkerView Create(Canvas canvas, string name = "Stack Markers",
-            Func<GameObject, IEnumerable<IDisposable>> acquirePrefabLifetimes = null)
+            Func<GameObject, IEnumerable<IDisposable>> acquirePrefabLifetimes = null, Func<int, string> formatCount = null)
         {
             if (!canvas) throw new ArgumentNullException(nameof(canvas));
 
@@ -120,6 +121,7 @@ namespace ZeroEngine.UI.Combat
             var view = container.AddComponent<StackMarkerView>();
             view.canvas = target;
             view.acquirePrefabLifetimes = acquirePrefabLifetimes;
+            view.formatCount = formatCount;
             return view;
         }
 
@@ -139,8 +141,8 @@ namespace ZeroEngine.UI.Combat
                 var key = !string.IsNullOrEmpty(row.Key) && seenKeys.Add(row.Key) ? row.Key : null;
                 var visual = UseVisualRow(key);
                 var count = Mathf.Min(row.Capacity, row.Count);
-                var plan = new LayoutPlan(row, count, usedLines);
-                visual.Draw(transform, row, plan, count, ref layoutBounds);
+                var plan = new LayoutPlan(row, count, usedLines, formatCount);
+                visual.Draw(transform, row, plan, count, formatCount, ref layoutBounds);
 
                 var lastMark = plan.Position(count - 1);
                 if (key != null)
@@ -354,11 +356,15 @@ namespace ZeroEngine.UI.Combat
             return camera.ScreenToWorldPoint(new Vector3(screen.x, screen.y, depth));
         }
 
+        private static string FormatCount(int count, Func<int, string> formatter) =>
+            formatter?.Invoke(count) ?? count.ToString();
+
         private readonly struct LayoutPlan
         {
             private const float CounterWidth = 114f;
             public readonly int Lines;
             public readonly bool Compact;
+            public readonly string CapacityText;
             private readonly int columns;
             private readonly int capacity;
             private readonly int firstLine;
@@ -366,7 +372,7 @@ namespace ZeroEngine.UI.Combat
             private readonly int splitAfter;
             private readonly float counterWidth;
 
-            public LayoutPlan(Row row, int count, int firstLine)
+            public LayoutPlan(Row row, int count, int firstLine, Func<int, string> formatter)
             {
                 Lines = 1;
                 this.firstLine = firstLine;
@@ -383,7 +389,8 @@ namespace ZeroEngine.UI.Combat
                 };
                 extraLines = row.Mode == LayoutMode.PerStack ? capacity % balancedLines : 0;
                 splitAfter = columns * extraLines + extraLines;
-                counterWidth = Compact ? Mathf.Min(CounterWidth, 15f + capacity.ToString().Length * 13f) : 0f;
+                CapacityText = Compact ? FormatCount(capacity, formatter) : null;
+                counterWidth = Compact ? Mathf.Min(CounterWidth, 15f + CapacityText.Length * 13f) : 0f;
                 if (!Compact) Lines = LocateLine(count - 1, out _, out _) + 1;
             }
 
@@ -427,7 +434,8 @@ namespace ZeroEngine.UI.Combat
             public Vector2 LastMark { get; set; }
             public GameObject SpendFeedback { get; set; }
 
-            public void Draw(Transform parent, Row row, LayoutPlan plan, int count, ref LayoutBounds bounds)
+            public void Draw(Transform parent, Row row, LayoutPlan plan, int count, Func<int, string> formatter,
+                ref LayoutBounds bounds)
             {
                 var previousMarks = activeMarks;
                 activeMarks = plan.Compact ? 1 : count;
@@ -450,12 +458,12 @@ namespace ZeroEngine.UI.Combat
                 if (labelCount != count)
                 {
                     labelCount = count;
-                    label.text = "×" + count;
+                    label.text = "×" + FormatCount(count, formatter);
                 }
                 if (labelCapacity != row.Capacity)
                 {
                     labelCapacity = row.Capacity;
-                    labelWidth = label.GetPreferredValues("×" + row.Capacity).x;
+                    labelWidth = label.GetPreferredValues("×" + plan.CapacityText).x;
                 }
 
                 var labelPosition = plan.LabelPosition;
