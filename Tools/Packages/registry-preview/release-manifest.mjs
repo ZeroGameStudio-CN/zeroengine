@@ -1511,18 +1511,47 @@ export default {
             "com.unity.modules.physics": "1.0.0",
             "com.unity.modules.physics2d": "1.0.0",
             "com.unity.modules.animation": "1.0.0"
+          },
+          "githubBase": "https://github.com/ZeroGameStudio-CN/zeroengine/releases/download/ze-upm-d21aa0f5-22e7e545abb4/"
+        },
+        "2.2.0": {
+          "asset": "com.zerogamestudio.zeroengine.gameplay-2.2.0.tgz",
+          "bytes": 123919,
+          "sha256": "85f8202fcab8ea950062fa4c9471a4fbfca73be2a4f792896d52b6715c963c29",
+          "sha512": "sha512-dFSaTkrum179C1gPBi2Ek/h0mu45sEyggDdSNFApJoUErhh8qsSw3vwSjEygj5EREzoF3x9W4R/k8NbWZhvs2w==",
+          "sourceCommit": "1bc0f05e0263072233562f8cb804af99a82086ea",
+          "sourceTree": "c9825fbf791eb77d9103012c8267265258b41efd",
+          "matchedSourceFiles": 219,
+          "sourceBytesUnchanged": true,
+          "runtimeBytesUnchanged": true,
+          "packageJsonReformatted": false,
+          "omittedGitIgnore": [],
+          "signingOrganizationId": "16767998560366",
+          "dependencies": {
+            "com.zerogamestudio.zeroengine.core": "2.2.4-ze-pob.history-pad.1",
+            "com.zerogamestudio.zeroengine.persistence": "2.1.4-ze-pob.create-menus.1",
+            "com.unity.ugui": "1.0.0",
+            "com.unity.inputsystem": "1.7.0",
+            "com.unity.textmeshpro": "3.0.6",
+            "com.unity.modules.video": "1.0.0",
+            "com.unity.modules.director": "1.0.0",
+            "com.unity.modules.screencapture": "1.0.0",
+            "com.unity.modules.audio": "1.0.0",
+            "com.unity.modules.physics": "1.0.0",
+            "com.unity.modules.physics2d": "1.0.0",
+            "com.unity.modules.animation": "1.0.0"
           }
         }
       },
-      "githubBase": "https://github.com/ZeroGameStudio-CN/zeroengine/releases/download/ze-upm-d21aa0f5-22e7e545abb4/",
+      "githubBase": "https://github.com/ZeroGameStudio-CN/zeroengine/releases/download/ze-upm-1bc0f05e-86ad1fbf54e2/",
       "metadataAsset": "com.zerogamestudio.zeroengine.gameplay-registry.json",
       "tags": {
-        "latest": "2.1.0",
+        "latest": "2.2.0",
         "preview": "2.1.2-ze-pob.create-menus.1"
       },
       "summary": {
         "displayName": "ZeroEngine Gameplay",
-        "description": "Gameplay mechanics for ZeroEngine. Includes Interaction System, Tutorial System (sequences, steps), and Command Pattern (undo/redo).",
+        "description": "Gameplay mechanics for ZeroEngine. Includes Interaction System, Tutorial System (sequences, steps), and Command Pattern (undo/redo), and build-aware reward selection.",
         "unity": "6000.6",
         "unityRelease": "0f1"
       }
@@ -2071,5 +2100,5 @@ export default {
       }
     }
   },
-  "updatedAt": "2026-11-27T08:28:58Z"
+  "updatedAt": "2026-11-27T12:54:56Z"
 };
