@@ -17,6 +17,10 @@ before adopting their newer major versions. The generic Portrait Speech and
 World Shift candidates preserve their original embedded asset GUIDs; POB's own
 adapter packages and production references remain project-owned.
 
+Consumer projects using build-aware rewards in ZeroEngine Gameplay 2.2
+need the verified cohort with ZeroEngine Core 2.2.2 or newer. See the
+[Build tags and reward selection guide](../com.zerogamestudio.zeroengine.gameplay/README.md#build-tags-and-reward-selection-22).
+
 ## Standard Source
 
 Use Unity Package Manager Git dependencies that point at this repository:

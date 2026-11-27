@@ -35,3 +35,19 @@ query adapter and localization for failure presentation.
 
 
 Scoped UI/world targets, multi-target masks, native click/hold/drag, context signals and CG/video/Timeline presentation are documented in [Tutorial](Runtime/Tutorial/README.md). Import Guidance Playground from Samples for an independent consumer example.
+
+## Build tags and reward selection (2.2)
+
+Project data defines stable IDs through BuildTagCatalog. Construct a BuildTagSnapshot
+from the requesting player's committed choices. Each BuildTagSource supplies a
+stable source ID and its tags. Duplicate source IDs contribute at most once. Call
+GetMultiplier with the candidate's tags, the per-source bonus and the cap. The
+default is 1x, 1.5x, or up to 2x. This scoring has no inventory or RNG dependency.
+
+RewardSelection accepts eligible candidates in stable order. SelectDistinct draws
+without replacement using the caller's random stream. TrySelectTiered lets the
+caller apply ZeroEngine.Core's WeightedSelection.LuckMultiplier to tier weights
+before drawing an item inside that tier. TryRedistributeTierWeights keeps the
+existing tier totals for a consumer that draws from a single combined pool.
+Projects own eligibility, content tags, random streams, player state and tuning.
+ZeroEngine.Core 2.2.2 or newer supplies the shared weighted draw and luck curve.
