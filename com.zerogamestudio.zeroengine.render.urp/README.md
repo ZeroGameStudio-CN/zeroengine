@@ -31,9 +31,21 @@ The default uses the already shaded scene color. Source textures supply alpha
 coverage. Same-side marked native lights form one bounded field. The strongest
 visible 2D center response selects the shifted art-cell mask, and Color Dodge
 resolves the field once. Bright and dark art retain different responses. RGB
-is bounded together so strong colored lamps keep their hue.
+is bounded together in the multi-light field. A single visible lateral lamp
+uses the reference field's per-channel clipping and restores the authored
+hue from the added luminance. The response blends into the combined field
+as another lamp becomes visible.
 
-With opposing lights, the key keeps its directional contour and inner wrap.
+For a left and right lamp pair, both lamps use the single-lamp response over
+the shaded sprite. The key keeps its contour and inward reflection. The fill
+adds a limited amount of its own color on uncovered contours and where the
+key's local contribution is faint. The weaker lamp gets an additional lift on
+the outer contour facing its side. The lift preserves established luminance on
+pale art and follows the lamp's visibility. The key weights crossfade the
+contours and coverage as the dominant lamp changes.
+
+For rear and grouped opposing lights, the key keeps its directional contour
+and inner wrap.
 The opposite field can strengthen recessed details on the far side in the
 key's hue. A thin strand can also carry the key hue on its opposite-facing
 contour when both fields overlap behind it. This contribution fades with the

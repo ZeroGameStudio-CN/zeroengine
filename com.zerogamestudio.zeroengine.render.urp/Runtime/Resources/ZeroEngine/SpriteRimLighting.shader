@@ -119,6 +119,24 @@ Shader "Hidden/ZeroEngine/SpriteRimLighting"
             return original + (lit - incomingBase) * exposure;
         }
 
+        float3 RestoreLateralLightHue(float3 original, float3 lit, float3 source)
+        {
+            source = max(source, 0);
+            float peak = max(source.r, max(source.g, source.b));
+            if (peak <= .000001 || peak - min(source.r, min(source.g, source.b)) <= peak * .001)
+                return lit;
+
+            const float3 luminance = float3(.2126, .7152, .0722);
+            float3 hue = source / peak;
+            if (fmod(_RimRefStyle.w, 2) > .5) hue = SRGBToLinear(hue);
+            float brightness = max(0, dot(lit - original, luminance));
+            float3 gain = hue * (brightness / max(dot(hue, luminance), .000001));
+            float ceiling = _RimRefStyle.w >= 2 ? 1 : max(1, max(lit.r, max(lit.g, lit.b)));
+            float3 headroom = max(ceiling - original, 0);
+            float3 fit = 1 - saturate((gain - headroom) / max(gain, .000001));
+            return original + gain * min(fit.r, min(fit.g, fit.b));
+        }
+
         float ReferenceSideWeight(float2 offset, float2 texel)
         {
             float2 offsetCells = float2(dot(offset, _RimRefRow0.xy), dot(offset, _RimRefRow1.xy)) / texel;
@@ -138,8 +156,22 @@ Shader "Hidden/ZeroEngine/SpriteRimLighting"
             return saturate(-dot(toward, view) * rsqrt(max(dot(toward, toward), .00000001)));
         }
 
-        float3 CompositeOneSide(float3 original, float4 field, float2 uv, float2 texel, float2 away, float score,
-            float rearFacing, float opposingAlpha, float3 keyHue, out float coverage)
+        float LateralReferenceWeight(float3 toSource, float2 texel)
+        {
+            float weight = ReferenceSideWeight(-toSource.xy, texel);
+            if (weight > 0)
+                weight *= 1 - smoothstep(.65, .9, NativeRearFacing(toSource, -GetViewForwardDir()));
+            return weight;
+        }
+
+        struct ReferenceCoverage
+        {
+            float occupied;
+            float outerEdge;
+        };
+
+        float3 CompositeDirectionalReference(float3 original, float4 field, float2 uv, float2 texel, float2 away, float score,
+            float rearFacing, float opposingAlpha, float3 keyHue, bool restoreLightHue, out ReferenceCoverage coverage)
         {
             float response = pow(score, 1 / max(_RimEnhanceInnerWrap.w, .001));
             float distance = lerp(_RimReferenceBandLimits.x, _RimReferenceBandLimits.y, response);
@@ -149,27 +181,37 @@ Shader "Hidden/ZeroEngine/SpriteRimLighting"
             float2 scale = (_RimRefFrame.zw + _RimReferenceBandLimits.z * response) / max(_RimRefFrame.zw, 1);
             float2 shifted = (uv - _RimRefFrame.xy) / max(scale, .00001) + _RimRefFrame.xy - direction * distance * texel;
             float exposure = lerp(1, _RimReferenceBandLimits.w, score);
-            float edgeExposure = exposure;
+            float wrapWeight = 1;
             float4 tint = _RimRefEdgeTint;
             bool keyEdge = MaskAlpha(shifted) <= 0;
-            coverage = keyEdge ? 1 : 0;
+            coverage.outerEdge = keyEdge ? 1 : 0;
+            coverage.occupied = coverage.outerEdge;
             if (!keyEdge)
             {
                 tint = _RimRefInnerTint;
-                coverage = any(tint.rgb * tint.a > 0) ? 1 : 0;
+                coverage.occupied = any(tint.rgb * tint.a > 0) ? 1 : 0;
                 if (_RimEnhanceInnerWrap.y > 0)
                 {
                     float wrap = _RimEnhanceInnerWrap.y * (1 - FilteredMaskAlpha(shifted - artStep));
                     if (wrap > 0)
                     {
                         tint = _RimRefEdgeTint;
-                        edgeExposure *= wrap;
-                        coverage = 1;
+                        wrapWeight = wrap;
+                        coverage.occupied = 1;
                     }
                 }
             }
 
-            float3 lit = CompositeNativeDodge(original, field, tint.rgb * (tint.a * response), edgeExposure);
+            float3 edgeTint = tint.rgb * (tint.a * response);
+            if (restoreLightHue)
+            {
+                float3 single = RestoreLateralLightHue(original,
+                    CompositeNativeDodge(original, field, edgeTint, exposure), keyHue);
+                // In the single-light reference, the inward weight follows hue restoration.
+                return lerp(original, single, wrapWeight);
+            }
+
+            float3 lit = CompositeNativeDodge(original, field, edgeTint, exposure * wrapWeight);
             float farSide = dot((uv - _RimRefFrame.xy) / texel, artDirection);
             float rearWeight = smoothstep(.05, .65, rearFacing) * smoothstep(0, 2.5, farSide);
             float backWrap = _RimEnhanceInnerWrap.y * rearWeight;
@@ -191,7 +233,7 @@ Shader "Hidden/ZeroEngine/SpriteRimLighting"
             if (max(reflected.r, max(reflected.g, reflected.b)) > max(existing.r, max(existing.g, existing.b)))
             {
                 lit = original + reflected;
-                coverage = 1;
+                coverage.occupied = 1;
             }
 
             // Both visible fields can strengthen this narrow far contour in the key's hue.
@@ -200,7 +242,7 @@ Shader "Hidden/ZeroEngine/SpriteRimLighting"
             {
                 float3 sourceHue = gammaBlend ? SRGBToLinear(keyHue) : keyHue;
                 lit += FitNativeGain(sourceHue * _RimRefEdgeTint.rgb * support, lit);
-                coverage = 1;
+                coverage.occupied = 1;
             }
             return lit;
         }
@@ -303,12 +345,23 @@ Shader "Hidden/ZeroEngine/SpriteRimLighting"
             return saturate(field);
         #endif
         }
-        float4 ReferenceFieldContribution(float3 color, float alpha, float visibility)
+        float4 QuantizedReferenceContribution(float4 boundedSource, float visibility)
         {
-            // Quantize the bounded source in the reference's RGBA8 UNorm field before SrcAlpha/One blending.
-            float4 source = round(BoundReferenceField(float4(color * alpha, alpha)) * 255) / 255;
+            // Quantize in RGBA8 UNorm before and after SrcAlpha/One blending.
+            float4 source = round(boundedSource * 255) / 255;
             return round(source * source.a * visibility * 255) / 255;
         }
+    #if defined(ZE_RIM_NATIVE_REFERENCE)
+        float3 CompositeLateralReferenceLight(int lightIndex, float3 original, float2 uv, float2 texel,
+            float2 toLight, float alpha, float visibility, float score, out ReferenceCoverage coverage)
+        {
+            float4 light = _RimEnhanceColors[lightIndex];
+            float4 boundedSource = saturate(float4(light.rgb * light.a * alpha, alpha));
+            float4 field = QuantizedReferenceContribution(boundedSource, visibility);
+            float2 away = -toLight / max(length(toLight), .00001);
+            return CompositeDirectionalReference(original, field, uv, texel, away, score, 0, 0, light.rgb, true, coverage);
+        }
+    #endif
         float EnhancedFalloff(float3 p, float4 shape, float4 powers)
         {
             if (shape.x > 2.5)
@@ -489,6 +542,9 @@ Shader "Hidden/ZeroEngine/SpriteRimLighting"
             float4 referenceScores = 0, nativePowers = 0;
             float2 referenceOffset = 0;
             float referenceScore = 0, strongestVisibleScore = 0;
+            float visibleReferencePeakSum = 0;
+            int2 sideLightIndices = int2(-1, -1);
+            float2 sideLightPeaks = 0;
             float referenceRear = 0;
             float3 viewRay = GetWorldSpaceNormalizeViewDir(input.positionWS);
             float2 viewSlope = abs(viewRay.z) > .00001 ? viewRay.xy / viewRay.z : 0;
@@ -553,13 +609,17 @@ Shader "Hidden/ZeroEngine/SpriteRimLighting"
                 {
                     float3 fieldColor = _RimEnhanceColors[i].rgb;
                     if (_RimEnhanceShapes[i].x > 2.5) fieldColor *= _RimEnhanceColors[i].a;
-                    float4 field = ReferenceFieldContribution(fieldColor, alpha, visibility);
+                    float4 boundedSource = BoundReferenceField(float4(fieldColor * alpha, alpha));
+                    float4 field = QuantizedReferenceContribution(boundedSource, visibility);
                     referenceFields[i] = field;
                 #if defined(ZE_RIM_NATIVE_REFERENCE)
                     oneSideField += field;
                     referenceScores[i] = centerScore;
                 #endif
                     float available = max(field.r, max(field.g, field.b));
+                #if defined(ZE_RIM_NATIVE_REFERENCE)
+                    visibleReferencePeakSum += available;
+                #endif
                     if (available > 0)
                     {
                         visiblePrimary += _RimPrimaryWeights[i] * visibility;
@@ -579,8 +639,24 @@ Shader "Hidden/ZeroEngine/SpriteRimLighting"
                             referenceRear = NativeRearFacing(toward, viewRay);
                         }
                         float side = horizontalDirections[i];
-                        if (side > .035) leftField += field;
-                        else if (side < -.035) rightField += field;
+                        if (side > .035)
+                        {
+                            leftField += field;
+                            if (available > sideLightPeaks.x)
+                            {
+                                sideLightIndices.x = i;
+                                sideLightPeaks.x = available;
+                            }
+                        }
+                        else if (side < -.035)
+                        {
+                            rightField += field;
+                            if (available > sideLightPeaks.y)
+                            {
+                                sideLightIndices.y = i;
+                                sideLightPeaks.y = available;
+                            }
+                        }
                         else centeredField += field;
                     #endif
                     }
@@ -599,7 +675,7 @@ Shader "Hidden/ZeroEngine/SpriteRimLighting"
             float dominantSide = 0, sideConfidence = 0;
         #if defined(ZE_RIM_NATIVE_REFERENCE)
             float oneSideWeight = 0;
-            bool opposingSides = any(leftField.rgb > 0) && any(rightField.rgb > 0);
+            bool opposingSides = all(sideLightIndices >= 0);
             float3 primaryColor = 0;
             float primaryWeight = 0;
             float3 primaryHue = 0;
@@ -639,15 +715,101 @@ Shader "Hidden/ZeroEngine/SpriteRimLighting"
             float2 sceneUV = GetNormalizedScreenSpaceUV(input.positionCS) * _RimEnhanceSceneScaleBias.xy + _RimEnhanceSceneScaleBias.zw;
             float4 original = SAMPLE_TEXTURE2D_X(_RimEnhanceSceneColor, sampler_PointClamp, sceneUV);
         #if defined(ZE_RIM_NATIVE_REFERENCE)
+            float pairWeight = 0;
+            float3 pairColor = original.rgb;
+            UNITY_BRANCH
+            if (opposingSides)
+            {
+                int left = sideLightIndices.x, right = sideLightIndices.y;
+                float3 toLeft = _RimNativeGeometry[left].xyz - _RimRefCenterWS.xyz;
+                float3 toRight = _RimNativeGeometry[right].xyz - _RimRefCenterWS.xyz;
+                float pairShare = saturate((sideLightPeaks.x + sideLightPeaks.y) / max(visibleReferencePeakSum, .000001));
+                pairWeight = min(LateralReferenceWeight(toLeft, texel), LateralReferenceWeight(toRight, texel)) *
+                    smoothstep(.95, 1, pairShare);
+                if (pairWeight > 0)
+                {
+                    ReferenceCoverage leftCoverage, rightCoverage;
+                    float3 leftColor = CompositeLateralReferenceLight(left, original.rgb, uv, texel,
+                        toLeft.xy, alphas[left], visibilities[left], referenceScores[left], leftCoverage);
+                    float3 rightColor = CompositeLateralReferenceLight(right, original.rgb, uv, texel,
+                        toRight.xy, alphas[right], visibilities[right], referenceScores[right], rightCoverage);
+                    float2 keyWeights = float2(primaryWeights[left], primaryWeights[right]);
+                    float keyWeightSum = keyWeights.x + keyWeights.y;
+                    float leftKeyWeight = keyWeightSum > .000001 ? keyWeights.x / keyWeightSum : step(sideLightPeaks.y, sideLightPeaks.x);
+                    float3 keyColor = lerp(rightColor, leftColor, leftKeyWeight);
+                    float keyCoverage = lerp(rightCoverage.occupied, leftCoverage.occupied, leftKeyWeight);
+                    float3 fillGain = max(lerp(leftColor, rightColor, leftKeyWeight) - original.rgb, 0);
+                    float3 fill = fillGain * ReferenceFillStrength;
+                    float uncovered = 1 - smoothstep(0, 1, keyCoverage);
+                    pairColor = keyColor + FitNativeGain(fill * uncovered, keyColor);
+
+                    // A geometric overlap may hold only faint wrap. Give the opposing
+                    // contour room in proportion to the actual light on that pixel.
+                    float fillEdge = lerp(leftCoverage.outerEdge, rightCoverage.outerEdge, leftKeyWeight);
+                    float overlap = keyCoverage * fillEdge;
+                    float wrapRoomForFill = 0;
+                    UNITY_BRANCH
+                    if (overlap > 0)
+                    {
+                        float3 keyGain = max(keyColor - original.rgb, 0);
+                        float keyPeak = max(keyGain.r, max(keyGain.g, keyGain.b));
+                        float fillPeak = max(fillGain.r, max(fillGain.g, fillGain.b));
+                        float keyShare = keyPeak / max(keyPeak + fillPeak, .000001);
+                        float wrapRoom = 1 - smoothstep(.15, .70, keyShare);
+                        float edgeRoom = 1 - smoothstep(.001, .012, keyPeak);
+                        float keyEdge = lerp(rightCoverage.outerEdge, leftCoverage.outerEdge, leftKeyWeight);
+                        wrapRoomForFill = overlap * lerp(wrapRoom, edgeRoom, keyEdge);
+                        float3 tinted = pairColor + FitNativeGain(fill * wrapRoomForFill, pairColor);
+                        // On light artwork keep the extra tint at the established brightness.
+                        float pale = smoothstep(.09, .27, Luminance(max(original.rgb, 0)));
+                        float tone = Luminance(pairColor) / max(Luminance(tinted), .000001);
+                        pairColor = lerp(tinted, tinted * min(1, tone), pale);
+                    }
+                    // Lift only the weak lamp's contour on its own side of the actor.
+                    float contourRoom = fillEdge * uncovered + wrapRoomForFill;
+                    UNITY_BRANCH
+                    if (contourRoom > 0)
+                    {
+                        float halfWidth = texel.x / max(length(_RimRefRow0.xyz), .000001);
+                        float rightHalf = smoothstep(-halfWidth, halfWidth, cellWS.x - _RimRefCenterWS.x);
+                        float fillSide = lerp(1 - rightHalf, rightHalf, leftKeyWeight);
+                        float3 boosted = pairColor + FitNativeGain(fillGain * (.34 * contourRoom * fillSide), pairColor);
+                        float pale = smoothstep(.045, .14, Luminance(max(original.rgb, 0)));
+                        float tone = Luminance(pairColor) / max(Luminance(boosted), .000001);
+                        pairColor = lerp(boosted, boosted * min(1, tone), pale);
+                    }
+                    if (pairWeight >= 1) return float4(pairColor, original.a);
+                }
+            }
+
+            float singleWeight = 0;
+            float3 singleColor = original.rgb;
+            if (fallbackWeight > 0 && referenceScores[fallbackPrimary] > 0)
+            {
+                float3 toSource = _RimNativeGeometry[fallbackPrimary].xyz - _RimRefCenterWS.xyz;
+                float otherShare = max(0, visibleReferencePeakSum - fallbackWeight) / max(visibleReferencePeakSum, .000001);
+                // Fade out the single-lamp mapping as other visible lamps enter the field.
+                singleWeight = LateralReferenceWeight(toSource, texel) * (1 - smoothstep(0, .05, otherShare));
+                UNITY_BRANCH
+                if (singleWeight > 0)
+                {
+                    ReferenceCoverage coverage;
+                    singleColor = CompositeLateralReferenceLight(fallbackPrimary, original.rgb, uv, texel,
+                        toSource.xy, alphas[fallbackPrimary], visibilities[fallbackPrimary],
+                        referenceScores[fallbackPrimary], coverage);
+                    if (singleWeight >= 1) return float4(singleColor, original.a);
+                }
+            }
+
             float3 oneSideColor = original.rgb;
             UNITY_BRANCH
             if (oneSideWeight > 0)
             {
                 float2 away = referenceOffset / max(length(referenceOffset), .00001);
-                float coverage;
-                oneSideColor = CompositeOneSide(original.rgb, BoundReferenceField(oneSideField), uv, texel,
-                    away, referenceScore, referenceRear, 0, 0, coverage);
-                if (oneSideWeight >= 1) return float4(oneSideColor, original.a);
+                ReferenceCoverage coverage;
+                oneSideColor = CompositeDirectionalReference(original.rgb, BoundReferenceField(oneSideField), uv, texel,
+                    away, referenceScore, referenceRear, 0, 0, false, coverage);
+                if (oneSideWeight >= 1) return float4(lerp(oneSideColor, singleColor, singleWeight), original.a);
             }
         #endif
             float exposure = _RimRefStyle.x;
@@ -824,7 +986,7 @@ Shader "Hidden/ZeroEngine/SpriteRimLighting"
                         if (sideWeight > 0)
                         {
                             // A directional key uses the standalone contour and wrap.
-                            float keyCoverage;
+                            ReferenceCoverage keyCoverage;
                             float2 away = offset / max(length(offset), .00001);
                             float3 toKey = _RimNativeGeometry[i].xyz - input.positionWS;
                             float rear = NativeRearFacing(toKey, viewRay);
@@ -833,10 +995,10 @@ Shader "Hidden/ZeroEngine/SpriteRimLighting"
                             // Carry the shared reflection according to view depth. Moving a sprite
                             // toward a screen edge must not change which lamp is behind it.
                             primaryRear += NativeRearFacing(toKey, -GetViewForwardDir()) * key;
-                            float3 single = CompositeOneSide(original.rgb, sameSide, uv, texel,
-                                away, referenceScores[i], rear, opposingAlpha, hue, keyCoverage);
+                            float3 single = CompositeDirectionalReference(original.rgb, sameSide, uv, texel,
+                                away, referenceScores[i], rear, opposingAlpha, hue, false, keyCoverage);
                             keyColor = sideWeight >= 1 ? single : lerp(keyColor, single, sideWeight);
-                            coverage = lerp(coverage, keyCoverage, sideWeight);
+                            coverage = lerp(coverage, keyCoverage.occupied, sideWeight);
                         }
                         if (opposingSides)
                         {
@@ -998,11 +1160,13 @@ Shader "Hidden/ZeroEngine/SpriteRimLighting"
                         float3 strand = hue * (amount / max(Luminance(hue), .000001));
                         fill = lerp(fill, strand, strandWeight);
                     }
-                    original.rgb = keyScene + FitNativeGain(fill, keyScene);
+                    original.rgb = lerp(keyScene + FitNativeGain(fill, keyScene), singleColor, singleWeight);
+                    original.rgb = lerp(original.rgb, pairColor, pairWeight);
                     return original;
                 }
                 float3 gain = MixNativeKeyAndFill(primaryGain, fill, original.rgb);
                 original.rgb = lerp(original.rgb + gain, oneSideColor, oneSideWeight);
+                original.rgb = lerp(original.rgb, singleColor, singleWeight);
             #else
                 // The secondary lights may reveal another direction or meet the
                 // soft inner wrap without changing the key's fully covered edge.
