@@ -1953,13 +1953,33 @@ export default {
             "com.unity.render-pipelines.universal": "17.6.0",
             "com.zerogamestudio.zeroengine.render": "0.6.0",
             "com.unity.modules.terrain": "1.0.0"
+          },
+          "githubBase": "https://github.com/ZeroGameStudio-CN/zeroengine/releases/download/ze-upm-d21aa0f5-22e7e545abb4/"
+        },
+        "0.4.5": {
+          "asset": "com.zerogamestudio.zeroengine.render.urp-0.4.5.tgz",
+          "bytes": 132022,
+          "sha256": "2caaa4161e98035719b6ad2b9033350b1b7d98cbfa1718179efcb4357c2658f2",
+          "sha512": "sha512-3zM9n6EptLbWJoDdLAfUxQu2aHJo7XRAV9OOkQ8KHZEiIPMjfpE3HVceoPC08N1vhH6MxutSxx/X4RBrua4sbw==",
+          "sourceCommit": "9f8dba9dbfe5dfaffe2e0d7f636a145f786352f7",
+          "sourceTree": "b178da17a0fda22b549c06d13836e702dadf0631",
+          "matchedSourceFiles": 114,
+          "sourceBytesUnchanged": true,
+          "runtimeBytesUnchanged": true,
+          "packageJsonReformatted": false,
+          "omittedGitIgnore": [],
+          "signingOrganizationId": "16767998560366",
+          "dependencies": {
+            "com.unity.render-pipelines.universal": "17.6.0",
+            "com.zerogamestudio.zeroengine.render": "0.6.0",
+            "com.unity.modules.terrain": "1.0.0"
           }
         }
       },
-      "githubBase": "https://github.com/ZeroGameStudio-CN/zeroengine/releases/download/ze-upm-d21aa0f5-22e7e545abb4/",
+      "githubBase": "https://github.com/ZeroGameStudio-CN/zeroengine/releases/download/ze-upm-9f8dba9d-4b077b309c67/",
       "metadataAsset": "com.zerogamestudio.zeroengine.render.urp-registry.json",
       "tags": {
-        "latest": "0.4.4",
+        "latest": "0.4.5",
         "preview": "0.4.5-ze-pob.create-menus.1"
       },
       "summary": {
@@ -2051,5 +2071,5 @@ export default {
       }
     }
   },
-  "updatedAt": "2026-11-26T14:49:19Z"
+  "updatedAt": "2026-11-27T08:28:58Z"
 };
