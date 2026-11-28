@@ -246,6 +246,67 @@ namespace ZeroEngine.Formula.Tests.Editor
         }
 
         [Test]
+        public void InspectorPreview_UsesCurrentHealthMaximumHealthAndBuffStacks()
+        {
+            var formula = ScriptableObject.CreateInstance<FormulaAsset>();
+            try
+            {
+                var statParameter = new FormulaParameterDescriptor(
+                    "statType", "属性类型", FormulaEditorParameterKind.Int, true, string.Empty);
+                var buffParameter = new FormulaParameterDescriptor(
+                    "buffId", "Buff ID", FormulaEditorParameterKind.String, true, string.Empty);
+                var profile = new FormulaEditorProfile(
+                    "inspector-test", "预览测试", string.Empty, string.Empty, "预览测试",
+                    new[]
+                    {
+                        new FormulaProviderDescriptor("stat.current", "当前属性", "属性", string.Empty, 10f,
+                            new[] { statParameter }),
+                        new FormulaProviderDescriptor("stat.max", "最大属性", "属性", string.Empty, 100f,
+                            new[] { statParameter }),
+                        new FormulaProviderDescriptor("buff.stacks", "Buff 层数", "Buff", string.Empty, 1f,
+                            new[] { buffParameter }),
+                    },
+                    new[] { new FormulaPreviewInputDescriptor("coin", "金币", FormulaPreviewInputKind.Int, 0f, string.Empty) });
+
+                var health = FormulaParameter.Int("statType", 0);
+                var buff = FormulaParameter.String("buffId", "test.buff");
+                var currentSource = FormulaValueSource.Provider("stat.current", health);
+                var maximumSource = FormulaValueSource.Provider("stat.max", health);
+                var buffSource = FormulaValueSource.Provider("buff.stacks", buff);
+                SetFormulaAsset(formula, 0f, new[]
+                {
+                    FormulaStep.Create(FormulaOperationType.Add, currentSource),
+                    FormulaStep.Create(FormulaOperationType.Add, maximumSource),
+                    FormulaStep.Create(FormulaOperationType.Add, buffSource),
+                });
+
+                var currentKey = FormulaEditorPreview.GetProviderPreviewInputKey(currentSource.ProviderId, currentSource.Parameters);
+                var maximumKey = FormulaEditorPreview.GetProviderPreviewInputKey(maximumSource.ProviderId, maximumSource.Parameters);
+                var buffKey = FormulaEditorPreview.GetProviderPreviewInputKey(buffSource.ProviderId, buffSource.Parameters);
+                var fields = FormulaAssetInspector.CollectPreviewInputs(profile, formula);
+                Assert.That(fields.Select(field => field.Key), Is.EquivalentTo(new[] { "coin", currentKey, maximumKey, buffKey }));
+
+                var state = new FormulaEditorPreviewState();
+                state.SetValue(currentKey, 10f);
+                state.SetValue(maximumKey, 50f);
+                state.SetValue(buffKey, 4f);
+                Assert.That(FormulaEditorPreview.TryEvaluate(formula, profile, state.CreateContext(profile),
+                    out var result, out var report), Is.True, string.Join("\n", report.Diagnostics));
+                Assert.That(report.Steps.Select(step => step.StepValue), Is.EqualTo(new[] { 10f, 50f, 4f }));
+                Assert.That(result, Is.EqualTo(64f));
+
+                state.ResetToDefaults(profile, fields);
+                Assert.That(FormulaEditorPreview.TryEvaluate(formula, profile, state.CreateContext(profile),
+                    out _, out var resetReport), Is.True, string.Join("\n", resetReport.Diagnostics));
+                Assert.That(resetReport.Steps.Select(step => step.StepValue), Is.EqualTo(new[] { 10f, 100f, 1f }));
+            }
+            finally
+            {
+                UnityObject.DestroyImmediate(formula);
+            }
+        }
+
+        [Test]
         public void TryEvaluate_WithRandomInteger_IsDeterministicAcrossTopLevelPreviews()
         {
             var formula = ScriptableObject.CreateInstance<FormulaAsset>();

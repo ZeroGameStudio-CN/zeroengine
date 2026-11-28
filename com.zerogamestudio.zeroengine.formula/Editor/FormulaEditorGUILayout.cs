@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using UnityEditor;
 using UnityEngine;
 
@@ -64,10 +65,11 @@ namespace ZeroEngine.Formula.Editor
         public static void DrawPreviewInputs(
             FormulaEditorProfile profile,
             FormulaEditorPreviewState state,
+            IReadOnlyList<FormulaPreviewFieldDescriptor> fields,
             bool drawHeader = true,
             bool drawContainer = true)
         {
-            if (profile == null || state == null || profile.PreviewInputs.Count == 0)
+            if (profile == null || state == null || fields.Count == 0)
                 return;
 
             if (drawHeader)
@@ -78,7 +80,7 @@ namespace ZeroEngine.Formula.Editor
                 EditorGUILayout.BeginVertical(EditorStyles.helpBox);
             bool compact = ZeroEngine.EditorUI.EditorUiGUILayout.ResponsiveMode(EditorGUIUtility.currentViewWidth) ==
                            ZeroEngine.EditorUI.EditorUiResponsiveMode.Compact;
-            foreach (var input in profile.PreviewInputs)
+            foreach (var input in fields)
             {
                 var value = state.GetValue(input);
                 if (compact)
@@ -110,7 +112,7 @@ namespace ZeroEngine.Formula.Editor
                         FormulaEditorLabels.ResetPreviewInputs,
                         FormulaEditorLabels.ResetPreviewInputsTooltip),
                     GUILayout.Width(120f)))
-                state.ResetToDefaults(profile);
+                state.ResetToDefaults(profile, fields);
             EditorGUILayout.EndHorizontal();
             if (drawContainer)
                 EditorGUILayout.EndVertical();

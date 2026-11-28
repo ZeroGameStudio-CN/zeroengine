@@ -42,6 +42,7 @@ namespace ZeroEngine.Formula.Editor
         public override void OnInspectorGUI()
         {
             var profile = FormulaEditorProfileRegistry.ActiveProfile;
+            var formula = (FormulaAsset)target;
             serializedObject.Update();
 
             FormulaEditorGUILayout.DrawHeader(
@@ -55,12 +56,13 @@ namespace ZeroEngine.Formula.Editor
             DrawSteps(profile);
             serializedObject.ApplyModifiedProperties();
 
-            FormulaEditorGUILayout.DrawPreviewInputs(profile, previewState);
+            var previewFields = CollectPreviewInputs(profile, formula);
+            FormulaEditorGUILayout.DrawPreviewInputs(profile, previewState, previewFields);
             EditorGUILayout.BeginHorizontal();
             if (GUILayout.Button(FormulaEditorLabels.Evaluate))
             {
                 FormulaEditorPreview.TryEvaluate(
-                    (FormulaAsset)target,
+                    formula,
                     profile,
                     previewState.CreateContext(profile),
                     out _,
@@ -68,10 +70,16 @@ namespace ZeroEngine.Formula.Editor
             }
 
             if (GUILayout.Button(FormulaEditorLabels.OpenWorkbench))
-                FormulaWorkbenchWindow.OpenWithFormula(profile, (FormulaAsset)target);
+                FormulaWorkbenchWindow.OpenWithFormula(profile, formula);
             EditorGUILayout.EndHorizontal();
 
             FormulaEditorGUILayout.DrawReport(lastReport);
+        }
+
+        internal static IReadOnlyList<FormulaPreviewFieldDescriptor> CollectPreviewInputs(
+            FormulaEditorProfile profile, FormulaAsset formula)
+        {
+            return FormulaEditorPreview.CollectPreviewFields(profile, new[] { formula }, includeAllProfileInputs: true);
         }
 
         private void DrawSteps(FormulaEditorProfile profile)
