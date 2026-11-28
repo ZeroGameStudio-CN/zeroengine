@@ -50,6 +50,15 @@ action/动画异常和对象销毁都会清理动画、恢复透明状态并释�
 - `UIViewBase` - 视图基类
 - 面板栈、遮罩、动画
 
+### uGUI 方向导航
+
+为需要方向导航的面板创建一个 `DirectionalFocusNavigation`，以面板根节点限定搜索范围。
+宿主把当前控件、移动方向和可选的优先目标传给 `FindNext`，选中返回的控件后调用
+`RecordMove`。列表焦点随该实例保存，页面重用时可调用 `ClearScrollFocus`。
+
+同列或同行的可交互控件优先，回环可按面板启用。默认遵循控件的 Navigation 设置。
+使用自定义输入处理的项目可提供候选条件，并由宿主保留滑条、文本输入等控件自身的方向键处理。
+
 ### UI.MVVM (可选)
 - MVVM 数据绑定框架
 - `MVVMViewBase<TViewModel>` 将 Initialize/绑定、每次 Open 的 Refresh 和 Destroy 的解绑/Dispose 接入 `UIViewBase` 生命周期。与独立 `MonoBehaviour` 的 `MVVMView<TViewModel>` 分开；产品事件、AppState 和角色数据留在消费项目。
