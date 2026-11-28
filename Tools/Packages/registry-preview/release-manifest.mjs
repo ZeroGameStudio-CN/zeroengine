@@ -941,14 +941,33 @@ export default {
           "dependencies": {
             "com.zerogamestudio.zeroengine.editor-ui": "1.5.0",
             "com.unity.modules.jsonserialize": "1.0.0"
+          },
+          "githubBase": "https://github.com/ZeroGameStudio-CN/zeroengine/releases/download/ze-upm-d21aa0f5-22e7e545abb4/"
+        },
+        "0.6.2-ze-pob.formula-preview.1": {
+          "asset": "com.zerogamestudio.zeroengine.formula-0.6.2-ze-pob.formula-preview.1.tgz",
+          "bytes": 79993,
+          "sha256": "050879977b221d01ff5408be4bb7e15e3c32d88b93af87cce7d96b12ea2cafd3",
+          "sha512": "sha512-pO0dG+bAT32j/3SSFO32VNyBJ0Z8CsIjR88XZ2OL702vGCr3b4dNVTlHqMz07VS4HH7p0p8mUax7FJEtJqKHLQ==",
+          "sourceCommit": "bffc997b47e187e8b8871c7c0c574ca5e4c5b9b5",
+          "sourceTree": "e42ef116a2fd0c345086f5b2c07f5728c14566d2",
+          "matchedSourceFiles": 146,
+          "sourceBytesUnchanged": true,
+          "runtimeBytesUnchanged": true,
+          "packageJsonReformatted": false,
+          "omittedGitIgnore": [],
+          "signingOrganizationId": "16767998560366",
+          "dependencies": {
+            "com.zerogamestudio.zeroengine.editor-ui": "1.5.0",
+            "com.unity.modules.jsonserialize": "1.0.0"
           }
         }
       },
-      "githubBase": "https://github.com/ZeroGameStudio-CN/zeroengine/releases/download/ze-upm-d21aa0f5-22e7e545abb4/",
+      "githubBase": "https://github.com/ZeroGameStudio-CN/zeroengine/releases/download/ze-upm-bffc997b-de79ddc52f77/",
       "metadataAsset": "com.zerogamestudio.zeroengine.formula-registry.json",
       "tags": {
         "latest": "0.6.1",
-        "preview": "0.6.2-ze-pob.create-menus.1"
+        "preview": "0.6.2-ze-pob.formula-preview.1"
       },
       "summary": {
         "displayName": "ZeroEngine Formula",
@@ -2100,5 +2119,5 @@ export default {
       }
     }
   },
-  "updatedAt": "2026-11-27T12:54:56Z"
+  "updatedAt": "2026-11-28T04:16:53Z"
 };
